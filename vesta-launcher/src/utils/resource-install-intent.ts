@@ -1,8 +1,33 @@
+import type { Instance } from "@stores/instances";
 import type {
 	InstalledResource,
 	ResourceProject,
+	ResourceType,
 	ResourceVersion,
 } from "@stores/resources";
+
+export interface ResourceInstallRequest {
+	project: ResourceProject;
+	versions: ResourceVersion[];
+}
+
+export function isGameVersionCompatible(
+	supported: readonly string[],
+	target: string,
+): boolean {
+	const normalize = (version: string) =>
+		version.endsWith(".0") ? version.slice(0, -2) : version;
+	const normalizedTarget = normalize(target);
+	const targetMajorMinor = normalizedTarget.split(".").slice(0, 2).join(".");
+
+	return supported.some((version) => {
+		const normalizedVersion = normalize(version);
+		return (
+			normalizedVersion === normalizedTarget ||
+			normalizedVersion === `${targetMajorMinor}.x`
+		);
+	});
+}
 
 export type InstalledResourceMatch = Pick<
 	InstalledResource,
@@ -48,4 +73,80 @@ export function isResourceUpdateAvailable(
 		return installed.remote_version_id !== version.id;
 	}
 	return installed.current_version !== version.version_number;
+}
+
+export function findBestVersion(
+	versions: readonly ResourceVersion[],
+	gameVersion: string,
+	modloader: string | null,
+	currentReleaseType?: "release" | "beta" | "alpha",
+	resourceType?: ResourceType,
+): ResourceVersion | null {
+	const instanceLoader = modloader?.toLowerCase() || "";
+	const allowedReleaseTypes =
+		currentReleaseType === "release" || !currentReleaseType
+			? ["release"]
+			: currentReleaseType === "beta"
+				? ["release", "beta"]
+				: ["release", "beta", "alpha"];
+
+	const compatible = versions.filter((version) => {
+		if (!isGameVersionCompatible(version.game_versions, gameVersion))
+			return false;
+
+		const loaders = version.loaders.map((loader) => loader.toLowerCase());
+		let matchesLoader = false;
+		if (
+			resourceType === "shader" ||
+			resourceType === "resourcepack" ||
+			resourceType === "datapack"
+		) {
+			matchesLoader =
+				resourceType !== "shader" ||
+				(instanceLoader !== "" && instanceLoader !== "vanilla");
+		} else if (instanceLoader === "" || instanceLoader === "vanilla") {
+			if (resourceType === "mod") matchesLoader = false;
+			else if (resourceType === "modpack") matchesLoader = true;
+			else {
+				matchesLoader = loaders.length === 0 || loaders.includes("minecraft");
+			}
+		} else {
+			matchesLoader = loaders.includes(instanceLoader);
+			if (!matchesLoader && instanceLoader === "quilt") {
+				matchesLoader = loaders.includes("fabric");
+			}
+			if (!matchesLoader && instanceLoader === "neoforge") {
+				matchesLoader = loaders.includes("forge");
+			}
+		}
+
+		return matchesLoader && allowedReleaseTypes.includes(version.release_type);
+	});
+
+	const stabilityOrder = { release: 0, beta: 1, alpha: 2 };
+	return (
+		[...compatible].sort((left, right) => {
+			const leftExact = left.game_versions.includes(gameVersion);
+			const rightExact = right.game_versions.includes(gameVersion);
+			if (leftExact !== rightExact) return leftExact ? -1 : 1;
+			return (
+				stabilityOrder[left.release_type] - stabilityOrder[right.release_type]
+			);
+		})[0] || null
+	);
+}
+
+export function findBestVersionForInstance(
+	project: ResourceProject,
+	versions: readonly ResourceVersion[],
+	instance: Pick<Instance, "minecraftVersion" | "modloader">,
+	releaseType: "release" | "beta" | "alpha" = "release",
+): ResourceVersion | null {
+	return findBestVersion(
+		versions,
+		instance.minecraftVersion,
+		instance.modloader,
+		releaseType,
+		project.resource_type,
+	);
 }

@@ -1,9 +1,6 @@
 import type { Instance } from "@stores/instances";
-import {
-	isGameVersionCompatible,
-	type ResourceProject,
-	type ResourceVersion,
-} from "@stores/resources";
+import { type ResourceProject, type ResourceVersion } from "@stores/resources";
+import { isGameVersionCompatible } from "@utils/resource-install-intent";
 
 export interface CompatibilityResult {
 	type: "compatible" | "warning" | "incompatible";

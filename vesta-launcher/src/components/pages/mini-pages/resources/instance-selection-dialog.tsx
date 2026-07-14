@@ -1,6 +1,5 @@
 import { type Instance, instancesState } from "@stores/instances";
 import {
-	findBestVersion,
 	type InstalledResource,
 	type ResourceProject,
 	type ResourceVersion,
@@ -15,6 +14,7 @@ import {
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import {
+	findBestVersionForInstance,
 	findInstalledResource,
 	isResourceUpdateAvailable,
 } from "@utils/resource-install-intent";
@@ -178,12 +178,10 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 				? props.versions
 				: fetchedVersions();
 		if (versionsToUse.length > 0) {
-			const best = findBestVersion(
+			const best = findBestVersionForInstance(
+				props.project,
 				versionsToUse,
-				instance.minecraftVersion,
-				instance.modloader,
-				"release",
-				props.project.resource_type,
+				instance,
 			);
 
 			if (best) return { type: "compatible" as const };
@@ -262,12 +260,10 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 										? props.versions
 										: fetchedVersions();
 								if (versionsToUse.length > 0) {
-									const best = findBestVersion(
+									const best = findBestVersionForInstance(
+										project,
 										versionsToUse,
-										instance.minecraftVersion,
-										instance.modloader,
-										"release",
-										project.resource_type,
+										instance,
 									);
 									if (best) {
 										return isResourceUpdateAvailable(project, ir, best);

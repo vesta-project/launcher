@@ -4,7 +4,6 @@ import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import {
-	findBestVersion,
 	type ResourceProject,
 	type ResourceVersion,
 	resources,
@@ -15,6 +14,7 @@ import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import {
+	findBestVersionForInstance,
 	findInstalledResource,
 	isResourceUpdateAvailable,
 } from "@utils/resource-install-intent";
@@ -100,13 +100,7 @@ const ResourceCard: Component<{
 						project.source,
 						project.id,
 					);
-					const best = findBestVersion(
-						versions,
-						inst.minecraftVersion,
-						inst.modloader,
-						"release",
-						project.resource_type,
-					);
+					const best = findBestVersionForInstance(project, versions, inst);
 					setLatestCompatibleVersion(best);
 				} catch (_) {
 					// Silently fail
@@ -212,7 +206,7 @@ const ResourceCard: Component<{
 	});
 
 	const navigateToDetails = () => {
-		resources.setRequestInstall(null);
+		resources.setInstallRequest(null);
 		activeRouter()?.navigate(
 			"/resource-details",
 			{
@@ -310,10 +304,10 @@ const ResourceCard: Component<{
 					props.project.source,
 					props.project.id,
 				);
-				resources.setRequestInstall(props.project, versions);
+				resources.setInstallRequest({ project: props.project, versions });
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
-				resources.setRequestInstall(props.project);
+				resources.setInstallRequest({ project: props.project, versions: [] });
 			} finally {
 				setLocalInstalling(false);
 			}
@@ -329,12 +323,10 @@ const ResourceCard: Component<{
 				props.project.source,
 				props.project.id,
 			);
-			const best = findBestVersion(
+			const best = findBestVersionForInstance(
+				props.project,
 				versions,
-				instance.minecraftVersion,
-				instance.modloader,
-				"release",
-				props.project.resource_type,
+				instance,
 			);
 			if (best) {
 				const instLoader = instance.modloader?.toLowerCase() || "";
