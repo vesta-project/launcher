@@ -58,6 +58,7 @@ const ResourceCard: Component<{
 			resources.state.installedResources.filter(
 				(resource) => !instanceId || resource.instance_id === instanceId,
 			),
+			resources.state.versions,
 		);
 	});
 
@@ -68,6 +69,7 @@ const ResourceCard: Component<{
 			resources.state.installedResources.filter(
 				(resource) => !instanceId || resource.instance_id === instanceId,
 			),
+			resources.state.versions,
 		);
 	});
 

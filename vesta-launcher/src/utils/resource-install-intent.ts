@@ -48,6 +48,7 @@ export type InstalledResourceMatch = Pick<
 export function findInstalledResource<T extends InstalledResourceMatch>(
 	project: ResourceProject,
 	installed: readonly T[],
+	versions: readonly ResourceVersion[] = [],
 ): T | undefined {
 	const projectIds = new Set(
 		[project.id, ...Object.values(project.external_ids || {})].map((id) =>
@@ -58,6 +59,16 @@ export function findInstalledResource<T extends InstalledResourceMatch>(
 
 	return installed.find((resource) => {
 		if (projectIds.has(resource.remote_id.toLowerCase())) return true;
+		if (
+			resource.hash &&
+			project.source.toLowerCase() !== resource.platform.toLowerCase() &&
+			versions.some(
+				(version) =>
+					version.project_id === project.id && version.hash === resource.hash,
+			)
+		) {
+			return true;
+		}
 		return (
 			resource.resource_type.toLowerCase() === project.resource_type &&
 			resource.display_name.toLowerCase() === projectName

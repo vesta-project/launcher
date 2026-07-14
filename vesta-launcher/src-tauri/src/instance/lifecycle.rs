@@ -160,12 +160,18 @@ pub(crate) async fn reconcile_finished_process(
                 }
 
                 if !crashed {
-                    update_instance_playtime(
+                    if let Err(error) = update_instance_playtime(
                         app_handle,
                         &run_state.instance_id,
                         &run_state.started_at,
                         &exit_status.exited_at,
-                    )?;
+                    ) {
+                        log::error!(
+                            "Failed to update playtime for {}: {}",
+                            run_state.instance_id,
+                            error
+                        );
+                    }
                 }
 
                 if let Err(e) = std::fs::remove_file(&exit_status_path) {
@@ -185,12 +191,18 @@ pub(crate) async fn reconcile_finished_process(
             "No exit status file for {}, using log file mtime as fallback",
             run_state.instance_id
         );
-        update_instance_playtime(
+        if let Err(error) = update_instance_playtime(
             app_handle,
             &run_state.instance_id,
             &run_state.started_at,
             &exited_at,
-        )?;
+        ) {
+            log::error!(
+                "Failed to update playtime for {} (fallback): {}",
+                run_state.instance_id,
+                error
+            );
+        }
     }
 
     let outcome = ExitOutcome {

@@ -237,7 +237,11 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 							const installedResource = createMemo(() => {
 								if (!props.project) return null;
 								const installedList = installedMap()[instance.id] || [];
-								return findInstalledResource(props.project, installedList);
+									return findInstalledResource(
+										props.project,
+										installedList,
+										props.versions,
+									);
 							});
 
 							const isAlreadyInstalled = createMemo(

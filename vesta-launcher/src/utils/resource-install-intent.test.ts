@@ -141,6 +141,23 @@ describe("resource install intent", () => {
 		).toBeDefined();
 	});
 
+	it("matches cross-platform resources by project version hash", () => {
+		expect(
+			findInstalledResource(
+				project(),
+				[
+					installed({
+						platform: "curseforge",
+						remote_id: "unknown",
+						display_name: "Different Name",
+						hash: "shared-hash",
+					}),
+				],
+				[version({ hash: "shared-hash" })],
+			),
+		).toBeDefined();
+	});
+
 	it("uses hashes before platform-specific version identity", () => {
 		expect(
 			isResourceUpdateAvailable(
