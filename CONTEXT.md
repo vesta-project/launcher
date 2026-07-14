@@ -172,6 +172,7 @@ sync, and final payload construction.
 
 Primary modules:
 
+- `vesta-launcher/src/utils/instance-draft.ts`
 - `vesta-launcher/src/components/pages/mini-pages/install/components/InstallForm.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/instance-details/instance-details.tsx`
 - `vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx`

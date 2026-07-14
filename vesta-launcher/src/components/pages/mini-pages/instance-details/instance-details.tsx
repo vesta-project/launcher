@@ -52,6 +52,13 @@ import { resolveResourceUrl } from "@utils/assets";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import { getCrashDetails, parseCrashDetails } from "@utils/crash-handler";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
+import {
+	applyInstanceEditDraft,
+	type InstanceEditDirty,
+	type InstanceEditDraft,
+	isInstanceEditDirty,
+	toInstanceEditHandoff,
+} from "@utils/instance-draft";
 import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
@@ -647,21 +654,41 @@ export default function InstanceDetails(
 			(slug() ? instancesState.launchingIds[slug()] : false) &&
 			!isRunningGlobal(),
 	);
-
-	const isDirty = createMemo(() => {
-		return (
-			isNameDirty() ||
-			isIconDirty() ||
-			isMinMemDirty() ||
-			isMaxMemDirty() ||
-			isJvmDirty() ||
-			isJavaPathDirty() ||
-			isResolutionDirty() ||
-			isHooksDirty() ||
-			isEnvDirty() ||
-			isLaunchActionDirty()
-		);
+	const currentEditDraft = (): InstanceEditDraft => ({
+		name: name(),
+		iconPath: iconPath(),
+		minMemory: minMemory()[0],
+		maxMemory: maxMemory()[0],
+		javaArgs: javaArgs(),
+		javaPath: javaPath(),
+		gameWidth: gameWidth(),
+		gameHeight: gameHeight(),
+		useGlobalResolution: useGlobalResolution(),
+		useGlobalJavaArgs: useGlobalJavaArgs(),
+		useGlobalJavaPath: useGlobalJavaPath(),
+		useGlobalHooks: useGlobalHooks(),
+		useGlobalEnvironmentVariables: useGlobalEnvironmentVariables(),
+		useGlobalLauncherAction: useGlobalLauncherAction(),
+		launcherActionOnLaunch: launcherActionOnLaunch(),
+		preLaunchHook: preLaunchHook(),
+		postExitHook: postExitHook(),
+		wrapperCommand: wrapperCommand(),
+		environmentVariables: environmentVariables(),
 	});
+	const currentEditDirty = (): InstanceEditDirty => ({
+		name: isNameDirty(),
+		icon: isIconDirty(),
+		minMem: isMinMemDirty(),
+		maxMem: isMaxMemDirty(),
+		jvm: isJvmDirty(),
+		javaPath: isJavaPathDirty(),
+		resolution: isResolutionDirty(),
+		hooks: isHooksDirty(),
+		env: isEnvDirty(),
+		launchAction: isLaunchActionDirty(),
+	});
+
+	const isDirty = createMemo(() => isInstanceEditDirty(currentEditDirty()));
 
 	const modpackIconBase64 = useModpackIcon(() => {
 		const current = instance();
@@ -814,38 +841,7 @@ export default function InstanceDetails(
 				...cleanProps,
 				slug: slug(),
 				activeTab: activeTab(),
-				// Capture unsaved settings
-				initialName: name(),
-				initialIconPath: iconPath(),
-				initialMinMemory: minMemory()[0],
-				initialMaxMemory: maxMemory()[0],
-				initialJavaArgs: javaArgs(),
-				initialJavaPath: javaPath(),
-				initialGameWidth: gameWidth(),
-				initialGameHeight: gameHeight(),
-				initialUseGlobalResolution: useGlobalResolution(),
-				initialUseGlobalJavaArgs: useGlobalJavaArgs(),
-				initialUseGlobalJavaPath: useGlobalJavaPath(),
-				initialUseGlobalHooks: useGlobalHooks(),
-				initialUseGlobalEnvironmentVariables: useGlobalEnvironmentVariables(),
-				initialUseGlobalLauncherAction: useGlobalLauncherAction(),
-				initialLauncherActionOnLaunch: launcherActionOnLaunch(),
-				initialPreLaunchHook: preLaunchHook(),
-				initialPostExitHook: postExitHook(),
-				initialWrapperCommand: wrapperCommand(),
-				initialEnvironmentVariables: environmentVariables(),
-				_dirty: {
-					name: isNameDirty(),
-					icon: isIconDirty(),
-					minMem: isMinMemDirty(),
-					maxMem: isMaxMemDirty(),
-					jvm: isJvmDirty(),
-					javaPath: isJavaPathDirty(),
-					resolution: isResolutionDirty(),
-					hooks: isHooksDirty(),
-					env: isEnvDirty(),
-					launchAction: isLaunchActionDirty(),
-				},
+				...toInstanceEditHandoff(currentEditDraft(), currentEditDirty()),
 			};
 		});
 	});
@@ -2324,31 +2320,7 @@ export default function InstanceDetails(
 		setSaving(true);
 		try {
 			const fresh = await getInstance(inst.id);
-			fresh.name = name();
-			fresh.iconPath = iconPath();
-			fresh.javaArgs = javaArgs() || null;
-			fresh.javaPath = javaPath() || null;
-			fresh.minMemory = minMemory()[0];
-			fresh.maxMemory = maxMemory()[0];
-
-			// New fields
-			fresh.useGlobalResolution = useGlobalResolution();
-			fresh.gameWidth = gameWidth();
-			fresh.gameHeight = gameHeight();
-			fresh.useGlobalJavaArgs = useGlobalJavaArgs();
-			fresh.useGlobalJavaPath = useGlobalJavaPath();
-			fresh.useGlobalHooks = useGlobalHooks();
-			fresh.useGlobalEnvironmentVariables = useGlobalEnvironmentVariables();
-			fresh.useGlobalLauncherAction = useGlobalLauncherAction();
-			fresh.launcherActionOnLaunch = useGlobalLauncherAction()
-				? null
-				: launcherActionOnLaunch();
-			fresh.preLaunchHook = preLaunchHook() || null;
-			fresh.postExitHook = postExitHook() || null;
-			fresh.wrapperCommand = wrapperCommand() || null;
-			fresh.environmentVariables = environmentVariables() || null;
-
-			await updateInstance(fresh);
+			await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
 			batch(() => {
 				// Clear temporary session icons once we've successfully saved to the backend
 				setCustomIconsThisSession([]);
