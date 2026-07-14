@@ -18,69 +18,6 @@ pub trait ActionHandler: Send + Sync {
     ) -> Result<()>;
 }
 
-/// Handler that cancels running tasks when the notification action 'cancel_task' is invoked.
-struct CancelTaskHandler {}
-
-impl ActionHandler for CancelTaskHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        // Defensive: client_key is required for task cancellation
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for cancel_task action"),
-        };
-
-        // Resolve TaskManager from app state and forward cancellation
-        // NOTE: `try_state` may not be available on older Tauri versions; use `state` which is
-        // present and will panic if not registered. Tests/registering TaskManager should ensure
-        // it is managed on app start. If it's missing at runtime, return an error instead of panicking.
-        let tm = app_handle.state::<TaskManager>();
-        tm.cancel_task(&key).map_err(|e: String| anyhow::anyhow!(e))
-    }
-}
-
-/// Handler that pauses running tasks when the notification action 'pause_task' is invoked.
-struct PauseTaskHandler {}
-
-impl ActionHandler for PauseTaskHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for pause_task action"),
-        };
-        let tm = app_handle.state::<TaskManager>();
-        tm.pause_task(&key).map_err(|e: String| anyhow::anyhow!(e))
-    }
-}
-
-/// Handler that resumes paused tasks when the notification action 'resume_task' is invoked.
-struct ResumeTaskHandler {}
-
-impl ActionHandler for ResumeTaskHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for resume_task action"),
-        };
-        let tm = app_handle.state::<TaskManager>();
-        tm.resume_task(&key).map_err(|e: String| anyhow::anyhow!(e))
-    }
-}
-
 /// Handler that resumes an interrupted instance operation
 struct ResumeInstanceOperationHandler {}
 
@@ -498,6 +435,7 @@ mod tests {
         // Initialize managers and add to app state
         let notification_manager = NotificationManager::new(handle.clone());
         let task_manager = crate::tasks::manager::TaskManager::new(handle.clone());
+        crate::tasks::notification_actions::register(&notification_manager);
 
         // Move managers into app state so handlers/commands can access them.
         handle.manage(notification_manager.clone());
@@ -575,9 +513,6 @@ impl NotificationManager {
         };
 
         // Register built-in action handlers
-        manager.register_action("cancel_task", Arc::new(CancelTaskHandler {}));
-        manager.register_action("pause_task", Arc::new(PauseTaskHandler {}));
-        manager.register_action("resume_task", Arc::new(ResumeTaskHandler {}));
         manager.register_action(
             "resume_instance_operation",
             Arc::new(ResumeInstanceOperationHandler {}),

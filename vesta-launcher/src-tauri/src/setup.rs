@@ -72,8 +72,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         interrupted_instances,
     );
 
-    app.manage(notification_manager);
-
     // Initialize DiscordManager
     let discord_manager = DiscordManager::new(app.handle().clone());
     let dm = discord_manager.clone();
@@ -85,6 +83,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize TaskManager
     let task_manager = TaskManager::new(app.handle().clone());
     app.manage(task_manager);
+
+    crate::tasks::notification_actions::register(&notification_manager);
+    app.manage(notification_manager);
 
     // Initialize SubscriptionManager
     let subscription_manager = Arc::new(SubscriptionManager::new(app.handle().clone()));

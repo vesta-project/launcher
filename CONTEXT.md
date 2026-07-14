@@ -189,6 +189,18 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/tasks/`
 - `vesta-launcher/src-tauri/src/notifications/`
 
+### Notification Action
+
+A command attached to a Notification. Notification Manager owns dispatch,
+persisted payload lookup, and auto-dismiss behavior. The Module that owns the
+command registers its Action Adapter; Task actions, for example, live beside
+Task Manager rather than inside Notification Manager.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/notifications/manager.rs`
+- `vesta-launcher/src-tauri/src/tasks/notification_actions.rs`
+
 ### Architecture Memory
 
 The repo-owned memory for domain language and load-bearing decisions.
