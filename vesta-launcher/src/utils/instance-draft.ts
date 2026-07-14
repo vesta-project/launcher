@@ -37,6 +37,101 @@ export interface InstanceEditDirty {
 	launchAction: boolean;
 }
 
+export interface InstanceInstallDirty {
+	name?: boolean;
+	version?: boolean;
+	loader?: boolean;
+	loaderVer?: boolean;
+	icon?: boolean;
+	memory?: boolean;
+}
+
+export interface InstanceInstallDraft {
+	name: string;
+	iconPath: string;
+	minecraftVersion: string;
+	modloader: string;
+	modloaderVersion: string;
+	minMemory: number;
+	maxMemory: number;
+	includeSnapshots: boolean;
+	dirty: InstanceInstallDirty;
+}
+
+export interface InstanceInstallDraftInput {
+	initialData?: Partial<Instance> & {
+		includeSnapshots?: boolean;
+		_dirty?: InstanceInstallDirty;
+	};
+	initialName?: string;
+	initialIcon?: string;
+	initialVersion?: string;
+	initialModloader?: string;
+	initialModloaderVersion?: string;
+	initialMinMemory?: number;
+	initialMaxMemory?: number;
+	initialIncludeSnapshots?: boolean;
+	defaultIcon: string;
+	defaultMinMemory: number;
+	defaultMaxMemory: number;
+}
+
+export interface InstanceInstallLink {
+	isModpack: boolean;
+	projectId?: string | null;
+	platform?: string | null;
+	versionId?: string | null;
+}
+
+export function createInstanceInstallDraft(
+	input: InstanceInstallDraftInput,
+): InstanceInstallDraft {
+	const data = input.initialData;
+	return {
+		name: data?.name || input.initialName || "",
+		iconPath: data?.iconPath || input.initialIcon || input.defaultIcon,
+		minecraftVersion: data?.minecraftVersion || input.initialVersion || "",
+		modloader: data?.modloader || input.initialModloader || "vanilla",
+		modloaderVersion:
+			data?.modloaderVersion || input.initialModloaderVersion || "",
+		minMemory:
+			data?.minMemory || input.initialMinMemory || input.defaultMinMemory,
+		maxMemory:
+			data?.maxMemory || input.initialMaxMemory || input.defaultMaxMemory,
+		includeSnapshots:
+			data?.includeSnapshots ?? input.initialIncludeSnapshots ?? false,
+		dirty: { ...(data?._dirty || {}) },
+	};
+}
+
+export function buildInstanceInstallPayload(
+	draft: Omit<InstanceInstallDraft, "dirty" | "includeSnapshots">,
+	link: InstanceInstallLink,
+): Partial<Instance> {
+	return {
+		name: draft.name,
+		iconPath: draft.iconPath,
+		modpackIconUrl: draft.iconPath.startsWith("http") ? draft.iconPath : null,
+		minecraftVersion: draft.minecraftVersion,
+		modloader: draft.modloader,
+		modloaderVersion: draft.modloaderVersion || null,
+		minMemory: draft.minMemory,
+		maxMemory: draft.maxMemory,
+		javaArgs: null,
+		useGlobalResolution: true,
+		useGlobalJavaArgs: true,
+		useGlobalJavaPath: true,
+		useGlobalHooks: true,
+		useGlobalEnvironmentVariables: true,
+		preLaunchHook: null,
+		wrapperCommand: null,
+		postExitHook: null,
+		modpackId: link.isModpack ? link.projectId || null : null,
+		modpackPlatform: link.isModpack ? link.platform || null : null,
+		modpackVersionId: link.isModpack ? link.versionId || null : null,
+	};
+}
+
 export function isInstanceEditDirty(dirty: InstanceEditDirty): boolean {
 	return Object.values(dirty).some(Boolean);
 }

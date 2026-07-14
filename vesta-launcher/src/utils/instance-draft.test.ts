@@ -1,5 +1,7 @@
 import {
 	applyInstanceEditDraft,
+	buildInstanceInstallPayload,
+	createInstanceInstallDraft,
 	type InstanceEditDirty,
 	type InstanceEditDraft,
 	isInstanceEditDirty,
@@ -77,5 +79,70 @@ describe("instance edit draft", () => {
 		expect(handoff.initialName).toBe("Edited");
 		expect(handoff.initialMaxMemory).toBe(8192);
 		expect(handoff._dirty).toEqual({ ...clean, name: true });
+	});
+});
+
+describe("instance install draft", () => {
+	it("applies initial-data precedence and preserves dirty handoff state", () => {
+		const initialized = createInstanceInstallDraft({
+			initialData: {
+				name: "Restored",
+				maxMemory: 6144,
+				_dirty: { name: true },
+			},
+			initialName: "Route name",
+			initialMaxMemory: 4096,
+			defaultIcon: "default-icon",
+			defaultMinMemory: 2048,
+			defaultMaxMemory: 3072,
+		});
+
+		expect(initialized.name).toBe("Restored");
+		expect(initialized.maxMemory).toBe(6144);
+		expect(initialized.minMemory).toBe(2048);
+		expect(initialized.dirty).toEqual({ name: true });
+	});
+
+	it("builds vanilla creation defaults without modpack links", () => {
+		const payload = buildInstanceInstallPayload(
+			{
+				name: "Fresh",
+				iconPath: "builtin:placeholder-1",
+				minecraftVersion: "1.21.1",
+				modloader: "vanilla",
+				modloaderVersion: "",
+				minMemory: 2048,
+				maxMemory: 4096,
+			},
+			{ isModpack: false, projectId: "ignored" },
+		);
+
+		expect(payload.modloaderVersion).toBeNull();
+		expect(payload.modpackId).toBeNull();
+		expect(payload.useGlobalHooks).toBe(true);
+	});
+
+	it("links modpacks and preserves remote icons", () => {
+		const payload = buildInstanceInstallPayload(
+			{
+				name: "Pack",
+				iconPath: "https://example.com/icon.png",
+				minecraftVersion: "1.21.1",
+				modloader: "fabric",
+				modloaderVersion: "0.16.0",
+				minMemory: 4096,
+				maxMemory: 8192,
+			},
+			{
+				isModpack: true,
+				projectId: "pack-id",
+				platform: "modrinth",
+				versionId: "version-id",
+			},
+		);
+
+		expect(payload.modpackIconUrl).toBe("https://example.com/icon.png");
+		expect(payload.modpackId).toBe("pack-id");
+		expect(payload.modpackVersionId).toBe("version-id");
 	});
 });
