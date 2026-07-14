@@ -306,8 +306,9 @@ pub(crate) async fn ensure_runtime_ready_for_launch(
     inst: &Instance,
     install_spec: InstallSpec,
 ) -> Result<piston_lib::game::runtime_preparation::RuntimePreparationReport, String> {
-    let initial_report = piston_lib::game::runtime_preparation::verify_runtime(&install_spec)
+    let initial_inspection = piston_lib::game::runtime_preparation::inspect_runtime(&install_spec)
         .map_err(|e| format!("Launch preflight verification failed: {}", e))?;
+    let initial_report = initial_inspection.verification;
     log_verification_report(&initial_report);
 
     if initial_report.ready {
@@ -316,6 +317,7 @@ pub(crate) async fn ensure_runtime_ready_for_launch(
                 final_report: initial_report.clone(),
                 initial_report,
                 repaired: false,
+                final_plan: initial_inspection.plan,
             },
         );
     }

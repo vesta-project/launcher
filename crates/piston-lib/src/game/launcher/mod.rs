@@ -14,7 +14,7 @@ pub use crate::game::installer::types::OsType;
 pub use arguments::{build_game_arguments, build_jvm_arguments, substitute_variables};
 pub use classpath::{build_classpath, maven_to_path};
 pub use natives::{extract_natives, get_natives_dir};
-pub use process::{kill_instance, launch_game, LogCallback};
+pub use process::{kill_instance, launch_game, launch_prepared_game, LogCallback};
 pub use registry::{
     get_instance, get_running_instances, is_instance_running, load_registry, register_instance,
     unregister_instance,

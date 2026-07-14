@@ -388,39 +388,38 @@ async fn install_instance_inner(
             None
         };
 
+    let vanilla_manifest: crate::game::launcher::version_parser::VersionManifest =
+        serde_json::from_value(version_info.clone())?;
+    let loader_manifest = loader_profile.as_ref().map(|profile| {
+        crate::game::installer::modloaders::profile_to_version_manifest(profile, &spec)
+    });
+    let runtime_plan = crate::game::runtime_plan::RuntimePlan::from_manifests(
+        crate::game::runtime_plan::RuntimeRequest::from(&spec),
+        vanilla_manifest,
+        loader_manifest,
+    )?;
+
     // ------------------------------------------------------------------
     // Phase 2: Download client jar + assets
     // ------------------------------------------------------------------
     reporter.start_step("Downloading game client", None);
     reporter.set_percent(15);
 
-    let installed_id = spec.installed_version_id();
-    let client_jar_path = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.jar", installed_id));
+    let installed_id = runtime_plan.installed_version_id.clone();
+    let client_jar_path = runtime_plan.installed_client_jar.clone();
 
     if !client_jar_path.exists() {
-        if let Some(client_url) = version_info
-            .get("downloads")
-            .and_then(|d| d.get("client"))
-            .and_then(|c| c.get("url"))
-            .and_then(|u| u.as_str())
-        {
-            let client_sha1 = version_info
-                .get("downloads")
-                .and_then(|d| d.get("client"))
-                .and_then(|c| c.get("sha1"))
-                .and_then(|s| s.as_str());
-
-            download_to_path(
-                &client,
-                client_url,
-                &client_jar_path,
-                client_sha1,
-                &*reporter,
-            )
-            .await?;
+        if let Some(client_download) = &runtime_plan.client_download {
+            if let Some(client_url) = client_download.url.as_deref() {
+                download_to_path(
+                    &client,
+                    client_url,
+                    &client_jar_path,
+                    client_download.sha1.as_deref(),
+                    &*reporter,
+                )
+                .await?;
+            }
         }
     }
 
@@ -428,15 +427,12 @@ async fn install_instance_inner(
     reporter.start_step("Downloading asset index", None);
     reporter.set_percent(20);
 
-    if let Some(asset_index) = version_info.get("assetIndex") {
-        let asset_index_id = asset_index
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("legacy");
-        let asset_index_path = spec
-            .assets_dir()
-            .join("indexes")
-            .join(format!("{}.json", asset_index_id));
+    if let Some(asset_index) = &runtime_plan.manifest.asset_index {
+        let asset_index_id = &asset_index.id;
+        let asset_index_path = runtime_plan
+            .asset_index_path
+            .clone()
+            .expect("asset index path");
         let asset_index_label = format!("assets/indexes/{}.json", asset_index_id);
 
         if !asset_index_path.exists()
@@ -446,14 +442,20 @@ async fn install_instance_inner(
         }
 
         if !asset_index_path.exists() {
-            if let Some(url) = asset_index.get("url").and_then(|u| u.as_str()) {
-                let sha1 = asset_index.get("sha1").and_then(|s| s.as_str());
-                download_to_path(&client, url, &asset_index_path, sha1, &*reporter).await?;
+            if !asset_index.url.is_empty() {
+                download_to_path(
+                    &client,
+                    &asset_index.url,
+                    &asset_index_path,
+                    Some(&asset_index.sha1),
+                    &*reporter,
+                )
+                .await?;
                 track_artifact_from_path(
                     asset_index_label,
                     &asset_index_path,
                     None,
-                    Some(url.to_string()),
+                    Some(asset_index.url.clone()),
                 )
                 .await?;
             }
@@ -510,24 +512,9 @@ async fn install_instance_inner(
     reporter.start_step("Downloading libraries", None);
     reporter.set_percent(40);
 
-    // Parse vanilla manifest from the already-loaded JSON
-    let vanilla_manifest: crate::game::launcher::version_parser::VersionManifest =
-        serde_json::from_value(version_info.clone())?;
-
-    // Convert loader profile to VersionManifest if present
-    // (borrow the profile so we can still use it for processors later)
-    let loader_manifest = loader_profile
-        .as_ref()
-        .map(|p| crate::game::installer::modloaders::profile_to_version_manifest(p, &spec));
-
-    let unified = process_and_download_libraries(
-        &spec,
-        vanilla_manifest,
-        loader_manifest,
-        client.clone(),
-        reporter.clone(),
-    )
-    .await?;
+    let unified =
+        process_and_download_libraries(&spec, &runtime_plan, client.clone(), reporter.clone())
+            .await?;
 
     // ------------------------------------------------------------------
     // Phase 4: Run Forge/NeoForge processors
@@ -558,17 +545,7 @@ async fn install_instance_inner(
     reporter.start_step("Setting up Java runtime", None);
     reporter.set_percent(95);
 
-    let java_requirement = crate::game::java_policy::java_requirement_from_version_detail_value(
-        &spec.version_id,
-        version_info.clone(),
-    )
-    .with_context(|| {
-        format!(
-            "Failed to resolve Java requirement from version detail for {}",
-            spec.version_id
-        )
-    })?;
-    let java_ver = JavaVersion::new(java_requirement.major_version);
+    let java_ver = JavaVersion::new(runtime_plan.java_requirement.major_version);
 
     if spec.java_path.is_none() {
         get_or_install_jre(&spec.jre_dir(), &java_ver, client, &*reporter).await?;

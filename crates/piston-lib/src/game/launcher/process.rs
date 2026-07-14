@@ -1,14 +1,12 @@
 /// Process management and game launch orchestration
-use crate::game::installer::types::OsType;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
     classpath::{build_classpath_filtered, validate_classpath},
     natives::extract_natives,
     registry::register_instance,
     types::{GameInstance, LaunchResult, LaunchSpec},
-    unified_manifest::UnifiedManifest,
-    version_parser::resolve_version_chain,
 };
+use crate::game::runtime_plan::{RuntimePlan, RuntimeRequest};
 use crate::utils::process::PistonCommandExt;
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -71,8 +69,20 @@ pub async fn launch_game(
     spec: LaunchSpec,
     log_callback: Option<LogCallback>,
 ) -> Result<LaunchResult> {
+    let plan = RuntimePlan::resolve_installed(RuntimeRequest::from(&spec))
+        .context("Failed to resolve runtime plan")?;
+    launch_prepared_game(spec, plan, log_callback).await
+}
+
+pub async fn launch_prepared_game(
+    spec: LaunchSpec,
+    plan: RuntimePlan,
+    log_callback: Option<LogCallback>,
+) -> Result<LaunchResult> {
+    plan.validate_launch_spec(&spec)
+        .context("Prepared runtime does not match launch")?;
     log::info!("Launching game instance: {}", spec.instance_id);
-    let os = OsType::current();
+    let os = plan.request.os;
     log::info!(
         "[launch_game] start: instance_id={}, version_id={}, os={:?}",
         spec.instance_id,
@@ -80,65 +90,7 @@ pub async fn launch_game(
         os
     );
 
-    // 1. Resolve version chain (handle inheritsFrom)
-    // Prefer a loader-specific manifest (installed id) when available and
-    // fall back to the vanilla manifest to preserve backward compatibility.
-    let installed_id = spec.installed_version_id();
-    log::info!(
-        "Resolving version chain for: {} (installed id: {})",
-        spec.version_id,
-        installed_id
-    );
-
-    let manifest_path = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.json", installed_id));
-
-    // TODO: Implement a lighter-weight preflight check for the loader manifest.
-    // This should cheaply verify that `manifest_path` points to a readable JSON file and
-    // emit a clear, user-facing error if the loader manifest is missing or obviously corrupt,
-    // instead of relying solely on `resolve_version_chain` to fail later. For now, we only
-    // check for existence here and assume `resolve_version_chain` will handle any deeper issues.
-
-    let manifest = if manifest_path.exists() {
-        log::info!("Found loader manifest at: {:?}", manifest_path);
-
-        // Try to load as a pre-resolved UnifiedManifest first (this is what our installer writes)
-        match UnifiedManifest::normalize_and_save_if_stale(&manifest_path) {
-            Ok(m) => {
-                log::info!("Successfully loaded pre-resolved UnifiedManifest");
-                m
-            }
-            Err(e) => {
-                log::info!(
-                    "File at {:?} is not a UnifiedManifest, trying to resolve version chain: {}",
-                    manifest_path,
-                    e
-                );
-                let v = resolve_version_chain(&installed_id, &spec.data_dir)
-                    .await
-                    .context(format!(
-                        "Failed to resolve version chain for loader version {}",
-                        installed_id
-                    ))?;
-                UnifiedManifest::from(v)
-            }
-        }
-    } else {
-        log::info!(
-            "No loader manifest found at {:?}, falling back to vanilla: {}",
-            manifest_path,
-            spec.version_id
-        );
-        let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
-            .await
-            .context(format!(
-                "Failed to resolve version chain for vanilla version {}",
-                spec.version_id
-            ))?;
-        UnifiedManifest::from(v)
-    };
+    let manifest = plan.manifest;
 
     // 2. Verify Java installation
     verify_java(&spec.java_path).context("Java verification failed")?;
@@ -153,11 +105,10 @@ pub async fn launch_game(
 
     // 3. Extract natives
     log::debug!("Extracting native libraries");
-    // Natives are shared per version, not per instance - use spec.natives_dir()
-    let natives_dir = spec.natives_dir();
+    let natives_dir = plan.natives_dir;
 
     // Perform extraction
-    extract_natives(&manifest.libraries, &spec.libraries_dir(), &natives_dir, os)
+    extract_natives(&manifest.libraries, &plan.libraries_dir, &natives_dir, os)
         .await
         .context("Failed to extract native libraries")?;
 
@@ -165,7 +116,7 @@ pub async fn launch_game(
 
     // 4. Validate classpath requirements before building
     log::debug!("Validating classpath requirements");
-    let validation = validate_classpath(&libraries_for_classpath, &spec.libraries_dir(), os)
+    let validation = validate_classpath(&libraries_for_classpath, &plan.libraries_dir, os)
         .context("Classpath validation failed")?;
 
     if !validation.missing_libraries.is_empty() {
@@ -188,28 +139,10 @@ pub async fn launch_game(
     log::debug!("Building classpath");
 
     let mut classpath =
-        build_classpath_filtered(&libraries_for_classpath, &spec.libraries_dir(), os, &[])
+        build_classpath_filtered(&libraries_for_classpath, &plan.libraries_dir, os, &[])
             .context("Failed to build classpath")?;
 
-    // Add the game JAR to classpath. Prefer a modloader-installed JAR (e.g.
-    // versions/fabric-loader-.../fabric-loader-....jar) and fall back to the
-    // vanilla path if the installed variant doesn't exist.
-    let installed_id = spec.installed_version_id();
-    let installed_jar = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.jar", installed_id));
-
-    let vanilla_jar = spec
-        .versions_dir()
-        .join(&spec.version_id)
-        .join(format!("{}.jar", spec.version_id));
-
-    let game_jar = if installed_jar.exists() {
-        installed_jar
-    } else {
-        vanilla_jar
-    };
+    let game_jar = plan.client_jar;
 
     if !game_jar.exists() {
         log::error!("Game JAR not found: {:?}", game_jar);

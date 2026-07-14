@@ -1540,12 +1540,15 @@ pub async fn launch_instance(
     let prepared =
         crate::instance::launch_preparation::prepare_instance_launch(&app_handle, &instance_data)
             .await?;
-    crate::instance::launch_preparation::ensure_runtime_ready_for_launch(
+    let runtime = crate::instance::launch_preparation::ensure_runtime_ready_for_launch(
         &app_handle,
         &instance_data,
         prepared.install_spec.clone(),
     )
     .await?;
+    let runtime_plan = runtime.final_plan.ok_or_else(|| {
+        "Launch blocked: runtime verification produced no launch plan".to_string()
+    })?;
 
     log::info!(
         "[launch_instance] Launching game: {} {}",
@@ -1608,8 +1611,9 @@ pub async fn launch_instance(
     }
 
     let join = tokio::task::spawn_blocking(move || {
-        futures::executor::block_on(piston_lib::game::launcher::launch_game(
+        futures::executor::block_on(piston_lib::game::launcher::launch_prepared_game(
             launch_spec,
+            runtime_plan,
             Some(log_callback),
         ))
     })

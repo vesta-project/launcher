@@ -1,6 +1,9 @@
 use crate::game::installer::types::{
     InstallSpec, RepairScope, VerificationIssue, VerificationIssueKind, VerificationResult,
 };
+use crate::game::runtime_plan::{
+    ManifestSource, RuntimeInspection, RuntimePlan, RuntimePlanErrorKind, RuntimeRequest,
+};
 use anyhow::Result;
 use sha1::{Digest, Sha1};
 use std::io::Read;
@@ -234,6 +237,10 @@ fn verify_asset_objects(assets_dir: &Path, asset_index_id: &str) -> Vec<Verifica
 }
 
 pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResult> {
+    Ok(inspect_instance_readiness(spec)?.verification)
+}
+
+pub fn inspect_instance_readiness(spec: &InstallSpec) -> Result<RuntimeInspection> {
     let mut checked = 0usize;
     let mut skipped_native = 0usize;
     let mut skipped_no_path = 0usize;
@@ -241,144 +248,60 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     let mut present_native_artifacts = 0usize;
     let mut issues = Vec::new();
     let current_os = crate::game::installer::types::OsType::current();
-    let installed_id = spec.installed_version_id();
-    let installed_manifest = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.json", installed_id));
-    let vanilla_manifest = spec
-        .versions_dir()
-        .join(&spec.version_id)
-        .join(format!("{}.json", spec.version_id));
-
-    // Determine which manifest to use
-    let (manifest_path, manifest_source) = if installed_manifest.exists() {
-        (installed_manifest, "installed")
-    } else if spec.modloader.is_none()
-        || spec.modloader == Some(crate::game::installer::types::ModloaderType::Vanilla)
-    {
-        (vanilla_manifest, "vanilla")
-    } else {
-        log::error!(
-            "[verifier] Modloader version manifest is missing: {}",
-            spec.installed_version_id()
-        );
-        issues.push(VerificationIssue {
-            kind: VerificationIssueKind::Missing,
-            artifact_class: "version-manifest".to_string(),
-            path: installed_manifest.to_string_lossy().to_string(),
-            detail: format!(
-                "Modloader version manifest is missing: {}",
-                spec.installed_version_id()
-            ),
-        });
-        return Ok(VerificationResult {
-            ready: false,
-            checked,
-            issues,
-        });
+    let plan = match RuntimePlan::resolve_installed(RuntimeRequest::from(spec)) {
+        Ok(plan) => plan,
+        Err(error) => {
+            checked += 1;
+            issues.push(VerificationIssue {
+                kind: if error.kind == RuntimePlanErrorKind::Missing {
+                    VerificationIssueKind::Missing
+                } else {
+                    VerificationIssueKind::Mismatch
+                },
+                artifact_class: "version-manifest".to_string(),
+                path: error.path.to_string_lossy().to_string(),
+                detail: error.detail,
+            });
+            return Ok(RuntimeInspection {
+                plan: None,
+                verification: VerificationResult {
+                    ready: false,
+                    checked,
+                    issues,
+                },
+            });
+        }
     };
 
     log::info!(
         "[verifier] Reading manifest: source={} path={} version={} modloader={:?}",
-        manifest_source,
-        manifest_path.display(),
+        match plan.manifest_source {
+            ManifestSource::Installed => "installed",
+            ManifestSource::Vanilla => "vanilla",
+        },
+        plan.manifest_path.display(),
         spec.version_id,
         spec.modloader,
     );
 
     checked += 1;
-    if !manifest_path.exists() {
-        log::error!(
-            "[verifier] Version manifest does not exist: {}",
-            manifest_path.display()
-        );
-        issues.push(VerificationIssue {
-            kind: VerificationIssueKind::Missing,
-            artifact_class: "version-manifest".to_string(),
-            path: manifest_path.to_string_lossy().to_string(),
-            detail: "Version manifest is missing".to_string(),
-        });
-        return Ok(VerificationResult {
-            ready: false,
-            checked,
-            issues,
-        });
-    }
-
-    let _manifest_json = match std::fs::read_to_string(&manifest_path) {
-        Ok(raw) => raw,
-        Err(e) => {
-            log::error!(
-                "[verifier] Version manifest unreadable: {} — {}",
-                manifest_path.display(),
-                e
-            );
-            issues.push(VerificationIssue {
-                kind: VerificationIssueKind::Mismatch,
-                artifact_class: "version-manifest".to_string(),
-                path: manifest_path.to_string_lossy().to_string(),
-                detail: format!("Version manifest is unreadable: {}", e),
-            });
-            return Ok(VerificationResult {
-                ready: false,
-                checked,
-                issues,
-            });
-        }
-    };
-
-    // Try to load a UnifiedManifest (handles both VersionManifest and UnifiedManifest)
-    let unified =
-        match crate::game::launcher::unified_manifest::UnifiedManifest::normalize_and_save_if_stale(
-            &manifest_path,
-        ) {
-            Ok(u) => u,
-            Err(e) => {
-                log::error!(
-                    "[verifier] Failed to parse manifest into unified manifest: {} — {}",
-                    manifest_path.display(),
-                    e
-                );
-                issues.push(VerificationIssue {
-                    kind: VerificationIssueKind::Mismatch,
-                    artifact_class: "version-manifest".to_string(),
-                    path: manifest_path.to_string_lossy().to_string(),
-                    detail: format!("Version manifest could not be parsed: {}", e),
-                });
-                return Ok(VerificationResult {
-                    ready: false,
-                    checked,
-                    issues,
-                });
-            }
-        };
-
-    let installed_jar = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.jar", installed_id));
-    let vanilla_jar = spec
-        .versions_dir()
-        .join(&spec.version_id)
-        .join(format!("{}.jar", spec.version_id));
     checked += 1;
-    if !installed_jar.exists() && !vanilla_jar.exists() {
+    if !plan.installed_client_jar.exists() && !plan.vanilla_client_jar.exists() {
         log::warn!(
             "[verifier] Client JAR missing: installed_path={} vanilla_path={}",
-            installed_jar.display(),
-            vanilla_jar.display()
+            plan.installed_client_jar.display(),
+            plan.vanilla_client_jar.display()
         );
         issues.push(VerificationIssue {
             kind: VerificationIssueKind::Missing,
             artifact_class: "client-jar".to_string(),
-            path: installed_jar.to_string_lossy().to_string(),
+            path: plan.installed_client_jar.to_string_lossy().to_string(),
             detail: "Neither installed-version nor vanilla client jar exists".to_string(),
         });
     } else {
         log::info!(
             "[verifier] Client JAR found: {}",
-            if installed_jar.exists() {
+            if plan.installed_client_jar.exists() {
                 "installed"
             } else {
                 "vanilla"
@@ -387,12 +310,9 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     }
 
     // Asset index check (use unified manifest representation)
-    if let Some(ai) = &unified.asset_index {
+    if let Some(ai) = &plan.manifest.asset_index {
         let asset_index_id = &ai.id;
-        let index_path = spec
-            .assets_dir()
-            .join("indexes")
-            .join(format!("{}.json", asset_index_id));
+        let index_path = plan.asset_index_path.as_ref().expect("asset index path");
         checked += 1;
         if !index_path.exists() {
             log::warn!(
@@ -423,10 +343,10 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     // which libraries are native and what their artifact paths are.
     log::info!(
         "[verifier] Checking {} library entries in manifest",
-        unified.libraries.len()
+        plan.manifest.libraries.len()
     );
 
-    for lib in &unified.libraries {
+    for lib in &plan.manifest.libraries {
         let name = &lib.name;
 
         if !lib.include_in_classpath {
@@ -440,7 +360,7 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
 
             if !lib.path.is_empty() {
                 checked += 1;
-                let full = spec.libraries_dir().join(&lib.path);
+                let full = plan.libraries_dir.join(&lib.path);
                 if full.exists() {
                     present_native_artifacts += 1;
                     log::debug!(
@@ -468,7 +388,7 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
 
         if !lib.path.is_empty() {
             checked += 1;
-            let full = spec.libraries_dir().join(&lib.path);
+            let full = plan.libraries_dir.join(&lib.path);
             if !full.exists() {
                 log::warn!(
                     "[verifier] Missing library: name={} path={}",
@@ -537,7 +457,7 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
 
     if expected_native_libraries > 0 {
         checked += 1;
-        let natives_dir = spec.natives_dir();
+        let natives_dir = plan.natives_dir.clone();
         let extracted_native_binaries = count_native_binaries(&natives_dir, current_os);
         if extracted_native_binaries > 0 {
             present_native_artifacts += extracted_native_binaries;
@@ -610,10 +530,13 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
         skipped_no_path,
     );
 
-    Ok(VerificationResult {
-        ready: issues.is_empty(),
-        checked,
-        issues,
+    Ok(RuntimeInspection {
+        plan: Some(plan),
+        verification: VerificationResult {
+            ready: issues.is_empty(),
+            checked,
+            issues,
+        },
     })
 }
 
@@ -713,6 +636,9 @@ mod tests {
 
         let manifest = json!({
             "id": version_id,
+            "type": "release",
+            "releaseTime": "2023-06-12T00:00:00Z",
+            "javaVersion": { "majorVersion": 17, "component": "java-runtime-gamma" },
             "assetIndex": {
                 "id": "30",
                 "sha1": "asset-index-sha1",
@@ -790,6 +716,9 @@ mod tests {
 
         let manifest = json!({
             "id": version_id,
+            "type": "release",
+            "releaseTime": "2023-06-12T00:00:00Z",
+            "javaVersion": { "majorVersion": 17, "component": "java-runtime-gamma" },
             "assetIndex": {
                 "id": "30",
                 "sha1": "asset-index-sha1",

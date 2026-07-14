@@ -3,9 +3,9 @@
 
 use crate::game::installer::core::downloader::download_to_path;
 use crate::game::installer::core::library::{LibraryDownloader, LibrarySpec};
-use crate::game::installer::types::{InstallSpec, OsType, ProgressReporter};
+use crate::game::installer::types::{InstallSpec, ProgressReporter};
 use crate::game::launcher::unified_manifest::{UnifiedLibrary, UnifiedManifest};
-use crate::game::launcher::version_parser::VersionManifest;
+use crate::game::runtime_plan::RuntimePlan;
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
 use reqwest::Client;
@@ -18,15 +18,11 @@ use std::sync::Arc;
 /// download all libraries, extract all natives, and return the result.
 pub async fn process_and_download_libraries(
     spec: &InstallSpec,
-    vanilla: VersionManifest,
-    loader: Option<VersionManifest>,
+    plan: &RuntimePlan,
     client: Client,
     reporter: Arc<dyn ProgressReporter>,
 ) -> Result<UnifiedManifest> {
-    let os = OsType::current();
-
-    // 1. Merge manifests into a UnifiedManifest
-    let unified = UnifiedManifest::merge(vanilla, loader, os);
+    let unified = plan.manifest.clone();
 
     let total_libs = unified.libraries.len();
     let native_libs: Vec<_> = unified.libraries.iter().filter(|l| l.is_native).collect();

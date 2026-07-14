@@ -8,6 +8,7 @@ use crate::game::installer;
 use crate::game::installer::types::{
     InstallSpec, ProgressReporter, RemediationPolicy, VerificationResult,
 };
+use crate::game::runtime_plan::{RuntimeInspection, RuntimePlan};
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -16,34 +17,42 @@ pub struct RuntimePreparationReport {
     pub initial_report: VerificationResult,
     pub final_report: VerificationResult,
     pub repaired: bool,
+    pub final_plan: Option<RuntimePlan>,
 }
 
 pub async fn prepare_runtime(
     spec: InstallSpec,
     reporter: Arc<dyn ProgressReporter>,
 ) -> Result<RuntimePreparationReport> {
-    let initial_report = verify_runtime(&spec)?;
+    let initial = inspect_runtime(&spec)?;
+    let initial_report = initial.verification;
 
     if !should_repair(&initial_report, spec.remediation_policy) {
         return Ok(RuntimePreparationReport {
             final_report: initial_report.clone(),
             initial_report,
             repaired: false,
+            final_plan: initial.plan,
         });
     }
 
     installer::install_instance(spec.clone(), reporter).await?;
-    let final_report = verify_runtime(&spec)?;
+    let final_inspection = inspect_runtime(&spec)?;
 
     Ok(RuntimePreparationReport {
         initial_report,
-        final_report,
+        final_report: final_inspection.verification,
         repaired: true,
+        final_plan: final_inspection.plan,
     })
 }
 
 pub fn verify_runtime(spec: &InstallSpec) -> Result<VerificationResult> {
     installer::verify_instance(spec)
+}
+
+pub fn inspect_runtime(spec: &InstallSpec) -> Result<RuntimeInspection> {
+    installer::verifier::inspect_instance_readiness(spec)
 }
 
 fn should_repair(report: &VerificationResult, policy: RemediationPolicy) -> bool {
