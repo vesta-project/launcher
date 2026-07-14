@@ -134,6 +134,7 @@ workflow notifications remain outside the Ledger.
 Primary modules:
 
 - `vesta-launcher/src-tauri/src/resources/ledger.rs`
+- `vesta-launcher/src-tauri/src/resources/update_policy.rs`
 - `vesta-launcher/src-tauri/src/resources/watcher.rs`
 - `vesta-launcher/src-tauri/src/tasks/resource_download.rs`
 

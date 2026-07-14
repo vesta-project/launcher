@@ -3,8 +3,8 @@ use base64::{engine::general_purpose, Engine as _};
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ReleaseType, ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef,
-    ResourceType, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
+    ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::models::resource_update::{
     InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
@@ -515,7 +515,12 @@ pub async fn check_instance_updates_lightweight(
                     .get_versions(platform, &res.remote_id, ignore_version_cache, None, None)
                     .await
                     .ok()?;
-                let best = find_best_resource_update(&versions, &res, &mc_version, &loader)?;
+                let best = crate::resources::update_policy::find_best_update(
+                    &versions,
+                    &res,
+                    &mc_version,
+                    &loader,
+                )?;
                 if best.id == res.remote_version_id {
                     return Some((res.id, None));
                 }
@@ -569,130 +574,6 @@ fn source_platform_from_str(platform: &str) -> Option<SourcePlatform> {
         "curseforge" => Some(SourcePlatform::CurseForge),
         _ => None,
     }
-}
-
-fn resource_type_from_str(resource_type: &str) -> Option<ResourceType> {
-    match resource_type {
-        "mod" => Some(ResourceType::Mod),
-        "resourcepack" => Some(ResourceType::ResourcePack),
-        "shader" => Some(ResourceType::Shader),
-        "datapack" => Some(ResourceType::DataPack),
-        "modpack" => Some(ResourceType::Modpack),
-        "world" => Some(ResourceType::World),
-        _ => None,
-    }
-}
-
-fn release_type_from_str(release_type: &str) -> ReleaseType {
-    match release_type {
-        "alpha" => ReleaseType::Alpha,
-        "beta" => ReleaseType::Beta,
-        _ => ReleaseType::Release,
-    }
-}
-
-fn is_release_allowed(candidate: ReleaseType, current: ReleaseType) -> bool {
-    match current {
-        ReleaseType::Release => candidate == ReleaseType::Release,
-        ReleaseType::Beta => candidate == ReleaseType::Release || candidate == ReleaseType::Beta,
-        ReleaseType::Alpha => true,
-    }
-}
-
-fn release_rank(release_type: ReleaseType) -> u8 {
-    match release_type {
-        ReleaseType::Release => 0,
-        ReleaseType::Beta => 1,
-        ReleaseType::Alpha => 2,
-    }
-}
-
-fn is_game_version_compatible(supported: &[String], target: &str) -> bool {
-    let normalized_target = normalize_mc_version(target);
-    let target_major_minor = normalized_target
-        .split('.')
-        .take(2)
-        .collect::<Vec<_>>()
-        .join(".");
-
-    supported.iter().any(|version| {
-        let normalized = normalize_mc_version(version);
-        normalized == normalized_target || normalized == format!("{}.x", target_major_minor)
-    })
-}
-
-fn normalize_mc_version(version: &str) -> String {
-    version.strip_suffix(".0").unwrap_or(version).to_string()
-}
-
-fn version_matches_loader(
-    version: &ResourceVersion,
-    instance_loader: &str,
-    resource_type: Option<ResourceType>,
-) -> bool {
-    let inst_loader = instance_loader.to_lowercase();
-    let normalized_loaders = version
-        .loaders
-        .iter()
-        .map(|loader| loader.to_lowercase())
-        .collect::<Vec<_>>();
-
-    match resource_type {
-        Some(ResourceType::Shader) => inst_loader != "vanilla" && !inst_loader.is_empty(),
-        Some(ResourceType::ResourcePack) | Some(ResourceType::DataPack) => true,
-        Some(ResourceType::Mod) => {
-            if inst_loader == "vanilla" || inst_loader.is_empty() {
-                return false;
-            }
-            normalized_loaders
-                .iter()
-                .any(|loader| loader == &inst_loader)
-                || (inst_loader == "quilt"
-                    && normalized_loaders.iter().any(|loader| loader == "fabric"))
-                || (inst_loader == "neoforge"
-                    && normalized_loaders.iter().any(|loader| loader == "forge"))
-        }
-        Some(ResourceType::Modpack) => true,
-        _ => {
-            if inst_loader == "vanilla" || inst_loader.is_empty() {
-                normalized_loaders.is_empty()
-                    || normalized_loaders
-                        .iter()
-                        .any(|loader| loader == "minecraft")
-            } else {
-                normalized_loaders
-                    .iter()
-                    .any(|loader| loader == &inst_loader)
-                    || (inst_loader == "quilt"
-                        && normalized_loaders.iter().any(|loader| loader == "fabric"))
-                    || (inst_loader == "neoforge"
-                        && normalized_loaders.iter().any(|loader| loader == "forge"))
-            }
-        }
-    }
-}
-
-fn find_best_resource_update(
-    versions: &[ResourceVersion],
-    resource: &crate::models::installed_resource::InstalledResource,
-    game_version: &str,
-    loader: &str,
-) -> Option<ResourceVersion> {
-    let current_release = release_type_from_str(&resource.release_type);
-    let resource_type = resource_type_from_str(&resource.resource_type);
-
-    versions
-        .iter()
-        .filter(|version| {
-            is_game_version_compatible(&version.game_versions, game_version)
-                && version_matches_loader(version, loader, resource_type)
-                && is_release_allowed(version.release_type, current_release)
-        })
-        .min_by_key(|version| {
-            let explicit = version.game_versions.iter().any(|v| v == game_version);
-            (!explicit, release_rank(version.release_type))
-        })
-        .cloned()
 }
 
 #[tauri::command]
