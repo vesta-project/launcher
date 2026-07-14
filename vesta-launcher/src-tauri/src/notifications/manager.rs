@@ -2,7 +2,6 @@ use crate::notifications::models::{
     CreateNotificationInput, Notification, NotificationSeverity, NotificationType,
 };
 use crate::notifications::store::NotificationStore;
-use crate::tasks::manager::TaskManager;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -16,42 +15,6 @@ pub trait ActionHandler: Send + Sync {
         client_key: Option<String>,
         payload: Option<serde_json::Value>,
     ) -> Result<()>;
-}
-
-/// Handler that resumes an interrupted instance operation
-struct ResumeInstanceOperationHandler {}
-
-impl ActionHandler for ResumeInstanceOperationHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for resume_instance_operation action"),
-        };
-
-        // Extract ID from key (interrupted_instance_{id})
-        let id_str = key.replace("interrupted_instance_", "");
-        let id = id_str
-            .parse::<i32>()
-            .map_err(|_| anyhow::anyhow!("Invalid instance ID in client_key"))?;
-
-        let handle = app_handle.clone();
-
-        tauri::async_runtime::spawn(async move {
-            let tm = handle.state::<TaskManager>();
-            if let Err(e) =
-                crate::commands::instances::resume_instance_operation(handle.clone(), tm, id).await
-            {
-                log::error!("[ResumeInstanceOperationHandler] Failed to resume: {}", e);
-            }
-        });
-
-        Ok(())
-    }
 }
 
 /// Handler that restarts the app when the notification action 'restart_app' is invoked.
@@ -513,10 +476,6 @@ impl NotificationManager {
         };
 
         // Register built-in action handlers
-        manager.register_action(
-            "resume_instance_operation",
-            Arc::new(ResumeInstanceOperationHandler {}),
-        );
         manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
         manager.register_action("install_app_update", Arc::new(InstallUpdateHandler {}));
         manager.register_action("download_update", Arc::new(DownloadUpdateHandler {}));

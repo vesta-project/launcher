@@ -85,6 +85,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(task_manager);
 
     crate::tasks::notification_actions::register(&notification_manager);
+    crate::instance::notification_actions::register(&notification_manager);
     app.manage(notification_manager);
 
     // Initialize SubscriptionManager
