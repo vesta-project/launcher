@@ -94,12 +94,15 @@ import {
 	resolveCompatibleVersionSelection,
 } from "@utils/version-selection";
 import {
+	createPreloadableLazyComponent,
+	createRetainedTabLoader,
+} from "@utils/preloadable-lazy";
+import {
 	batch,
 	createEffect,
 	createMemo,
 	createResource,
 	createSignal,
-	lazy,
 	on,
 	onCleanup,
 	onMount,
@@ -114,36 +117,64 @@ import type { ModpackVersion } from "./modpack-version-selector";
 import { HomeTab } from "./tabs/HomeTab";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
 
-const ConsoleTab = lazy(() =>
+const ConsoleTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/ConsoleTab").then((module) => ({
 		default: module.ConsoleTab,
 	})),
 );
-const CrashTab = lazy(() =>
+const CrashTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/CrashTab").then((module) => ({
 		default: module.CrashTab,
 	})),
 );
-const ResourcesTab = lazy(() =>
+const ResourcesTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/ResourcesTab").then((module) => ({
 		default: module.ResourcesTab,
 	})),
 );
-const ScreenshotsTab = lazy(() =>
+const ScreenshotsTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/ScreenshotsTab").then((module) => ({
 		default: module.ScreenshotsTab,
 	})),
 );
-const SettingsTab = lazy(() =>
+const SettingsTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/SettingsTab").then((module) => ({
 		default: module.SettingsTab,
 	})),
 );
-const VersioningTab = lazy(() =>
+const VersioningTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/VersioningTab").then((module) => ({
 		default: module.VersioningTab,
 	})),
 );
+
+const ConsoleTab = ConsoleTabModule.Component;
+const CrashTab = CrashTabModule.Component;
+const ResourcesTab = ResourcesTabModule.Component;
+const ScreenshotsTab = ScreenshotsTabModule.Component;
+const SettingsTab = SettingsTabModule.Component;
+const VersioningTab = VersioningTabModule.Component;
+
+const instanceTabLoaders: Partial<Record<TabType, () => Promise<unknown>>> = {
+	console: ConsoleTabModule.preload,
+	crash: CrashTabModule.preload,
+	resources: ResourcesTabModule.preload,
+	screenshots: ScreenshotsTabModule.preload,
+	settings: SettingsTabModule.preload,
+	versioning: VersioningTabModule.preload,
+};
+
+function InstanceTabLoading(props: { label: string }) {
+	return (
+		<div class={styles["instance-tab-loading"]} aria-live="polite">
+			<span
+				class={styles["instance-tab-loading__spinner"]}
+				data-essential-motion
+			/>
+			<span>Loading {props.label}…</span>
+		</div>
+	);
+}
 
 type LightweightUpdateCheckResult = {
 	resourceUpdates: Array<{
@@ -938,9 +969,18 @@ export default function InstanceDetails(
 	});
 
 	const [selectedTab, setSelectedTab] = createSignal<TabType>(activeTab());
+	const instanceTabLoader = createRetainedTabLoader(
+		activeTab(),
+		(tab) => instanceTabLoaders[tab],
+		(tab, error) => {
+			console.warn(`Failed to preload instance tab ${tab}:`, error);
+		},
+	);
 
 	createEffect(() => {
-		setSelectedTab(activeTab());
+		const tab = activeTab();
+		setSelectedTab(tab);
+		instanceTabLoader.retain(tab);
 	});
 
 	createEffect(
@@ -2468,8 +2508,11 @@ export default function InstanceDetails(
 
 	const handleTabChange = (tab: TabType) => {
 		if (tab === activeTab()) return;
+		instanceTabLoader.prepare(tab);
 		setSelectedTab(tab);
-		activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
+		// Tabs are state within this page, not separate router entries. Replacing
+		// the query keeps the instance shell mounted while tab code suspends.
+		activeRouter()?.updateQuery("activeTab", tab);
 	};
 
 	createEffect(() => {
@@ -2489,6 +2532,7 @@ export default function InstanceDetails(
 				tabs={instanceTabs()}
 				activeTab={selectedTab()}
 				onTabChange={(v) => handleTabChange(v as TabType)}
+				onTabIntent={(v) => instanceTabLoader.preload(v as TabType)}
 			>
 				<div
 					class={styles["content-wrapper"]}
@@ -2683,7 +2727,7 @@ export default function InstanceDetails(
 
 								<div class={styles["instance-tab-content"]}>
 									<TabsContent value="home">
-										<Show when={activeTab() === "home"}>
+										<Show when={instanceTabLoader.visitedTabs().has("home")}>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-grid"]}>
 													{Array.from({ length: 4 }).map(() => (
@@ -2702,15 +2746,13 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="console">
-										<Show when={activeTab() === "console"}>
+										<Show when={instanceTabLoader.visitedTabs().has("console")}>
 											<Show when={instance.loading && !instance.latest}>
 												<Skeleton class={styles["skeleton-console"]} />
 											</Show>
 											<Show when={instance.latest}>
 												<Suspense
-													fallback={
-														<Skeleton class={styles["skeleton-console"]} />
-													}
+													fallback={<InstanceTabLoading label="console" />}
 												>
 													<ConsoleTab
 														instanceSlug={slug()}
@@ -2722,9 +2764,14 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="resources">
-										<Show when={activeTab() === "resources" && instance.latest}>
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("resources") &&
+												instance.latest
+											}
+										>
 											<Suspense
-												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+												fallback={<InstanceTabLoading label="resources" />}
 											>
 												<ResourcesTab
 													instance={inst()}
@@ -2765,9 +2812,14 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="crash">
-										<Show when={activeTab() === "crash" && instance.latest}>
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("crash") &&
+												instance.latest
+											}
+										>
 											<Suspense
-												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+												fallback={<InstanceTabLoading label="crash report" />}
 											>
 												<CrashTab
 													instanceSlug={slug()}
@@ -2792,10 +2844,13 @@ export default function InstanceDetails(
 
 									<TabsContent value="screenshots">
 										<Show
-											when={activeTab() === "screenshots" && instance.latest}
+											when={
+												instanceTabLoader.visitedTabs().has("screenshots") &&
+												instance.latest
+											}
 										>
 											<Suspense
-												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+												fallback={<InstanceTabLoading label="screenshots" />}
 											>
 												<ScreenshotsTab instanceIdSlug={slug()} />
 											</Suspense>
@@ -2804,10 +2859,13 @@ export default function InstanceDetails(
 
 									<TabsContent value="versioning">
 										<Show
-											when={activeTab() === "versioning" && instance.latest}
+											when={
+												instanceTabLoader.visitedTabs().has("versioning") &&
+												instance.latest
+											}
 										>
 											<Suspense
-												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+												fallback={<InstanceTabLoading label="version tools" />}
 											>
 												<VersioningTab
 													instance={inst()}
@@ -2870,7 +2928,9 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="settings">
-										<Show when={activeTab() === "settings"}>
+										<Show
+											when={instanceTabLoader.visitedTabs().has("settings")}
+										>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-settings"]}>
 													<Skeleton class={styles["skeleton-field"]} />
@@ -2880,10 +2940,7 @@ export default function InstanceDetails(
 											<Show when={instance.latest}>
 												<Suspense
 													fallback={
-														<div class={styles["skeleton-settings"]}>
-															<Skeleton class={styles["skeleton-field"]} />
-															<Skeleton class={styles["skeleton-field"]} />
-														</div>
+														<InstanceTabLoading label="instance settings" />
 													}
 												>
 													<SettingsTab

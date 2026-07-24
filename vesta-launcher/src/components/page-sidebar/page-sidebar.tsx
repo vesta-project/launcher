@@ -13,6 +13,7 @@ interface PageSidebarProps {
 	tabs: PageSidebarTab[];
 	activeTab: string;
 	onTabChange: (value: string) => void;
+	onTabIntent?: (value: string) => void;
 	children: any;
 	mobileToggle?: any;
 }
@@ -49,6 +50,8 @@ export function PageSidebar(props: PageSidebarProps) {
 									[styles.error]: tab.variant === "error",
 								}}
 								disabled={tab.disabled}
+								onPointerEnter={() => props.onTabIntent?.(tab.value)}
+								onFocus={() => props.onTabIntent?.(tab.value)}
 								onClick={() => {
 									props.onTabChange(tab.value);
 									setMobileOpen(false);
