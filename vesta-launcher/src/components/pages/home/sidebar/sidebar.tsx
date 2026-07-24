@@ -36,6 +36,8 @@ import {
 	Show,
 } from "solid-js";
 import type { UiChromeMode } from "~/themes/presets";
+import { ariaShortcut, displayChord } from "~/keybindings/chords";
+import { keybindingFor } from "~/keybindings/store";
 import { PinnedItem } from "./pinned-items";
 import styles from "./sidebar.module.css";
 
@@ -60,6 +62,10 @@ function Sidebar(props: SidebarProps) {
 	});
 
 	const isFlatChrome = createMemo(() => props.uiChromeMode === "flat");
+	const tooltipWithShortcut = (label: string, commandId: string) => {
+		const chord = keybindingFor(commandId);
+		return chord ? `${label} (${displayChord(chord)})` : label;
+	};
 
 	const openPage = (
 		path: string,
@@ -204,7 +210,16 @@ function Sidebar(props: SidebarProps) {
 						<Show when={isFlatChrome()}>
 							<SidebarActionButton
 								id={"sidebar-library"}
-								tooltip_text={"Library"}
+								tooltip_text={tooltipWithShortcut(
+									"Library",
+									"navigation.library",
+								)}
+								aria-keyshortcuts={ariaShortcut(
+									keybindingFor("navigation.library"),
+								)}
+								aria-current={
+									activeSection() === "library" ? "page" : undefined
+								}
 								class={
 									activeSection() === "library"
 										? styles["sidebar-tab-active"]
@@ -218,7 +233,14 @@ function Sidebar(props: SidebarProps) {
 
 						<SidebarActionButton
 							id={"sidebar-new"}
-							tooltip_text={"New Instance"}
+							tooltip_text={tooltipWithShortcut(
+								"New Instance",
+								"navigation.new-instance",
+							)}
+							aria-keyshortcuts={ariaShortcut(
+								keybindingFor("navigation.new-instance"),
+							)}
+							aria-current={activeSection() === "create" ? "page" : undefined}
 							class={
 								activeSection() === "create"
 									? styles["sidebar-tab-active"]
@@ -231,7 +253,16 @@ function Sidebar(props: SidebarProps) {
 
 						<SidebarActionButton
 							id={"sidebar-explore"}
-							tooltip_text={"Explore"}
+							tooltip_text={tooltipWithShortcut(
+								"Explore",
+								"navigation.explore",
+							)}
+							aria-keyshortcuts={ariaShortcut(
+								keybindingFor("navigation.explore"),
+							)}
+							aria-current={
+								activeSection() === "explore" ? "page" : undefined
+							}
 							class={
 								activeSection() === "explore"
 									? styles["sidebar-tab-active"]
@@ -247,7 +278,21 @@ function Sidebar(props: SidebarProps) {
 								<Separator class={styles["pins-separator"]} />
 								<div class={styles["sidebar__pins"]}>
 									<For each={pinning.pins}>
-										{(pin: PinnedPage) => <PinnedItem pin={pin} />}
+										{(pin: PinnedPage, index) => (
+											<PinnedItem
+												pin={pin}
+												shortcutCommandIds={() => {
+													const ids: string[] = [];
+													if (index() < 5) {
+														ids.push(`navigation.pinned.${index() + 1}`);
+													}
+													if (index() === pinning.pins.length - 1) {
+														ids.push("navigation.pinned.last");
+													}
+													return ids;
+												}}
+											/>
+										)}
 									</For>
 								</div>
 							</div>
@@ -257,8 +302,14 @@ function Sidebar(props: SidebarProps) {
 				<div class={styles["sidebar__section"]}>
 					<SidebarActionButton
 						id={"sidebar-notifications"}
+						tooltip_text={tooltipWithShortcut(
+							"Notifications",
+							"navigation.notifications",
+						)}
+						aria-keyshortcuts={ariaShortcut(
+							keybindingFor("navigation.notifications"),
+						)}
 						onClick={() => props.openChanged(!props.open)}
-						tooltip_text={"Notifications"}
 					>
 						<div
 							style={{
@@ -291,7 +342,16 @@ function Sidebar(props: SidebarProps) {
 					</SidebarActionButton>
 					<SidebarActionButton
 						id={"sidebar-settings"}
-						tooltip_text={"Settings"}
+						tooltip_text={tooltipWithShortcut(
+							"Settings",
+							"navigation.settings",
+						)}
+						aria-keyshortcuts={ariaShortcut(
+							keybindingFor("navigation.settings"),
+						)}
+						aria-current={
+							activeSection() === "settings" ? "page" : undefined
+						}
 						class={
 							activeSection() === "settings"
 								? styles["sidebar-tab-active"]

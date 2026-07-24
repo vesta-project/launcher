@@ -44,6 +44,11 @@ const NotificationSettingsModule = createPreloadableLazyComponent(() =>
 		default: module.NotificationSettingsTab,
 	})),
 );
+const KeyboardSettingsModule = createPreloadableLazyComponent(() =>
+	import("./keyboard/KeyboardTab").then((module) => ({
+		default: module.KeyboardSettingsTab,
+	})),
+);
 const InstanceDefaultsModule = createPreloadableLazyComponent(() =>
 	import("./defaults/DefaultsTab").then((module) => ({
 		default: module.InstanceDefaultsTab,
@@ -64,6 +69,7 @@ const AccountSettingsTab = AccountSettingsModule.Component;
 const AppearanceSettingsTab = AppearanceSettingsModule.Component;
 const JavaSettingsTab = JavaSettingsModule.Component;
 const NotificationSettingsTab = NotificationSettingsModule.Component;
+const KeyboardSettingsTab = KeyboardSettingsModule.Component;
 const InstanceDefaultsTab = InstanceDefaultsModule.Component;
 const DeveloperSettingsTab = DeveloperSettingsModule.Component;
 const HelpSettingsTab = HelpSettingsModule.Component;
@@ -112,6 +118,13 @@ const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
 		loadingMessageId: "settings-generic-loading",
 		preload: NotificationSettingsModule.preload,
 		render: () => <NotificationSettingsTab />,
+	},
+	{
+		value: "keyboard",
+		label: "Keyboard",
+		loadingLabel: "Keyboard Settings",
+		preload: KeyboardSettingsModule.preload,
+		render: () => <KeyboardSettingsTab />,
 	},
 	{
 		value: "defaults",
