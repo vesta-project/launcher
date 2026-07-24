@@ -37,6 +37,7 @@ import {
 	createMemo,
 	createSignal,
 	For,
+	onCleanup,
 	onMount,
 	Show,
 	untrack,
@@ -103,6 +104,15 @@ function HomePage() {
 	}
 
 	onMount(async () => {
+		const toggleNotifications = () => setSidebarOpen((open) => !open);
+		window.addEventListener("vesta:toggle-notifications", toggleNotifications);
+		onCleanup(() =>
+			window.removeEventListener(
+				"vesta:toggle-notifications",
+				toggleNotifications,
+			),
+		);
+
 		ensureLibrarySlot();
 
 		void initializePinning();
