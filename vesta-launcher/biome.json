@@ -1,5 +1,10 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+	"extends": "//",
+	"formatter": {
+		"indentWidth": 2,
+		"lineWidth": 80
+	},
 	"files": {
 		"includes": [
 			"src/**",
@@ -26,9 +31,6 @@
 			"!**/*.d.ts",
 			"!**/*.d.tsx"
 		]
-	},
-	"linter": {
-		"enabled": false
 	},
 	"vcs": {
 		"enabled": true,
