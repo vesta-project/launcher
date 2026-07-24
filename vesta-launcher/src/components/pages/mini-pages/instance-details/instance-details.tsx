@@ -37,6 +37,7 @@ import {
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
+import { useMinecraftVersions } from "@stores/versions";
 import {
 	createColumnHelper,
 	createSolidTable,
@@ -74,7 +75,6 @@ import {
 	getInstanceBySlug,
 	getInstanceOperationLabel,
 	getInstanceSlug,
-	getMinecraftVersions,
 	getStableIconId,
 	installInstance,
 	isDefaultIcon,
@@ -1203,10 +1203,15 @@ export default function InstanceDetails(
 		string | null
 	>(null);
 
-	const [mcVersions] = createResource(
-		() => activeTab() === "versioning" || undefined,
-		() => getMinecraftVersions(),
-	);
+	const sharedMinecraftVersions = useMinecraftVersions();
+	const mcVersions = sharedMinecraftVersions.versions as typeof sharedMinecraftVersions.versions & {
+		readonly loading: boolean;
+		readonly error: string | null;
+	};
+	Object.defineProperties(mcVersions, {
+		loading: { get: sharedMinecraftVersions.loading },
+		error: { get: sharedMinecraftVersions.error },
+	});
 	const loadersList = createMemo(() => {
 		const metadata = mcVersions();
 		const loaderIds = metadata

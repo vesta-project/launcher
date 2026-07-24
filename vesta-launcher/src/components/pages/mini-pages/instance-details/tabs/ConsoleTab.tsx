@@ -5,6 +5,7 @@ import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
 import { consoleStore, type LogLevel } from "@stores/console";
 import { instancesState } from "@stores/instances";
+import { createVirtualizer } from "@tanstack/solid-virtual";
 import Button from "@ui/button/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { TextField } from "@ui/text-field/text-field";
@@ -113,11 +114,38 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 		return filtered;
 	});
 
+	const lineVirtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+		get count() {
+			return filteredLines().length;
+		},
+		getScrollElement: () => outputRef ?? null,
+		estimateSize: () => 30,
+		overscan: 20,
+		getItemKey: (index) => filteredLines()[index]?.id ?? index,
+	});
+	const virtualLines = createMemo(() => {
+		const measured = lineVirtualizer.getVirtualItems();
+		if (measured.length > 0) return measured;
+		return Array.from(
+			{ length: Math.min(60, filteredLines().length) },
+			(_, index) => ({
+				key: filteredLines()[index]?.id ?? index,
+				index,
+				start: index * 30,
+				end: (index + 1) * 30,
+				size: 30,
+				lane: 0,
+			}),
+		);
+	});
+
 	// Handle autoscroll
 	createEffect(() => {
-		if (consoleStore.state.autoScroll && outputRef) {
-			filteredLines(); // Dependency
-			outputRef.scrollTop = outputRef.scrollHeight;
+		const count = filteredLines().length;
+		if (consoleStore.state.autoScroll && outputRef && count > 0) {
+			requestAnimationFrame(() => {
+				lineVirtualizer.scrollToIndex(count - 1, { align: "end" });
+			});
 		}
 	});
 
@@ -401,29 +429,63 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 						</div>
 					}
 				>
-					<div class={styles["console-virtual-container"]}>
-						<For each={filteredLines()}>
-							{(line) => (
-								<div class={styles["console-line-wrapper"]}>
-									<div class={styles["console-gutter"]}>{line.id}</div>
-									<div class={styles["console-line-content"]}>
-										<Show when={line.timestamp}>
-											<span class={styles["log-time"]}>[{line.timestamp}]</span>
-										</Show>
-										<Show when={line.level !== "UNKNOWN"}>
-											<span
-												class={clsx(
-													styles["log-level"],
-													styles[`log-level--${line.level.toLowerCase()}`],
-												)}
+					<div
+						class={styles["console-virtual-container"]}
+						style={{
+							height: `${lineVirtualizer.getTotalSize()}px`,
+							position: "relative",
+							width: "100%",
+						}}
+					>
+						<For each={virtualLines()}>
+							{(virtualLine) => {
+								const line = () => filteredLines()[virtualLine.index];
+								return (
+									<Show when={line()}>
+										{(visibleLine) => (
+											<div
+												ref={(element) =>
+													lineVirtualizer.measureElement(element)
+												}
+												data-index={virtualLine.index}
+												class={styles["console-line-wrapper"]}
+												style={{
+													position: "absolute",
+													top: "0",
+													left: "0",
+													transform: `translateY(${virtualLine.start}px)`,
+												}}
 											>
-												[{line.thread}/{line.level}]:
-											</span>
-										</Show>
-										<span class={styles["log-message"]}>{line.message}</span>
-									</div>
-								</div>
-							)}
+												<div class={styles["console-gutter"]}>
+													{visibleLine().id}
+												</div>
+												<div class={styles["console-line-content"]}>
+													<Show when={visibleLine().timestamp}>
+														<span class={styles["log-time"]}>
+															[{visibleLine().timestamp}]
+														</span>
+													</Show>
+													<Show when={visibleLine().level !== "UNKNOWN"}>
+														<span
+															class={clsx(
+																styles["log-level"],
+																styles[
+																	`log-level--${visibleLine().level.toLowerCase()}`
+																],
+															)}
+														>
+															[{visibleLine().thread}/{visibleLine().level}]:
+														</span>
+													</Show>
+													<span class={styles["log-message"]}>
+														{visibleLine().message}
+													</span>
+												</div>
+											</div>
+										)}
+									</Show>
+								);
+							}}
 						</For>
 					</div>
 				</Show>
