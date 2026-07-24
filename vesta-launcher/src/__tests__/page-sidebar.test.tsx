@@ -24,7 +24,7 @@ describe("PageSidebar", () => {
 			</PageSidebar>
 		));
 
-		const settingsTab = screen.getByRole("button", { name: "Settings" });
+		const settingsTab = screen.getByRole("tab", { name: "Settings" });
 
 		await fireEvent.pointerEnter(settingsTab);
 		expect(onTabIntent).toHaveBeenCalledWith("settings");
@@ -32,7 +32,7 @@ describe("PageSidebar", () => {
 
 		await fireEvent.click(settingsTab);
 		expect(onTabChange).toHaveBeenCalledWith("settings");
-		expect(screen.getByRole("button", { name: "Home" })).toBeTruthy();
+		expect(screen.getByRole("tab", { name: "Home" })).toBeTruthy();
 	});
 
 	it("keeps an independent scroll position for each tab", async () => {
@@ -54,13 +54,13 @@ describe("PageSidebar", () => {
 		const content = screen.getByRole("main");
 		content.scrollTop = 600;
 
-		await fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+		await fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
 
 		expect(activeTab()).toBe("settings");
 		expect(content.scrollTop).toBe(0);
 
 		content.scrollTop = 240;
-		await fireEvent.click(screen.getByRole("button", { name: "Home" }));
+		await fireEvent.click(screen.getByRole("tab", { name: "Home" }));
 
 		expect(activeTab()).toBe("home");
 		expect(content.scrollTop).toBe(600);
