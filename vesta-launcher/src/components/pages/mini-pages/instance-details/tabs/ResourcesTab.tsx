@@ -26,13 +26,7 @@ import {
 	RESOURCES_FILTER_COMPACT_WIDTH,
 	RESOURCES_TABLE_COMPACT_WIDTH,
 } from "@utils/media-query";
-import {
-	createEffect,
-	createMemo,
-	createSignal,
-	For,
-	Show,
-} from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import styles from "../instance-details.module.css";
 
 const FILTER_OPTIONS = [
@@ -285,17 +279,21 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	};
 
 	const [panelRef, setPanelRef] = createSignal<HTMLElement | undefined>();
-	let tableScrollRef: HTMLDivElement | undefined;
-	const rowVirtualizer = createVirtualizer<HTMLDivElement, HTMLTableRowElement>({
-		get count() {
-			return visibleResourceRows().length;
+	const [tableScrollElement, setTableScrollElement] = createSignal<
+		HTMLDivElement | undefined
+	>();
+	const rowVirtualizer = createVirtualizer<HTMLDivElement, HTMLTableRowElement>(
+		{
+			get count() {
+				return visibleResourceRows().length;
+			},
+			getScrollElement: () => tableScrollElement() ?? null,
+			estimateSize: () => 49,
+			initialRect: { width: 1000, height: 600 },
+			overscan: 12,
+			getItemKey: (index) => visibleResourceRows()[index]?.id ?? index,
 		},
-		getScrollElement: () => tableScrollRef ?? null,
-		estimateSize: () => 49,
-		initialRect: { width: 1000, height: 600 },
-		overscan: 12,
-		getItemKey: (index) => visibleResourceRows()[index]?.id ?? index,
-	});
+	);
 	const virtualRows = createMemo(() => {
 		const measuredRows = rowVirtualizer.getVirtualItems();
 		if (measuredRows.length > 0) return measuredRows;
@@ -314,9 +312,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			}),
 		);
 	});
-	const topVirtualPadding = createMemo(
-		() => virtualRows()[0]?.start ?? 0,
-	);
+	const topVirtualPadding = createMemo(() => virtualRows()[0]?.start ?? 0);
 	const bottomVirtualPadding = createMemo(() => {
 		const rows = virtualRows();
 		const last = rows[rows.length - 1];
@@ -578,7 +574,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 				</Show>
 				<Show when={props.installedResources.latest}>
 					<div
-						ref={tableScrollRef}
+						ref={(element) => setTableScrollElement(element)}
 						class={`${styles["vesta-table-container"]} v-instance-resources-table`}
 						classList={{
 							[styles.refetching]: props.installedResources.loading,
@@ -654,14 +650,16 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									<tr aria-hidden="true">
 										<td
 											colSpan={props.table.getVisibleLeafColumns().length}
-											style={{ height: `${topVirtualPadding()}px`, padding: "0" }}
+											style={{
+												height: `${topVirtualPadding()}px`,
+												padding: "0",
+											}}
 										/>
 									</tr>
 								</Show>
 								<For each={virtualRows()}>
 									{(virtualRow) => {
-										const row = () =>
-											visibleResourceRows()[virtualRow.index];
+										const row = () => visibleResourceRows()[virtualRow.index];
 										return <Show when={row()}>{renderResourceRow(row())}</Show>;
 									}}
 								</For>

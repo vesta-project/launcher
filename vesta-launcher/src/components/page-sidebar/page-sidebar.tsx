@@ -21,7 +21,9 @@ interface PageSidebarProps {
 export function PageSidebar(props: PageSidebarProps) {
 	const [mobileOpen, setMobileOpen] = createSignal(false);
 	const [isMobile, setIsMobile] = createSignal(window.innerWidth < 600);
-	let contentElement: HTMLElement | undefined;
+	const [contentElement, setContentElement] = createSignal<
+		HTMLElement | undefined
+	>();
 	let previousTab = props.activeTab;
 	const tabScrollPositions = new Map<string, number>();
 
@@ -37,10 +39,11 @@ export function PageSidebar(props: PageSidebarProps) {
 	// Remembering positions by tab also preserves continuity on return visits.
 	createEffect(() => {
 		const activeTab = props.activeTab;
-		if (!contentElement || activeTab === previousTab) return;
+		const content = contentElement();
+		if (!content || activeTab === previousTab) return;
 
-		tabScrollPositions.set(previousTab, contentElement.scrollTop);
-		contentElement.scrollTop = tabScrollPositions.get(activeTab) ?? 0;
+		tabScrollPositions.set(previousTab, content.scrollTop);
+		content.scrollTop = tabScrollPositions.get(activeTab) ?? 0;
 		previousTab = activeTab;
 	});
 
@@ -115,7 +118,10 @@ export function PageSidebar(props: PageSidebarProps) {
 					</Show>
 				</Show>
 
-				<main ref={contentElement} class={styles.content}>
+				<main
+					ref={(element) => setContentElement(element)}
+					class={styles.content}
+				>
 					{props.children}
 				</main>
 			</div>

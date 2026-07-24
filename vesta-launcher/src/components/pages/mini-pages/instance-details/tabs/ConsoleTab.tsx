@@ -62,7 +62,9 @@ interface ConsoleTabProps {
 }
 
 export const ConsoleTab = (props: ConsoleTabProps) => {
-	let outputRef: HTMLDivElement | undefined;
+	const [outputElement, setOutputElement] = createSignal<
+		HTMLDivElement | undefined
+	>();
 	const [unlisten, setUnlisten] = createSignal<(() => void) | null>(null);
 	const [historyOpen, setHistoryOpen] = createSignal(false);
 	const [isScrollable, setIsScrollable] = createSignal(false);
@@ -83,8 +85,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	});
 
 	const checkScroll = () => {
-		if (!outputRef) return;
-		const { scrollTop, scrollHeight, clientHeight } = outputRef;
+		const output = outputElement();
+		if (!output) return;
+		const { scrollTop, scrollHeight, clientHeight } = output;
 		const atBottomNow = scrollHeight - scrollTop - clientHeight < 50;
 
 		setIsScrollable(scrollHeight > clientHeight + 10);
@@ -118,7 +121,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 		get count() {
 			return filteredLines().length;
 		},
-		getScrollElement: () => outputRef ?? null,
+		getScrollElement: () => outputElement() ?? null,
 		estimateSize: () => 30,
 		overscan: 20,
 		getItemKey: (index) => filteredLines()[index]?.id ?? index,
@@ -142,7 +145,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	// Handle autoscroll
 	createEffect(() => {
 		const count = filteredLines().length;
-		if (consoleStore.state.autoScroll && outputRef && count > 0) {
+		const output = outputElement();
+		if (consoleStore.state.autoScroll && output && count > 0) {
 			requestAnimationFrame(() => {
 				lineVirtualizer.scrollToIndex(count - 1, { align: "end" });
 			});
@@ -166,11 +170,12 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	};
 
 	const toggleScroll = () => {
-		if (!outputRef) return;
+		const output = outputElement();
+		if (!output) return;
 		if (atBottom()) {
-			outputRef.scrollTop = 0;
+			output.scrollTop = 0;
 		} else {
-			outputRef.scrollTop = outputRef.scrollHeight;
+			output.scrollTop = output.scrollHeight;
 		}
 		checkScroll();
 	};
@@ -347,7 +352,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 			<div
 				class={clsx(styles["console-output"], styles["v2"])}
-				ref={outputRef}
+				ref={(element) => setOutputElement(element)}
 				style={{ "font-family": "var(--font-mono)" }}
 				onScroll={checkScroll}
 			>
