@@ -315,6 +315,7 @@ fn main() {
             commands::resources::get_instance_update_snapshot,
             commands::resources::sync_instance_resources,
             commands::resources::get_installed_resources,
+            commands::resources::get_instance_resource_overview,
             commands::resources::check_resource_updates,
             commands::resources::resolve_image_url,
             commands::resources::resolve_image_urls,

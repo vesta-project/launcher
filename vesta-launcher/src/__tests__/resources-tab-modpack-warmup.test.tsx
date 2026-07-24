@@ -3,7 +3,7 @@
 import { ResourcesTab } from "@components/pages/mini-pages/instance-details/tabs/ResourcesTab";
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@assets/reload.svg", () => ({
 	default: (props: any) => <svg data-testid="reload-icon" {...props} />,
@@ -113,22 +113,8 @@ const createTable = (rows: any[]) => ({
 	],
 });
 
-describe("ResourcesTab modpack row warm-up", () => {
-	let idleCallback: (() => void) | undefined;
-	let idleHandle = 0;
-
-	beforeEach(() => {
-		idleCallback = undefined;
-		idleHandle = 0;
-		(window as any).requestIdleCallback = vi.fn((callback: () => void) => {
-			idleCallback = callback;
-			idleHandle += 1;
-			return idleHandle;
-		});
-		(window as any).cancelIdleCallback = vi.fn();
-	});
-
-	it("pre-mounts bundled modpack rows hidden, then reveals them on expand", async () => {
+describe("ResourcesTab virtualized modpack rows", () => {
+	it("mounts bundled rows only when their group is expanded", async () => {
 		const rows = [
 			createRow({
 				id: 1,
@@ -197,14 +183,6 @@ describe("ResourcesTab modpack row warm-up", () => {
 
 		expect(screen.getByText("Custom One")).toBeTruthy();
 		expect(screen.queryByText("Bundled One")).toBeNull();
-
-		idleCallback?.();
-
-		await waitFor(() => {
-			const bundledRow = screen.getByText("Bundled One").closest("tr");
-			expect(bundledRow?.hasAttribute("hidden")).toBe(true);
-			expect(bundledRow?.getAttribute("aria-hidden")).toBe("true");
-		});
 
 		const groupRow = screen.getByText("1 bundled resources").closest("tr");
 		if (!groupRow) throw new Error("expected bundled resource group row");
@@ -297,5 +275,62 @@ describe("ResourcesTab modpack row warm-up", () => {
 				.closest("tr")
 				?.getAttribute("aria-expanded"),
 		).toBe("true");
+	});
+
+	it("keeps the mounted table bounded for large resource collections", async () => {
+		const rows = Array.from({ length: 5_000 }, (_, index) =>
+			createRow({
+				id: index + 1,
+				display_name: `Resource ${index + 1}`,
+				current_version: "1.0.0",
+				is_enabled: true,
+				local_path: `mods/resource-${index + 1}.jar`,
+				resource_type: "mod",
+				source_kind: "custom",
+			}),
+		);
+
+		render(() => (
+			<ResourcesTab
+				instance={{ id: 10, name: "Large Instance" }}
+				resourceTypeFilter="All"
+				setResourceTypeFilter={vi.fn()}
+				table={createTable(rows)}
+				resourcesStore={{
+					state: { selection: {} },
+					clearSelection: vi.fn(),
+					setInstance: vi.fn(),
+					setGameVersion: vi.fn(),
+					setLoader: vi.fn(),
+				}}
+				installedResources={{
+					latest: rows.map((row) => row.original),
+					loading: false,
+				}}
+				modpackResources={[]}
+				modpackIcon={() => null}
+				modpackExpanded={false}
+				setModpackExpanded={vi.fn()}
+				currentModpackVersion={null}
+				availableModpackUpdate={null}
+				router={null}
+				handleBatchUpdate={vi.fn()}
+				handleBatchDelete={vi.fn()}
+				onManageModpackVersions={vi.fn()}
+				onUnlinkModpack={vi.fn()}
+				onDeleteModpackAndUnlink={vi.fn()}
+				onRowClick={vi.fn()}
+				resourceSearch=""
+				setResourceSearch={vi.fn()}
+				selectedToUpdateCount={0}
+				busy={false}
+				checkingUpdates={false}
+				checkUpdates={vi.fn()}
+			/>
+		));
+
+		await waitFor(() => expect(screen.getByText("Resource 1")).toBeTruthy());
+		expect(document.querySelectorAll("tbody tr").length).toBeLessThan(80);
+		expect(screen.queryByText("Resource 5000")).toBeNull();
 	});
 });

@@ -26,6 +26,13 @@ import {
 	unpinPage,
 } from "@stores/pinning";
 import {
+	invalidateInstanceResourceOverview,
+	loadInstanceResourceOverview,
+	projectRecordMap,
+	type ResourceProjectOverviewRecord,
+	type ResourceProjectRef,
+} from "@stores/instance-resource-overview";
+import {
 	type InstalledResource,
 	type ResourceVersion,
 	resources,
@@ -97,6 +104,11 @@ import {
 	createPreloadableLazyComponent,
 	createRetainedTabLoader,
 } from "@utils/preloadable-lazy";
+import {
+	afterStablePaint,
+	markPerformance,
+	measurePerformance,
+} from "@utils/performance-trace";
 import {
 	batch,
 	createEffect,
@@ -184,16 +196,6 @@ type LightweightUpdateCheckResult = {
 	modpackVersions: ResourceVersion[];
 };
 
-type InstanceUpdateSnapshot = {
-	checkedAt: string;
-	resourceUpdates: Array<{
-		resourceId: number;
-		version: ResourceVersion;
-	}>;
-	modpackVersions: ResourceVersion[];
-	isStale: boolean;
-};
-
 type TabType =
 	| "home"
 	| "console"
@@ -252,7 +254,7 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 	// so icon_url will be either a data: URL (icon_data available) or null/absent.
 	const resolvedUrl = createMemo(() => {
 		const url = props.record?.icon_url;
-		if (url && url.startsWith("data:")) {
+		if (url && (url.startsWith("data:") || url.startsWith("https://"))) {
 			return url;
 		}
 		return null;
@@ -294,6 +296,8 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 						src={url()}
 						alt={props.name || "Resource Icon"}
 						class={styles["res-icon"]}
+						loading="lazy"
+						decoding="async"
 					/>
 				)}
 			</Show>
@@ -352,29 +356,6 @@ const isSameCanonicalProject = (
 	hasCanonicalResourceLink(b) &&
 	a.platform === b.platform &&
 	String(a.remote_id) === String(b.remote_id);
-
-const AUTO_RESYNC_COOLDOWN_MS = 5 * 60 * 1000;
-
-// Frontend cache for project records to avoid re-fetching from the backend on repeated
-// navigations within the same session (e.g., mini-router open/close).
-interface RecordCacheEntry {
-	data: Record<string, any>;
-	timestamp: number;
-}
-const projectRecordCache = new Map<string, RecordCacheEntry>();
-const RECORD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getProjectRecordCacheKey(
-	refs: { platform: string; id: string }[],
-): string {
-	const sorted = [...refs]
-		.sort((a, b) =>
-			`${a.platform}:${a.id}`.localeCompare(`${b.platform}:${b.id}`),
-		)
-		.map((r) => `${r.platform}:${r.id}`)
-		.join(",");
-	return sorted;
-}
 
 export default function InstanceDetails(
 	props: InstanceDetailsProps & {
@@ -502,65 +483,50 @@ export default function InstanceDetails(
 
 	const [
 		installedResources,
-		{ refetch: refetchResources, mutate: mutateResources },
+		{ refetch: refetchInstalledResources, mutate: mutateResources },
 	] = createResource(instance, async (inst) => {
 		if (!inst) return [];
 		return await resources.getInstalled(inst.id);
 	});
 
-	const [projectRecords] = createResource(
-		() => ({
-			active: activeTab() === "resources" || activeTab() === "crash",
-			resourcesList: installedResources(),
-		}),
-		async ({ active, resourcesList }) => {
-			if (!active) return {};
-			if (!resourcesList || resourcesList.length === 0) return {};
-			const refs = resourcesList
-				.filter(
-					(r) =>
-						r.remote_id &&
-						(r.platform === "modrinth" || r.platform === "curseforge"),
-				)
-				.map((r) => ({
-					platform: r.platform,
-					id: r.remote_id,
-				}));
+	// The overview is tab-specific so the home view keeps its minimal installed-row
+	// query. Hover/focus intent warms the same deduplicated cache before activation.
+	const [resourceOverview, { refetch: refetchResourceOverview }] =
+		createResource(
+			() => {
+				const inst = instance();
+				const tab = activeTab();
+				return inst && (tab === "resources" || tab === "crash")
+					? inst.id
+					: undefined;
+			},
+			async (instanceId) => loadInstanceResourceOverview(instanceId),
+		);
 
-			if (refs.length === 0) return {};
-
-			// Check frontend cache first (avoids IPC + backend cache lookup)
-			const cacheKey = getProjectRecordCacheKey(refs);
-			const cached = projectRecordCache.get(cacheKey);
-			if (cached && Date.now() - cached.timestamp < RECORD_CACHE_TTL_MS) {
-				return cached.data;
+	const refetchResources = async () => {
+		const rows = await refetchInstalledResources();
+		const instanceId = instance()?.id;
+		if (instanceId) {
+			invalidateInstanceResourceOverview(instanceId);
+			if (activeTab() === "resources" || activeTab() === "crash") {
+				void refetchResourceOverview();
 			}
+		}
+		return rows;
+	};
 
-			try {
-				const records: any[] = await invoke(
-					"get_or_hydrate_resource_projects",
-					{
-						refs,
-						allowNetwork: true,
-						refreshStale: false,
-					},
-				);
-				const map: Record<string, any> = {};
-				for (const r of records) {
-					const key = getProjectRecordKey(r.source, r.id);
-					if (key) {
-						map[key] = r;
-					}
-				}
-				// Store in frontend cache for instant re-visits
-				projectRecordCache.set(cacheKey, { data: map, timestamp: Date.now() });
-				return map;
-			} catch (e) {
-				console.error("Failed to fetch project records:", e);
-				return {};
-			}
-		},
-	);
+	const [projectRecords, setProjectRecords] = createSignal<
+		Record<string, ResourceProjectOverviewRecord>
+	>({});
+
+	createEffect(() => {
+		const overview = resourceOverview.latest;
+		if (!overview || overview.instanceId !== instance()?.id) {
+			setProjectRecords({});
+			return;
+		}
+		setProjectRecords(projectRecordMap(overview.projectRecords));
+	});
 
 	const modpackOwnedResources = createMemo(() =>
 		(installedResources() || []).filter(isModpackOwnedResource),
@@ -576,87 +542,6 @@ export default function InstanceDetails(
 	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
 		createSignal(false);
 
-	const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<
-		Record<number, number>
-	>({});
-	const [autoResyncInFlight, setAutoResyncInFlight] = createSignal(false);
-
-	const getLinkedResourceRefs = (
-		resourcesList: InstalledResource[] | undefined,
-	) => {
-		if (!resourcesList || resourcesList.length === 0) return [];
-		return resourcesList
-			.filter(
-				(r) =>
-					!!r.remote_id &&
-					(r.platform === "modrinth" || r.platform === "curseforge"),
-			)
-			.map((r) => ({ platform: r.platform, id: r.remote_id }));
-	};
-
-	const getMetadataHoleCount = (
-		resourcesList: InstalledResource[] | undefined,
-		recordMap: Record<string, any> | undefined,
-	) => {
-		const refs = getLinkedResourceRefs(resourcesList);
-		if (refs.length === 0) return 0;
-
-		let holes = 0;
-		for (const ref of refs) {
-			const key = getProjectRecordKey(ref.platform, ref.id);
-			if (!key) {
-				holes += 1;
-				continue;
-			}
-
-			const record = recordMap?.[key];
-			if (!record) {
-				holes += 1;
-				continue;
-			}
-
-			const summaryMissing = !record.summary || !String(record.summary).trim();
-			const expectsIcon = !!record.icon_url;
-			const iconMissing =
-				expectsIcon &&
-				(!record.icon_data ||
-					(Array.isArray(record.icon_data) && record.icon_data.length === 0));
-
-			if (summaryMissing || iconMissing) {
-				holes += 1;
-			}
-		}
-
-		return holes;
-	};
-
-	const triggerConditionalResync = async (reason: string) => {
-		const current = instance();
-		if (!current || !current.gameDirectory) return;
-		if (autoResyncInFlight()) return;
-
-		const now = Date.now();
-		const last = autoResyncByInstance()[current.id] || 0;
-		if (now - last < AUTO_RESYNC_COOLDOWN_MS) return;
-
-		const holes = getMetadataHoleCount(installedResources(), projectRecords());
-		if (holes === 0) return;
-
-		console.info(
-			`[InstanceDetails] Triggering conditional resync (${reason}), ${holes} metadata holes detected`,
-		);
-
-		setAutoResyncInFlight(true);
-		setAutoResyncByInstance((prev) => ({ ...prev, [current.id]: now }));
-		try {
-			await resources.sync(current.id, slug(), current.gameDirectory || "");
-			await refetchResources();
-		} catch (e) {
-			console.error("[InstanceDetails] Conditional resync failed:", e);
-		} finally {
-			setAutoResyncInFlight(false);
-		}
-	};
 
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
@@ -1376,39 +1261,20 @@ export default function InstanceDetails(
 		}
 	};
 
-	const hydrateUpdateSnapshot = async (instanceId: number) => {
-		try {
-			const snapshot = await invoke<InstanceUpdateSnapshot | null>(
-				"get_instance_update_snapshot",
-				{
-					instanceId,
-				},
-			);
-			if (snapshot) {
-				applyUpdateCheckResult(snapshot);
-			} else {
-				setUpdates({});
-			}
-			return snapshot;
-		} catch (e) {
-			console.error("Failed to load cached update snapshot:", e);
-			setUpdates({});
-			return null;
-		}
-	};
-
 	createEffect(() => {
 		const inst = instance();
-		const tab = activeTab();
 		setUpdates({});
-		setCheckedPerResource(new Set());
-		if (!inst || (tab !== "resources" && tab !== "versioning")) return;
-		void hydrateUpdateSnapshot(inst.id);
+		setCheckedPerResource(new Set<number>());
+		if (!inst) return;
+		const snapshot = resourceOverview.latest?.updateSnapshot;
+		if (snapshot) {
+			applyUpdateCheckResult(snapshot as LightweightUpdateCheckResult);
+		}
 	});
 
 	const availableModpackUpdate = createMemo(() => {
 		const inst = instance();
-		const versions = modpackVersions();
+		const versions = modpackVersions.latest;
 		if (!inst?.modpackId || !versions || versions.length === 0) return null;
 		const currentId = inst.modpackVersionId
 			? String(inst.modpackVersionId)
@@ -1426,7 +1292,9 @@ export default function InstanceDetails(
 			? String(inst.modpackVersionId)
 			: null;
 		return (
-			modpackVersions()?.find((version) => String(version.id) === currentId) ||
+			modpackVersions.latest?.find(
+				(version) => String(version.id) === currentId,
+			) ||
 			null
 		);
 	});
@@ -1878,47 +1746,6 @@ export default function InstanceDetails(
 		}
 	};
 
-	// Check updates when entering resources tab; resync only if metadata holes are detected.
-	createEffect(async () => {
-		const tab = activeTab();
-		const inst = instance();
-		if (tab === "resources" && inst && !busy()) {
-			await triggerConditionalResync("resources-tab-enter");
-
-			if (installedResources.loading || checkingUpdates()) return;
-
-			const snapshot = await hydrateUpdateSnapshot(inst.id);
-			if (!snapshot?.isStale) return;
-
-			void checkUpdates(false);
-		}
-	});
-
-	createEffect(
-		on(
-			() =>
-				[
-					activeTab(),
-					instance()?.id,
-					installedResources.loading,
-					projectRecords.loading,
-					installedResources(),
-					projectRecords(),
-				] as const,
-			([tab, id, installedLoading, recordsLoading, resourcesList, records]) => {
-				if (tab !== "resources" && tab !== "crash") return;
-				if (!id || installedLoading || recordsLoading) return;
-				if (!resourcesList || resourcesList.length === 0) return;
-
-				const holes = getMetadataHoleCount(resourcesList, records || {});
-				if (holes > 0) {
-					void triggerConditionalResync("instance-load-holes");
-				}
-			},
-			{ defer: true },
-		),
-	);
-
 	const checkUpdates = async (forceRefresh = false) => {
 		const inst = instance();
 		if (!inst || checkingUpdates()) return;
@@ -1946,6 +1773,106 @@ export default function InstanceDetails(
 			setCheckingUpdates(false);
 		}
 	};
+
+	let resourceMaintenanceGeneration = 0;
+	createEffect(
+		on(
+			() =>
+				[
+					activeTab(),
+					instance()?.id,
+					resourceOverview.latest?.revision,
+				] as const,
+			([tab, instanceId]) => {
+				const generation = ++resourceMaintenanceGeneration;
+				if (
+					(tab !== "resources" && tab !== "crash") ||
+					!instanceId ||
+					!resourceOverview.latest
+				) {
+					return;
+				}
+
+				const overview = resourceOverview.latest;
+				const cancelPaint = afterStablePaint(() => {
+					if (
+						generation !== resourceMaintenanceGeneration ||
+						instance()?.id !== instanceId
+					) {
+						return;
+					}
+
+					const paintedMark = `instance-resources:${instanceId}:rows-painted`;
+					markPerformance(paintedMark, {
+						instanceId,
+						resources: overview.resources.length,
+					});
+					measurePerformance(
+						"instance-resources:first-stable-paint",
+						`instance-resources:${instanceId}:tab-intent`,
+						paintedMark,
+						{ instanceId },
+					);
+
+					if (
+						tab === "resources" &&
+						overview.updateSnapshot?.isStale &&
+						!checkingUpdates()
+					) {
+						void checkUpdates(false);
+					}
+
+					const hydrateMissingMetadata = async (
+						refs: ResourceProjectRef[],
+					) => {
+						const chunkSize = 12;
+						for (let index = 0; index < refs.length; index += chunkSize) {
+							if (
+								generation !== resourceMaintenanceGeneration ||
+								instance()?.id !== instanceId
+							) {
+								return;
+							}
+
+							const chunk = refs.slice(index, index + chunkSize);
+							try {
+								const records = await invoke<
+									ResourceProjectOverviewRecord[]
+								>("get_or_hydrate_resource_projects", {
+									refs: chunk,
+									allowNetwork: true,
+									refreshStale: false,
+								});
+								setProjectRecords((previous) => ({
+									...previous,
+									...projectRecordMap(records),
+								}));
+							} catch (error) {
+								console.warn(
+									"Failed to hydrate background resource metadata:",
+									error,
+								);
+							}
+
+							await new Promise<void>((resolve) =>
+								window.setTimeout(resolve, 0),
+							);
+						}
+					};
+
+					void hydrateMissingMetadata(overview.missingProjectRefs);
+				});
+
+				onCleanup(() => {
+					cancelPaint();
+					if (generation === resourceMaintenanceGeneration) {
+						resourceMaintenanceGeneration += 1;
+					}
+				});
+			},
+			{ defer: true },
+		),
+	);
 
 	const handleUpdate = async (
 		resource: InstalledResource,
@@ -2041,15 +1968,12 @@ export default function InstanceDetails(
 		}
 	};
 
-	// Sync resources separately - only on actual instance change
 	createEffect(
 		on(
 			() => instance()?.id,
 			(id) => {
-				const inst = instance();
-				if (id && inst) {
+				if (id) {
 					resources.clearSelection();
-					void triggerConditionalResync("instance-switch");
 				}
 			},
 			{ defer: true },
@@ -2508,11 +2432,29 @@ export default function InstanceDetails(
 
 	const handleTabChange = (tab: TabType) => {
 		if (tab === activeTab()) return;
+		if (tab === "resources") {
+			const instanceId = instance()?.id;
+			if (instanceId) {
+				markPerformance(`instance-resources:${instanceId}:tab-intent`, {
+					instanceId,
+				});
+			}
+		}
 		instanceTabLoader.prepare(tab);
 		setSelectedTab(tab);
 		// Tabs are state within this page, not separate router entries. Replacing
 		// the query keeps the instance shell mounted while tab code suspends.
 		activeRouter()?.updateQuery("activeTab", tab);
+	};
+
+	const handleTabIntent = (tab: TabType) => {
+		instanceTabLoader.preload(tab);
+		if (tab === "resources" || tab === "crash") {
+			const instanceId = instance()?.id;
+			if (instanceId) {
+				void loadInstanceResourceOverview(instanceId);
+			}
+		}
 	};
 
 	createEffect(() => {
@@ -2532,7 +2474,7 @@ export default function InstanceDetails(
 				tabs={instanceTabs()}
 				activeTab={selectedTab()}
 				onTabChange={(v) => handleTabChange(v as TabType)}
-				onTabIntent={(v) => instanceTabLoader.preload(v as TabType)}
+				onTabIntent={(v) => handleTabIntent(v as TabType)}
 			>
 				<div
 					class={styles["content-wrapper"]}
@@ -2833,7 +2775,7 @@ export default function InstanceDetails(
 														[]
 													}
 													projectRecords={
-														projectRecords.latest || projectRecords()
+														projectRecords()
 													}
 													router={activeRouter()}
 													onCleared={() => void handleRefetch()}
