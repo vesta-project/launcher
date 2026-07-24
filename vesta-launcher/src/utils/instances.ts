@@ -463,6 +463,10 @@ export async function getInstance(id: number): Promise<Instance> {
 	if (id === DEMO_INSTANCE_ID) {
 		return createDemoInstance();
 	}
+	const cached = instancesState.instances.find(
+		(instance) => instance.id === id,
+	);
+	if (cached) return cached;
 	return await invoke<Instance>("get_instance", { instanceId: id });
 }
 
@@ -471,6 +475,10 @@ export async function getInstanceBySlug(slug: string): Promise<Instance> {
 	if (slug === DEMO_INSTANCE_SLUG) {
 		return createDemoInstance();
 	}
+	const cached = instancesState.instances.find(
+		(instance) => getInstanceSlug(instance) === slug,
+	);
+	if (cached) return cached;
 	return await invoke<Instance>("get_instance_by_slug", { slugVal: slug });
 }
 

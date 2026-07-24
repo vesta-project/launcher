@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Instance } from "@utils/instances";
-import { createResource } from "solid-js";
+import { createEffect, createSignal, onCleanup } from "solid-js";
 
 type ModpackIconSource = Pick<
 	Instance,
@@ -14,33 +14,38 @@ type ModpackIconSource = Pick<
 export function useModpackIcon(
 	source: () => ModpackIconSource | null | undefined,
 ) {
-	const [hydratedIcon] = createResource(
-		() => {
-			const current = source();
-			if (!current?.modpackId || !current?.modpackPlatform) return null;
+	const [hydratedIcon, setHydratedIcon] = createSignal<string | null>(null);
+	const [hydrating, setHydrating] = createSignal(false);
+	let requestGeneration = 0;
 
-			const platform = current.modpackPlatform.toLowerCase();
-			if (platform !== "modrinth" && platform !== "curseforge") return null;
+	createEffect(() => {
+		const current = source();
+		const generation = ++requestGeneration;
+		setHydratedIcon(null);
 
-			return {
-				platform,
-				id: current.modpackId,
-				cachedUrl: current.modpackIconUrl,
-			};
-		},
-		async (modpackRef) => {
-			if (!modpackRef) return null;
+		if (!current?.modpackId || !current?.modpackPlatform) {
+			setHydrating(false);
+			return;
+		}
 
-			try {
-				const records: Array<{
-					icon_data?: number[];
-					icon_url?: string | null;
-				}> = await invoke("get_or_hydrate_resource_projects", {
-					refs: [{ platform: modpackRef.platform, id: modpackRef.id }],
-					allowNetwork: true,
-					refreshStale: false,
-				});
+		const platform = current.modpackPlatform.toLowerCase();
+		if (platform !== "modrinth" && platform !== "curseforge") {
+			setHydrating(false);
+			return;
+		}
 
+		setHydrating(true);
+		void invoke<
+			Array<{
+				icon_data?: number[];
+				icon_url?: string | null;
+			}>
+		>("get_or_hydrate_resource_projects", {
+			refs: [{ platform, id: current.modpackId }],
+			allowNetwork: true,
+			refreshStale: false,
+		})
+			.then(async (records) => {
 				const record = records[0];
 				if (record?.icon_url?.startsWith("data:")) {
 					return record.icon_url;
@@ -54,12 +59,21 @@ export function useModpackIcon(
 					reader.onerror = reject;
 					reader.readAsDataURL(blob);
 				});
-			} catch (e) {
-				console.error("Failed to fetch modpack icon:", e);
+			})
+			.catch((error) => {
+				console.error("Failed to fetch modpack icon:", error);
 				return null;
-			}
-		},
-	);
+			})
+			.then((icon) => {
+				if (generation !== requestGeneration) return;
+				setHydratedIcon(icon);
+				setHydrating(false);
+			});
+	});
+
+	onCleanup(() => {
+		requestGeneration += 1;
+	});
 
 	return () => {
 		const current = source();
@@ -72,8 +86,6 @@ export function useModpackIcon(
 			return current.modpackIconUrl ?? null;
 		}
 
-		return (
-			hydratedIcon() ?? (hydratedIcon.loading ? null : current.modpackIconUrl)
-		);
+		return hydratedIcon() ?? (hydrating() ? null : current.modpackIconUrl);
 	};
 }

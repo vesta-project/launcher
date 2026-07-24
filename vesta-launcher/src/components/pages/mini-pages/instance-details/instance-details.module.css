@@ -17,6 +17,26 @@
 	z-index: 1;
 }
 
+.instance-tab-loading {
+	flex: 1;
+	min-height: 220px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	color: var(--text-secondary);
+	font-size: var(--font-small);
+}
+
+.instance-tab-loading__spinner {
+	width: 18px;
+	height: 18px;
+	border: 2px solid var(--border-subtle);
+	border-top-color: var(--accent-primary);
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
 /* Common tab layout */
 .tab-home {
 	display: flex;

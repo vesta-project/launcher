@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Context};
 use base64::{engine::general_purpose, Engine as _};
+use serde::Serialize;
+use std::collections::{hash_map::DefaultHasher, HashSet};
+use std::hash::{Hash, Hasher};
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
@@ -20,6 +23,106 @@ use anyhow_tauri::TAResult as Result;
 use tauri::{Emitter, Manager, State};
 
 const MAX_CONCURRENT_UPDATE_CHECKS: usize = 6;
+
+#[derive(Debug, Serialize)]
+pub struct ResourceProjectOverviewRecord {
+    pub id: String,
+    pub source: String,
+    pub name: String,
+    pub summary: String,
+    pub description: Option<String>,
+    pub icon_url: Option<String>,
+    pub has_cached_icon: bool,
+    pub project_type: String,
+    pub last_updated: String,
+    pub metadata_synced_at: Option<String>,
+    pub icon_synced_at: Option<String>,
+}
+
+impl From<ResourceProjectRecord> for ResourceProjectOverviewRecord {
+    fn from(record: ResourceProjectRecord) -> Self {
+        Self {
+            id: record.id,
+            source: record.source,
+            name: record.name,
+            summary: record.summary,
+            description: record.description,
+            icon_url: record.icon_url.filter(|url| url.starts_with("https://")),
+            has_cached_icon: record
+                .icon_data
+                .as_ref()
+                .is_some_and(|bytes| !bytes.is_empty()),
+            project_type: record.project_type,
+            last_updated: record.last_updated,
+            metadata_synced_at: record.metadata_synced_at,
+            icon_synced_at: record.icon_synced_at,
+        }
+    }
+}
+
+#[cfg(test)]
+mod overview_tests {
+    use super::*;
+
+    #[test]
+    fn overview_metadata_never_serializes_cached_icon_bytes() {
+        let record = ResourceProjectRecord {
+            id: "project".to_string(),
+            source: "modrinth".to_string(),
+            name: "Project".to_string(),
+            summary: "Summary".to_string(),
+            description: None,
+            icon_url: Some("https://example.invalid/icon.png".to_string()),
+            icon_data: Some(vec![1, 2, 3, 4]),
+            project_type: "mod".to_string(),
+            last_updated: "2026-07-24T00:00:00Z".to_string(),
+            metadata_synced_at: None,
+            icon_synced_at: None,
+        };
+
+        let value = serde_json::to_value(ResourceProjectOverviewRecord::from(record))
+            .expect("overview record should serialize");
+        assert!(value.get("icon_data").is_none());
+        assert_eq!(
+            value.get("has_cached_icon"),
+            Some(&serde_json::Value::Bool(true))
+        );
+    }
+
+    #[test]
+    fn overview_metadata_rejects_insecure_icon_urls() {
+        let record = ResourceProjectRecord {
+            id: "project".to_string(),
+            source: "modrinth".to_string(),
+            name: "Project".to_string(),
+            summary: "Summary".to_string(),
+            description: None,
+            icon_url: Some("http://example.invalid/icon.png".to_string()),
+            icon_data: None,
+            project_type: "mod".to_string(),
+            last_updated: "2026-07-24T00:00:00Z".to_string(),
+            metadata_synced_at: None,
+            icon_synced_at: None,
+        };
+
+        assert!(ResourceProjectOverviewRecord::from(record)
+            .icon_url
+            .is_none());
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceResourceOverview {
+    pub instance_id: i32,
+    pub resources: Vec<crate::models::installed_resource::InstalledResource>,
+    pub project_records: Vec<ResourceProjectOverviewRecord>,
+    pub missing_project_refs: Vec<ResourceProjectRef>,
+    pub update_snapshot: Option<InstanceUpdateSnapshotResponse>,
+    pub metadata_status: &'static str,
+    pub repair_status: &'static str,
+    pub revision: String,
+}
 
 /// Converts `icon_data` bytes to a base64 data URL, mirroring `process_instance_icon`.
 /// Detects the actual image format from magic bytes.
@@ -94,6 +197,120 @@ pub async fn get_installed_resources(
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     Ok(resources)
+}
+
+/// Returns the complete locally available resource state needed for first paint.
+///
+/// This command deliberately performs no network requests and no filesystem scan.
+/// Cached icon bytes are reduced to a boolean so a large resource collection cannot
+/// turn into a multi-megabyte base64 IPC payload.
+#[tauri::command]
+pub async fn get_instance_resource_overview(instance_id: i32) -> Result<InstanceResourceOverview> {
+    let started = std::time::Instant::now();
+    let overview = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        use crate::models::installed_resource::InstalledResource;
+        use crate::models::instance::Instance;
+        use crate::schema::installed_resource::dsl as ir_dsl;
+        use crate::schema::instance::dsl as inst_dsl;
+        use crate::schema::resource_project::dsl as rp_dsl;
+        use crate::utils::db::get_vesta_conn;
+        use diesel::prelude::*;
+
+        let mut conn = get_vesta_conn()?;
+        let resources = ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .load::<InstalledResource>(&mut conn)?;
+
+        let mut refs = Vec::new();
+        let mut seen_refs = HashSet::new();
+        for resource in &resources {
+            let platform = match resource.platform.as_str() {
+                "modrinth" => Some(SourcePlatform::Modrinth),
+                "curseforge" => Some(SourcePlatform::CurseForge),
+                _ => None,
+            };
+            if resource.remote_id.is_empty() {
+                continue;
+            }
+            if let Some(platform) = platform {
+                if seen_refs.insert((platform, resource.remote_id.clone())) {
+                    refs.push(ResourceProjectRef {
+                        platform,
+                        id: resource.remote_id.clone(),
+                    });
+                }
+            }
+        }
+
+        let ids = refs
+            .iter()
+            .map(|project_ref| &project_ref.id)
+            .collect::<Vec<_>>();
+        let records = if ids.is_empty() {
+            Vec::new()
+        } else {
+            rp_dsl::resource_project
+                .filter(rp_dsl::id.eq_any(ids))
+                .load::<ResourceProjectRecord>(&mut conn)?
+        };
+
+        let record_keys = records
+            .iter()
+            .map(|record| (record.source.to_lowercase(), record.id.clone()))
+            .collect::<HashSet<_>>();
+        let missing_project_refs = refs
+            .into_iter()
+            .filter(|project_ref| {
+                let source = format!("{:?}", project_ref.platform).to_lowercase();
+                !record_keys.contains(&(source, project_ref.id.clone()))
+            })
+            .collect::<Vec<_>>();
+
+        let inst = inst_dsl::instance
+            .filter(inst_dsl::id.eq(instance_id))
+            .first::<Instance>(&mut conn)?;
+        let update_snapshot =
+            crate::resources::update_cache::get_instance_update_snapshot_response(
+                instance_id,
+                &inst,
+            )?;
+
+        let mut revision_hasher = DefaultHasher::new();
+        instance_id.hash(&mut revision_hasher);
+        for resource in &resources {
+            resource.id.hash(&mut revision_hasher);
+            resource.remote_version_id.hash(&mut revision_hasher);
+            resource.is_enabled.hash(&mut revision_hasher);
+            resource.file_mtime.hash(&mut revision_hasher);
+        }
+
+        Ok(InstanceResourceOverview {
+            instance_id,
+            metadata_status: if missing_project_refs.is_empty() {
+                "complete"
+            } else {
+                "partial"
+            },
+            repair_status: "notChecked",
+            revision: format!("{:x}", revision_hasher.finish()),
+            resources,
+            project_records: records.into_iter().map(Into::into).collect(),
+            missing_project_refs,
+            update_snapshot,
+        })
+    })
+    .await
+    .map_err(|error| anyhow!("Failed to join resource overview task: {error}"))?
+    .map_err(|error| anyhow!(error.to_string()))?;
+
+    log::debug!(
+        "[perf] instance-resource-overview instance_id={} resources={} metadata={} elapsed_ms={}",
+        instance_id,
+        overview.resources.len(),
+        overview.project_records.len(),
+        started.elapsed().as_millis()
+    );
+    Ok(overview)
 }
 
 #[tauri::command]

@@ -39,11 +39,7 @@ import {
 } from "@utils/notifications";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
-import { lazy, onCleanup, onMount } from "solid-js";
-
-const StandalonePageViewer = lazy(
-	() => import("@components/page-viewer/standalone-page-viewer"),
-);
+import { onCleanup, onMount } from "solid-js";
 
 export interface ExitCheckResponse {
 	can_exit: boolean;
@@ -65,7 +61,6 @@ function App() {
 				<Route path="*404" component={InvalidPage} />
 				<Route path={"/fatal"} component={FatalPage} />
 				<Route path={"/other.html"} component={HomePage} />
-				<Route path={"/standalone"} component={StandalonePageViewer} />
 			</Router>
 		</>
 	);

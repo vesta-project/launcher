@@ -284,9 +284,15 @@ mod tests {
 
     #[test]
     fn remap_path_under_root_rewrites_absolute_paths() {
-        let source = PathBuf::from("/instances/source");
-        let dest = PathBuf::from("/instances/dest");
-        let remapped = remap_path_under_root("/instances/source/mods/foo.jar", &source, &dest);
-        assert_eq!(remapped, "/instances/dest/mods/foo.jar");
+        let root = if cfg!(windows) {
+            r"C:\instances"
+        } else {
+            "/instances"
+        };
+        let source = PathBuf::from(root).join("source");
+        let dest = PathBuf::from(root).join("dest");
+        let original = source.join("mods").join("foo.jar");
+        let remapped = remap_path_under_root(original.to_string_lossy().as_ref(), &source, &dest);
+        assert_eq!(PathBuf::from(remapped), dest.join("mods").join("foo.jar"));
     }
 }

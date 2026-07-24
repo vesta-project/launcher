@@ -373,7 +373,7 @@ describe("route-scoped reload", () => {
 		let reloads = 0;
 
 		router.navigate("/instance", { id: 1 });
-		router.setRefetch(() => {
+		router.setRefetch(async () => {
 			reloads += 1;
 		}, "/instance");
 
@@ -409,5 +409,39 @@ describe("route-scoped reload", () => {
 		finishReload?.();
 		await Promise.all([firstReload, secondReload]);
 		expect(reloads).toBe(1);
+	});
+});
+
+describe("mini-router snapshots", () => {
+	it("restores route, history, custom title, and live page state", () => {
+		const { router } = createTestRouter();
+		router.navigate("/config", { activeTab: "general" });
+		router.registerStateProvider("/config", () => ({
+			draftTheme: "midnight",
+		}));
+		router.navigate("/instance", { id: 7 }, { activeTab: "logs" });
+		router.customName.set("Instance Seven");
+		router.backwards();
+
+		const snapshot = router.exportSnapshot();
+		const restored = new MiniRouter({
+			sessionId: snapshot.sessionId,
+			paths: {
+				"/config": { element: () => null },
+				"/instance": { element: () => null },
+			},
+		});
+		restored.restoreSnapshot(snapshot);
+
+		expect(restored.sessionId).toBe(router.sessionId);
+		expect(restored.currentPath.get()).toBe("/config");
+		expect(restored.currentParams.get()).toEqual({ activeTab: "general" });
+		expect(restored.currentPathProps()).toEqual({ draftTheme: "midnight" });
+		expect(restored.history.future[0]).toMatchObject({
+			path: "/instance",
+			params: { id: 7 },
+			props: { activeTab: "logs" },
+		});
+		expect(restored.customName.get()).toBe("Instance Seven");
 	});
 });

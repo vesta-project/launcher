@@ -9,6 +9,7 @@ import {
 import { initTheme } from "@components/theming";
 import { initializeInstances } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
+import { getStartupConfig } from "@utils/startup-state";
 
 export type StartupTarget = "home" | "init";
 export type StartupAtmosphereState = "active" | "fading" | "off";
@@ -157,12 +158,12 @@ export async function bootstrapStartup(): Promise<StartupBootstrapResult> {
 	bootstrapPromise = (async () => {
 		const forceLoginRequested = getForceLoginRequested();
 
-		let config: Record<string, any> = {};
+		let config: Record<string, any> = getStartupConfig() ?? {};
 		try {
 			const themedConfig = await initTheme();
 			if (themedConfig) {
 				config = themedConfig;
-			} else {
+			} else if (!Object.keys(config).length) {
 				config = (await invoke("get_config")) as Record<string, any>;
 			}
 		} catch (error) {

@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { applyConfigSnapshot } from "@utils/config-sync";
 import { ensureOsType } from "@utils/os";
+import { getStartupConfig } from "@utils/startup-state";
+import { afterNextPaint } from "@utils/window-readiness";
 import { createSignal } from "solid-js";
 
 const [isThemeReady, setIsThemeReady] = createSignal(false);
@@ -37,7 +39,9 @@ export function initTheme(): Promise<Record<string, any> | null> {
 			applyStartupFallbackTheme();
 
 			// Start config fetching as early as possible
-			const configPromise = invoke<Record<string, any>>("get_config");
+			const configPromise = getStartupConfig()
+				? Promise.resolve(getStartupConfig() as Record<string, any>)
+				: invoke<Record<string, any>>("get_config");
 
 			// Attempt to get OS from initialization script or URL parameters (instant)
 			const urlParams = new URLSearchParams(window.location.search);
@@ -55,15 +59,16 @@ export function initTheme(): Promise<Record<string, any> | null> {
 				document.documentElement.setAttribute("data-os", os);
 			}
 
-			// Clear the startup window background before applying theme effects,
-			// so window effects (vibrancy, blur, etc.) can show through transparency.
+			applyConfigSnapshot(config);
+			await afterNextPaint();
+
+			// Clear the solid startup backing only after the configured theme has painted.
 			try {
 				await invoke("clear_window_startup_background");
 			} catch (e) {
 				console.warn("Failed to clear startup background:", e);
 			}
 
-			applyConfigSnapshot(config);
 			setIsThemeReady(true);
 			console.info("Initial theme applied from config");
 			return config;
