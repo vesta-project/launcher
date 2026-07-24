@@ -48,7 +48,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { resolveResourceUrl } from "@utils/assets";
 import { formatDate } from "@utils/date";
 import { confirmDatapackWorldCompatibility } from "@utils/datapack-compatibility-confirm";
 import { openExternal } from "@utils/external-link";

@@ -8,7 +8,7 @@ import {
 } from "@ui/dialog/dialog";
 import { Separator } from "@ui/separator/separator";
 import { getCrashDetails } from "@utils/crash-handler";
-import { createSignal, Match, Show, Switch } from "solid-js";
+import { Match, Show, Switch } from "solid-js";
 import styles from "./crash-details-modal.module.css";
 
 interface CrashDetailsModalProps {

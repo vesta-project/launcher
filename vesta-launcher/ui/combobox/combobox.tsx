@@ -3,7 +3,7 @@ import * as ComboboxPrimitive from "@kobalte/core/combobox";
 import CheckIcon from "@assets/icons/controls/check.svg";
 import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { Component, splitProps, type ValidComponent } from "solid-js";
+import { splitProps, type ValidComponent } from "solid-js";
 import styles from "./combobox.module.css";
 
 const Combobox = ComboboxPrimitive.Combobox;
