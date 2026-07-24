@@ -104,6 +104,7 @@ import {
 	createPreloadableLazyComponent,
 	createRetainedTabLoader,
 } from "@utils/preloadable-lazy";
+import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
 import {
 	afterStablePaint,
 	markPerformance,
@@ -818,9 +819,7 @@ export default function InstanceDetails(
 		});
 
 		const unlistenPromise = listen("java-paths-updated", () => {
-			refetchManaged();
-			refetchGlobal();
-			refetchDetected();
+			void instanceJavaSettings.refetch();
 		});
 		onCleanup(() => {
 			unlistenPromise.then((unlisten) => unlisten());
@@ -863,13 +862,10 @@ export default function InstanceDetails(
 	);
 
 	onMount(() => {
-		// Settings is a small, high-frequency tab. Loading its code after the
-		// first stable instance paint removes its one-time click suspension
-		// without adding it to the instance page's critical bundle.
-		const cancelPreload = afterStablePaint(() => {
-			instanceTabLoader.preload("settings");
-		});
-		onCleanup(cancelPreload);
+		// Settings is a small, high-frequency tab. Start its local chunk as the
+		// instance shell mounts so an immediate click does not wait for the
+		// post-paint warmup, without adding it to the critical route bundle.
+		instanceTabLoader.preload("settings");
 	});
 
 	createEffect(() => {
@@ -940,43 +936,39 @@ export default function InstanceDetails(
 
 	const isGuest = () => activeAccount()?.account_type === ACCOUNT_TYPE_GUEST;
 
-	const [requiredJava] = createResource(
-		() => (activeTab() === "settings" ? instance()?.id : undefined),
-		async (id) => {
-			if (!id) return null;
-			return await invoke<number>("get_instance_required_java", {
-				instanceId: id,
-			});
+	const instanceJavaSettings = createNonSuspendingLoader(
+		() => instance()?.id,
+		async (instanceId) => {
+			const [requiredJava, detectedJavas, managedJavas, globalJavaPaths] =
+				await Promise.all([
+					invoke<number>("get_instance_required_java", { instanceId }),
+					invoke<any[]>("detect_java"),
+					invoke<any[]>("get_managed_javas"),
+					invoke<any[]>("get_global_java_paths"),
+				]);
+			return {
+				requiredJava,
+				detectedJavas,
+				managedJavas,
+				globalJavaPaths,
+			};
 		},
-	);
-	const [detectedJavas, { refetch: refetchDetected }] = createResource<
-		any[],
-		boolean
-	>(
-		() => activeTab() === "settings",
-		(enabled) => (enabled ? invoke("detect_java") : Promise.resolve([])),
-	);
-	const [managedJavas, { refetch: refetchManaged }] = createResource<
-		any[],
-		boolean
-	>(
-		() => activeTab() === "settings",
-		(enabled) => (enabled ? invoke("get_managed_javas") : Promise.resolve([])),
-	);
-	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<
-		any[],
-		boolean
-	>(
-		() => activeTab() === "settings",
-		(enabled) =>
-			enabled ? invoke("get_global_java_paths") : Promise.resolve([]),
+		{
+			requiredJava: null as number | null,
+			detectedJavas: [] as any[],
+			managedJavas: [] as any[],
+			globalJavaPaths: [] as any[],
+		},
 	);
 
 	const jreOptions = createMemo(() => {
-		const req = requiredJava();
+		const javaSettings = instanceJavaSettings.value();
+		const req = javaSettings.requiredJava;
 		if (!req) return [];
 
-		const global = globalJavaPaths()?.find((g) => g.major_version === req);
+		const global = javaSettings.globalJavaPaths.find(
+			(g) => g.major_version === req,
+		);
 		const globalPathSuffix = global ? `→ ${global.path}` : "(not set)";
 
 		const opts: any[] = [
@@ -988,7 +980,7 @@ export default function InstanceDetails(
 		];
 
 		// Managed Runtime
-		const managed = managedJavas() || [];
+		const managed = javaSettings.managedJavas;
 		const managedForVersion = managed.find((j) => j.major_version === req);
 		if (managedForVersion) {
 			opts.push({
@@ -1004,7 +996,7 @@ export default function InstanceDetails(
 			});
 		}
 
-		(detectedJavas() || [])
+		javaSettings.detectedJavas
 			.filter((j) => j.major_version === req)
 			.forEach((j) => {
 				opts.push({
