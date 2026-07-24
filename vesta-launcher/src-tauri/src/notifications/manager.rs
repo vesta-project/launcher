@@ -73,6 +73,8 @@ mod tests {
     use crate::notifications::models::{Notification, NotificationSeverity, NotificationType};
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     use std::time::{Duration, Instant};
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    use tauri::Manager;
 
     // Helper to build a minimal Tauri app for manager tests
     // NOTE: Upsert tests disabled on Windows due to Tauri event loop constraints (must run on main thread).
@@ -216,6 +218,7 @@ mod tests {
 
     #[test]
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[ignore = "Tauri's Linux event loop must be initialized on the process main thread"]
     fn invoke_action_dispatches_to_registered_handler() {
         let app = build_test_app();
         let handle = app.handle();
@@ -256,6 +259,7 @@ mod tests {
 
     #[test]
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[ignore = "Tauri's Linux event loop must be initialized on the process main thread"]
     fn integration_cancel_task_flow() {
         let app = build_test_app();
         let handle = app.handle();
