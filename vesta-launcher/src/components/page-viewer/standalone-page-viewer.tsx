@@ -1,203 +1,133 @@
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import {
+	MiniRouter,
+	type MiniRouterSnapshot,
+} from "@components/page-viewer/mini-router";
 import {
 	miniRouterInvalidPage,
 	miniRouterPaths,
 } from "@components/page-viewer/mini-router-config";
-import { router, setRouter } from "@components/page-viewer/page-viewer";
+import type { MiniWindowPayload } from "@components/page-viewer/standalone-launcher";
+import { setRouter } from "@components/page-viewer/page-viewer";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
-import { useSearchParams } from "@solidjs/router";
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WindowControls } from "@tauri-controls-v2/solid";
 import { useOs } from "@utils/os";
+import { afterNextPaint } from "@utils/window-readiness";
 import { useWindowFullscreen } from "@utils/window-fullscreen";
-import { createMemo, onCleanup, onMount, Show } from "solid-js";
+import {
+	createMemo,
+	createSignal,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import styles from "./standalone-page-viewer.module.css";
 
+async function waitForRouteSurface(path: string): Promise<void> {
+	const deadline = performance.now() + 5000;
+	while (performance.now() < deadline) {
+		const surface = document.querySelector<HTMLElement>(
+			"[data-mini-route-ready]",
+		);
+		if (surface?.dataset.miniRouteReady === path) {
+			await afterNextPaint();
+			return;
+		}
+		await afterNextPaint();
+	}
+	throw new Error(`Timed out waiting for mini route to paint: ${path}`);
+}
+
+function createRouter(snapshot: MiniRouterSnapshot): MiniRouter {
+	const miniRouter = new MiniRouter({
+		paths: miniRouterPaths,
+		invalid: miniRouterInvalidPage,
+		sessionId: snapshot.sessionId,
+		currentPath: snapshot.current.path,
+	});
+	miniRouter.restoreSnapshot(snapshot);
+	return miniRouter;
+}
+
 function StandalonePageViewer() {
-	const [searchParams] = useSearchParams();
 	const osType = useOs();
 	const isWindowFullscreen = useWindowFullscreen();
+	const [activeRouter, setActiveRouter] = createSignal<MiniRouter>();
 	const isMacosFullscreen = createMemo(
 		() => osType() === "macos" && isWindowFullscreen(),
 	);
+	let unlistenOpen: UnlistenFn | undefined;
+	let applyingPayload: Promise<void> = Promise.resolve();
 
-	const tryParse = (val: string) => {
-		if (typeof val !== "string") return val;
-		if (val === "true") return true;
-		if (val === "false") return false;
-		if (val === "null") return null;
-		if (val === "undefined") return undefined;
-		if (/^-?\d+$/.test(val)) return parseInt(val, 10);
-		if (/^-?\d*\.\d+$/.test(val)) return parseFloat(val);
-		if (val.startsWith("{") || val.startsWith("[")) {
-			try {
-				return JSON.parse(val);
-			} catch {
-				return val;
-			}
+	const applyPendingPayload = async () => {
+		const payload = await invoke<MiniWindowPayload | null>(
+			"take_mini_window_payload",
+		);
+		if (!payload?.snapshot) return;
+
+		let miniRouter = activeRouter();
+		if (!miniRouter || miniRouter.sessionId !== payload.snapshot.sessionId) {
+			miniRouter = createRouter(payload.snapshot);
+			setActiveRouter(miniRouter);
+			setRouter(miniRouter);
+		} else {
+			miniRouter.restoreSnapshot(payload.snapshot);
 		}
-		return val;
+
+		await waitForRouteSurface(payload.snapshot.current.path);
+		await invoke("present_window_when_ready", {
+			label: getCurrentWindow().label,
+		});
 	};
 
-	onMount(() => {
-		// Ensure window is focused when the standalone app mounts
-		getCurrentWindow().setFocus().catch(console.error);
+	const queuePayloadApplication = () => {
+		applyingPayload = applyingPayload
+			.then(applyPendingPayload)
+			.catch((error) => console.error("Failed to open mini-window payload:", error));
+	};
 
-		const initialPath = (searchParams.path as string) || "/config";
-		console.log("[Standalone] Initial currentPath from URL:", initialPath);
+	const requestHide = async () => {
+		const miniRouter = activeRouter();
+		const canExit = miniRouter?.getCanExit();
+		if (canExit && !(await canExit())) return;
+		await invoke("hide_mini_window");
+	};
 
-		// Separate route params (like slug) from component props
-		const initialParams: Record<string, unknown> = {};
-		const initialProps: Record<string, unknown> = {};
-		let historyPast: any[] = [];
-		let historyFuture: any[] = [];
-
-		// Check for handoff data in localStorage
-		const handoffId = searchParams.handoffId as string;
-		if (handoffId) {
-			const rawHandoff = localStorage.getItem(handoffId);
-			if (rawHandoff) {
-				try {
-					const handoff = JSON.parse(rawHandoff);
-					localStorage.removeItem(handoffId); // Clean up
-
-					// Categorize handoff props into params and component props
-					if (handoff.props) {
-						for (const [k, v] of Object.entries(handoff.props)) {
-							const parsed = tryParse(v as string);
-							if (
-								[
-									"slug",
-									"id",
-									"projectId",
-									"platform",
-									"activeTab",
-									"query",
-									"resourceType",
-									"activeSource",
-									"gameVersion",
-									"loader",
-									"mode",
-									"source",
-								].includes(k)
-							) {
-								initialParams[k] = parsed;
-							} else {
-								initialProps[k] = parsed;
-							}
-						}
-					}
-
-					if (handoff.history) {
-						const hist = JSON.parse(handoff.history);
-						historyPast = hist.past || [];
-						historyFuture = hist.future || [];
-					}
-				} catch (e) {
-					console.error("Failed to parse handoff data:", e);
-				}
-			}
-		}
-
-		// Fallback/Legacy: Parse directly from searchParams if no handoff or handoff failed
-		if (Object.keys(initialProps).length === 0) {
-			const historyData = searchParams.history as string;
-			if (historyData) {
-				try {
-					const parsed = JSON.parse(historyData);
-					historyPast = parsed.past || [];
-					historyFuture = parsed.future || [];
-				} catch (e) {
-					console.error("Failed to parse history data:", e);
-				}
-			}
-
-			for (const [key, value] of Object.entries(searchParams)) {
-				if (key === "path" || key === "history" || key === "handoffId")
-					continue;
-				const parsed = tryParse(String(value));
-				if (
-					["slug", "id", "projectId", "platform", "activeTab"].includes(key)
-				) {
-					initialParams[key] = parsed;
-				} else {
-					initialProps[key] = parsed;
-				}
-			}
-		}
-
-		const mini_router = new MiniRouter({
-			paths: miniRouterPaths,
-			invalid: miniRouterInvalidPage,
-			currentPath: initialPath,
-			initialProps:
-				Object.keys(initialProps).length > 0 ? initialProps : undefined,
+	onMount(async () => {
+		unlistenOpen = await listen("core://mini-window-open", () => {
+			queuePayloadApplication();
 		});
 
-		if (Object.keys(initialParams).length > 0) {
-			mini_router.currentParams.set(initialParams);
-		}
-
-		if (historyPast.length > 0 || historyFuture.length > 0) {
-			const mapHistory = (entries: any[]) =>
-				entries.map((entry) => ({
-					path: entry.path,
-					params: entry.params
-						? Object.fromEntries(
-								Object.entries(entry.params).map(([k, v]) => [
-									k,
-									tryParse(v as string),
-								]),
-							)
-						: {},
-					props: entry.props
-						? Object.fromEntries(
-								Object.entries(entry.props).map(([k, v]) => [
-									k,
-									tryParse(v as string),
-								]),
-							)
-						: undefined,
-				}));
-
-			mini_router.history.past = mapHistory(historyPast);
-			mini_router.history.future = mapHistory(historyFuture);
-		}
-
-		setRouter(mini_router);
-
-		// Handle native window close button
-		const unlistenCloseRequested = getCurrentWindow().onCloseRequested(
-			async (event) => {
-				if (mini_router.skipNextExitCheck) return;
-
-				const canExit = mini_router.getCanExit();
-				if (canExit) {
-					event.preventDefault();
-					const ok = await canExit();
-					if (ok) {
-						mini_router.skipNextExitCheck = true;
-						getCurrentWindow().close();
-					}
-				}
+		const unlistenCloseRequested = await getCurrentWindow().onCloseRequested(
+			(event) => {
+				event.preventDefault();
+				void requestHide();
 			},
 		);
 
 		onCleanup(() => {
-			unlistenCloseRequested.then((unlisten) => unlisten());
+			unlistenCloseRequested();
 		});
+
+		queuePayloadApplication();
+	});
+
+	onCleanup(() => {
+		unlistenOpen?.();
 	});
 
 	return (
-		<Show when={router()}>
-			{(r) => (
+		<Show when={activeRouter()}>
+			{(miniRouter) => (
 				<UnifiedPageViewer
-					router={r()}
+					router={miniRouter()}
 					showWindowControls={true}
 					titleSuffix="Standalone"
 					os={osType()}
 					macosFullscreen={isMacosFullscreen()}
-					onClose={() => getCurrentWindow().close()}
+					onClose={() => void requestHide()}
 					windowControls={
 						<Show when={osType() !== "macos"}>
 							<WindowControls

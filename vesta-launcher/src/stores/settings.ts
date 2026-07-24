@@ -6,6 +6,7 @@ import {
 	globalJavaPaths,
 	javaRequirements,
 	managedJava,
+	prefetchSettingsData,
 	type StorageSnapshot,
 	storageSnapshot as storageSnapshotResource,
 	systemMemory,
@@ -31,6 +32,7 @@ import {
 	uiChromeModeEnabled,
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { getStartupConfig } from "@utils/startup-state";
 import {
 	batch,
 	createEffect,
@@ -1572,10 +1574,21 @@ export function getRequirements(): any[] {
 	return requirements() || [];
 }
 
-export async function initSettings() {
+let settingsInitializationPromise: Promise<void> | null = null;
+
+export function initSettings(): Promise<void> {
+	if (!settingsInitializationPromise) {
+		settingsInitializationPromise = initializeSettings();
+	}
+	return settingsInitializationPromise;
+}
+
+async function initializeSettings() {
 	if (hasTauriRuntime()) {
 		try {
-			const config = await invoke<AppConfig>("get_config");
+			const config =
+				(getStartupConfig() as AppConfig | undefined) ??
+				(await invoke<AppConfig>("get_config"));
 			batch(() => {
 				setDebugLogging(config.debug_logging);
 				setReducedMotion(config.reduced_motion ?? false);
@@ -1700,15 +1713,18 @@ export async function initSettings() {
 		}
 	}
 
-	// Refresh theme catalog from backend
-	await refreshThemeCatalog();
+	// Persisted fields are ready now. Slow, tab-specific resources must not block
+	// the settings shell from rendering.
+	setLoading(false);
+	void prefetchSettingsData();
 
-	// Load window effect capabilities
-	const capabilities = await loadWindowEffectCapabilities();
-	if (capabilities?.supportedEffects?.length) {
-		setWindowEffectOptions(capabilities.supportedEffects);
-		setWindowEffect((current) => normalizeWindowEffectForCurrentOS(current));
-	}
+	void refreshThemeCatalog();
+	void loadWindowEffectCapabilities().then((capabilities) => {
+		if (capabilities?.supportedEffects?.length) {
+			setWindowEffectOptions(capabilities.supportedEffects);
+			setWindowEffect((current) => normalizeWindowEffectForCurrentOS(current));
+		}
+	});
 
 	// Set up Java paths listener
 	if (hasTauriRuntime()) {
@@ -1849,11 +1865,8 @@ export async function initSettings() {
 		}
 	});
 
-	setLoading(false);
 }
 
 export function cleanupSettings() {
 	cancelDebouncedPersistence();
-	unsubscribeConfigUpdate?.();
-	unlistenJavaPaths?.();
 }

@@ -582,13 +582,35 @@ pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn clear_window_startup_background(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
-        window
-            .set_background_color(None)
-            .map_err(|e| format!("Failed to clear startup background: {}", e))?;
+pub fn present_window_when_ready(
+    window: tauri::WebviewWindow,
+    label: String,
+) -> Result<(), String> {
+    if window.label() != label {
+        return Err("Window readiness label did not match the calling window".to_string());
     }
+
+    window
+        .show()
+        .map_err(|error| format!("Failed to show ready window: {error}"))?;
+    window
+        .set_focus()
+        .map_err(|error| format!("Failed to focus ready window: {error}"))?;
+
+    if label == "main" {
+        if let Err(error) = sync_tray_visibility_with_config(window.app_handle()) {
+            log::warn!("Failed to sync tray after presenting main window: {error}");
+        }
+    }
+
     Ok(())
+}
+
+#[tauri::command]
+pub fn clear_window_startup_background(window: tauri::WebviewWindow) -> Result<(), String> {
+    window
+        .set_background_color(None)
+        .map_err(|e| format!("Failed to clear startup background: {}", e))
 }
 
 pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), String> {

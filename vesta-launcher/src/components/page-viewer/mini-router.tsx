@@ -12,6 +12,7 @@ import {
 	batch,
 	createMemo,
 	createSignal,
+	Suspense,
 	type JSXElement,
 	type ValidComponent,
 } from "solid-js";
@@ -29,9 +30,20 @@ interface MiniRouterProps {
 	currentPath?: string;
 	initialParams?: Record<string, unknown>;
 	initialProps?: Record<string, unknown>;
+	sessionId?: string;
+}
+
+export interface MiniRouterSnapshot {
+	version: 1;
+	sessionId: string;
+	current: HistoryEntry;
+	past: HistoryEntry[];
+	future: HistoryEntry[];
+	customName: string | null;
 }
 
 class MiniRouter {
+	readonly sessionId: string;
 	paths: Record<string, RouterComponent>;
 	currentPath: { set: (value: string) => void; get: Accessor<string> };
 	currentParams: {
@@ -99,6 +111,8 @@ class MiniRouter {
 	getCanExit: () => (() => Promise<boolean>) | null;
 	setCanExit: (fn: (() => Promise<boolean>) | null) => void;
 	setShellNavigation: (delegate: ShellNavigationDelegate | null) => void;
+	exportSnapshot: () => MiniRouterSnapshot;
+	restoreSnapshot: (snapshot: MiniRouterSnapshot) => void;
 	skipNextExitCheck: boolean = false;
 	private refetchFn: (() => Promise<void>) | undefined;
 	private refetchPath: string | undefined;
@@ -107,6 +121,10 @@ class MiniRouter {
 
 	constructor(props: MiniRouterProps) {
 		this.paths = props.paths;
+		this.sessionId =
+			props.sessionId ??
+			globalThis.crypto?.randomUUID?.() ??
+			`mini-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 		this.paths["404"] = { element: props.invalid ?? (() => <div />) };
 
@@ -227,6 +245,31 @@ class MiniRouter {
 
 		this.setShellNavigation = (delegate) => {
 			this.shellNavigation = delegate;
+		};
+
+		this.exportSnapshot = () => ({
+			version: 1,
+			sessionId: this.sessionId,
+			current: {
+				path: this.currentPath.get(),
+				params: this.currentParams.get(),
+				props: this.getSnapshot(),
+			},
+			past: [...this.history.past],
+			future: [...this.history.future],
+			customName: this.customName.get(),
+		});
+
+		this.restoreSnapshot = (snapshot) => {
+			if (snapshot.version !== 1) {
+				throw new Error(`Unsupported mini-router snapshot: ${snapshot.version}`);
+			}
+			batch(() => {
+				setHistoryPast([...snapshot.past]);
+				setHistoryFuture([...snapshot.future]);
+				applyEntry(snapshot.current);
+				setCustomName(snapshot.customName);
+			});
 		};
 
 		this.isOnLibrarySlot = () => isLibraryPath(this.currentPath.get());
@@ -455,11 +498,18 @@ class MiniRouter {
 
 	getRouterView(additionalProps?: Record<string, unknown>) {
 		return (
-			<Dynamic
-				component={this.currentElement().element}
-				{...(this.currentElement().props || {})}
-				{...(additionalProps || {})}
-			/>
+			<Suspense fallback={<div data-mini-route-loading />}>
+				<div
+					data-mini-route-ready={this.currentPath.get()}
+					style={{ display: "contents" }}
+				>
+					<Dynamic
+						component={this.currentElement().element}
+						{...(this.currentElement().props || {})}
+						{...(additionalProps || {})}
+					/>
+				</div>
+			</Suspense>
 		);
 	}
 }

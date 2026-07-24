@@ -53,6 +53,13 @@ export default defineConfig(async () => ({
 		],
 	},
 	build: {
+		manifest: true,
 		chunkSizeWarningLimit: 2500,
+		rollupOptions: {
+			input: {
+				main: path.resolve(__dirname, "index.html"),
+				standalone: path.resolve(__dirname, "standalone.html"),
+			},
+		},
 	},
 }));

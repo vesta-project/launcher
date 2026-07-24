@@ -102,6 +102,7 @@ fn main() {
             setup::init(app)
         })
         .manage(utils::dialog_manager::DialogManager::new())
+        .manage(utils::windows::MiniWindowRegistry::default())
         .manage(utils::launch_intents::PendingLaunchIntents::new())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
@@ -123,6 +124,9 @@ fn main() {
         }))
         .invoke_handler(tauri::generate_handler![
             launch_window,
+            utils::windows::prime_mini_window,
+            utils::windows::take_mini_window_payload,
+            utils::windows::hide_mini_window,
             get_config,
             set_config,
             update_config_field,
@@ -156,6 +160,7 @@ fn main() {
             commands::app::set_tray_icon_visibility,
             commands::app::set_minimize_to_tray,
             commands::app::show_window_from_tray,
+            commands::app::present_window_when_ready,
             commands::app::clear_window_startup_background,
             commands::app::parse_vesta_url,
             utils::launch_intents::consume_pending_intents,

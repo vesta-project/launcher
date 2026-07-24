@@ -1,19 +1,52 @@
 import { CreateMiniRouterPath } from "@components/page-viewer/mini-router";
 import InvalidPage from "@components/pages/mini-pages/404-page";
-import ChangelogPage from "@components/pages/mini-pages/changelog/changelog";
-import DebugTestPage from "@components/pages/mini-pages/debug-test";
-import FileDropPage from "@components/pages/mini-pages/file-drop/file-drop-page";
-import ImportPage from "@components/pages/mini-pages/install/import-page";
-import InstallPage from "@components/pages/mini-pages/install/install-page";
-import SourceSelectPage from "@components/pages/mini-pages/install/source-select-page";
-import InstanceDetailsPage from "@components/pages/mini-pages/instance-details/instance-details";
-import LoginPage from "@components/pages/mini-pages/login/login-page";
-import ResourceBrowser from "@components/pages/mini-pages/resources/resource-browser";
-import ResourceDetailsPage from "@components/pages/mini-pages/resources/resource-details";
-import SettingsPage from "@components/pages/mini-pages/settings/settings-page";
-import TaskTestPage from "@components/pages/mini-pages/task-test/task-test-page";
-import NotificationTestPage from "@components/pages/notification-test/notification-test";
-import { ModdingGuidePage } from "../pages/mini-pages/modding-guide/guide";
+import { lazy } from "solid-js";
+
+const ChangelogPage = lazy(
+	() => import("@components/pages/mini-pages/changelog/changelog"),
+);
+const DebugTestPage = lazy(
+	() => import("@components/pages/mini-pages/debug-test"),
+);
+const FileDropPage = lazy(
+	() => import("@components/pages/mini-pages/file-drop/file-drop-page"),
+);
+const ImportPage = lazy(
+	() => import("@components/pages/mini-pages/install/import-page"),
+);
+const InstallPage = lazy(
+	() => import("@components/pages/mini-pages/install/install-page"),
+);
+const SourceSelectPage = lazy(
+	() => import("@components/pages/mini-pages/install/source-select-page"),
+);
+const InstanceDetailsPage = lazy(
+	() =>
+		import("@components/pages/mini-pages/instance-details/instance-details"),
+);
+const LoginPage = lazy(
+	() => import("@components/pages/mini-pages/login/login-page"),
+);
+const ResourceBrowser = lazy(
+	() => import("@components/pages/mini-pages/resources/resource-browser"),
+);
+const ResourceDetailsPage = lazy(
+	() => import("@components/pages/mini-pages/resources/resource-details"),
+);
+const SettingsPage = lazy(
+	() => import("@components/pages/mini-pages/settings/settings-page"),
+);
+const TaskTestPage = lazy(
+	() => import("@components/pages/mini-pages/task-test/task-test-page"),
+);
+const NotificationTestPage = lazy(
+	() => import("@components/pages/notification-test/notification-test"),
+);
+const ModdingGuidePage = lazy(() =>
+	import("../pages/mini-pages/modding-guide/guide").then((module) => ({
+		default: module.ModdingGuidePage,
+	})),
+);
 
 // Centralized router path configuration
 export const miniRouterPaths = {

@@ -1,13 +1,14 @@
 /* @refresh reload */
 
 import { router } from "@components/page-viewer/page-viewer";
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { initSentryMonitoring } from "@utils/sentry";
+import { scheduleCommonPagePreloads } from "@utils/page-preload";
 import {
 	applyStartupRouteTarget,
 	bootstrapStartup,
 } from "@utils/startup-bootstrap";
+import { presentCurrentWindowAfterPaint } from "@utils/window-readiness";
 import { createSignal, Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
 import App from "./app";
@@ -22,13 +23,13 @@ if (!root) {
 
 void initSentryMonitoring();
 
-if ((window as any).__TAURI_INTERNALS__) {
-	const label = getCurrentWindow().label;
-	if (label === "main") {
-		invoke("show_window_from_tray").catch((error) => {
-			console.warn("Failed to show startup window:", error);
-		});
-	}
+if (
+	(window as any).__TAURI_INTERNALS__ &&
+	getCurrentWindow().label === "main"
+) {
+	void presentCurrentWindowAfterPaint().catch((error) => {
+		console.warn("Failed to present startup window:", error);
+	});
 }
 
 function isTauriDevWebview() {
@@ -120,7 +121,10 @@ void bootstrapStartup()
 	})
 	.finally(() => {
 		setIsStartupReady(true);
-		queueMicrotask(() => retireStartupLoader());
+		queueMicrotask(() => {
+			retireStartupLoader();
+			scheduleCommonPagePreloads();
+		});
 	});
 
 render(

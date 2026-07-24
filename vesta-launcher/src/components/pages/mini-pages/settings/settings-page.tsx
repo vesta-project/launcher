@@ -8,20 +8,110 @@ import {
 	createMemo,
 	createSignal,
 	ErrorBoundary,
+	For,
+	type JSXElement,
+	lazy,
 	onCleanup,
 	onMount,
 	Show,
 	Suspense,
 } from "solid-js";
-import { AccountSettingsTab } from "./account/AccountTab";
-import { AppearanceSettingsTab } from "./appearance/AppearanceTab";
-import { InstanceDefaultsTab } from "./defaults/DefaultsTab";
-import { DeveloperSettingsTab } from "./developer/DeveloperTab";
 import { GeneralSettingsTab } from "./general/GeneralTab";
-import { HelpSettingsTab } from "./help/HelpTab";
-import { JavaSettingsTab } from "./java/JavaTab";
-import { NotificationSettingsTab } from "./notifications/NotificationsTab";
 import styles from "./settings-page.module.css";
+
+const AccountSettingsTab = lazy(() =>
+	import("./account/AccountTab").then((module) => ({
+		default: module.AccountSettingsTab,
+	})),
+);
+const AppearanceSettingsTab = lazy(() =>
+	import("./appearance/AppearanceTab").then((module) => ({
+		default: module.AppearanceSettingsTab,
+	})),
+);
+const JavaSettingsTab = lazy(() =>
+	import("./java/JavaTab").then((module) => ({
+		default: module.JavaSettingsTab,
+	})),
+);
+const NotificationSettingsTab = lazy(() =>
+	import("./notifications/NotificationsTab").then((module) => ({
+		default: module.NotificationSettingsTab,
+	})),
+);
+const InstanceDefaultsTab = lazy(() =>
+	import("./defaults/DefaultsTab").then((module) => ({
+		default: module.InstanceDefaultsTab,
+	})),
+);
+const DeveloperSettingsTab = lazy(() =>
+	import("./developer/DeveloperTab").then((module) => ({
+		default: module.DeveloperSettingsTab,
+	})),
+);
+const HelpSettingsTab = lazy(() =>
+	import("./help/HelpTab").then((module) => ({
+		default: module.HelpSettingsTab,
+	})),
+);
+
+interface SettingsTabDefinition {
+	value: string;
+	label: string;
+	loadingLabel: string;
+	render: (props: { close?: () => void }) => JSXElement;
+}
+
+const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
+	{
+		value: "general",
+		label: "General",
+		loadingLabel: "General Settings",
+		render: () => <GeneralSettingsTab />,
+	},
+	{
+		value: "account",
+		label: "Account",
+		loadingLabel: "Account Settings",
+		render: () => <AccountSettingsTab />,
+	},
+	{
+		value: "appearance",
+		label: "Appearance",
+		loadingLabel: "Appearance",
+		render: () => <AppearanceSettingsTab />,
+	},
+	{
+		value: "java",
+		label: "Java",
+		loadingLabel: "Java Settings",
+		render: () => <JavaSettingsTab />,
+	},
+	{
+		value: "notifications",
+		label: "Notifications",
+		loadingLabel: "Notification Settings",
+		render: () => <NotificationSettingsTab />,
+	},
+	{
+		value: "defaults",
+		label: "Defaults",
+		loadingLabel: "Instance Defaults",
+		render: () => <InstanceDefaultsTab />,
+	},
+	{
+		value: "developer",
+		label: "Developer",
+		loadingLabel: "Developer Settings",
+		render: () => <DeveloperSettingsTab />,
+	},
+	{
+		value: "help",
+		label: "Help",
+		loadingLabel: "Help",
+		render: (props) => <HelpSettingsTab close={props.close} />,
+	},
+];
 
 function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const activeRouter = createMemo(() => props.router || router());
@@ -38,27 +128,16 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		setSelectedTab(activeTab());
 	});
 
-	onMount(async () => {
-		await initSettings();
+	onMount(() => {
+		void initSettings();
 		activeRouter()?.registerStateProvider("/config", () => ({
-			activeTab: activeTab(),
+			activeTab: selectedTab(),
 		}));
 	});
 
 	onCleanup(() => {
 		cleanupSettings();
 	});
-
-	const settingsTabs = [
-		{ value: "general", label: "General" },
-		{ value: "account", label: "Account" },
-		{ value: "appearance", label: "Appearance" },
-		{ value: "java", label: "Java" },
-		{ value: "notifications", label: "Notifications" },
-		{ value: "defaults", label: "Defaults" },
-		{ value: "developer", label: "Developer" },
-		{ value: "help", label: "Help" },
-	];
 
 	return (
 		<div class={styles["settings-page"]}>
@@ -69,91 +148,41 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				}
 			>
 				<PageSidebar
-					tabs={settingsTabs}
+					tabs={[...SETTINGS_TABS]}
 					activeTab={selectedTab()}
 					onTabChange={(v) => {
 						setSelectedTab(v);
 						activeRouter()?.updateQuery("activeTab", v, true);
 					}}
 				>
-					<TabsContent class={styles["tabs-content"]} value="general">
-						<Suspense
-							fallback={
-								<div class={styles["settings-tab-loading"]}>
-									Loading General Settings...
-								</div>
-							}
-						>
-							<ErrorBoundary
-								fallback={(error) => (
-									<div class={styles["settings-tab-error"]}>
-										<strong>General settings could not be displayed.</strong>
-										<span>{String(error)}</span>
-									</div>
-								)}
-							>
-								<GeneralSettingsTab />
-							</ErrorBoundary>
-						</Suspense>
-					</TabsContent>
-
-					<TabsContent class={styles["tabs-content"]} value="account">
-						<AccountSettingsTab />
-					</TabsContent>
-
-					<TabsContent class={styles["tabs-content"]} value="appearance">
-						<Suspense
-							fallback={
-								<div class={styles["settings-tab-loading"]}>
-									Loading Appearance...
-								</div>
-							}
-						>
-							<AppearanceSettingsTab />
-						</Suspense>
-					</TabsContent>
-
-					<TabsContent class={styles["tabs-content"]} value="java">
-						<Suspense
-							fallback={
-								<div class={styles["settings-tab-loading"]}>
-									Loading Java Settings...
-								</div>
-							}
-						>
-							<JavaSettingsTab />
-						</Suspense>
-					</TabsContent>
-
-					<TabsContent class={styles["tabs-content"]} value="notifications">
-						<NotificationSettingsTab />
-					</TabsContent>
-
-					<TabsContent class={styles["tabs-content"]} value="defaults">
-						<InstanceDefaultsTab />
-					</TabsContent>
-
-					<TabsContent class={styles["tabs-content"]} value="developer">
-						<Suspense
-							fallback={
-								<div class={styles["settings-tab-loading"]}>
-									Loading Developer Settings...
-								</div>
-							}
-						>
-							<DeveloperSettingsTab />
-						</Suspense>
-					</TabsContent>
-
-					<TabsContent class={styles["tabs-content"]} value="help">
-						<Suspense
-							fallback={
-								<div class={styles["settings-tab-loading"]}>Loading...</div>
-							}
-						>
-							<HelpSettingsTab close={props.close} />
-						</Suspense>
-					</TabsContent>
+					<For each={SETTINGS_TABS}>
+						{(tab) => (
+							<TabsContent class={styles["tabs-content"]} value={tab.value}>
+								<Show when={selectedTab() === tab.value}>
+									<Suspense
+										fallback={
+											<div class={styles["settings-tab-loading"]}>
+												Loading {tab.loadingLabel}...
+											</div>
+										}
+									>
+										<ErrorBoundary
+											fallback={(error) => (
+												<div class={styles["settings-tab-error"]}>
+													<strong>
+														{tab.label} settings could not be displayed.
+													</strong>
+													<span>{String(error)}</span>
+												</div>
+											)}
+										>
+											{tab.render({ close: props.close })}
+										</ErrorBoundary>
+									</Suspense>
+								</Show>
+							</TabsContent>
+						)}
+					</For>
 				</PageSidebar>
 			</Show>
 		</div>

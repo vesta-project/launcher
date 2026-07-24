@@ -44,9 +44,18 @@ fn build_main_window(
     os: &str,
     config: &crate::utils::config::AppConfig,
 ) -> Result<tauri::WebviewWindow, tauri::Error> {
+    let bootstrap = serde_json::json!({
+        "os": os,
+        "config": config,
+    });
+    let initialization_script = format!(
+        "window.__VESTA_OS__ = {os}; window.__VESTA_BOOTSTRAP__ = {bootstrap};",
+        os = serde_json::to_string(os).expect("serialize startup OS"),
+        bootstrap = serde_json::to_string(&bootstrap).expect("serialize startup snapshot"),
+    );
     let builder =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-            .initialization_script(&format!("window.__VESTA_OS__ = '{}';", os))
+            .initialization_script(&initialization_script)
             .title("Vesta Launcher")
             .inner_size(
                 config.last_window_width as f64,
