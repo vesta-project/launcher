@@ -133,4 +133,5 @@ cargo test -p vesta-launcher localization::tests
 The first implementation localizes the language settings surface, Settings
 navigation/loading states, and native tray. Migrating the remaining UI strings
 is incremental: move strings into the nearest domain catalog as each screen is
-touched.
+touched. `bun run build` and Tauri production builds run catalog validation
+before bundling.
