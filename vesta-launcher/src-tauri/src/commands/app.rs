@@ -589,6 +589,17 @@ pub fn present_window_when_ready(
     if window.label() != label {
         return Err("Window readiness label did not match the calling window".to_string());
     }
+    if label != "main" {
+        if !label.starts_with("page-viewer-") {
+            return Err(
+                "Only the main window and mini windows can use readiness presentation".to_string(),
+            );
+        }
+        let registry = window.state::<crate::utils::windows::MiniWindowRegistry>();
+        if !registry.is_claimed(&label) {
+            return Err("An unclaimed prewarmed mini window cannot be presented".to_string());
+        }
+    }
 
     window
         .show()

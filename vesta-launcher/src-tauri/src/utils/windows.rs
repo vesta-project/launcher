@@ -65,6 +65,15 @@ impl MiniWindowRegistry {
     fn take_payload(&self, label: &str) -> Option<Value> {
         self.inner.lock().unwrap().pending_payloads.remove(label)
     }
+
+    pub(crate) fn is_claimed(&self, label: &str) -> bool {
+        self.inner
+            .lock()
+            .unwrap()
+            .session_windows
+            .values()
+            .any(|claimed_label| claimed_label == label)
+    }
 }
 
 fn os_name() -> &'static str {
@@ -275,11 +284,13 @@ mod tests {
             "only one idle window should be primed at once"
         );
         registry.register_idle(idle_label.clone());
+        assert!(!registry.is_claimed(&idle_label));
 
         let (claimed_label, needs_build) =
             registry.claim_session("settings".to_string(), json!({}));
 
         assert_eq!(claimed_label, idle_label);
         assert!(!needs_build);
+        assert!(registry.is_claimed(&claimed_label));
     }
 }

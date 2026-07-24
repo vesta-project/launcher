@@ -92,7 +92,18 @@ fn main() {
 
     builder
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                // Visibility is controlled by the painted-surface handshake. Restoring
+                // it here would show hidden startup and prewarmed windows prematurely.
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        .difference(tauri_plugin_window_state::StateFlags::VISIBLE),
+                )
+                // Reusable mini windows own their lifecycle in MiniWindowRegistry.
+                .with_filter(|label| !label.starts_with("page-viewer-"))
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
