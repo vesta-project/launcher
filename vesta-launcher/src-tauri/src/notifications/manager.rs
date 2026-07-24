@@ -73,6 +73,8 @@ mod tests {
     use crate::notifications::models::{Notification, NotificationSeverity, NotificationType};
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     use std::time::{Duration, Instant};
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    use tauri::Manager;
 
     // Helper to build a minimal Tauri app for manager tests
     // NOTE: Upsert tests disabled on Windows due to Tauri event loop constraints (must run on main thread).
