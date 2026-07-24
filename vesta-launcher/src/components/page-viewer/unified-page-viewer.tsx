@@ -9,14 +9,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	handleNavigationBack,
 	handleNavigationForward,
-	handleNavigationKeyDown,
 } from "@utils/flat-shell-navigation";
 import {
 	children,
 	createMemo,
 	type JSX,
-	onCleanup,
-	onMount,
 	Show,
 } from "solid-js";
 import styles from "./unified-page-viewer.module.css";
@@ -92,30 +89,6 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 		}
 		if (props.onClose) props.onClose();
 	};
-
-	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.ctrlKey || event.metaKey) {
-			if (event.key === "r") {
-				event.preventDefault();
-				props.router.reload();
-			}
-			if (event.key === "w" && props.onClose) {
-				event.preventDefault();
-				handleClose();
-			}
-		}
-		if (!props.hideNavbar && event.altKey) {
-			void handleNavigationKeyDown(event, props.router);
-		}
-	};
-
-	onMount(() => {
-		window.addEventListener("keydown", handleKeyDown);
-	});
-
-	onCleanup(() => {
-		window.removeEventListener("keydown", handleKeyDown);
-	});
 
 	return (
 		<div class={styles["unified-page-viewer-root"]} data-os={props.os}>

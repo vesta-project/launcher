@@ -205,6 +205,24 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/startup/update_actions.rs`
 - `vesta-launcher/src-tauri/src/auth/notification_actions.rs`
 
+### Keyboard Command Catalog
+
+The app-local command and shortcut system. Frontend command definitions own
+executable handlers, availability, and defaults. The config database owns the
+materialized command metadata and each user's current, customized, or explicitly
+unbound shortcut. Tauri command Adapters reconcile definitions, enforce global
+shortcut uniqueness, persist mutations, and broadcast updates to every WebView.
+
+Page-local navigation such as arrow movement within a grid remains owned by the
+page or control Module rather than the global Keyboard Command Catalog.
+
+Primary modules:
+
+- `vesta-launcher/src/keybindings/`
+- `vesta-launcher/src/components/pages/mini-pages/settings/keyboard/`
+- `vesta-launcher/src-tauri/src/commands/keybindings.rs`
+- `vesta-launcher/src-tauri/migrations/config/`
+
 ### Architecture Memory
 
 The repo-owned memory for domain language and load-bearing decisions.

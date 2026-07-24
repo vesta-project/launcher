@@ -54,6 +54,14 @@
 	background: hsl(var(--color__primary-hue) 25% 25% / 0.25);
 }
 
+.button:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: -2px;
+	background: hsl(var(--color__primary-hue) 40% 30% / 22%);
+	color: var(--text-primary);
+	opacity: 1;
+}
+
 .button:disabled {
 	opacity: 0.35;
 	cursor: not-allowed;

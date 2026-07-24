@@ -18,6 +18,8 @@ import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
 import { generateVestaDeepLink } from "@utils/deep-links";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
+import { ariaShortcut, displayChord } from "~/keybindings/chords";
+import { keybindingFor } from "~/keybindings/store";
 import {
 	DEFAULT_ICONS,
 	getInstanceSlug,
@@ -33,6 +35,7 @@ const ACTIONS_ENABLED = false;
 
 export interface PinnedItemProps {
 	pin: PinnedPage;
+	shortcutCommandIds?: () => readonly string[];
 }
 
 export function PinnedItem(props: PinnedItemProps) {
@@ -120,6 +123,20 @@ export function PinnedItem(props: PinnedItemProps) {
 		return props.pin.icon_url;
 	});
 	const iconPreview = createAnimatedIconPreview(() => displayIcon());
+	const shortcutChords = createMemo(() =>
+		(props.shortcutCommandIds?.() ?? [])
+			.map((commandId) => keybindingFor(commandId))
+			.filter((chord): chord is string => Boolean(chord)),
+	);
+	const shortcutDescription = createMemo(() =>
+		shortcutChords().map(displayChord).join(", "),
+	);
+	const shortcutAria = createMemo(() =>
+		shortcutChords()
+			.map(ariaShortcut)
+			.filter((shortcut): shortcut is string => Boolean(shortcut))
+			.join(" "),
+	);
 
 	const handleClick = () => {
 		if (props.pin.page_type === "instance") {
@@ -279,7 +296,12 @@ export function PinnedItem(props: PinnedItemProps) {
 							onClick={handleClick}
 						>
 							<SidebarButton
-								tooltip_text={displayName()}
+								tooltip_text={
+									shortcutDescription()
+										? `${displayName()} (${shortcutDescription()})`
+										: displayName()
+								}
+								aria-keyshortcuts={shortcutAria() || undefined}
 								tooltip_placement="right"
 								tooltip_gutter={props.pin.page_type === "instance" ? 44 : 8}
 								class={styles["pinned-button"]}
