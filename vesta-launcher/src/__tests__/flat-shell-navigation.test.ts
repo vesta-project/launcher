@@ -5,7 +5,6 @@ import {
 	createLibraryEntry,
 	futureEntryMatchesTarget,
 	handleNavigationBack,
-	handleNavigationForward,
 	isLibraryPath,
 	LIBRARY_PATH,
 	routeParamsMatch,
@@ -124,7 +123,9 @@ describe("library slot navigation", () => {
 		expect(pageViewerOpen()).toBe(false);
 		expect(router.canGoBack()).toBe(true);
 		expect(router.history.past[router.history.past.length - 1]?.params).toEqual(
-			{ id: 1 },
+			{
+				id: 1,
+			},
 		);
 
 		router.navigateFromLibrary("/instance", { id: 2 });
@@ -285,7 +286,9 @@ describe("library slot navigation", () => {
 		expect(router.canGoBack()).toBe(true);
 		expect(router.history.past).toHaveLength(pastBefore);
 		expect(router.history.past[router.history.past.length - 1]?.params).toEqual(
-			{ id: 1 },
+			{
+				id: 1,
+			},
 		);
 	});
 
@@ -375,6 +378,7 @@ describe("route-scoped reload", () => {
 		router.navigate("/instance", { id: 1 });
 		router.setRefetch(() => {
 			reloads += 1;
+			return Promise.resolve();
 		}, "/instance");
 
 		await router.reload();

@@ -29,9 +29,11 @@ export function useInstallCapabilities(params: UseInstallCapabilitiesParams) {
 		const versions = params.projectVersions();
 		if (versions && versions.length > 0) {
 			const set = new Set(["vanilla"]);
-			versions.forEach((v: ResourceVersion) =>
-				v.loaders.forEach((loader: string) => set.add(loader.toLowerCase())),
-			);
+			versions.forEach((v: ResourceVersion) => {
+				v.loaders.forEach((loader: string) => {
+					set.add(loader.toLowerCase());
+				});
+			});
 			return Array.from(set);
 		}
 		return undefined;

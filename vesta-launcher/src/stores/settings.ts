@@ -37,7 +37,6 @@ import {
 	createMemo,
 	createResource,
 	createSignal,
-	onCleanup,
 	untrack,
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";

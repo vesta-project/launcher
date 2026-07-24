@@ -11,6 +11,9 @@
     "typescript": "^5.4.5"
   },
   "scripts": {
+    "check": "cd vesta-launcher && bun run check",
+    "format": "cd vesta-launcher && bun run format",
+    "typecheck": "cd vesta-launcher && bun run typecheck",
     "vesta:dev": "cd vesta-launcher && bun run tauri dev",
     "vesta:dev:tools": "cd vesta-launcher && bun run tauri dev -- --features devtools",
     "vesta:build": "cd vesta-launcher && bun run tauri build",

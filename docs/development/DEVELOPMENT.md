@@ -72,9 +72,14 @@ For details on how the launcher handles window initialization, the initial loadi
 
 ### Linting & Formatting
 We use **Biome** for JavaScript/TypeScript and standard Rust formatting.
-- **Check/Fix Frontend Code:**
+- **Check Frontend Code:**
   ```bash
-  bunx biome check --apply .
+  bun run check
+  bun run typecheck
+  ```
+- **Format Frontend Code:**
+  ```bash
+  bun run format
   ```
 - **Format Rust Code:**
   ```bash

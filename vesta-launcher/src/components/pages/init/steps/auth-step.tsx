@@ -2,7 +2,6 @@ import networkStore from "@stores/network";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import {
-	type AuthStage,
 	cancelLogin,
 	getActiveAccount,
 	listenToAuthEvents,

@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ResourceInstallRequest } from "@utils/resource-install-intent";
 import { createStore, reconcile } from "solid-js/store";
-import { Instance } from "./instances";
 
 export type ResourceType =
 	| "mod"
@@ -526,7 +525,9 @@ export const resources = {
 	fetchInstalled: async (instanceId: number) => {
 		const results = await invoke<InstalledResource[]>(
 			"get_installed_resources",
-			{ instanceId },
+			{
+				instanceId,
+			},
 		);
 		setResourceStore("installedResources", results);
 

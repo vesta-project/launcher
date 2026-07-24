@@ -73,6 +73,7 @@ export function GeneralSettingsTab() {
 		if (
 			path !== "/config" ||
 			!props?.focusArtifactCacheLimit ||
+			typeof requestId !== "number" ||
 			!storageCardRef
 		)
 			return;

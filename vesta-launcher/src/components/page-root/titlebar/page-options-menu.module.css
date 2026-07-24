@@ -8,11 +8,9 @@
 	background: transparent;
 	border: none;
 	color: var(--text-muted);
-	cursor: default;
 	transition: all 0.2s ease;
 	padding: 0;
 	margin-right: 4px;
-	cursor: default;
 	cursor: default;
 }
 
@@ -52,10 +50,8 @@
 	border: none;
 	color: var(--text);
 	font-size: 13px;
-	cursor: default;
 	text-align: left;
 	transition: background 0.15s ease;
-	cursor: default;
 	cursor: default;
 }
 

@@ -118,11 +118,9 @@
 	transition: all 0.15s ease;
 	background: transparent;
 	border: none;
-	cursor: default;
 	color: var(--text-tertiary);
 	padding: 0;
 	z-index: 1;
-	cursor: default;
 	cursor: default;
 }
 

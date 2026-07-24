@@ -80,7 +80,6 @@ import {
 	startModpackUpdate,
 	unlinkInstance,
 	updateInstance,
-	updateInstanceModpackVersion,
 } from "@utils/instances";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
@@ -1276,7 +1275,7 @@ export default function InstanceDetails(
 	createEffect(() => {
 		const inst = instance();
 		setUpdates({});
-		setCheckedPerResource(new Set());
+		setCheckedPerResource(new Set<number>());
 		if (!inst) return;
 		void hydrateUpdateSnapshot(inst.id);
 	});

@@ -1,7 +1,6 @@
-import { PolymorphicProps } from "@kobalte/core";
 import * as TooltipPrimitive from "@kobalte/core/tooltip";
 import type { ChildrenProp, ClassProp } from "@ui/props";
-import { children, splitProps, ValidComponent } from "solid-js";
+import { children, splitProps } from "solid-js";
 import styles from "./tooltip.module.css";
 
 type BasePlacement = "top" | "bottom" | "left" | "right";

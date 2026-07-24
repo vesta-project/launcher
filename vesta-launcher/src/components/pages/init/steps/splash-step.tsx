@@ -1,4 +1,3 @@
-import LogoIcon from "@assets/logo.svg";
 import networkStore from "@stores/network";
 import Button from "@ui/button/button";
 import { Show } from "solid-js";

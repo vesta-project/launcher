@@ -397,10 +397,8 @@
 	background: var(--surface-low);
 	border: var(--border-width-subtle) solid var(--border-subtle);
 	border-radius: 8px;
-	cursor: default;
 	transition: all 0.2s ease;
 	min-height: 100px;
-	cursor: default;
 	cursor: default;
 }
 

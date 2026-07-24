@@ -9,7 +9,6 @@ import {
 	canChangeHue,
 	canChangeStyle,
 	filteredThemeCatalog,
-	getThemeSource,
 	gradientEnabled,
 	gradientHarmony,
 	gradientType,
@@ -60,12 +59,9 @@ import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import {
 	type GradientHarmony,
-	getThemeById,
 	isBuiltinThemeId,
 	type StyleMode,
-	type ThemeConfig,
 	type ThemeVariableValue,
-	type UiChromeMode,
 } from "../../../../../themes/presets";
 import { ThemePresetCard } from "../../../../theme-preset-card/theme-preset-card";
 import styles from "../settings-page.module.css";

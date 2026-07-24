@@ -33,7 +33,6 @@ import {
 	listExportCandidates,
 } from "@utils/modpacks";
 import {
-	createEffect,
 	createMemo,
 	createResource,
 	createSignal,

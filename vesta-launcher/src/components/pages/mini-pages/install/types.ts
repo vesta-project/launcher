@@ -1,10 +1,7 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import type { ResourceVersion } from "@stores/resources";
 import type { Instance } from "@utils/instances";
-import type {
-	ExternalInstanceCandidate,
-	LauncherKind,
-} from "@utils/launcher-imports";
+import type { LauncherKind } from "@utils/launcher-imports";
 import type { ModpackInfo } from "@utils/modpacks";
 import type { PendingResourceInstall } from "@utils/resource-install-intent";
 import type { JSX } from "solid-js";
