@@ -7,3 +7,5 @@ files:
   - source: /vesta-launcher/locales/en/*.ftl
     translation: /vesta-launcher/locales/%locale%/%original_file_name%
     type: ftl
+    update_option: update_as_unapproved
+    skip_untranslated_strings: true

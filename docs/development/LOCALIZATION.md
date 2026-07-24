@@ -47,6 +47,9 @@ Do not add Crowdin credentials to `crowdin.yml`. The GitHub integration stores
 authorization in Crowdin. The custom Crowdin commit message intentionally omits
 `[ci skip]` so the localization workflow validates translation pull requests;
 workflow concurrency cancels redundant runs while Crowdin is updating files.
+Crowdin omits untranslated messages so Vesta's English fallback remains the
+single fallback mechanism. When English source text changes, existing
+translations are preserved but marked unapproved for review.
 
 If Crowdin's `%locale%` value is not the BCP 47 directory code Vesta should use,
 configure a language mapping in Crowdin before downloading that language.
@@ -68,6 +71,9 @@ Before Crowdin exports a new target locale, add it to
 
 The code must be a valid BCP 47 language tag accepted by browser `Intl` APIs and
 Rust `unic-langid`. Use `"direction": "rtl"` for right-to-left locales.
+A disabled locale may be declared before its directory exists; validation will
+report that it is awaiting its first Crowdin export. Enabled locales must have
+at least one valid `.ftl` catalog.
 
 When translation quality is sufficient:
 
@@ -79,7 +85,8 @@ When translation quality is sufficient:
 
 Missing translated messages safely fall back to English, so a locale may launch
 before it reaches 100% coverage. Unknown message IDs, malformed Fluent syntax,
-duplicate IDs, and changed variables fail validation.
+duplicate IDs or locale codes, invalid locale metadata, attribute-only messages,
+and changed variables fail validation.
 
 ## Add or change source text
 
@@ -113,7 +120,7 @@ From `vesta-launcher/`:
 
 ```sh
 bun run i18n:check
-bun run test --run src/localization/index.test.ts
+bun run test --run src/localization/index.test.ts scripts/validate-locales.test.ts
 bun run build
 ```
 
