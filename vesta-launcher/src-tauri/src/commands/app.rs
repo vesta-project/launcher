@@ -601,12 +601,7 @@ pub fn present_window_when_ready(
         }
     }
 
-    window
-        .show()
-        .map_err(|error| format!("Failed to show ready window: {error}"))?;
-    window
-        .set_focus()
-        .map_err(|error| format!("Failed to focus ready window: {error}"))?;
+    crate::utils::windows::reveal_window(&window)?;
 
     if label == "main" {
         if let Err(error) = sync_tray_visibility_with_config(window.app_handle()) {

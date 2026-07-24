@@ -199,15 +199,23 @@ pub fn hide_mini_window(window: tauri::WebviewWindow) -> Result<(), String> {
         .map_err(|error| format!("Failed to hide mini window: {error}"))
 }
 
+/// Reveal and focus a prepared app window through one cross-platform path.
+pub fn reveal_window(window: &tauri::WebviewWindow) -> Result<(), String> {
+    window
+        .unminimize()
+        .map_err(|error| format!("Failed to restore window: {error}"))?;
+    window
+        .show()
+        .map_err(|error| format!("Failed to show window: {error}"))?;
+    window
+        .set_focus()
+        .map_err(|error| format!("Failed to focus window: {error}"))
+}
+
 /// Ensure the main window is visible and focused (used by deep-links / CLI)
 pub fn ensure_main_window_visible(app: &tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        window
-            .show()
-            .map_err(|e| format!("Failed to show window: {}", e))?;
-        window
-            .set_focus()
-            .map_err(|e| format!("Failed to focus window: {}", e))?;
+        reveal_window(&window)?;
 
         if let Err(e) = crate::commands::app::sync_tray_visibility_with_config(app) {
             log::warn!(

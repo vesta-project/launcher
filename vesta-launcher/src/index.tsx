@@ -1,7 +1,6 @@
 /* @refresh reload */
 
 import { router } from "@components/page-viewer/page-viewer";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { initSentryMonitoring } from "@utils/sentry";
 import { scheduleCommonPagePreloads } from "@utils/page-preload";
 import {
@@ -22,15 +21,6 @@ if (!root) {
 }
 
 void initSentryMonitoring();
-
-if (
-	(window as any).__TAURI_INTERNALS__ &&
-	getCurrentWindow().label === "main"
-) {
-	void presentCurrentWindowAfterPaint().catch((error) => {
-		console.warn("Failed to present startup window:", error);
-	});
-}
 
 function isTauriDevWebview() {
 	return Boolean((window as any).__TAURI_INTERNALS__) && import.meta.env.DEV;
@@ -124,6 +114,9 @@ void bootstrapStartup()
 		queueMicrotask(() => {
 			retireStartupLoader();
 			scheduleCommonPagePreloads();
+			void presentCurrentWindowAfterPaint().catch((error) => {
+				console.warn("Failed to present startup window:", error);
+			});
 		});
 	});
 

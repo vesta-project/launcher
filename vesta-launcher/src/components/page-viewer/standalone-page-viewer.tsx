@@ -16,7 +16,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WindowControls } from "@tauri-controls-v2/solid";
 import { useOs } from "@utils/os";
-import { afterNextPaint } from "@utils/window-readiness";
+import {
+	afterNextPaint,
+	presentCurrentWindowAfterPaint,
+} from "@utils/window-readiness";
 import { useWindowFullscreen } from "@utils/window-fullscreen";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./standalone-page-viewer.module.css";
@@ -28,7 +31,6 @@ async function waitForRouteSurface(path: string): Promise<void> {
 			"[data-mini-route-ready]",
 		);
 		if (surface?.dataset.miniRouteReady === path) {
-			await afterNextPaint();
 			return;
 		}
 		await afterNextPaint();
@@ -81,9 +83,7 @@ function StandalonePageViewer() {
 		}
 
 		await waitForRouteSurface(payload.snapshot.current.path);
-		await invoke("present_window_when_ready", {
-			label: getCurrentWindow().label,
-		});
+		await presentCurrentWindowAfterPaint();
 		console.debug("[mini-window-performance]", {
 			path: payload.snapshot.current.path,
 			readyMs: Date.now() - payload.requestedAtMs,
