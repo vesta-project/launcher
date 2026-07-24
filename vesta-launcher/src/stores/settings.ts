@@ -6,7 +6,6 @@ import {
 	globalJavaPaths,
 	javaRequirements,
 	managedJava,
-	prefetchSettingsData,
 	type StorageSnapshot,
 	storageSnapshot as storageSnapshotResource,
 	systemMemory,
@@ -1716,7 +1715,6 @@ async function initializeSettings() {
 	// Persisted fields are ready now. Slow, tab-specific resources must not block
 	// the settings shell from rendering.
 	setLoading(false);
-	void prefetchSettingsData();
 
 	void refreshThemeCatalog();
 	void loadWindowEffectCapabilities().then((capabilities) => {
@@ -1864,7 +1862,6 @@ async function initializeSettings() {
 			setInstanceDefaults((prev) => ({ ...prev, [field]: value }));
 		}
 	});
-
 }
 
 export function cleanupSettings() {

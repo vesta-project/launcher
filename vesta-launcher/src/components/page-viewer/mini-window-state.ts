@@ -41,6 +41,25 @@ export function createMiniWindowSnapshot(
 }
 
 /**
+ * Give a router snapshot a window identity based on the view it currently
+ * represents. A MiniRouter's own session ID belongs to the in-window tab
+ * history, so using it as the native window identity would collapse every
+ * popped-out route from that router into one window.
+ */
+export function createPopOutSnapshot(
+	snapshot: MiniRouterSnapshot,
+	sessionId = createMiniWindowSessionId(
+		snapshot.current.path,
+		snapshot.current.params,
+	),
+): MiniRouterSnapshot {
+	return {
+		...snapshot,
+		sessionId,
+	};
+}
+
+/**
  * IPC snapshots intentionally contain only serializable view state. Runtime
  * callbacks and router references are recreated inside the destination window.
  */

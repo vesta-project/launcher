@@ -373,7 +373,16 @@ export const resources = {
 
 	search: async () => {
 		const cacheKey = currentSearchCacheKey();
-		setResourceStore("loading", true);
+		const cached = searchCache.get(cacheKey);
+		if (cached) {
+			setResourceStore({
+				results: cached.hits,
+				totalHits: cached.total_hits,
+				loading: false,
+			});
+		} else {
+			setResourceStore("loading", true);
+		}
 		setResourceStore("searchError", null);
 		setResourceStore("searchWarning", null);
 		try {
@@ -400,13 +409,11 @@ export const resources = {
 				searchError: null,
 				searchWarning: null,
 			});
-			if (response.hits.length > 0) {
-				searchCache.set(cacheKey, {
-					...response,
-					source: resourceStore.activeSource,
-					resourceType: resourceStore.resourceType,
-				});
-			}
+			searchCache.set(cacheKey, {
+				...response,
+				source: resourceStore.activeSource,
+				resourceType: resourceStore.resourceType,
+			});
 		} catch (e) {
 			console.error("Failed to search resources:", e);
 			const message = e instanceof Error ? e.message : String(e);
@@ -558,6 +565,23 @@ export const resources = {
 		await resources.fetchInstalled(instanceId);
 	},
 };
+
+let defaultBrowsePreload: Promise<void> | undefined;
+
+/**
+ * Populate this webview's browse store while it is still hidden. The Rust
+ * resource manager provides the cross-webview cache; this layer retains the
+ * response so later refreshes can render stale data while revalidating.
+ */
+export function preloadDefaultBrowseData(): Promise<void> {
+	if (!defaultBrowsePreload) {
+		defaultBrowsePreload = Promise.all([
+			resources.fetchCategories(),
+			resources.search(),
+		]).then(() => undefined);
+	}
+	return defaultBrowsePreload;
+}
 
 // Listen for resource updates from the backend (watcher)
 if (typeof window !== "undefined") {

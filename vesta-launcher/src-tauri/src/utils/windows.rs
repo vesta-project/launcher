@@ -4,6 +4,8 @@ use std::sync::Mutex;
 use tauri::webview::Color;
 use tauri::{Emitter, Manager};
 
+const IDLE_MINI_WINDOW_CAPACITY: usize = 2;
+
 #[derive(Default)]
 struct MiniWindowRegistryInner {
     next_window_id: u64,
@@ -25,9 +27,9 @@ impl MiniWindowRegistry {
         label
     }
 
-    fn reserve_idle_label(&self) -> Option<String> {
+    fn reserve_idle_label(&self, target_capacity: usize) -> Option<String> {
         let mut inner = self.inner.lock().unwrap();
-        if !inner.idle_windows.is_empty() || !inner.priming_windows.is_empty() {
+        if inner.idle_windows.len() + inner.priming_windows.len() >= target_capacity {
             return None;
         }
         let label = Self::allocate_label(&mut inner);
@@ -130,17 +132,15 @@ fn build_mini_window(
 #[tauri::command]
 pub async fn prime_mini_window(app_handle: tauri::AppHandle) -> Result<(), String> {
     let registry = app_handle.state::<MiniWindowRegistry>();
-    let Some(label) = registry.reserve_idle_label() else {
-        return Ok(());
-    };
-
-    if app_handle.get_webview_window(&label).is_none() {
-        if let Err(error) = build_mini_window(&app_handle, &label) {
-            registry.release_idle_reservation(&label);
-            return Err(format!("Failed to prime mini window: {error}"));
+    while let Some(label) = registry.reserve_idle_label(IDLE_MINI_WINDOW_CAPACITY) {
+        if app_handle.get_webview_window(&label).is_none() {
+            if let Err(error) = build_mini_window(&app_handle, &label) {
+                registry.release_idle_reservation(&label);
+                return Err(format!("Failed to prime mini window: {error}"));
+            }
         }
+        registry.register_idle(label);
     }
-    registry.register_idle(label);
     Ok(())
 }
 
@@ -166,6 +166,20 @@ pub async fn launch_window(
     }
 
     Ok(label)
+}
+
+#[tauri::command]
+pub fn preload_mini_window_route(app_handle: tauri::AppHandle, path: String) -> Result<(), String> {
+    for label in app_handle
+        .webview_windows()
+        .keys()
+        .filter(|label| label.starts_with("page-viewer-"))
+    {
+        app_handle
+            .emit_to(label, "core://mini-window-preload", &path)
+            .map_err(|error| format!("Failed to preload route in {label}: {error}"))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -278,12 +292,16 @@ mod tests {
     #[test]
     fn claims_a_prepared_window_without_rebuilding_it() {
         let registry = MiniWindowRegistry::default();
-        let idle_label = registry.reserve_idle_label().expect("reserve idle label");
+        let idle_label = registry.reserve_idle_label(2).expect("reserve idle label");
+        let second_idle_label = registry
+            .reserve_idle_label(2)
+            .expect("reserve second label");
         assert!(
-            registry.reserve_idle_label().is_none(),
-            "only one idle window should be primed at once"
+            registry.reserve_idle_label(2).is_none(),
+            "the configured standby capacity should be respected"
         );
         registry.register_idle(idle_label.clone());
+        registry.register_idle(second_idle_label);
         assert!(!registry.is_claimed(&idle_label));
 
         let (claimed_label, needs_build) =

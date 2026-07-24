@@ -136,6 +136,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             launch_window,
             utils::windows::prime_mini_window,
+            utils::windows::preload_mini_window_route,
             utils::windows::take_mini_window_payload,
             utils::windows::hide_mini_window,
             get_config,

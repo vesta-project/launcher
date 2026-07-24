@@ -5,6 +5,8 @@ import {
 import {
 	miniRouterInvalidPage,
 	miniRouterPaths,
+	prepareCommonMiniRoutes,
+	prepareMiniRoute,
 } from "@components/page-viewer/mini-router-config";
 import type { MiniWindowPayload } from "@components/page-viewer/standalone-launcher";
 import { setRouter } from "@components/page-viewer/page-viewer";
@@ -16,13 +18,7 @@ import { WindowControls } from "@tauri-controls-v2/solid";
 import { useOs } from "@utils/os";
 import { afterNextPaint } from "@utils/window-readiness";
 import { useWindowFullscreen } from "@utils/window-fullscreen";
-import {
-	createMemo,
-	createSignal,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./standalone-page-viewer.module.css";
 
 async function waitForRouteSurface(path: string): Promise<void> {
@@ -59,13 +55,21 @@ function StandalonePageViewer() {
 		() => osType() === "macos" && isWindowFullscreen(),
 	);
 	let unlistenOpen: UnlistenFn | undefined;
+	let unlistenPreload: UnlistenFn | undefined;
 	let applyingPayload: Promise<void> = Promise.resolve();
 
 	const applyPendingPayload = async () => {
 		const payload = await invoke<MiniWindowPayload | null>(
 			"take_mini_window_payload",
 		);
-		if (!payload?.snapshot) return;
+		if (!payload?.snapshot) {
+			void prepareCommonMiniRoutes().catch((error) => {
+				console.warn("Failed to warm standalone routes:", error);
+			});
+			return;
+		}
+
+		await prepareMiniRoute(payload.snapshot.current.path);
 
 		let miniRouter = activeRouter();
 		if (!miniRouter || miniRouter.sessionId !== payload.snapshot.sessionId) {
@@ -80,12 +84,23 @@ function StandalonePageViewer() {
 		await invoke("present_window_when_ready", {
 			label: getCurrentWindow().label,
 		});
+		console.debug("[mini-window-performance]", {
+			path: payload.snapshot.current.path,
+			readyMs: Date.now() - payload.requestedAtMs,
+		});
+		void prepareCommonMiniRoutes(payload.snapshot.current.path).catch(
+			(error) => {
+				console.warn("Failed to warm remaining standalone routes:", error);
+			},
+		);
 	};
 
 	const queuePayloadApplication = () => {
 		applyingPayload = applyingPayload
 			.then(applyPendingPayload)
-			.catch((error) => console.error("Failed to open mini-window payload:", error));
+			.catch((error) =>
+				console.error("Failed to open mini-window payload:", error),
+			);
 	};
 
 	const requestHide = async () => {
@@ -99,6 +114,17 @@ function StandalonePageViewer() {
 		unlistenOpen = await listen("core://mini-window-open", () => {
 			queuePayloadApplication();
 		});
+		unlistenPreload = await listen<string>(
+			"core://mini-window-preload",
+			(event) => {
+				void prepareMiniRoute(event.payload).catch((error) => {
+					console.warn(
+						`Failed to preload standalone route ${event.payload}:`,
+						error,
+					);
+				});
+			},
+		);
 
 		const unlistenCloseRequested = await getCurrentWindow().onCloseRequested(
 			(event) => {
@@ -116,6 +142,7 @@ function StandalonePageViewer() {
 
 	onCleanup(() => {
 		unlistenOpen?.();
+		unlistenPreload?.();
 	});
 
 	return (
