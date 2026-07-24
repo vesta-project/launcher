@@ -13,6 +13,7 @@ import {
 	Show,
 	Suspense,
 } from "solid-js";
+import { t } from "~/localization";
 import { AccountSettingsTab } from "./account/AccountTab";
 import { AppearanceSettingsTab } from "./appearance/AppearanceTab";
 import { InstanceDefaultsTab } from "./defaults/DefaultsTab";
@@ -49,27 +50,27 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		cleanupSettings();
 	});
 
-	const settingsTabs = [
-		{ value: "general", label: "General" },
-		{ value: "account", label: "Account" },
-		{ value: "appearance", label: "Appearance" },
-		{ value: "java", label: "Java" },
-		{ value: "notifications", label: "Notifications" },
-		{ value: "defaults", label: "Defaults" },
-		{ value: "developer", label: "Developer" },
-		{ value: "help", label: "Help" },
-	];
+	const settingsTabs = createMemo(() => [
+		{ value: "general", label: t("settings-tab-general") },
+		{ value: "account", label: t("settings-tab-account") },
+		{ value: "appearance", label: t("settings-tab-appearance") },
+		{ value: "java", label: t("settings-tab-java") },
+		{ value: "notifications", label: t("settings-tab-notifications") },
+		{ value: "defaults", label: t("settings-tab-defaults") },
+		{ value: "developer", label: t("settings-tab-developer") },
+		{ value: "help", label: t("settings-tab-help") },
+	]);
 
 	return (
 		<div class={styles["settings-page"]}>
 			<Show
 				when={!loading()}
 				fallback={
-					<div class={styles["settings-loading"]}>Loading settings...</div>
+					<div class={styles["settings-loading"]}>{t("settings-loading")}</div>
 				}
 			>
 				<PageSidebar
-					tabs={settingsTabs}
+					tabs={settingsTabs()}
 					activeTab={selectedTab()}
 					onTabChange={(v) => {
 						setSelectedTab(v);
@@ -80,14 +81,14 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						<Suspense
 							fallback={
 								<div class={styles["settings-tab-loading"]}>
-									Loading General Settings...
+									{t("settings-general-loading")}
 								</div>
 							}
 						>
 							<ErrorBoundary
 								fallback={(error) => (
 									<div class={styles["settings-tab-error"]}>
-										<strong>General settings could not be displayed.</strong>
+										<strong>{t("settings-general-error")}</strong>
 										<span>{String(error)}</span>
 									</div>
 								)}
@@ -105,7 +106,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						<Suspense
 							fallback={
 								<div class={styles["settings-tab-loading"]}>
-									Loading Appearance...
+									{t("settings-appearance-loading")}
 								</div>
 							}
 						>
@@ -117,7 +118,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						<Suspense
 							fallback={
 								<div class={styles["settings-tab-loading"]}>
-									Loading Java Settings...
+									{t("settings-java-loading")}
 								</div>
 							}
 						>
@@ -137,7 +138,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						<Suspense
 							fallback={
 								<div class={styles["settings-tab-loading"]}>
-									Loading Developer Settings...
+									{t("settings-developer-loading")}
 								</div>
 							}
 						>
@@ -148,7 +149,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					<TabsContent class={styles["tabs-content"]} value="help">
 						<Suspense
 							fallback={
-								<div class={styles["settings-tab-loading"]}>Loading...</div>
+								<div class={styles["settings-tab-loading"]}>
+									{t("settings-generic-loading")}
+								</div>
 							}
 						>
 							<HelpSettingsTab close={props.close} />

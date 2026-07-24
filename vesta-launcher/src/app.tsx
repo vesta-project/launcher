@@ -40,6 +40,7 @@ import {
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { lazy, onCleanup, onMount } from "solid-js";
+import { applyLanguagePreference } from "~/localization";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -407,7 +408,12 @@ function Root(props: ChildrenProp) {
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()
 				.then(() => {
-					onConfigUpdate(applyCommonConfigUpdates);
+					onConfigUpdate((field, value) => {
+						applyCommonConfigUpdates(field, value);
+						if (field === "language" && typeof value === "string") {
+							applyLanguagePreference(value);
+						}
+					});
 				})
 				.catch((error) => {
 					console.error("Failed to initialize config sync:", error);

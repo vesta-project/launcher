@@ -1,3 +1,4 @@
+use crate::localization::LocalizationManager;
 use crate::utils::config::get_app_config;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
@@ -72,10 +73,7 @@ fn create_tray(
     app: &tauri::AppHandle,
     show_tray_icon: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let show = MenuItem::with_id(app, "tray_show", "Show", true, None::<&str>)?;
-    let hide = MenuItem::with_id(app, "tray_hide", "Hide", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "tray_quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
+    let menu = build_tray_menu(app)?;
     let icon = app.default_window_icon().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -118,6 +116,40 @@ fn create_tray(
         let _ = tray.set_visible(show_tray_icon);
     }
     Ok(())
+}
+
+fn build_tray_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, Box<dyn std::error::Error>> {
+    let localization = app.state::<LocalizationManager>();
+    let show = MenuItem::with_id(
+        app,
+        "tray_show",
+        localization.text("shell-tray-show"),
+        true,
+        None::<&str>,
+    )?;
+    let hide = MenuItem::with_id(
+        app,
+        "tray_hide",
+        localization.text("shell-tray-hide"),
+        true,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(
+        app,
+        "tray_quit",
+        localization.text("shell-tray-quit"),
+        true,
+        None::<&str>,
+    )?;
+    Ok(Menu::with_items(app, &[&show, &hide, &quit])?)
+}
+
+pub fn refresh_tray_menu(app: &tauri::AppHandle) -> Result<(), String> {
+    let Some(tray) = app.tray_by_id("main-tray") else {
+        return Ok(());
+    };
+    let menu = build_tray_menu(app).map_err(|error| error.to_string())?;
+    tray.set_menu(Some(menu)).map_err(|error| error.to_string())
 }
 
 #[cfg(desktop)]
