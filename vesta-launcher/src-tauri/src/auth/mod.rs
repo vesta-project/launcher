@@ -4,13 +4,16 @@
 
 pub mod notification_actions;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use lazy_static::lazy_static;
 use oauth2::TokenResponse;
-use piston_lib::api::mojang::get_minecraft_profile;
-use piston_lib::auth::{device_code_to_details, get_auth_client, get_device_code, poll_for_token};
+use piston_lib::api::mojang::{get_minecraft_profile, verify_game_ownership, OwnershipStatus};
+use piston_lib::auth::{
+    device_code_to_details, get_auth_client, get_device_code, poll_for_token, AuthPhase,
+    AuthService, PistonAuthError,
+};
 use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -29,6 +32,7 @@ pub const ACCOUNT_TYPE_DEMO: &str = "Demo";
 pub const GUEST_UUID: &str = "00000000000000000000000000000000";
 pub const DEMO_UUID: &str = "ffffffffffffffffffffffffffffffff";
 const PROFILE_CACHE_TTL_SECONDS: i64 = 120;
+const AUTH_SERVICE_UNAVAILABLE_NOTIFICATION_KEY: &str = "auth_service_unavailable";
 
 #[derive(Clone)]
 struct CachedProfileEntry {
@@ -87,8 +91,168 @@ pub enum AuthStage {
     },
     Cancelled,
     Error {
+        code: String,
         message: String,
+        service: Option<String>,
+        retryable: bool,
     },
+}
+
+#[derive(Debug, Clone)]
+pub struct AuthFailure {
+    pub code: String,
+    pub message: String,
+    pub service: Option<String>,
+    pub retryable: bool,
+    pub status_code: Option<u16>,
+}
+
+impl AuthFailure {
+    fn internal(message: impl Into<String>) -> Self {
+        Self {
+            code: "authentication_error".to_string(),
+            message: message.into(),
+            service: None,
+            retryable: false,
+            status_code: None,
+        }
+    }
+
+    fn device_code_expired() -> Self {
+        Self {
+            code: "device_code_expired".to_string(),
+            message: "The Microsoft sign-in code expired. Request a new code and try again."
+                .to_string(),
+            service: Some(AuthService::Microsoft.as_str().to_string()),
+            retryable: true,
+            status_code: None,
+        }
+    }
+
+    pub fn allows_offline_fallback(&self) -> bool {
+        self.retryable
+            && matches!(
+                self.code.as_str(),
+                "network_unavailable" | "service_unavailable"
+            )
+    }
+
+    fn is_session_expired(&self) -> bool {
+        self.code == "session_expired" || self.code == "authentication_rejected"
+    }
+
+    fn as_stage(&self) -> AuthStage {
+        AuthStage::Error {
+            code: self.code.clone(),
+            message: self.message.clone(),
+            service: self.service.clone(),
+            retryable: self.retryable,
+        }
+    }
+}
+
+impl From<PistonAuthError> for AuthFailure {
+    fn from(error: PistonAuthError) -> Self {
+        Self {
+            code: error.code().to_string(),
+            message: error.user_message(),
+            service: error.service().map(|service| service.as_str().to_string()),
+            retryable: error.is_retryable_outage(),
+            status_code: error.status_code(),
+        }
+    }
+}
+
+pub fn is_previously_authenticated_account(candidate: &Account) -> bool {
+    candidate.account_type.eq_ignore_ascii_case("Microsoft")
+        && !candidate.uuid.trim().is_empty()
+        && !candidate.username.trim().is_empty()
+}
+
+fn has_previously_authenticated_account() -> bool {
+    let Ok(mut conn) = get_vesta_conn() else {
+        return false;
+    };
+    account
+        .load::<Account>(&mut conn)
+        .map(|accounts| accounts.iter().any(is_previously_authenticated_account))
+        .unwrap_or(false)
+}
+
+fn should_publish_auth_service_unavailable(
+    setup_completed: bool,
+    has_authenticated_account: bool,
+    already_exists: bool,
+    failure: &AuthFailure,
+) -> bool {
+    setup_completed
+        && has_authenticated_account
+        && !already_exists
+        && failure.allows_offline_fallback()
+}
+
+pub fn publish_auth_service_unavailable(app_handle: &AppHandle, failure: &AuthFailure) {
+    let Ok(config) = get_app_config() else {
+        return;
+    };
+    let already_exists = matches!(
+        crate::notifications::store::NotificationStore::get_by_client_key(
+            AUTH_SERVICE_UNAVAILABLE_NOTIFICATION_KEY
+        ),
+        Ok(Some(_))
+    );
+    if !should_publish_auth_service_unavailable(
+        config.setup_completed,
+        has_previously_authenticated_account(),
+        already_exists,
+        failure,
+    ) {
+        return;
+    }
+    let Some(manager) =
+        app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+    else {
+        return;
+    };
+
+    let _ = manager.create(crate::notifications::models::CreateNotificationInput {
+        client_key: Some(AUTH_SERVICE_UNAVAILABLE_NOTIFICATION_KEY.to_string()),
+        title: Some("Minecraft Authentication Unavailable".to_string()),
+        description: Some(
+            "Vesta cannot reach Minecraft authentication services. Previously authenticated accounts can still launch offline."
+                .to_string(),
+        ),
+        severity: Some("warning".to_string()),
+        notification_type: Some(crate::notifications::models::NotificationType::Patient),
+        dismissible: Some(true),
+        persist: Some(true),
+        silent: Some(false),
+        actions: None,
+        progress: None,
+        current_step: None,
+        total_steps: None,
+        metadata: failure.status_code.map(|status| {
+            serde_json::json!({
+                "service": failure.service.clone(),
+                "status": status,
+            })
+            .to_string()
+        }),
+        show_on_completion: None,
+    });
+}
+
+fn clear_auth_service_unavailable(app_handle: &AppHandle) {
+    if let Some(manager) =
+        app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+    {
+        let _ = manager.delete(AUTH_SERVICE_UNAVAILABLE_NOTIFICATION_KEY.to_string());
+    }
+}
+
+fn emit_auth_failure(app_handle: &AppHandle, failure: &AuthFailure) {
+    publish_auth_service_unavailable(app_handle, failure);
+    let _ = app_handle.emit("vesta://auth", failure.as_stage());
 }
 
 /// Start Microsoft OAuth device-code login flow
@@ -106,13 +270,26 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     // Get OAuth client
-    let client = get_auth_client().map_err(|e| e.to_string())?;
+    let client = match get_auth_client() {
+        Ok(client) => client,
+        Err(error) => {
+            let failure = AuthFailure::internal(format!(
+                "Failed to initialize Microsoft authentication: {error}"
+            ));
+            emit_auth_failure(&app, &failure);
+            return Ok(());
+        }
+    };
 
     // Request device code
-    let device_code_res = get_device_code(&client).await;
-
-    let device_code_response =
-        device_code_res.map_err(|e| format!("Failed to get device code: {}", e))?;
+    let device_code_response = match get_device_code(&client).await {
+        Ok(response) => response,
+        Err(error) => {
+            let failure = AuthFailure::from(error);
+            emit_auth_failure(&app, &failure);
+            return Ok(());
+        }
+    };
 
     let details = device_code_to_details(&device_code_response);
 
@@ -150,12 +327,7 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
                         );
                     }
                     Err(e) => {
-                        let _ = app_clone.emit(
-                            "vesta://auth",
-                            AuthStage::Error {
-                                message: format!("Failed to complete login: {}", e),
-                            },
-                        );
+                        emit_auth_failure(&app_clone, &e);
                     }
                 }
             }
@@ -164,13 +336,8 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
                 let _ = app_clone.emit("vesta://auth", AuthStage::Cancelled);
             }
             Err(e) => {
-                log::error!("[auth] Poll for token failed: {}", e);
-                let _ = app_clone.emit(
-                    "vesta://auth",
-                    AuthStage::Error {
-                        message: format!("Authentication failed: {}", e),
-                    },
-                );
+                log::error!("[auth] Poll for token failed: {}", e.message);
+                emit_auth_failure(&app_clone, &e);
             }
         }
     });
@@ -361,7 +528,7 @@ async fn poll_with_cancellation(
     client: oauth2::basic::BasicClient,
     device_code: oauth2::StandardDeviceAuthorizationResponse,
     mut cancel_rx: oneshot::Receiver<()>,
-) -> Result<Option<oauth2::basic::BasicTokenResponse>> {
+) -> std::result::Result<Option<oauth2::basic::BasicTokenResponse>, AuthFailure> {
     let interval = std::time::Duration::from_secs(device_code.interval().as_secs());
 
     loop {
@@ -383,15 +550,36 @@ async fn poll_with_cancellation(
                         tokio::time::sleep(interval * 2).await;
                     }
                     oauth2::DeviceCodeErrorResponseType::ExpiredToken => {
-                        anyhow::bail!("Device code expired");
+                        return Err(AuthFailure::device_code_expired());
                     }
                     _ => {
-                        anyhow::bail!("Authorization failed: {:?}", resp.error());
+                        return Err(AuthFailure {
+                            code: "authentication_rejected".to_string(),
+                            message: "Microsoft authentication was not approved.".to_string(),
+                            service: Some(AuthService::Microsoft.as_str().to_string()),
+                            retryable: false,
+                            status_code: None,
+                        });
                     }
                 }
             }
             Err(e) => {
-                anyhow::bail!("Failed to poll for token: {}", e);
+                let detail = piston_lib::client::redact_configured_proxy_secrets(&format!("{e:?}"));
+                let error = match e {
+                    oauth2::RequestTokenError::Request(_) => PistonAuthError::network(
+                        AuthService::Microsoft,
+                        AuthPhase::TokenPolling,
+                        detail,
+                    ),
+                    oauth2::RequestTokenError::ServerResponse(_) => PistonAuthError::unexpected(
+                        AuthService::Microsoft,
+                        AuthPhase::TokenPolling,
+                        None,
+                        detail,
+                    ),
+                    _ => PistonAuthError::Other(detail),
+                };
+                return Err(error.into());
             }
         }
     }
@@ -401,11 +589,11 @@ async fn poll_with_cancellation(
 async fn process_login_completion(
     app_handle: AppHandle,
     token_response: oauth2::basic::BasicTokenResponse,
-) -> Result<(String, String)> {
+) -> std::result::Result<(String, String), AuthFailure> {
     let microsoft_access_token = token_response.access_token().secret();
     let refresh_token_val = token_response
         .refresh_token()
-        .context("No refresh token provided")?
+        .ok_or_else(|| AuthFailure::internal("Microsoft did not provide a refresh token."))?
         .secret()
         .clone();
 
@@ -419,43 +607,25 @@ async fn process_login_completion(
     // Exchange for Minecraft token
     let minecraft_token = piston_lib::auth::exchange_for_minecraft_token(microsoft_access_token)
         .await
-        .context("Failed to exchange for Minecraft token")?;
-
-    // --- Guest Mode Cleanup ---
-    // If we were in guest mode, we want to clean up the marker and guest session data
-    let app_data_dir = crate::utils::db_manager::get_app_config_dir().ok();
-    if let Some(dir) = app_data_dir {
-        let marker_path = dir.join(".guest_mode");
-        if marker_path.exists() {
-            log::info!("[auth] Cleaning up guest session...");
-            let marker_clone = marker_path.clone();
-            let _ = task::spawn_blocking(move || {
-                let _ = std::fs::remove_file(&marker_clone);
-            })
-            .await;
-
-            // Clear the guest mode notification
-            if let Some(nm) =
-                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
-            {
-                let _ = nm.delete("guest_mode_warning".to_string());
-            }
-
-            // Evict Guest account from database
-            if let Some(mut c) = get_vesta_conn().ok() {
-                let _ = diesel::delete(account.filter(uuid.eq(GUEST_UUID))).execute(&mut c);
-            }
-        }
-    }
-    // ---------------------------
+        .map_err(AuthFailure::from)?;
 
     let minecraft_access_token = minecraft_token.access_token().clone();
     let minecraft_access_token_str = minecraft_access_token.clone().into_inner();
 
+    match verify_game_ownership(&minecraft_access_token_str)
+        .await
+        .map_err(AuthFailure::from)?
+    {
+        OwnershipStatus::Owned => {}
+        OwnershipStatus::NotOwned => {
+            return Err(AuthFailure::from(PistonAuthError::NoMinecraftEntitlement))
+        }
+    }
+
     // Fetch Minecraft profile
     let profile = get_minecraft_profile(&minecraft_access_token_str)
         .await
-        .context("Failed to fetch Minecraft profile")?;
+        .map_err(AuthFailure::from)?;
 
     // Normalize UUID
     let normalized_uuid = profile.id.replace("-", "");
@@ -485,15 +655,17 @@ async fn process_login_completion(
     );
 
     // Save to database
-    let mut conn =
-        get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+    let mut conn = get_vesta_conn()
+        .map_err(|error| AuthFailure::internal(format!("Failed to get database: {error}")))?;
 
     // Check if account already exists
     let existing_account = account
         .filter(uuid.eq(&normalized_uuid))
         .first::<Account>(&mut conn)
         .optional()
-        .unwrap_or(None);
+        .map_err(|error| {
+            AuthFailure::internal(format!("Failed to check for an existing account: {error}"))
+        })?;
 
     let now_str = Utc::now().to_rfc3339();
     let current_config = get_app_config().unwrap_or_default();
@@ -506,7 +678,9 @@ async fn process_login_completion(
     diesel::update(account)
         .set(is_active.eq(false))
         .execute(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Failed to deactivate other accounts: {}", e))?;
+        .map_err(|error| {
+            AuthFailure::internal(format!("Failed to deactivate other accounts: {error}"))
+        })?;
 
     if existing_account.is_none() {
         // Insert new account
@@ -534,7 +708,7 @@ async fn process_login_completion(
         diesel::insert_into(account)
             .values(&new_account)
             .execute(&mut conn)
-            .map_err(|e| anyhow::anyhow!("Failed to insert account: {}", e))?;
+            .map_err(|error| AuthFailure::internal(format!("Failed to insert account: {error}")))?;
 
         log::info!("[auth] Account inserted successfully");
     } else {
@@ -569,7 +743,7 @@ async fn process_login_completion(
                 theme_background_opacity.eq(current_config.theme_background_opacity),
             ))
             .execute(&mut conn)
-            .map_err(|e| anyhow::anyhow!("Failed to update account: {}", e))?;
+            .map_err(|error| AuthFailure::internal(format!("Failed to update account: {error}")))?;
 
         log::info!("[auth] Account updated successfully");
     }
@@ -577,9 +751,31 @@ async fn process_login_completion(
     invalidate_account_profile_cache(&normalized_uuid).await;
 
     // Update active account in config
-    let mut config = get_app_config().context("Failed to get app config")?;
+    let mut config = get_app_config()
+        .map_err(|error| AuthFailure::internal(format!("Failed to get app config: {error}")))?;
     config.active_account_uuid = Some(normalized_uuid.clone());
-    update_app_config(&config).context("Failed to update app config")?;
+    update_app_config(&config)
+        .map_err(|error| AuthFailure::internal(format!("Failed to update app config: {error}")))?;
+
+    // Remote authentication and persistence have succeeded. Guest cleanup is
+    // deliberately last so a failed first login never destroys setup state.
+    if let Ok(dir) = crate::utils::db_manager::get_app_config_dir() {
+        let marker_path = dir.join(".guest_mode");
+        if marker_path.exists() {
+            log::info!("[auth] Cleaning up guest session after successful authentication...");
+            let marker_clone = marker_path.clone();
+            let _ = task::spawn_blocking(move || std::fs::remove_file(marker_clone)).await;
+            if let Some(nm) =
+                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+            {
+                let _ = nm.delete("guest_mode_warning".to_string());
+            }
+            if let Ok(mut connection) = get_vesta_conn() {
+                let _ =
+                    diesel::delete(account.filter(uuid.eq(GUEST_UUID))).execute(&mut connection);
+            }
+        }
+    }
 
     // Emit config update event so UI knows active account changed
     let _ = app_handle.emit(
@@ -593,6 +789,7 @@ async fn process_login_completion(
     // Notify UI that accounts might have changed (added/updated). Force head
     // refresh because the same UUID can now point at a different skin URL.
     emit_account_heads_updated(&app_handle, Some(&normalized_uuid), true);
+    clear_auth_service_unavailable(&app_handle);
 
     Ok((normalized_uuid, profile.name))
 }
@@ -632,26 +829,31 @@ pub fn get_active_account() -> Result<Option<Account>, String> {
     }
 }
 
+fn mark_account_expired(app_handle: &AppHandle, target_uuid: &str) {
+    if let Ok(mut conn) = get_vesta_conn() {
+        let _ = diesel::update(account.filter(uuid.eq(target_uuid)))
+            .set(is_expired.eq(true))
+            .execute(&mut conn);
+        let _ = app_handle.emit("core://accounts-changed", ());
+    }
+}
+
 /// Ensure account tokens are valid and refresh if they are near expiry
 pub async fn ensure_account_tokens_valid(
     app_handle: tauri::AppHandle,
     target_uuid: String,
-) -> Result<(), String> {
+) -> std::result::Result<Account, AuthFailure> {
     // Normalize UUID
     let target_uuid = target_uuid.replace("-", "");
 
-    // Skip all token validation for Guest accounts
-    if target_uuid == GUEST_UUID {
-        return Ok(());
-    }
-
     // Load account
-    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let mut conn = get_vesta_conn()
+        .map_err(|error| AuthFailure::internal(format!("Failed to get database: {error}")))?;
     let acct = account
         .filter(uuid.eq(&target_uuid))
         .first::<crate::models::account::Account>(&mut conn)
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| AuthFailure::internal(format!("Failed to load account: {error}")))?;
 
     let acct = match acct {
         Some(a) => a,
@@ -661,70 +863,67 @@ pub async fn ensure_account_tokens_valid(
                 target_uuid
             );
             // If this was the active account, try to repair it
-            let config = get_app_config().map_err(|e| e.to_string())?;
+            let config = get_app_config().map_err(|error| {
+                AuthFailure::internal(format!("Failed to get app config: {error}"))
+            })?;
             if config.active_account_uuid == Some(target_uuid) {
-                repair_active_account(app_handle)?;
+                repair_active_account(app_handle.clone()).map_err(AuthFailure::internal)?;
             }
-            return Err("Account not found".to_string());
+            return Err(AuthFailure::internal("Account not found"));
         }
     };
 
-    // Skip all token validation for Guest accounts
-    if acct.account_type == ACCOUNT_TYPE_GUEST {
-        log::debug!(
-            "[auth] Skipping token validation for Guest account {}",
-            target_uuid
-        );
-        return Ok(());
+    if !is_previously_authenticated_account(&acct) {
+        return Err(AuthFailure {
+            code: "login_required".to_string(),
+            message: "Sign in with a Microsoft account before launching Minecraft.".to_string(),
+            service: None,
+            retryable: false,
+            status_code: None,
+        });
     }
-
-    // If no refresh token present, nothing to do
-    let _refresh = match acct.refresh_token.clone() {
-        Some(s) => s,
-        None => return Ok(()),
-    };
 
     // Check expiry; if missing, assume token is expired and refresh
     let now = Utc::now();
-    let needs_refresh = match &acct.token_expires_at {
-        Some(ts) => match chrono::DateTime::parse_from_rfc3339(ts) {
-            Ok(datetime) => {
-                let dt_utc = datetime.with_timezone(&Utc);
-                // Refresh if expiring within 60 seconds
-                let margin = Duration::seconds(60);
-                dt_utc <= now + margin
-            }
-            Err(_) => true,
-        },
-        None => true,
-    };
+    let needs_refresh = acct.access_token.as_deref().is_none_or(str::is_empty)
+        || match &acct.token_expires_at {
+            Some(ts) => match chrono::DateTime::parse_from_rfc3339(ts) {
+                Ok(datetime) => {
+                    let dt_utc = datetime.with_timezone(&Utc);
+                    // Refresh if expiring within 60 seconds
+                    let margin = Duration::seconds(60);
+                    dt_utc <= now + margin
+                }
+                Err(_) => true,
+            },
+            None => true,
+        };
 
     if needs_refresh {
         log::info!(
             "[auth] Token for account {} is expired or expiring soon; refreshing",
             target_uuid
         );
-        // Call our refresh function
-        match refresh_account_tokens(app_handle, target_uuid.clone()).await {
-            Ok(_) => {
+        match refresh_account_tokens_internal(app_handle, target_uuid.clone()).await {
+            Ok(refreshed_account) => {
                 log::info!(
                     "[auth] Token refresh successful for account {}",
                     target_uuid
                 );
-                Ok(())
+                Ok(refreshed_account)
             }
             Err(e) => {
                 log::error!(
                     "[auth] Token refresh failed for account {}: {}",
                     target_uuid,
-                    e
+                    e.message
                 );
                 Err(e)
             }
         }
     } else {
         log::debug!("[auth] Token still valid for account {}", target_uuid);
-        Ok(())
+        Ok(acct)
     }
 }
 
@@ -734,29 +933,42 @@ pub async fn refresh_account_tokens(
     app_handle: tauri::AppHandle,
     target_uuid: String,
 ) -> Result<(), String> {
+    refresh_account_tokens_internal(app_handle, target_uuid)
+        .await
+        .map(|_| ())
+        .map_err(|failure| failure.message)
+}
+
+async fn refresh_account_tokens_internal(
+    app_handle: tauri::AppHandle,
+    target_uuid: String,
+) -> std::result::Result<Account, AuthFailure> {
     // Normalize UUID
     let target_uuid = target_uuid.replace("-", "");
 
     log::info!("[auth] Refresh requested for account: {}", target_uuid);
 
     // Load account to get refresh token
-    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let mut conn = get_vesta_conn()
+        .map_err(|error| AuthFailure::internal(format!("Failed to get database: {error}")))?;
     let acct = account
         .filter(uuid.eq(&target_uuid))
         .first::<crate::models::account::Account>(&mut conn)
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| AuthFailure::internal(format!("Failed to load account: {error}")))?;
 
-    let mut acct = match acct {
+    let acct = match acct {
         Some(a) => a,
         None => {
             log::error!("[auth] No account found to refresh: {}", target_uuid);
             // If this was the active account, try to repair it
-            let config = get_app_config().map_err(|e| e.to_string())?;
+            let config = get_app_config().map_err(|error| {
+                AuthFailure::internal(format!("Failed to get app config: {error}"))
+            })?;
             if config.active_account_uuid == Some(target_uuid) {
-                repair_active_account(app_handle)?;
+                repair_active_account(app_handle.clone()).map_err(AuthFailure::internal)?;
             }
-            return Err("Account not found".to_string());
+            return Err(AuthFailure::internal("Account not found"));
         }
     };
 
@@ -767,7 +979,13 @@ pub async fn refresh_account_tokens(
                 "[auth] No refresh token present for account: {}",
                 target_uuid
             );
-            return Err("No refresh token available".to_string());
+            return Err(AuthFailure {
+                code: "credentials_missing".to_string(),
+                message: "This account has no refresh token. Sign in again.".to_string(),
+                service: Some(AuthService::Microsoft.as_str().to_string()),
+                retryable: false,
+                status_code: None,
+            });
         }
     };
 
@@ -776,7 +994,9 @@ pub async fn refresh_account_tokens(
         Ok(c) => c,
         Err(e) => {
             log::error!("[auth] Failed to create auth client: {}", e);
-            return Err(format!("Failed to create auth client: {}", e));
+            return Err(AuthFailure::internal(format!(
+                "Failed to create auth client: {e}"
+            )));
         }
     };
 
@@ -792,68 +1012,59 @@ pub async fn refresh_account_tokens(
         Ok(t) => t,
         Err(e) => {
             log::error!("[auth] Refresh failed for account {}: {}", target_uuid, e);
+            let failure = AuthFailure::from(e);
 
             // If the session expired, mark it in the database
-            if matches!(e, piston_lib::auth::PistonAuthError::SessionExpired) {
+            if failure.is_session_expired() {
                 log::warn!("[auth] Refresh token for {} is revoked or expired. Marking account as expired.", target_uuid);
-                if let Ok(mut conn) = get_vesta_conn() {
-                    use crate::schema::account::dsl::*;
-                    let _ = diesel::update(account.filter(uuid.eq(target_uuid.clone())))
-                        .set(is_expired.eq(true))
-                        .execute(&mut conn);
-
-                    // Notify UI that accounts have changed (expired status updated)
-                    let _ = app_handle.emit("core://accounts-changed", ());
-                }
+                mark_account_expired(&app_handle, &target_uuid);
             }
 
-            return Err(format!("Failed to refresh token: {}", e));
+            publish_auth_service_unavailable(&app_handle, &failure);
+            return Err(failure);
         }
     };
-
-    // If we're here, refresh succeeded, so ensure is_expired is false
-    if let Ok(mut conn) = get_vesta_conn() {
-        use crate::schema::account::dsl::*;
-        let _ = diesel::update(account.filter(uuid.eq(target_uuid.clone())))
-            .set(is_expired.eq(false))
-            .execute(&mut conn);
-
-        // Notify UI that accounts have changed (expired status updated)
-        let _ = app_handle.emit("core://accounts-changed", ());
-    }
 
     // Exchange for Minecraft token
     let ms_access_token = token_response.access_token().secret().clone();
     let ms_refresh_token = token_response.refresh_token().map(|r| r.secret().clone());
 
-    let minecraft_response = match piston_lib::auth::exchange_for_minecraft_token(&ms_access_token)
-        .await
-    {
-        Ok(resp) => resp,
-        Err(e) => {
-            log::error!(
-                "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
-                target_uuid,
-                e
-            );
+    let minecraft_response =
+        match piston_lib::auth::exchange_for_minecraft_token(&ms_access_token).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                log::error!(
+                    "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
+                    target_uuid,
+                    e
+                );
 
-            // Provide a more actionable error for the UI/logs. Common causes:
-            // - The Microsoft account does not have an Xbox Live profile.
-            // - The account does not own Minecraft (no entitlement).
-            // - The Microsoft token lacks required scopes or is invalid.
-            log::warn!(
-                        "[auth] Exchange failure may indicate missing Xbox Live profile or missing Minecraft ownership for account {}",
-                        target_uuid
-                    );
-
-            return Err(format!(
-                        "Failed to exchange for Minecraft token: {}. This often means the Microsoft account lacks an Xbox Live profile or Minecraft ownership — try re-authenticating with an account that owns Minecraft.",
-                        e
-                    ));
-        }
-    };
+                let failure = AuthFailure::from(e);
+                if failure.is_session_expired() {
+                    mark_account_expired(&app_handle, &target_uuid);
+                }
+                publish_auth_service_unavailable(&app_handle, &failure);
+                return Err(failure);
+            }
+        };
 
     let mc_access_token = minecraft_response.access_token().clone().into_inner();
+    match verify_game_ownership(&mc_access_token)
+        .await
+        .map_err(AuthFailure::from)
+    {
+        Ok(OwnershipStatus::Owned) => {}
+        Ok(OwnershipStatus::NotOwned) => {
+            return Err(AuthFailure::from(PistonAuthError::NoMinecraftEntitlement))
+        }
+        Err(failure) => {
+            if failure.is_session_expired() {
+                mark_account_expired(&app_handle, &target_uuid);
+            }
+            publish_auth_service_unavailable(&app_handle, &failure);
+            return Err(failure);
+        }
+    }
     let expires_in_secs = {
         let secs: u64 = minecraft_response.expires_in() as u64;
         if secs == 0 {
@@ -867,32 +1078,38 @@ pub async fn refresh_account_tokens(
         (Utc::now() + Duration::seconds(expires_in_secs as i64)).to_rfc3339();
     let now_str = Utc::now().to_rfc3339();
 
-    // Update account fields (in memory copy)
-    acct.access_token = Some(mc_access_token.clone());
-    if let Some(rt) = ms_refresh_token.clone() {
-        acct.refresh_token = Some(rt);
-    }
-    acct.token_expires_at = Some(token_expires_at_val.clone());
-    acct.updated_at = Some(now_str.clone());
-
     // Save to DB
-    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let next_refresh_token = ms_refresh_token.unwrap_or(refresh_token_val);
+    let mut conn = get_vesta_conn()
+        .map_err(|error| AuthFailure::internal(format!("Failed to get database: {error}")))?;
 
     diesel::update(account.filter(uuid.eq(&target_uuid)))
         .set((
             access_token.eq(Some(mc_access_token)),
-            refresh_token.eq(ms_refresh_token), // Handles Option logic naturally
+            refresh_token.eq(Some(next_refresh_token)),
             token_expires_at.eq(Some(token_expires_at_val)),
             updated_at.eq(Some(now_str)),
+            is_expired.eq(false),
         ))
         .execute(&mut conn)
-        .map_err(|e| format!("Failed to update account in DB: {}", e))?;
+        .map_err(|error| {
+            AuthFailure::internal(format!("Failed to update account in DB: {error}"))
+        })?;
+
+    let refreshed_account = account
+        .filter(uuid.eq(&target_uuid))
+        .first::<Account>(&mut conn)
+        .map_err(|error| {
+            AuthFailure::internal(format!("Failed to reload refreshed account: {error}"))
+        })?;
 
     log::info!(
         "[auth] Successfully refreshed tokens for account: {}",
         target_uuid
     );
-    Ok(())
+    let _ = app_handle.emit("core://accounts-changed", ());
+    clear_auth_service_unavailable(&app_handle);
+    Ok(refreshed_account)
 }
 
 /// Set active account by UUID
@@ -1021,6 +1238,14 @@ pub fn remove_account(target_uuid: String) -> Result<(), String> {
 pub async fn get_account_profile(
     account_uuid: String,
 ) -> Result<piston_lib::api::mojang::MinecraftProfile, String> {
+    fetch_account_profile(account_uuid)
+        .await
+        .map_err(|failure| failure.message)
+}
+
+pub async fn fetch_account_profile(
+    account_uuid: String,
+) -> std::result::Result<piston_lib::api::mojang::MinecraftProfile, AuthFailure> {
     let normalized_uuid = account_uuid.replace("-", "");
 
     {
@@ -1032,7 +1257,7 @@ pub async fn get_account_profile(
         }
     }
 
-    let fetch_lock = get_profile_fetch_lock(&normalized_uuid)?;
+    let fetch_lock = get_profile_fetch_lock(&normalized_uuid).map_err(AuthFailure::internal)?;
     let _fetch_guard = fetch_lock.lock().await;
 
     {
@@ -1046,20 +1271,27 @@ pub async fn get_account_profile(
 
     let account_model = {
         use crate::schema::account::dsl::*;
-        let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+        let mut conn = get_vesta_conn()
+            .map_err(|error| AuthFailure::internal(format!("Failed to get database: {error}")))?;
         account
             .filter(uuid.eq(&normalized_uuid))
             .first::<crate::models::account::Account>(&mut conn)
-            .map_err(|e| e.to_string())?
+            .map_err(|error| AuthFailure::internal(format!("Failed to load account: {error}")))?
     };
 
     if account_model.account_type == ACCOUNT_TYPE_GUEST {
-        return Err("Guest accounts do not have a profile".to_string());
+        return Err(AuthFailure::internal(
+            "Guest accounts do not have a Minecraft profile",
+        ));
     }
 
-    let token = account_model
-        .access_token
-        .ok_or_else(|| "Account has no access token".to_string())?;
+    let token = account_model.access_token.ok_or_else(|| AuthFailure {
+        code: "credentials_missing".to_string(),
+        message: "This account has no Minecraft access token. Sign in again.".to_string(),
+        service: Some(AuthService::MinecraftServices.as_str().to_string()),
+        retryable: false,
+        status_code: None,
+    })?;
 
     let profile = match piston_lib::api::mojang::get_minecraft_profile(&token).await {
         Ok(p) => p,
@@ -1081,7 +1313,7 @@ pub async fn get_account_profile(
                 log::debug!("Account {} has no refresh token", account_model.uuid);
             }
 
-            return Err(e.to_string());
+            return Err(AuthFailure::from(e));
         }
     };
 
@@ -1217,4 +1449,69 @@ pub fn repair_active_account(app_handle: AppHandle) -> Result<Option<Account>, S
     }
 
     Ok(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn account_with_type(candidate_type: &str) -> Account {
+        Account {
+            uuid: "069a79f444e94726a5befca90e38aaf5".to_string(),
+            username: "Player".to_string(),
+            account_type: candidate_type.to_string(),
+            ..Account::default()
+        }
+    }
+
+    #[test]
+    fn persisted_microsoft_account_is_previous_authentication_proof() {
+        assert!(is_previously_authenticated_account(&account_with_type(
+            "Microsoft"
+        )));
+        assert!(!is_previously_authenticated_account(&account_with_type(
+            "Guest"
+        )));
+        assert!(!is_previously_authenticated_account(&account_with_type(
+            "Demo"
+        )));
+        assert!(!is_previously_authenticated_account(&account_with_type(
+            "Unknown"
+        )));
+    }
+
+    #[test]
+    fn only_connectivity_failures_allow_offline_fallback() {
+        let outage = AuthFailure::from(PistonAuthError::network(
+            AuthService::MinecraftServices,
+            AuthPhase::MinecraftTokenExchange,
+            "timeout",
+        ));
+        let rejected = AuthFailure::from(PistonAuthError::SessionExpired);
+
+        assert!(outage.allows_offline_fallback());
+        assert!(!rejected.allows_offline_fallback());
+    }
+
+    #[test]
+    fn outage_notification_requires_completed_setup_and_previous_authentication() {
+        let outage = AuthFailure::from(PistonAuthError::network(
+            AuthService::MinecraftServices,
+            AuthPhase::Profile,
+            "offline",
+        ));
+
+        assert!(!should_publish_auth_service_unavailable(
+            false, true, false, &outage
+        ));
+        assert!(!should_publish_auth_service_unavailable(
+            true, false, false, &outage
+        ));
+        assert!(!should_publish_auth_service_unavailable(
+            true, true, true, &outage
+        ));
+        assert!(should_publish_auth_service_unavailable(
+            true, true, false, &outage
+        ));
+    }
 }

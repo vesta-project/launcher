@@ -61,6 +61,29 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/tasks/update_modpack.rs`
 - `vesta-launcher/src-tauri/src/tasks/installers/external_import_resync.rs`
 
+### Authentication Session and Availability
+
+The boundary between persisted Microsoft/Minecraft account state and the
+current availability of remote authentication services. `piston-lib` owns
+protocol and HTTP failure classification for Microsoft, Xbox Live, and
+Minecraft Services. Tauri owns account persistence, refresh policy, launch
+fallback, and setup-aware notification policy.
+
+A persisted Microsoft account with a Minecraft UUID and username is proof of a
+previous successful authentication. Only such an account may launch offline
+automatically. Guest, Demo, and unknown account types never qualify. Network
+failures and retryable service responses may make authentication temporarily
+unavailable; they do not invalidate the account. Generic HTTP responses such as
+`404 Not Found` are never proof that a session is unauthenticated.
+
+Primary modules:
+
+- `crates/piston-lib/src/auth/mod.rs`
+- `crates/piston-lib/src/api/mojang.rs`
+- `vesta-launcher/src-tauri/src/auth/mod.rs`
+- `vesta-launcher/src-tauri/src/instance/launch_preparation.rs`
+- `vesta-launcher/src/utils/auth.ts`
+
 ### Startup Orchestrator
 
 The Tauri startup sequence that initializes app services in dependency order.
