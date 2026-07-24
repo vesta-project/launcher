@@ -70,4 +70,19 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(app_config, global_java_paths,);
+diesel::table! {
+    keybinding_commands (command_id) {
+        command_id -> Text,
+        handler_id -> Text,
+        label -> Text,
+        description -> Text,
+        category -> Text,
+        default_chord -> Nullable<Text>,
+        current_chord -> Nullable<Text>,
+        customized -> Bool,
+        available -> Bool,
+        sort_order -> Integer,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(app_config, global_java_paths, keybinding_commands,);
