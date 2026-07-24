@@ -1164,6 +1164,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn normalize_and_save_if_stale_persists_normalized_native_libraries() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("forge-loader-test.json");

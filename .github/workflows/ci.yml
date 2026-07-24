@@ -66,8 +66,7 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libxdo-dev \
             pkg-config \
-            xdg-utils \
-            xvfb
+            xdg-utils
 
       - name: Set up Java
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
@@ -98,7 +97,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run Rust tests
-        run: xvfb-run --auto-servernum cargo test --workspace --locked --no-fail-fast
+        run: cargo test --workspace --locked --no-fail-fast
 
   workflow:
     name: Workflow validation

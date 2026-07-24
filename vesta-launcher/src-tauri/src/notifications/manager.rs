@@ -218,6 +218,7 @@ mod tests {
 
     #[test]
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[ignore = "Tauri's Linux event loop must be initialized on the process main thread"]
     fn invoke_action_dispatches_to_registered_handler() {
         let app = build_test_app();
         let handle = app.handle();
@@ -258,6 +259,7 @@ mod tests {
 
     #[test]
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[ignore = "Tauri's Linux event loop must be initialized on the process main thread"]
     fn integration_cancel_task_flow() {
         let app = build_test_app();
         let handle = app.handle();
