@@ -75,6 +75,7 @@ function HomePage() {
 				appearance: "Appearance",
 				java: "Java",
 				notifications: "Notifications",
+				keyboard: "Keyboard",
 				defaults: "Defaults",
 				developer: "Developer",
 				help: "Help",

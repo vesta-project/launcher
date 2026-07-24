@@ -64,6 +64,12 @@ function lastPinned(): PinnedPage | undefined {
 	return pinning.pins.at(-1);
 }
 
+function currentSearchTarget(): HTMLElement | null {
+	return document.querySelector<HTMLElement>(
+		'[data-keybinding-search] input:not([disabled]), input[data-keybinding-search]:not([disabled])',
+	);
+}
+
 function pinnedCommand(slot: number, chord: string): CommandDefinition {
 	return {
 		commandId: `navigation.pinned.${slot}`,
@@ -222,18 +228,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 		category: "Navigation",
 		defaultChord: "Mod+KeyF",
 		sortOrder: 70,
-		canExecute: () =>
-			Boolean(
-				document.querySelector<HTMLElement>(
-					'[data-keybinding-search]:not([disabled])',
-				),
-			),
+		canExecute: () => Boolean(currentSearchTarget()),
 		execute: () => {
-			document
-				.querySelector<HTMLElement>(
-					'[data-keybinding-search]:not([disabled])',
-				)
-				?.focus();
+			currentSearchTarget()?.focus();
 		},
 	},
 ];

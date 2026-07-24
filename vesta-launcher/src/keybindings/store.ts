@@ -131,12 +131,13 @@ export async function resetKeybinding(
 	if (!hasTauriRuntime()) {
 		const command = commands().find((item) => item.commandId === commandId);
 		if (!command) throw new Error(`Unknown command ${commandId}`);
-		const conflict =
-			commands().find(
-				(item) =>
-					item.commandId !== commandId &&
-					item.currentChord === command.defaultChord,
-			) ?? null;
+		const conflict = command.defaultChord
+			? (commands().find(
+					(item) =>
+						item.commandId !== commandId &&
+						item.currentChord === command.defaultChord,
+				) ?? null)
+			: null;
 		if (conflict && !replaceConflict) {
 			return { command, conflict, applied: false };
 		}
