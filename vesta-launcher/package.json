@@ -8,6 +8,7 @@
 		"dev": "vite",
 		"vesta:dev": "vite",
 		"build": "vite build",
+		"perf:bundle": "bun run build && bun run scripts/check-bundle-budget.ts",
 		"version:bump": "tsx ../scripts/bump-version.ts",
 		"serve": "vite preview",
 		"tauri": "tauri",

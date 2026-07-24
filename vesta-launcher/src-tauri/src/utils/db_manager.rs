@@ -340,14 +340,16 @@ mod tests {
             .expect("create legacy instance dir");
         fs::create_dir_all(legacy_dir.join("data")).expect("create legacy data dir");
         let legacy_config_db = legacy_dir.join("app_config.db");
-        let _legacy_config_conn = diesel::sqlite::SqliteConnection::establish(
+        let legacy_config_conn = diesel::sqlite::SqliteConnection::establish(
             legacy_config_db.to_string_lossy().as_ref(),
         )
         .expect("create legacy config sqlite db");
         let legacy_vesta_db = legacy_dir.join("vesta.db");
-        let _legacy_conn =
+        let legacy_conn =
             diesel::sqlite::SqliteConnection::establish(legacy_vesta_db.to_string_lossy().as_ref())
                 .expect("create legacy sqlite db");
+        drop(legacy_config_conn);
+        drop(legacy_conn);
 
         migrate_config_artifacts_only(&legacy_dir, &target_dir).expect("migrate config artifacts");
 
