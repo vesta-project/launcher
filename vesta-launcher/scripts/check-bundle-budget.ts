@@ -87,6 +87,43 @@ const budgets: Budget[] = [
 		gzipKiB: 45,
 		exclude: mainFiles,
 	},
+	{
+		name: "instance route after startup",
+		entry: (key, chunk) =>
+			(chunk.isDynamicEntry === true && chunk.name === "instance-details") ||
+			key.endsWith(
+				"components/pages/mini-pages/instance-details/instance-details.tsx",
+			) ||
+			chunk.src?.endsWith(
+				"components/pages/mini-pages/instance-details/instance-details.tsx",
+			) === true,
+		gzipKiB: 60,
+		exclude: mainFiles,
+	},
+	{
+		name: "browse route after startup",
+		entry: (key, chunk) =>
+			(chunk.isDynamicEntry === true && chunk.name === "resource-browser") ||
+			key.endsWith(
+				"components/pages/mini-pages/resources/resource-browser.tsx",
+			) ||
+			chunk.src?.endsWith(
+				"components/pages/mini-pages/resources/resource-browser.tsx",
+			) === true,
+		gzipKiB: 45,
+		exclude: mainFiles,
+	},
+	{
+		name: "install route after startup",
+		entry: (key, chunk) =>
+			(chunk.isDynamicEntry === true && chunk.name === "install-page") ||
+			key.endsWith("components/pages/mini-pages/install/install-page.tsx") ||
+			chunk.src?.endsWith(
+				"components/pages/mini-pages/install/install-page.tsx",
+			) === true,
+		gzipKiB: 45,
+		exclude: mainFiles,
+	},
 ];
 
 let failed = false;

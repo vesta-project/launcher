@@ -99,24 +99,51 @@ import {
 	createMemo,
 	createResource,
 	createSignal,
+	lazy,
 	on,
 	onCleanup,
 	onMount,
 	Show,
+	Suspense,
 } from "solid-js";
 import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
 import styles from "./instance-details.module.css";
 import type { ModpackVersion } from "./modpack-version-selector";
-import { ConsoleTab } from "./tabs/ConsoleTab";
-import { CrashTab } from "./tabs/CrashTab";
 // Tabs
 import { HomeTab } from "./tabs/HomeTab";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
-import { ResourcesTab } from "./tabs/ResourcesTab";
-import { ScreenshotsTab } from "./tabs/ScreenshotsTab";
-import { SettingsTab } from "./tabs/SettingsTab";
-import { VersioningTab } from "./tabs/VersioningTab";
+
+const ConsoleTab = lazy(() =>
+	import("./tabs/ConsoleTab").then((module) => ({
+		default: module.ConsoleTab,
+	})),
+);
+const CrashTab = lazy(() =>
+	import("./tabs/CrashTab").then((module) => ({
+		default: module.CrashTab,
+	})),
+);
+const ResourcesTab = lazy(() =>
+	import("./tabs/ResourcesTab").then((module) => ({
+		default: module.ResourcesTab,
+	})),
+);
+const ScreenshotsTab = lazy(() =>
+	import("./tabs/ScreenshotsTab").then((module) => ({
+		default: module.ScreenshotsTab,
+	})),
+);
+const SettingsTab = lazy(() =>
+	import("./tabs/SettingsTab").then((module) => ({
+		default: module.SettingsTab,
+	})),
+);
+const VersioningTab = lazy(() =>
+	import("./tabs/VersioningTab").then((module) => ({
+		default: module.VersioningTab,
+	})),
+);
 
 type LightweightUpdateCheckResult = {
 	resourceUpdates: Array<{
@@ -148,6 +175,7 @@ type TabType =
 interface InstanceDetailsProps {
 	id?: number;
 	slug?: string; // Optional fallback - can come from props or router params
+	prefetchedInstance?: Instance;
 	activeTab?: TabType;
 	initialData?: any;
 	initialName?: string;
@@ -342,25 +370,71 @@ export default function InstanceDetails(
 		return k;
 	});
 
-	const [instance, { refetch }] = createResource(paramsKey, async (key) => {
-		if (!key) {
-			return undefined;
-		}
-		try {
-			let inst: Instance | undefined;
-			if (key.startsWith("id:")) {
-				const id = parseInt(key.slice(3), 10);
-				inst = await getInstance(id);
-			} else if (key.startsWith("slug:")) {
-				const slugVal = key.slice(5);
-				inst = await getInstanceBySlug(slugVal);
-			}
-			return inst;
-		} catch (e) {
-			console.error("[InstanceDetails] Error fetching instance:", e);
-			throw e;
-		}
+	// Resolve tab state before creating resources so tab-specific work can be
+	// gated instead of every hidden tab fetching during the first render.
+	const activeTab = createMemo<TabType>(() => {
+		const params = activeRouter()?.currentParams.get();
+		const tab = params?.activeTab as TabType | undefined;
+		return tab &&
+			[
+				"home",
+				"console",
+				"resources",
+				"crash",
+				"screenshots",
+				"settings",
+				"versioning",
+			].includes(tab)
+			? tab
+			: "home";
 	});
+
+	const prefetchedInstance = () => {
+		const key = paramsKey();
+		const candidate =
+			props.prefetchedInstance ??
+			instancesState.instances.find((stored) => {
+				if (key.startsWith("id:")) {
+					return stored.id === Number(key.slice(3));
+				}
+				return getInstanceSlug(stored) === key.slice(5);
+			});
+		if (!candidate || !key) return undefined;
+		if (key.startsWith("id:") && candidate.id === Number(key.slice(3))) {
+			return candidate;
+		}
+		if (
+			key.startsWith("slug:") &&
+			getInstanceSlug(candidate) === key.slice(5)
+		) {
+			return candidate;
+		}
+		return undefined;
+	};
+
+	const [instance, { refetch }] = createResource(
+		paramsKey,
+		async (key) => {
+			if (!key) {
+				return undefined;
+			}
+			try {
+				let inst: Instance | undefined;
+				if (key.startsWith("id:")) {
+					const id = parseInt(key.slice(3), 10);
+					inst = await getInstance(id);
+				} else if (key.startsWith("slug:")) {
+					const slugVal = key.slice(5);
+					inst = await getInstanceBySlug(slugVal);
+				}
+				return inst;
+			} catch (e) {
+				console.error("[InstanceDetails] Error fetching instance:", e);
+				throw e;
+			}
+		},
+		{ initialValue: prefetchedInstance() },
+	);
 	const headerIconPreview = createAnimatedIconPreview(
 		() => instance()?.iconPath || DEFAULT_ICONS[0],
 	);
@@ -404,8 +478,12 @@ export default function InstanceDetails(
 	});
 
 	const [projectRecords] = createResource(
-		installedResources,
-		async (resourcesList) => {
+		() => ({
+			active: activeTab() === "resources" || activeTab() === "crash",
+			resourcesList: installedResources(),
+		}),
+		async ({ active, resourcesList }) => {
+			if (!active) return {};
 			if (!resourcesList || resourcesList.length === 0) return {};
 			const refs = resourcesList
 				.filter(
@@ -840,6 +918,7 @@ export default function InstanceDetails(
 			return {
 				...cleanProps,
 				slug: slug(),
+				prefetchedInstance: instance(),
 				activeTab: activeTab(),
 				...toInstanceEditHandoff(currentEditDraft(), currentEditDirty()),
 			};
@@ -856,24 +935,6 @@ export default function InstanceDetails(
 
 	onCleanup(() => {
 		activeRouter()?.customName.set(null);
-	});
-
-	// Tab state - initialized from query param if available
-	const activeTab = createMemo<TabType>(() => {
-		const params = activeRouter()?.currentParams.get();
-		const tab = params?.activeTab as TabType | undefined;
-		return tab &&
-			[
-				"home",
-				"console",
-				"resources",
-				"crash",
-				"screenshots",
-				"settings",
-				"versioning",
-			].includes(tab)
-			? tab
-			: "home";
 	});
 
 	const [selectedTab, setSelectedTab] = createSignal<TabType>(activeTab());
@@ -931,18 +992,21 @@ export default function InstanceDetails(
 
 	const [busy, setBusy] = createSignal(false);
 
-	const [activeAccount] = createResource<any>(async () => {
-		try {
-			return await getActiveAccount();
-		} catch {
-			return null;
-		}
-	});
+	const [activeAccount] = createResource<any, boolean>(
+		() => activeTab() === "versioning" || undefined,
+		async () => {
+			try {
+				return await getActiveAccount();
+			} catch {
+				return null;
+			}
+		},
+	);
 
 	const isGuest = () => activeAccount()?.account_type === ACCOUNT_TYPE_GUEST;
 
 	const [requiredJava] = createResource(
-		() => instance()?.id,
+		() => (activeTab() === "settings" ? instance()?.id : undefined),
 		async (id) => {
 			if (!id) return null;
 			return await invoke<number>("get_instance_required_java", {
@@ -950,14 +1014,27 @@ export default function InstanceDetails(
 			});
 		},
 	);
-	const [detectedJavas, { refetch: refetchDetected }] = createResource<any[]>(
-		() => invoke("detect_java"),
+	const [detectedJavas, { refetch: refetchDetected }] = createResource<
+		any[],
+		boolean
+	>(
+		() => activeTab() === "settings",
+		(enabled) => (enabled ? invoke("detect_java") : Promise.resolve([])),
 	);
-	const [managedJavas, { refetch: refetchManaged }] = createResource<any[]>(
-		() => invoke("get_managed_javas"),
+	const [managedJavas, { refetch: refetchManaged }] = createResource<
+		any[],
+		boolean
+	>(
+		() => activeTab() === "settings",
+		(enabled) => (enabled ? invoke("get_managed_javas") : Promise.resolve([])),
 	);
-	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<any[]>(
-		() => invoke("get_global_java_paths"),
+	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<
+		any[],
+		boolean
+	>(
+		() => activeTab() === "settings",
+		(enabled) =>
+			enabled ? invoke("get_global_java_paths") : Promise.resolve([]),
 	);
 
 	const jreOptions = createMemo(() => {
@@ -1183,13 +1260,17 @@ export default function InstanceDetails(
 	);
 	const [totalRam, setTotalRam] = createSignal(16384);
 
-	onMount(async () => {
-		try {
-			const ram = await invoke("get_system_memory_mb");
-			if (typeof ram === "number" && ram > 0) setTotalRam(ram);
-		} catch (e) {
-			console.error("Failed to get total RAM:", e);
-		}
+	let totalRamLoaded = false;
+	createEffect(() => {
+		if (activeTab() !== "settings" || totalRamLoaded) return;
+		totalRamLoaded = true;
+		void invoke("get_system_memory_mb")
+			.then((ram) => {
+				if (typeof ram === "number" && ram > 0) setTotalRam(ram);
+			})
+			.catch((e) => {
+				console.error("Failed to get total RAM:", e);
+			});
 	});
 
 	// Modpack versions for picker
@@ -1197,7 +1278,10 @@ export default function InstanceDetails(
 		string | null
 	>(null);
 
-	const [mcVersions] = createResource(getMinecraftVersions);
+	const [mcVersions] = createResource(
+		() => activeTab() === "versioning" || undefined,
+		() => getMinecraftVersions(),
+	);
 	const loadersList = createMemo(() => {
 		const metadata = mcVersions();
 		const loaderIds = metadata
@@ -1275,9 +1359,10 @@ export default function InstanceDetails(
 
 	createEffect(() => {
 		const inst = instance();
+		const tab = activeTab();
 		setUpdates({});
 		setCheckedPerResource(new Set());
-		if (!inst) return;
+		if (!inst || (tab !== "resources" && tab !== "versioning")) return;
 		void hydrateUpdateSnapshot(inst.id);
 	});
 
@@ -1773,13 +1858,15 @@ export default function InstanceDetails(
 		on(
 			() =>
 				[
+					activeTab(),
 					instance()?.id,
 					installedResources.loading,
 					projectRecords.loading,
 					installedResources(),
 					projectRecords(),
 				] as const,
-			([id, installedLoading, recordsLoading, resourcesList, records]) => {
+			([tab, id, installedLoading, recordsLoading, resourcesList, records]) => {
+				if (tab !== "resources" && tab !== "crash") return;
 				if (!id || installedLoading || recordsLoading) return;
 				if (!resourcesList || resourcesList.length === 0) return;
 
@@ -2596,222 +2683,279 @@ export default function InstanceDetails(
 
 								<div class={styles["instance-tab-content"]}>
 									<TabsContent value="home">
-										<Show when={instance.loading && !instance.latest}>
-											<div class={styles["skeleton-grid"]}>
-												{Array.from({ length: 4 }).map(() => (
-													<Skeleton class={styles["skeleton-item"]} />
-												))}
-											</div>
-										</Show>
-										<Show when={instance.latest}>
-											<HomeTab
-												instance={inst()}
-												installedResources={installedResources() || []}
-												isRunning={isRunningGlobal()}
-											/>
+										<Show when={activeTab() === "home"}>
+											<Show when={instance.loading && !instance.latest}>
+												<div class={styles["skeleton-grid"]}>
+													{Array.from({ length: 4 }).map(() => (
+														<Skeleton class={styles["skeleton-item"]} />
+													))}
+												</div>
+											</Show>
+											<Show when={instance.latest}>
+												<HomeTab
+													instance={inst()}
+													installedResources={installedResources() || []}
+													isRunning={isRunningGlobal()}
+												/>
+											</Show>
 										</Show>
 									</TabsContent>
 
 									<TabsContent value="console">
-										<Show when={instance.loading && !instance.latest}>
-											<Skeleton class={styles["skeleton-console"]} />
-										</Show>
-										<Show when={instance.latest}>
-											<ConsoleTab
-												instanceSlug={slug()}
-												openLogsFolder={openLogsFolder}
-											/>
+										<Show when={activeTab() === "console"}>
+											<Show when={instance.loading && !instance.latest}>
+												<Skeleton class={styles["skeleton-console"]} />
+											</Show>
+											<Show when={instance.latest}>
+												<Suspense
+													fallback={
+														<Skeleton class={styles["skeleton-console"]} />
+													}
+												>
+													<ConsoleTab
+														instanceSlug={slug()}
+														openLogsFolder={openLogsFolder}
+													/>
+												</Suspense>
+											</Show>
 										</Show>
 									</TabsContent>
 
 									<TabsContent value="resources">
-										<ResourcesTab
-											instance={inst()}
-											resourceTypeFilter={resourceTypeFilter()}
-											resourceSearch={resourceSearch()}
-											setResourceSearch={setResourceSearch}
-											setResourceTypeFilter={setResourceTypeFilter}
-											table={table}
-											resourcesStore={resources}
-											installedResources={installedResources}
-											modpackResources={modpackOwnedResources()}
-											modpackIcon={() =>
-												modpackIconBase64() || inst().modpackIconUrl || null
-											}
-											modpackExpanded={modpackResourcesExpanded()}
-											setModpackExpanded={setModpackResourcesExpanded}
-											currentModpackVersion={currentModpackVersion()}
-											availableModpackUpdate={availableModpackUpdate()}
-											router={activeRouter()}
-											handleBatchUpdate={handleBatchUpdate}
-											handleBatchDelete={handleBatchDelete}
-											onManageModpackVersions={() =>
-												handleTabChange("versioning")
-											}
-											onUnlinkModpack={handleUnlink}
-											onDeleteModpackAndUnlink={
-												handleDeleteModpackFilesAndUnlink
-											}
-											onRowClick={handleRowClick}
-											selectedToUpdateCount={selectedToUpdateCount()}
-											busy={busy()}
-											checkingUpdates={checkingUpdates()}
-											checkUpdates={() => void checkUpdates(true)}
-											onCompactChange={setIsCompactTable}
-										/>
+										<Show when={activeTab() === "resources" && instance.latest}>
+											<Suspense
+												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+											>
+												<ResourcesTab
+													instance={inst()}
+													resourceTypeFilter={resourceTypeFilter()}
+													resourceSearch={resourceSearch()}
+													setResourceSearch={setResourceSearch}
+													setResourceTypeFilter={setResourceTypeFilter}
+													table={table}
+													resourcesStore={resources}
+													installedResources={installedResources}
+													modpackResources={modpackOwnedResources()}
+													modpackIcon={() =>
+														modpackIconBase64() || inst().modpackIconUrl || null
+													}
+													modpackExpanded={modpackResourcesExpanded()}
+													setModpackExpanded={setModpackResourcesExpanded}
+													currentModpackVersion={currentModpackVersion()}
+													availableModpackUpdate={availableModpackUpdate()}
+													router={activeRouter()}
+													handleBatchUpdate={handleBatchUpdate}
+													handleBatchDelete={handleBatchDelete}
+													onManageModpackVersions={() =>
+														handleTabChange("versioning")
+													}
+													onUnlinkModpack={handleUnlink}
+													onDeleteModpackAndUnlink={
+														handleDeleteModpackFilesAndUnlink
+													}
+													onRowClick={handleRowClick}
+													selectedToUpdateCount={selectedToUpdateCount()}
+													busy={busy()}
+													checkingUpdates={checkingUpdates()}
+													checkUpdates={() => void checkUpdates(true)}
+													onCompactChange={setIsCompactTable}
+												/>
+											</Suspense>
+										</Show>
 									</TabsContent>
 
 									<TabsContent value="crash">
-										<CrashTab
-											instanceSlug={slug()}
-											instanceId={inst().id}
-											gameVersion={inst().minecraftVersion}
-											loader={inst().modloader ?? undefined}
-											crash={currentCrash()}
-											installedResources={
-												installedResources.latest || installedResources() || []
-											}
-											projectRecords={projectRecords.latest || projectRecords()}
-											router={activeRouter()}
-											onCleared={() => void handleRefetch()}
-										/>
+										<Show when={activeTab() === "crash" && instance.latest}>
+											<Suspense
+												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+											>
+												<CrashTab
+													instanceSlug={slug()}
+													instanceId={inst().id}
+													gameVersion={inst().minecraftVersion}
+													loader={inst().modloader ?? undefined}
+													crash={currentCrash()}
+													installedResources={
+														installedResources.latest ||
+														installedResources() ||
+														[]
+													}
+													projectRecords={
+														projectRecords.latest || projectRecords()
+													}
+													router={activeRouter()}
+													onCleared={() => void handleRefetch()}
+												/>
+											</Suspense>
+										</Show>
 									</TabsContent>
 
 									<TabsContent value="screenshots">
-										<ScreenshotsTab instanceIdSlug={slug()} />
+										<Show
+											when={activeTab() === "screenshots" && instance.latest}
+										>
+											<Suspense
+												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+											>
+												<ScreenshotsTab instanceIdSlug={slug()} />
+											</Suspense>
+										</Show>
 									</TabsContent>
 
 									<TabsContent value="versioning">
-										<Show when={instance.latest}>
-											<VersioningTab
-												instance={inst()}
-												modpackIcon={() =>
-													modpackIconBase64() || inst().modpackIconUrl || null
-												}
-												isGuest={isGuest()}
-												busy={busy()}
-												isInstalling={isInstalling()}
-												checkingUpdates={checkingUpdates()}
-												checkUpdates={() => void checkUpdates(true)}
-												modpackVersions={modpackVersions}
-												availableModpackUpdate={availableModpackUpdate()}
-												handleModpackVersionSelect={handleModpackVersionSelect}
-												rolloutModpackUpdate={rolloutModpackUpdate}
-												handleUnlink={handleUnlink}
-												handleDeleteModpackAndUnlink={
-													handleDeleteModpackFilesAndUnlink
-												}
-												router={activeRouter()}
-												searchableMcVersions={searchableMcVersions}
-												includeSnapshots={includeSnapshots}
-												setIncludeSnapshots={setIncludeSnapshots}
-												selectedMcVersion={selectedMcVersion}
-												setSelectedMcVersion={setSelectedMcVersion}
-												selectedLoader={selectedLoader}
-												setSelectedLoader={setSelectedLoader}
-												selectedLoaderVersion={selectedLoaderVersion}
-												setSelectedLoaderVersion={setSelectedLoaderVersion}
-												loadersList={loadersList()}
-												currentVersionSupportedLoaders={
-													currentVersionSupportedLoaders
-												}
-												searchableLoaderVersions={searchableLoaderVersions}
-												handleStandardUpdate={handleStandardUpdate}
-												setShowExportDialog={setShowExportDialog}
-												handleDuplicate={async () => {
-													const n = await dialogStore.prompt(
-														"Duplicate Instance",
-														"Enter name for the copy:",
-														{
-															defaultValue: `${inst().name} (Copy)`,
-														},
-													);
-													if (n) duplicateInstance(inst().id, n);
-												}}
-												handleHardReset={() => handleHardReset(inst())}
-												handleUninstall={() =>
-													handleUninstall(inst(), () =>
-														activeRouter()?.navigate("/"),
-													)
-												}
-												repairInstance={repairInstance}
-												mcVersions={mcVersions}
-											/>
+										<Show
+											when={activeTab() === "versioning" && instance.latest}
+										>
+											<Suspense
+												fallback={<Skeleton class={styles["skeleton-grid"]} />}
+											>
+												<VersioningTab
+													instance={inst()}
+													modpackIcon={() =>
+														modpackIconBase64() || inst().modpackIconUrl || null
+													}
+													isGuest={isGuest()}
+													busy={busy()}
+													isInstalling={isInstalling()}
+													checkingUpdates={checkingUpdates()}
+													checkUpdates={() => void checkUpdates(true)}
+													modpackVersions={modpackVersions}
+													availableModpackUpdate={availableModpackUpdate()}
+													handleModpackVersionSelect={
+														handleModpackVersionSelect
+													}
+													rolloutModpackUpdate={rolloutModpackUpdate}
+													handleUnlink={handleUnlink}
+													handleDeleteModpackAndUnlink={
+														handleDeleteModpackFilesAndUnlink
+													}
+													router={activeRouter()}
+													searchableMcVersions={searchableMcVersions}
+													includeSnapshots={includeSnapshots}
+													setIncludeSnapshots={setIncludeSnapshots}
+													selectedMcVersion={selectedMcVersion}
+													setSelectedMcVersion={setSelectedMcVersion}
+													selectedLoader={selectedLoader}
+													setSelectedLoader={setSelectedLoader}
+													selectedLoaderVersion={selectedLoaderVersion}
+													setSelectedLoaderVersion={setSelectedLoaderVersion}
+													loadersList={loadersList()}
+													currentVersionSupportedLoaders={
+														currentVersionSupportedLoaders
+													}
+													searchableLoaderVersions={searchableLoaderVersions}
+													handleStandardUpdate={handleStandardUpdate}
+													setShowExportDialog={setShowExportDialog}
+													handleDuplicate={async () => {
+														const n = await dialogStore.prompt(
+															"Duplicate Instance",
+															"Enter name for the copy:",
+															{
+																defaultValue: `${inst().name} (Copy)`,
+															},
+														);
+														if (n) duplicateInstance(inst().id, n);
+													}}
+													handleHardReset={() => handleHardReset(inst())}
+													handleUninstall={() =>
+														handleUninstall(inst(), () =>
+															activeRouter()?.navigate("/"),
+														)
+													}
+													repairInstance={repairInstance}
+													mcVersions={mcVersions}
+												/>
+											</Suspense>
 										</Show>
 									</TabsContent>
 
 									<TabsContent value="settings">
-										<Show when={instance.loading && !instance.latest}>
-											<div class={styles["skeleton-settings"]}>
-												<Skeleton class={styles["skeleton-field"]} />
-												<Skeleton class={styles["skeleton-field"]} />
-											</div>
-										</Show>
-										<Show when={instance.latest}>
-											<SettingsTab
-												instance={inst()}
-												name={name()}
-												setName={setName}
-												setIsNameDirty={setIsNameDirty}
-												iconPath={iconPath()}
-												setIconPath={setIconPath}
-												setIsIconDirty={setIsIconDirty}
-												uploadedIcons={uploadedIcons}
-												modpackIcon={() => modpackIconBase64() || null}
-												isInstalling={isInstalling()}
-												jreOptions={jreOptions}
-												javaPath={javaPath()}
-												setJavaPath={setJavaPath}
-												setIsJavaPathDirty={setIsJavaPathDirty}
-												isCustomMode={isCustomMode()}
-												setIsCustomMode={setIsCustomMode}
-												javaArgs={javaArgs()}
-												setJavaArgs={setJavaArgs}
-												setIsJvmDirty={setIsJvmDirty}
-												minMemory={minMemory()}
-												setMinMemory={setMinMemory}
-												setIsMinMemDirty={setIsMinMemDirty}
-												maxMemory={maxMemory()}
-												setMaxMemory={setMaxMemory}
-												setIsMaxMemDirty={setIsMaxMemDirty}
-												handleSave={handleSave}
-												saving={saving}
-												totalRam={totalRam()}
-												useGlobalResolution={useGlobalResolution()}
-												setUseGlobalResolution={setUseGlobalResolution}
-												gameWidth={gameWidth()}
-												setGameWidth={setGameWidth}
-												gameHeight={gameHeight()}
-												setGameHeight={setGameHeight}
-												setIsResolutionDirty={setIsResolutionDirty}
-												useGlobalJavaArgs={useGlobalJavaArgs()}
-												setUseGlobalJavaArgs={setUseGlobalJavaArgs}
-												useGlobalJavaPath={useGlobalJavaPath()}
-												setUseGlobalJavaPath={setUseGlobalJavaPath}
-												preLaunchHook={preLaunchHook()}
-												setPreLaunchHook={setPreLaunchHook}
-												postExitHook={postExitHook()}
-												setPostExitHook={setPostExitHook}
-												wrapperCommand={wrapperCommand()}
-												setWrapperCommand={setWrapperCommand}
-												useGlobalHooks={useGlobalHooks()}
-												setUseGlobalHooks={setUseGlobalHooks}
-												setIsHooksDirty={setIsHooksDirty}
-												environmentVariables={environmentVariables()}
-												setEnvironmentVariables={setEnvironmentVariables}
-												useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
-												setUseGlobalEnvironmentVariables={
-													setUseGlobalEnvironmentVariables
-												}
-												setIsEnvDirty={setIsEnvDirty}
-												useGlobalLauncherAction={useGlobalLauncherAction()}
-												setUseGlobalLauncherAction={setUseGlobalLauncherAction}
-												launcherActionOnLaunch={launcherActionOnLaunch()}
-												setLauncherActionOnLaunch={setLauncherActionOnLaunch}
-												setIsLaunchActionDirty={setIsLaunchActionDirty}
-												invoke={invoke}
-												showToast={showToast}
-											/>
+										<Show when={activeTab() === "settings"}>
+											<Show when={instance.loading && !instance.latest}>
+												<div class={styles["skeleton-settings"]}>
+													<Skeleton class={styles["skeleton-field"]} />
+													<Skeleton class={styles["skeleton-field"]} />
+												</div>
+											</Show>
+											<Show when={instance.latest}>
+												<Suspense
+													fallback={
+														<div class={styles["skeleton-settings"]}>
+															<Skeleton class={styles["skeleton-field"]} />
+															<Skeleton class={styles["skeleton-field"]} />
+														</div>
+													}
+												>
+													<SettingsTab
+														instance={inst()}
+														name={name()}
+														setName={setName}
+														setIsNameDirty={setIsNameDirty}
+														iconPath={iconPath()}
+														setIconPath={setIconPath}
+														setIsIconDirty={setIsIconDirty}
+														uploadedIcons={uploadedIcons}
+														modpackIcon={() => modpackIconBase64() || null}
+														isInstalling={isInstalling()}
+														jreOptions={jreOptions}
+														javaPath={javaPath()}
+														setJavaPath={setJavaPath}
+														setIsJavaPathDirty={setIsJavaPathDirty}
+														isCustomMode={isCustomMode()}
+														setIsCustomMode={setIsCustomMode}
+														javaArgs={javaArgs()}
+														setJavaArgs={setJavaArgs}
+														setIsJvmDirty={setIsJvmDirty}
+														minMemory={minMemory()}
+														setMinMemory={setMinMemory}
+														setIsMinMemDirty={setIsMinMemDirty}
+														maxMemory={maxMemory()}
+														setMaxMemory={setMaxMemory}
+														setIsMaxMemDirty={setIsMaxMemDirty}
+														handleSave={handleSave}
+														saving={saving}
+														totalRam={totalRam()}
+														useGlobalResolution={useGlobalResolution()}
+														setUseGlobalResolution={setUseGlobalResolution}
+														gameWidth={gameWidth()}
+														setGameWidth={setGameWidth}
+														gameHeight={gameHeight()}
+														setGameHeight={setGameHeight}
+														setIsResolutionDirty={setIsResolutionDirty}
+														useGlobalJavaArgs={useGlobalJavaArgs()}
+														setUseGlobalJavaArgs={setUseGlobalJavaArgs}
+														useGlobalJavaPath={useGlobalJavaPath()}
+														setUseGlobalJavaPath={setUseGlobalJavaPath}
+														preLaunchHook={preLaunchHook()}
+														setPreLaunchHook={setPreLaunchHook}
+														postExitHook={postExitHook()}
+														setPostExitHook={setPostExitHook}
+														wrapperCommand={wrapperCommand()}
+														setWrapperCommand={setWrapperCommand}
+														useGlobalHooks={useGlobalHooks()}
+														setUseGlobalHooks={setUseGlobalHooks}
+														setIsHooksDirty={setIsHooksDirty}
+														environmentVariables={environmentVariables()}
+														setEnvironmentVariables={setEnvironmentVariables}
+														useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
+														setUseGlobalEnvironmentVariables={
+															setUseGlobalEnvironmentVariables
+														}
+														setIsEnvDirty={setIsEnvDirty}
+														useGlobalLauncherAction={useGlobalLauncherAction()}
+														setUseGlobalLauncherAction={
+															setUseGlobalLauncherAction
+														}
+														launcherActionOnLaunch={launcherActionOnLaunch()}
+														setLauncherActionOnLaunch={
+															setLauncherActionOnLaunch
+														}
+														setIsLaunchActionDirty={setIsLaunchActionDirty}
+														invoke={invoke}
+														showToast={showToast}
+													/>
+												</Suspense>
+											</Show>
 										</Show>
 									</TabsContent>
 								</div>

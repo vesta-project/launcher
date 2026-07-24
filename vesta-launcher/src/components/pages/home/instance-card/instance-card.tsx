@@ -9,7 +9,10 @@ import QuiltLogo from "@assets/quilt-logo.svg";
 import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
-import { openStandaloneMiniPage } from "@components/page-viewer/standalone-launcher";
+import {
+	openStandaloneMiniPage,
+	preloadMiniPage,
+} from "@components/page-viewer/standalone-launcher";
 import {
 	clearRunning,
 	instancesState,
@@ -320,7 +323,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 			openCrashDetails();
 			return;
 		}
-		openMiniPage("/instance", { slug: instanceSlug() });
+		openMiniPage(
+			"/instance",
+			{ slug: instanceSlug() },
+			{ prefetchedInstance: storeInstance() },
+		);
 	};
 
 	const openCrashDetails = () => {
@@ -328,7 +335,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 	};
 
 	const openInstanceDetailsStandalone = () => {
-		void openStandaloneMiniPage("/instance", { slug: instanceSlug() });
+		void openStandaloneMiniPage(
+			"/instance",
+			{ slug: instanceSlug() },
+			{ prefetchedInstance: props.instance },
+		);
 	};
 
 	const openAddContent = () => {
@@ -406,13 +417,17 @@ export default function InstanceCard(props: InstanceCardProps) {
 				onMouseEnter={() => {
 					setLeaveAnim(false);
 					cardIconPreview.activate();
+					preloadMiniPage("/instance");
 				}}
 				onMouseLeave={() => {
 					cardIconPreview.deactivate();
 					setLeaveAnim(true);
 					setTimeout(() => setLeaveAnim(false), 250);
 				}}
-				onFocusIn={cardIconPreview.activate}
+				onFocusIn={() => {
+					cardIconPreview.activate();
+					preloadMiniPage("/instance");
+				}}
 				onFocusOut={cardIconPreview.deactivate}
 				onClick={openInstanceDetails}
 				style={{
