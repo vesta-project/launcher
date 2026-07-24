@@ -3,7 +3,7 @@ import StopIcon from "@assets/rounded-square.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import * as HoverCard from "@kobalte/core/hover-card";
 import { clearRunning, instancesState, setLaunching } from "@stores/instances";
-import { type PinnedPage, pinning, unpinPage } from "@stores/pinning";
+import { type PinnedPage, unpinPage } from "@stores/pinning";
 import { resources } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -25,7 +25,7 @@ import {
 	launchInstance,
 } from "@utils/instances";
 import { clsx } from "clsx";
-import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
 import { SidebarButton } from "../sidebar-buttons/sidebar-buttons";
 import styles from "./pinned-item.module.css";
 

@@ -28,7 +28,6 @@ import {
 	createMemo,
 	createSignal,
 	For,
-	onCleanup,
 	onMount,
 	Show,
 	untrack,

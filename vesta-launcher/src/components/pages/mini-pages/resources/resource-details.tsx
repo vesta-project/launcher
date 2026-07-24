@@ -38,7 +38,6 @@ import {
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { resolveResourceUrl } from "@utils/assets";
 import { formatDate } from "@utils/date";
 import { openExternal } from "@utils/external-link";
 import {

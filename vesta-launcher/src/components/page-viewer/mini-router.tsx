@@ -12,7 +12,6 @@ import {
 	batch,
 	createMemo,
 	createSignal,
-	type JSXElement,
 	type ValidComponent,
 } from "solid-js";
 import { Dynamic } from "solid-js/web";

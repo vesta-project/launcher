@@ -57,9 +57,7 @@
 	border: none;
 	background: transparent;
 	color: var(--text-tertiary);
-	cursor: default;
 	transition: all 0.15s ease;
-	cursor: default;
 	cursor: default;
 }
 

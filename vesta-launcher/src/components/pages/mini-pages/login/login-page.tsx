@@ -1,4 +1,3 @@
-import { router } from "@components/page-viewer/page-viewer";
 import LauncherButton from "@ui/button/button";
 import { cancelLogin, listenToAuthEvents, startLogin } from "@utils/auth";
 import { openExternal } from "@utils/external-link";

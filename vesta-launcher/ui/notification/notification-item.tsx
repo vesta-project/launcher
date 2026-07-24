@@ -9,7 +9,7 @@ import type {
 	NotificationType,
 } from "@utils/notifications";
 import clsx from "clsx";
-import { For, JSX, Show, splitProps } from "solid-js";
+import { For, Show, splitProps } from "solid-js";
 import styles from "./notification-item.module.css";
 
 export interface NotificationItemProps {

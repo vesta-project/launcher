@@ -12,7 +12,7 @@ import {
 	createAnimatedIconPreview,
 	iconBackgroundStyle,
 } from "@utils/icon-animation";
-import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
+import { DEFAULT_ICONS } from "@utils/instances";
 import {
 	findBestVersionForInstance,
 	findInstalledResource,
@@ -237,11 +237,11 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 							const installedResource = createMemo(() => {
 								if (!props.project) return null;
 								const installedList = installedMap()[instance.id] || [];
-									return findInstalledResource(
-										props.project,
-										installedList,
-										props.versions,
-									);
+								return findInstalledResource(
+									props.project,
+									installedList,
+									props.versions,
+								);
 							});
 
 							const isAlreadyInstalled = createMemo(

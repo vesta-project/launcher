@@ -1,21 +1,12 @@
 import CloseIcon from "@assets/close.svg";
-import { SidebarActionButton } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
-import { dialogStore } from "@stores/dialog-store";
-import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { NotificationItem } from "@ui/notification/notification-item";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
-	type BackendNotification,
 	clearAllDismissibleNotifications,
-	closeAlert,
 	deleteNotification,
 	invokeNotificationAction,
 	listNotifications,
 	markNotificationRead,
-	type NotificationAction,
-	type NotificationSeverity,
-	type NotificationType,
 	notifications,
 	persistentNotificationTrigger,
 	removeAllAlerts,

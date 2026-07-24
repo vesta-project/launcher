@@ -360,9 +360,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 										variant="slate"
 										size="sm"
 										onClick={() => {
-											["INFO", "WARN", "ERROR", "DEBUG"].forEach((l) =>
-												consoleStore.toggleFilterLevel(l as LogLevel),
-											);
+											["INFO", "WARN", "ERROR", "DEBUG"].forEach((l) => {
+												consoleStore.toggleFilterLevel(l as LogLevel);
+											});
 										}}
 									>
 										Reset Filters

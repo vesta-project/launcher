@@ -1,4 +1,4 @@
-import { SettingsCard, SettingsField } from "@components/settings";
+import { SettingsCard } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	getRequirements,
@@ -7,7 +7,6 @@ import {
 	refreshJavas,
 } from "@stores/settings";
 import LauncherButton from "@ui/button/button";
-import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { For, Show } from "solid-js";
 import styles from "../settings-page.module.css";
 import { JavaOptionCard } from "./JavaOptionCard";

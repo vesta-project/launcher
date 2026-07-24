@@ -1,11 +1,7 @@
 import { dialogStore } from "@stores/dialog-store";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
-import {
-	createNotification,
-	PROGRESS_INDETERMINATE,
-	showAlert,
-} from "@utils/notifications";
+import { showAlert } from "@utils/notifications";
 import { createSignal } from "solid-js";
 import styles from "./notification-test.module.css";
 

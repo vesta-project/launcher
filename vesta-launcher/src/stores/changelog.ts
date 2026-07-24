@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { createResource, createSignal } from "solid-js";
+import { createResource } from "solid-js";
 
 export interface GithubRelease {
 	tag_name: string;

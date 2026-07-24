@@ -681,7 +681,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								<For
 									each={props.instance?.modpackId ? customRows() : sortedRows()}
 								>
-									{renderResourceRow}
+									{(row) => renderResourceRow(row)}
 								</For>
 							</tbody>
 						</table>
