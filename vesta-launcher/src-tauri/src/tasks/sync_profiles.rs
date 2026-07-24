@@ -1,4 +1,6 @@
-use crate::auth::{get_account_profile, invalidate_account_profile_cache};
+use crate::auth::{
+    fetch_account_profile, invalidate_account_profile_cache, publish_auth_service_unavailable,
+};
 use crate::models::account::Account;
 use crate::models::skin_history::NewAccountSkinHistory;
 use crate::schema::vesta::account;
@@ -62,14 +64,17 @@ pub async fn sync_account_profile_data(
     }
 
     invalidate_account_profile_cache(normalized_uuid).await;
-    let profile = match get_account_profile(normalized_uuid.to_string()).await {
+    let profile = match fetch_account_profile(normalized_uuid.to_string()).await {
         Ok(p) => p,
-        Err(e) => {
+        Err(failure) => {
             warn!(
                 "[Sync] Failed to fetch profile from Mojang for {}: {}",
-                normalized_uuid, e
+                normalized_uuid, failure.message
             );
-            return Err(e);
+            if let Some(app) = app_handle.as_ref() {
+                publish_auth_service_unavailable(app, &failure);
+            }
+            return Err(failure.message);
         }
     };
 

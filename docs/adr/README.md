@@ -23,6 +23,7 @@ not worth doing today.
 - [ADR-0002: Split Instance Lifecycle From Runtime Launch](0002-instance-lifecycle-tauri-runtime-launch-piston.md)
 - [ADR-0003: Put Runtime Preparation In piston-lib And Launch Adaptation In Tauri](0003-runtime-preparation-piston-launch-adaptation-tauri.md)
 - [ADR-0004: Put Installed Resource Facts In The Tauri Resource Ledger](0004-installed-resource-ledger.md)
+- [ADR-0005: Separate Authentication Rejection From Service Availability](0005-authentication-availability-offline-fallback.md)
 
 Use `0000-template.md` for the first decision and number accepted records as
 `0001-short-title.md`, `0002-short-title.md`, and so on.

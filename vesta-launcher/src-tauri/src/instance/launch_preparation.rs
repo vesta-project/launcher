@@ -4,7 +4,10 @@
 //! `piston-lib` owns Minecraft/runtime preparation; this Module owns app paths,
 //! settings, account/offline policy, notifications, and status restoration.
 
-use crate::auth::{ACCOUNT_TYPE_DEMO, ACCOUNT_TYPE_GUEST};
+use crate::auth::{
+    is_previously_authenticated_account, publish_auth_service_unavailable, AuthFailure,
+    ACCOUNT_TYPE_DEMO, ACCOUNT_TYPE_GUEST,
+};
 use crate::models::instance::Instance;
 use lazy_static::lazy_static;
 use piston_lib::game::installer::types::{
@@ -161,42 +164,77 @@ pub(crate) async fn prepare_instance_launch(
     };
 
     let mut active_account = match crate::auth::get_active_account() {
-        Ok(Some(acc)) => Some(acc),
-        Ok(None) => None,
-        Err(e) => {
-            log::warn!("[launch_instance] Failed to read active account: {}", e);
-            None
-        }
-    };
-
-    let network_manager = app_handle.state::<crate::utils::network::NetworkManager>();
-    let is_offline = network_manager.get_status() == crate::utils::network::NetworkStatus::Offline;
-
-    if let Some(acc) = active_account.clone() {
-        if acc.account_type == ACCOUNT_TYPE_GUEST || acc.account_type == ACCOUNT_TYPE_DEMO {
-            log::warn!(
-                "[launch_instance] Blocked launch attempt from {} account",
-                acc.account_type
-            );
-            notify_login_required(app_handle, &acc.account_type);
+        Ok(Some(acc)) => acc,
+        Ok(None) => {
+            notify_login_required(app_handle, "No account");
             return Err(
                 "You must be signed in with a Microsoft account to launch Minecraft.".to_string(),
             );
-        } else if !is_offline {
-            if let Err(e) =
-                crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid.clone()).await
-            {
-                log::error!("[launch_instance] Failed to refresh token: {}", e);
-                return Err(format!("Failed to refresh authentication: {}", e));
-            }
+        }
+        Err(e) => {
+            log::warn!("[launch_instance] Failed to read active account: {}", e);
+            return Err(format!("Failed to read the active account: {e}"));
+        }
+    };
 
-            active_account = match crate::auth::get_active_account() {
-                Ok(Some(acc)) => Some(acc),
-                Ok(None) => None,
-                Err(_) => None,
-            };
-        } else {
-            log::info!("[launch_instance] Offline mode: skipping token refresh");
+    if active_account.account_type == ACCOUNT_TYPE_GUEST
+        || active_account.account_type == ACCOUNT_TYPE_DEMO
+        || !is_previously_authenticated_account(&active_account)
+    {
+        log::warn!(
+            "[launch_instance] Blocked launch attempt from {} account",
+            active_account.account_type
+        );
+        notify_login_required(app_handle, &active_account.account_type);
+        return Err(
+            "You must be signed in with a Microsoft account to launch Minecraft.".to_string(),
+        );
+    }
+
+    let network_manager = app_handle.state::<crate::utils::network::NetworkManager>();
+    let mut is_offline =
+        network_manager.get_status() == crate::utils::network::NetworkStatus::Offline;
+
+    if is_offline {
+        log::info!("[launch_instance] Offline mode: skipping token refresh");
+        publish_auth_service_unavailable(
+            app_handle,
+            &AuthFailure {
+                code: "network_unavailable".to_string(),
+                message: "Minecraft authentication services cannot be reached while offline."
+                    .to_string(),
+                service: Some("minecraft_services".to_string()),
+                retryable: true,
+                status_code: None,
+            },
+        );
+    } else {
+        match crate::auth::ensure_account_tokens_valid(
+            app_handle.clone(),
+            active_account.uuid.clone(),
+        )
+        .await
+        {
+            Ok(refreshed_account) => active_account = refreshed_account,
+            Err(failure) if failure.allows_offline_fallback() => {
+                log::warn!(
+                    "[launch_instance] Authentication unavailable; falling back offline: {}",
+                    failure.message
+                );
+                let connectivity = network_manager.verify_online().await;
+                if connectivity == crate::utils::network::NetworkStatus::Offline {
+                    network_manager.set_status(connectivity);
+                }
+                publish_auth_service_unavailable(app_handle, &failure);
+                is_offline = true;
+            }
+            Err(failure) => {
+                log::error!(
+                    "[launch_instance] Authentication validation failed: {}",
+                    failure.message
+                );
+                return Err(failure.message);
+            }
         }
     }
 
@@ -221,18 +259,24 @@ pub(crate) async fn prepare_instance_launch(
         .join("logs")
         .join(format!("{}.log", instance_id));
 
-    let username = active_account
-        .as_ref()
-        .map(|a| a.username.clone())
-        .unwrap_or_else(|| "Player".to_string());
+    let username = active_account.username.clone();
 
     let uuid = if is_offline {
         piston_lib::auth::generate_offline_uuid(&username)
     } else {
+        active_account.uuid.clone()
+    };
+
+    let access_token = if is_offline {
+        "offline".to_string()
+    } else {
         active_account
-            .as_ref()
-            .map(|a| a.uuid.clone())
-            .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string())
+            .access_token
+            .clone()
+            .filter(|token| !token.is_empty())
+            .ok_or_else(|| {
+                "Online launch requires a valid Minecraft access token. Sign in again.".to_string()
+            })?
     };
 
     if app_config.use_dedicated_gpu {
@@ -267,14 +311,7 @@ pub(crate) async fn prepare_instance_launch(
         max_memory: Some(resolved_memory.max as u32),
         username,
         uuid,
-        access_token: if is_offline {
-            "offline".to_string()
-        } else {
-            active_account
-                .as_ref()
-                .and_then(|a| a.access_token.clone())
-                .unwrap_or_else(|| "offline".to_string())
-        },
+        access_token,
         xuid: None,
         client_id: piston_lib::auth::CLIENT_ID.to_string(),
         user_type: "msa".to_string(),
