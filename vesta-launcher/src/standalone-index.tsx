@@ -2,6 +2,8 @@
 
 import StandalonePageViewer from "@components/page-viewer/standalone-page-viewer";
 import { initTheme } from "@components/theming";
+import { installKeybindingDispatcher } from "~/keybindings/dispatcher";
+import { initializeKeybindings } from "~/keybindings/store";
 import {
 	applyCommonConfigUpdates,
 	onConfigUpdate,
@@ -14,6 +16,9 @@ import "./styles.css";
 
 const root = document.getElementById("app");
 if (!root) throw new Error("Standalone root element not found");
+
+void initializeKeybindings();
+const removeKeybindingDispatcher = installKeybindingDispatcher();
 
 void initTheme()
 	.catch((error) => {
@@ -34,6 +39,7 @@ void subscribeToConfigUpdates()
 window.addEventListener(
 	"unload",
 	() => {
+		removeKeybindingDispatcher();
 		unsubscribeFromConfigUpdates();
 	},
 	{ once: true },
