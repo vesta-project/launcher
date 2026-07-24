@@ -862,6 +862,16 @@ export default function InstanceDetails(
 		},
 	);
 
+	onMount(() => {
+		// Settings is a small, high-frequency tab. Loading its code after the
+		// first stable instance paint removes its one-time click suspension
+		// without adding it to the instance page's critical bundle.
+		const cancelPreload = afterStablePaint(() => {
+			instanceTabLoader.preload("settings");
+		});
+		onCleanup(cancelPreload);
+	});
+
 	createEffect(() => {
 		const tab = activeTab();
 		setSelectedTab(tab);

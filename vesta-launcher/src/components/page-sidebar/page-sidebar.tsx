@@ -1,5 +1,5 @@
 import { Tabs } from "@ui/tabs/tabs";
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./page-sidebar.module.css";
 
 export interface PageSidebarTab {
@@ -21,11 +21,27 @@ interface PageSidebarProps {
 export function PageSidebar(props: PageSidebarProps) {
 	const [mobileOpen, setMobileOpen] = createSignal(false);
 	const [isMobile, setIsMobile] = createSignal(window.innerWidth < 600);
+	let contentElement: HTMLElement | undefined;
+	let previousTab = props.activeTab;
+	const tabScrollPositions = new Map<string, number>();
 
 	onMount(() => {
 		const handleResize = () => setIsMobile(window.innerWidth < 600);
 		window.addEventListener("resize", handleResize);
 		onCleanup(() => window.removeEventListener("resize", handleResize));
+	});
+
+	// Each tab owns an independent document-like surface. Carrying a long
+	// tab's scroll position into a first-visit loading state can put that
+	// state above the viewport and make the content area appear blank.
+	// Remembering positions by tab also preserves continuity on return visits.
+	createEffect(() => {
+		const activeTab = props.activeTab;
+		if (!contentElement || activeTab === previousTab) return;
+
+		tabScrollPositions.set(previousTab, contentElement.scrollTop);
+		contentElement.scrollTop = tabScrollPositions.get(activeTab) ?? 0;
+		previousTab = activeTab;
 	});
 
 	return (
@@ -99,7 +115,9 @@ export function PageSidebar(props: PageSidebarProps) {
 					</Show>
 				</Show>
 
-				<main class={styles.content}>{props.children}</main>
+				<main ref={contentElement} class={styles.content}>
+					{props.children}
+				</main>
 			</div>
 		</Tabs>
 	);
