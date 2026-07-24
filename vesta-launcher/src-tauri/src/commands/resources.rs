@@ -83,7 +83,10 @@ mod overview_tests {
         let value = serde_json::to_value(ResourceProjectOverviewRecord::from(record))
             .expect("overview record should serialize");
         assert!(value.get("icon_data").is_none());
-        assert_eq!(value.get("has_cached_icon"), Some(&serde_json::Value::Bool(true)));
+        assert_eq!(
+            value.get("has_cached_icon"),
+            Some(&serde_json::Value::Bool(true))
+        );
     }
 
     #[test]
@@ -102,7 +105,9 @@ mod overview_tests {
             icon_synced_at: None,
         };
 
-        assert!(ResourceProjectOverviewRecord::from(record).icon_url.is_none());
+        assert!(ResourceProjectOverviewRecord::from(record)
+            .icon_url
+            .is_none());
     }
 }
 
@@ -237,7 +242,10 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
             }
         }
 
-        let ids = refs.iter().map(|project_ref| &project_ref.id).collect::<Vec<_>>();
+        let ids = refs
+            .iter()
+            .map(|project_ref| &project_ref.id)
+            .collect::<Vec<_>>();
         let records = if ids.is_empty() {
             Vec::new()
         } else {
