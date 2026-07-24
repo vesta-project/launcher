@@ -194,10 +194,9 @@ jobs:
         run: '"$RUNNER_TEMP/actionlint" -color -shellcheck=""'
 
   frontend-quality:
-    name: Frontend quality (advisory)
+    name: Frontend quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -215,14 +214,12 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Check TypeScript
-        continue-on-error: true
         working-directory: vesta-launcher
-        run: ./node_modules/.bin/tsc --noEmit
+        run: bun run typecheck
 
-      - name: Check frontend formatting
-        continue-on-error: true
+      - name: Check frontend quality
         working-directory: vesta-launcher
-        run: ../node_modules/.bin/biome check .
+        run: bun run check
 
   rust-quality:
     name: Rust Clippy (advisory)
@@ -261,6 +258,7 @@ jobs:
     if: always()
     needs:
       - frontend
+      - frontend-quality
       - rust
       - sandbox-platforms
       - workflow
@@ -270,16 +268,19 @@ jobs:
       - name: Confirm required jobs passed
         env:
           FRONTEND_RESULT: ${{ needs.frontend.result }}
+          FRONTEND_QUALITY_RESULT: ${{ needs.frontend-quality.result }}
           RUST_RESULT: ${{ needs.rust.result }}
           SANDBOX_PLATFORMS_RESULT: ${{ needs.sandbox-platforms.result }}
           WORKFLOW_RESULT: ${{ needs.workflow.result }}
         run: |
           if [[ "$FRONTEND_RESULT" != "success" ||
+                "$FRONTEND_QUALITY_RESULT" != "success" ||
                 "$RUST_RESULT" != "success" ||
                 "$SANDBOX_PLATFORMS_RESULT" != "success" ||
                 "$WORKFLOW_RESULT" != "success" ]]; then
             echo "A required CI job did not pass."
             echo "frontend=$FRONTEND_RESULT"
+            echo "frontend-quality=$FRONTEND_QUALITY_RESULT"
             echo "rust=$RUST_RESULT"
             echo "sandbox-platforms=$SANDBOX_PLATFORMS_RESULT"
             echo "workflow=$WORKFLOW_RESULT"
