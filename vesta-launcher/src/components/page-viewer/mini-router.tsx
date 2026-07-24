@@ -122,9 +122,7 @@ class MiniRouter {
 	constructor(props: MiniRouterProps) {
 		this.paths = props.paths;
 		this.sessionId =
-			props.sessionId ??
-			globalThis.crypto?.randomUUID?.() ??
-			`mini-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+			props.sessionId ?? globalThis.crypto.randomUUID();
 
 		this.paths["404"] = { element: props.invalid ?? (() => <div />) };
 
