@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use tauri::Emitter;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -291,6 +292,7 @@ pub fn list_keybinding_commands() -> Result<Vec<KeybindingCommand>, String> {
 
 #[tauri::command]
 pub fn set_keybinding(
+    app: tauri::AppHandle,
     command_id: String,
     chord: String,
     replace_conflict: bool,
@@ -300,30 +302,49 @@ pub fn set_keybinding(
         return Err("Shortcut cannot be empty".to_string());
     }
     let mut conn = get_config_conn().map_err(|error| error.to_string())?;
-    assign_binding(&mut conn, &command_id, Some(chord), true, replace_conflict)
+    let result = assign_binding(&mut conn, &command_id, Some(chord), true, replace_conflict)?;
+    emit_binding_update(&app, &result);
+    Ok(result)
 }
 
 #[tauri::command]
-pub fn clear_keybinding(command_id: String) -> Result<BindingMutationResult, String> {
+pub fn clear_keybinding(
+    app: tauri::AppHandle,
+    command_id: String,
+) -> Result<BindingMutationResult, String> {
     let mut conn = get_config_conn().map_err(|error| error.to_string())?;
-    assign_binding(&mut conn, &command_id, None, true, false)
+    let result = assign_binding(&mut conn, &command_id, None, true, false)?;
+    emit_binding_update(&app, &result);
+    Ok(result)
 }
 
 #[tauri::command]
 pub fn reset_keybinding(
+    app: tauri::AppHandle,
     command_id: String,
     replace_conflict: bool,
 ) -> Result<BindingMutationResult, String> {
     let mut conn = get_config_conn().map_err(|error| error.to_string())?;
     let command = get_command(&mut conn, &command_id)
         .map_err(|error| format!("Unknown command {command_id}: {error}"))?;
-    assign_binding(
+    let result = assign_binding(
         &mut conn,
         &command_id,
         command.default_chord.as_deref(),
         false,
         replace_conflict,
-    )
+    )?;
+    emit_binding_update(&app, &result);
+    Ok(result)
+}
+
+fn emit_binding_update(app: &tauri::AppHandle, result: &BindingMutationResult) {
+    if !result.applied {
+        return;
+    }
+    if let Err(error) = app.emit("core://keybindings-updated", result) {
+        log::warn!("Failed to broadcast keybinding update: {error}");
+    }
 }
 
 #[cfg(test)]

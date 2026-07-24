@@ -309,6 +309,8 @@ function Sidebar(props: SidebarProps) {
 						aria-keyshortcuts={ariaShortcut(
 							keybindingFor("navigation.notifications"),
 						)}
+						aria-controls="sidebar-notifications-panel"
+						aria-expanded={props.open}
 						onClick={() => props.openChanged(!props.open)}
 					>
 						<div

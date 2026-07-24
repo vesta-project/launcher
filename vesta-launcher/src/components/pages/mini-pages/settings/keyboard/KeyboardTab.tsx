@@ -258,7 +258,12 @@ export function KeyboardSettingsTab() {
 														</button>
 														<button
 															type="button"
-															disabled={busy() || !command.customized}
+															disabled={
+																busy() ||
+																(!command.customized &&
+																	command.currentChord ===
+																		command.defaultChord)
+															}
 															onClick={() => void restoreDefault(command)}
 														>
 															Reset

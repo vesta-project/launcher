@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { createSignal } from "solid-js";
 import { commandDefinitions } from "./catalog";
@@ -28,6 +29,7 @@ const [commands, setCommands] = createSignal<PersistedCommand[]>(
 const [loading, setLoading] = createSignal(false);
 const [persistenceError, setPersistenceError] = createSignal<string>();
 let initializationPromise: Promise<void> | undefined;
+let subscribedToUpdates = false;
 
 function replaceCommand(updated: PersistedCommand): void {
 	setCommands((current) =>
@@ -55,6 +57,13 @@ export function initializeKeybindings(): Promise<void> {
 		if (!hasTauriRuntime()) return;
 		setLoading(true);
 		try {
+			if (!subscribedToUpdates) {
+				await listen<BindingMutationResult>(
+					"core://keybindings-updated",
+					(event) => applyMutation(event.payload),
+				);
+				subscribedToUpdates = true;
+			}
 			const reconciled = await invoke<PersistedCommand[]>(
 				"reconcile_keybinding_catalog",
 				{

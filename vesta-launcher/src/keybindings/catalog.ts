@@ -79,7 +79,7 @@ function pinnedCommand(slot: number, chord: string): CommandDefinition {
 		category: "Navigation",
 		defaultChord: chord,
 		sortOrder: 30 + slot,
-		canExecute: () => Boolean(pinnedAtSlot(slot)),
+		canExecute: () => isMainWindow() && Boolean(pinnedAtSlot(slot)),
 		execute: () => {
 			const pin = pinnedAtSlot(slot);
 			if (pin) openPinnedPage(pin);
@@ -190,7 +190,7 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 		category: "Navigation",
 		defaultChord: "Mod+Digit9",
 		sortOrder: 39,
-		canExecute: () => Boolean(lastPinned()),
+		canExecute: () => isMainWindow() && Boolean(lastPinned()),
 		execute: () => {
 			const pin = lastPinned();
 			if (pin) openPinnedPage(pin);
