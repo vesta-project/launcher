@@ -205,6 +205,23 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/startup/update_actions.rs`
 - `vesta-launcher/src-tauri/src/auth/notification_actions.rs`
 
+### Localization
+
+The shared user-language boundary for frontend and native launcher surfaces.
+Fluent catalogs are repo-owned release inputs synchronized through Crowdin.
+The frontend Module owns reactive language application, document direction,
+browser formatting, and English fallback. The Tauri Module embeds the same
+catalogs for native shell text and owns persisted preference validation and
+system-locale negotiation.
+
+Primary modules:
+
+- `vesta-launcher/locales/`
+- `vesta-launcher/src/localization/`
+- `vesta-launcher/src-tauri/src/localization/`
+- `vesta-launcher/src/components/pages/mini-pages/settings/general/GeneralTab.tsx`
+- `crowdin.yml`
+
 ### Architecture Memory
 
 The repo-owned memory for domain language and load-bearing decisions.

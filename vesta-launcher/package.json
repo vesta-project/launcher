@@ -8,6 +8,7 @@
 		"dev": "vite",
 		"vesta:dev": "vite",
 		"build": "vite build",
+		"i18n:check": "bun run scripts/validate-locales.ts",
 		"version:bump": "tsx ../scripts/bump-version.ts",
 		"serve": "vite preview",
 		"tauri": "tauri",
@@ -16,6 +17,7 @@
 	"packageManager": "bun@1.3.10",
 	"license": "MIT",
 	"dependencies": {
+		"@fluent/bundle": "^0.19.1",
 		"@kobalte/core": "^0.13.11",
 		"@sentry/browser": "^10.8.0",
 		"@solidjs/router": "^0.16.1",
@@ -41,6 +43,7 @@
 	},
 	"devDependencies": {
 		"@csstools/postcss-contrast-color-function": "^3.0.2",
+		"@fluent/syntax": "^0.19.0",
 		"@solidjs/testing-library": "^0.8.10",
 		"@tauri-apps/cli": "^2.11.0",
 		"@types/chroma-js": "^3.1.2",

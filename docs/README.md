@@ -20,6 +20,7 @@ Check this index for ongoing documentation work and areas needing contribution.
 - [Preferences & Style](development/vesta_preferences.md) — Coding and UI conventions.
 - [Quick Reference](development/QUICK_REFERENCE.md) — Handy commands.
 - [Frontend Patterns](development/FRONTEND.md) — SolidJS performance patterns, store management, and component architecture.
+- [Localization](development/LOCALIZATION.md) — Fluent runtime, Crowdin synchronization, and locale rollout.
 
 ## 📥 Installation & Versions
 - [General Installation](installation/VERSIONS.md) — How game versions are handled.

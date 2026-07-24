@@ -6,6 +6,7 @@ mod commands;
 pub mod discord;
 mod instance;
 mod launcher_import;
+mod localization;
 mod logging;
 mod metadata_cache;
 pub mod models;
@@ -127,6 +128,7 @@ fn main() {
             set_config,
             update_config_field,
             update_config_fields,
+            localization::set_language,
             commands::app::open_app_config_dir,
             commands::app::open_app_runtime_storage_dir,
             commands::app::clear_cache,
