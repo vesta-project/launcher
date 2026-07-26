@@ -80,7 +80,7 @@ jobs:
 
   build:
     needs: [bump-version]
-    if: always() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
+    if: ${{ !cancelled() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped') }}
     permissions:
       contents: read
     strategy:
@@ -364,7 +364,7 @@ jobs:
 
   generate-manifest:
     needs: [build, bump-version]
-    if: always() && (needs.build.result == 'success')
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -524,7 +524,7 @@ jobs:
 
   create-github-release:
     needs: [build, generate-manifest, bump-version]
-    if: always() && needs.build.result == 'success' && needs.generate-manifest.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.generate-manifest.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
