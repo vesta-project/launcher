@@ -254,12 +254,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 				clearCrashDetails(slug);
 
 				await launchInstance(props.instance);
-				showToast({
-					title: "Launching",
-					description: `Launching instance "${props.instance.name}"`,
-					severity: "info",
-					duration: 3000,
-				});
 			} catch (err) {
 				console.error("Launch failed", err);
 				showToast({

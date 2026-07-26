@@ -43,7 +43,13 @@ export type AuthStage =
 	| { stage: "Polling" }
 	| { stage: "Complete"; user_uuid: string; user_username: string }
 	| { stage: "Cancelled" }
-	| { stage: "Error"; message: string };
+	| {
+			stage: "Error";
+			code: string;
+			message: string;
+			service: string | null;
+			retryable: boolean;
+	  };
 
 /**
  * Start Microsoft OAuth device-code login flow
