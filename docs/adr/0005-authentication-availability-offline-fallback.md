@@ -35,8 +35,10 @@ availability failures are surfaced as structured, user-facing errors.
 
 The authentication-unavailable warning is persisted and deduplicated. It is
 created only after setup is complete and at least one previously authenticated
-account exists. A service-specific outage does not mark the global network
-offline unless a fresh general connectivity probe also fails.
+account exists. It is not created while the global network is known to be
+offline; that state uses the Instance offline-launch notification instead. A
+service-specific outage does not mark the global network offline unless a fresh
+general connectivity probe also fails.
 
 ## Consequences
 
@@ -44,6 +46,10 @@ Previously authenticated players can launch offline through temporary
 authentication outages without weakening first-time account verification.
 Callers must preserve typed failures until the UI or launch-policy boundary
 rather than converting every response to an unauthenticated boolean.
+
+Launch UI Adapters do not add a generic launch-success toast when launch policy
+already owns a more specific offline notice. This keeps one user-facing
+notification per known device-offline launch.
 
 The persisted account row is the current proof of prior authentication, so no
 database migration is required. If stronger provenance is needed later, it can

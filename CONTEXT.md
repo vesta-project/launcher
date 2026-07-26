@@ -75,6 +75,9 @@ automatically. Guest, Demo, and unknown account types never qualify. Network
 failures and retryable service responses may make authentication temporarily
 unavailable; they do not invalidate the account. Generic HTTP responses such as
 `404 Not Found` are never proof that a session is unauthenticated.
+Authentication-service warnings are reserved for service-only failures while
+general connectivity is online. A known device-offline state uses the single
+Instance offline-launch notification instead.
 
 Primary modules:
 

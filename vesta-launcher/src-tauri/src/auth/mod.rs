@@ -183,15 +183,24 @@ fn should_publish_auth_service_unavailable(
     setup_completed: bool,
     has_authenticated_account: bool,
     already_exists: bool,
+    general_network_online: bool,
     failure: &AuthFailure,
 ) -> bool {
     setup_completed
         && has_authenticated_account
         && !already_exists
+        && general_network_online
         && failure.allows_offline_fallback()
 }
 
 pub fn publish_auth_service_unavailable(app_handle: &AppHandle, failure: &AuthFailure) {
+    let general_network_online = app_handle
+        .try_state::<crate::utils::network::NetworkManager>()
+        .is_none_or(|manager| manager.get_status() == crate::utils::network::NetworkStatus::Online);
+    if !general_network_online {
+        clear_auth_service_unavailable(app_handle);
+        return;
+    }
     let Ok(config) = get_app_config() else {
         return;
     };
@@ -205,6 +214,7 @@ pub fn publish_auth_service_unavailable(app_handle: &AppHandle, failure: &AuthFa
         config.setup_completed,
         has_previously_authenticated_account(),
         already_exists,
+        general_network_online,
         failure,
     ) {
         return;
@@ -242,7 +252,7 @@ pub fn publish_auth_service_unavailable(app_handle: &AppHandle, failure: &AuthFa
     });
 }
 
-fn clear_auth_service_unavailable(app_handle: &AppHandle) {
+pub(crate) fn clear_auth_service_unavailable(app_handle: &AppHandle) {
     if let Some(manager) =
         app_handle.try_state::<crate::notifications::manager::NotificationManager>()
     {
@@ -1494,7 +1504,7 @@ mod tests {
     }
 
     #[test]
-    fn outage_notification_requires_completed_setup_and_previous_authentication() {
+    fn outage_notification_requires_setup_previous_authentication_and_general_connectivity() {
         let outage = AuthFailure::from(PistonAuthError::network(
             AuthService::MinecraftServices,
             AuthPhase::Profile,
@@ -1502,16 +1512,19 @@ mod tests {
         ));
 
         assert!(!should_publish_auth_service_unavailable(
-            false, true, false, &outage
+            false, true, false, true, &outage
         ));
         assert!(!should_publish_auth_service_unavailable(
-            true, false, false, &outage
+            true, false, false, true, &outage
         ));
         assert!(!should_publish_auth_service_unavailable(
-            true, true, true, &outage
+            true, true, true, true, &outage
+        ));
+        assert!(!should_publish_auth_service_unavailable(
+            true, true, false, false, &outage
         ));
         assert!(should_publish_auth_service_unavailable(
-            true, true, false, &outage
+            true, true, false, true, &outage
         ));
     }
 }

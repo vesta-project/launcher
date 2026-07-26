@@ -5,8 +5,8 @@
 //! settings, account/offline policy, notifications, and status restoration.
 
 use crate::auth::{
-    is_previously_authenticated_account, publish_auth_service_unavailable, AuthFailure,
-    ACCOUNT_TYPE_DEMO, ACCOUNT_TYPE_GUEST,
+    clear_auth_service_unavailable, is_previously_authenticated_account,
+    publish_auth_service_unavailable, ACCOUNT_TYPE_DEMO, ACCOUNT_TYPE_GUEST,
 };
 use crate::models::instance::Instance;
 use lazy_static::lazy_static;
@@ -197,17 +197,7 @@ pub(crate) async fn prepare_instance_launch(
 
     if is_offline {
         log::info!("[launch_instance] Offline mode: skipping token refresh");
-        publish_auth_service_unavailable(
-            app_handle,
-            &AuthFailure {
-                code: "network_unavailable".to_string(),
-                message: "Minecraft authentication services cannot be reached while offline."
-                    .to_string(),
-                service: Some("minecraft_services".to_string()),
-                retryable: true,
-                status_code: None,
-            },
-        );
+        clear_auth_service_unavailable(app_handle);
     } else {
         match crate::auth::ensure_account_tokens_valid(
             app_handle.clone(),
