@@ -333,4 +333,107 @@ describe("ResourcesTab virtualized modpack rows", () => {
 		expect(document.querySelectorAll("tbody tr").length).toBeLessThan(80);
 		expect(screen.queryByText("Resource 5000")).toBeNull();
 	});
+
+	it("mounts the virtualizer scroll container before async modpack resources resolve", async () => {
+		const rows = Array.from({ length: 200 }, (_, index) =>
+			createRow({
+				id: index + 1,
+				display_name: `Bundled Resource ${index + 1}`,
+				current_version: "1.0.0",
+				is_enabled: true,
+				local_path: `mods/bundled-resource-${index + 1}.jar`,
+				resource_type: "mod",
+				source_kind: "modpack",
+			}),
+		);
+		const offsetHeight = vi
+			.spyOn(HTMLElement.prototype, "offsetHeight", "get")
+			.mockImplementation(function (this: HTMLElement) {
+				return this.classList.contains("v-instance-resources-table") ? 300 : 49;
+			});
+		const offsetWidth = vi
+			.spyOn(HTMLElement.prototype, "offsetWidth", "get")
+			.mockReturnValue(1_000);
+
+		const Harness = () => {
+			const [loaded, setLoaded] = createSignal(false);
+			const [expanded, setExpanded] = createSignal(true);
+			const installedResources = {
+				get latest() {
+					return loaded() ? rows.map((row) => row.original) : undefined;
+				},
+				loading: false,
+			};
+
+			return (
+				<>
+					<button onClick={() => setLoaded(true)}>Load resources</button>
+					<ResourcesTab
+						instance={{ id: 10, name: "Large Pack", modpackId: "pack-1" }}
+						resourceTypeFilter="All"
+						setResourceTypeFilter={vi.fn()}
+						table={createTable(rows)}
+						resourcesStore={{
+							state: { selection: {} },
+							clearSelection: vi.fn(),
+							setInstance: vi.fn(),
+							setGameVersion: vi.fn(),
+							setLoader: vi.fn(),
+						}}
+						installedResources={installedResources}
+						modpackResources={rows.map((row) => row.original)}
+						modpackIcon={() => null}
+						modpackExpanded={expanded()}
+						setModpackExpanded={setExpanded}
+						currentModpackVersion={null}
+						availableModpackUpdate={null}
+						router={null}
+						handleBatchUpdate={vi.fn()}
+						handleBatchDelete={vi.fn()}
+						onManageModpackVersions={vi.fn()}
+						onUnlinkModpack={vi.fn()}
+						onDeleteModpackAndUnlink={vi.fn()}
+						onRowClick={vi.fn()}
+						resourceSearch=""
+						setResourceSearch={vi.fn()}
+						selectedToUpdateCount={0}
+						busy={false}
+						checkingUpdates={false}
+						checkUpdates={vi.fn()}
+					/>
+				</>
+			);
+		};
+
+		try {
+			render(() => <Harness />);
+
+			const scrollContainer = document.querySelector(
+				".v-instance-resources-table",
+			);
+			if (!(scrollContainer instanceof HTMLDivElement)) {
+				throw new Error("expected resource table scroll container");
+			}
+			expect(screen.queryByText("Bundled Resource 1")).toBeNull();
+
+			await fireEvent.click(screen.getByText("Load resources"));
+			await waitFor(() =>
+				expect(screen.getByText("Bundled Resource 1")).toBeTruthy(),
+			);
+			expect(screen.getByText("200 bundled resources")).toBeTruthy();
+			expect(document.querySelectorAll("tbody tr").length).toBeLessThan(80);
+
+			scrollContainer.scrollTop = 49 * 80;
+			await fireEvent.scroll(scrollContainer);
+
+			await waitFor(() =>
+				expect(screen.getByText("Bundled Resource 81")).toBeTruthy(),
+			);
+			expect(screen.queryByText("Bundled Resource 1")).toBeNull();
+			expect(document.querySelectorAll("tbody tr").length).toBeLessThan(80);
+		} finally {
+			offsetHeight.mockRestore();
+			offsetWidth.mockRestore();
+		}
+	});
 });

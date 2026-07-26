@@ -279,15 +279,13 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	};
 
 	const [panelRef, setPanelRef] = createSignal<HTMLElement | undefined>();
-	const [tableScrollElement, setTableScrollElement] = createSignal<
-		HTMLDivElement | undefined
-	>();
+	let tableScrollElement: HTMLDivElement | undefined;
 	const rowVirtualizer = createVirtualizer<HTMLDivElement, HTMLTableRowElement>(
 		{
 			get count() {
 				return visibleResourceRows().length;
 			},
-			getScrollElement: () => tableScrollElement() ?? null,
+			getScrollElement: () => tableScrollElement ?? null,
 			estimateSize: () => 49,
 			initialRect: { width: 1000, height: 600 },
 			overscan: 12,
@@ -565,21 +563,22 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			</div>
 
 			<div class={styles["installed-resources-list"]}>
-				<Show
-					when={
-						props.installedResources.loading && !props.installedResources.latest
-					}
+				<div
+					ref={tableScrollElement}
+					class={`${styles["vesta-table-container"]} v-instance-resources-table`}
+					classList={{
+						[styles.refetching]: props.installedResources.loading,
+					}}
 				>
-					<Skeleton class={styles["skeleton-resources"]} />
-				</Show>
-				<Show when={props.installedResources.latest}>
-					<div
-						ref={(element) => setTableScrollElement(element)}
-						class={`${styles["vesta-table-container"]} v-instance-resources-table`}
-						classList={{
-							[styles.refetching]: props.installedResources.loading,
-						}}
+					<Show
+						when={
+							props.installedResources.loading &&
+							!props.installedResources.latest
+						}
 					>
+						<Skeleton class={styles["skeleton-resources"]} />
+					</Show>
+					<Show when={props.installedResources.latest}>
 						<table class={styles["vesta-table"]}>
 							<colgroup>
 								<For each={props.table.getVisibleLeafColumns()}>
@@ -690,8 +689,8 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								</p>
 							</div>
 						</Show>
-					</div>
-				</Show>
+					</Show>
+				</div>
 			</div>
 		</section>
 	);
