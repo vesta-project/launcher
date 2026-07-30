@@ -33,8 +33,8 @@ reconciliation Module's passive discovery phase: stat local files, publish
 changed local rows atomically, and emit one rows event. They do not hash files
 or contact providers. Remote identification runs only for an install/update
 workflow that owns the new files, or when the user explicitly chooses
-**Rescan Resources** for the Instance or **Identify Resource** for one
-unresolved row. Overview reads remain side-effect free.
+**Identify Resource** from one unresolved row's action menu. Overview reads
+remain side-effect free.
 
 Remote identification uses provider batch Interfaces. Project metadata is
 cached without downloading icons. Icons are hydrated only for project refs
@@ -59,16 +59,16 @@ The modpack install Task reports post-download work as indeterminate
 finalization rather than leaving the progress bar at 100%. Local fact
 collection exposes bounded processed/total progress to Task Adapters, which
 report indexing counts before atomic Ledger publication. Background enrichment
-does not create a user notification; manual rescans expose step and count
-progress inline in the retained Resources tab.
+does not create a user notification; manual row identification exposes its busy
+state only in that row's action menu and reports failures through a toast.
 
 ## Consequences
 
 Local filename rows remain usable when providers are offline or partially
 failing. They remain unresolved until a later install-owned enrichment or
-explicit manual rescan; opening an overview and ordinary filesystem activity
-never create retry traffic. Provider traffic scales with batch count rather
-than file count, and UI updates scale with completed batches.
+explicit row identification; opening an overview and ordinary filesystem
+activity never create retry traffic. Provider traffic scales with batch count
+rather than file count, and UI updates scale with completed batches.
 
 The Installed Resource Ledger continues to own only local file/row invariants,
 including atomic batch writes. It does not emit events or perform remote

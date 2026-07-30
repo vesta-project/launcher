@@ -93,7 +93,6 @@ import {
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
 import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
-import type { ProgressUpdate } from "@utils/notifications";
 import {
 	afterStablePaint,
 	markPerformance,
@@ -239,7 +238,7 @@ interface InstanceDetailsProps {
 
 /** Distance (pixels) below the viewport at which table row icons begin resolving.
  *  Larger values preload sooner; smaller values reduce initial network burst. */
-const ICON_LOAD_MARGIN_PX = 600;
+const ICON_LOAD_MARGIN_PX = 1600;
 
 const ResourceIcon = (props: {
 	record?: any;
@@ -270,6 +269,7 @@ const ResourceIcon = (props: {
 
 	onMount(() => {
 		if (!wrapperRef) return;
+		const scrollRoot = wrapperRef.closest(".v-instance-resources-table");
 		const observer = new IntersectionObserver(
 			([entry]) => {
 				if (entry.isIntersecting) {
@@ -277,7 +277,10 @@ const ResourceIcon = (props: {
 					observer.disconnect();
 				}
 			},
-			{ rootMargin: `${ICON_LOAD_MARGIN_PX}px` },
+			{
+				root: scrollRoot,
+				rootMargin: `${ICON_LOAD_MARGIN_PX}px 0px`,
+			},
 		);
 		observer.observe(wrapperRef);
 		onCleanup(() => observer.disconnect());
@@ -304,7 +307,7 @@ const ResourceIcon = (props: {
 						src={url()}
 						alt={props.name || "Resource Icon"}
 						class={styles["res-icon"]}
-						loading="lazy"
+						loading="eager"
 						decoding="async"
 					/>
 				)}
@@ -1269,13 +1272,9 @@ export default function InstanceDetails(
 		{},
 	);
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
-	const [rescanningResources, setRescanningResources] = createSignal(false);
 	const [rescanningResourceIds, setRescanningResourceIds] = createSignal<
 		Set<number>
 	>(new Set());
-	const [resourceRescanStatus, setResourceRescanStatus] = createSignal<
-		string | null
-	>(null);
 	const [checkingPerResource, setCheckingPerResource] = createSignal<
 		Set<number>
 	>(new Set());
@@ -1878,64 +1877,26 @@ export default function InstanceDetails(
 		}
 	};
 
-	const applyResourceRescanProgress = (update: ProgressUpdate) => {
-		if (update.type === "step") {
-			setResourceRescanStatus(update.data.name);
-		} else if (update.type === "progress" && update.data.description?.trim()) {
-			setResourceRescanStatus(update.data.description);
-		} else if (update.type === "finished" && update.data.message?.trim()) {
-			setResourceRescanStatus(update.data.message);
-		}
-	};
-
-	const rescanResources = async (resourceId?: number) => {
+	const identifyResource = async (resourceId: number) => {
 		const inst = instance();
-		if (!inst || rescanningResources()) return;
-		if (resourceId && rescanningResourceIds().has(resourceId)) return;
-		if (!resourceId && rescanningResourceIds().size > 0) return;
-
-		if (resourceId) {
-			setRescanningResourceIds((current) => new Set([...current, resourceId]));
-			setResourceRescanStatus("Identifying resource…");
-		} else {
-			setRescanningResources(true);
-			setResourceRescanStatus("Discovering local resources…");
-		}
+		if (!inst || rescanningResourceIds().has(resourceId)) return;
+		setRescanningResourceIds((current) => new Set([...current, resourceId]));
 
 		try {
-			const summary = await resources.rescan(
-				inst.id,
-				resourceId ? [resourceId] : undefined,
-				applyResourceRescanProgress,
-			);
-			if (summary.status === "alreadyRunning") {
-				setResourceRescanStatus("Resource identification is already running.");
-			} else if (summary.scanned === 0) {
-				setResourceRescanStatus("No unlinked resources need identification.");
-			} else if (summary.unresolved > 0) {
-				setResourceRescanStatus(
-					`Identified ${summary.identified}; ${summary.unresolved} remain unlinked.`,
-				);
-			} else {
-				setResourceRescanStatus(
-					`Identified ${summary.identified} resource${
-						summary.identified === 1 ? "" : "s"
-					}.`,
-				);
-			}
+			await resources.rescan(inst.id, [resourceId]);
 		} catch (error) {
-			console.error("Failed to rescan resources:", error);
-			setResourceRescanStatus("Resource identification failed.");
+			console.error("Failed to identify resource:", error);
+			showToast({
+				title: "Resource Identification Failed",
+				description: "Vesta could not identify this resource right now.",
+				severity: "error",
+			});
 		} finally {
-			if (resourceId) {
-				setRescanningResourceIds((current) => {
-					const next = new Set(current);
-					next.delete(resourceId);
-					return next;
-				});
-			} else {
-				setRescanningResources(false);
-			}
+			setRescanningResourceIds((current) => {
+				const next = new Set(current);
+				next.delete(resourceId);
+				return next;
+			});
 		}
 	};
 
@@ -2319,7 +2280,7 @@ export default function InstanceDetails(
 						}
 					}}
 					onIdentify={async (resource) => {
-						await rescanResources(resource.id);
+						await identifyResource(resource.id);
 					}}
 				/>
 			),
@@ -2961,9 +2922,6 @@ export default function InstanceDetails(
 													busy={busy()}
 													checkingUpdates={checkingUpdates()}
 													checkUpdates={() => void checkUpdates(true)}
-													rescanningResources={rescanningResources()}
-													resourceRescanStatus={resourceRescanStatus()}
-													rescanResources={() => void rescanResources()}
 													onCompactChange={setIsCompactTable}
 												/>
 											</Suspense>

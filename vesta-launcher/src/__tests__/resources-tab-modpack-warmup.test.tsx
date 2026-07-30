@@ -175,9 +175,6 @@ describe("ResourcesTab virtualized modpack rows", () => {
 					busy={false}
 					checkingUpdates={false}
 					checkUpdates={vi.fn()}
-					rescanningResources={false}
-					resourceRescanStatus={null}
-					rescanResources={vi.fn()}
 				/>
 			);
 		};
@@ -259,9 +256,6 @@ describe("ResourcesTab virtualized modpack rows", () => {
 					busy={false}
 					checkingUpdates={false}
 					checkUpdates={vi.fn()}
-					rescanningResources={false}
-					resourceRescanStatus={null}
-					rescanResources={vi.fn()}
 				/>
 			);
 		};
@@ -332,9 +326,6 @@ describe("ResourcesTab virtualized modpack rows", () => {
 				busy={false}
 				checkingUpdates={false}
 				checkUpdates={vi.fn()}
-				rescanningResources={false}
-				resourceRescanStatus={null}
-				rescanResources={vi.fn()}
 			/>
 		));
 
@@ -409,9 +400,6 @@ describe("ResourcesTab virtualized modpack rows", () => {
 						busy={false}
 						checkingUpdates={false}
 						checkUpdates={vi.fn()}
-						rescanningResources={false}
-						resourceRescanStatus={null}
-						rescanResources={vi.fn()}
 					/>
 				</>
 			);
@@ -450,8 +438,108 @@ describe("ResourcesTab virtualized modpack rows", () => {
 				expect(screen.getByText("Bundled Resource 81")).toBeTruthy(),
 			);
 			expect(screen.queryByText("Bundled Resource 1")).toBeNull();
-			expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(50);
-			expect(document.querySelectorAll("tbody tr").length).toBeLessThan(80);
+			expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(70);
+			expect(document.querySelectorAll("tbody tr").length).toBeLessThan(100);
+		} finally {
+			offsetHeight.mockRestore();
+			offsetWidth.mockRestore();
+		}
+	});
+
+	it("returns to the first rendered rows when the resource filter changes", async () => {
+		const rows = Array.from({ length: 300 }, (_, index) =>
+			createRow({
+				id: index + 1,
+				display_name:
+					index % 2 === 0
+						? `Mod Resource ${index + 1}`
+						: `Pack Resource ${index + 1}`,
+				current_version: "1.0.0",
+				is_enabled: true,
+				local_path: `resources/resource-${index + 1}`,
+				resource_type: index % 2 === 0 ? "mod" : "resourcepack",
+				source_kind: "custom",
+			}),
+		);
+		const offsetHeight = vi
+			.spyOn(HTMLElement.prototype, "offsetHeight", "get")
+			.mockImplementation(function (this: HTMLElement) {
+				return this.classList.contains("v-instance-resources-table") ? 300 : 49;
+			});
+		const offsetWidth = vi
+			.spyOn(HTMLElement.prototype, "offsetWidth", "get")
+			.mockReturnValue(1_000);
+
+		const Harness = () => {
+			const [filter, setFilter] = createSignal("All");
+			const filteredRows = () =>
+				filter() === "All"
+					? rows
+					: rows.filter((row) => row.original.resource_type === "mod");
+			const table = {
+				...createTable([]),
+				getRowModel: () => ({ rows: filteredRows() }),
+			};
+
+			return (
+				<ResourcesTab
+					instance={{ id: 10, name: "Filter Test" }}
+					resourceTypeFilter={filter()}
+					setResourceTypeFilter={setFilter}
+					table={table}
+					resourcesStore={{
+						state: { selection: {} },
+						clearSelection: vi.fn(),
+						setInstance: vi.fn(),
+						setGameVersion: vi.fn(),
+						setLoader: vi.fn(),
+					}}
+					installedResources={{
+						latest: rows.map((row) => row.original),
+						loading: false,
+					}}
+					modpackResources={[]}
+					modpackIcon={() => null}
+					modpackExpanded={false}
+					setModpackExpanded={vi.fn()}
+					currentModpackVersion={null}
+					availableModpackUpdate={null}
+					router={null}
+					handleBatchUpdate={vi.fn()}
+					handleBatchDelete={vi.fn()}
+					onManageModpackVersions={vi.fn()}
+					onUnlinkModpack={vi.fn()}
+					onDeleteModpackAndUnlink={vi.fn()}
+					onRowClick={vi.fn()}
+					resourceSearch=""
+					setResourceSearch={vi.fn()}
+					selectedToUpdateCount={0}
+					busy={false}
+					checkingUpdates={false}
+					checkUpdates={vi.fn()}
+				/>
+			);
+		};
+
+		try {
+			render(() => <Harness />);
+			const scrollContainer = document.querySelector<HTMLElement>(
+				".v-instance-resources-table",
+			);
+			if (!scrollContainer)
+				throw new Error("expected resource scroll container");
+
+			scrollContainer.scrollTop = 49 * 220;
+			await fireEvent.scroll(scrollContainer);
+			expect(scrollContainer.scrollTop).toBeGreaterThan(0);
+
+			await fireEvent.click(screen.getByText("Mods"));
+
+			await waitFor(() => {
+				expect(scrollContainer.scrollTop).toBe(0);
+				expect(screen.getByText("Mod Resource 1")).toBeTruthy();
+			});
+			expect(screen.queryByText("Rescan Resources")).toBeNull();
 		} finally {
 			offsetHeight.mockRestore();
 			offsetWidth.mockRestore();
@@ -533,9 +621,6 @@ describe("ResourcesTab virtualized modpack rows", () => {
 						busy={false}
 						checkingUpdates={false}
 						checkUpdates={vi.fn()}
-						rescanningResources={false}
-						resourceRescanStatus={null}
-						rescanResources={vi.fn()}
 					/>
 				</>
 			);
@@ -582,51 +667,5 @@ describe("ResourcesTab virtualized modpack rows", () => {
 			offsetHeight.mockRestore();
 			offsetWidth.mockRestore();
 		}
-	});
-
-	it("exposes rescan progress inline and invokes the explicit action", async () => {
-		const rescanResources = vi.fn();
-		render(() => (
-			<ResourcesTab
-				instance={{ id: 10, name: "Instance" }}
-				resourceTypeFilter="All"
-				setResourceTypeFilter={vi.fn()}
-				table={createTable([])}
-				resourcesStore={{
-					state: { selection: {} },
-					clearSelection: vi.fn(),
-					setInstance: vi.fn(),
-					setGameVersion: vi.fn(),
-					setLoader: vi.fn(),
-				}}
-				installedResources={{ latest: [], loading: false }}
-				modpackResources={[]}
-				modpackIcon={() => null}
-				modpackExpanded={false}
-				setModpackExpanded={vi.fn()}
-				currentModpackVersion={null}
-				availableModpackUpdate={null}
-				router={null}
-				handleBatchUpdate={vi.fn()}
-				handleBatchDelete={vi.fn()}
-				onManageModpackVersions={vi.fn()}
-				onUnlinkModpack={vi.fn()}
-				onDeleteModpackAndUnlink={vi.fn()}
-				onRowClick={vi.fn()}
-				resourceSearch=""
-				setResourceSearch={vi.fn()}
-				selectedToUpdateCount={0}
-				busy={false}
-				checkingUpdates={false}
-				checkUpdates={vi.fn()}
-				rescanningResources={false}
-				resourceRescanStatus="Hashing local resources… 12/40"
-				rescanResources={rescanResources}
-			/>
-		));
-
-		await fireEvent.click(screen.getByText("Rescan Resources"));
-		expect(rescanResources).toHaveBeenCalledOnce();
-		expect(screen.getByRole("status").textContent).toContain("12/40");
 	});
 });

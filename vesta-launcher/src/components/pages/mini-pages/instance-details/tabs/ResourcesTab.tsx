@@ -26,7 +26,14 @@ import {
 	RESOURCES_FILTER_COMPACT_WIDTH,
 	RESOURCES_TABLE_COMPACT_WIDTH,
 } from "@utils/media-query";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	on,
+	Show,
+} from "solid-js";
 import styles from "../instance-details.module.css";
 
 const FILTER_OPTIONS = [
@@ -45,7 +52,7 @@ const COLUMN_WIDTHS: Record<string, string | undefined> = {
 	actions: "68px",
 };
 
-const RESOURCE_ROW_OVERSCAN = 30;
+const RESOURCE_ROW_OVERSCAN = 40;
 
 const COLUMN_CLASS: Record<string, string> = {
 	select: "col-select",
@@ -86,9 +93,6 @@ interface ResourcesTabProps {
 	busy: boolean;
 	checkingUpdates: boolean;
 	checkUpdates: () => void;
-	rescanningResources: boolean;
-	resourceRescanStatus: string | null;
-	rescanResources: () => void;
 	onCompactChange?: (compact: boolean) => void;
 }
 
@@ -321,6 +325,17 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 		const last = rows[rows.length - 1];
 		return last ? Math.max(0, rowVirtualizer.getTotalSize() - last.end) : 0;
 	});
+	createEffect(
+		on(
+			() => [props.resourceTypeFilter, props.resourceSearch] as const,
+			() => {
+				if (!tableScrollElement) return;
+				tableScrollElement.scrollTop = 0;
+				tableScrollElement.dispatchEvent(new Event("scroll"));
+			},
+			{ defer: true },
+		),
+	);
 	const isCompactTable = createContainerQuery(
 		panelRef,
 		RESOURCES_TABLE_COMPACT_WIDTH,
@@ -429,32 +444,6 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 				<div class={styles["toolbar-lower-wrapper"]}>
 					<Show when={selectionCount() === 0}>
 						<div class={styles["toolbar-actions"]}>
-							<Button
-								size="sm"
-								variant="ghost"
-								class={styles["rescan-resources-btn"]}
-								onClick={props.rescanResources}
-								disabled={
-									props.busy ||
-									props.checkingUpdates ||
-									props.rescanningResources
-								}
-								tooltip_text="Find local files and identify unlinked resources"
-							>
-								<Show
-									when={props.rescanningResources}
-									fallback={
-										<>
-											<ReloadIcon class={styles["check-updates-icon"]} />
-											<span>Rescan Resources</span>
-										</>
-									}
-								>
-									<span class={styles["checking-updates-spinner"]} />
-									<span>Rescanning...</span>
-								</Show>
-							</Button>
-
 							<Button
 								size="sm"
 								variant="ghost"
@@ -588,15 +577,6 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									<Show when={!isCompactTable()}>Delete Selected</Show>
 								</Button>
 							</div>
-						</div>
-					</Show>
-					<Show when={props.resourceRescanStatus}>
-						<div
-							class={styles["resource-rescan-status"]}
-							role="status"
-							aria-live="polite"
-						>
-							{props.resourceRescanStatus}
 						</div>
 					</Show>
 				</div>

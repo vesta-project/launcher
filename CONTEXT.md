@@ -170,12 +170,13 @@ The Tauri workflow Module between Resource Watcher discovery, Resource Manager
 remote lookup, and Installed Resource Ledger persistence. Passive watcher and
 startup reconciliation stats files and publishes local rows in one transaction
 without hashing or provider traffic. Install-owned enrichment and explicit
-user rescans collect hashes in a bounded pass, identify files through provider
-batch Interfaces, select the canonical platform, persist authoritative peer
-links, and emit at most one typed rows event plus one typed metadata event per
-completed batch. Install-owned enrichment is a silent deduplicated Task;
-explicit rescans report progress inline in the Resources tab and can target one
-unresolved row. The Module owns offline and partial results, while permanently
+unresolved-row identification collect hashes in a bounded pass, identify files
+through provider batch Interfaces, select the canonical platform, persist
+authoritative peer links, and emit at most one typed rows event plus one typed
+metadata event per completed batch. Install-owned enrichment is a silent
+deduplicated Task; explicit identification is available only from an unresolved
+row's action menu and reports its busy state there. The Module owns offline and
+partial results, while permanently
 unidentifiable local files are not retried by overview reads or filesystem
 bursts. The Ledger remains unaware of remote lookup, event, retry, and
 notification policy.
