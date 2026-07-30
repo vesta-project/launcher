@@ -2148,8 +2148,11 @@ pub async fn resume_instance_operation(
                 "installing",
             )?;
 
-            let task =
-                crate::tasks::update_modpack::UpdateModpackTask::new(instance_id, version_id);
+            let task = crate::tasks::update_modpack::UpdateModpackTask::new(
+                instance_id,
+                version_id,
+                game_dir,
+            );
             task_manager.submit(Box::new(task)).await
         }
         "install" | _ => install_instance(app_handle, task_manager, inst, None).await,

@@ -52,13 +52,16 @@ import {
 import { createAnimatedIconPreview } from "@utils/icon-animation";
 import type { Instance } from "@utils/instances";
 import {
+	getInstanceInstallationFailureReason,
 	getInstanceOperationLabel,
 	getInstanceSlug,
 	installInstance,
+	isInstanceInstallationFailed,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
+	needsInstanceInstallation,
 	resolveInstanceDisplayIcon,
 	resumeInstanceOperation,
 } from "@utils/instances";
@@ -127,10 +130,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const isInterrupted = createMemo(
 		() => storeInstance().installationStatus === "interrupted",
 	);
-	const isFailed = createMemo(() => {
-		const status = storeInstance().installationStatus;
-		return status === "failed" || status?.startsWith("failed:");
-	});
+	const isFailed = createMemo(() =>
+		isInstanceInstallationFailed(storeInstance()),
+	);
 
 	const cardIconPreview = createAnimatedIconPreview(() =>
 		resolveInstanceDisplayIcon(storeInstance()),
@@ -188,16 +190,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const operationLabel = () => getInstanceOperationLabel(storeInstance());
 
 	const failureReason = () => {
-		if (!isFailed()) return null;
-		const status = storeInstance().installationStatus;
-		if (status?.includes(":")) {
-			return status.split(":").slice(1).join(":");
-		}
-		return "Installation failed";
+		return getInstanceInstallationFailureReason(storeInstance());
 	};
 
-	const needsInstallation = () =>
-		!storeInstance().installationStatus || isFailed();
+	const needsInstallation = () => needsInstanceInstallation(storeInstance());
 
 	const playButtonTooltip = () => {
 		if (isInstalling()) {
@@ -266,9 +262,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		}
 	};
 
-	const handleClick = async (e: MouseEvent) => {
-		e.stopPropagation();
-
+	const handlePrimaryAction = async () => {
 		if (busy() || isWarmingUp()) return;
 
 		if (isInstalling()) {
@@ -298,18 +292,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 		await toggleRun();
 	};
 
+	const handleClick = async (e: MouseEvent) => {
+		e.stopPropagation();
+		await handlePrimaryAction();
+	};
+
 	const handleContextToggle = () => {
-		if (busy() || isWarmingUp() || isInstalling()) return;
-		if (
-			hasCrashed() &&
-			!isRunning() &&
-			!needsInstallation() &&
-			!isInterrupted()
-		) {
-			openCrashDetails();
-			return;
-		}
-		void toggleRun();
+		void handlePrimaryAction();
 	};
 
 	const openInstanceDetails = () => {
@@ -464,13 +453,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						<div
 							class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}
 						>
-							<ErrorIcon
-								style={{
-									width: "24px",
-									height: "24px",
-									color: "var(--semantic-error)",
-								}}
-							/>
+							<ErrorIcon />
 							<h1
 								style={{
 									margin: "4px 0 0",
@@ -487,14 +470,22 @@ export default function InstanceCard(props: InstanceCardProps) {
 									margin: "4px 8px 0",
 									padding: 0,
 									"font-size": "10px",
-									color: "var(--text-on-accent)",
-									opacity: 0.8,
 									"text-align": "center",
 									"line-height": "1.2",
 								}}
 							>
 								{failureReason()}
 							</p>
+							<button
+								type="button"
+								class={styles["failure-retry-button"]}
+								onClick={handleClick}
+								disabled={busy()}
+								aria-label="Retry installation"
+							>
+								<ReloadIcon />
+								<span>{busy() ? "Retrying…" : "Retry installation"}</span>
+							</button>
 						</div>
 					</Match>
 					<Match when={true}>
@@ -641,7 +632,19 @@ export default function InstanceCard(props: InstanceCardProps) {
 						disabled={isWarmingUp()}
 					>
 						<span>
-							{isRunning() ? "Stop" : isWarmingUp() ? "Warming up..." : "Play"}
+							{isRunning()
+								? "Stop"
+								: isWarmingUp()
+									? "Warming up..."
+									: isInterrupted()
+										? "Resume operation"
+										: needsInstallation()
+											? isFailed()
+												? "Retry installation"
+												: "Install"
+											: hasCrashed()
+												? "Crash details"
+												: "Play"}
 						</span>
 					</ContextMenuItem>
 

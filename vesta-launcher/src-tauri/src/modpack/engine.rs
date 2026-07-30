@@ -9,7 +9,7 @@ use crate::sync::manifest;
 use crate::sync::manifest_bootstrap::{self, TaskBootstrapProgress};
 use crate::sync::merger::{merge_config, MergeResult};
 use crate::sync::safeguards;
-use crate::sync::staging::StagingDir;
+use crate::sync::staging::{RollbackSnapshot, StagingDir};
 use crate::tasks::installers::modpack::enrich_manifest_platform_hashes;
 use crate::tasks::manager::TaskContext;
 use piston_lib::game::modpack::manifest::ModpackManifest;
@@ -25,9 +25,56 @@ pub struct UpdatePlan {
     pub actions: ActionTree,
 }
 
-pub struct ApplyOutcome {
+pub struct AppliedUpdate {
     pub skipped_deletions: u32,
     pub preserved_worlds: u32,
+    rollback: Option<RollbackSnapshot>,
+    game_dir: PathBuf,
+    world_rotations: Vec<(String, String)>,
+}
+
+impl AppliedUpdate {
+    pub fn finalize(mut self) {
+        if let Some(rollback) = self.rollback.take() {
+            rollback.finalize();
+        }
+    }
+
+    pub fn rollback(mut self) -> Result<(), String> {
+        let file_result = self
+            .rollback
+            .take()
+            .map(|rollback| rollback.restore().map_err(|error| error.to_string()))
+            .unwrap_or(Ok(()));
+        let world_result = restore_world_rotations(&self.game_dir, &self.world_rotations);
+
+        match (file_result, world_result) {
+            (Ok(()), Ok(())) => Ok(()),
+            (files, worlds) => Err(format!(
+                "file restore: {}; world restore: {}",
+                files.err().unwrap_or_else(|| "complete".to_string()),
+                worlds.err().unwrap_or_else(|| "complete".to_string()),
+            )),
+        }
+    }
+}
+
+impl Drop for AppliedUpdate {
+    fn drop(&mut self) {
+        if self.rollback.is_none() {
+            return;
+        }
+        // Dropping the snapshot restores tracked files. World rotations are
+        // reversible renames and are restored separately to avoid copying
+        // potentially multi-gigabyte saves into the snapshot.
+        self.rollback.take();
+        if let Err(error) = restore_world_rotations(&self.game_dir, &self.world_rotations) {
+            log::error!(
+                "[modpack-engine] Failed to restore world rotations after dropped update: {}",
+                error
+            );
+        }
+    }
 }
 
 pub async fn plan(
@@ -86,7 +133,7 @@ pub async fn apply(
     game_dir: &Path,
     plan: &mut UpdatePlan,
     ctx: &TaskContext,
-) -> Result<ApplyOutcome, String> {
+) -> Result<AppliedUpdate, String> {
     ctx.update_full(
         25,
         "Evaluating conflicts and merging configs...".to_string(),
@@ -168,6 +215,9 @@ pub async fn apply(
         }
     }
 
+    let rollback = RollbackSnapshot::capture(game_dir, rollback_paths(&plan.actions))
+        .map_err(|error| format!("Failed to prepare update rollback: {}", error))?;
+
     ctx.update_full(
         65,
         "Preserving existing world saves...".to_string(),
@@ -217,17 +267,83 @@ pub async fn apply(
         Some(5),
         Some(6),
     );
-    staging.commit().map_err(|error| {
-        format!(
-            "Failed to commit update: {}. Your game directory is unchanged.",
-            error
-        )
-    })?;
+    if let Err(error) = staging.commit() {
+        let commit_error = format!("Failed to commit update: {}", error);
+        let file_rollback = rollback.restore().map_err(|error| error.to_string());
+        let world_rollback = restore_world_rotations(game_dir, &plan.actions.world_collisions);
+        return match (file_rollback, world_rollback) {
+            (Ok(()), Ok(())) => Err(format!(
+                "{}. The previous instance files were restored.",
+                commit_error
+            )),
+            (files, worlds) => Err(format!(
+                "{}. Automatic rollback was incomplete (files: {}; worlds: {}).",
+                commit_error,
+                files.err().unwrap_or_else(|| "restored".to_string()),
+                worlds.err().unwrap_or_else(|| "restored".to_string()),
+            )),
+        };
+    }
 
-    Ok(ApplyOutcome {
+    Ok(AppliedUpdate {
         skipped_deletions,
         preserved_worlds,
+        rollback: Some(rollback),
+        game_dir: game_dir.to_path_buf(),
+        world_rotations: plan.actions.world_collisions.clone(),
     })
+}
+
+fn rollback_paths(actions: &ActionTree) -> Vec<String> {
+    let mut paths = Vec::new();
+    for action in &actions.actions {
+        match action {
+            SyncAction::Add { path, .. }
+            | SyncAction::Update { path, .. }
+            | SyncAction::Remove { path, .. }
+            | SyncAction::Merge { path, .. } => paths.push(path.clone()),
+            SyncAction::RotateWorld { .. } => {}
+            SyncAction::Skip { .. } => {}
+        }
+    }
+    for path in &actions.corrupted_configs {
+        paths.push(path.clone());
+        paths.push(format!("{}.corrupted", path));
+    }
+    paths.push(ModpackManifest::FILE_NAME.to_string());
+    paths
+}
+
+fn restore_world_rotations(game_dir: &Path, rotations: &[(String, String)]) -> Result<(), String> {
+    for (original, quarantine) in rotations.iter().rev() {
+        let original = crate::sync::paths::join_validated(game_dir, original)
+            .map_err(|error| error.to_string())?;
+        let quarantine = crate::sync::paths::join_validated(game_dir, quarantine)
+            .map_err(|error| error.to_string())?;
+        if !quarantine.exists() {
+            continue;
+        }
+
+        if original.exists() {
+            let metadata =
+                std::fs::symlink_metadata(&original).map_err(|error| error.to_string())?;
+            if metadata.is_dir() && !metadata.file_type().is_symlink() {
+                std::fs::remove_dir_all(&original).map_err(|error| error.to_string())?;
+            } else {
+                std::fs::remove_file(&original).map_err(|error| error.to_string())?;
+            }
+        }
+        if let Some(parent) = original.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        std::fs::rename(&quarantine, &original).map_err(|error| {
+            format!(
+                "Failed to restore world {:?} from {:?}: {}",
+                original, quarantine, error
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn update_stage_progress(ctx: &TaskContext, staged: usize, total: usize, message: String) {
@@ -473,4 +589,36 @@ async fn fetch_target_manifest(
         .map_err(|error| format!("Failed to parse new modpack manifest: {}", error))?;
     enrich_manifest_platform_hashes(app_handle, &mut manifest).await;
     Ok((manifest, zip_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rollback_moves_preserved_world_back_without_copying_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let game_dir = temp.path();
+        let original = game_dir.join("saves/world");
+        let quarantine = game_dir.join("saves/world_user_backup");
+        std::fs::create_dir_all(&quarantine).unwrap();
+        std::fs::write(quarantine.join("level.dat"), b"user world").unwrap();
+        std::fs::create_dir_all(&original).unwrap();
+        std::fs::write(original.join("level.dat"), b"pack world").unwrap();
+
+        restore_world_rotations(
+            game_dir,
+            &[(
+                "saves/world".to_string(),
+                "saves/world_user_backup".to_string(),
+            )],
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read(original.join("level.dat")).unwrap(),
+            b"user world"
+        );
+        assert!(!quarantine.exists());
+    }
 }

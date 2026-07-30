@@ -1,7 +1,206 @@
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::paths::{join_validated, path_is_within, validate_staged_relative_path};
+
+const UPDATE_ROLLBACK_DIR: &str = ".update_rollback";
+
+/// Snapshot of active paths that an update may mutate. The snapshot remains
+/// live through manifest/runtime finalization so a late failure can restore the
+/// previous playable instance, not merely clear the staging directory.
+pub struct RollbackSnapshot {
+    root: PathBuf,
+    game_dir: PathBuf,
+    entries: Vec<SnapshotEntry>,
+    active: bool,
+}
+
+struct SnapshotEntry {
+    relative_path: String,
+    existed: bool,
+}
+
+impl RollbackSnapshot {
+    pub fn capture<I, S>(game_dir: &Path, relative_paths: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let root = game_dir.join(UPDATE_ROLLBACK_DIR);
+        if root.exists() {
+            anyhow::bail!(
+                "Cannot start update while a previous rollback snapshot exists at {:?}",
+                root
+            );
+        }
+
+        let mut unique = HashSet::new();
+        let mut paths = Vec::new();
+        for path in relative_paths {
+            let path = path.into();
+            validate_staged_relative_path(&path)?;
+            if Path::new(&path)
+                .components()
+                .next()
+                .is_some_and(|component| component.as_os_str() == UPDATE_ROLLBACK_DIR)
+            {
+                anyhow::bail!(
+                    "Update path may not target the reserved rollback directory: {}",
+                    path
+                );
+            }
+            if unique.insert(path.clone()) {
+                paths.push(path);
+            }
+        }
+
+        // If an ancestor is already captured, its snapshot covers every child.
+        paths.sort_by_key(|path| Path::new(path).components().count());
+        let mut covered = Vec::<PathBuf>::new();
+        paths.retain(|path| {
+            let candidate = PathBuf::from(path);
+            if covered
+                .iter()
+                .any(|ancestor| candidate.starts_with(ancestor))
+            {
+                false
+            } else {
+                covered.push(candidate);
+                true
+            }
+        });
+
+        std::fs::create_dir_all(&root)
+            .with_context(|| format!("Failed to create update rollback snapshot {:?}", root))?;
+
+        let capture_result = (|| {
+            let mut entries = Vec::with_capacity(paths.len());
+            for relative_path in paths {
+                let source = join_validated(game_dir, &relative_path)?;
+                let existed = source.exists();
+                if existed {
+                    let destination = join_validated(&root, &relative_path)?;
+                    copy_path(&source, &destination)?;
+                }
+                entries.push(SnapshotEntry {
+                    relative_path,
+                    existed,
+                });
+            }
+            Ok(entries)
+        })();
+
+        match capture_result {
+            Ok(entries) => Ok(Self {
+                root,
+                game_dir: game_dir.to_path_buf(),
+                entries,
+                active: true,
+            }),
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&root);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn restore(mut self) -> Result<()> {
+        self.restore_inner()?;
+        self.active = false;
+        Ok(())
+    }
+
+    pub fn finalize(mut self) {
+        self.active = false;
+        if let Err(error) = std::fs::remove_dir_all(&self.root) {
+            log::warn!(
+                "[staging] Update succeeded but rollback snapshot cleanup failed at {:?}: {}",
+                self.root,
+                error
+            );
+        }
+    }
+
+    fn restore_inner(&self) -> Result<()> {
+        for entry in &self.entries {
+            let target = join_validated(&self.game_dir, &entry.relative_path)?;
+            remove_path_if_exists(&target)?;
+
+            if entry.existed {
+                let backup = join_validated(&self.root, &entry.relative_path)?;
+                copy_path(&backup, &target)?;
+            }
+        }
+
+        std::fs::remove_dir_all(&self.root).with_context(|| {
+            format!(
+                "Restored update files but failed to remove rollback snapshot {:?}",
+                self.root
+            )
+        })?;
+        log::info!("[staging] Restored pre-update filesystem snapshot");
+        Ok(())
+    }
+}
+
+impl Drop for RollbackSnapshot {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        if let Err(error) = self.restore_inner() {
+            log::error!(
+                "[staging] Failed to restore update rollback snapshot {:?}: {}",
+                self.root,
+                error
+            );
+        }
+    }
+}
+
+fn copy_path(source: &Path, destination: &Path) -> Result<()> {
+    let metadata = std::fs::symlink_metadata(source)
+        .with_context(|| format!("Failed to inspect update path {:?}", source))?;
+    if metadata.file_type().is_symlink() {
+        anyhow::bail!("Cannot safely snapshot symlinked update path {:?}", source);
+    }
+
+    if metadata.is_dir() {
+        std::fs::create_dir_all(destination)
+            .with_context(|| format!("Failed to create snapshot directory {:?}", destination))?;
+        for entry in std::fs::read_dir(source)
+            .with_context(|| format!("Failed to read update directory {:?}", source))?
+        {
+            let entry = entry?;
+            copy_path(&entry.path(), &destination.join(entry.file_name()))?;
+        }
+    } else {
+        if let Some(parent) = destination.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::copy(source, destination).with_context(|| {
+            format!(
+                "Failed to snapshot update path {:?} to {:?}",
+                source, destination
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn remove_path_if_exists(path: &Path) -> Result<()> {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return Ok(());
+    };
+    if metadata.is_dir() && !metadata.file_type().is_symlink() {
+        std::fs::remove_dir_all(path)
+            .with_context(|| format!("Failed to remove updated directory {:?}", path))
+    } else {
+        std::fs::remove_file(path)
+            .with_context(|| format!("Failed to remove updated file {:?}", path))
+    }
+}
 
 /// Manages the `.update_stage/` temporary directory used for atomic updates.
 /// All new files are downloaded and prepared here, then atomically moved
@@ -225,5 +424,64 @@ mod tests {
         assert!(staging.write_staged("../outside.txt", b"bad").is_err());
         staging.rollback();
         assert!(!dir.path().join("outside.txt").exists());
+    }
+
+    #[test]
+    fn rollback_snapshot_restores_changed_deleted_and_added_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("instance");
+        std::fs::create_dir_all(game_dir.join("mods")).unwrap();
+        std::fs::write(game_dir.join("mods/changed.jar"), b"old").unwrap();
+        std::fs::write(game_dir.join("mods/deleted.jar"), b"keep").unwrap();
+
+        let snapshot = RollbackSnapshot::capture(
+            &game_dir,
+            ["mods/changed.jar", "mods/deleted.jar", "mods/added.jar"],
+        )
+        .unwrap();
+
+        std::fs::write(game_dir.join("mods/changed.jar"), b"new").unwrap();
+        std::fs::remove_file(game_dir.join("mods/deleted.jar")).unwrap();
+        std::fs::write(game_dir.join("mods/added.jar"), b"added").unwrap();
+
+        snapshot.restore().unwrap();
+
+        assert_eq!(
+            std::fs::read(game_dir.join("mods/changed.jar")).unwrap(),
+            b"old"
+        );
+        assert_eq!(
+            std::fs::read(game_dir.join("mods/deleted.jar")).unwrap(),
+            b"keep"
+        );
+        assert!(!game_dir.join("mods/added.jar").exists());
+        assert!(!game_dir.join(UPDATE_ROLLBACK_DIR).exists());
+    }
+
+    #[test]
+    fn finalized_snapshot_keeps_updated_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("instance");
+        std::fs::create_dir_all(game_dir.join("mods")).unwrap();
+        std::fs::write(game_dir.join("mods/example.jar"), b"old").unwrap();
+
+        let snapshot = RollbackSnapshot::capture(&game_dir, ["mods/example.jar"]).unwrap();
+        std::fs::write(game_dir.join("mods/example.jar"), b"new").unwrap();
+        snapshot.finalize();
+
+        assert_eq!(
+            std::fs::read(game_dir.join("mods/example.jar")).unwrap(),
+            b"new"
+        );
+        assert!(!game_dir.join(UPDATE_ROLLBACK_DIR).exists());
+    }
+
+    #[test]
+    fn rollback_snapshot_rejects_its_reserved_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = RollbackSnapshot::capture(dir.path(), [".update_rollback/recursive"]);
+
+        assert!(result.is_err());
+        assert!(!dir.path().join(UPDATE_ROLLBACK_DIR).exists());
     }
 }

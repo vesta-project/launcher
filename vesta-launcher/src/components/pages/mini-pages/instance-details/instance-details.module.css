@@ -17,6 +17,43 @@
 	z-index: 1;
 }
 
+.installation-failure-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin: -8px var(--page-gutter-x) 16px;
+	padding: 12px 14px;
+	border: 1px solid hsl(var(--hue-error) 70% 50% / 0.35);
+	border-radius: 8px;
+	background: hsl(var(--hue-error) 55% 24% / 0.16);
+	color: var(--text-color);
+}
+
+.installation-failure-banner > svg {
+	flex: 0 0 auto;
+	margin-top: 2px;
+	color: var(--semantic-error);
+	fill: currentColor;
+}
+
+.installation-failure-banner > div {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.installation-failure-banner strong {
+	font-size: var(--font-small);
+}
+
+.installation-failure-banner span {
+	color: var(--text-secondary);
+	font-size: var(--font-xsmall);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
 .instance-tab-loading {
 	flex: 1;
 	min-height: 220px;
@@ -474,6 +511,10 @@
 	align-items: center;
 	justify-content: center;
 	line-height: 1;
+}
+
+.details-play-button-icon svg {
+	fill: currentColor;
 }
 
 .details-play-button-kill-icon {

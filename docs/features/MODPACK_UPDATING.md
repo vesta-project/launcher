@@ -9,7 +9,7 @@ When a modpack author releases a new version, the update engine performs a **thr
 ### Key Principles
 
 - **User changes are sacred.** If a user modified a config or replaced a mod, the engine preserves it.
-- **Atomic updates.** All changes are staged in `.update_stage/` and applied in a single atomic commit. If anything fails, the game directory is left untouched.
+- **Recoverable updates.** New content is staged in `.update_stage/`, and every active path the update may mutate is snapshotted until manifest/runtime finalization succeeds. A failure restores the previous instance before the failure notification is published.
 - **Binary vs. text awareness.** Binary files (JARs, ZIPs) are compared by hash. Text configs (.properties, .json) are merged at the key-value level.
 
 ---
@@ -150,7 +150,7 @@ If a text config fails structural validation (e.g., user typo like a missing bra
 - A non-blocking diagnostic is logged and the update continues.
 
 ### Rollback Safety
-If any phase (3–6) fails, `.update_stage/` is cleaned up without touching the game directory. If the process crashes mid-update, the leftover staging directory is detected and cleaned on the next update attempt.
+If staging fails, `.update_stage/` is discarded without touching active files. Before quarantine, deletion, or commit begins, affected files (including the root manifest) are copied into `.update_rollback/`. The snapshot remains available through manifest persistence, instance metadata updates, runtime installation, and Java setup. Any task failure restores the snapshot and previous Instance metadata, while Task Manager keeps a persistent error notification.
 
 ---
 
@@ -235,4 +235,3 @@ interface ModpackVersionInfo {
 - **Full $O$ content storage** — Store config file contents (not just hashes) in the manifest to enable true 3-way merges with old values
 - **Preview mode** — Show what will change before applying
 - **Partial updates** — Allow selective mod updates (e.g., skip specific mods)
-- **Rollback support** — Restore previous manifest state if an update causes issues

@@ -49,6 +49,30 @@ pub fn rollback_start(app_handle: &tauri::AppHandle, instance_id: i32, game_dir:
     clear_pending(game_dir);
 }
 
+pub fn restore_previous_instance(
+    app_handle: &tauri::AppHandle,
+    previous: &crate::models::instance::Instance,
+) -> Result<(), String> {
+    let mut conn = crate::utils::db::get_vesta_conn().map_err(|error| error.to_string())?;
+    use crate::schema::instance::dsl as instances;
+    use diesel::prelude::*;
+
+    diesel::update(instances::instance.filter(instances::id.eq(previous.id)))
+        .set((
+            instances::minecraft_version.eq(&previous.minecraft_version),
+            instances::modloader.eq(&previous.modloader),
+            instances::modloader_version.eq(&previous.modloader_version),
+            instances::modpack_version_id.eq(&previous.modpack_version_id),
+            instances::installation_status.eq(Some("installed".to_string())),
+        ))
+        .execute(&mut conn)
+        .map_err(|error| format!("Failed to restore previous instance metadata: {}", error))?;
+
+    let restored = crate::commands::instances::get_instance(previous.id)?;
+    let _ = app_handle.emit("core://instance-updated", restored);
+    Ok(())
+}
+
 pub fn pending_target(game_dir: &Path) -> Option<String> {
     let content = std::fs::read_to_string(pending_path(game_dir)).ok()?;
     serde_json::from_str::<PendingUpdate>(&content)
@@ -83,8 +107,6 @@ pub async fn finish(
     manifest
         .persist(game_dir)
         .map_err(|error| format!("Failed to persist manifest: {}", error))?;
-
-    spawn_manifest_resource_linking(app_handle, instance.id, game_dir, &manifest);
 
     let runtime_fields =
         crate::utils::instance_runtime::InstanceRuntimeFields::from_manifest(new_manifest);
@@ -129,6 +151,7 @@ pub async fn finish(
 
     let processed = crate::commands::instances::get_instance(instance.id)
         .map_err(|error| format!("Failed to fetch updated instance for emit: {}", error))?;
+    spawn_manifest_resource_linking(app_handle, instance.id, game_dir, &manifest);
     let _ = app_handle.emit("core://instance-updated", processed.clone());
     let _ = app_handle.emit("core://instance-installed", processed);
 
@@ -173,23 +196,18 @@ impl Drop for StatusGuard {
             return;
         }
 
-        let app_handle = self.app_handle.clone();
-        let instance_id = self.instance_id;
-        let game_dir = self.game_dir.clone();
-        tauri::async_runtime::spawn(async move {
-            clear_pending(&game_dir);
-            if let Err(error) = crate::commands::instances::update_installation_status(
-                &app_handle,
-                instance_id,
-                "installed",
-            ) {
-                log::warn!(
-                    "[modpack-update] Failed to restore instance {} after update failure: {}",
-                    instance_id,
-                    error
-                );
-            }
-        });
+        clear_pending(&self.game_dir);
+        if let Err(error) = crate::commands::instances::update_installation_status(
+            &self.app_handle,
+            self.instance_id,
+            "installed",
+        ) {
+            log::warn!(
+                "[modpack-update] Failed to restore instance {} after update failure: {}",
+                self.instance_id,
+                error
+            );
+        }
     }
 }
 

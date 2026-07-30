@@ -125,7 +125,10 @@ The installed state of a modpack-linked Instance. Its only persisted manifest is
 `<game directory>/modpack_manifest.json`; the former `.vesta` manifest copy is
 not read or written. It includes hash backfill, resource ledger, resource
 presence checks, repair state, update finalization, pending-update recovery,
-runtime/Java follow-up, and Instance event emission.
+runtime/Java follow-up, and Instance event emission. An update keeps an
+affected-path rollback snapshot through finalization; any task failure restores
+the prior files and runtime/modpack metadata before returning the Instance to
+`installed` and publishing the persistent failure notification.
 
 Primary modules:
 

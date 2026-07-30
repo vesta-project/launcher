@@ -141,7 +141,7 @@ pub async fn start_modpack_update(
 
     crate::modpack::update::begin(&app_handle, instance_id, &game_dir, &new_version_id)?;
 
-    let task = UpdateModpackTask::new(instance_id, new_version_id);
+    let task = UpdateModpackTask::new(instance_id, new_version_id, game_dir.clone());
     if let Err(e) = task_manager.submit(Box::new(task)).await {
         crate::modpack::update::rollback_start(&app_handle, instance_id, &game_dir);
         return Err(e.to_string());

@@ -74,15 +74,18 @@ import {
 	duplicateInstance,
 	getInstance,
 	getInstanceBySlug,
+	getInstanceInstallationFailureReason,
 	getInstanceOperationLabel,
 	getInstanceSlug,
 	getStableIconId,
 	installInstance,
 	isDefaultIcon,
+	isInstanceInstallationFailed,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
+	needsInstanceInstallation,
 	repairInstance,
 	resumeInstanceOperation,
 	startModpackUpdate,
@@ -1127,12 +1130,17 @@ export default function InstanceDetails(
 
 	const isFailed = createMemo(() => {
 		const inst = instance();
-		return inst?.installationStatus === "failed";
+		return inst ? isInstanceInstallationFailed(inst) : false;
 	});
 
 	const needsInstallation = createMemo(() => {
 		const inst = instance();
-		return !inst?.installationStatus || isFailed();
+		return inst ? needsInstanceInstallation(inst) : false;
+	});
+
+	const installationFailureReason = createMemo(() => {
+		const inst = instance();
+		return inst ? getInstanceInstallationFailureReason(inst) : null;
 	});
 
 	let lastSelectedRowId: string | null = null;
@@ -2841,6 +2849,21 @@ export default function InstanceDetails(
 										</div>
 									</div>
 								</header>
+
+								<Show when={installationFailureReason()}>
+									{(reason) => (
+										<div
+											class={styles["installation-failure-banner"]}
+											role="alert"
+										>
+											<ErrorIcon width="16" height="16" />
+											<div>
+												<strong>Installation failed</strong>
+												<span>{reason()}</span>
+											</div>
+										</div>
+									)}
+								</Show>
 
 								<div class={styles["instance-tab-content"]}>
 									<TabsContent value="home">
