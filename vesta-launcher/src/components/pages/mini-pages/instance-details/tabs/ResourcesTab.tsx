@@ -45,6 +45,8 @@ const COLUMN_WIDTHS: Record<string, string | undefined> = {
 	actions: "68px",
 };
 
+const RESOURCE_ROW_OVERSCAN = 30;
+
 const COLUMN_CLASS: Record<string, string> = {
 	select: "col-select",
 	display_name: "col-display_name",
@@ -291,7 +293,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			getScrollElement: () => tableScrollElement ?? null,
 			estimateSize: () => 49,
 			initialRect: { width: 1000, height: 600 },
-			overscan: 12,
+			overscan: RESOURCE_ROW_OVERSCAN,
 			getItemKey: (index) => visibleResourceRows()[index]?.id ?? index,
 		},
 	);

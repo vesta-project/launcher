@@ -450,6 +450,7 @@ describe("ResourcesTab virtualized modpack rows", () => {
 				expect(screen.getByText("Bundled Resource 81")).toBeTruthy(),
 			);
 			expect(screen.queryByText("Bundled Resource 1")).toBeNull();
+			expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(50);
 			expect(document.querySelectorAll("tbody tr").length).toBeLessThan(80);
 		} finally {
 			offsetHeight.mockRestore();
