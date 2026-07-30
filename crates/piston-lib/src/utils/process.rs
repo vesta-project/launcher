@@ -4,11 +4,15 @@ use std::os::windows::process::CommandExt;
 /// Extension trait for Piston-related command execution, providing unified
 /// support for console suppression and process detachment.
 pub trait PistonCommandExt {
-    /// Hides the console window on Windows. No-op on other platforms.
+    /// Hides the console window on Windows while preserving configured
+    /// standard-I/O redirection. No-op on other platforms.
+    ///
+    /// Use this for short-lived background console commands. Long-running
+    /// processes that must survive their parent should use [`Self::detach`].
     fn suppress_console(&mut self) -> &mut Self;
 
     /// Detaches the process from its parent, allowing it to survive app closure.
-    /// On Windows, this uses CREATE_NEW_PROCESS_GROUP.
+    /// On Windows, this uses CREATE_NEW_PROCESS_GROUP with CREATE_NO_WINDOW.
     /// On Unix, this uses a new session via setsid.
     fn detach(&mut self) -> &mut Self;
 }

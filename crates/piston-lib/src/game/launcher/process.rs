@@ -520,6 +520,7 @@ fn verify_java(java_path: &Path) -> Result<()> {
     // Try to run java -version to verify it works
     let output = std::process::Command::new(java_path)
         .arg("-version")
+        .suppress_console()
         .output()
         .context("Failed to execute Java")?;
 

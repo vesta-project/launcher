@@ -12,6 +12,7 @@ use crate::game::metadata::{
     is_dummy_game_version, ModrinthArtifact, ModrinthLoaderProfile, ModrinthManifest,
     ModrinthProcessor, ModrinthSidedDataEntry,
 };
+use crate::utils::process::PistonCommandExt;
 
 pub async fn resolve_loader_profile(
     spec: &InstallSpec,
@@ -276,7 +277,7 @@ pub async fn execute_loader_processors(
         for arg in &resolved_args {
             cmd.arg(arg);
         }
-        cmd.current_dir(spec.data_dir());
+        cmd.current_dir(spec.data_dir()).suppress_console();
 
         let status = cmd
             .status()

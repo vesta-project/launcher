@@ -4,6 +4,7 @@ use crate::game::installer::types::{
 use crate::game::runtime_plan::{
     ManifestSource, RuntimeInspection, RuntimePlan, RuntimePlanErrorKind, RuntimeRequest,
 };
+use crate::utils::process::PistonCommandExt;
 use anyhow::Result;
 use sha1::{Digest, Sha1};
 use std::io::Read;
@@ -44,6 +45,7 @@ fn verify_jre_executable(java_path: &Path) -> bool {
     }
     Command::new(java_path)
         .arg("-version")
+        .suppress_console()
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
