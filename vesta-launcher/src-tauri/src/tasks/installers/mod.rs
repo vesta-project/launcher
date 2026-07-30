@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 
 use crate::models::instance::Instance;
 use crate::notifications::manager::NotificationManager;
-use crate::notifications::models::ProgressUpdate;
+use crate::notifications::models::{ProgressUpdate, PROGRESS_INDETERMINATE};
 use crate::tasks::manager::{Task, TaskContext};
 
 /// Task adapter for game installation
@@ -348,14 +348,26 @@ impl ProgressReporter for TauriProgressReporter {
         let ctx = self.ctx.clone();
         let current_step = self.current_step.clone();
 
-        // Each top-level step starts a new counting context.
-        self.last_step_current
-            .store(-1, std::sync::atomic::Ordering::Relaxed);
-        self.last_step_total
-            .store(-1, std::sync::atomic::Ordering::Relaxed);
+        // A new top-level phase must not inherit the previous phase's 100%.
+        // Keep it indeterminate until this phase reports its own percentage.
+        self.last_percent
+            .store(PROGRESS_INDETERMINATE, std::sync::atomic::Ordering::Relaxed);
+        self.last_step_current.store(
+            if total_steps.is_some() { 0 } else { -1 },
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.last_step_total.store(
+            total_steps.map(|total| total as i32).unwrap_or(-1),
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
-        // 1. Update overall status via unified context
-        ctx.update_description(name_str.clone());
+        // 1. Atomically reset progress, description, and any known step count.
+        ctx.update_full(
+            PROGRESS_INDETERMINATE,
+            name_str.clone(),
+            total_steps.map(|_| 0),
+            total_steps.map(|total| total as i32),
+        );
 
         // 2. Start a new step in the channel if present
         if let Some(ref channel) = ctx.progress_channel {

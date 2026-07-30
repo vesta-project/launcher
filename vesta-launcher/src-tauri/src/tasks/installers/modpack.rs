@@ -6,9 +6,11 @@ use tokio::sync::RwLock;
 
 use crate::models::instance::Instance;
 use crate::models::SourcePlatform;
+use crate::notifications::models::PROGRESS_INDETERMINATE;
 use crate::resources::ResourceManager;
 use crate::tasks::installers::{ProgressReporter, TauriProgressReporter};
-use crate::tasks::manager::{Task, TaskContext};
+use crate::tasks::manager::{Task, TaskContext, TaskManager};
+use crate::tasks::resource_reconciliation::ResourceEnrichmentTask;
 
 use anyhow::Result;
 use piston_lib::game::installer::core::modpack_installer::{
@@ -380,7 +382,12 @@ impl Task for InstallModpackTask {
             use crate::schema::instance::dsl as inst_dsl;
             use diesel::prelude::*;
 
-            reporter.set_message("Setting up Java runtime...");
+            ctx.update_full(
+                PROGRESS_INDETERMINATE,
+                "Downloads complete. Setting up Java runtime…".to_string(),
+                None,
+                None,
+            );
             crate::utils::java::ensure_java_for_instance(
                 &app_handle,
                 &final_instance,
@@ -390,266 +397,99 @@ impl Task for InstallModpackTask {
             .await
             .map_err(|e| format!("Java setup failed after modpack install: {}", e))?;
 
-            if let Err(e) = diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
+            // Persist the manifest before publishing resource rows. It is the source of truth
+            // used to assign provenance and recover interrupted enrichment.
+            let mut root_manifest =
+                piston_lib::game::modpack::manifest::ModpackManifest::from_install(
+                    &metadata,
+                    &override_mods,
+                    &[],
+                    None,
+                    instance.modpack_id.clone(),
+                );
+            let mut known_resolutions = HashMap::new();
+            for resource in &mut root_manifest.mods {
+                if let piston_lib::game::modpack::manifest::ModSource::CurseForge {
+                    project_id,
+                    file_id,
+                    ..
+                } = &resource.source
+                {
+                    if let Some(cached) = resolver
+                        .get_cached(*project_id, *file_id, resource.sha1.as_deref())
+                        .await
+                    {
+                        resource.path = format!("{}/{}", cached.subfolder, cached.filename);
+                        if let Some(local_path) =
+                            piston_lib::game::modpack::manifest::resolve_mod_path_on_disk(
+                                &game_dir,
+                                &resource.path,
+                            )
+                        {
+                            known_resolutions.insert(
+                                crate::utils::instance_helpers::normalize_path(&local_path),
+                                crate::resources::reconciliation::KnownResourceResolution {
+                                    project: cached.project,
+                                    version: cached.version,
+                                    platform: SourcePlatform::CurseForge,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+            root_manifest.installed_at = chrono::Utc::now().to_rfc3339();
+            root_manifest
+                .persist(&game_dir)
+                .map_err(|error| format!("Failed to save root modpack manifest: {error}"))?;
+
+            let prepared = prepare_manifest_resource_rows(
+                &app_handle,
+                instance.id,
+                &game_dir,
+                &root_manifest,
+                &known_resolutions,
+                Some(&ctx),
+            )
+            .await?;
+
+            ctx.update_description("Attaching resource watcher…".to_string());
+            let watcher = app_handle.state::<crate::resources::watcher::ResourceWatcher>();
+            watcher
+                .watch_instance_without_scan(instance.id, game_dir.to_string_lossy().into_owned())
+                .await
+                .map_err(|error| format!("Failed to attach resource watcher: {error}"))?;
+
+            ctx.update_description("Finalizing installed instance…".to_string());
+            diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
                 .set(inst_dsl::installation_status.eq(Some("installed".to_string())))
                 .execute(&mut conn)
-            {
-                log::error!("[ModpackTask] Failed to update installation status: {}", e);
-            } else {
-                final_instance = inst_dsl::instance
-                    .find(instance.id)
-                    .first(&mut conn)
-                    .map_err(|e| e.to_string())?;
-            }
+                .map_err(|error| format!("Failed to update installation status: {error}"))?;
+            final_instance = inst_dsl::instance
+                .find(instance.id)
+                .first(&mut conn)
+                .map_err(|error| error.to_string())?;
 
-            // Emit update event
             use tauri::Emitter;
             let emitted =
                 crate::commands::instances::get_instance(instance.id).unwrap_or(final_instance);
             let _ = app_handle.emit("core://instance-updated", emitted.clone());
             let _ = app_handle.emit("core://instance-installed", emitted);
 
-            // POST-INSTALL: Link resources to database automatically
-            // This prevents the ResourceWatcher from needing to hit the network for every mod
-            let mc_ver = metadata.minecraft_version.clone();
-            let loader_type = metadata.modloader_type.clone();
-            let mods = metadata.mods.clone();
-            let override_mods_for_manifest = override_mods.clone();
-            let instance_id = instance.id;
-            let game_dir_clone = game_dir.clone();
-            let app_handle_clone = app_handle.clone();
-            let resolver_for_linking = resolver.clone();
-
-            tauri::async_runtime::spawn(async move {
-                let rm = app_handle_clone.state::<ResourceManager>();
-                let pack_provenance =
-                    crate::resources::watcher::modpack_provenance_for_instance(instance_id).ok();
-                log::info!("[ModpackTask] Background linking {} resources and {} overrides for instance {}", mods.len(), override_mods.len(), instance_id);
-
-                // Handle Overrides first (local files from ZIP)
-                for override_path in override_mods {
-                    // Only link resources in known directories
-                    let is_resource = override_path.starts_with("mods")
-                        || override_path.starts_with("resourcepacks")
-                        || override_path.starts_with("shaderpacks")
-                        || override_path.starts_with("datapacks");
-
-                    if !is_resource {
-                        continue;
-                    }
-
-                    let local_path = game_dir_clone.join(&override_path);
-                    if local_path.exists() {
-                        let hash = crate::utils::hash::calculate_sha1(&local_path).ok();
-                        let path_meta = local_path.clone();
-                        let meta =
-                            tokio::task::spawn_blocking(move || std::fs::metadata(&path_meta))
-                                .await
-                                .ok()
-                                .and_then(|r| r.ok())
-                                .map_or((0, 0), |m| {
-                                    (
-                                        m.len() as i64,
-                                        m.modified()
-                                            .ok()
-                                            .and_then(|t| {
-                                                t.duration_since(std::time::UNIX_EPOCH).ok()
-                                            })
-                                            .map(|d| d.as_secs() as i64)
-                                            .unwrap_or(0),
-                                    )
-                                });
-
-                        let _ = crate::resources::watcher::link_manual_resource_to_db(
-                            &app_handle_clone,
-                            instance_id,
-                            &local_path,
-                            hash,
-                            meta,
-                            "modpack",
-                            pack_provenance.clone(),
-                        )
-                        .await;
-                    }
-                }
-
-                for res_entry in mods {
-                    match res_entry {
-                        piston_lib::game::modpack::types::ModpackMod::Modrinth {
-                            path,
-                            hashes,
-                            ..
-                        } => {
-                            if let Some(sha1) = hashes.get("sha1") {
-                                let local_path = game_dir_clone.join(path.replace("\\", "/"));
-                                if local_path.exists() {
-                                    if let Ok((project, version)) = rm
-                                        .get_by_hash(crate::models::SourcePlatform::Modrinth, sha1)
-                                        .await
-                                    {
-                                        let path_meta = local_path.clone();
-                                        let meta = tokio::task::spawn_blocking(move || {
-                                            std::fs::metadata(&path_meta)
-                                        })
-                                        .await
-                                        .ok()
-                                        .and_then(|r| r.ok())
-                                        .map_or((0, 0), |m| {
-                                            (
-                                                m.len() as i64,
-                                                m.modified()
-                                                    .ok()
-                                                    .and_then(|t| {
-                                                        t.duration_since(std::time::UNIX_EPOCH).ok()
-                                                    })
-                                                    .map(|d| d.as_secs() as i64)
-                                                    .unwrap_or(0),
-                                            )
-                                        });
-
-                                        let _ = crate::resources::watcher::link_resource_to_db(
-                                            &app_handle_clone,
-                                            instance_id,
-                                            &local_path,
-                                            project,
-                                            version,
-                                            crate::models::SourcePlatform::Modrinth,
-                                            Some(sha1.clone()),
-                                            meta,
-                                            pack_provenance.clone(),
-                                        )
-                                        .await;
-                                    }
-                                }
-                            }
-                        }
-                        piston_lib::game::modpack::types::ModpackMod::CurseForge {
-                            project_id,
-                            file_id,
-                            hash,
-                            ..
-                        } => {
-                            // Reuse resolver cache from install phase to avoid repetitive API calls.
-                            let cached = resolver_for_linking
-                                .get_cached(project_id, file_id, hash.as_deref())
-                                .await;
-
-                            let (project, version, subfolder) = if let Some(c) = cached {
-                                (c.project, c.version, c.subfolder)
-                            } else {
-                                let pid_str =
-                                    project_id.map(|id| id.to_string()).unwrap_or_default();
-                                let fid_str = file_id.to_string();
-                                let version = match rm
-                                    .get_version(
-                                        crate::models::SourcePlatform::CurseForge,
-                                        &pid_str,
-                                        &fid_str,
-                                    )
-                                    .await
-                                {
-                                    Ok(v) => v,
-                                    Err(_) => continue,
-                                };
-                                let project = match rm
-                                    .get_project(
-                                        crate::models::SourcePlatform::CurseForge,
-                                        &version.project_id,
-                                    )
-                                    .await
-                                {
-                                    Ok(p) => p,
-                                    Err(_) => continue,
-                                };
-                                let subfolder = match project.resource_type {
-                                    crate::models::resource::ResourceType::Mod => "mods",
-                                    crate::models::resource::ResourceType::ResourcePack => {
-                                        "resourcepacks"
-                                    }
-                                    crate::models::resource::ResourceType::Shader => "shaderpacks",
-                                    crate::models::resource::ResourceType::DataPack => "datapacks",
-                                    crate::models::resource::ResourceType::World => "saves",
-                                    _ => "mods",
-                                }
-                                .to_string();
-                                (project, version, subfolder)
-                            };
-
-                            let local_path =
-                                game_dir_clone.join(subfolder).join(&version.file_name);
-                            if local_path.exists() {
-                                let path_meta = local_path.clone();
-                                let meta = tokio::task::spawn_blocking(move || {
-                                    std::fs::metadata(&path_meta)
-                                })
-                                .await
-                                .ok()
-                                .and_then(|r| r.ok())
-                                .map_or((0, 0), |m| {
-                                    (
-                                        m.len() as i64,
-                                        m.modified()
-                                            .ok()
-                                            .and_then(|t| {
-                                                t.duration_since(std::time::UNIX_EPOCH).ok()
-                                            })
-                                            .map(|d| d.as_secs() as i64)
-                                            .unwrap_or(0),
-                                    )
-                                });
-
-                                let _ = crate::resources::watcher::link_resource_to_db(
-                                    &app_handle_clone,
-                                    instance_id,
-                                    &local_path,
-                                    project,
-                                    version,
-                                    crate::models::SourcePlatform::CurseForge,
-                                    hash,
-                                    meta,
-                                    pack_provenance.clone(),
-                                )
-                                .await;
-                            }
-                        }
-                    }
-                }
-
-                // Finally, refresh latest version statuses in background
-                let _ = rm
-                    .refresh_resources_for_instance(instance_id, &mc_ver, &loader_type)
-                    .await;
-                if let Err(e) = crate::resources::watcher::resolve_modpack_override_conflicts(
-                    &app_handle_clone,
-                    instance_id,
-                )
+            if let Err(error) = app_handle
+                .state::<TaskManager>()
+                .submit(Box::new(ResourceEnrichmentTask::new(
+                    instance.id,
+                    instance.name.clone(),
+                    prepared,
+                    "modpack-install-enrichment",
+                )))
                 .await
-                {
-                    log::warn!(
-                        "[ModpackTask] Failed to resolve modpack override conflicts: {}",
-                        e
-                    );
-                }
-                log::info!(
-                    "[ModpackTask] Finished linking resources for instance {}",
-                    instance_id
-                );
-            });
-
-            // Step 6: Save manifest for future syncs
-            let mut root_manifest =
-                piston_lib::game::modpack::manifest::ModpackManifest::from_install(
-                    &metadata,
-                    &override_mods_for_manifest,
-                    &[],
-                    None,
-                    instance.modpack_id.clone(),
-                );
-            root_manifest.installed_at = chrono::Utc::now().to_rfc3339();
-            if let Err(e) = root_manifest.persist(&game_dir) {
-                log::error!(
-                    "[InstallModpackTask] Failed to save root modpack manifest: {}",
-                    e
+            {
+                log::warn!(
+                    "[ResourceReconciliation] Installed {} but could not enqueue enrichment: {}",
+                    instance.name,
+                    error
                 );
             }
 
@@ -671,117 +511,207 @@ pub async fn enrich_manifest_platform_hashes(
     .await;
 }
 
-/// Pre-link manifest mods into `installed_resource` so ResourceWatcher can skip API calls.
+fn manifest_resource_candidates(
+    instance_id: i32,
+    game_dir: &std::path::Path,
+    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
+    known_resolutions: &HashMap<String, crate::resources::reconciliation::KnownResourceResolution>,
+) -> Vec<crate::resources::reconciliation::ResourceCandidate> {
+    use piston_lib::game::modpack::manifest::resolve_mod_path_on_disk;
+    use piston_lib::game::modpack::types::ModpackFormat;
+    use std::collections::HashSet;
+
+    let provenance = crate::resources::watcher::modpack_provenance_for_instance(instance_id).ok();
+    let preferred_platform = Some(match manifest.source {
+        ModpackFormat::Modrinth => SourcePlatform::Modrinth,
+        ModpackFormat::CurseForge => SourcePlatform::CurseForge,
+    });
+    let mut seen = HashSet::new();
+    let mut paths = manifest
+        .mods
+        .iter()
+        .filter_map(|resource| resolve_mod_path_on_disk(game_dir, &resource.path))
+        .collect::<Vec<_>>();
+    paths.extend(manifest.overrides.extracted.iter().filter_map(|relative| {
+        let normalized = relative.replace('\\', "/");
+        let is_resource = ["mods/", "resourcepacks/", "shaderpacks/", "datapacks/"]
+            .iter()
+            .any(|prefix| normalized.to_lowercase().starts_with(prefix));
+        if !is_resource {
+            return None;
+        }
+        let path = std::path::PathBuf::from(relative);
+        let path = if path.is_absolute() {
+            path
+        } else {
+            game_dir.join(path)
+        };
+        path.is_file().then_some(path)
+    }));
+
+    paths
+        .into_iter()
+        .filter(|path| seen.insert(crate::utils::instance_helpers::normalize_path(path)))
+        .map(|path| crate::resources::reconciliation::ResourceCandidate {
+            resolved: known_resolutions
+                .get(&crate::utils::instance_helpers::normalize_path(&path))
+                .cloned(),
+            path,
+            provenance: provenance.clone(),
+            preferred_platform,
+        })
+        .collect()
+}
+
+async fn prepare_manifest_resource_rows(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    game_dir: &std::path::Path,
+    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
+    known_resolutions: &HashMap<String, crate::resources::reconciliation::KnownResourceResolution>,
+    progress_context: Option<&TaskContext>,
+) -> Result<Vec<crate::resources::reconciliation::PreparedResourceCandidate>, String> {
+    let candidates =
+        manifest_resource_candidates(instance_id, game_dir, manifest, known_resolutions);
+    let total = candidates.len();
+    let progress = progress_context.map(|context| {
+        context.update_full(
+            PROGRESS_INDETERMINATE,
+            indexing_progress_description(0, total),
+            Some(0),
+            Some(total as i32),
+        );
+        let context = context.clone();
+        std::sync::Arc::new(move |processed, total| {
+            if should_report_indexing_progress(processed, total) {
+                context.update_full(
+                    PROGRESS_INDETERMINATE,
+                    indexing_progress_description(processed, total),
+                    Some(processed as i32),
+                    Some(total as i32),
+                );
+            }
+        }) as crate::resources::reconciliation::LocalFactProgress
+    });
+    let prepared = crate::resources::reconciliation::prepare_candidates_with_progress(
+        instance_id,
+        candidates,
+        progress,
+    )
+    .await;
+
+    if let Some(context) = progress_context {
+        context.update_full(
+            PROGRESS_INDETERMINATE,
+            format!("Saving {total} indexed resources…"),
+            Some(total as i32),
+            Some(total as i32),
+        );
+    }
+    crate::resources::reconciliation::publish_local_rows(
+        app_handle,
+        instance_id,
+        &prepared,
+        "modpack-install-local-rows",
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(prepared)
+}
+
+fn indexing_progress_description(processed: usize, total: usize) -> String {
+    if total == 0 {
+        "No modpack resources need indexing…".to_string()
+    } else {
+        format!("Indexing installed resources… {processed}/{total}")
+    }
+}
+
+fn should_report_indexing_progress(processed: usize, total: usize) -> bool {
+    if total == 0 {
+        return false;
+    }
+    let interval = (total / 20).max(1);
+    processed == 1 || processed == total || processed.is_multiple_of(interval)
+}
+
+/// Publish manifest resources locally, then enqueue one deduplicated enrichment task.
 pub fn spawn_manifest_resource_linking(
     app_handle: &tauri::AppHandle,
     instance_id: i32,
     game_dir: &std::path::Path,
     manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
 ) {
-    use piston_lib::game::modpack::manifest::{resolve_mod_path_on_disk, ModSource};
-
     let app_handle = app_handle.clone();
     let game_dir = game_dir.to_path_buf();
-    let mods = manifest.mods.clone();
+    let manifest = manifest.clone();
+    let instance_name = crate::commands::instances::get_instance(instance_id)
+        .map(|instance| instance.name)
+        .unwrap_or_else(|_| "this instance".to_string());
 
     tauri::async_runtime::spawn(async move {
-        let rm = app_handle.state::<ResourceManager>();
-        let pack_provenance =
-            crate::resources::watcher::modpack_provenance_for_instance(instance_id).ok();
-
-        for m in mods {
-            let Some(local_path) = resolve_mod_path_on_disk(&game_dir, &m.path) else {
-                continue;
-            };
-
-            let path_meta = local_path.clone();
-            let meta = tokio::task::spawn_blocking(move || std::fs::metadata(&path_meta))
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .map_or((0, 0), |file_meta| {
-                    (
-                        file_meta.len() as i64,
-                        file_meta
-                            .modified()
-                            .ok()
-                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs() as i64)
-                            .unwrap_or(0),
-                    )
-                });
-
-            match &m.source {
-                ModSource::Modrinth { .. } => {
-                    let Some(sha1) = m.sha1.clone() else {
-                        continue;
-                    };
-                    if let Ok((project, version)) =
-                        rm.get_by_hash(SourcePlatform::Modrinth, &sha1).await
-                    {
-                        let _ = crate::resources::watcher::link_resource_to_db(
-                            &app_handle,
-                            instance_id,
-                            &local_path,
-                            project,
-                            version,
-                            SourcePlatform::Modrinth,
-                            Some(sha1),
-                            meta,
-                            pack_provenance.clone(),
-                        )
-                        .await;
-                    }
-                }
-                ModSource::CurseForge {
-                    project_id,
-                    file_id,
-                    ..
-                } => {
-                    let pid = project_id.map(|p| p.to_string()).unwrap_or_default();
-                    let Ok(version) = rm
-                        .get_version(SourcePlatform::CurseForge, &pid, &file_id.to_string())
-                        .await
-                    else {
-                        continue;
-                    };
-                    let Ok(project) = rm
-                        .get_project(SourcePlatform::CurseForge, &version.project_id)
-                        .await
-                    else {
-                        continue;
-                    };
-                    let hash = m.sha1.clone().or_else(|| {
-                        if version.hash.is_empty() {
-                            None
-                        } else {
-                            Some(version.hash.clone())
-                        }
-                    });
-                    let _ = crate::resources::watcher::link_resource_to_db(
-                        &app_handle,
-                        instance_id,
-                        &local_path,
-                        project,
-                        version,
-                        SourcePlatform::CurseForge,
-                        hash,
-                        meta,
-                        pack_provenance.clone(),
-                    )
-                    .await;
-                }
+        let prepared = match prepare_manifest_resource_rows(
+            &app_handle,
+            instance_id,
+            &game_dir,
+            &manifest,
+            &HashMap::new(),
+            None,
+        )
+        .await
+        {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                log::warn!(
+                    "[ResourceReconciliation] Failed to publish rows for {}: {}",
+                    instance_name,
+                    error
+                );
+                return;
             }
-        }
-
-        if let Err(e) =
-            crate::resources::watcher::resolve_modpack_override_conflicts(&app_handle, instance_id)
-                .await
+        };
+        if let Err(error) = app_handle
+            .state::<TaskManager>()
+            .submit(Box::new(ResourceEnrichmentTask::new(
+                instance_id,
+                instance_name.clone(),
+                prepared,
+                "modpack-update-enrichment",
+            )))
+            .await
         {
             log::warn!(
-                "[ModpackTask] Failed to resolve modpack override conflicts: {}",
-                e
+                "[ResourceReconciliation] Failed to enqueue enrichment for {}: {}",
+                instance_name,
+                error
             );
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{indexing_progress_description, should_report_indexing_progress};
+
+    #[test]
+    fn indexing_progress_is_human_readable() {
+        assert_eq!(
+            indexing_progress_description(125, 500),
+            "Indexing installed resources… 125/500"
+        );
+        assert_eq!(
+            indexing_progress_description(0, 0),
+            "No modpack resources need indexing…"
+        );
+    }
+
+    #[test]
+    fn large_indexing_jobs_limit_notification_updates() {
+        let updates = (1..=500)
+            .filter(|processed| should_report_indexing_progress(*processed, 500))
+            .collect::<Vec<_>>();
+
+        assert!(updates.len() <= 21);
+        assert_eq!(updates.first(), Some(&1));
+        assert_eq!(updates.last(), Some(&500));
+    }
 }

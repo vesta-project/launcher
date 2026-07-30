@@ -1,9 +1,6 @@
 import type { InstalledResource } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
-import {
-	markPerformance,
-	measurePerformance,
-} from "@utils/performance-trace";
+import { markPerformance, measurePerformance } from "@utils/performance-trace";
 
 export interface ResourceProjectRef {
 	platform: "modrinth" | "curseforge";
@@ -52,15 +49,27 @@ interface CacheEntry {
 
 const MAX_CACHED_INSTANCES = 12;
 const overviewCache = new Map<number, CacheEntry>();
+const rowsCache = new Map<number, InstalledResource[]>();
 const inFlight = new Map<number, Promise<InstanceResourceOverview>>();
+const rowsInFlight = new Map<number, Promise<InstalledResource[]>>();
+const rowsTrailing = new Set<number>();
+const rowsRevision = new Map<number, string>();
+
+function evictCachedInstance(instanceId: number) {
+	overviewCache.delete(instanceId);
+	rowsCache.delete(instanceId);
+	rowsRevision.delete(instanceId);
+	rowsTrailing.delete(instanceId);
+}
 
 function retain(instanceId: number, value: InstanceResourceOverview) {
+	rowsCache.set(instanceId, value.resources);
 	overviewCache.delete(instanceId);
 	overviewCache.set(instanceId, { value, updatedAt: Date.now() });
 	while (overviewCache.size > MAX_CACHED_INSTANCES) {
 		const oldest = overviewCache.keys().next().value;
 		if (oldest === undefined) break;
-		overviewCache.delete(oldest);
+		evictCachedInstance(oldest);
 	}
 }
 
@@ -94,12 +103,9 @@ export async function loadInstanceResourceOverview(
 				resources: overview.resources.length,
 				metadata: overview.projectRecords.length,
 			});
-			measurePerformance(
-				"instance-resources:overview",
-				startMark,
-				endMark,
-				{ instanceId },
-			);
+			measurePerformance("instance-resources:overview", startMark, endMark, {
+				instanceId,
+			});
 			return overview;
 		})
 		.finally(() => {
@@ -114,13 +120,53 @@ export function updateCachedInstanceResources(
 	instanceId: number,
 	resources: InstalledResource[],
 ) {
+	rowsCache.set(instanceId, resources);
 	const cached = overviewCache.get(instanceId);
 	if (!cached) return;
 	retain(instanceId, { ...cached.value, resources });
 }
 
+/**
+ * Coalesces bursty watcher events into one local rows request plus at most one
+ * trailing request when another event arrives while the first is in flight.
+ */
+export function refreshInstanceResourceRows(
+	instanceId: number,
+	revision?: string,
+): Promise<InstalledResource[]> {
+	const pending = rowsInFlight.get(instanceId);
+	if (pending) {
+		if (!revision || rowsRevision.get(instanceId) !== revision) {
+			rowsTrailing.add(instanceId);
+		}
+		if (revision) rowsRevision.set(instanceId, revision);
+		return pending;
+	}
+	if (revision && rowsRevision.get(instanceId) === revision) {
+		const cachedRows = rowsCache.get(instanceId);
+		if (cachedRows) return Promise.resolve(cachedRows);
+	}
+	if (revision) rowsRevision.set(instanceId, revision);
+
+	const request = (async () => {
+		let rows: InstalledResource[] = [];
+		do {
+			rowsTrailing.delete(instanceId);
+			rows = await invoke<InstalledResource[]>("get_installed_resources", {
+				instanceId,
+			});
+			updateCachedInstanceResources(instanceId, rows);
+		} while (rowsTrailing.delete(instanceId));
+		return rows;
+	})().finally(() => {
+		rowsInFlight.delete(instanceId);
+	});
+	rowsInFlight.set(instanceId, request);
+	return request;
+}
+
 export function invalidateInstanceResourceOverview(instanceId: number) {
-	overviewCache.delete(instanceId);
+	evictCachedInstance(instanceId);
 }
 
 export function projectRecordMap(

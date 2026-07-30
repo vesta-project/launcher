@@ -13,6 +13,14 @@ import { router } from "@components/page-viewer/page-viewer";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
 import {
+	invalidateInstanceResourceOverview,
+	loadInstanceResourceOverview,
+	projectRecordMap,
+	type ResourceProjectOverviewRecord,
+	type ResourceProjectRef,
+	refreshInstanceResourceRows,
+} from "@stores/instance-resource-overview";
+import {
 	clearRunning,
 	instancesState,
 	isInstanceRunningInStore,
@@ -25,13 +33,6 @@ import {
 	pinPage,
 	unpinPage,
 } from "@stores/pinning";
-import {
-	invalidateInstanceResourceOverview,
-	loadInstanceResourceOverview,
-	projectRecordMap,
-	type ResourceProjectOverviewRecord,
-	type ResourceProjectRef,
-} from "@stores/instance-resource-overview";
 import {
 	type InstalledResource,
 	type ResourceVersion,
@@ -91,6 +92,17 @@ import {
 } from "@utils/instances";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
+import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
+import type { ProgressUpdate } from "@utils/notifications";
+import {
+	afterStablePaint,
+	markPerformance,
+	measurePerformance,
+} from "@utils/performance-trace";
+import {
+	createPreloadableLazyComponent,
+	createRetainedTabLoader,
+} from "@utils/preloadable-lazy";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -100,16 +112,6 @@ import {
 	getNotifiableSelectionAdjustments,
 	resolveCompatibleVersionSelection,
 } from "@utils/version-selection";
-import {
-	createPreloadableLazyComponent,
-	createRetainedTabLoader,
-} from "@utils/preloadable-lazy";
-import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
-import {
-	afterStablePaint,
-	markPerformance,
-	measurePerformance,
-} from "@utils/performance-trace";
 import {
 	batch,
 	createEffect,
@@ -122,6 +124,7 @@ import {
 	Show,
 	Suspense,
 } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
 import styles from "./instance-details.module.css";
@@ -238,7 +241,13 @@ interface InstanceDetailsProps {
  *  Larger values preload sooner; smaller values reduce initial network burst. */
 const ICON_LOAD_MARGIN_PX = 600;
 
-const ResourceIcon = (props: { record?: any; name: string }) => {
+const ResourceIcon = (props: {
+	record?: any;
+	name: string;
+	platform?: string;
+	projectId?: string;
+	onNearViewport?: () => void;
+}) => {
 	const displayChar = createMemo(() => {
 		const match = props.name.match(/[a-zA-Z]/);
 		if (match) return match[0].toUpperCase();
@@ -247,15 +256,9 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 		return (first || "?").toUpperCase();
 	});
 
-	// Only accept data: URLs from the backend (icon_data → base64 encoded server-side).
-	// External http/https URLs are rejected because:
-	// 1. CSP blocks external image sources that aren't explicitly allowed
-	// 2. macOS ATS blocks insecure connections in production
-	// The backend's process_resource_record_icon() already strips external URLs,
-	// so icon_url will be either a data: URL (icon_data available) or null/absent.
 	const resolvedUrl = createMemo(() => {
 		const url = props.record?.icon_url;
-		if (url && (url.startsWith("data:") || url.startsWith("https://"))) {
+		if (url?.startsWith("data:")) {
 			return url;
 		}
 		return null;
@@ -278,6 +281,10 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 		);
 		observer.observe(wrapperRef);
 		onCleanup(() => observer.disconnect());
+	});
+	createEffect(() => {
+		if (!isNearViewport() || !props.platform || !props.projectId) return;
+		props.onNearViewport?.();
 	});
 
 	return (
@@ -425,7 +432,7 @@ export default function InstanceDetails(
 		return undefined;
 	};
 
-	const [instance, { refetch }] = createResource(
+	const [instance, { refetch, mutate: mutateInstance }] = createResource(
 		paramsKey,
 		async (key) => {
 			if (!key) {
@@ -485,10 +492,13 @@ export default function InstanceDetails(
 	const [
 		installedResources,
 		{ refetch: refetchInstalledResources, mutate: mutateResources },
-	] = createResource(instance, async (inst) => {
-		if (!inst) return [];
-		return await resources.getInstalled(inst.id);
-	});
+	] = createResource(
+		() => instance()?.id,
+		async (instanceId) => {
+			if (!instanceId) return [];
+			return await resources.getInstalled(instanceId);
+		},
+	);
 
 	// The overview is tab-specific so the home view keeps its minimal installed-row
 	// query. Hover/focus intent warms the same deduplicated cache before activation.
@@ -516,17 +526,99 @@ export default function InstanceDetails(
 		return rows;
 	};
 
-	const [projectRecords, setProjectRecords] = createSignal<
+	const [projectRecords, setProjectRecords] = createStore<
 		Record<string, ResourceProjectOverviewRecord>
 	>({});
+	const mergeProjectMetadata = (
+		key: string,
+		record: ResourceProjectOverviewRecord,
+	) => {
+		const current = projectRecords[key];
+		const retainedIcon = current?.icon_url?.startsWith("data:")
+			? current.icon_url
+			: record.icon_url;
+		setProjectRecords(key, {
+			...current,
+			...record,
+			icon_url: retainedIcon,
+			has_cached_icon:
+				Boolean(retainedIcon?.startsWith("data:")) || record.has_cached_icon,
+		});
+	};
+	const pendingIconRefs = new Map<string, ResourceProjectRef>();
+	const requestedIconKeys = new Set<string>();
+	let iconQueueTimer: number | undefined;
 
-	createEffect(() => {
-		const overview = resourceOverview.latest;
-		if (!overview || overview.instanceId !== instance()?.id) {
-			setProjectRecords({});
+	const flushIconQueue = async () => {
+		iconQueueTimer = undefined;
+		const refs = [...pendingIconRefs.values()].slice(0, 16);
+		for (const ref of refs) {
+			pendingIconRefs.delete(`${ref.platform}:${ref.id}`);
+		}
+		if (refs.length === 0) return;
+		try {
+			const records = await invoke<
+				Array<ResourceProjectOverviewRecord & { icon_url?: string | null }>
+			>("hydrate_resource_project_icons", { refs });
+			batch(() => {
+				for (const record of records) {
+					const key = `${record.source.toLowerCase()}:${record.id}`;
+					setProjectRecords(key, {
+						...projectRecords[key],
+						...record,
+						has_cached_icon: Boolean(record.icon_url?.startsWith("data:")),
+					});
+				}
+			});
+		} catch (error) {
+			for (const ref of refs) {
+				requestedIconKeys.delete(`${ref.platform}:${ref.id}`);
+			}
+			console.warn("Failed to hydrate visible resource icons:", error);
+		}
+		if (pendingIconRefs.size > 0 && iconQueueTimer === undefined) {
+			iconQueueTimer = window.setTimeout(() => void flushIconQueue(), 16);
+		}
+	};
+
+	const queueResourceIcon = (
+		platform: string | null | undefined,
+		id: string | null | undefined,
+	) => {
+		if ((platform !== "modrinth" && platform !== "curseforge") || !id) {
 			return;
 		}
-		setProjectRecords(projectRecordMap(overview.projectRecords));
+		const key = `${platform}:${id}`;
+		if (
+			requestedIconKeys.has(key) ||
+			projectRecords[key]?.icon_url?.startsWith("data:")
+		) {
+			return;
+		}
+		requestedIconKeys.add(key);
+		pendingIconRefs.set(key, { platform, id });
+		if (iconQueueTimer === undefined) {
+			iconQueueTimer = window.setTimeout(() => void flushIconQueue(), 16);
+		}
+	};
+	onCleanup(() => {
+		if (iconQueueTimer !== undefined) window.clearTimeout(iconQueueTimer);
+	});
+
+	let iconInstanceId: number | undefined;
+	createEffect(() => {
+		const currentInstanceId = instance()?.id;
+		if (iconInstanceId !== currentInstanceId) {
+			iconInstanceId = currentInstanceId;
+			pendingIconRefs.clear();
+			requestedIconKeys.clear();
+		}
+		const overview = resourceOverview.latest;
+		if (!overview || overview.instanceId !== currentInstanceId) {
+			setProjectRecords(reconcile({}));
+			return;
+		}
+		setProjectRecords(reconcile(projectRecordMap(overview.projectRecords)));
 	});
 
 	const modpackOwnedResources = createMemo(() =>
@@ -542,7 +634,6 @@ export default function InstanceDetails(
 	>({});
 	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
 		createSignal(false);
-
 
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
@@ -1132,7 +1223,6 @@ export default function InstanceDetails(
 				});
 			}
 			resources.clearSelection();
-			await refetchResources();
 		} catch (e) {
 			console.error("Batch delete failed:", e);
 		} finally {
@@ -1179,6 +1269,13 @@ export default function InstanceDetails(
 		{},
 	);
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
+	const [rescanningResources, setRescanningResources] = createSignal(false);
+	const [rescanningResourceIds, setRescanningResourceIds] = createSignal<
+		Set<number>
+	>(new Set());
+	const [resourceRescanStatus, setResourceRescanStatus] = createSignal<
+		string | null
+	>(null);
 	const [checkingPerResource, setCheckingPerResource] = createSignal<
 		Set<number>
 	>(new Set());
@@ -1206,10 +1303,11 @@ export default function InstanceDetails(
 	>(null);
 
 	const sharedMinecraftVersions = useMinecraftVersions();
-	const mcVersions = sharedMinecraftVersions.versions as typeof sharedMinecraftVersions.versions & {
-		readonly loading: boolean;
-		readonly error: string | null;
-	};
+	const mcVersions =
+		sharedMinecraftVersions.versions as typeof sharedMinecraftVersions.versions & {
+			readonly loading: boolean;
+			readonly error: string | null;
+		};
 	Object.defineProperties(mcVersions, {
 		loading: { get: sharedMinecraftVersions.loading },
 		error: { get: sharedMinecraftVersions.error },
@@ -1301,8 +1399,7 @@ export default function InstanceDetails(
 		return (
 			modpackVersions.latest?.find(
 				(version) => String(version.id) === currentId,
-			) ||
-			null
+			) || null
 		);
 	});
 
@@ -1781,6 +1878,67 @@ export default function InstanceDetails(
 		}
 	};
 
+	const applyResourceRescanProgress = (update: ProgressUpdate) => {
+		if (update.type === "step") {
+			setResourceRescanStatus(update.data.name);
+		} else if (update.type === "progress" && update.data.description?.trim()) {
+			setResourceRescanStatus(update.data.description);
+		} else if (update.type === "finished" && update.data.message?.trim()) {
+			setResourceRescanStatus(update.data.message);
+		}
+	};
+
+	const rescanResources = async (resourceId?: number) => {
+		const inst = instance();
+		if (!inst || rescanningResources()) return;
+		if (resourceId && rescanningResourceIds().has(resourceId)) return;
+		if (!resourceId && rescanningResourceIds().size > 0) return;
+
+		if (resourceId) {
+			setRescanningResourceIds((current) => new Set([...current, resourceId]));
+			setResourceRescanStatus("Identifying resource…");
+		} else {
+			setRescanningResources(true);
+			setResourceRescanStatus("Discovering local resources…");
+		}
+
+		try {
+			const summary = await resources.rescan(
+				inst.id,
+				resourceId ? [resourceId] : undefined,
+				applyResourceRescanProgress,
+			);
+			if (summary.status === "alreadyRunning") {
+				setResourceRescanStatus("Resource identification is already running.");
+			} else if (summary.scanned === 0) {
+				setResourceRescanStatus("No unlinked resources need identification.");
+			} else if (summary.unresolved > 0) {
+				setResourceRescanStatus(
+					`Identified ${summary.identified}; ${summary.unresolved} remain unlinked.`,
+				);
+			} else {
+				setResourceRescanStatus(
+					`Identified ${summary.identified} resource${
+						summary.identified === 1 ? "" : "s"
+					}.`,
+				);
+			}
+		} catch (error) {
+			console.error("Failed to rescan resources:", error);
+			setResourceRescanStatus("Resource identification failed.");
+		} finally {
+			if (resourceId) {
+				setRescanningResourceIds((current) => {
+					const next = new Set(current);
+					next.delete(resourceId);
+					return next;
+				});
+			} else {
+				setRescanningResources(false);
+			}
+		}
+	};
+
 	let resourceMaintenanceGeneration = 0;
 	createEffect(
 		on(
@@ -1829,45 +1987,36 @@ export default function InstanceDetails(
 						void checkUpdates(false);
 					}
 
-					const hydrateMissingMetadata = async (
-						refs: ResourceProjectRef[],
-					) => {
-						const chunkSize = 12;
-						for (let index = 0; index < refs.length; index += chunkSize) {
-							if (
-								generation !== resourceMaintenanceGeneration ||
-								instance()?.id !== instanceId
-							) {
-								return;
-							}
-
-							const chunk = refs.slice(index, index + chunkSize);
-							try {
-								const records = await invoke<
-									ResourceProjectOverviewRecord[]
-								>("get_or_hydrate_resource_projects", {
-									refs: chunk,
-									allowNetwork: true,
-									refreshStale: false,
-								});
-								setProjectRecords((previous) => ({
-									...previous,
-									...projectRecordMap(records),
-								}));
-							} catch (error) {
+					if (overview.missingProjectRefs.length > 0) {
+						void invoke<ResourceProjectOverviewRecord[]>(
+							"get_or_hydrate_resource_projects",
+							{
+								refs: overview.missingProjectRefs,
+								allowNetwork: true,
+								refreshStale: false,
+							},
+						)
+							.then((records) => {
+								if (
+									generation === resourceMaintenanceGeneration &&
+									instance()?.id === instanceId
+								) {
+									batch(() => {
+										for (const [key, record] of Object.entries(
+											projectRecordMap(records),
+										)) {
+											mergeProjectMetadata(key, record);
+										}
+									});
+								}
+							})
+							.catch((error) =>
 								console.warn(
 									"Failed to hydrate background resource metadata:",
 									error,
-								);
-							}
-
-							await new Promise<void>((resolve) =>
-								window.setTimeout(resolve, 0),
+								),
 							);
-						}
-					};
-
-					void hydrateMissingMetadata(overview.missingProjectRefs);
+					}
 				});
 
 				onCleanup(() => {
@@ -1926,6 +2075,8 @@ export default function InstanceDetails(
 		resource: InstalledResource,
 		enabled: boolean,
 	) => {
+		const currentInstance = instance();
+		if (!currentInstance) return false;
 		const peers = enabled ? getOppositeActiveCopies(resource) : [];
 
 		if (peers.length > 0 && !overrideConflictConfirmed()) {
@@ -1958,15 +2109,16 @@ export default function InstanceDetails(
 		try {
 			for (const peer of peers) {
 				await invoke("toggle_resource", {
+					instanceId: currentInstance.id,
 					resourceId: peer.id,
 					enabled: false,
 				});
 			}
 			await invoke("toggle_resource", {
+				instanceId: currentInstance.id,
 				resourceId: resource.id,
 				enabled,
 			});
-			await refetchResources();
 			return true;
 		} catch (e) {
 			console.error("Failed to toggle resource:", e);
@@ -2017,7 +2169,7 @@ export default function InstanceDetails(
 					>
 						<ResourceIcon
 							record={
-								projectRecords()?.[
+								projectRecords[
 									getProjectRecordKey(
 										info.row.original.platform,
 										info.row.original.remote_id,
@@ -2025,6 +2177,14 @@ export default function InstanceDetails(
 								]
 							}
 							name={info.row.original.display_name}
+							platform={info.row.original.platform}
+							projectId={info.row.original.remote_id}
+							onNearViewport={() =>
+								queueResourceIcon(
+									info.row.original.platform,
+									info.row.original.remote_id,
+								)
+							}
 						/>
 						<Checkbox
 							class={styles["row-checkbox"]}
@@ -2098,6 +2258,7 @@ export default function InstanceDetails(
 					update={updates()[info.row.original.id]}
 					isCheckingForUpdates={checkingPerResource().has(info.row.original.id)}
 					hasCheckedForUpdates={checkedPerResource().has(info.row.original.id)}
+					isIdentifying={rescanningResourceIds().has(info.row.original.id)}
 					showVersionInfo={isCompactTable()}
 					currentVersion={info.row.original.current_version}
 					busy={busy()}
@@ -2121,7 +2282,6 @@ export default function InstanceDetails(
 									instanceId: resource.instance_id,
 									resourceId: resource.id,
 								});
-								refetchResources();
 							} catch (e) {
 								console.error("Failed to delete resource:", e);
 								mutateResources(previous);
@@ -2157,6 +2317,9 @@ export default function InstanceDetails(
 							});
 							setCheckedPerResource((prev) => new Set([...prev, resource.id]));
 						}
+					}}
+					onIdentify={async (resource) => {
+						await rescanResources(resource.id);
 					}}
 				/>
 			),
@@ -2239,30 +2402,74 @@ export default function InstanceDetails(
 		);
 
 		cleanups.push(
-			await listen("resources-updated", (event) => {
+			await listen<{
+				instanceId: number;
+				revision: string;
+				reason: string;
+			}>("core://instance-resource-rows-changed", (event) => {
 				const inst = instance();
-				if (inst && event.payload === inst.id) {
-					refetchResources();
-					resources.fetchInstalled(inst.id);
+				if (inst && event.payload.instanceId === inst.id) {
+					void refreshInstanceResourceRows(inst.id, event.payload.revision)
+						.then((rows) => {
+							if (instance()?.id === inst.id) mutateResources(rows);
+						})
+						.catch((error) => {
+							console.warn("Failed to refresh changed resource rows:", error);
+						});
 				}
 			}),
 		);
 
 		cleanups.push(
-			await listen("core://instance-installed", (ev) => {
-				const payload = (ev as { payload: { instance_id?: string } }).payload;
-				if (payload.instance_id === slug()) {
-					handleRefetch();
+			await listen<{
+				instanceId: number;
+				revision: string;
+				projectRefs: ResourceProjectRef[];
+				status: "complete" | "partial";
+			}>("core://instance-resource-metadata-changed", (event) => {
+				const inst = instance();
+				if (
+					inst &&
+					event.payload.instanceId === inst.id &&
+					event.payload.projectRefs.length > 0
+				) {
+					void invoke<ResourceProjectOverviewRecord[]>(
+						"get_cached_resource_projects",
+						{ refs: event.payload.projectRefs },
+					)
+						.then((records) => {
+							if (instance()?.id !== inst.id) return;
+							batch(() => {
+								for (const [key, record] of Object.entries(
+									projectRecordMap(records),
+								)) {
+									mergeProjectMetadata(key, record);
+								}
+							});
+						})
+						.catch((error) => {
+							console.warn("Failed to refresh resource metadata:", error);
+						});
 				}
 			}),
 		);
 
 		cleanups.push(
-			await listen("core://instance-updated", (ev) => {
-				const payload = ev.payload as any;
+			await listen<Instance>("core://instance-installed", (event) => {
+				const payload = event.payload;
 				const current = instance();
 				if (current && payload.id === current.id) {
-					handleRefetch();
+					mutateInstance(payload);
+				}
+			}),
+		);
+
+		cleanups.push(
+			await listen<Instance>("core://instance-updated", (event) => {
+				const payload = event.payload;
+				const current = instance();
+				if (current && payload.id === current.id) {
+					mutateInstance(payload);
 				}
 			}),
 		);
@@ -2754,6 +2961,9 @@ export default function InstanceDetails(
 													busy={busy()}
 													checkingUpdates={checkingUpdates()}
 													checkUpdates={() => void checkUpdates(true)}
+													rescanningResources={rescanningResources()}
+													resourceRescanStatus={resourceRescanStatus()}
+													rescanResources={() => void rescanResources()}
 													onCompactChange={setIsCompactTable}
 												/>
 											</Suspense>
@@ -2781,9 +2991,7 @@ export default function InstanceDetails(
 														installedResources() ||
 														[]
 													}
-													projectRecords={
-														projectRecords()
-													}
+													projectRecords={projectRecords}
 													router={activeRouter()}
 													onCleared={() => void handleRefetch()}
 												/>

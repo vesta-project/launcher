@@ -154,6 +154,51 @@ impl Task for ImportResourceResyncTask {
                 refresh_summary.failed
             );
 
+            let candidates = crate::resources::reconciliation::unresolved_candidates_for_instance(
+                instance_id,
+                None,
+            )
+            .map_err(|error| format!("Failed to collect imported resources: {error}"))?;
+            let candidate_total = candidates.len();
+            if candidate_total > 0 {
+                ctx.update_full(
+                    crate::notifications::models::PROGRESS_INDETERMINATE,
+                    format!("Identifying imported resources… 0/{candidate_total}"),
+                    Some(0),
+                    Some(candidate_total as i32),
+                );
+                let progress_context = ctx.clone();
+                let progress = std::sync::Arc::new(move |processed: usize, total: usize| {
+                    progress_context.update_full(
+                        crate::notifications::models::PROGRESS_INDETERMINATE,
+                        format!("Identifying imported resources… {processed}/{total}"),
+                        Some(processed as i32),
+                        Some(total as i32),
+                    );
+                })
+                    as crate::resources::reconciliation::LocalFactProgress;
+                let prepared = crate::resources::reconciliation::prepare_candidates_with_progress(
+                    instance_id,
+                    candidates,
+                    Some(progress),
+                )
+                .await;
+                let summary = crate::resources::reconciliation::reconcile_prepared_candidates(
+                    &app_handle,
+                    instance_id,
+                    prepared,
+                    "external-import-enrichment",
+                )
+                .await
+                .map_err(|error| format!("Failed to identify imported resources: {error}"))?;
+                log::info!(
+                    "[external_import_resync] enrichment instance={} identified={} unresolved={}",
+                    target_instance.name,
+                    summary.identified,
+                    summary.unresolved
+                );
+            }
+
             ctx.update_description(
                 "Verifying imported runtime artifacts (manifests/libraries/assets)...".to_string(),
             );
@@ -488,6 +533,8 @@ async fn apply_launcher_hints(
     let mut seen_pairs = HashSet::new();
     let mut seeded = 0usize;
     let mut skipped_missing_file = 0usize;
+    let mut facts = Vec::new();
+    let mut metadata_refs = Vec::new();
 
     for hint in hints {
         let key = format!(
@@ -531,20 +578,43 @@ async fn apply_launcher_hints(
             .unwrap_or(0);
         let hash = crate::utils::hash::calculate_sha1(&local_path).ok();
 
-        crate::resources::watcher::link_resource_to_db(
-            app_handle,
+        let _ = resource_manager
+            .cache_project_metadata(hint.platform, &project)
+            .await;
+        metadata_refs.push(crate::models::resource::ResourceProjectRef {
+            platform: hint.platform,
+            id: project.id.clone(),
+        });
+        facts.push(crate::resources::ledger::InstalledResourceFact::Remote {
             instance_id,
-            &local_path,
+            path: local_path,
             project,
             version,
-            hint.platform,
+            platform: hint.platform,
             hash,
-            (file_size, file_mtime),
-            None,
-        )
-        .await
-        .map_err(|e| format!("Failed to seed hinted linkage for {:?}: {}", local_path, e))?;
+            metadata: (file_size, file_mtime),
+            provenance: None,
+            resource_type: None,
+        });
         seeded += 1;
+    }
+
+    if !facts.is_empty() {
+        crate::resources::ledger::record_many(facts)
+            .map_err(|error| format!("Failed to seed imported resource rows: {error}"))?;
+        crate::resources::reconciliation::emit_rows_changed(
+            app_handle,
+            instance_id,
+            "external-import-hints",
+        )
+        .map_err(|error| error.to_string())?;
+        crate::resources::reconciliation::emit_metadata_changed(
+            app_handle,
+            instance_id,
+            metadata_refs,
+            "complete",
+        )
+        .map_err(|error| error.to_string())?;
     }
 
     Ok((seeded, skipped_missing_file))

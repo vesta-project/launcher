@@ -3,16 +3,14 @@ use crate::models::resource::SourcePlatform;
 pub use crate::resources::ledger::ResourceProvenance;
 use crate::resources::ResourceManager;
 use crate::schema::installed_resource::dsl as ir_dsl;
-use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_sha1};
 use crate::utils::instance_helpers::normalize_path;
-use anyhow::Context;
 use anyhow::Result;
 use notify::{Config, Event, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{Mutex, Semaphore};
+use tauri::{AppHandle, Manager};
+use tokio::sync::Mutex;
 use tokio::time::Duration;
 use walkdir::WalkDir;
 
@@ -37,10 +35,6 @@ pub struct ResourceWatcher {
     app_handle: AppHandle,
     // Map of db_id -> watcher
     watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>,
-    // Bounds identification/hash/link fan-out to prevent resource spikes.
-    scan_limiter: Arc<Semaphore>,
-    // De-duplicate in-flight scans for identical instance/path keys.
-    in_flight_scans: Arc<Mutex<HashSet<String>>>,
 }
 
 pub fn modpack_provenance_for_instance(instance_id: i32) -> Result<ResourceProvenance> {
@@ -52,8 +46,6 @@ impl ResourceWatcher {
         Self {
             app_handle,
             watchers: Arc::new(Mutex::new(HashMap::new())),
-            scan_limiter: Arc::new(Semaphore::new(6)),
-            in_flight_scans: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -93,8 +85,6 @@ impl ResourceWatcher {
 
         let app_handle = self.app_handle.clone();
         let watchers_ptr = self.watchers.clone();
-        let scan_limiter = self.scan_limiter.clone();
-        let in_flight_scans = self.in_flight_scans.clone();
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
@@ -128,22 +118,20 @@ impl ResourceWatcher {
 
         // Handle events in a separate task
         tauri::async_runtime::spawn(async move {
-            while let Some(event) = rx.recv().await {
+            while let Some(first_event) = rx.recv().await {
+                let mut events = vec![first_event];
+                while let Ok(Some(event)) =
+                    tokio::time::timeout(Duration::from_millis(180), rx.recv()).await
+                {
+                    events.push(event);
+                }
                 // Check if still watched before handling
                 let is_watched = {
                     let w = watchers_ptr.lock().await;
                     w.contains_key(&db_id)
                 };
                 if is_watched {
-                    handle_event(
-                        &app_handle,
-                        db_id,
-                        event,
-                        watchers_ptr.clone(),
-                        scan_limiter.clone(),
-                        in_flight_scans.clone(),
-                    )
-                    .await;
+                    handle_events(&app_handle, db_id, events).await;
                 } else {
                     log::debug!(
                         "[ResourceWatcher] Dropping event for db_id {} as it is no longer watched",
@@ -156,14 +144,7 @@ impl ResourceWatcher {
 
         // Initial scan after watcher registration so worker tasks don't block on is_watched checks.
         if initial_scan {
-            for folder in folders_to_watch {
-                let path = game_path.join(folder);
-                if path.exists() {
-                    self.scan_folder(db_id, &path).await?;
-                    // Cleanup any resources in database that no longer exist on disk
-                    let _ = self.cleanup_missing_resources(db_id, &path).await;
-                }
-            }
+            self.refresh_instance(db_id, game_dir).await?;
         }
 
         Ok(())
@@ -178,124 +159,12 @@ impl ResourceWatcher {
         Ok(())
     }
 
-    async fn scan_folder(&self, db_id: i32, folder_path: &Path) -> Result<()> {
-        let _ = self
-            .scan_folder_with_progress(db_id, folder_path, None)
-            .await?;
-        Ok(())
-    }
-
-    async fn scan_folder_with_progress(
-        &self,
-        db_id: i32,
-        folder_path: &Path,
-        progress_tx: Option<&tokio::sync::mpsc::UnboundedSender<ScanProgressSnapshot>>,
-    ) -> Result<ScanSummary> {
-        log::info!("[ResourceWatcher] Scanning folder: {:?}", folder_path);
-        let scan_limiter = self.scan_limiter.clone();
-        let in_flight_scans = self.in_flight_scans.clone();
-        let mut join_set = tokio::task::JoinSet::new();
-        let mut summary = ScanSummary::default();
-        let folder_name = folder_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-
-        let candidates: Vec<PathBuf> = WalkDir::new(folder_path)
-            .max_depth(1)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|entry| entry.file_type().is_file() && is_resource_file(entry.path()))
-            .map(|entry| entry.path().to_path_buf())
-            .collect();
-        summary.total = candidates.len();
-        if let Some(tx) = progress_tx {
-            let _ = tx.send(ScanProgressSnapshot {
-                folder: folder_name.clone(),
-                total: summary.total,
-                processed: 0,
-                skipped: 0,
-                failed: 0,
-            });
-        }
-        for path in candidates {
-            let app = self.app_handle.clone();
-            let limiter_spawn = scan_limiter.clone();
-            let in_flight_spawn = in_flight_scans.clone();
-
-            // Get metadata for quick check
-            let path_meta = path.clone();
-            let (file_size, file_mtime) =
-                tokio::task::spawn_blocking(move || std::fs::metadata(&path_meta))
-                    .await
-                    .context("spawn_blocking panicked")?
-                    .map_or((0, 0), |meta| {
-                        (
-                            meta.len() as i64,
-                            meta.modified()
-                                .ok()
-                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs() as i64)
-                                .unwrap_or(0),
-                        )
-                    });
-
-            if !mark_in_flight(&in_flight_scans, db_id, &path).await {
-                summary.skipped += 1;
-                continue;
-            }
-            join_set.spawn(async move {
-                let _permit = limiter_spawn
-                    .acquire_owned()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Scan limiter closed: {e}"));
-                if _permit.is_err() {
-                    clear_in_flight(&in_flight_spawn, db_id, &path).await;
-                    return;
-                }
-                // Pass metadata for skip check
-                if let Err(e) =
-                    identify_and_link_resource(&app, db_id, &path, Some((file_size, file_mtime)))
-                        .await
-                {
-                    if !e.to_string().contains("FOREIGN KEY") {
-                        log::error!("[ResourceWatcher] Failed to identify {:?}: {}", path, e);
-                    }
-                }
-                clear_in_flight(&in_flight_spawn, db_id, &path).await;
-            });
-        }
-        while let Some(joined) = join_set.join_next().await {
-            match joined {
-                Err(e) => {
-                    log::warn!("[ResourceWatcher] scan worker join error: {e}");
-                    summary.failed += 1;
-                }
-                Ok(()) => {
-                    summary.processed += 1;
-                }
-            }
-            if let Some(tx) = progress_tx {
-                let _ = tx.send(ScanProgressSnapshot {
-                    folder: folder_name.clone(),
-                    total: summary.total,
-                    processed: summary.processed,
-                    skipped: summary.skipped,
-                    failed: summary.failed,
-                });
-            }
-        }
-        Ok(summary)
-    }
-
-    async fn cleanup_missing_resources(&self, db_id: i32, folder_path: &Path) -> Result<()> {
+    async fn cleanup_missing_resources(&self, db_id: i32, folder_path: &Path) -> Result<usize> {
         log::debug!(
             "[ResourceWatcher] Cleaning up missing resources in: {:?}",
             folder_path
         );
-        crate::resources::ledger::remove_missing_in_folder(db_id, folder_path)?;
-        Ok(())
+        crate::resources::ledger::remove_missing_in_folder(db_id, folder_path)
     }
 
     pub async fn stop_watching(&self, db_id: i32) {
@@ -318,145 +187,175 @@ impl ResourceWatcher {
     ) -> anyhow::Result<ScanSummary> {
         let game_path = PathBuf::from(&game_dir);
         let folders_to_watch = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
-        let mut summary = ScanSummary::default();
-
+        let mut paths = Vec::new();
+        let mut existing_folders = Vec::new();
         for folder in folders_to_watch {
-            let path = game_path.join(folder);
-            if path.exists() {
-                let folder_summary = self
-                    .scan_folder_with_progress(db_id, &path, progress_tx.as_ref())
-                    .await?;
-                summary.total += folder_summary.total;
-                summary.processed += folder_summary.processed;
-                summary.skipped += folder_summary.skipped;
-                summary.failed += folder_summary.failed;
-                let _ = self.cleanup_missing_resources(db_id, &path).await;
+            let folder_path = game_path.join(folder);
+            if !folder_path.exists() {
+                continue;
             }
+            existing_folders.push(folder_path.clone());
+            paths.extend(
+                WalkDir::new(&folder_path)
+                    .max_depth(1)
+                    .into_iter()
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| entry.file_type().is_file() && is_resource_file(entry.path()))
+                    .map(|entry| entry.path().to_path_buf()),
+            );
+        }
+
+        let total = paths.len();
+        if let Some(tx) = progress_tx.as_ref() {
+            let _ = tx.send(ScanProgressSnapshot {
+                folder: "resources".to_string(),
+                total,
+                processed: 0,
+                skipped: 0,
+                failed: 0,
+            });
+        }
+        let mut removed = 0;
+        for folder in existing_folders {
+            removed += self
+                .cleanup_missing_resources(db_id, &folder)
+                .await
+                .unwrap_or_default();
+        }
+        let candidates = crate::resources::reconciliation::candidates_from_paths(
+            paths,
+            None,
+            preferred_platform_for_instance(db_id),
+        );
+        let result = crate::resources::reconciliation::discover_candidates(
+            &self.app_handle,
+            db_id,
+            candidates,
+            "filesystem-scan",
+        )
+        .await?;
+        if removed > 0 && result.changed == 0 {
+            crate::resources::reconciliation::emit_rows_changed(
+                &self.app_handle,
+                db_id,
+                "filesystem-scan",
+            )?;
+        }
+        let summary = ScanSummary {
+            total,
+            processed: result.attempted,
+            skipped: total.saturating_sub(result.attempted),
+            failed: 0,
+        };
+        if let Some(tx) = progress_tx.as_ref() {
+            let _ = tx.send(ScanProgressSnapshot {
+                folder: "resources".to_string(),
+                total,
+                processed: summary.processed,
+                skipped: summary.skipped,
+                failed: 0,
+            });
         }
         Ok(summary)
     }
 }
 
-async fn handle_event(
-    app: &AppHandle,
-    db_id: i32,
-    event: Event,
-    watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>,
-    scan_limiter: Arc<Semaphore>,
-    in_flight_scans: Arc<Mutex<HashSet<String>>>,
-) {
-    use notify::EventKind;
+fn preferred_platform_for_instance(instance_id: i32) -> Option<SourcePlatform> {
+    use crate::models::instance::Instance;
+    use crate::schema::instance::dsl as instance_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
 
-    match event.kind {
-        EventKind::Create(_) | EventKind::Modify(_) => {
-            for path in event.paths {
-                if is_resource_file(&path) {
-                    log::info!(
-                        "[ResourceWatcher] Resource changed in instance {}: {:?}",
-                        db_id,
-                        path
-                    );
-                    let app_clone = app.clone();
-                    let watchers_clone = watchers.clone();
-                    let limiter_clone = scan_limiter.clone();
-                    let in_flight_clone = in_flight_scans.clone();
-
-                    let path_clone = path.clone();
-                    let (file_size, file_mtime) =
-                        tokio::task::spawn_blocking(move || std::fs::metadata(&path_clone))
-                            .await
-                            .ok()
-                            .and_then(|r| r.ok())
-                            .map_or((0, 0), |meta| {
-                                (
-                                    meta.len() as i64,
-                                    meta.modified()
-                                        .ok()
-                                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                        .map(|d| d.as_secs() as i64)
-                                        .unwrap_or(0),
-                                )
-                            });
-
-                    if !mark_in_flight(&in_flight_scans, db_id, &path).await {
-                        continue;
-                    }
-                    tauri::async_runtime::spawn(async move {
-                        let _permit = limiter_clone
-                            .acquire_owned()
-                            .await
-                            .map_err(|e| anyhow::anyhow!("Scan limiter closed: {e}"));
-                        if _permit.is_err() {
-                            clear_in_flight(&in_flight_clone, db_id, &path).await;
-                            return;
-                        }
-                        let is_watched = {
-                            let w = watchers_clone.lock().await;
-                            w.contains_key(&db_id)
-                        };
-                        if is_watched {
-                            if let Err(e) = identify_and_link_resource(
-                                &app_clone,
-                                db_id,
-                                &path,
-                                Some((file_size, file_mtime)),
-                            )
-                            .await
-                            {
-                                if !e.to_string().contains("FOREIGN KEY") {
-                                    log::error!(
-                                        "[ResourceWatcher] Failed to identify {:?}: {}",
-                                        path,
-                                        e
-                                    );
-                                }
-                            }
-                        }
-                        clear_in_flight(&in_flight_clone, db_id, &path).await;
-                    });
-                }
-            }
-        }
-        EventKind::Remove(_) => {
-            for path in event.paths {
-                log::info!(
-                    "[ResourceWatcher] Resource removed from instance {}: {:?}",
-                    db_id,
-                    path
-                );
-                let app_clone = app.clone();
-                let watchers_clone = watchers.clone();
-                tauri::async_runtime::spawn(async move {
-                    let is_watched = {
-                        let w = watchers_clone.lock().await;
-                        w.contains_key(&db_id)
-                    };
-                    if is_watched {
-                        if let Err(e) = unlink_resource_from_db(&app_clone, db_id, &path).await {
-                            if !e.to_string().contains("FOREIGN KEY") {
-                                log::error!("[ResourceWatcher] Failed to unlink {:?}: {}", path, e);
-                            }
-                        }
-                    }
-                });
-            }
-        }
-        _ => {}
+    let mut conn = get_vesta_conn().ok()?;
+    let instance = instance_dsl::instance
+        .find(instance_id)
+        .first::<Instance>(&mut conn)
+        .ok()?;
+    match instance.modpack_platform.as_deref() {
+        Some("modrinth") => Some(SourcePlatform::Modrinth),
+        Some("curseforge") => Some(SourcePlatform::CurseForge),
+        _ => None,
     }
 }
 
-fn in_flight_key(db_id: i32, path: &Path) -> String {
-    format!("{db_id}:{}", normalize_path(path))
+fn instance_name_for_log(instance_id: i32) -> String {
+    use crate::models::instance::Instance;
+    use crate::schema::instance::dsl as instance_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    get_vesta_conn()
+        .ok()
+        .and_then(|mut conn| {
+            instance_dsl::instance
+                .find(instance_id)
+                .first::<Instance>(&mut conn)
+                .ok()
+        })
+        .map(|instance| instance.name)
+        .unwrap_or_else(|| "unknown instance".to_string())
 }
 
-async fn mark_in_flight(in_flight: &Arc<Mutex<HashSet<String>>>, db_id: i32, path: &Path) -> bool {
-    let mut lock = in_flight.lock().await;
-    lock.insert(in_flight_key(db_id, path))
-}
+async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) {
+    use notify::EventKind;
 
-async fn clear_in_flight(in_flight: &Arc<Mutex<HashSet<String>>>, db_id: i32, path: &Path) {
-    let mut lock = in_flight.lock().await;
-    lock.remove(&in_flight_key(db_id, path));
+    let mut changed = HashSet::new();
+    let mut removed = HashSet::new();
+    for event in events {
+        match event.kind {
+            EventKind::Create(_) | EventKind::Modify(_) => {
+                for path in event.paths {
+                    if is_resource_file(&path) {
+                        changed.insert(path);
+                    }
+                }
+            }
+            EventKind::Remove(_) => {
+                removed.extend(event.paths);
+            }
+            _ => {}
+        }
+    }
+
+    changed.retain(|path| !removed.contains(path));
+    if !changed.is_empty() {
+        let candidates = crate::resources::reconciliation::candidates_from_paths(
+            changed,
+            None,
+            preferred_platform_for_instance(db_id),
+        );
+        if let Err(error) = crate::resources::reconciliation::discover_candidates(
+            app,
+            db_id,
+            candidates,
+            "filesystem-burst",
+        )
+        .await
+        {
+            log::warn!(
+                "[ResourceWatcher] Failed to publish resource burst for {}: {}",
+                instance_name_for_log(db_id),
+                error
+            );
+        }
+    }
+
+    let mut removed_any = false;
+    for path in removed {
+        match crate::resources::ledger::unlink_path(db_id, &path) {
+            Ok(count) => removed_any |= count > 0,
+            Err(error) => log::warn!(
+                "[ResourceWatcher] Failed to unlink {:?} for {}: {}",
+                path,
+                instance_name_for_log(db_id),
+                error
+            ),
+        }
+    }
+    if removed_any {
+        let _ =
+            crate::resources::reconciliation::emit_rows_changed(app, db_id, "filesystem-remove");
+    }
 }
 
 fn is_resource_file(path: &Path) -> bool {
@@ -465,290 +364,6 @@ fn is_resource_file(path: &Path) -> bool {
         || s.ends_with(".zip")
         || s.ends_with(".jar.disabled")
         || s.ends_with(".zip.disabled")
-}
-
-fn is_enabled_path(path: &Path) -> bool {
-    !path.to_string_lossy().to_lowercase().ends_with(".disabled")
-}
-
-async fn identify_and_link_resource(
-    app: &AppHandle,
-    instance_db_id: i32,
-    path: &Path,
-    metadata: Option<(i64, i64)>,
-) -> Result<()> {
-    if !path.exists() {
-        return Ok(());
-    }
-
-    let (file_size, file_mtime) = if let Some(m) = metadata {
-        m
-    } else {
-        let path_owned = path.to_path_buf();
-        let meta_result = tokio::task::spawn_blocking(move || std::fs::metadata(&path_owned))
-            .await
-            .context("spawn_blocking panicked")?;
-        match meta_result {
-            Ok(meta) => (
-                meta.len() as i64,
-                meta.modified()
-                    .ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs() as i64)
-                    .unwrap_or(0),
-            ),
-            Err(_) => (0, 0),
-        }
-    };
-
-    let path_str = normalize_path(path);
-    let is_enabled = is_enabled_path(path);
-
-    // 1. FAST CHECK: Metadata Skip
-    {
-        use crate::models::installed_resource::InstalledResource;
-        use crate::schema::installed_resource::dsl as ir_dsl;
-        use crate::utils::db::get_vesta_conn;
-        use diesel::prelude::*;
-        if let Ok(mut conn) = get_vesta_conn() {
-            let existing = ir_dsl::installed_resource
-                .filter(ir_dsl::local_path.eq(&path_str))
-                .first::<InstalledResource>(&mut conn)
-                .optional()?;
-
-            if let Some(res) = existing {
-                // If metadata matches AND enabled status matches, we can skip everything
-                // EXCEPT if the resource is currently marked as a "modpack" override with no remote ID.
-                // In that case, we want to try identifying it at least once to see if it can be linked.
-                if res.file_size == file_size
-                    && res.file_mtime == file_mtime
-                    && res.is_enabled == is_enabled
-                {
-                    let unresolved_manual = res.platform == "manual" && res.remote_id.is_empty();
-                    if (!unresolved_manual)
-                        && (res.platform != "modpack" || !res.remote_id.is_empty())
-                    {
-                        log::debug!(
-                            "[ResourceWatcher] Metadata match for {}, skipping scan",
-                            path_str
-                        );
-                        return Ok(());
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. IDENTIFY: If metadata changed or is new, we must hash
-    let hash = calculate_sha1(path)?;
-    log::debug!("[ResourceWatcher] Identified hash for {:?}: {}", path, hash);
-
-    let network_manager = app.state::<crate::utils::network::NetworkManager>();
-    let network_status = network_manager.get_status();
-
-    // Skip external API calls if offline
-    if network_status == crate::utils::network::NetworkStatus::Offline {
-        log::info!(
-            "[ResourceWatcher] Skipping remote identification for {:?} due to {:?} network",
-            path,
-            network_status
-        );
-        link_manual_resource_to_db(
-            app,
-            instance_db_id,
-            path,
-            Some(hash),
-            (file_size, file_mtime),
-            "manual",
-            None,
-        )
-        .await?;
-        return Ok(());
-    }
-
-    let resource_manager = app.state::<ResourceManager>();
-
-    // Check if we HAVE a record in the DB already with a specific platform.
-    let mut preferred_platform = None;
-    let mut instance_platform = None;
-    {
-        use crate::models::installed_resource::InstalledResource;
-        use crate::models::instance::Instance;
-        use crate::schema::installed_resource::dsl as ir_dsl;
-        use crate::schema::instance::dsl as inst_dsl;
-        use crate::utils::db::get_vesta_conn;
-        use diesel::prelude::*;
-
-        if let Ok(mut conn) = get_vesta_conn() {
-            // Get instance primary platform
-            if let Ok(inst) = inst_dsl::instance
-                .filter(inst_dsl::id.eq(instance_db_id))
-                .first::<Instance>(&mut conn)
-            {
-                instance_platform = inst.modpack_platform.map(|s| match s.as_str() {
-                    "curseforge" => SourcePlatform::CurseForge,
-                    "modrinth" => SourcePlatform::Modrinth,
-                    _ => SourcePlatform::Modrinth,
-                });
-            }
-
-            if let Ok(Some(existing)) = ir_dsl::installed_resource
-                .filter(ir_dsl::local_path.eq(&path_str))
-                .first::<InstalledResource>(&mut conn)
-                .optional()
-            {
-                preferred_platform = Some(match existing.platform.as_str() {
-                    "modrinth" => SourcePlatform::Modrinth,
-                    "curseforge" => SourcePlatform::CurseForge,
-                    _ => SourcePlatform::Modrinth,
-                });
-            }
-        }
-    }
-
-    // Resolve search order:
-    // 1. Previously known platform for this specific file
-    // 2. Platform of the modpack (if applicable)
-    // 3. Modrinth (default)
-    // 4. CurseForge
-    let mut search_order = vec![SourcePlatform::Modrinth, SourcePlatform::CurseForge];
-
-    let priority = preferred_platform.or(instance_platform);
-    if let Some(p) = priority {
-        search_order.retain(|&x| x != p);
-        search_order.insert(0, p);
-    }
-
-    for platform in search_order {
-        match platform {
-            SourcePlatform::Modrinth => {
-                if let Ok(Ok((project, version))) = tokio::time::timeout(
-                    Duration::from_secs(12),
-                    resource_manager.get_by_hash(SourcePlatform::Modrinth, &hash),
-                )
-                .await
-                {
-                    log::info!(
-                        "[ResourceWatcher] Found Modrinth resource: {} ({})",
-                        project.name,
-                        version.version_number
-                    );
-                    link_resource_to_db(
-                        app,
-                        instance_db_id,
-                        path,
-                        project,
-                        version,
-                        SourcePlatform::Modrinth,
-                        Some(hash),
-                        (file_size, file_mtime),
-                        None,
-                    )
-                    .await?;
-                    return Ok(());
-                }
-            }
-            SourcePlatform::CurseForge => {
-                if let Ok(fp) = calculate_curseforge_fingerprint(path) {
-                    if let Ok(Ok((project, version))) = tokio::time::timeout(
-                        Duration::from_secs(12),
-                        resource_manager.get_by_hash(SourcePlatform::CurseForge, &fp.to_string()),
-                    )
-                    .await
-                    {
-                        log::info!(
-                            "[ResourceWatcher] Found CurseForge resource: {} ({})",
-                            project.name,
-                            version.version_number
-                        );
-                        link_resource_to_db(
-                            app,
-                            instance_db_id,
-                            path,
-                            project,
-                            version,
-                            SourcePlatform::CurseForge,
-                            Some(hash),
-                            (file_size, file_mtime),
-                            None,
-                        )
-                        .await?;
-                        return Ok(());
-                    }
-                }
-            }
-        }
-    }
-
-    // If no match found, link as manual/unknown resource
-    link_manual_resource_to_db(
-        app,
-        instance_db_id,
-        path,
-        Some(hash),
-        (file_size, file_mtime),
-        "manual",
-        None,
-    )
-    .await?;
-
-    Ok(())
-}
-
-/// Links a resource to the database without external API metadata.
-pub async fn link_manual_resource_to_db(
-    app: &AppHandle,
-    instance_id: i32,
-    path: &Path,
-    hash: Option<String>,
-    metadata: (i64, i64),
-    platform: &str,
-    provenance: Option<ResourceProvenance>,
-) -> Result<()> {
-    if crate::resources::ledger::record_manual(
-        instance_id,
-        path,
-        hash,
-        metadata,
-        platform,
-        provenance,
-    )? {
-        app.emit("resources-updated", instance_id)?;
-    }
-
-    Ok(())
-}
-
-pub async fn link_resource_to_db(
-    app: &AppHandle,
-    instance_db_id: i32,
-    path: &Path,
-    project: crate::models::resource::ResourceProject,
-    version: crate::models::resource::ResourceVersion,
-    platform: SourcePlatform,
-    hash: Option<String>,
-    metadata: (i64, i64),
-    provenance: Option<ResourceProvenance>,
-) -> Result<()> {
-    // Cache project metadata (including icon) beforehand
-    let rm = app.state::<ResourceManager>();
-    let _ = rm.cache_project_metadata(platform, &project).await;
-    crate::resources::ledger::record_remote(
-        instance_db_id,
-        path,
-        &project,
-        &version,
-        platform,
-        hash,
-        metadata,
-        provenance,
-        None,
-    )?;
-
-    // Emit event to frontend
-    app.emit("resources-updated", instance_db_id)?;
-
-    Ok(())
 }
 
 pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i32) -> Result<()> {
@@ -843,7 +458,11 @@ pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i3
         ));
     }
 
-    app.emit("resources-updated", instance_id)?;
+    crate::resources::reconciliation::emit_rows_changed(
+        app,
+        instance_id,
+        "override-conflicts-resolved",
+    )?;
 
     let visible = disabled_custom
         .iter()
@@ -905,12 +524,4 @@ async fn version_is_at_least(
         (Some(pack), Some(custom)) => pack <= custom,
         _ => true,
     }
-}
-
-async fn unlink_resource_from_db(app: &AppHandle, instance_db_id: i32, path: &Path) -> Result<()> {
-    crate::resources::ledger::unlink_path(instance_db_id, path)?;
-
-    app.emit("resources-updated", instance_db_id)?;
-
-    Ok(())
 }

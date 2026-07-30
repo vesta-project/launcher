@@ -164,6 +164,31 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/resources/watcher.rs`
 - `vesta-launcher/src-tauri/src/tasks/resource_download.rs`
 
+### Resource Reconciliation
+
+The Tauri workflow Module between Resource Watcher discovery, Resource Manager
+remote lookup, and Installed Resource Ledger persistence. Passive watcher and
+startup reconciliation stats files and publishes local rows in one transaction
+without hashing or provider traffic. Install-owned enrichment and explicit
+user rescans collect hashes in a bounded pass, identify files through provider
+batch Interfaces, select the canonical platform, persist authoritative peer
+links, and emit at most one typed rows event plus one typed metadata event per
+completed batch. Install-owned enrichment is a silent deduplicated Task;
+explicit rescans report progress inline in the Resources tab and can target one
+unresolved row. The Module owns offline and partial results, while permanently
+unidentifiable local files are not retried by overview reads or filesystem
+bursts. The Ledger remains unaware of remote lookup, event, retry, and
+notification policy.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/resources/reconciliation.rs`
+- `vesta-launcher/src-tauri/src/tasks/resource_reconciliation.rs`
+- `vesta-launcher/src-tauri/src/resources/watcher.rs`
+- `vesta-launcher/src-tauri/src/resources/manager.rs`
+- `vesta-launcher/src/stores/instance-resource-overview.ts`
+- `vesta-launcher/src/components/pages/mini-pages/instance-details/`
+
 ### Resource Browse Session
 
 The frontend state around browsing Resources. It includes query text, filters,

@@ -894,7 +894,8 @@ pub async fn create_instance(
 
     // Make a mutable copy so we can set defaults (game_directory) before inserting
     let mut inst = instance_data;
-    let skip_initial_watch = inst.installation_status.as_deref() == Some("skip-initial-watch");
+    let skip_initial_watch = inst.installation_status.as_deref() == Some("skip-initial-watch")
+        || inst.modpack_id.is_some();
 
     // Get app config to check for custom instances directory
     let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;

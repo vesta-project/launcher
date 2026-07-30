@@ -3,6 +3,7 @@ use crate::models::resource::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 pub mod curseforge;
 pub mod modrinth;
@@ -23,6 +24,16 @@ pub trait ResourceSource: Send + Sync {
     ) -> Result<Vec<ResourceVersion>>;
     async fn get_version(&self, project_id: &str, version_id: &str) -> Result<ResourceVersion>;
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)>;
+    async fn get_by_hashes(
+        &self,
+        hashes: &[String],
+    ) -> Result<HashMap<String, (ResourceProject, ResourceVersion)>>;
+    fn identification_batch_size(&self) -> usize {
+        100
+    }
+    fn identification_concurrency(&self) -> usize {
+        2
+    }
     async fn get_categories(&self) -> Result<Vec<ResourceCategory>>;
 
     fn platform(&self) -> SourcePlatform;

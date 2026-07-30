@@ -1275,13 +1275,15 @@
 	width: 100%;
 	display: flex;
 	align-items: center;
+	gap: 12px;
 }
 
 .toolbar-actions {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	width: 100%;
+	flex: 0 0 auto;
+	min-width: 0;
 }
 
 .toolbar-actions button {
@@ -1483,6 +1485,27 @@
 
 .check-updates-btn:hover {
 	color: var(--text-primary) !important;
+}
+
+.rescan-resources-btn {
+	color: var(--text-secondary) !important;
+	font-weight: 500 !important;
+}
+
+.rescan-resources-btn:hover {
+	color: var(--text-primary) !important;
+}
+
+.resource-rescan-status {
+	min-width: 0;
+	margin-left: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-tertiary);
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-align: right;
 }
 
 .update-all-btn {
@@ -1707,16 +1730,6 @@
 	border-radius: 4px;
 	margin-left: 4px;
 	border: 1px solid hsl(var(--color__primary-hue) 60% 50% / 0.3);
-}
-
-.vesta-table-container.refetching {
-	opacity: 0.6 !important;
-	transition: opacity 0.2s ease;
-}
-
-.vesta-table-container.refetching {
-	opacity: 0.6;
-	transition: opacity 0.2s ease;
 }
 
 /*

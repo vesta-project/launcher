@@ -17,6 +17,7 @@ use tokio::sync::{mpsc, watch, Semaphore};
 pub struct TaskContext {
     pub app_handle: AppHandle,
     pub notification_id: String,
+    pub notifications_enabled: bool,
     pub cancel_rx: watch::Receiver<bool>,
     pub pause_rx: watch::Receiver<bool>,
     pub progress_channel: Option<Channel<ProgressUpdate>>,
@@ -31,6 +32,10 @@ impl TaskContext {
                 description: Some(description.clone()),
                 severity: None,
             });
+        }
+
+        if !self.notifications_enabled {
+            return;
         }
 
         // 2. Fallback to classic NotificationManager
@@ -60,6 +65,10 @@ impl TaskContext {
             }
         }
 
+        if !self.notifications_enabled {
+            return;
+        }
+
         // 2. Fallback to classic NotificationManager
         let manager = self.app_handle.state::<NotificationManager>();
         let _ = manager.update_progress_full(
@@ -74,6 +83,9 @@ impl TaskContext {
     }
 
     pub fn set_title(&self, title: String) {
+        if !self.notifications_enabled {
+            return;
+        }
         let manager = self.app_handle.state::<NotificationManager>();
         let _ = manager.update_progress_full(
             self.notification_id.clone(),
@@ -106,6 +118,10 @@ impl TaskContext {
                     total: total_steps.map(|t| t as u32),
                 });
             }
+        }
+
+        if !self.notifications_enabled {
+            return;
         }
 
         // 2. Fallback to classic NotificationManager
@@ -143,6 +159,11 @@ pub trait Task: Send + Sync {
     /// Default: false (auto-delete on success)
     fn show_completion_notification(&self) -> bool {
         false
+    }
+    /// Whether Task Manager should create a progress/failure notification for this task.
+    /// Silent tasks still participate in deduplication and can report over an IPC channel.
+    fn show_notification(&self) -> bool {
+        true
     }
     /// Total logical steps (used for progress bar). If unknown, return 0.
     fn total_steps(&self) -> i32 {
@@ -203,6 +224,7 @@ impl TaskManager {
                 let task_name = task.name();
                 let is_cancellable = task.cancellable();
                 let is_pausable = task.pausable();
+                let notifications_enabled = task.show_notification();
 
                 // Generate ID and create "Waiting" notification immediately
                 let id = TASK_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -263,30 +285,32 @@ impl TaskManager {
                     None
                 };
 
-                if let Err(e) = manager
-                    .create(CreateNotificationInput {
-                        client_key: Some(client_key.clone()),
-                        title: Some(task_name.clone()),
-                        description: Some("Waiting for worker...".to_string()),
-                        severity: Some("info".to_string()),
-                        notification_type: Some(NotificationType::Progress),
-                        dismissible: Some(false),
-                        persist: Some(true),
-                        silent: Some(false),
-                        actions: actions_json,
-                        progress: Some(PROGRESS_INDETERMINATE), // Indeterminate until picked up
-                        current_step: initial_current_step,
-                        total_steps: initial_total_steps,
-                        metadata: None,
-                        show_on_completion: Some(task.show_completion_notification()),
-                    })
-                    .map_err(|e| e.to_string())
-                {
-                    log::error!(
-                        "Failed to create task-start notification for {}: {}",
-                        client_key,
-                        e
-                    );
+                if notifications_enabled {
+                    if let Err(e) = manager
+                        .create(CreateNotificationInput {
+                            client_key: Some(client_key.clone()),
+                            title: Some(task_name.clone()),
+                            description: Some("Waiting for worker...".to_string()),
+                            severity: Some("info".to_string()),
+                            notification_type: Some(NotificationType::Progress),
+                            dismissible: Some(false),
+                            persist: Some(true),
+                            silent: Some(false),
+                            actions: actions_json,
+                            progress: Some(PROGRESS_INDETERMINATE), // Indeterminate until picked up
+                            current_step: initial_current_step,
+                            total_steps: initial_total_steps,
+                            metadata: None,
+                            show_on_completion: Some(task.show_completion_notification()),
+                        })
+                        .map_err(|e| e.to_string())
+                    {
+                        log::error!(
+                            "Failed to create task-start notification for {}: {}",
+                            client_key,
+                            e
+                        );
+                    }
                 }
 
                 // Create cancellation channel
@@ -330,28 +354,30 @@ impl TaskManager {
                 tokio::spawn(async move {
                     // Check if cancelled while waiting
                     if *rx.borrow() {
-                        let manager = app.state::<NotificationManager>();
-                        if let Err(e) = manager.create(CreateNotificationInput {
-                            client_key: Some(key_clone.clone()),
-                            title: Some(task_name),
-                            description: Some("Task cancelled.".to_string()),
-                            severity: Some("warning".to_string()),
-                            notification_type: Some(NotificationType::Patient),
-                            dismissible: Some(true),
-                            persist: Some(true),
-                            silent: Some(false),
-                            actions: None,
-                            progress: None,
-                            current_step: None,
-                            total_steps: None,
-                            metadata: None,
-                            show_on_completion: None,
-                        }) {
-                            log::error!(
-                                "Failed to create task-cancel notification for {}: {}",
-                                key_clone,
-                                e
-                            );
+                        if notifications_enabled {
+                            let manager = app.state::<NotificationManager>();
+                            if let Err(e) = manager.create(CreateNotificationInput {
+                                client_key: Some(key_clone.clone()),
+                                title: Some(task_name),
+                                description: Some("Task cancelled.".to_string()),
+                                severity: Some("warning".to_string()),
+                                notification_type: Some(NotificationType::Patient),
+                                dismissible: Some(true),
+                                persist: Some(true),
+                                silent: Some(false),
+                                actions: None,
+                                progress: None,
+                                current_step: None,
+                                total_steps: None,
+                                metadata: None,
+                                show_on_completion: None,
+                            }) {
+                                log::error!(
+                                    "Failed to create task-cancel notification for {}: {}",
+                                    key_clone,
+                                    e
+                                );
+                            }
                         }
 
                         // Notify frontend about failure if it's a resource download
@@ -376,6 +402,7 @@ impl TaskManager {
                     let ctx = TaskContext {
                         app_handle: app.clone(),
                         notification_id: key_clone.clone(),
+                        notifications_enabled,
                         cancel_rx: rx,
                         pause_rx,
                         progress_channel,
@@ -383,7 +410,7 @@ impl TaskManager {
 
                     log::info!("TaskManager: Executing task: {}", task_name);
                     // Update initial progress to 0 and starting description.
-                    {
+                    if notifications_enabled {
                         let manager = app.state::<NotificationManager>();
                         let _ = manager.update_progress_with_description(
                             key_clone.clone(),
@@ -423,14 +450,16 @@ impl TaskManager {
                                 None
                             };
 
-                            let _ = manager.update_progress_with_description_and_severity(
-                                key_clone.clone(),
-                                100,
-                                final_step,
-                                final_step,
-                                task.completion_description(),
-                                Some(NotificationSeverity::Success),
-                            );
+                            if notifications_enabled {
+                                let _ = manager.update_progress_with_description_and_severity(
+                                    key_clone.clone(),
+                                    100,
+                                    final_step,
+                                    final_step,
+                                    task.completion_description(),
+                                    Some(NotificationSeverity::Success),
+                                );
+                            }
                         }
                         Err(e) => {
                             log::error!("Task execution failed: {}", e);
@@ -451,27 +480,29 @@ impl TaskManager {
                             }
 
                             // Convert progress notification to Patient failure
-                            if let Err(err) = manager.create(CreateNotificationInput {
-                                client_key: Some(key_clone.clone()),
-                                title: Some(task_name),
-                                description: Some(format!("Failed: {}", e)),
-                                severity: Some("error".to_string()),
-                                notification_type: Some(NotificationType::Patient),
-                                dismissible: Some(true),
-                                persist: Some(true),
-                                silent: Some(false),
-                                actions: None,
-                                progress: None,
-                                current_step: None,
-                                total_steps: None,
-                                metadata: None,
-                                show_on_completion: Some(true),
-                            }) {
-                                log::error!(
-                                    "Failed to create task-failure notification for {}: {}",
-                                    key_clone,
-                                    err
-                                );
+                            if notifications_enabled {
+                                if let Err(err) = manager.create(CreateNotificationInput {
+                                    client_key: Some(key_clone.clone()),
+                                    title: Some(task_name),
+                                    description: Some(format!("Failed: {}", e)),
+                                    severity: Some("error".to_string()),
+                                    notification_type: Some(NotificationType::Patient),
+                                    dismissible: Some(true),
+                                    persist: Some(true),
+                                    silent: Some(false),
+                                    actions: None,
+                                    progress: None,
+                                    current_step: None,
+                                    total_steps: None,
+                                    metadata: None,
+                                    show_on_completion: Some(true),
+                                }) {
+                                    log::error!(
+                                        "Failed to create task-failure notification for {}: {}",
+                                        key_clone,
+                                        err
+                                    );
+                                }
                             }
                         }
                     }

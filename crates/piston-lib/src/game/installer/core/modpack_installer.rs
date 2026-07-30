@@ -293,6 +293,14 @@ impl ModpackInstaller {
 
             // Step 6: Persist modpack manifest for future repair
             if !reporter.is_dry_run() {
+                if cf_resolved.is_empty() {
+                    reporter.start_step("Saving modpack manifest", None);
+                } else {
+                    reporter.start_step(
+                        "Recording downloaded resources",
+                        Some(cf_resolved.len() as u32),
+                    );
+                }
                 let mut manifest = ModpackManifest::from_install(
                     &metadata,
                     &override_files,
@@ -302,7 +310,10 @@ impl ModpackInstaller {
                 );
 
                 // Update CurseForge manifest entries with resolved data + file size from disk
-                for (label, relative_path, sha1, download_url) in &cf_resolved {
+                let report_interval = (cf_resolved.len() / 20).max(1);
+                for (index, (label, relative_path, sha1, download_url)) in
+                    cf_resolved.iter().enumerate()
+                {
                     for mod_entry in &mut manifest.mods {
                         if let ModSource::CurseForge {
                             project_id,
@@ -329,6 +340,10 @@ impl ModpackInstaller {
                                 break;
                             }
                         }
+                    }
+                    let processed = index + 1;
+                    if processed == cf_resolved.len() || processed % report_interval == 0 {
+                        reporter.set_step_count(processed as u32, Some(cf_resolved.len() as u32));
                     }
                 }
 

@@ -1,7 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { ProgressUpdate } from "@utils/notifications";
 import type { ResourceInstallRequest } from "@utils/resource-install-intent";
 import { createStore, reconcile } from "solid-js/store";
+import { refreshInstanceResourceRows } from "./instance-resource-overview";
 import { Instance } from "./instances";
 
 export type ResourceType =
@@ -93,6 +95,14 @@ export type InstalledResource = {
 	source_modpack_id?: string | null;
 	source_modpack_version_id?: string | null;
 	source_modpack_platform?: string | null;
+};
+
+export type ResourceRescanSummary = {
+	scanned: number;
+	hashed: number;
+	identified: number;
+	unresolved: number;
+	status: "complete" | "partial" | "offline" | "alreadyRunning";
 };
 
 type ResourceStoreState = {
@@ -499,17 +509,8 @@ export const resources = {
 				resourceType: project.resource_type,
 			});
 
-			// We DO NOT clear the installing IDs here anymore.
-			// They will be cleared by fetchInstalled once the ResourceWatcher
-			// detects the new file and updates the database.
-
-			// Request an initial refresh after a short delay, but the event listener
-			// will handle the real completion signal.
-			setTimeout(() => {
-				if (instanceId) {
-					resources.fetchInstalled(instanceId);
-				}
-			}, 1000);
+			// Installing IDs are cleared by the scoped rows event after the
+			// Resource Watcher atomically publishes the completed local batch.
 
 			return result;
 		} catch (e) {
@@ -552,11 +553,17 @@ export const resources = {
 		return results;
 	},
 
-	sync: async (instanceId: number, instanceSlug: string, gameDir: string) => {
-		return await invoke<void>("sync_instance_resources", {
+	rescan: async (
+		instanceId: number,
+		resourceIds?: number[],
+		onProgress?: (update: ProgressUpdate) => void,
+	) => {
+		const progressChannel = new Channel<ProgressUpdate>();
+		progressChannel.onmessage = (update) => onProgress?.(update);
+		return await invoke<ResourceRescanSummary>("rescan_instance_resources", {
 			instanceId,
-			instanceSlug,
-			gameDir,
+			resourceIds,
+			progressChannel,
 		});
 	},
 
@@ -585,12 +592,20 @@ export function preloadDefaultBrowseData(): Promise<void> {
 
 // Listen for resource updates from the backend (watcher)
 if (typeof window !== "undefined") {
-	listen("resources-updated", (event) => {
-		const instanceId = event.payload as number;
-		if (resourceStore.selectedInstanceId === instanceId) {
-			resources.fetchInstalled(instanceId);
-		}
-	});
+	listen<{ instanceId: number; revision: string }>(
+		"core://instance-resource-rows-changed",
+		(event) => {
+			const instanceId = event.payload.instanceId;
+			if (resourceStore.selectedInstanceId === instanceId) {
+				void refreshInstanceResourceRows(
+					instanceId,
+					event.payload.revision,
+				).then((results) => {
+					setResourceStore("installedResources", results);
+				});
+			}
+		},
+	);
 
 	listen("resource-install-error", (event) => {
 		const taskId = event.payload as string;

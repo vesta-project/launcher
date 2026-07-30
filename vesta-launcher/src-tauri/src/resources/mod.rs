@@ -1,5 +1,6 @@
 pub mod ledger;
 pub mod manager;
+pub mod reconciliation;
 pub mod sources;
 pub mod update_cache;
 pub mod update_policy;
