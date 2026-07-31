@@ -150,7 +150,11 @@ If a text config fails structural validation (e.g., user typo like a missing bra
 - A non-blocking diagnostic is logged and the update continues.
 
 ### Rollback Safety
-If staging fails, `.update_stage/` is discarded without touching active files. Before quarantine, deletion, or commit begins, affected files (including the root manifest) are copied into `.update_rollback/`. The snapshot remains available through manifest persistence, instance metadata updates, runtime installation, and Java setup. Any task failure restores the snapshot and previous Instance metadata, while Task Manager keeps a persistent error notification.
+If staging fails, `.update_stage/` is discarded without touching active files. Before quarantine, deletion, or commit begins, a versioned transaction journal is persisted at `.update_rollback/manifest.json`. Existing affected paths (including the root manifest) are moved into `.update_rollback/files/` with same-filesystem renames; world and corrupted-config rotations are recorded in the same journal. This avoids copying large instance data and makes normal backup and restoration fast.
+
+The journal remains available through manifest persistence, runtime installation, Java setup, and database finalization. Any update failure automatically restores the previous files and Instance metadata, returns the Instance to playable `installed` state, and publishes a persistent notification. Launcher startup also resumes any uncommitted restoration before normal interrupted-operation handling.
+
+The journal phases are `prepared`, `backed-up`, `restoring`, and `committed`. Restoration is restart-safe and may be retried. If restoration cannot finish, the journal is preserved and the Instance atomically records the launcher's existing `interrupted` operation lifecycle with `last_operation = update`. Card, details, and notification actions present this state as **Resume recovery**. That action only resumes restoration; it never retries the failed update. The notification remains visible while asynchronous restoration runs; another failure refreshes the same persistent recovery prompt, while success replaces it with the completion notice. A committed journal is cleanup-only, so a restart cannot roll back an update whose metadata finalization already succeeded.
 
 ---
 
@@ -166,8 +170,8 @@ src-tauri/src/sync/
 ├── classifier.rs       # Binary / Text / Untracked classification
 ├── action_tree.rs      # SyncAction enum, ActionTree collection
 ├── merger.rs           # ConfigMerger (.properties + .json)
-├── staging.rs          # .update_stage/ directory + atomic commit/rollback
-└── safeguards.rs       # Process lock, case normalization, world rotation
+├── staging.rs          # Staging + durable rename-based rollback transaction
+└── safeguards.rs       # Process lock, case normalization, safe removal checks
 ```
 
 ### Key Types

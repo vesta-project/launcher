@@ -139,7 +139,7 @@ pub async fn start_modpack_update(
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
 
-    crate::modpack::update::begin(&app_handle, instance_id, &game_dir, &new_version_id)?;
+    crate::modpack::update::begin(&app_handle, &inst, &game_dir, &new_version_id)?;
 
     let task = UpdateModpackTask::new(instance_id, new_version_id, game_dir.clone());
     if let Err(e) = task_manager.submit(Box::new(task)).await {

@@ -83,6 +83,7 @@ import {
 	isInstanceInstallationFailed,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
+	isInstanceUpdateRecovery,
 	killInstance,
 	launchInstance,
 	needsInstanceInstallation,
@@ -1131,6 +1132,11 @@ export default function InstanceDetails(
 	const isFailed = createMemo(() => {
 		const inst = instance();
 		return inst ? isInstanceInstallationFailed(inst) : false;
+	});
+
+	const isUpdateRecovery = createMemo(() => {
+		const inst = instance();
+		return inst ? isInstanceUpdateRecovery(inst) : false;
 	});
 
 	const needsInstallation = createMemo(() => {
@@ -2468,6 +2474,8 @@ export default function InstanceDetails(
 		if (isInstalling()) return `${getInstanceOperationLabel(inst)}...`;
 
 		if (isInterrupted()) {
+			if (isUpdateRecovery()) return "Resume Recovery";
+
 			const op = inst.lastOperation;
 			const opName =
 				op === "hard-reset"
@@ -2808,7 +2816,9 @@ export default function InstanceDetails(
 														: "primary"
 												}
 												data-color={
-													isRunningGlobal() || currentCrash()
+													isRunningGlobal() ||
+													currentCrash() ||
+													isUpdateRecovery()
 														? "destructive"
 														: "primary"
 												}
@@ -2826,7 +2836,7 @@ export default function InstanceDetails(
 																when={isRunningGlobal()}
 																fallback={
 																	<Show
-																		when={currentCrash()}
+																		when={currentCrash() || isUpdateRecovery()}
 																		fallback={
 																			<PlayIcon width="16" height="16" />
 																		}
@@ -2863,6 +2873,22 @@ export default function InstanceDetails(
 											</div>
 										</div>
 									)}
+								</Show>
+
+								<Show when={isUpdateRecovery()}>
+									<div
+										class={styles["installation-failure-banner"]}
+										role="alert"
+									>
+										<ErrorIcon width="16" height="16" />
+										<div>
+											<strong>Update recovery required</strong>
+											<span>
+												The previous version could not be fully restored. Resume
+												recovery before launching this instance.
+											</span>
+										</div>
+									</div>
 								</Show>
 
 								<div class={styles["instance-tab-content"]}>

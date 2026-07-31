@@ -105,7 +105,7 @@ impl Task for UpdateModpackTask {
                 Some(5),
                 Some(6),
             );
-            if let Err(update_error) = crate::modpack::update::finish(
+            let finished = match crate::modpack::update::finish(
                 &app_handle,
                 &ctx,
                 &inst,
@@ -117,25 +117,60 @@ impl Task for UpdateModpackTask {
             )
             .await
             {
-                let file_rollback = outcome.rollback();
-                let metadata_rollback =
-                    crate::modpack::update::restore_previous_instance(&app_handle, &inst);
+                Ok(finished) => finished,
+                Err(update_error) => {
+                    let file_rollback = outcome.rollback();
+                    let metadata_rollback = status_guard.recover_failure();
 
-                return match (file_rollback, metadata_rollback) {
-                    (Ok(()), Ok(())) => Err(format!(
-                        "{} The previous instance was restored.",
-                        update_error
+                    return match (file_rollback, metadata_rollback) {
+                        (Ok(()), Ok(_)) => Err(format!(
+                            "{} The previous instance was restored.",
+                            update_error
+                        )),
+                        (files, metadata) => Err(format!(
+                            "{} Automatic rollback was incomplete (files: {}; metadata: {}).",
+                            update_error,
+                            files.err().unwrap_or_else(|| "restored".to_string()),
+                            metadata.err().unwrap_or_else(|| "restored".to_string()),
+                        )),
+                    };
+                }
+            };
+            if let Err(finalize_error) = outcome.finalize() {
+                return match status_guard.recover_failure() {
+                    Ok(_) => Err(format!(
+                        "Failed to commit update recovery state: {}. The previous instance was restored.",
+                        finalize_error
                     )),
-                    (files, metadata) => Err(format!(
-                        "{} Automatic rollback was incomplete (files: {}; metadata: {}).",
-                        update_error,
-                        files.err().unwrap_or_else(|| "restored".to_string()),
-                        metadata.err().unwrap_or_else(|| "restored".to_string()),
+                    Err(recovery_error) => Err(format!(
+                        "Failed to commit update recovery state: {}. Automatic recovery is incomplete: {}.",
+                        finalize_error, recovery_error
                     )),
                 };
             }
-            outcome.finalize();
+            if let Err(clear_error) = crate::modpack::update::clear_pending(&game_dir) {
+                // The update is durably committed. Leave both markers in place
+                // so startup can retry cleanup without rolling back new files.
+                log::warn!(
+                    "[UpdateModpackTask] Pending update cleanup deferred for instance {}: {}",
+                    instance_id,
+                    clear_error
+                );
+                status_guard.mark_success();
+                finished.publish(&app_handle, instance_id, &game_dir);
+                return Ok(());
+            }
+            if let Err(cleanup_error) =
+                crate::sync::staging::RollbackSnapshot::cleanup_committed(&game_dir)
+            {
+                log::warn!(
+                    "[UpdateModpackTask] Committed rollback cleanup deferred for instance {}: {}",
+                    instance_id,
+                    cleanup_error
+                );
+            }
             status_guard.mark_success();
+            finished.publish(&app_handle, instance_id, &game_dir);
 
             let skipped_msg = if skipped_deletions > 0 {
                 format!(" ({} user-modified files were kept)", skipped_deletions)

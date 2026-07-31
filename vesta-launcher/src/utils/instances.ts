@@ -442,6 +442,13 @@ export function isInstanceInstallationFailed(instance: Instance): boolean {
 	return status === "failed" || status?.startsWith("failed:") === true;
 }
 
+export function isInstanceUpdateRecovery(instance: Instance): boolean {
+	return (
+		instance.installationStatus === "interrupted" &&
+		instance.lastOperation === "update"
+	);
+}
+
 export function getInstanceInstallationFailureReason(
 	instance: Instance,
 ): string | null {

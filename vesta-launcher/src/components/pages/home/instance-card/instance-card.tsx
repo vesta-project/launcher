@@ -59,6 +59,7 @@ import {
 	isInstanceInstallationFailed,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
+	isInstanceUpdateRecovery,
 	killInstance,
 	launchInstance,
 	needsInstanceInstallation,
@@ -133,6 +134,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const isFailed = createMemo(() =>
 		isInstanceInstallationFailed(storeInstance()),
 	);
+	const isUpdateRecovery = createMemo(() =>
+		isInstanceUpdateRecovery(storeInstance()),
+	);
 
 	const cardIconPreview = createAnimatedIconPreview(() =>
 		resolveInstanceDisplayIcon(storeInstance()),
@@ -201,6 +205,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 		}
 
 		if (isInterrupted()) {
+			if (isUpdateRecovery()) {
+				return "Update recovery is incomplete. Click to resume recovery.";
+			}
 			const op =
 				storeInstance().lastOperation === "hard-reset"
 					? "Hard reset"
@@ -273,9 +280,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 			setBusy(true);
 			try {
 				if (isInterrupted()) {
-					await resumeInstanceOperation(props.instance);
+					await resumeInstanceOperation(storeInstance());
 				} else {
-					await installInstance(props.instance);
+					await installInstance(storeInstance());
 				}
 			} catch (err) {
 				console.error("Install/Resume failed", err);
@@ -513,7 +520,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 								</Show>
 								<Show when={isInterrupted()}>
 									<Badge variant="warning" dot={true}>
-										Interrupted
+										{isUpdateRecovery() ? "Recovery needed" : "Interrupted"}
 									</Badge>
 								</Show>
 								<Show when={hasCrashed()}>
@@ -637,7 +644,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 								: isWarmingUp()
 									? "Warming up..."
 									: isInterrupted()
-										? "Resume operation"
+										? isUpdateRecovery()
+											? "Resume recovery"
+											: "Resume operation"
 										: needsInstallation()
 											? isFailed()
 												? "Retry installation"

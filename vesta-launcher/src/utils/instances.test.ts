@@ -3,6 +3,7 @@ import {
 	getInstanceId,
 	getInstanceInstallationFailureReason,
 	isInstanceInstallationFailed,
+	isInstanceUpdateRecovery,
 	needsInstanceInstallation,
 } from "./instances";
 
@@ -36,5 +37,30 @@ describe("instances util", () => {
 		expect(isInstanceInstallationFailed(inst)).toBe(false);
 		expect(needsInstanceInstallation(inst)).toBe(false);
 		expect(getInstanceInstallationFailureReason(inst)).toBeNull();
+	});
+
+	test("recognizes update recovery through the interrupted operation lifecycle", () => {
+		const inst: any = {
+			installationStatus: "interrupted",
+			lastOperation: "update",
+		};
+
+		expect(isInstanceUpdateRecovery(inst)).toBe(true);
+		expect(isInstanceInstallationFailed(inst)).toBe(false);
+		expect(needsInstanceInstallation(inst)).toBe(false);
+	});
+
+	test("does not treat another interrupted operation as update recovery", () => {
+		const interruptedRepair: any = {
+			installationStatus: "interrupted",
+			lastOperation: "repair",
+		};
+		const completedUpdate: any = {
+			installationStatus: "installed",
+			lastOperation: "update",
+		};
+
+		expect(isInstanceUpdateRecovery(interruptedRepair)).toBe(false);
+		expect(isInstanceUpdateRecovery(completedUpdate)).toBe(false);
 	});
 });

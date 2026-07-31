@@ -1509,7 +1509,10 @@ pub async fn launch_instance(
         }
     }
 
-    if instance_data.installation_status.as_deref() == Some("installing") {
+    if matches!(
+        instance_data.installation_status.as_deref(),
+        Some("installing") | Some("interrupted")
+    ) {
         let op = instance_data
             .last_operation
             .as_deref()
@@ -2131,29 +2134,55 @@ pub async fn resume_instance_operation(
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
 
-            let version_id = crate::modpack::update::pending_target(&game_dir)
-                .ok_or_else(|| {
-                    "Cannot resume modpack update: no pending version recorded. Open the instance Version tab to retry."
-                        .to_string()
-                })?;
+            if !crate::modpack::update::has_pending_recovery(&game_dir) {
+                return Err(
+                    "Cannot resume update recovery: no pending recovery was found. Start the update again from the Version tab."
+                        .to_string(),
+                );
+            }
 
-            crate::commands::instances::update_instance_operation(
+            match crate::modpack::update::recover_previous_instance(
                 &app_handle,
                 instance_id,
-                "update",
-            )?;
-            crate::commands::instances::update_installation_status(
-                &app_handle,
-                instance_id,
-                "installing",
-            )?;
-
-            let task = crate::tasks::update_modpack::UpdateModpackTask::new(
-                instance_id,
-                version_id,
-                game_dir,
-            );
-            task_manager.submit(Box::new(task)).await
+                &game_dir,
+            ) {
+                Ok(crate::modpack::update::UpdateRecoveryOutcome::Restored) => {
+                    crate::modpack::update::publish_recovery_complete_notification(
+                        &app_handle,
+                        instance_id,
+                        false,
+                    );
+                    Ok(())
+                }
+                Ok(crate::modpack::update::UpdateRecoveryOutcome::Committed) => {
+                    crate::modpack::update::publish_recovery_complete_notification(
+                        &app_handle,
+                        instance_id,
+                        true,
+                    );
+                    Ok(())
+                }
+                Ok(crate::modpack::update::UpdateRecoveryOutcome::None) => {
+                    Err("No pending update recovery was found.".to_string())
+                }
+                Err(error) => {
+                    if let Err(status_error) =
+                        crate::modpack::update::mark_recovery_interrupted(&app_handle, instance_id)
+                    {
+                        log::error!(
+                            "Failed to preserve update recovery state for instance {}: {}",
+                            instance_id,
+                            status_error
+                        );
+                    }
+                    crate::modpack::update::publish_recovery_required_notification(
+                        &app_handle,
+                        instance_id,
+                        &error,
+                    );
+                    Err(format!("Update recovery is still incomplete: {}", error))
+                }
+            }
         }
         "install" | _ => install_instance(app_handle, task_manager, inst, None).await,
     }

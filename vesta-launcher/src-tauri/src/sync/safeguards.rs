@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 
 /// Check if the instance's game directory is currently in use by a running
@@ -56,82 +56,10 @@ pub fn normalize_path(path: &str) -> String {
     path.to_lowercase()
 }
 
-/// Rotate a world save folder: rename the active directory to a timestamped
-/// quarantine folder so the user's data is preserved and the pack can place
-/// a clean copy in the original location.
-///
-/// Example: `saves/MyWorld` → `saves/MyWorld_user_20260520_1337`
-pub fn rotate_world_save(game_dir: &Path, world_path: &str, quarantine_path: &str) -> Result<()> {
-    let source = game_dir.join(world_path);
-    let target = game_dir.join(quarantine_path);
-
-    // The world_path might point to level.dat; we want the parent folder
-    let source_dir = if source.is_file() {
-        source
-            .parent()
-            .context("World path has no parent directory")?
-            .to_path_buf()
-    } else {
-        source.clone()
-    };
-
-    let target_dir = if target.is_file() {
-        target
-            .parent()
-            .context("Quarantine path has no parent directory")?
-            .to_path_buf()
-    } else {
-        target.clone()
-    };
-
-    if !source_dir.exists() {
-        return Ok(());
-    }
-
-    // Ensure parent of target exists
-    if let Some(parent) = target_dir.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-
-    log::info!(
-        "[safeguards] Rotating world save: {:?} → {:?}",
-        source_dir,
-        target_dir
-    );
-
-    std::fs::rename(&source_dir, &target_dir).with_context(|| {
-        format!(
-            "Failed to rotate world save {:?} to {:?}",
-            source_dir, target_dir
-        )
-    })?;
-
-    Ok(())
-}
-
-/// Handle a corrupted config file: rename it to `.corrupted` so the user can
-/// inspect it later, and return the path to the corrupted backup.
-pub fn quarantine_corrupted_config(game_dir: &Path, path: &str) -> Result<String> {
-    let source = game_dir.join(path);
-    let corrupted_path = format!("{}.corrupted", path);
-    let target = game_dir.join(&corrupted_path);
-
-    if source.exists() {
-        std::fs::rename(&source, &target).with_context(|| {
-            format!(
-                "Failed to quarantine corrupted config {:?} to {:?}",
-                source, target
-            )
-        })?;
-    }
-
-    Ok(corrupted_path)
-}
-
-/// Delete a file only if it still matches the expected content hash.
-/// Expects sha1 (40 hex chars).
-/// Returns true if the file was deleted.
-pub fn safe_delete_if_unchanged(
+/// Return whether a removal candidate still matches its expected content hash.
+/// The update transaction moves approved paths into its rollback directory
+/// rather than deleting them directly.
+pub fn can_delete_if_unchanged(
     game_dir: &Path,
     path: &str,
     expected_hash: Option<&str>,
@@ -152,10 +80,6 @@ pub fn safe_delete_if_unchanged(
             return Ok(false);
         }
     }
-
-    log::info!("[safeguards] Deleting {:?} (removed from modpack)", path);
-    std::fs::remove_file(&full_path)
-        .with_context(|| format!("Failed to delete {:?}", full_path))?;
 
     Ok(true)
 }

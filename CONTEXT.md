@@ -94,7 +94,11 @@ The Tauri startup sequence that initializes app services in dependency order.
 startup phases own cohesive work with explicit inputs and outputs. Interrupted
 operation recovery is the first extracted phase: database recovery runs before
 the Notification Manager exists, then recovered facts are published after it is
-created.
+created. Pending modpack update transactions are recovered in this phase before
+normal interrupted-operation handling: committed transactions finish cleanup,
+uncommitted transactions restore the previous playable version, and incomplete
+restores use the existing resumable `interrupted` Instance lifecycle with
+`last_operation = update`.
 
 Current phases:
 
@@ -125,10 +129,15 @@ The installed state of a modpack-linked Instance. Its only persisted manifest is
 `<game directory>/modpack_manifest.json`; the former `.vesta` manifest copy is
 not read or written. It includes hash backfill, resource ledger, resource
 presence checks, repair state, update finalization, pending-update recovery,
-runtime/Java follow-up, and Instance event emission. An update keeps an
-affected-path rollback snapshot through finalization; any task failure restores
-the prior files and runtime/modpack metadata before returning the Instance to
-`installed` and publishing the persistent failure notification.
+runtime/Java follow-up, and Instance event emission. An update keeps a
+versioned `.update_rollback/manifest.json` transaction through finalization.
+Affected active paths and world/config rotations are preserved with
+same-filesystem renames, making rollback proportional to metadata operations
+rather than file copying. Any task failure restores the prior files and
+runtime/modpack metadata before returning the Instance to `installed` and
+publishing a persistent notification. A restore failure preserves its journal,
+sets the existing `interrupted` status, and exposes a resume action that retries
+restoration without retrying the update.
 
 Primary modules:
 
@@ -248,9 +257,12 @@ Primary modules:
 ### Notification Action
 
 A command attached to a Notification. Notification Manager owns dispatch,
-persisted payload lookup, and auto-dismiss behavior. The Module that owns the
-command registers its Action Adapter; Task actions, for example, live beside
-Task Manager rather than inside Notification Manager.
+persisted payload lookup, and default auto-dismiss behavior. The Module that
+owns the command registers its Action Adapter and may keep an asynchronous
+action notification visible until the result replaces it. Update recovery uses
+that opt-out so a repeated restore failure refreshes, rather than removes, its
+resumable notification. Task actions, for example, live beside Task Manager
+rather than inside Notification Manager.
 
 Primary modules:
 
