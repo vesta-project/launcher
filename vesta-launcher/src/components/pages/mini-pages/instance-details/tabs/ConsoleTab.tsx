@@ -3,9 +3,12 @@ import HistoryIcon from "@assets/history.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
-import { consoleStore, type LogLevel } from "@stores/console";
+import {
+	CONSOLE_FILTER_LEVELS,
+	consoleStore,
+	type LogLevel,
+} from "@stores/console";
 import { instancesState } from "@stores/instances";
-import { createVirtualizer } from "@tanstack/solid-virtual";
 import Button from "@ui/button/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { TextField } from "@ui/text-field/text-field";
@@ -71,7 +74,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	const [atBottom, setAtBottom] = createSignal(true);
 	const [isSearchExpanded, setIsSearchExpanded] = createSignal(false);
 	const hasFilters = () =>
-		consoleStore.state.filterLevels.length < 4 ||
+		CONSOLE_FILTER_LEVELS.some(
+			(level) => !consoleStore.state.filterLevels.includes(level),
+		) ||
 		consoleStore.state.searchQuery.length > 0;
 
 	onMount(async () => {
@@ -108,7 +113,12 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 		const filtered = consoleStore.state.lines.filter((line) => {
 			const matchesQuery = !query || line.raw.toLowerCase().includes(query);
-			const matchesLevel = levels.includes(line.level);
+			// Unclassified lines are still real console output (stack traces,
+			// crash reports, native-loader diagnostics). FATAL shares the
+			// visible ERROR category because there is no separate FATAL control.
+			const matchesLevel =
+				line.level === "UNKNOWN" ||
+				levels.includes(line.level === "FATAL" ? "ERROR" : line.level);
 			return matchesQuery && matchesLevel;
 		});
 
@@ -117,38 +127,14 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 		return filtered;
 	});
 
-	const lineVirtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-		get count() {
-			return filteredLines().length;
-		},
-		getScrollElement: () => outputElement() ?? null,
-		estimateSize: () => 30,
-		overscan: 20,
-		getItemKey: (index) => filteredLines()[index]?.id ?? index,
-	});
-	const virtualLines = createMemo(() => {
-		const measured = lineVirtualizer.getVirtualItems();
-		if (measured.length > 0) return measured;
-		return Array.from(
-			{ length: Math.min(60, filteredLines().length) },
-			(_, index) => ({
-				key: filteredLines()[index]?.id ?? index,
-				index,
-				start: index * 30,
-				end: (index + 1) * 30,
-				size: 30,
-				lane: 0,
-			}),
-		);
-	});
-
 	// Handle autoscroll
 	createEffect(() => {
 		const count = filteredLines().length;
 		const output = outputElement();
 		if (consoleStore.state.autoScroll && output && count > 0) {
 			requestAnimationFrame(() => {
-				lineVirtualizer.scrollToIndex(count - 1, { align: "end" });
+				output.scrollTop = output.scrollHeight;
+				checkScroll();
 			});
 		}
 	});
@@ -331,7 +317,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 				</div>
 
 				<div class={styles["console-filters"]}>
-					<For each={["INFO", "WARN", "ERROR", "DEBUG"] as LogLevel[]}>
+					<For each={CONSOLE_FILTER_LEVELS}>
 						{(level) => (
 							<button
 								onClick={() => consoleStore.toggleFilterLevel(level)}
@@ -392,11 +378,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									<Button
 										variant="slate"
 										size="sm"
-										onClick={() => {
-											["INFO", "WARN", "ERROR", "DEBUG"].forEach((l) =>
-												consoleStore.toggleFilterLevel(l as LogLevel),
-											);
-										}}
+										onClick={() => consoleStore.resetFilters()}
 									>
 										Reset Filters
 									</Button>
@@ -434,63 +416,29 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 						</div>
 					}
 				>
-					<div
-						class={styles["console-virtual-container"]}
-						style={{
-							height: `${lineVirtualizer.getTotalSize()}px`,
-							position: "relative",
-							width: "100%",
-						}}
-					>
-						<For each={virtualLines()}>
-							{(virtualLine) => {
-								const line = () => filteredLines()[virtualLine.index];
-								return (
-									<Show when={line()}>
-										{(visibleLine) => (
-											<div
-												ref={(element) =>
-													lineVirtualizer.measureElement(element)
-												}
-												data-index={virtualLine.index}
-												class={styles["console-line-wrapper"]}
-												style={{
-													position: "absolute",
-													top: "0",
-													left: "0",
-													transform: `translateY(${virtualLine.start}px)`,
-												}}
+					<div class={styles["console-lines"]}>
+						<For each={filteredLines()}>
+							{(line) => (
+								<div class={styles["console-line-wrapper"]}>
+									<div class={styles["console-gutter"]}>{line.id}</div>
+									<div class={styles["console-line-content"]}>
+										<Show when={line.timestamp}>
+											<span class={styles["log-time"]}>[{line.timestamp}]</span>
+										</Show>
+										<Show when={line.level !== "UNKNOWN"}>
+											<span
+												class={clsx(
+													styles["log-level"],
+													styles[`log-level--${line.level.toLowerCase()}`],
+												)}
 											>
-												<div class={styles["console-gutter"]}>
-													{visibleLine().id}
-												</div>
-												<div class={styles["console-line-content"]}>
-													<Show when={visibleLine().timestamp}>
-														<span class={styles["log-time"]}>
-															[{visibleLine().timestamp}]
-														</span>
-													</Show>
-													<Show when={visibleLine().level !== "UNKNOWN"}>
-														<span
-															class={clsx(
-																styles["log-level"],
-																styles[
-																	`log-level--${visibleLine().level.toLowerCase()}`
-																],
-															)}
-														>
-															[{visibleLine().thread}/{visibleLine().level}]:
-														</span>
-													</Show>
-													<span class={styles["log-message"]}>
-														{visibleLine().message}
-													</span>
-												</div>
-											</div>
-										)}
-									</Show>
-								);
-							}}
+												[{line.thread}/{line.level}]:
+											</span>
+										</Show>
+										<span class={styles["log-message"]}>{line.message}</span>
+									</div>
+								</div>
+							)}
 						</For>
 					</div>
 				</Show>

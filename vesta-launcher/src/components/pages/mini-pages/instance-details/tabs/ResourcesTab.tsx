@@ -141,9 +141,15 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 	const renderResourceRow = (
 		row: any,
-		options?: { hidden?: () => boolean },
+		options?: {
+			hidden?: () => boolean;
+			virtualIndex?: number;
+			measure?: (element: HTMLTableRowElement) => void;
+		},
 	) => (
 		<tr
+			ref={(element) => options?.measure?.(element)}
+			data-index={options?.virtualIndex}
 			onClick={(e) => props.onRowClick(row, e)}
 			style={{ cursor: "default" }}
 			hidden={options?.hidden?.()}
@@ -676,7 +682,14 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								<For each={virtualRows()}>
 									{(virtualRow) => {
 										const row = () => visibleResourceRows()[virtualRow.index];
-										return <Show when={row()}>{renderResourceRow(row())}</Show>;
+										return (
+											<Show when={row()}>
+												{renderResourceRow(row(), {
+													virtualIndex: virtualRow.index,
+													measure: rowVirtualizer.measureElement,
+												})}
+											</Show>
+										);
 									}}
 								</For>
 								<Show when={bottomVirtualPadding() > 0}>

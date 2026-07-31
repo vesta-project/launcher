@@ -1044,6 +1044,11 @@
 	cursor: text;
 }
 
+.console-lines {
+	width: 100%;
+	min-width: 0;
+}
+
 .console-line-wrapper {
 	display: flex;
 	width: 100%;
@@ -1069,9 +1074,11 @@
 
 .console-line-content {
 	flex: 1;
+	min-width: 0;
 	padding: 4px 12px;
 	white-space: pre-wrap;
-	word-break: break-all;
+	overflow-wrap: anywhere;
+	word-break: normal;
 }
 
 .log-time {
