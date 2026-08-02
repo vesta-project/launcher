@@ -60,6 +60,7 @@ pub struct CurseForgeManifest {
     #[serde(default = "default_manifest_version")]
     pub manifest_version: u32,
     pub name: String,
+    #[serde(default = "default_modpack_version")]
     pub version: String,
     #[serde(default = "default_author")]
     pub author: String,
@@ -73,6 +74,9 @@ fn default_manifest_version() -> u32 {
     1
 }
 fn default_author() -> String {
+    "Unknown".to_string()
+}
+fn default_modpack_version() -> String {
     "Unknown".to_string()
 }
 fn default_modpack() -> String {

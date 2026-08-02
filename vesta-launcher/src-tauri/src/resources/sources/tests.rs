@@ -5,6 +5,17 @@ mod tests {
     use crate::resources::sources::modrinth::ModrinthSource;
     use crate::resources::sources::ResourceSource;
 
+    #[test]
+    fn provider_identification_limits_bound_large_scans() {
+        let modrinth = ModrinthSource::new();
+        let curseforge = CurseForgeSource::new();
+
+        assert_eq!(500usize.div_ceil(modrinth.identification_batch_size()), 5);
+        assert_eq!(500usize.div_ceil(curseforge.identification_batch_size()), 1);
+        assert!(modrinth.identification_concurrency() <= 3);
+        assert!(curseforge.identification_concurrency() <= 2);
+    }
+
     #[tokio::test]
     #[ignore = "live Modrinth API test; run explicitly when checking provider integration"]
     async fn test_modrinth_search() {

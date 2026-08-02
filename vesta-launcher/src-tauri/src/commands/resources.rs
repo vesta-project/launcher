@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Context};
 use base64::{engine::general_purpose, Engine as _};
+use serde::Serialize;
+use std::collections::{hash_map::DefaultHasher, HashSet};
+use std::hash::{Hash, Hasher};
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
@@ -9,6 +12,7 @@ use crate::models::resource::{
 use crate::models::resource_update::{
     InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
 };
+use crate::notifications::models::{ProgressUpdate, PROGRESS_INDETERMINATE};
 use crate::resources::update_cache::{
     instance_update_fingerprint, invalidate_instance_update_snapshot, is_snapshot_fresh,
     load_instance_update_snapshot, save_instance_update_snapshot, snapshot_to_result,
@@ -17,9 +21,142 @@ use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::resource_download::ResourceDownloadTask;
 use anyhow_tauri::TAResult as Result;
-use tauri::{Emitter, Manager, State};
+use std::sync::{Mutex, OnceLock};
+use tauri::{ipc::Channel, Manager, State};
 
 const MAX_CONCURRENT_UPDATE_CHECKS: usize = 6;
+
+#[derive(Debug, Serialize)]
+pub struct ResourceProjectOverviewRecord {
+    pub id: String,
+    pub source: String,
+    pub name: String,
+    pub summary: String,
+    pub description: Option<String>,
+    pub icon_url: Option<String>,
+    pub has_cached_icon: bool,
+    pub project_type: String,
+    pub last_updated: String,
+    pub metadata_synced_at: Option<String>,
+    pub icon_synced_at: Option<String>,
+}
+
+impl From<ResourceProjectRecord> for ResourceProjectOverviewRecord {
+    fn from(record: ResourceProjectRecord) -> Self {
+        Self {
+            id: record.id,
+            source: record.source,
+            name: record.name,
+            summary: record.summary,
+            description: record.description,
+            icon_url: record
+                .icon_url
+                .filter(|url| url.starts_with("https://") || url.starts_with("data:image/")),
+            has_cached_icon: record
+                .icon_data
+                .as_ref()
+                .is_some_and(|bytes| !bytes.is_empty()),
+            project_type: record.project_type,
+            last_updated: record.last_updated,
+            metadata_synced_at: record.metadata_synced_at,
+            icon_synced_at: record.icon_synced_at,
+        }
+    }
+}
+
+#[cfg(test)]
+mod overview_tests {
+    use super::*;
+
+    #[test]
+    fn overview_metadata_never_serializes_cached_icon_bytes() {
+        let record = ResourceProjectRecord {
+            id: "project".to_string(),
+            source: "modrinth".to_string(),
+            name: "Project".to_string(),
+            summary: "Summary".to_string(),
+            description: None,
+            icon_url: Some("https://example.invalid/icon.png".to_string()),
+            icon_data: Some(vec![1, 2, 3, 4]),
+            project_type: "mod".to_string(),
+            last_updated: "2026-07-24T00:00:00Z".to_string(),
+            metadata_synced_at: None,
+            icon_synced_at: None,
+        };
+
+        let value = serde_json::to_value(ResourceProjectOverviewRecord::from(record))
+            .expect("overview record should serialize");
+        assert!(value.get("icon_data").is_none());
+        assert_eq!(
+            value.get("has_cached_icon"),
+            Some(&serde_json::Value::Bool(true))
+        );
+    }
+
+    #[test]
+    fn overview_metadata_rejects_insecure_icon_urls() {
+        let record = ResourceProjectRecord {
+            id: "project".to_string(),
+            source: "modrinth".to_string(),
+            name: "Project".to_string(),
+            summary: "Summary".to_string(),
+            description: None,
+            icon_url: Some("http://example.invalid/icon.png".to_string()),
+            icon_data: None,
+            project_type: "mod".to_string(),
+            last_updated: "2026-07-24T00:00:00Z".to_string(),
+            metadata_synced_at: None,
+            icon_synced_at: None,
+        };
+
+        assert!(ResourceProjectOverviewRecord::from(record)
+            .icon_url
+            .is_none());
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceResourceOverview {
+    pub instance_id: i32,
+    pub resources: Vec<crate::models::installed_resource::InstalledResource>,
+    pub project_records: Vec<ResourceProjectOverviewRecord>,
+    pub missing_project_refs: Vec<ResourceProjectRef>,
+    pub update_snapshot: Option<InstanceUpdateSnapshotResponse>,
+    pub metadata_status: &'static str,
+    pub repair_status: &'static str,
+    pub revision: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceRescanSummary {
+    pub scanned: usize,
+    pub hashed: usize,
+    pub identified: usize,
+    pub unresolved: usize,
+    pub status: &'static str,
+}
+
+static ACTIVE_RESOURCE_RESCANS: OnceLock<Mutex<HashSet<i32>>> = OnceLock::new();
+
+struct ResourceRescanGuard(i32);
+
+impl ResourceRescanGuard {
+    fn acquire(instance_id: i32) -> Option<Self> {
+        let active = ACTIVE_RESOURCE_RESCANS.get_or_init(|| Mutex::new(HashSet::new()));
+        let mut active = active.lock().unwrap();
+        active.insert(instance_id).then_some(Self(instance_id))
+    }
+}
+
+impl Drop for ResourceRescanGuard {
+    fn drop(&mut self) {
+        if let Some(active) = ACTIVE_RESOURCE_RESCANS.get() {
+            active.lock().unwrap().remove(&self.0);
+        }
+    }
+}
 
 /// Converts `icon_data` bytes to a base64 data URL, mirroring `process_instance_icon`.
 /// Detects the actual image format from magic bytes.
@@ -67,16 +204,124 @@ pub async fn check_resource_updates(
 }
 
 #[tauri::command]
-pub async fn sync_instance_resources(
+pub async fn rescan_instance_resources(
+    app_handle: tauri::AppHandle,
     resource_watcher: State<'_, ResourceWatcher>,
     instance_id: i32,
-    game_dir: String,
-) -> Result<()> {
-    resource_watcher
-        .watch_instance("sync".to_string(), instance_id, game_dir)
-        .await
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    Ok(())
+    resource_ids: Option<Vec<i32>>,
+    progress_channel: Channel<ProgressUpdate>,
+) -> Result<ResourceRescanSummary> {
+    let Some(_guard) = ResourceRescanGuard::acquire(instance_id) else {
+        return Ok(ResourceRescanSummary {
+            scanned: 0,
+            hashed: 0,
+            identified: 0,
+            unresolved: 0,
+            status: "alreadyRunning",
+        });
+    };
+
+    let inst = crate::commands::instances::get_instance(instance_id)
+        .map_err(|error| anyhow!("Failed to load instance for resource rescan: {error}"))?;
+    let game_dir = inst
+        .game_directory
+        .clone()
+        .ok_or_else(|| anyhow!("Instance has no game directory"))?;
+
+    let targeted = resource_ids.as_ref().is_some_and(|ids| !ids.is_empty());
+    if !targeted {
+        let _ = progress_channel.send(ProgressUpdate::Step {
+            name: "Discovering local resources…".to_string(),
+            total: None,
+        });
+        resource_watcher
+            .refresh_instance(instance_id, game_dir)
+            .await
+            .map_err(|error| anyhow!(error.to_string()))?;
+    }
+
+    let candidates = crate::resources::reconciliation::unresolved_candidates_for_instance(
+        instance_id,
+        resource_ids.as_deref(),
+    )
+    .map_err(|error| anyhow!(error.to_string()))?;
+    let scanned = candidates.len();
+
+    let total = candidates.len();
+    let channel = progress_channel.clone();
+    let progress = std::sync::Arc::new(move |current: usize, total: usize| {
+        let _ = channel.send(ProgressUpdate::Progress {
+            percent: PROGRESS_INDETERMINATE,
+            description: Some(format!("Hashing local resources… {current}/{total}")),
+            severity: None,
+        });
+        let _ = channel.send(ProgressUpdate::StepCount {
+            current: current as u32,
+            total: Some(total as u32),
+        });
+    }) as crate::resources::reconciliation::LocalFactProgress;
+    let _ = progress_channel.send(ProgressUpdate::Step {
+        name: "Hashing local resources…".to_string(),
+        total: Some(total as u32),
+    });
+    let prepared = crate::resources::reconciliation::prepare_candidates_with_progress(
+        instance_id,
+        candidates,
+        Some(progress),
+    )
+    .await;
+    let hashed = prepared.len();
+
+    let _ = progress_channel.send(ProgressUpdate::Step {
+        name: "Matching with Modrinth and CurseForge…".to_string(),
+        total: Some(hashed as u32),
+    });
+    let summary = crate::resources::reconciliation::reconcile_prepared_candidates(
+        &app_handle,
+        instance_id,
+        prepared,
+        if targeted {
+            "manual-resource-identification"
+        } else {
+            "manual-resource-rescan"
+        },
+    )
+    .await
+    .map_err(|error| anyhow!(error.to_string()))?;
+
+    let offline = app_handle
+        .state::<crate::utils::network::NetworkManager>()
+        .get_status()
+        == crate::utils::network::NetworkStatus::Offline;
+    let status = if summary.unresolved == 0 {
+        "complete"
+    } else if offline {
+        "offline"
+    } else {
+        "partial"
+    };
+    let message = if scanned == 0 {
+        "No unlinked resources need identification.".to_string()
+    } else if summary.unresolved == 0 {
+        format!("Identified {} resources.", summary.identified)
+    } else {
+        format!(
+            "Identified {} resources; {} remain unlinked.",
+            summary.identified, summary.unresolved
+        )
+    };
+    let _ = progress_channel.send(ProgressUpdate::Finished {
+        success: true,
+        message: Some(message),
+    });
+
+    Ok(ResourceRescanSummary {
+        scanned,
+        hashed,
+        identified: summary.identified,
+        unresolved: summary.unresolved,
+        status,
+    })
 }
 
 #[tauri::command]
@@ -94,6 +339,136 @@ pub async fn get_installed_resources(
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     Ok(resources)
+}
+
+/// Returns the complete locally available resource state needed for first paint.
+///
+/// This command deliberately performs no network requests and no filesystem scan.
+/// Cached icon bytes are reduced to a boolean so a large resource collection cannot
+/// turn into a multi-megabyte base64 IPC payload.
+#[tauri::command]
+pub async fn get_instance_resource_overview(instance_id: i32) -> Result<InstanceResourceOverview> {
+    let started = std::time::Instant::now();
+    let overview = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        use crate::models::installed_resource::InstalledResource;
+        use crate::models::instance::Instance;
+        use crate::schema::installed_resource::dsl as ir_dsl;
+        use crate::schema::instance::dsl as inst_dsl;
+        use crate::schema::resource_project::dsl as rp_dsl;
+        use crate::utils::db::get_vesta_conn;
+        use diesel::prelude::*;
+
+        let mut conn = get_vesta_conn()?;
+        let resources = ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .load::<InstalledResource>(&mut conn)?;
+
+        let mut refs = Vec::new();
+        let mut seen_refs = HashSet::new();
+        for resource in &resources {
+            let platform = match resource.platform.as_str() {
+                "modrinth" => Some(SourcePlatform::Modrinth),
+                "curseforge" => Some(SourcePlatform::CurseForge),
+                _ => None,
+            };
+            if resource.remote_id.is_empty() {
+                continue;
+            }
+            if let Some(platform) = platform {
+                if seen_refs.insert((platform, resource.remote_id.clone())) {
+                    refs.push(ResourceProjectRef {
+                        platform,
+                        id: resource.remote_id.clone(),
+                    });
+                }
+            }
+        }
+
+        let ids = refs
+            .iter()
+            .map(|project_ref| &project_ref.id)
+            .collect::<Vec<_>>();
+        let mut records = if ids.is_empty() {
+            Vec::new()
+        } else {
+            rp_dsl::resource_project
+                .filter(rp_dsl::id.eq_any(ids))
+                .load::<ResourceProjectRecord>(&mut conn)?
+        };
+        let requested_keys = refs
+            .iter()
+            .map(|project_ref| {
+                (
+                    format!("{:?}", project_ref.platform).to_lowercase(),
+                    project_ref.id.clone(),
+                )
+            })
+            .collect::<HashSet<_>>();
+        records.retain(|record| {
+            requested_keys.contains(&(record.source.to_lowercase(), record.id.clone()))
+        });
+
+        let record_keys = records
+            .iter()
+            .map(|record| (record.source.to_lowercase(), record.id.clone()))
+            .collect::<HashSet<_>>();
+        let missing_project_refs = refs
+            .into_iter()
+            .filter(|project_ref| {
+                let source = format!("{:?}", project_ref.platform).to_lowercase();
+                !record_keys.contains(&(source, project_ref.id.clone()))
+            })
+            .collect::<Vec<_>>();
+
+        let inst = inst_dsl::instance
+            .filter(inst_dsl::id.eq(instance_id))
+            .first::<Instance>(&mut conn)?;
+        let update_snapshot =
+            crate::resources::update_cache::get_instance_update_snapshot_response(
+                instance_id,
+                &inst,
+            )?;
+
+        let mut revision_hasher = DefaultHasher::new();
+        instance_id.hash(&mut revision_hasher);
+        for resource in &resources {
+            resource.id.hash(&mut revision_hasher);
+            resource.remote_version_id.hash(&mut revision_hasher);
+            resource.is_enabled.hash(&mut revision_hasher);
+            resource.file_mtime.hash(&mut revision_hasher);
+        }
+
+        let has_unresolved_rows = resources.iter().any(|resource| {
+            resource.remote_id.is_empty()
+                || !matches!(resource.platform.as_str(), "modrinth" | "curseforge")
+        });
+        Ok(InstanceResourceOverview {
+            instance_id,
+            metadata_status: if missing_project_refs.is_empty() && !has_unresolved_rows {
+                "complete"
+            } else {
+                "partial"
+            },
+            repair_status: "notChecked",
+            revision: format!("{:x}", revision_hasher.finish()),
+            resources,
+            project_records: records.into_iter().map(Into::into).collect(),
+            missing_project_refs,
+            update_snapshot,
+        })
+    })
+    .await
+    .map_err(|error| anyhow!("Failed to join resource overview task: {error}"))?
+    .map_err(|error| anyhow!(error.to_string()))?;
+
+    log::debug!(
+        "[perf] instance-resource-overview instance_id={} resources={} metadata={} elapsed_ms={}",
+        instance_id,
+        overview.resources.len(),
+        overview.project_records.len(),
+        started.elapsed().as_millis()
+    );
+    Ok(overview)
 }
 
 #[tauri::command]
@@ -141,10 +516,11 @@ pub async fn cache_resource_metadata(
 #[tauri::command]
 pub async fn get_cached_resource_project(
     resource_manager: State<'_, ResourceManager>,
+    platform: SourcePlatform,
     id: String,
 ) -> Result<Option<ResourceProjectRecord>> {
     Ok(resource_manager
-        .get_project_record(&id)
+        .get_project_record(platform, &id)
         .await?
         .map(process_resource_record_icon))
 }
@@ -306,12 +682,26 @@ pub async fn resolve_image_urls(
 #[tauri::command]
 pub async fn get_cached_resource_projects(
     resource_manager: State<'_, ResourceManager>,
-    ids: Vec<String>,
-) -> Result<Vec<ResourceProjectRecord>> {
+    refs: Vec<ResourceProjectRef>,
+) -> Result<Vec<ResourceProjectOverviewRecord>> {
     Ok(resource_manager
-        .get_project_records(&ids)?
+        .get_project_records(&refs)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
+
+#[tauri::command]
+pub async fn hydrate_resource_project_icons(
+    resource_manager: State<'_, ResourceManager>,
+    refs: Vec<ResourceProjectRef>,
+) -> Result<Vec<ResourceProjectOverviewRecord>> {
+    Ok(resource_manager
+        .hydrate_project_icons(&refs)
+        .await?
         .into_iter()
         .map(process_resource_record_icon)
+        .map(Into::into)
         .collect())
 }
 
@@ -321,7 +711,7 @@ pub async fn get_or_hydrate_resource_projects(
     refs: Vec<ResourceProjectRef>,
     allow_network: Option<bool>,
     refresh_stale: Option<bool>,
-) -> Result<Vec<ResourceProjectRecord>> {
+) -> Result<Vec<ResourceProjectOverviewRecord>> {
     Ok(resource_manager
         .get_or_hydrate_project_records(
             &refs,
@@ -330,7 +720,7 @@ pub async fn get_or_hydrate_resource_projects(
         )
         .await?
         .into_iter()
-        .map(process_resource_record_icon)
+        .map(Into::into)
         .collect())
 }
 
@@ -585,7 +975,11 @@ pub async fn find_peer_resource(
 }
 
 #[tauri::command]
-pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
+pub async fn delete_resource(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+    resource_id: i32,
+) -> Result<()> {
     crate::resources::ledger::remove_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
@@ -597,20 +991,43 @@ pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
         );
     }
 
+    crate::resources::reconciliation::emit_rows_changed(
+        &app_handle,
+        instance_id,
+        "resource-deleted",
+    )?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn toggle_resource(resource_id: i32, enabled: bool) -> Result<()> {
+pub async fn toggle_resource(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+    resource_id: i32,
+    enabled: bool,
+) -> Result<()> {
     crate::resources::ledger::set_enabled(resource_id, enabled)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    crate::resources::reconciliation::emit_rows_changed(
+        &app_handle,
+        instance_id,
+        "resource-toggled",
+    )?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn clear_modpack_resource_provenance(instance_id: i32) -> Result<()> {
+pub async fn clear_modpack_resource_provenance(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+) -> Result<()> {
     crate::resources::ledger::clear_modpack_provenance(instance_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    crate::resources::reconciliation::emit_rows_changed(
+        &app_handle,
+        instance_id,
+        "provenance-cleared",
+    )?;
     Ok(())
 }
 
@@ -624,7 +1041,11 @@ pub async fn backfill_modpack_resource_provenance_fast(
         match backfill_modpack_resource_provenance_fast_inner(instance_id) {
             Ok(changed) => {
                 if changed > 0 {
-                    let _ = app_handle.emit("resources-updated", instance_id);
+                    let _ = crate::resources::reconciliation::emit_rows_changed(
+                        &app_handle,
+                        instance_id,
+                        "provenance-backfill",
+                    );
                 }
             }
             Err(e) => {
@@ -752,7 +1173,11 @@ pub async fn backfill_modpack_resource_provenance(
         .map_err(|e| anyhow::anyhow!("Failed to apply resource provenance: {}", e))?;
 
     if changed > 0 {
-        let _ = app_handle.emit("resources-updated", instance_id);
+        let _ = crate::resources::reconciliation::emit_rows_changed(
+            &app_handle,
+            instance_id,
+            "provenance-backfill",
+        );
     }
 
     Ok(matched_vec.len())

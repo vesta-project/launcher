@@ -190,7 +190,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    resource_project (id) {
+    resource_project (source, id) {
         id -> Text,
         source -> Text,
         name -> Text,
@@ -202,6 +202,17 @@ diesel::table! {
         last_updated -> Timestamp,
         metadata_synced_at -> Nullable<Timestamp>,
         icon_synced_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    resource_project_peer (source, project_id, peer_source) {
+        source -> Text,
+        project_id -> Text,
+        peer_source -> Text,
+        peer_project_id -> Text,
+        evidence -> Text,
+        updated_at -> Timestamp,
     }
 }
 
@@ -254,6 +265,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     instance_resource_update_check,
     resource_metadata_cache,
     resource_project,
+    resource_project_peer,
     saved_themes,
     task_state,
     user_version_tracking,

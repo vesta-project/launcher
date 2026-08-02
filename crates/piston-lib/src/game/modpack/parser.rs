@@ -283,6 +283,42 @@ mod tests {
     }
 
     #[test]
+    fn parses_curseforge_pack_without_version() {
+        let zip = write_zip(&[(
+            "manifest.json",
+            r#"{
+                "minecraft": {
+                    "version": "1.20.1",
+                    "modLoaders": [{ "id": "forge-47.4.20", "primary": true }],
+                    "recommendedRam": 10000
+                },
+                "manifestType": "minecraftModpack",
+                "manifestVersion": 1,
+                "name": "Bountiful Wilds 3.0.2",
+                "author": "",
+                "files": [{
+                    "projectID": 351725,
+                    "fileID": 7627954,
+                    "required": true,
+                    "isLocked": false
+                }],
+                "overrides": "overrides"
+            }"#,
+        )]);
+
+        let metadata = get_modpack_metadata(zip.path())
+            .expect("CurseForge packs with no declared version should still parse");
+
+        assert_eq!(metadata.name, "Bountiful Wilds 3.0.2");
+        assert_eq!(metadata.version, "Unknown");
+        assert_eq!(metadata.minecraft_version, "1.20.1");
+        assert_eq!(metadata.modloader_type, "forge");
+        assert_eq!(metadata.modloader_version.as_deref(), Some("47.4.20"));
+        assert_eq!(metadata.recommended_ram_mb, Some(10000));
+        assert_eq!(metadata.mods.len(), 1);
+    }
+
+    #[test]
     fn rejects_nested_only_manifest_without_scanning_for_compatibility() {
         let zip = write_zip(&[(
             "wrapped/modrinth.index.json",

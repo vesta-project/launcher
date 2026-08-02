@@ -16,17 +16,22 @@ interface ResourceRowActionsProps {
 	update: ResourceVersion | undefined;
 	isCheckingForUpdates: boolean;
 	hasCheckedForUpdates: boolean;
+	isIdentifying: boolean;
 	busy: boolean;
 	showVersionInfo?: boolean;
 	currentVersion?: string;
 	onUpdate: (resource: any, version: ResourceVersion) => Promise<void>;
 	onDelete: (resource: any) => Promise<void>;
 	onCheckUpdates: (resource: any) => Promise<void>;
+	onIdentify: (resource: any) => Promise<void>;
 	onMenuItemSelect?: () => void;
 }
 
 export function ResourceRowActions(props: ResourceRowActionsProps) {
 	const notifyMenuSelect = () => props.onMenuItemSelect?.();
+	const isUnresolved = () =>
+		!props.resource.remote_id ||
+		!["modrinth", "curseforge"].includes(props.resource.platform);
 
 	const handleMenuOpenChange = (open: boolean) => {
 		if (!open) props.onMenuItemSelect?.();
@@ -78,6 +83,37 @@ export function ResourceRowActions(props: ResourceRowActionsProps) {
 								class={styles["row-actions-version-info"]}
 							>
 								Current: {props.currentVersion}
+							</DropdownMenuItem>
+							<DropdownMenuSeparator class={styles["row-actions-separator"]} />
+						</Show>
+
+						<Show when={isUnresolved()}>
+							<DropdownMenuItem
+								onSelect={() => {
+									notifyMenuSelect();
+									void props.onIdentify(props.resource);
+								}}
+								disabled={props.busy || props.isIdentifying}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="14"
+									height="14"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									style={{ "margin-right": "8px", flex: "0 0 auto" }}
+									classList={{
+										[styles["checking-updates-spinner"]]: props.isIdentifying,
+									}}
+								>
+									<polyline points="23 4 23 10 17 10" />
+									<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+								</svg>
+								{props.isIdentifying ? "Identifying..." : "Identify Resource"}
 							</DropdownMenuItem>
 							<DropdownMenuSeparator class={styles["row-actions-separator"]} />
 						</Show>

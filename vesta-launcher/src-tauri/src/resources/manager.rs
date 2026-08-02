@@ -21,21 +21,7 @@ use crate::schema::vesta::resource_project::dsl as rp_dsl;
 use crate::utils::db::get_vesta_conn;
 
 fn is_record_incomplete(record: &ResourceProjectRecord) -> bool {
-    let summary_missing = record.summary.trim().is_empty();
-
-    let expects_icon = record
-        .icon_url
-        .as_ref()
-        .map(|url| !url.trim().is_empty())
-        .unwrap_or(false);
-    let icon_missing = record
-        .icon_data
-        .as_ref()
-        .map(|bytes| bytes.is_empty())
-        .unwrap_or(true)
-        && expects_icon;
-
-    summary_missing || icon_missing
+    record.metadata_synced_at.is_none() || record.summary.trim().is_empty()
 }
 
 async fn download_icon_with_timeout(url: &str) -> Result<Vec<u8>> {
@@ -518,14 +504,14 @@ impl ResourceManager {
         let source = self.get_source(platform).await?;
         let fetched = source.get_projects(&missing_ids).await?;
 
-        for project in fetched {
+        for project in &fetched {
             {
                 let mut cache = self.project_cache.write().await;
                 cache.insert((platform, project.id.clone()), project.clone());
             }
-            let _ = self.cache_project_metadata(platform, &project).await;
-            results.push(project);
         }
+        let _ = self.cache_project_metadata_many(platform, &fetched).await;
+        results.extend(fetched);
 
         Ok(results)
     }
@@ -607,6 +593,16 @@ impl ResourceManager {
             SourcePlatform::Modrinth => SourcePlatform::CurseForge,
             SourcePlatform::CurseForge => SourcePlatform::Modrinth,
         };
+
+        if let Some((platform, project_id)) =
+            crate::resources::reconciliation::find_persisted_peer(current.source, &current.id)?
+        {
+            if platform == other_platform {
+                if let Ok(project) = self.get_project(platform, &project_id).await {
+                    return Ok(Some(project));
+                }
+            }
+        }
 
         if let Some(ref external_ids) = current.external_ids {
             let key = match other_platform {
@@ -725,21 +721,78 @@ impl ResourceManager {
         Ok((project, version))
     }
 
-    pub async fn get_project_record_for_source(
+    pub async fn get_by_hashes(
         &self,
         platform: SourcePlatform,
-        id: &str,
-    ) -> Result<Option<ResourceProjectRecord>> {
-        let mut conn = get_vesta_conn()?;
-        let source = format!("{:?}", platform).to_lowercase();
+        hashes: &[String],
+    ) -> Result<HashMap<String, (ResourceProject, ResourceVersion)>> {
+        let mut matches = HashMap::new();
+        let mut missing = Vec::new();
+        let mut missing_seen = HashSet::new();
 
-        let record = rp_dsl::resource_project
-            .filter(rp_dsl::id.eq(id))
-            .filter(rp_dsl::source.eq(source))
-            .first::<ResourceProjectRecord>(&mut conn)
-            .optional()?;
+        {
+            let cache = self.hash_cache.read().await;
+            for hash in hashes {
+                if let Some(found) = cache.get(&(platform, hash.clone())) {
+                    matches.insert(hash.clone(), found.clone());
+                } else if missing_seen.insert(hash.clone()) {
+                    missing.push(hash.clone());
+                }
+            }
+        }
 
-        Ok(record)
+        if missing.is_empty() {
+            return Ok(matches);
+        }
+
+        let source = self.get_source(platform).await?;
+        let batch_size = source.identification_batch_size().max(1);
+        let concurrency = source.identification_concurrency().max(1);
+        use futures::stream::{self, StreamExt};
+        let chunks = missing
+            .chunks(batch_size)
+            .map(<[String]>::to_vec)
+            .collect::<Vec<_>>();
+        let batches = stream::iter(chunks.into_iter().map(|hashes| {
+            let source = source.clone();
+            async move {
+                let result = source.get_by_hashes(&hashes).await;
+                (hashes.len(), result)
+            }
+        }))
+        .buffer_unordered(concurrency)
+        .collect::<Vec<_>>()
+        .await;
+        let mut projects_to_cache = HashMap::new();
+        for (batch_len, result) in batches {
+            let fetched = match result {
+                Ok(fetched) => fetched,
+                Err(error) => {
+                    log::warn!(
+                        "[ResourceManager] {:?} identification batch failed ({} hashes): {}",
+                        platform,
+                        batch_len,
+                        error
+                    );
+                    continue;
+                }
+            };
+            for (hash, (project, version)) in fetched {
+                {
+                    let mut hash_cache = self.hash_cache.write().await;
+                    hash_cache.insert((platform, hash.clone()), (project.clone(), version.clone()));
+                }
+                {
+                    let mut project_cache = self.project_cache.write().await;
+                    project_cache.insert((platform, project.id.clone()), project.clone());
+                }
+                projects_to_cache.insert(project.id.clone(), project.clone());
+                matches.insert(hash, (project, version));
+            }
+        }
+        let projects = projects_to_cache.into_values().collect::<Vec<_>>();
+        let _ = self.cache_project_metadata_many(platform, &projects).await;
+        Ok(matches)
     }
 
     pub async fn get_or_hydrate_project_records(
@@ -762,14 +815,18 @@ impl ResourceManager {
             }
         }
 
+        let existing_records = self.get_project_records(&unique_refs)?;
+        let existing_by_key = existing_records
+            .into_iter()
+            .map(|record| ((record.source.clone(), record.id.clone()), record))
+            .collect::<HashMap<_, _>>();
         let mut refs_to_hydrate = Vec::new();
         for project_ref in &unique_refs {
-            let record = self
-                .get_project_record_for_source(project_ref.platform, &project_ref.id)
-                .await?;
+            let source = format!("{:?}", project_ref.platform).to_lowercase();
+            let record = existing_by_key.get(&(source, project_ref.id.clone()));
 
             match record {
-                Some(ref existing) if is_record_incomplete(existing) || refresh_stale => {
+                Some(existing) if is_record_incomplete(existing) || refresh_stale => {
                     refs_to_hydrate.push(project_ref.clone());
                 }
                 Some(_) => {}
@@ -778,48 +835,30 @@ impl ResourceManager {
         }
 
         if allow_network && !refs_to_hydrate.is_empty() {
-            // Parallelize project hydration to significantly reduce load time for many resources.
-            // Each get_project call makes network requests (API + icon download), so running
-            // them concurrently is much faster than sequential.
-            use futures::stream::{self, StreamExt};
-            const MAX_CONCURRENT_HYDRATIONS: usize = 15;
-            let futures: Vec<_> = refs_to_hydrate
-                .iter()
-                .map(|project_ref| self.get_project(project_ref.platform, &project_ref.id))
-                .collect();
-            let results: Vec<_> = stream::iter(futures)
-                .buffer_unordered(MAX_CONCURRENT_HYDRATIONS)
-                .collect()
-                .await;
-            for (project_ref, result) in refs_to_hydrate.iter().zip(results.iter()) {
-                if let Err(e) = result {
-                    log::warn!(
-                        "[ResourceManager] Failed to hydrate project {}/{}: {}",
-                        format!("{:?}", project_ref.platform).to_lowercase(),
-                        project_ref.id,
-                        e
-                    );
+            let mut grouped: HashMap<SourcePlatform, Vec<String>> = HashMap::new();
+            for project_ref in refs_to_hydrate {
+                grouped
+                    .entry(project_ref.platform)
+                    .or_default()
+                    .push(project_ref.id);
+            }
+
+            for (platform, ids) in grouped {
+                const PROJECT_BATCH_SIZE: usize = 100;
+                for chunk in ids.chunks(PROJECT_BATCH_SIZE) {
+                    if let Err(error) = self.get_projects(platform, chunk).await {
+                        log::warn!(
+                            "[ResourceManager] Failed to hydrate {} {:?} projects: {}",
+                            chunk.len(),
+                            platform,
+                            error
+                        );
+                    }
                 }
             }
         }
 
-        let mut records = Vec::new();
-        let mut returned = HashSet::new();
-
-        for project_ref in refs {
-            let record = self
-                .get_project_record_for_source(project_ref.platform, &project_ref.id)
-                .await?;
-
-            if let Some(record) = record {
-                let key = (record.source.clone(), record.id.clone());
-                if returned.insert(key) {
-                    records.push(record);
-                }
-            }
-        }
-
-        Ok(records)
+        self.get_project_records(refs)
     }
 
     pub async fn refresh_resources_for_instance(
@@ -877,107 +916,190 @@ impl ResourceManager {
         platform: SourcePlatform,
         project: &ResourceProject,
     ) -> Result<()> {
+        self.cache_project_metadata_many(platform, std::slice::from_ref(project))
+            .await
+    }
+
+    pub async fn cache_project_metadata_many(
+        &self,
+        platform: SourcePlatform,
+        projects: &[ResourceProject],
+    ) -> Result<()> {
+        if projects.is_empty() {
+            return Ok(());
+        }
         let mut conn = get_vesta_conn()?;
         let now = chrono::Utc::now().to_rfc3339();
         let platform_str = format!("{:?}", platform).to_lowercase();
-
-        // 1. Check if we have an existing record with icon_data
-        let existing: Option<ResourceProjectRecord> = rp_dsl::resource_project
-            .filter(rp_dsl::id.eq(&project.id))
+        let ids = projects
+            .iter()
+            .map(|project| &project.id)
+            .collect::<Vec<_>>();
+        let existing = rp_dsl::resource_project
             .filter(rp_dsl::source.eq(&platform_str))
-            .first(&mut conn)
-            .optional()?;
-
-        let mut icon_data = existing.as_ref().and_then(|e| e.icon_data.clone());
-        let existing_icon_url = existing.as_ref().and_then(|e| e.icon_url.clone());
-        let icon_url_changed = existing_icon_url != project.icon_url;
-        let mut icon_synced_at = existing.as_ref().and_then(|e| e.icon_synced_at.clone());
-
-        // 2. Download icon data if missing, or refresh it when icon URL changed.
-        if icon_data.is_none() || icon_url_changed {
-            if let Some(url) = &project.icon_url {
-                if !url.is_empty() {
-                    match download_icon_with_timeout(url).await {
-                        Ok(bytes) => {
-                            icon_data = Some(bytes);
-                            icon_synced_at = Some(now.clone());
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "Failed to download icon for {} ({}): {}",
-                                project.id,
-                                url,
-                                e
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        let description = project
-            .description
-            .as_ref()
-            .map(|d| d.trim())
-            .filter(|d| !d.is_empty())
-            .map(|d| d.to_string())
-            .or_else(|| existing.as_ref().and_then(|e| e.description.clone()))
-            .or_else(|| {
-                if project.summary.trim().is_empty() {
+            .filter(rp_dsl::id.eq_any(ids))
+            .load::<ResourceProjectRecord>(&mut conn)?
+            .into_iter()
+            .map(|record| (record.id.clone(), record))
+            .collect::<HashMap<_, _>>();
+        let records = projects
+            .iter()
+            .map(|project| {
+                let previous = existing.get(&project.id);
+                let icon_url_changed = previous.and_then(|record| record.icon_url.as_ref())
+                    != project.icon_url.as_ref();
+                let icon_data = if icon_url_changed {
                     None
                 } else {
-                    Some(project.summary.clone())
+                    previous.and_then(|record| record.icon_data.clone())
+                };
+                let icon_synced_at = if icon_url_changed {
+                    None
+                } else {
+                    previous.and_then(|record| record.icon_synced_at.clone())
+                };
+                let description = project
+                    .description
+                    .as_ref()
+                    .map(|description| description.trim())
+                    .filter(|description| !description.is_empty())
+                    .map(str::to_string)
+                    .or_else(|| previous.and_then(|record| record.description.clone()))
+                    .or_else(|| {
+                        (!project.summary.trim().is_empty()).then(|| project.summary.clone())
+                    });
+                let summary = if project.summary.trim().is_empty() {
+                    previous
+                        .map(|record| record.summary.clone())
+                        .unwrap_or_default()
+                } else {
+                    project.summary.clone()
+                };
+                ResourceProjectRecord {
+                    id: project.id.clone(),
+                    source: platform_str.clone(),
+                    name: project.name.clone(),
+                    summary,
+                    description,
+                    icon_url: project.icon_url.clone(),
+                    icon_data,
+                    project_type: format!("{:?}", project.resource_type).to_lowercase(),
+                    last_updated: now.clone(),
+                    metadata_synced_at: Some(now.clone()),
+                    icon_synced_at,
                 }
-            });
-
-        let summary = if project.summary.trim().is_empty() {
-            existing
-                .as_ref()
-                .map(|e| e.summary.clone())
-                .unwrap_or_default()
-        } else {
-            project.summary.clone()
-        };
-
-        let record = ResourceProjectRecord {
-            id: project.id.clone(),
-            source: platform_str,
-            name: project.name.clone(),
-            summary,
-            description,
-            icon_url: project.icon_url.clone(),
-            icon_data,
-            project_type: format!("{:?}", project.resource_type).to_lowercase(),
-            last_updated: now.clone(),
-            metadata_synced_at: Some(now),
-            icon_synced_at,
-        };
-
-        diesel::insert_into(rp_dsl::resource_project)
-            .values(&record)
-            .on_conflict(rp_dsl::id)
-            .do_update()
-            .set(&record)
-            .execute(&mut conn)?;
-
-        Ok(())
+            })
+            .collect::<Vec<_>>();
+        conn.transaction::<(), anyhow::Error, _>(|conn| {
+            for record in &records {
+                diesel::insert_into(rp_dsl::resource_project)
+                    .values(record)
+                    .on_conflict((rp_dsl::source, rp_dsl::id))
+                    .do_update()
+                    .set(record)
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
     }
 
-    pub async fn get_project_record(&self, id: &str) -> Result<Option<ResourceProjectRecord>> {
+    pub async fn get_project_record(
+        &self,
+        platform: SourcePlatform,
+        id: &str,
+    ) -> Result<Option<ResourceProjectRecord>> {
         let mut conn = get_vesta_conn()?;
+        let source = format!("{:?}", platform).to_lowercase();
         let record = rp_dsl::resource_project
             .filter(rp_dsl::id.eq(id))
+            .filter(rp_dsl::source.eq(source))
             .first::<ResourceProjectRecord>(&mut conn)
             .optional()?;
         Ok(record)
     }
 
-    pub fn get_project_records(&self, ids: &[String]) -> Result<Vec<ResourceProjectRecord>> {
+    pub fn get_project_records(
+        &self,
+        refs: &[ResourceProjectRef],
+    ) -> Result<Vec<ResourceProjectRecord>> {
+        if refs.is_empty() {
+            return Ok(Vec::new());
+        }
         let mut conn = get_vesta_conn()?;
-        let records = rp_dsl::resource_project
+        let keys = refs
+            .iter()
+            .map(|project_ref| {
+                (
+                    format!("{:?}", project_ref.platform).to_lowercase(),
+                    project_ref.id.clone(),
+                )
+            })
+            .collect::<HashSet<_>>();
+        let ids = refs
+            .iter()
+            .map(|project_ref| &project_ref.id)
+            .collect::<Vec<_>>();
+        let mut records = rp_dsl::resource_project
             .filter(rp_dsl::id.eq_any(ids))
             .load::<ResourceProjectRecord>(&mut conn)?;
+        records.retain(|record| keys.contains(&(record.source.clone(), record.id.clone())));
         Ok(records)
+    }
+
+    pub async fn hydrate_project_icons(
+        &self,
+        refs: &[ResourceProjectRef],
+    ) -> Result<Vec<ResourceProjectRecord>> {
+        use futures::stream::{self, StreamExt};
+
+        let records = self.get_project_records(refs)?;
+        let downloads = records
+            .iter()
+            .filter_map(|record| {
+                let needs_icon = record
+                    .icon_data
+                    .as_ref()
+                    .is_none_or(|bytes| bytes.is_empty());
+                needs_icon
+                    .then(|| record.icon_url.clone())
+                    .flatten()
+                    .map(|url| (record.source.clone(), record.id.clone(), url))
+            })
+            .collect::<Vec<_>>();
+
+        let downloaded = stream::iter(downloads.into_iter().map(|(source, id, url)| async move {
+            let bytes = download_icon_with_timeout(&url).await;
+            (source, id, bytes)
+        }))
+        .buffer_unordered(8)
+        .collect::<Vec<_>>()
+        .await;
+
+        if !downloaded.is_empty() {
+            let mut conn = get_vesta_conn()?;
+            let now = chrono::Utc::now().to_rfc3339();
+            for (source, id, result) in downloaded {
+                match result {
+                    Ok(bytes) => {
+                        diesel::update(
+                            rp_dsl::resource_project
+                                .filter(rp_dsl::source.eq(source))
+                                .filter(rp_dsl::id.eq(id)),
+                        )
+                        .set((
+                            rp_dsl::icon_data.eq(Some(bytes)),
+                            rp_dsl::icon_synced_at.eq(Some(now.clone())),
+                        ))
+                        .execute(&mut conn)?;
+                    }
+                    Err(error) => {
+                        log::warn!("[ResourceManager] Failed to hydrate resource icon: {error}");
+                    }
+                }
+            }
+        }
+
+        self.get_project_records(refs)
     }
 }
 

@@ -16,6 +16,10 @@ fn instance_id_from_key(client_key: Option<String>) -> Result<i32> {
         .map_err(|_| anyhow::anyhow!("Invalid instance ID in client_key"))
 }
 
+fn should_auto_dismiss(last_operation: Option<&str>) -> bool {
+    last_operation != Some("update")
+}
+
 impl ActionHandler for ResumeInstanceOperation {
     fn handle(
         &self,
@@ -39,6 +43,16 @@ impl ActionHandler for ResumeInstanceOperation {
         });
         Ok(())
     }
+
+    fn auto_dismiss(&self, _app_handle: &AppHandle, client_key: Option<&str>) -> bool {
+        let instance_id = client_key
+            .map(str::to_string)
+            .and_then(|key| instance_id_from_key(Some(key)).ok());
+        match instance_id.and_then(|id| crate::commands::instances::get_instance(id).ok()) {
+            Some(instance) => should_auto_dismiss(instance.last_operation.as_deref()),
+            None => false,
+        }
+    }
 }
 
 pub fn register(manager: &NotificationManager) {
@@ -60,5 +74,12 @@ mod tests {
         );
         assert!(instance_id_from_key(Some("task_42".into())).is_err());
         assert!(instance_id_from_key(None).is_err());
+    }
+
+    #[test]
+    fn update_recovery_notification_remains_until_async_result() {
+        assert!(!should_auto_dismiss(Some("update")));
+        assert!(should_auto_dismiss(Some("repair")));
+        assert!(should_auto_dismiss(None));
     }
 }

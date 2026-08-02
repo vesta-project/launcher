@@ -1,4 +1,4 @@
-# ADR-0005: Keep Localization Catalogs With The Launcher
+# ADR-0007: Keep Localization Catalogs With The Launcher
 
 Date: 2026-07-24
 

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { updateStartupConfigField } from "@utils/startup-state";
 import { batch, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
@@ -105,6 +106,7 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 
 					batch(() => {
 						for (const { field, value } of currentUpdates) {
+							updateStartupConfigField(field, value);
 							if (isThemeConfigField(field)) {
 								hasThemeUpdate = true;
 							}

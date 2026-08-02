@@ -93,7 +93,18 @@ fn main() {
 
     builder
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                // Visibility is controlled by the painted-surface handshake. Restoring
+                // it here would show hidden startup and prewarmed windows prematurely.
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        .difference(tauri_plugin_window_state::StateFlags::VISIBLE),
+                )
+                // Reusable mini windows own their lifecycle in MiniWindowRegistry.
+                .with_filter(|label| !label.starts_with("page-viewer-"))
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -103,6 +114,7 @@ fn main() {
             setup::init(app)
         })
         .manage(utils::dialog_manager::DialogManager::new())
+        .manage(utils::windows::MiniWindowRegistry::default())
         .manage(utils::launch_intents::PendingLaunchIntents::new())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
@@ -124,6 +136,10 @@ fn main() {
         }))
         .invoke_handler(tauri::generate_handler![
             launch_window,
+            utils::windows::prime_mini_window,
+            utils::windows::preload_mini_window_route,
+            utils::windows::take_mini_window_payload,
+            utils::windows::hide_mini_window,
             get_config,
             set_config,
             update_config_field,
@@ -158,6 +174,7 @@ fn main() {
             commands::app::set_tray_icon_visibility,
             commands::app::set_minimize_to_tray,
             commands::app::show_window_from_tray,
+            commands::app::present_window_when_ready,
             commands::app::clear_window_startup_background,
             commands::app::parse_vesta_url,
             utils::launch_intents::consume_pending_intents,
@@ -286,6 +303,7 @@ fn main() {
             commands::resources::cache_resource_metadata,
             commands::resources::get_cached_resource_project,
             commands::resources::get_cached_resource_projects,
+            commands::resources::hydrate_resource_project_icons,
             commands::resources::get_or_hydrate_resource_projects,
             commands::resources::get_resource_projects,
             commands::resources::get_resource_versions,
@@ -298,8 +316,9 @@ fn main() {
             commands::resources::backfill_modpack_resource_provenance,
             commands::resources::check_instance_updates_lightweight,
             commands::resources::get_instance_update_snapshot,
-            commands::resources::sync_instance_resources,
+            commands::resources::rescan_instance_resources,
             commands::resources::get_installed_resources,
+            commands::resources::get_instance_resource_overview,
             commands::resources::check_resource_updates,
             commands::resources::resolve_image_url,
             commands::resources::resolve_image_urls,

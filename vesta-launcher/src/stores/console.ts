@@ -27,6 +27,14 @@ export interface LogFileInfo {
 	last_modified: number;
 }
 
+export const CONSOLE_FILTER_LEVELS: LogLevel[] = [
+	"INFO",
+	"WARN",
+	"ERROR",
+	"DEBUG",
+];
+export const MAX_CONSOLE_LINES = 5000;
+
 interface ConsoleState {
 	lines: LogLine[];
 	history: LogFileInfo[];
@@ -45,13 +53,39 @@ const [state, setState] = createStore<ConsoleState>({
 	currentLogPath: null,
 	isLive: true,
 	searchQuery: "",
-	filterLevels: ["INFO", "WARN", "ERROR", "FATAL", "DEBUG"],
+	filterLevels: [...CONSOLE_FILTER_LEVELS],
 	autoScroll: true,
 	isCatchingUp: false,
 	lastCatchupTime: null,
 });
 
 let lineIdCounter = 0;
+let activeInstanceSlug: string | null = null;
+let initGeneration = 0;
+
+interface CachedConsoleSession {
+	lines: LogLine[];
+	history: LogFileInfo[];
+	lastCatchupTime: number | null;
+}
+
+const MAX_CACHED_CONSOLE_SESSIONS = 6;
+const sessionCache = new Map<string, CachedConsoleSession>();
+
+function retainCurrentSession() {
+	if (!activeInstanceSlug) return;
+	sessionCache.delete(activeInstanceSlug);
+	sessionCache.set(activeInstanceSlug, {
+		lines: [...state.lines],
+		history: [...state.history],
+		lastCatchupTime: state.lastCatchupTime,
+	});
+	while (sessionCache.size > MAX_CACHED_CONSOLE_SESSIONS) {
+		const oldest = sessionCache.keys().next().value;
+		if (!oldest) break;
+		sessionCache.delete(oldest);
+	}
+}
 
 // Regex for standard Minecraft log4j format: [12:34:56] [Thread/LEVEL]: message
 const LOG_REGEX = /^\[(\d{2}:\d{2}:\d{2})\]\s+\[([^/]+)\/([^\]]+)\]:\s+(.*)$/;
@@ -84,30 +118,22 @@ export const consoleStore = {
 	state,
 
 	async init(instanceSlug: string) {
+		const generation = ++initGeneration;
 		const isRunning = !!instancesState.runningIds[instanceSlug];
+		const cached = sessionCache.get(instanceSlug);
+		activeInstanceSlug = instanceSlug;
+		lineIdCounter = cached?.lines.at(-1)?.id ?? 0;
 
-		// Reset state
 		setState({
-			lines: [],
+			lines: cached?.lines ?? [],
+			history: cached?.history ?? [],
 			isLive: isRunning,
 			currentLogPath: null,
 			isCatchingUp: true,
+			lastCatchupTime: cached?.lastCatchupTime ?? null,
 		});
 
-		// 1. Fetch history
-		try {
-			const history = await invoke<LogFileInfo[]>("get_instance_log_history", {
-				instanceIdSlug: instanceSlug,
-			});
-			setState("history", history);
-		} catch (e) {
-			console.error("Failed to fetch log history", e);
-		}
-
-		// 2. Catch up with current session log
-		await this.catchUp(instanceSlug);
-
-		// 3. Listen for live events
+		const queuedLiveLines: string[] = [];
 		const logUnlisten = await listen<{
 			lines: Array<{
 				instance_id: string;
@@ -120,7 +146,11 @@ export const consoleStore = {
 					.filter((l) => l.instance_id === instanceSlug)
 					.map((l) => l.line);
 				if (relevantLines.length > 0) {
-					this.appendRawLines(relevantLines);
+					if (state.isCatchingUp) {
+						queuedLiveLines.push(...relevantLines);
+					} else {
+						this.appendRawLines(relevantLines);
+					}
 				}
 			}
 		});
@@ -143,10 +173,35 @@ export const consoleStore = {
 			},
 		);
 
+		await Promise.all([
+			invoke<LogFileInfo[]>("get_instance_log_history", {
+				instanceIdSlug: instanceSlug,
+			})
+				.then((history) => {
+					if (generation !== initGeneration) return;
+					setState("history", history);
+					retainCurrentSession();
+				})
+				.catch((error) => {
+					console.error("Failed to fetch log history", error);
+				}),
+			this.catchUp(instanceSlug),
+		]);
+
+		if (generation === initGeneration && queuedLiveLines.length > 0) {
+			const tail = new Set(
+				state.lines
+					.slice(-Math.max(200, queuedLiveLines.length * 2))
+					.map((line) => line.raw),
+			);
+			this.appendRawLines(queuedLiveLines.filter((line) => !tail.has(line)));
+		}
+
 		return () => {
 			logUnlisten();
 			launchUnlisten();
 			exitUnlisten();
+			retainCurrentSession();
 		};
 	},
 
@@ -160,9 +215,10 @@ export const consoleStore = {
 
 			const caughtUpLines = await invoke<string[]>("read_instance_log", {
 				instanceIdSlug: instanceSlug,
-				lastLines: state.lines.length === 0 ? 1000 : undefined,
+				lastLines: state.lines.length === 0 ? MAX_CONSOLE_LINES : undefined,
 				since: since,
 			});
+			if (activeInstanceSlug !== instanceSlug) return;
 
 			if (state.lines.length === 0) {
 				lineIdCounter = 0;
@@ -170,10 +226,13 @@ export const consoleStore = {
 
 			this.appendRawLines(caughtUpLines);
 			setState("lastCatchupTime", Math.floor(Date.now() / 1000));
+			retainCurrentSession();
 		} catch (e) {
 			console.error("Failed to catch up logs", e);
 		} finally {
-			setState("isCatchingUp", false);
+			if (activeInstanceSlug === instanceSlug) {
+				setState("isCatchingUp", false);
+			}
 		}
 	},
 
@@ -181,9 +240,9 @@ export const consoleStore = {
 		const parsed = rawLines.map(parseLine);
 		setState("lines", (prev) => {
 			const newLines = [...prev, ...parsed];
-			// Keep a reasonable buffer for performance, e.g., 5000 lines
-			return newLines.slice(-5000);
+			return newLines.slice(-MAX_CONSOLE_LINES);
 		});
+		retainCurrentSession();
 	},
 
 	async viewHistoricalLog(path: string) {
@@ -225,9 +284,14 @@ export const consoleStore = {
 		});
 	},
 
+	resetFilters() {
+		setState("filterLevels", [...CONSOLE_FILTER_LEVELS]);
+	},
+
 	clear() {
 		setState("lines", []);
 		lineIdCounter = 0;
+		retainCurrentSession();
 	},
 
 	toggleAutoScroll() {

@@ -61,6 +61,32 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/tasks/update_modpack.rs`
 - `vesta-launcher/src-tauri/src/tasks/installers/external_import_resync.rs`
 
+### Authentication Session and Availability
+
+The boundary between persisted Microsoft/Minecraft account state and the
+current availability of remote authentication services. `piston-lib` owns
+protocol and HTTP failure classification for Microsoft, Xbox Live, and
+Minecraft Services. Tauri owns account persistence, refresh policy, launch
+fallback, and setup-aware notification policy.
+
+A persisted Microsoft account with a Minecraft UUID and username is proof of a
+previous successful authentication. Only such an account may launch offline
+automatically. Guest, Demo, and unknown account types never qualify. Network
+failures and retryable service responses may make authentication temporarily
+unavailable; they do not invalidate the account. Generic HTTP responses such as
+`404 Not Found` are never proof that a session is unauthenticated.
+Authentication-service warnings are reserved for service-only failures while
+general connectivity is online. A known device-offline state uses the single
+Instance offline-launch notification instead.
+
+Primary modules:
+
+- `crates/piston-lib/src/auth/mod.rs`
+- `crates/piston-lib/src/api/mojang.rs`
+- `vesta-launcher/src-tauri/src/auth/mod.rs`
+- `vesta-launcher/src-tauri/src/instance/launch_preparation.rs`
+- `vesta-launcher/src/utils/auth.ts`
+
 ### Startup Orchestrator
 
 The Tauri startup sequence that initializes app services in dependency order.
@@ -68,7 +94,11 @@ The Tauri startup sequence that initializes app services in dependency order.
 startup phases own cohesive work with explicit inputs and outputs. Interrupted
 operation recovery is the first extracted phase: database recovery runs before
 the Notification Manager exists, then recovered facts are published after it is
-created.
+created. Pending modpack update transactions are recovered in this phase before
+normal interrupted-operation handling: committed transactions finish cleanup,
+uncommitted transactions restore the previous playable version, and incomplete
+restores use the existing resumable `interrupted` Instance lifecycle with
+`last_operation = update`.
 
 Current phases:
 
@@ -99,7 +129,15 @@ The installed state of a modpack-linked Instance. Its only persisted manifest is
 `<game directory>/modpack_manifest.json`; the former `.vesta` manifest copy is
 not read or written. It includes hash backfill, resource ledger, resource
 presence checks, repair state, update finalization, pending-update recovery,
-runtime/Java follow-up, and Instance event emission.
+runtime/Java follow-up, and Instance event emission. An update keeps a
+versioned `.update_rollback/manifest.json` transaction through finalization.
+Affected active paths and world/config rotations are preserved with
+same-filesystem renames, making rollback proportional to metadata operations
+rather than file copying. Any task failure restores the prior files and
+runtime/modpack metadata before returning the Instance to `installed` and
+publishing a persistent notification. A restore failure preserves its journal,
+sets the existing `interrupted` status, and exposes a resume action that retries
+restoration without retrying the update.
 
 Primary modules:
 
@@ -137,6 +175,32 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/resources/update_policy.rs`
 - `vesta-launcher/src-tauri/src/resources/watcher.rs`
 - `vesta-launcher/src-tauri/src/tasks/resource_download.rs`
+
+### Resource Reconciliation
+
+The Tauri workflow Module between Resource Watcher discovery, Resource Manager
+remote lookup, and Installed Resource Ledger persistence. Passive watcher and
+startup reconciliation stats files and publishes local rows in one transaction
+without hashing or provider traffic. Install-owned enrichment and explicit
+unresolved-row identification collect hashes in a bounded pass, identify files
+through provider batch Interfaces, select the canonical platform, persist
+authoritative peer links, and emit at most one typed rows event plus one typed
+metadata event per completed batch. Install-owned enrichment is a silent
+deduplicated Task; explicit identification is available only from an unresolved
+row's action menu and reports its busy state there. The Module owns offline and
+partial results, while permanently
+unidentifiable local files are not retried by overview reads or filesystem
+bursts. The Ledger remains unaware of remote lookup, event, retry, and
+notification policy.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/resources/reconciliation.rs`
+- `vesta-launcher/src-tauri/src/tasks/resource_reconciliation.rs`
+- `vesta-launcher/src-tauri/src/resources/watcher.rs`
+- `vesta-launcher/src-tauri/src/resources/manager.rs`
+- `vesta-launcher/src/stores/instance-resource-overview.ts`
+- `vesta-launcher/src/components/pages/mini-pages/instance-details/`
 
 ### Resource Browse Session
 
@@ -193,9 +257,12 @@ Primary modules:
 ### Notification Action
 
 A command attached to a Notification. Notification Manager owns dispatch,
-persisted payload lookup, and auto-dismiss behavior. The Module that owns the
-command registers its Action Adapter; Task actions, for example, live beside
-Task Manager rather than inside Notification Manager.
+persisted payload lookup, and default auto-dismiss behavior. The Module that
+owns the command registers its Action Adapter and may keep an asynchronous
+action notification visible until the result replaces it. Update recovery uses
+that opt-out so a repeated restore failure refreshes, rather than removes, its
+resumable notification. Task actions, for example, live beside Task Manager
+rather than inside Notification Manager.
 
 Primary modules:
 

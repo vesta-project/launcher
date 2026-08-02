@@ -50,9 +50,12 @@ pub fn validate_active_session(app_handle: tauri::AppHandle) {
         if let Some(account) = active_account {
             if account.uuid != crate::auth::GUEST_UUID {
                 match crate::auth::ensure_account_tokens_valid(app_handle, account.uuid).await {
-                    Ok(()) => log::info!("[startup] Proactive session validation succeeded"),
+                    Ok(_) => log::info!("[startup] Proactive session validation succeeded"),
                     Err(error) => {
-                        log::warn!("[startup] Proactive session validation failed: {}", error)
+                        log::warn!(
+                            "[startup] Proactive session validation failed: {}",
+                            error.message
+                        )
                     }
                 }
             }

@@ -17,6 +17,63 @@
 	z-index: 1;
 }
 
+.installation-failure-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin: -8px var(--page-gutter-x) 16px;
+	padding: 12px 14px;
+	border: 1px solid hsl(var(--hue-error) 70% 50% / 0.35);
+	border-radius: 8px;
+	background: hsl(var(--hue-error) 55% 24% / 0.16);
+	color: var(--text-color);
+}
+
+.installation-failure-banner > svg {
+	flex: 0 0 auto;
+	margin-top: 2px;
+	color: var(--semantic-error);
+	fill: currentColor;
+}
+
+.installation-failure-banner > div {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.installation-failure-banner strong {
+	font-size: var(--font-small);
+}
+
+.installation-failure-banner span {
+	color: var(--text-secondary);
+	font-size: var(--font-xsmall);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.instance-tab-loading {
+	flex: 1;
+	min-height: 220px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	color: var(--text-secondary);
+	font-size: var(--font-small);
+}
+
+.instance-tab-loading__spinner {
+	width: 18px;
+	height: 18px;
+	border: 2px solid var(--border-subtle);
+	border-top-color: var(--accent-primary);
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
 /* Common tab layout */
 .tab-home {
 	display: flex;
@@ -454,6 +511,10 @@
 	align-items: center;
 	justify-content: center;
 	line-height: 1;
+}
+
+.details-play-button-icon svg {
+	fill: currentColor;
 }
 
 .details-play-button-kill-icon {
@@ -983,6 +1044,11 @@
 	cursor: text;
 }
 
+.console-lines {
+	width: 100%;
+	min-width: 0;
+}
+
 .console-line-wrapper {
 	display: flex;
 	width: 100%;
@@ -1008,9 +1074,11 @@
 
 .console-line-content {
 	flex: 1;
+	min-width: 0;
 	padding: 4px 12px;
 	white-space: pre-wrap;
-	word-break: break-all;
+	overflow-wrap: anywhere;
+	word-break: normal;
 }
 
 .log-time {
@@ -1255,13 +1323,15 @@
 	width: 100%;
 	display: flex;
 	align-items: center;
+	gap: 12px;
 }
 
 .toolbar-actions {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	width: 100%;
+	flex: 0 0 auto;
+	min-width: 0;
 }
 
 .toolbar-actions button {
@@ -1687,16 +1757,6 @@
 	border-radius: 4px;
 	margin-left: 4px;
 	border: 1px solid hsl(var(--color__primary-hue) 60% 50% / 0.3);
-}
-
-.vesta-table-container.refetching {
-	opacity: 0.6 !important;
-	transition: opacity 0.2s ease;
-}
-
-.vesta-table-container.refetching {
-	opacity: 0.6;
-	transition: opacity 0.2s ease;
 }
 
 /*

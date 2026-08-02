@@ -7,6 +7,7 @@ use crate::utils::url::normalize_url;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 // Include generated obfuscated key
 include!(concat!(env!("OUT_DIR"), "/curseforge_key.rs"));
@@ -133,6 +134,8 @@ struct CFFile {
     file_date: String,
     download_url: Option<String>,
     dependencies: Vec<CFDependency>,
+    #[serde(default)]
+    file_fingerprint: u32,
 }
 
 #[derive(Deserialize)]
@@ -333,6 +336,67 @@ impl CurseForgeSource {
         }
 
         Err(anyhow!("Could not resolve CurseForge slug: {}", slug))
+    }
+
+    fn map_file(file: CFFile, project_id: String) -> ResourceVersion {
+        let sha1 = file
+            .hashes
+            .iter()
+            .find(|hash| hash.algo == 1)
+            .map(|hash| hash.value.clone())
+            .unwrap_or_default();
+        let mut loaders = Vec::new();
+        let mut game_versions = Vec::new();
+        for version in &file.game_versions {
+            match version.to_lowercase().as_str() {
+                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => {
+                    loaders.push(version.clone())
+                }
+                _ => game_versions.push(version.clone()),
+            }
+        }
+        let fallback_id = file.id;
+        let fallback_name = file.file_name.clone();
+
+        ResourceVersion {
+            id: file.id.to_string(),
+            project_id,
+            version_number: file.display_name,
+            game_versions,
+            loaders,
+            download_url: file.download_url.unwrap_or_else(|| {
+                let major = fallback_id / 1000;
+                let minor = fallback_id % 1000;
+                format!(
+                    "https://edge.forgecdn.net/files/{}/{:03}/{}",
+                    major, minor, fallback_name
+                )
+            }),
+            file_name: file.file_name,
+            release_type: match file.release_type {
+                1 => ReleaseType::Release,
+                2 => ReleaseType::Beta,
+                3 => ReleaseType::Alpha,
+                _ => ReleaseType::Release,
+            },
+            hash: sha1,
+            dependencies: file
+                .dependencies
+                .into_iter()
+                .map(|dependency| ResourceDependency {
+                    project_id: dependency.mod_id.to_string(),
+                    version_id: None,
+                    file_name: None,
+                    dependency_type: match dependency.relation_type {
+                        2 => DependencyType::Optional,
+                        3 => DependencyType::Required,
+                        5 => DependencyType::Incompatible,
+                        _ => DependencyType::Embedded,
+                    },
+                })
+                .collect(),
+            published_at: Some(file.file_date),
+        }
     }
 }
 
@@ -1037,6 +1101,73 @@ impl ResourceSource for CurseForgeSource {
         };
 
         Ok((project, version))
+    }
+
+    async fn get_by_hashes(
+        &self,
+        hashes: &[String],
+    ) -> Result<HashMap<String, (ResourceProject, ResourceVersion)>> {
+        if hashes.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let fingerprints = hashes
+            .iter()
+            .filter_map(|hash| hash.parse::<u32>().ok())
+            .collect::<Vec<_>>();
+        if fingerprints.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let response = self
+            .http_post("https://api.curseforge.com/v1/fingerprints")
+            .json(&serde_json::json!({ "fingerprints": fingerprints }))
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "CurseForge batch fingerprint lookup failed ({}): {}",
+                status,
+                body
+            ));
+        }
+
+        let response: CFFingerprintResponse = response.json().await?;
+        let project_ids = response
+            .data
+            .exact_matches
+            .iter()
+            .map(|matched| matched.id.to_string())
+            .collect::<Vec<_>>();
+        let projects = self.get_projects(&project_ids).await?;
+        let projects_by_id = projects
+            .into_iter()
+            .map(|project| (project.id.clone(), project))
+            .collect::<HashMap<_, _>>();
+
+        let mut matches = HashMap::new();
+        for matched in response.data.exact_matches {
+            let project_id = matched.id.to_string();
+            let fingerprint = matched.file.file_fingerprint.to_string();
+            let Some(project) = projects_by_id.get(&project_id).cloned() else {
+                continue;
+            };
+            matches.insert(
+                fingerprint,
+                (project, Self::map_file(matched.file, project_id)),
+            );
+        }
+        Ok(matches)
+    }
+
+    fn identification_batch_size(&self) -> usize {
+        1_000
+    }
+
+    fn identification_concurrency(&self) -> usize {
+        2
     }
 
     fn platform(&self) -> SourcePlatform {

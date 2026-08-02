@@ -9,7 +9,10 @@ import QuiltLogo from "@assets/quilt-logo.svg";
 import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
-import { openStandaloneMiniPage } from "@components/page-viewer/standalone-launcher";
+import {
+	openStandaloneMiniPage,
+	preloadMiniPage,
+} from "@components/page-viewer/standalone-launcher";
 import {
 	clearRunning,
 	instancesState,
@@ -49,13 +52,17 @@ import {
 import { createAnimatedIconPreview } from "@utils/icon-animation";
 import type { Instance } from "@utils/instances";
 import {
+	getInstanceInstallationFailureReason,
 	getInstanceOperationLabel,
 	getInstanceSlug,
 	installInstance,
+	isInstanceInstallationFailed,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
+	isInstanceUpdateRecovery,
 	killInstance,
 	launchInstance,
+	needsInstanceInstallation,
 	resolveInstanceDisplayIcon,
 	resumeInstanceOperation,
 } from "@utils/instances";
@@ -124,10 +131,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const isInterrupted = createMemo(
 		() => storeInstance().installationStatus === "interrupted",
 	);
-	const isFailed = createMemo(() => {
-		const status = storeInstance().installationStatus;
-		return status === "failed" || status?.startsWith("failed:");
-	});
+	const isFailed = createMemo(() =>
+		isInstanceInstallationFailed(storeInstance()),
+	);
+	const isUpdateRecovery = createMemo(() =>
+		isInstanceUpdateRecovery(storeInstance()),
+	);
 
 	const cardIconPreview = createAnimatedIconPreview(() =>
 		resolveInstanceDisplayIcon(storeInstance()),
@@ -185,16 +194,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const operationLabel = () => getInstanceOperationLabel(storeInstance());
 
 	const failureReason = () => {
-		if (!isFailed()) return null;
-		const status = storeInstance().installationStatus;
-		if (status?.includes(":")) {
-			return status.split(":").slice(1).join(":");
-		}
-		return "Installation failed";
+		return getInstanceInstallationFailureReason(storeInstance());
 	};
 
-	const needsInstallation = () =>
-		!storeInstance().installationStatus || isFailed();
+	const needsInstallation = () => needsInstanceInstallation(storeInstance());
 
 	const playButtonTooltip = () => {
 		if (isInstalling()) {
@@ -202,6 +205,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 		}
 
 		if (isInterrupted()) {
+			if (isUpdateRecovery()) {
+				return "Update recovery is incomplete. Click to resume recovery.";
+			}
 			const op =
 				storeInstance().lastOperation === "hard-reset"
 					? "Hard reset"
@@ -251,12 +257,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 				clearCrashDetails(slug);
 
 				await launchInstance(props.instance);
-				showToast({
-					title: "Launching",
-					description: `Launching instance "${props.instance.name}"`,
-					severity: "info",
-					duration: 3000,
-				});
 			} catch (err) {
 				console.error("Launch failed", err);
 				showToast({
@@ -269,9 +269,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		}
 	};
 
-	const handleClick = async (e: MouseEvent) => {
-		e.stopPropagation();
-
+	const handlePrimaryAction = async () => {
 		if (busy() || isWarmingUp()) return;
 
 		if (isInstalling()) {
@@ -282,9 +280,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 			setBusy(true);
 			try {
 				if (isInterrupted()) {
-					await resumeInstanceOperation(props.instance);
+					await resumeInstanceOperation(storeInstance());
 				} else {
-					await installInstance(props.instance);
+					await installInstance(storeInstance());
 				}
 			} catch (err) {
 				console.error("Install/Resume failed", err);
@@ -301,18 +299,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 		await toggleRun();
 	};
 
+	const handleClick = async (e: MouseEvent) => {
+		e.stopPropagation();
+		await handlePrimaryAction();
+	};
+
 	const handleContextToggle = () => {
-		if (busy() || isWarmingUp() || isInstalling()) return;
-		if (
-			hasCrashed() &&
-			!isRunning() &&
-			!needsInstallation() &&
-			!isInterrupted()
-		) {
-			openCrashDetails();
-			return;
-		}
-		void toggleRun();
+		void handlePrimaryAction();
 	};
 
 	const openInstanceDetails = () => {
@@ -320,7 +313,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 			openCrashDetails();
 			return;
 		}
-		openMiniPage("/instance", { slug: instanceSlug() });
+		openMiniPage(
+			"/instance",
+			{ slug: instanceSlug() },
+			{ prefetchedInstance: storeInstance() },
+		);
 	};
 
 	const openCrashDetails = () => {
@@ -328,7 +325,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 	};
 
 	const openInstanceDetailsStandalone = () => {
-		void openStandaloneMiniPage("/instance", { slug: instanceSlug() });
+		void openStandaloneMiniPage(
+			"/instance",
+			{ slug: instanceSlug() },
+			{ prefetchedInstance: props.instance },
+		);
 	};
 
 	const openAddContent = () => {
@@ -406,13 +407,17 @@ export default function InstanceCard(props: InstanceCardProps) {
 				onMouseEnter={() => {
 					setLeaveAnim(false);
 					cardIconPreview.activate();
+					preloadMiniPage("/instance");
 				}}
 				onMouseLeave={() => {
 					cardIconPreview.deactivate();
 					setLeaveAnim(true);
 					setTimeout(() => setLeaveAnim(false), 250);
 				}}
-				onFocusIn={cardIconPreview.activate}
+				onFocusIn={() => {
+					cardIconPreview.activate();
+					preloadMiniPage("/instance");
+				}}
 				onFocusOut={cardIconPreview.deactivate}
 				onClick={openInstanceDetails}
 				style={{
@@ -455,13 +460,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						<div
 							class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}
 						>
-							<ErrorIcon
-								style={{
-									width: "24px",
-									height: "24px",
-									color: "var(--semantic-error)",
-								}}
-							/>
+							<ErrorIcon />
 							<h1
 								style={{
 									margin: "4px 0 0",
@@ -478,14 +477,22 @@ export default function InstanceCard(props: InstanceCardProps) {
 									margin: "4px 8px 0",
 									padding: 0,
 									"font-size": "10px",
-									color: "var(--text-on-accent)",
-									opacity: 0.8,
 									"text-align": "center",
 									"line-height": "1.2",
 								}}
 							>
 								{failureReason()}
 							</p>
+							<button
+								type="button"
+								class={styles["failure-retry-button"]}
+								onClick={handleClick}
+								disabled={busy()}
+								aria-label="Retry installation"
+							>
+								<ReloadIcon />
+								<span>{busy() ? "Retrying…" : "Retry installation"}</span>
+							</button>
 						</div>
 					</Match>
 					<Match when={true}>
@@ -513,7 +520,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 								</Show>
 								<Show when={isInterrupted()}>
 									<Badge variant="warning" dot={true}>
-										Interrupted
+										{isUpdateRecovery() ? "Recovery needed" : "Interrupted"}
 									</Badge>
 								</Show>
 								<Show when={hasCrashed()}>
@@ -632,7 +639,21 @@ export default function InstanceCard(props: InstanceCardProps) {
 						disabled={isWarmingUp()}
 					>
 						<span>
-							{isRunning() ? "Stop" : isWarmingUp() ? "Warming up..." : "Play"}
+							{isRunning()
+								? "Stop"
+								: isWarmingUp()
+									? "Warming up..."
+									: isInterrupted()
+										? isUpdateRecovery()
+											? "Resume recovery"
+											: "Resume operation"
+										: needsInstallation()
+											? isFailed()
+												? "Retry installation"
+												: "Install"
+											: hasCrashed()
+												? "Crash details"
+												: "Play"}
 						</span>
 					</ContextMenuItem>
 

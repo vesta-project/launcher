@@ -59,7 +59,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     crate::startup::accounts::cleanup_temporary_accounts();
 
-    let interrupted_instances = crate::startup::recovery::recover_interrupted_operations()
+    let recovery_notices = crate::startup::recovery::recover_interrupted_operations(app.handle())
         .unwrap_or_else(|error| {
             log::error!("Failed to recover interrupted installations: {}", error);
             Vec::new()
@@ -74,7 +74,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     crate::startup::recovery::publish_interrupted_notifications(
         notification_manager.clone(),
-        interrupted_instances,
+        recovery_notices,
     );
 
     // Initialize DiscordManager

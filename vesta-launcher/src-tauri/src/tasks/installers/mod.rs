@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 
 use crate::models::instance::Instance;
 use crate::notifications::manager::NotificationManager;
-use crate::notifications::models::ProgressUpdate;
+use crate::notifications::models::{ProgressUpdate, PROGRESS_INDETERMINATE};
 use crate::tasks::manager::{Task, TaskContext};
 
 /// Task adapter for game installation
@@ -23,6 +23,7 @@ pub struct InstallInstanceTask {
     instance: Instance,
     dry_run: bool,
     update_notification_title: bool,
+    manage_instance_lifecycle: bool,
 }
 
 impl InstallInstanceTask {
@@ -31,6 +32,7 @@ impl InstallInstanceTask {
             instance,
             dry_run: false,
             update_notification_title: true,
+            manage_instance_lifecycle: true,
         }
     }
 
@@ -40,6 +42,10 @@ impl InstallInstanceTask {
 
     pub fn set_update_notification_title(&mut self, update_notification_title: bool) {
         self.update_notification_title = update_notification_title;
+    }
+
+    pub fn set_manage_instance_lifecycle(&mut self, manage_instance_lifecycle: bool) {
+        self.manage_instance_lifecycle = manage_instance_lifecycle;
     }
 }
 
@@ -97,6 +103,7 @@ impl Task for InstallInstanceTask {
         let instance = self.instance.clone();
         let dry_run = self.dry_run;
         let update_notification_title = self.update_notification_title;
+        let manage_instance_lifecycle = self.manage_instance_lifecycle;
         let app_handle = ctx.app_handle.clone();
         let notification_id = ctx.notification_id.clone();
         let pause_rx = ctx.pause_rx.clone();
@@ -268,7 +275,7 @@ impl Task for InstallInstanceTask {
                     );
 
                     // Update database status to 'installed'
-                    if instance.id > 0 {
+                    if manage_instance_lifecycle && instance.id > 0 {
                         if let Err(e) = crate::commands::instances::update_installation_status(
                             &app_handle,
                             instance.id,
@@ -279,24 +286,27 @@ impl Task for InstallInstanceTask {
                     }
 
                     // Emit installed event for frontend with a full instance payload.
-                    use tauri::Emitter;
-                    match crate::commands::instances::get_instance(instance.id) {
-                        Ok(updated_instance) => {
-                            let _ = app_handle.emit("core://instance-installed", updated_instance);
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "[InstallTask] Failed to fetch full installed instance payload (id={}): {}",
-                                instance.id,
-                                e
-                            );
-                            let _ = app_handle.emit(
-                                "core://instance-installed",
-                                serde_json::json!({
-                                    "name": instance.name,
-                                    "instance_id": instance.slug()
-                                }),
-                            );
+                    if manage_instance_lifecycle {
+                        use tauri::Emitter;
+                        match crate::commands::instances::get_instance(instance.id) {
+                            Ok(updated_instance) => {
+                                let _ =
+                                    app_handle.emit("core://instance-installed", updated_instance);
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "[InstallTask] Failed to fetch full installed instance payload (id={}): {}",
+                                    instance.id,
+                                    e
+                                );
+                                let _ = app_handle.emit(
+                                    "core://instance-installed",
+                                    serde_json::json!({
+                                        "name": instance.name,
+                                        "instance_id": instance.slug()
+                                    }),
+                                );
+                            }
                         }
                     }
 
@@ -306,7 +316,7 @@ impl Task for InstallInstanceTask {
                     log::error!("[InstallTask] Installation failed: {}", e);
 
                     // Update database status to 'failed' with reason
-                    if instance.id > 0 {
+                    if manage_instance_lifecycle && instance.id > 0 {
                         let status_val = format!("failed:{}", e);
                         if let Err(status_err) =
                             crate::commands::instances::update_installation_status(
@@ -348,14 +358,26 @@ impl ProgressReporter for TauriProgressReporter {
         let ctx = self.ctx.clone();
         let current_step = self.current_step.clone();
 
-        // Each top-level step starts a new counting context.
-        self.last_step_current
-            .store(-1, std::sync::atomic::Ordering::Relaxed);
-        self.last_step_total
-            .store(-1, std::sync::atomic::Ordering::Relaxed);
+        // A new top-level phase must not inherit the previous phase's 100%.
+        // Keep it indeterminate until this phase reports its own percentage.
+        self.last_percent
+            .store(PROGRESS_INDETERMINATE, std::sync::atomic::Ordering::Relaxed);
+        self.last_step_current.store(
+            if total_steps.is_some() { 0 } else { -1 },
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.last_step_total.store(
+            total_steps.map(|total| total as i32).unwrap_or(-1),
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
-        // 1. Update overall status via unified context
-        ctx.update_description(name_str.clone());
+        // 1. Atomically reset progress, description, and any known step count.
+        ctx.update_full(
+            PROGRESS_INDETERMINATE,
+            name_str.clone(),
+            total_steps.map(|_| 0),
+            total_steps.map(|total| total as i32),
+        );
 
         // 2. Start a new step in the channel if present
         if let Some(ref channel) = ctx.progress_channel {

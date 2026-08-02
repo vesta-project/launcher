@@ -1299,7 +1299,10 @@ const ResourceDetailsPage: Component<{
 			const errorMsg = e instanceof Error ? e.message : String(e);
 
 			try {
-				const cached: any = await invoke("get_cached_resource_project", { id });
+				const cached: any = await invoke("get_cached_resource_project", {
+					platform,
+					id,
+				});
 				if (cached) {
 					const fallback: ResourceProject = {
 						id: cached.id,
@@ -1429,11 +1432,6 @@ const ResourceDetailsPage: Component<{
 					description: err instanceof Error ? err.message : String(err),
 					severity: "error",
 				});
-			} finally {
-				// Refresh counts/states
-				if (inst) {
-					resources.fetchInstalled(inst.id);
-				}
 			}
 		}
 	};

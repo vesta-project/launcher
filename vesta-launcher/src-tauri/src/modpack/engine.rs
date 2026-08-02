@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::models::instance::Instance;
@@ -9,7 +10,7 @@ use crate::sync::manifest;
 use crate::sync::manifest_bootstrap::{self, TaskBootstrapProgress};
 use crate::sync::merger::{merge_config, MergeResult};
 use crate::sync::safeguards;
-use crate::sync::staging::StagingDir;
+use crate::sync::staging::{RollbackRotation, RollbackSnapshot, StagingDir};
 use crate::tasks::installers::modpack::enrich_manifest_platform_hashes;
 use crate::tasks::manager::TaskContext;
 use piston_lib::game::modpack::manifest::ModpackManifest;
@@ -25,9 +26,37 @@ pub struct UpdatePlan {
     pub actions: ActionTree,
 }
 
-pub struct ApplyOutcome {
+pub struct AppliedUpdate {
     pub skipped_deletions: u32,
     pub preserved_worlds: u32,
+    rollback: Option<RollbackSnapshot>,
+}
+
+impl AppliedUpdate {
+    pub fn finalize(mut self) -> Result<(), String> {
+        if let Some(rollback) = self.rollback.take() {
+            rollback.finalize().map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub fn rollback(mut self) -> Result<(), String> {
+        self.rollback
+            .take()
+            .map(|rollback| rollback.restore().map_err(|error| error.to_string()))
+            .unwrap_or(Ok(()))
+    }
+}
+
+impl Drop for AppliedUpdate {
+    fn drop(&mut self) {
+        if self.rollback.is_none() {
+            return;
+        }
+        // Dropping the transaction restores tracked paths and rotations with
+        // same-filesystem renames.
+        self.rollback.take();
+    }
 }
 
 pub async fn plan(
@@ -86,7 +115,7 @@ pub async fn apply(
     game_dir: &Path,
     plan: &mut UpdatePlan,
     ctx: &TaskContext,
-) -> Result<ApplyOutcome, String> {
+) -> Result<AppliedUpdate, String> {
     ctx.update_full(
         25,
         "Evaluating conflicts and merging configs...".to_string(),
@@ -168,26 +197,31 @@ pub async fn apply(
         }
     }
 
+    let (removable_paths, skipped_deletions) =
+        removable_paths(game_dir, &plan.actions).map_err(|error| error.to_string())?;
+    let rotations = rollback_rotations(game_dir, &plan.actions)?;
+    let preserved_worlds = plan
+        .actions
+        .world_collisions
+        .iter()
+        .filter(|(original, _)| {
+            crate::sync::paths::join_validated(game_dir, original).is_ok_and(|path| path.exists())
+        })
+        .count() as u32;
+
+    let rollback = RollbackSnapshot::capture(
+        game_dir,
+        rollback_paths(&plan.actions, &removable_paths),
+        rotations,
+    )
+    .map_err(|error| format!("Failed to prepare update rollback: {}", error))?;
+
     ctx.update_full(
         65,
         "Preserving existing world saves...".to_string(),
         Some(3),
         Some(6),
     );
-    let mut preserved_worlds = 0u32;
-    for (original, quarantine) in &plan.actions.world_collisions {
-        match safeguards::rotate_world_save(game_dir, original, quarantine) {
-            Ok(()) => preserved_worlds += 1,
-            Err(error) => log::error!(
-                "[modpack-engine] Failed to rotate world {}: {}",
-                original,
-                error
-            ),
-        }
-    }
-    for config_path in &plan.actions.corrupted_configs {
-        let _ = safeguards::quarantine_corrupted_config(game_dir, config_path);
-    }
 
     ctx.update_full(
         70,
@@ -195,21 +229,6 @@ pub async fn apply(
         Some(4),
         Some(6),
     );
-    let mut skipped_deletions = 0u32;
-    for action in &plan.actions.actions {
-        if let SyncAction::Remove {
-            path, last_hash, ..
-        } = action
-        {
-            match safeguards::safe_delete_if_unchanged(game_dir, path, last_hash.as_deref()) {
-                Ok(true) => {}
-                Ok(false) => skipped_deletions += 1,
-                Err(error) => {
-                    log::warn!("[modpack-engine] Failed to delete {}: {}", path, error)
-                }
-            }
-        }
-    }
 
     ctx.update_full(
         80,
@@ -217,17 +236,97 @@ pub async fn apply(
         Some(5),
         Some(6),
     );
-    staging.commit().map_err(|error| {
-        format!(
-            "Failed to commit update: {}. Your game directory is unchanged.",
-            error
-        )
-    })?;
+    if let Err(error) = staging.commit() {
+        let commit_error = format!("Failed to commit update: {}", error);
+        return match rollback.restore() {
+            Ok(()) => Err(format!(
+                "{}. The previous instance files were restored.",
+                commit_error
+            )),
+            Err(restore_error) => Err(format!(
+                "{}. Automatic rollback was incomplete: {}.",
+                commit_error, restore_error
+            )),
+        };
+    }
 
-    Ok(ApplyOutcome {
+    Ok(AppliedUpdate {
         skipped_deletions,
         preserved_worlds,
+        rollback: Some(rollback),
     })
+}
+
+fn rollback_paths(actions: &ActionTree, removable_paths: &HashSet<String>) -> Vec<String> {
+    let mut paths = Vec::new();
+    for action in &actions.actions {
+        match action {
+            SyncAction::Add { path, .. }
+            | SyncAction::Update { path, .. }
+            | SyncAction::Merge { path, .. } => paths.push(path.clone()),
+            SyncAction::Remove { path, .. } if removable_paths.contains(path) => {
+                paths.push(path.clone())
+            }
+            SyncAction::Remove { .. } => {}
+            SyncAction::RotateWorld { .. } => {}
+            SyncAction::Skip { .. } => {}
+        }
+    }
+    paths.push(ModpackManifest::FILE_NAME.to_string());
+    paths
+}
+
+fn removable_paths(
+    game_dir: &Path,
+    actions: &ActionTree,
+) -> Result<(HashSet<String>, u32), anyhow::Error> {
+    let mut removable = HashSet::new();
+    let mut skipped = 0u32;
+    for action in &actions.actions {
+        if let SyncAction::Remove {
+            path, last_hash, ..
+        } = action
+        {
+            if safeguards::can_delete_if_unchanged(game_dir, path, last_hash.as_deref())? {
+                removable.insert(path.clone());
+            } else {
+                skipped += 1;
+            }
+        }
+    }
+    Ok((removable, skipped))
+}
+
+fn rollback_rotations(
+    game_dir: &Path,
+    actions: &ActionTree,
+) -> Result<Vec<RollbackRotation>, String> {
+    let mut rotations = actions
+        .world_collisions
+        .iter()
+        .map(|(original, preserved)| RollbackRotation::new(original.clone(), preserved.clone()))
+        .collect::<Vec<_>>();
+
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    for path in &actions.corrupted_configs {
+        let mut suffix = 0u32;
+        let preserved = loop {
+            let candidate = if suffix == 0 {
+                format!("{}.corrupted_{}", path, timestamp)
+            } else {
+                format!("{}.corrupted_{}_{}", path, timestamp, suffix)
+            };
+            let candidate_path = crate::sync::paths::join_validated(game_dir, &candidate)
+                .map_err(|error| error.to_string())?;
+            if !candidate_path.exists() {
+                break candidate;
+            }
+            suffix += 1;
+        };
+        rotations.push(RollbackRotation::new(path.clone(), preserved));
+    }
+
+    Ok(rotations)
 }
 
 fn update_stage_progress(ctx: &TaskContext, staged: usize, total: usize, message: String) {
@@ -473,4 +572,39 @@ async fn fetch_target_manifest(
         .map_err(|error| format!("Failed to parse new modpack manifest: {}", error))?;
     enrich_manifest_platform_hashes(app_handle, &mut manifest).await;
     Ok((manifest, zip_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rollback_rotation_maps_world_paths_without_copying_them() {
+        let temp = tempfile::tempdir().unwrap();
+        let game_dir = temp.path();
+        let original = game_dir.join("saves/world");
+        let quarantine = game_dir.join("saves/world_user_backup");
+        std::fs::create_dir_all(&original).unwrap();
+        std::fs::write(original.join("level.dat"), b"user world").unwrap();
+
+        let snapshot = RollbackSnapshot::capture(
+            game_dir,
+            Vec::<String>::new(),
+            [RollbackRotation::new(
+                "saves/world".to_string(),
+                "saves/world_user_backup".to_string(),
+            )],
+        )
+        .unwrap();
+        assert!(quarantine.exists());
+        std::fs::create_dir_all(&original).unwrap();
+        std::fs::write(original.join("level.dat"), b"pack world").unwrap();
+        snapshot.restore().unwrap();
+
+        assert_eq!(
+            std::fs::read(original.join("level.dat")).unwrap(),
+            b"user world"
+        );
+        assert!(!quarantine.exists());
+    }
 }

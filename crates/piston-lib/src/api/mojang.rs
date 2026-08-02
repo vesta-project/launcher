@@ -2,6 +2,7 @@
 //!
 //! Provides methods to fetch user profile data, skins, and verify game ownership.
 
+use crate::auth::{AuthPhase, AuthService, PistonAuthError};
 use anyhow::{Context, Result};
 use log::{debug, error};
 use reqwest::multipart;
@@ -39,45 +40,132 @@ pub struct ProfileCape {
     pub alias: String,
 }
 
-/// Fetch Minecraft profile using bearer token
-pub async fn get_minecraft_profile(bearer_token: &str) -> Result<MinecraftProfile> {
-    let client = crate::client::shared_client();
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnershipStatus {
+    Owned,
+    NotOwned,
+}
 
-    let url = format!("{}/minecraft/profile", MOJANG_API_BASE);
+#[derive(Debug, Deserialize)]
+struct EntitlementsResponse {
+    #[serde(default)]
+    items: Vec<serde_json::Value>,
+}
+
+/// Fetch Minecraft profile using bearer token
+pub async fn get_minecraft_profile(
+    bearer_token: &str,
+) -> std::result::Result<MinecraftProfile, PistonAuthError> {
+    get_minecraft_profile_from(
+        crate::client::shared_client(),
+        MOJANG_API_BASE,
+        bearer_token,
+    )
+    .await
+}
+
+async fn get_minecraft_profile_from(
+    client: &reqwest::Client,
+    base_url: &str,
+    bearer_token: &str,
+) -> std::result::Result<MinecraftProfile, PistonAuthError> {
+    let url = format!("{base_url}/minecraft/profile");
     let response = client
-        .get(url.clone())
+        .get(url)
         .bearer_auth(bearer_token)
         .send()
         .await
-        .context("Failed to fetch Minecraft profile")?;
+        .map_err(|error| {
+            PistonAuthError::network(
+                AuthService::MinecraftServices,
+                AuthPhase::Profile,
+                crate::client::redact_configured_proxy_secrets(&error.to_string()),
+            )
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         error!("get_minecraft_profile: non-success {} - {}", status, body);
-        anyhow::bail!("Failed to get profile: {} - {}", status, body);
+        return Err(PistonAuthError::from_http_status(
+            AuthService::MinecraftServices,
+            AuthPhase::Profile,
+            status.as_u16(),
+            "Minecraft profile lookup failed",
+        ));
     }
 
-    let profile = response
-        .json::<MinecraftProfile>()
-        .await
-        .context("Failed to parse Minecraft profile")?;
+    let profile = response.json::<MinecraftProfile>().await.map_err(|error| {
+        PistonAuthError::unexpected(
+            AuthService::MinecraftServices,
+            AuthPhase::Profile,
+            None,
+            error.to_string(),
+        )
+    })?;
 
     Ok(profile)
 }
 
 /// Verify game ownership
-pub async fn verify_game_ownership(bearer_token: &str) -> Result<bool> {
-    let client = crate::client::shared_client();
+pub async fn verify_game_ownership(
+    bearer_token: &str,
+) -> std::result::Result<OwnershipStatus, PistonAuthError> {
+    verify_game_ownership_from(
+        crate::client::shared_client(),
+        MOJANG_API_BASE,
+        bearer_token,
+    )
+    .await
+}
 
+async fn verify_game_ownership_from(
+    client: &reqwest::Client,
+    base_url: &str,
+    bearer_token: &str,
+) -> std::result::Result<OwnershipStatus, PistonAuthError> {
     let response = client
-        .get(format!("{}/entitlements/mcstore", MOJANG_API_BASE))
+        .get(format!("{base_url}/entitlements/mcstore"))
         .bearer_auth(bearer_token)
         .send()
         .await
-        .context("Failed to verify game ownership")?;
+        .map_err(|error| {
+            PistonAuthError::network(
+                AuthService::MinecraftServices,
+                AuthPhase::Entitlements,
+                crate::client::redact_configured_proxy_secrets(&error.to_string()),
+            )
+        })?;
 
-    Ok(response.status().is_success())
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        error!("verify_game_ownership: non-success {} - {}", status, body);
+        return Err(PistonAuthError::from_http_status(
+            AuthService::MinecraftServices,
+            AuthPhase::Entitlements,
+            status.as_u16(),
+            "Minecraft entitlement lookup failed",
+        ));
+    }
+
+    let entitlements = response
+        .json::<EntitlementsResponse>()
+        .await
+        .map_err(|error| {
+            PistonAuthError::unexpected(
+                AuthService::MinecraftServices,
+                AuthPhase::Entitlements,
+                None,
+                error.to_string(),
+            )
+        })?;
+
+    Ok(if entitlements.items.is_empty() {
+        OwnershipStatus::NotOwned
+    } else {
+        OwnershipStatus::Owned
+    })
 }
 
 /// Upload a new skin to Mojang
@@ -167,4 +255,76 @@ pub async fn hide_cape(bearer_token: &str) -> Result<()> {
         anyhow::bail!("Failed to hide cape: {} - {}", status, body);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn ownership_requires_a_successful_non_empty_entitlement_response() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/entitlements/mcstore"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": []
+            })))
+            .mount(&server)
+            .await;
+
+        let status = verify_game_ownership_from(&reqwest::Client::new(), &server.uri(), "token")
+            .await
+            .unwrap();
+        assert_eq!(status, OwnershipStatus::NotOwned);
+    }
+
+    #[tokio::test]
+    async fn ownership_accepts_a_non_empty_entitlement_response() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/entitlements/mcstore"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [{ "name": "game_minecraft", "signature": "signature" }]
+            })))
+            .mount(&server)
+            .await;
+
+        let status = verify_game_ownership_from(&reqwest::Client::new(), &server.uri(), "token")
+            .await
+            .unwrap();
+        assert_eq!(status, OwnershipStatus::Owned);
+    }
+
+    #[tokio::test]
+    async fn profile_404_is_not_classified_as_unauthorized() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/minecraft/profile"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let error = get_minecraft_profile_from(&reqwest::Client::new(), &server.uri(), "token")
+            .await
+            .unwrap_err();
+        assert!(error.is_retryable_outage());
+        assert!(!matches!(error, PistonAuthError::Unauthorized { .. }));
+    }
+
+    #[tokio::test]
+    async fn entitlement_401_is_classified_as_unauthorized() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/entitlements/mcstore"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+
+        let error = verify_game_ownership_from(&reqwest::Client::new(), &server.uri(), "token")
+            .await
+            .unwrap_err();
+        assert!(matches!(error, PistonAuthError::Unauthorized { .. }));
+    }
 }

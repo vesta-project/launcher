@@ -5,6 +5,7 @@ pub mod manifest;
 pub mod modpack_export;
 pub mod notification_actions;
 pub mod resource_download;
+pub mod resource_reconciliation;
 pub mod store;
 pub mod sync_profiles;
 pub mod update_modpack;

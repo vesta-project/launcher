@@ -279,10 +279,12 @@ instance/
 - `install_resource`: Download and install resource
 - `delete_resource`: Remove installed resource
 - `toggle_resource`: Enable/disable resource
+- `rescan_instance_resources`: Discover local rows and batch-identify all or selected unresolved resources
 - `check_resource_updates`: Check for available updates
 
 ### Frontend Events
-- `core://resources-updated`: Fired when resources change
+- `core://instance-resource-rows-changed`: Local resource rows changed for one Instance
+- `core://instance-resource-metadata-changed`: Cached project metadata changed for source-aware project refs
 - `core://resource-install-progress`: Installation progress updates
 - `core://resource-install-error`: Installation failures
 

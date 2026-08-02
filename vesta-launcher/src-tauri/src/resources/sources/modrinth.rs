@@ -8,6 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct ModrinthCategory {
@@ -149,6 +150,57 @@ impl ModrinthSource {
             .json()
             .await
             .map_err(|e| anyhow!("Modrinth search JSON decode error: {}. URL: {}", e, url))
+    }
+
+    fn map_version(v: ModrinthVersion, preferred_hash: Option<&str>) -> Result<ResourceVersion> {
+        let selected_file = preferred_hash
+            .and_then(|hash| v.files.iter().find(|file| file.hashes.sha1 == hash))
+            .or_else(|| v.files.iter().find(|file| file.primary))
+            .or_else(|| {
+                v.files.iter().find(|file| {
+                    let url = file.url.to_lowercase();
+                    (url.ends_with(".mrpack") || url.ends_with(".jar") || url.ends_with(".zip"))
+                        && !url.ends_with(".cosign-bundle.json")
+                })
+            })
+            .or_else(|| v.files.first())
+            .ok_or_else(|| anyhow!("Modrinth version {} has no files", v.id))?;
+
+        Ok(ResourceVersion {
+            id: v.id,
+            project_id: v.project_id,
+            version_number: v.version_number,
+            game_versions: v.game_versions,
+            loaders: v.loaders,
+            download_url: selected_file.url.clone(),
+            file_name: selected_file.filename.clone(),
+            release_type: match v.version_type.as_str() {
+                "release" => ReleaseType::Release,
+                "beta" => ReleaseType::Beta,
+                "alpha" => ReleaseType::Alpha,
+                _ => ReleaseType::Release,
+            },
+            hash: selected_file.hashes.sha1.clone(),
+            dependencies: v
+                .dependencies
+                .into_iter()
+                .filter_map(|dependency| {
+                    dependency.project_id.map(|project_id| ResourceDependency {
+                        project_id,
+                        version_id: dependency.version_id,
+                        file_name: dependency.file_name,
+                        dependency_type: match dependency.dependency_type.as_str() {
+                            "required" => DependencyType::Required,
+                            "optional" => DependencyType::Optional,
+                            "incompatible" => DependencyType::Incompatible,
+                            "embedded" => DependencyType::Embedded,
+                            _ => DependencyType::Optional,
+                        },
+                    })
+                })
+                .collect(),
+            published_at: Some(v.date_published),
+        })
     }
 }
 
@@ -740,6 +792,66 @@ impl ResourceSource for ModrinthSource {
         };
 
         Ok((project, version))
+    }
+
+    async fn get_by_hashes(
+        &self,
+        hashes: &[String],
+    ) -> Result<HashMap<String, (ResourceProject, ResourceVersion)>> {
+        if hashes.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let response = self
+            .client
+            .post("https://api.modrinth.com/v2/version_files")
+            .json(&serde_json::json!({
+                "hashes": hashes,
+                "algorithm": "sha1"
+            }))
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "Modrinth batch hash lookup failed ({}): {}",
+                status,
+                body
+            ));
+        }
+
+        let versions: HashMap<String, ModrinthVersion> = response.json().await?;
+        let project_ids = versions
+            .values()
+            .map(|version| version.project_id.clone())
+            .collect::<Vec<_>>();
+        let projects = self.get_projects(&project_ids).await?;
+        let projects_by_id = projects
+            .into_iter()
+            .map(|project| (project.id.clone(), project))
+            .collect::<HashMap<_, _>>();
+
+        let mut matches = HashMap::new();
+        for (hash, version) in versions {
+            let project_id = version.project_id.clone();
+            let Some(project) = projects_by_id.get(&project_id).cloned() else {
+                continue;
+            };
+            matches.insert(
+                hash.clone(),
+                (project, Self::map_version(version, Some(&hash))?),
+            );
+        }
+        Ok(matches)
+    }
+
+    fn identification_batch_size(&self) -> usize {
+        100
+    }
+
+    fn identification_concurrency(&self) -> usize {
+        3
     }
 
     async fn get_categories(&self) -> Result<Vec<ResourceCategory>> {

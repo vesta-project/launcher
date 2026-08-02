@@ -13,6 +13,14 @@ import { router } from "@components/page-viewer/page-viewer";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
 import {
+	invalidateInstanceResourceOverview,
+	loadInstanceResourceOverview,
+	projectRecordMap,
+	type ResourceProjectOverviewRecord,
+	type ResourceProjectRef,
+	refreshInstanceResourceRows,
+} from "@stores/instance-resource-overview";
+import {
 	clearRunning,
 	instancesState,
 	isInstanceRunningInStore,
@@ -30,6 +38,7 @@ import {
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
+import { useMinecraftVersions } from "@stores/versions";
 import {
 	createColumnHelper,
 	createSolidTable,
@@ -65,16 +74,19 @@ import {
 	duplicateInstance,
 	getInstance,
 	getInstanceBySlug,
+	getInstanceInstallationFailureReason,
 	getInstanceOperationLabel,
 	getInstanceSlug,
-	getMinecraftVersions,
 	getStableIconId,
 	installInstance,
 	isDefaultIcon,
+	isInstanceInstallationFailed,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
+	isInstanceUpdateRecovery,
 	killInstance,
 	launchInstance,
+	needsInstanceInstallation,
 	repairInstance,
 	resumeInstanceOperation,
 	startModpackUpdate,
@@ -84,6 +96,16 @@ import {
 } from "@utils/instances";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
+import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
+import {
+	afterStablePaint,
+	markPerformance,
+	measurePerformance,
+} from "@utils/performance-trace";
+import {
+	createPreloadableLazyComponent,
+	createRetainedTabLoader,
+} from "@utils/preloadable-lazy";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -103,20 +125,75 @@ import {
 	onCleanup,
 	onMount,
 	Show,
+	Suspense,
 } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
 import styles from "./instance-details.module.css";
 import type { ModpackVersion } from "./modpack-version-selector";
-import { ConsoleTab } from "./tabs/ConsoleTab";
-import { CrashTab } from "./tabs/CrashTab";
 // Tabs
 import { HomeTab } from "./tabs/HomeTab";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
-import { ResourcesTab } from "./tabs/ResourcesTab";
-import { ScreenshotsTab } from "./tabs/ScreenshotsTab";
-import { SettingsTab } from "./tabs/SettingsTab";
-import { VersioningTab } from "./tabs/VersioningTab";
+
+const ConsoleTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/ConsoleTab").then((module) => ({
+		default: module.ConsoleTab,
+	})),
+);
+const CrashTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/CrashTab").then((module) => ({
+		default: module.CrashTab,
+	})),
+);
+const ResourcesTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/ResourcesTab").then((module) => ({
+		default: module.ResourcesTab,
+	})),
+);
+const ScreenshotsTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/ScreenshotsTab").then((module) => ({
+		default: module.ScreenshotsTab,
+	})),
+);
+const SettingsTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/SettingsTab").then((module) => ({
+		default: module.SettingsTab,
+	})),
+);
+const VersioningTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/VersioningTab").then((module) => ({
+		default: module.VersioningTab,
+	})),
+);
+
+const ConsoleTab = ConsoleTabModule.Component;
+const CrashTab = CrashTabModule.Component;
+const ResourcesTab = ResourcesTabModule.Component;
+const ScreenshotsTab = ScreenshotsTabModule.Component;
+const SettingsTab = SettingsTabModule.Component;
+const VersioningTab = VersioningTabModule.Component;
+
+const instanceTabLoaders: Partial<Record<TabType, () => Promise<unknown>>> = {
+	console: ConsoleTabModule.preload,
+	crash: CrashTabModule.preload,
+	resources: ResourcesTabModule.preload,
+	screenshots: ScreenshotsTabModule.preload,
+	settings: SettingsTabModule.preload,
+	versioning: VersioningTabModule.preload,
+};
+
+function InstanceTabLoading(props: { label: string }) {
+	return (
+		<div class={styles["instance-tab-loading"]} aria-live="polite">
+			<span
+				class={styles["instance-tab-loading__spinner"]}
+				data-essential-motion
+			/>
+			<span>Loading {props.label}…</span>
+		</div>
+	);
+}
 
 type LightweightUpdateCheckResult = {
 	resourceUpdates: Array<{
@@ -124,16 +201,6 @@ type LightweightUpdateCheckResult = {
 		version: ResourceVersion;
 	}>;
 	modpackVersions: ResourceVersion[];
-};
-
-type InstanceUpdateSnapshot = {
-	checkedAt: string;
-	resourceUpdates: Array<{
-		resourceId: number;
-		version: ResourceVersion;
-	}>;
-	modpackVersions: ResourceVersion[];
-	isStale: boolean;
 };
 
 type TabType =
@@ -148,6 +215,7 @@ type TabType =
 interface InstanceDetailsProps {
 	id?: number;
 	slug?: string; // Optional fallback - can come from props or router params
+	prefetchedInstance?: Instance;
 	activeTab?: TabType;
 	initialData?: any;
 	initialName?: string;
@@ -174,9 +242,15 @@ interface InstanceDetailsProps {
 
 /** Distance (pixels) below the viewport at which table row icons begin resolving.
  *  Larger values preload sooner; smaller values reduce initial network burst. */
-const ICON_LOAD_MARGIN_PX = 600;
+const ICON_LOAD_MARGIN_PX = 1600;
 
-const ResourceIcon = (props: { record?: any; name: string }) => {
+const ResourceIcon = (props: {
+	record?: any;
+	name: string;
+	platform?: string;
+	projectId?: string;
+	onNearViewport?: () => void;
+}) => {
 	const displayChar = createMemo(() => {
 		const match = props.name.match(/[a-zA-Z]/);
 		if (match) return match[0].toUpperCase();
@@ -185,15 +259,9 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 		return (first || "?").toUpperCase();
 	});
 
-	// Only accept data: URLs from the backend (icon_data → base64 encoded server-side).
-	// External http/https URLs are rejected because:
-	// 1. CSP blocks external image sources that aren't explicitly allowed
-	// 2. macOS ATS blocks insecure connections in production
-	// The backend's process_resource_record_icon() already strips external URLs,
-	// so icon_url will be either a data: URL (icon_data available) or null/absent.
 	const resolvedUrl = createMemo(() => {
 		const url = props.record?.icon_url;
-		if (url && url.startsWith("data:")) {
+		if (url?.startsWith("data:")) {
 			return url;
 		}
 		return null;
@@ -205,6 +273,7 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 
 	onMount(() => {
 		if (!wrapperRef) return;
+		const scrollRoot = wrapperRef.closest(".v-instance-resources-table");
 		const observer = new IntersectionObserver(
 			([entry]) => {
 				if (entry.isIntersecting) {
@@ -212,10 +281,17 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 					observer.disconnect();
 				}
 			},
-			{ rootMargin: `${ICON_LOAD_MARGIN_PX}px` },
+			{
+				root: scrollRoot,
+				rootMargin: `${ICON_LOAD_MARGIN_PX}px 0px`,
+			},
 		);
 		observer.observe(wrapperRef);
 		onCleanup(() => observer.disconnect());
+	});
+	createEffect(() => {
+		if (!isNearViewport() || !props.platform || !props.projectId) return;
+		props.onNearViewport?.();
 	});
 
 	return (
@@ -235,6 +311,8 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 						src={url()}
 						alt={props.name || "Resource Icon"}
 						class={styles["res-icon"]}
+						loading="eager"
+						decoding="async"
 					/>
 				)}
 			</Show>
@@ -294,29 +372,6 @@ const isSameCanonicalProject = (
 	a.platform === b.platform &&
 	String(a.remote_id) === String(b.remote_id);
 
-const AUTO_RESYNC_COOLDOWN_MS = 5 * 60 * 1000;
-
-// Frontend cache for project records to avoid re-fetching from the backend on repeated
-// navigations within the same session (e.g., mini-router open/close).
-interface RecordCacheEntry {
-	data: Record<string, any>;
-	timestamp: number;
-}
-const projectRecordCache = new Map<string, RecordCacheEntry>();
-const RECORD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getProjectRecordCacheKey(
-	refs: { platform: string; id: string }[],
-): string {
-	const sorted = [...refs]
-		.sort((a, b) =>
-			`${a.platform}:${a.id}`.localeCompare(`${b.platform}:${b.id}`),
-		)
-		.map((r) => `${r.platform}:${r.id}`)
-		.join(",");
-	return sorted;
-}
-
 export default function InstanceDetails(
 	props: InstanceDetailsProps & {
 		setRefetch?: (fn: () => Promise<void>) => void;
@@ -342,25 +397,71 @@ export default function InstanceDetails(
 		return k;
 	});
 
-	const [instance, { refetch }] = createResource(paramsKey, async (key) => {
-		if (!key) {
-			return undefined;
-		}
-		try {
-			let inst: Instance | undefined;
-			if (key.startsWith("id:")) {
-				const id = parseInt(key.slice(3), 10);
-				inst = await getInstance(id);
-			} else if (key.startsWith("slug:")) {
-				const slugVal = key.slice(5);
-				inst = await getInstanceBySlug(slugVal);
-			}
-			return inst;
-		} catch (e) {
-			console.error("[InstanceDetails] Error fetching instance:", e);
-			throw e;
-		}
+	// Resolve tab state before creating resources so tab-specific work can be
+	// gated instead of every hidden tab fetching during the first render.
+	const activeTab = createMemo<TabType>(() => {
+		const params = activeRouter()?.currentParams.get();
+		const tab = params?.activeTab as TabType | undefined;
+		return tab &&
+			[
+				"home",
+				"console",
+				"resources",
+				"crash",
+				"screenshots",
+				"settings",
+				"versioning",
+			].includes(tab)
+			? tab
+			: "home";
 	});
+
+	const prefetchedInstance = () => {
+		const key = paramsKey();
+		const candidate =
+			props.prefetchedInstance ??
+			instancesState.instances.find((stored) => {
+				if (key.startsWith("id:")) {
+					return stored.id === Number(key.slice(3));
+				}
+				return getInstanceSlug(stored) === key.slice(5);
+			});
+		if (!candidate || !key) return undefined;
+		if (key.startsWith("id:") && candidate.id === Number(key.slice(3))) {
+			return candidate;
+		}
+		if (
+			key.startsWith("slug:") &&
+			getInstanceSlug(candidate) === key.slice(5)
+		) {
+			return candidate;
+		}
+		return undefined;
+	};
+
+	const [instance, { refetch, mutate: mutateInstance }] = createResource(
+		paramsKey,
+		async (key) => {
+			if (!key) {
+				return undefined;
+			}
+			try {
+				let inst: Instance | undefined;
+				if (key.startsWith("id:")) {
+					const id = parseInt(key.slice(3), 10);
+					inst = await getInstance(id);
+				} else if (key.startsWith("slug:")) {
+					const slugVal = key.slice(5);
+					inst = await getInstanceBySlug(slugVal);
+				}
+				return inst;
+			} catch (e) {
+				console.error("[InstanceDetails] Error fetching instance:", e);
+				throw e;
+			}
+		},
+		{ initialValue: prefetchedInstance() },
+	);
 	const headerIconPreview = createAnimatedIconPreview(
 		() => instance()?.iconPath || DEFAULT_ICONS[0],
 	);
@@ -397,61 +498,135 @@ export default function InstanceDetails(
 
 	const [
 		installedResources,
-		{ refetch: refetchResources, mutate: mutateResources },
-	] = createResource(instance, async (inst) => {
-		if (!inst) return [];
-		return await resources.getInstalled(inst.id);
-	});
-
-	const [projectRecords] = createResource(
-		installedResources,
-		async (resourcesList) => {
-			if (!resourcesList || resourcesList.length === 0) return {};
-			const refs = resourcesList
-				.filter(
-					(r) =>
-						r.remote_id &&
-						(r.platform === "modrinth" || r.platform === "curseforge"),
-				)
-				.map((r) => ({
-					platform: r.platform,
-					id: r.remote_id,
-				}));
-
-			if (refs.length === 0) return {};
-
-			// Check frontend cache first (avoids IPC + backend cache lookup)
-			const cacheKey = getProjectRecordCacheKey(refs);
-			const cached = projectRecordCache.get(cacheKey);
-			if (cached && Date.now() - cached.timestamp < RECORD_CACHE_TTL_MS) {
-				return cached.data;
-			}
-
-			try {
-				const records: any[] = await invoke(
-					"get_or_hydrate_resource_projects",
-					{
-						refs,
-						allowNetwork: true,
-						refreshStale: false,
-					},
-				);
-				const map: Record<string, any> = {};
-				for (const r of records) {
-					const key = getProjectRecordKey(r.source, r.id);
-					if (key) {
-						map[key] = r;
-					}
-				}
-				// Store in frontend cache for instant re-visits
-				projectRecordCache.set(cacheKey, { data: map, timestamp: Date.now() });
-				return map;
-			} catch (e) {
-				console.error("Failed to fetch project records:", e);
-				return {};
-			}
+		{ refetch: refetchInstalledResources, mutate: mutateResources },
+	] = createResource(
+		() => instance()?.id,
+		async (instanceId) => {
+			if (!instanceId) return [];
+			return await resources.getInstalled(instanceId);
 		},
 	);
+
+	// The overview is tab-specific so the home view keeps its minimal installed-row
+	// query. Hover/focus intent warms the same deduplicated cache before activation.
+	const [resourceOverview, { refetch: refetchResourceOverview }] =
+		createResource(
+			() => {
+				const inst = instance();
+				const tab = activeTab();
+				return inst && (tab === "resources" || tab === "crash")
+					? inst.id
+					: undefined;
+			},
+			async (instanceId) => loadInstanceResourceOverview(instanceId),
+		);
+
+	const refetchResources = async () => {
+		const rows = await refetchInstalledResources();
+		const instanceId = instance()?.id;
+		if (instanceId) {
+			invalidateInstanceResourceOverview(instanceId);
+			if (activeTab() === "resources" || activeTab() === "crash") {
+				void refetchResourceOverview();
+			}
+		}
+		return rows;
+	};
+
+	const [projectRecords, setProjectRecords] = createStore<
+		Record<string, ResourceProjectOverviewRecord>
+	>({});
+	const mergeProjectMetadata = (
+		key: string,
+		record: ResourceProjectOverviewRecord,
+	) => {
+		const current = projectRecords[key];
+		const retainedIcon = current?.icon_url?.startsWith("data:")
+			? current.icon_url
+			: record.icon_url;
+		setProjectRecords(key, {
+			...current,
+			...record,
+			icon_url: retainedIcon,
+			has_cached_icon:
+				Boolean(retainedIcon?.startsWith("data:")) || record.has_cached_icon,
+		});
+	};
+	const pendingIconRefs = new Map<string, ResourceProjectRef>();
+	const requestedIconKeys = new Set<string>();
+	let iconQueueTimer: number | undefined;
+
+	const flushIconQueue = async () => {
+		iconQueueTimer = undefined;
+		const refs = [...pendingIconRefs.values()].slice(0, 16);
+		for (const ref of refs) {
+			pendingIconRefs.delete(`${ref.platform}:${ref.id}`);
+		}
+		if (refs.length === 0) return;
+		try {
+			const records = await invoke<
+				Array<ResourceProjectOverviewRecord & { icon_url?: string | null }>
+			>("hydrate_resource_project_icons", { refs });
+			batch(() => {
+				for (const record of records) {
+					const key = `${record.source.toLowerCase()}:${record.id}`;
+					setProjectRecords(key, {
+						...projectRecords[key],
+						...record,
+						has_cached_icon: Boolean(record.icon_url?.startsWith("data:")),
+					});
+				}
+			});
+		} catch (error) {
+			for (const ref of refs) {
+				requestedIconKeys.delete(`${ref.platform}:${ref.id}`);
+			}
+			console.warn("Failed to hydrate visible resource icons:", error);
+		}
+		if (pendingIconRefs.size > 0 && iconQueueTimer === undefined) {
+			iconQueueTimer = window.setTimeout(() => void flushIconQueue(), 16);
+		}
+	};
+
+	const queueResourceIcon = (
+		platform: string | null | undefined,
+		id: string | null | undefined,
+	) => {
+		if ((platform !== "modrinth" && platform !== "curseforge") || !id) {
+			return;
+		}
+		const key = `${platform}:${id}`;
+		if (
+			requestedIconKeys.has(key) ||
+			projectRecords[key]?.icon_url?.startsWith("data:")
+		) {
+			return;
+		}
+		requestedIconKeys.add(key);
+		pendingIconRefs.set(key, { platform, id });
+		if (iconQueueTimer === undefined) {
+			iconQueueTimer = window.setTimeout(() => void flushIconQueue(), 16);
+		}
+	};
+	onCleanup(() => {
+		if (iconQueueTimer !== undefined) window.clearTimeout(iconQueueTimer);
+	});
+
+	let iconInstanceId: number | undefined;
+	createEffect(() => {
+		const currentInstanceId = instance()?.id;
+		if (iconInstanceId !== currentInstanceId) {
+			iconInstanceId = currentInstanceId;
+			pendingIconRefs.clear();
+			requestedIconKeys.clear();
+		}
+		const overview = resourceOverview.latest;
+		if (!overview || overview.instanceId !== currentInstanceId) {
+			setProjectRecords(reconcile({}));
+			return;
+		}
+		setProjectRecords(reconcile(projectRecordMap(overview.projectRecords)));
+	});
 
 	const modpackOwnedResources = createMemo(() =>
 		(installedResources() || []).filter(isModpackOwnedResource),
@@ -466,88 +641,6 @@ export default function InstanceDetails(
 	>({});
 	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
 		createSignal(false);
-
-	const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<
-		Record<number, number>
-	>({});
-	const [autoResyncInFlight, setAutoResyncInFlight] = createSignal(false);
-
-	const getLinkedResourceRefs = (
-		resourcesList: InstalledResource[] | undefined,
-	) => {
-		if (!resourcesList || resourcesList.length === 0) return [];
-		return resourcesList
-			.filter(
-				(r) =>
-					!!r.remote_id &&
-					(r.platform === "modrinth" || r.platform === "curseforge"),
-			)
-			.map((r) => ({ platform: r.platform, id: r.remote_id }));
-	};
-
-	const getMetadataHoleCount = (
-		resourcesList: InstalledResource[] | undefined,
-		recordMap: Record<string, any> | undefined,
-	) => {
-		const refs = getLinkedResourceRefs(resourcesList);
-		if (refs.length === 0) return 0;
-
-		let holes = 0;
-		for (const ref of refs) {
-			const key = getProjectRecordKey(ref.platform, ref.id);
-			if (!key) {
-				holes += 1;
-				continue;
-			}
-
-			const record = recordMap?.[key];
-			if (!record) {
-				holes += 1;
-				continue;
-			}
-
-			const summaryMissing = !record.summary || !String(record.summary).trim();
-			const expectsIcon = !!record.icon_url;
-			const iconMissing =
-				expectsIcon &&
-				(!record.icon_data ||
-					(Array.isArray(record.icon_data) && record.icon_data.length === 0));
-
-			if (summaryMissing || iconMissing) {
-				holes += 1;
-			}
-		}
-
-		return holes;
-	};
-
-	const triggerConditionalResync = async (reason: string) => {
-		const current = instance();
-		if (!current || !current.gameDirectory) return;
-		if (autoResyncInFlight()) return;
-
-		const now = Date.now();
-		const last = autoResyncByInstance()[current.id] || 0;
-		if (now - last < AUTO_RESYNC_COOLDOWN_MS) return;
-
-		const holes = getMetadataHoleCount(installedResources(), projectRecords());
-		if (holes === 0) return;
-
-		console.info(
-			`[InstanceDetails] Triggering conditional resync (${reason}), ${holes} metadata holes detected`,
-		);
-
-		setAutoResyncInFlight(true);
-		setAutoResyncByInstance((prev) => ({ ...prev, [current.id]: now }));
-		try {
-			await resources.sync(current.id, slug(), current.gameDirectory || "");
-			await refetchResources();
-		} catch (e) {
-			console.error("[InstanceDetails] Conditional resync failed:", e);
-		} finally {
-			setAutoResyncInFlight(false);
-		}
-	};
 
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
@@ -824,9 +917,7 @@ export default function InstanceDetails(
 		});
 
 		const unlistenPromise = listen("java-paths-updated", () => {
-			refetchManaged();
-			refetchGlobal();
-			refetchDetected();
+			void instanceJavaSettings.refetch();
 		});
 		onCleanup(() => {
 			unlistenPromise.then((unlisten) => unlisten());
@@ -840,6 +931,7 @@ export default function InstanceDetails(
 			return {
 				...cleanProps,
 				slug: slug(),
+				prefetchedInstance: instance(),
 				activeTab: activeTab(),
 				...toInstanceEditHandoff(currentEditDraft(), currentEditDirty()),
 			};
@@ -858,28 +950,26 @@ export default function InstanceDetails(
 		activeRouter()?.customName.set(null);
 	});
 
-	// Tab state - initialized from query param if available
-	const activeTab = createMemo<TabType>(() => {
-		const params = activeRouter()?.currentParams.get();
-		const tab = params?.activeTab as TabType | undefined;
-		return tab &&
-			[
-				"home",
-				"console",
-				"resources",
-				"crash",
-				"screenshots",
-				"settings",
-				"versioning",
-			].includes(tab)
-			? tab
-			: "home";
+	const [selectedTab, setSelectedTab] = createSignal<TabType>(activeTab());
+	const instanceTabLoader = createRetainedTabLoader(
+		activeTab(),
+		(tab) => instanceTabLoaders[tab],
+		(tab, error) => {
+			console.warn(`Failed to preload instance tab ${tab}:`, error);
+		},
+	);
+
+	onMount(() => {
+		// Settings is a small, high-frequency tab. Start its local chunk as the
+		// instance shell mounts so an immediate click does not wait for the
+		// post-paint warmup, without adding it to the critical route bundle.
+		instanceTabLoader.preload("settings");
 	});
 
-	const [selectedTab, setSelectedTab] = createSignal<TabType>(activeTab());
-
 	createEffect(() => {
-		setSelectedTab(activeTab());
+		const tab = activeTab();
+		setSelectedTab(tab);
+		instanceTabLoader.retain(tab);
 	});
 
 	createEffect(
@@ -931,40 +1021,52 @@ export default function InstanceDetails(
 
 	const [busy, setBusy] = createSignal(false);
 
-	const [activeAccount] = createResource<any>(async () => {
-		try {
-			return await getActiveAccount();
-		} catch {
-			return null;
-		}
-	});
+	const [activeAccount] = createResource<any, boolean>(
+		() => activeTab() === "versioning" || undefined,
+		async () => {
+			try {
+				return await getActiveAccount();
+			} catch {
+				return null;
+			}
+		},
+	);
 
 	const isGuest = () => activeAccount()?.account_type === ACCOUNT_TYPE_GUEST;
 
-	const [requiredJava] = createResource(
+	const instanceJavaSettings = createNonSuspendingLoader(
 		() => instance()?.id,
-		async (id) => {
-			if (!id) return null;
-			return await invoke<number>("get_instance_required_java", {
-				instanceId: id,
-			});
+		async (instanceId) => {
+			const [requiredJava, detectedJavas, managedJavas, globalJavaPaths] =
+				await Promise.all([
+					invoke<number>("get_instance_required_java", { instanceId }),
+					invoke<any[]>("detect_java"),
+					invoke<any[]>("get_managed_javas"),
+					invoke<any[]>("get_global_java_paths"),
+				]);
+			return {
+				requiredJava,
+				detectedJavas,
+				managedJavas,
+				globalJavaPaths,
+			};
 		},
-	);
-	const [detectedJavas, { refetch: refetchDetected }] = createResource<any[]>(
-		() => invoke("detect_java"),
-	);
-	const [managedJavas, { refetch: refetchManaged }] = createResource<any[]>(
-		() => invoke("get_managed_javas"),
-	);
-	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<any[]>(
-		() => invoke("get_global_java_paths"),
+		{
+			requiredJava: null as number | null,
+			detectedJavas: [] as any[],
+			managedJavas: [] as any[],
+			globalJavaPaths: [] as any[],
+		},
 	);
 
 	const jreOptions = createMemo(() => {
-		const req = requiredJava();
+		const javaSettings = instanceJavaSettings.value();
+		const req = javaSettings.requiredJava;
 		if (!req) return [];
 
-		const global = globalJavaPaths()?.find((g) => g.major_version === req);
+		const global = javaSettings.globalJavaPaths.find(
+			(g) => g.major_version === req,
+		);
 		const globalPathSuffix = global ? `→ ${global.path}` : "(not set)";
 
 		const opts: any[] = [
@@ -976,7 +1078,7 @@ export default function InstanceDetails(
 		];
 
 		// Managed Runtime
-		const managed = managedJavas() || [];
+		const managed = javaSettings.managedJavas;
 		const managedForVersion = managed.find((j) => j.major_version === req);
 		if (managedForVersion) {
 			opts.push({
@@ -992,7 +1094,7 @@ export default function InstanceDetails(
 			});
 		}
 
-		(detectedJavas() || [])
+		javaSettings.detectedJavas
 			.filter((j) => j.major_version === req)
 			.forEach((j) => {
 				opts.push({
@@ -1029,12 +1131,22 @@ export default function InstanceDetails(
 
 	const isFailed = createMemo(() => {
 		const inst = instance();
-		return inst?.installationStatus === "failed";
+		return inst ? isInstanceInstallationFailed(inst) : false;
+	});
+
+	const isUpdateRecovery = createMemo(() => {
+		const inst = instance();
+		return inst ? isInstanceUpdateRecovery(inst) : false;
 	});
 
 	const needsInstallation = createMemo(() => {
 		const inst = instance();
-		return !inst?.installationStatus || isFailed();
+		return inst ? needsInstanceInstallation(inst) : false;
+	});
+
+	const installationFailureReason = createMemo(() => {
+		const inst = instance();
+		return inst ? getInstanceInstallationFailureReason(inst) : null;
 	});
 
 	let lastSelectedRowId: string | null = null;
@@ -1128,7 +1240,6 @@ export default function InstanceDetails(
 				});
 			}
 			resources.clearSelection();
-			await refetchResources();
 		} catch (e) {
 			console.error("Batch delete failed:", e);
 		} finally {
@@ -1175,6 +1286,9 @@ export default function InstanceDetails(
 		{},
 	);
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
+	const [rescanningResourceIds, setRescanningResourceIds] = createSignal<
+		Set<number>
+	>(new Set());
 	const [checkingPerResource, setCheckingPerResource] = createSignal<
 		Set<number>
 	>(new Set());
@@ -1183,13 +1297,17 @@ export default function InstanceDetails(
 	);
 	const [totalRam, setTotalRam] = createSignal(16384);
 
-	onMount(async () => {
-		try {
-			const ram = await invoke("get_system_memory_mb");
-			if (typeof ram === "number" && ram > 0) setTotalRam(ram);
-		} catch (e) {
-			console.error("Failed to get total RAM:", e);
-		}
+	let totalRamLoaded = false;
+	createEffect(() => {
+		if (activeTab() !== "settings" || totalRamLoaded) return;
+		totalRamLoaded = true;
+		void invoke("get_system_memory_mb")
+			.then((ram) => {
+				if (typeof ram === "number" && ram > 0) setTotalRam(ram);
+			})
+			.catch((e) => {
+				console.error("Failed to get total RAM:", e);
+			});
 	});
 
 	// Modpack versions for picker
@@ -1197,7 +1315,16 @@ export default function InstanceDetails(
 		string | null
 	>(null);
 
-	const [mcVersions] = createResource(getMinecraftVersions);
+	const sharedMinecraftVersions = useMinecraftVersions();
+	const mcVersions =
+		sharedMinecraftVersions.versions as typeof sharedMinecraftVersions.versions & {
+			readonly loading: boolean;
+			readonly error: string | null;
+		};
+	Object.defineProperties(mcVersions, {
+		loading: { get: sharedMinecraftVersions.loading },
+		error: { get: sharedMinecraftVersions.error },
+	});
 	const loadersList = createMemo(() => {
 		const metadata = mcVersions();
 		const loaderIds = metadata
@@ -1252,38 +1379,20 @@ export default function InstanceDetails(
 		}
 	};
 
-	const hydrateUpdateSnapshot = async (instanceId: number) => {
-		try {
-			const snapshot = await invoke<InstanceUpdateSnapshot | null>(
-				"get_instance_update_snapshot",
-				{
-					instanceId,
-				},
-			);
-			if (snapshot) {
-				applyUpdateCheckResult(snapshot);
-			} else {
-				setUpdates({});
-			}
-			return snapshot;
-		} catch (e) {
-			console.error("Failed to load cached update snapshot:", e);
-			setUpdates({});
-			return null;
-		}
-	};
-
 	createEffect(() => {
 		const inst = instance();
 		setUpdates({});
-		setCheckedPerResource(new Set());
+		setCheckedPerResource(new Set<number>());
 		if (!inst) return;
-		void hydrateUpdateSnapshot(inst.id);
+		const snapshot = resourceOverview.latest?.updateSnapshot;
+		if (snapshot) {
+			applyUpdateCheckResult(snapshot as LightweightUpdateCheckResult);
+		}
 	});
 
 	const availableModpackUpdate = createMemo(() => {
 		const inst = instance();
-		const versions = modpackVersions();
+		const versions = modpackVersions.latest;
 		if (!inst?.modpackId || !versions || versions.length === 0) return null;
 		const currentId = inst.modpackVersionId
 			? String(inst.modpackVersionId)
@@ -1301,8 +1410,9 @@ export default function InstanceDetails(
 			? String(inst.modpackVersionId)
 			: null;
 		return (
-			modpackVersions()?.find((version) => String(version.id) === currentId) ||
-			null
+			modpackVersions.latest?.find(
+				(version) => String(version.id) === currentId,
+			) || null
 		);
 	});
 
@@ -1753,45 +1863,6 @@ export default function InstanceDetails(
 		}
 	};
 
-	// Check updates when entering resources tab; resync only if metadata holes are detected.
-	createEffect(async () => {
-		const tab = activeTab();
-		const inst = instance();
-		if (tab === "resources" && inst && !busy()) {
-			await triggerConditionalResync("resources-tab-enter");
-
-			if (installedResources.loading || checkingUpdates()) return;
-
-			const snapshot = await hydrateUpdateSnapshot(inst.id);
-			if (!snapshot?.isStale) return;
-
-			void checkUpdates(false);
-		}
-	});
-
-	createEffect(
-		on(
-			() =>
-				[
-					instance()?.id,
-					installedResources.loading,
-					projectRecords.loading,
-					installedResources(),
-					projectRecords(),
-				] as const,
-			([id, installedLoading, recordsLoading, resourcesList, records]) => {
-				if (!id || installedLoading || recordsLoading) return;
-				if (!resourcesList || resourcesList.length === 0) return;
-
-				const holes = getMetadataHoleCount(resourcesList, records || {});
-				if (holes > 0) {
-					void triggerConditionalResync("instance-load-holes");
-				}
-			},
-			{ defer: true },
-		),
-	);
-
 	const checkUpdates = async (forceRefresh = false) => {
 		const inst = instance();
 		if (!inst || checkingUpdates()) return;
@@ -1819,6 +1890,120 @@ export default function InstanceDetails(
 			setCheckingUpdates(false);
 		}
 	};
+
+	const identifyResource = async (resourceId: number) => {
+		const inst = instance();
+		if (!inst || rescanningResourceIds().has(resourceId)) return;
+		setRescanningResourceIds((current) => new Set([...current, resourceId]));
+
+		try {
+			await resources.rescan(inst.id, [resourceId]);
+		} catch (error) {
+			console.error("Failed to identify resource:", error);
+			showToast({
+				title: "Resource Identification Failed",
+				description: "Vesta could not identify this resource right now.",
+				severity: "error",
+			});
+		} finally {
+			setRescanningResourceIds((current) => {
+				const next = new Set(current);
+				next.delete(resourceId);
+				return next;
+			});
+		}
+	};
+
+	let resourceMaintenanceGeneration = 0;
+	createEffect(
+		on(
+			() =>
+				[
+					activeTab(),
+					instance()?.id,
+					resourceOverview.latest?.revision,
+				] as const,
+			([tab, instanceId]) => {
+				const generation = ++resourceMaintenanceGeneration;
+				if (
+					(tab !== "resources" && tab !== "crash") ||
+					!instanceId ||
+					!resourceOverview.latest
+				) {
+					return;
+				}
+
+				const overview = resourceOverview.latest;
+				const cancelPaint = afterStablePaint(() => {
+					if (
+						generation !== resourceMaintenanceGeneration ||
+						instance()?.id !== instanceId
+					) {
+						return;
+					}
+
+					const paintedMark = `instance-resources:${instanceId}:rows-painted`;
+					markPerformance(paintedMark, {
+						instanceId,
+						resources: overview.resources.length,
+					});
+					measurePerformance(
+						"instance-resources:first-stable-paint",
+						`instance-resources:${instanceId}:tab-intent`,
+						paintedMark,
+						{ instanceId },
+					);
+
+					if (
+						tab === "resources" &&
+						overview.updateSnapshot?.isStale &&
+						!checkingUpdates()
+					) {
+						void checkUpdates(false);
+					}
+
+					if (overview.missingProjectRefs.length > 0) {
+						void invoke<ResourceProjectOverviewRecord[]>(
+							"get_or_hydrate_resource_projects",
+							{
+								refs: overview.missingProjectRefs,
+								allowNetwork: true,
+								refreshStale: false,
+							},
+						)
+							.then((records) => {
+								if (
+									generation === resourceMaintenanceGeneration &&
+									instance()?.id === instanceId
+								) {
+									batch(() => {
+										for (const [key, record] of Object.entries(
+											projectRecordMap(records),
+										)) {
+											mergeProjectMetadata(key, record);
+										}
+									});
+								}
+							})
+							.catch((error) =>
+								console.warn(
+									"Failed to hydrate background resource metadata:",
+									error,
+								),
+							);
+					}
+				});
+
+				onCleanup(() => {
+					cancelPaint();
+					if (generation === resourceMaintenanceGeneration) {
+						resourceMaintenanceGeneration += 1;
+					}
+				});
+			},
+			{ defer: true },
+		),
+	);
 
 	const handleUpdate = async (
 		resource: InstalledResource,
@@ -1865,6 +2050,8 @@ export default function InstanceDetails(
 		resource: InstalledResource,
 		enabled: boolean,
 	) => {
+		const currentInstance = instance();
+		if (!currentInstance) return false;
 		const peers = enabled ? getOppositeActiveCopies(resource) : [];
 
 		if (peers.length > 0 && !overrideConflictConfirmed()) {
@@ -1897,15 +2084,16 @@ export default function InstanceDetails(
 		try {
 			for (const peer of peers) {
 				await invoke("toggle_resource", {
+					instanceId: currentInstance.id,
 					resourceId: peer.id,
 					enabled: false,
 				});
 			}
 			await invoke("toggle_resource", {
+				instanceId: currentInstance.id,
 				resourceId: resource.id,
 				enabled,
 			});
-			await refetchResources();
 			return true;
 		} catch (e) {
 			console.error("Failed to toggle resource:", e);
@@ -1914,15 +2102,12 @@ export default function InstanceDetails(
 		}
 	};
 
-	// Sync resources separately - only on actual instance change
 	createEffect(
 		on(
 			() => instance()?.id,
 			(id) => {
-				const inst = instance();
-				if (id && inst) {
+				if (id) {
 					resources.clearSelection();
-					void triggerConditionalResync("instance-switch");
 				}
 			},
 			{ defer: true },
@@ -1959,7 +2144,7 @@ export default function InstanceDetails(
 					>
 						<ResourceIcon
 							record={
-								projectRecords()?.[
+								projectRecords[
 									getProjectRecordKey(
 										info.row.original.platform,
 										info.row.original.remote_id,
@@ -1967,6 +2152,14 @@ export default function InstanceDetails(
 								]
 							}
 							name={info.row.original.display_name}
+							platform={info.row.original.platform}
+							projectId={info.row.original.remote_id}
+							onNearViewport={() =>
+								queueResourceIcon(
+									info.row.original.platform,
+									info.row.original.remote_id,
+								)
+							}
 						/>
 						<Checkbox
 							class={styles["row-checkbox"]}
@@ -2040,6 +2233,7 @@ export default function InstanceDetails(
 					update={updates()[info.row.original.id]}
 					isCheckingForUpdates={checkingPerResource().has(info.row.original.id)}
 					hasCheckedForUpdates={checkedPerResource().has(info.row.original.id)}
+					isIdentifying={rescanningResourceIds().has(info.row.original.id)}
 					showVersionInfo={isCompactTable()}
 					currentVersion={info.row.original.current_version}
 					busy={busy()}
@@ -2063,7 +2257,6 @@ export default function InstanceDetails(
 									instanceId: resource.instance_id,
 									resourceId: resource.id,
 								});
-								refetchResources();
 							} catch (e) {
 								console.error("Failed to delete resource:", e);
 								mutateResources(previous);
@@ -2099,6 +2292,9 @@ export default function InstanceDetails(
 							});
 							setCheckedPerResource((prev) => new Set([...prev, resource.id]));
 						}
+					}}
+					onIdentify={async (resource) => {
+						await identifyResource(resource.id);
 					}}
 				/>
 			),
@@ -2181,30 +2377,74 @@ export default function InstanceDetails(
 		);
 
 		cleanups.push(
-			await listen("resources-updated", (event) => {
+			await listen<{
+				instanceId: number;
+				revision: string;
+				reason: string;
+			}>("core://instance-resource-rows-changed", (event) => {
 				const inst = instance();
-				if (inst && event.payload === inst.id) {
-					refetchResources();
-					resources.fetchInstalled(inst.id);
+				if (inst && event.payload.instanceId === inst.id) {
+					void refreshInstanceResourceRows(inst.id, event.payload.revision)
+						.then((rows) => {
+							if (instance()?.id === inst.id) mutateResources(rows);
+						})
+						.catch((error) => {
+							console.warn("Failed to refresh changed resource rows:", error);
+						});
 				}
 			}),
 		);
 
 		cleanups.push(
-			await listen("core://instance-installed", (ev) => {
-				const payload = (ev as { payload: { instance_id?: string } }).payload;
-				if (payload.instance_id === slug()) {
-					handleRefetch();
+			await listen<{
+				instanceId: number;
+				revision: string;
+				projectRefs: ResourceProjectRef[];
+				status: "complete" | "partial";
+			}>("core://instance-resource-metadata-changed", (event) => {
+				const inst = instance();
+				if (
+					inst &&
+					event.payload.instanceId === inst.id &&
+					event.payload.projectRefs.length > 0
+				) {
+					void invoke<ResourceProjectOverviewRecord[]>(
+						"get_cached_resource_projects",
+						{ refs: event.payload.projectRefs },
+					)
+						.then((records) => {
+							if (instance()?.id !== inst.id) return;
+							batch(() => {
+								for (const [key, record] of Object.entries(
+									projectRecordMap(records),
+								)) {
+									mergeProjectMetadata(key, record);
+								}
+							});
+						})
+						.catch((error) => {
+							console.warn("Failed to refresh resource metadata:", error);
+						});
 				}
 			}),
 		);
 
 		cleanups.push(
-			await listen("core://instance-updated", (ev) => {
-				const payload = ev.payload as any;
+			await listen<Instance>("core://instance-installed", (event) => {
+				const payload = event.payload;
 				const current = instance();
 				if (current && payload.id === current.id) {
-					handleRefetch();
+					mutateInstance(payload);
+				}
+			}),
+		);
+
+		cleanups.push(
+			await listen<Instance>("core://instance-updated", (event) => {
+				const payload = event.payload;
+				const current = instance();
+				if (current && payload.id === current.id) {
+					mutateInstance(payload);
 				}
 			}),
 		);
@@ -2234,6 +2474,8 @@ export default function InstanceDetails(
 		if (isInstalling()) return `${getInstanceOperationLabel(inst)}...`;
 
 		if (isInterrupted()) {
+			if (isUpdateRecovery()) return "Resume Recovery";
+
 			const op = inst.lastOperation;
 			const opName =
 				op === "hard-reset"
@@ -2381,8 +2623,29 @@ export default function InstanceDetails(
 
 	const handleTabChange = (tab: TabType) => {
 		if (tab === activeTab()) return;
+		if (tab === "resources") {
+			const instanceId = instance()?.id;
+			if (instanceId) {
+				markPerformance(`instance-resources:${instanceId}:tab-intent`, {
+					instanceId,
+				});
+			}
+		}
+		instanceTabLoader.prepare(tab);
 		setSelectedTab(tab);
-		activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
+		// Tabs are state within this page, not separate router entries. Replacing
+		// the query keeps the instance shell mounted while tab code suspends.
+		activeRouter()?.updateQuery("activeTab", tab);
+	};
+
+	const handleTabIntent = (tab: TabType) => {
+		instanceTabLoader.preload(tab);
+		if (tab === "resources" || tab === "crash") {
+			const instanceId = instance()?.id;
+			if (instanceId) {
+				void loadInstanceResourceOverview(instanceId);
+			}
+		}
 	};
 
 	createEffect(() => {
@@ -2402,6 +2665,7 @@ export default function InstanceDetails(
 				tabs={instanceTabs()}
 				activeTab={selectedTab()}
 				onTabChange={(v) => handleTabChange(v as TabType)}
+				onTabIntent={(v) => handleTabIntent(v as TabType)}
 			>
 				<div
 					class={styles["content-wrapper"]}
@@ -2552,7 +2816,9 @@ export default function InstanceDetails(
 														: "primary"
 												}
 												data-color={
-													isRunningGlobal() || currentCrash()
+													isRunningGlobal() ||
+													currentCrash() ||
+													isUpdateRecovery()
 														? "destructive"
 														: "primary"
 												}
@@ -2570,7 +2836,7 @@ export default function InstanceDetails(
 																when={isRunningGlobal()}
 																fallback={
 																	<Show
-																		when={currentCrash()}
+																		when={currentCrash() || isUpdateRecovery()}
 																		fallback={
 																			<PlayIcon width="16" height="16" />
 																		}
@@ -2594,224 +2860,323 @@ export default function InstanceDetails(
 									</div>
 								</header>
 
+								<Show when={installationFailureReason()}>
+									{(reason) => (
+										<div
+											class={styles["installation-failure-banner"]}
+											role="alert"
+										>
+											<ErrorIcon width="16" height="16" />
+											<div>
+												<strong>Installation failed</strong>
+												<span>{reason()}</span>
+											</div>
+										</div>
+									)}
+								</Show>
+
+								<Show when={isUpdateRecovery()}>
+									<div
+										class={styles["installation-failure-banner"]}
+										role="alert"
+									>
+										<ErrorIcon width="16" height="16" />
+										<div>
+											<strong>Update recovery required</strong>
+											<span>
+												The previous version could not be fully restored. Resume
+												recovery before launching this instance.
+											</span>
+										</div>
+									</div>
+								</Show>
+
 								<div class={styles["instance-tab-content"]}>
 									<TabsContent value="home">
-										<Show when={instance.loading && !instance.latest}>
-											<div class={styles["skeleton-grid"]}>
-												{Array.from({ length: 4 }).map(() => (
-													<Skeleton class={styles["skeleton-item"]} />
-												))}
-											</div>
-										</Show>
-										<Show when={instance.latest}>
-											<HomeTab
-												instance={inst()}
-												installedResources={installedResources() || []}
-												isRunning={isRunningGlobal()}
-											/>
+										<Show when={instanceTabLoader.visitedTabs().has("home")}>
+											<Show when={instance.loading && !instance.latest}>
+												<div class={styles["skeleton-grid"]}>
+													{Array.from({ length: 4 }).map(() => (
+														<Skeleton class={styles["skeleton-item"]} />
+													))}
+												</div>
+											</Show>
+											<Show when={instance.latest}>
+												<HomeTab
+													instance={inst()}
+													installedResources={installedResources() || []}
+													isRunning={isRunningGlobal()}
+												/>
+											</Show>
 										</Show>
 									</TabsContent>
 
 									<TabsContent value="console">
-										<Show when={instance.loading && !instance.latest}>
-											<Skeleton class={styles["skeleton-console"]} />
-										</Show>
-										<Show when={instance.latest}>
-											<ConsoleTab
-												instanceSlug={slug()}
-												openLogsFolder={openLogsFolder}
-											/>
+										<Show when={instanceTabLoader.visitedTabs().has("console")}>
+											<Show when={instance.loading && !instance.latest}>
+												<Skeleton class={styles["skeleton-console"]} />
+											</Show>
+											<Show when={instance.latest}>
+												<Suspense
+													fallback={<InstanceTabLoading label="console" />}
+												>
+													<ConsoleTab
+														instanceSlug={slug()}
+														openLogsFolder={openLogsFolder}
+													/>
+												</Suspense>
+											</Show>
 										</Show>
 									</TabsContent>
 
 									<TabsContent value="resources">
-										<ResourcesTab
-											instance={inst()}
-											resourceTypeFilter={resourceTypeFilter()}
-											resourceSearch={resourceSearch()}
-											setResourceSearch={setResourceSearch}
-											setResourceTypeFilter={setResourceTypeFilter}
-											table={table}
-											resourcesStore={resources}
-											installedResources={installedResources}
-											modpackResources={modpackOwnedResources()}
-											modpackIcon={() =>
-												modpackIconBase64() || inst().modpackIconUrl || null
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("resources") &&
+												instance.latest
 											}
-											modpackExpanded={modpackResourcesExpanded()}
-											setModpackExpanded={setModpackResourcesExpanded}
-											currentModpackVersion={currentModpackVersion()}
-											availableModpackUpdate={availableModpackUpdate()}
-											router={activeRouter()}
-											handleBatchUpdate={handleBatchUpdate}
-											handleBatchDelete={handleBatchDelete}
-											onManageModpackVersions={() =>
-												handleTabChange("versioning")
-											}
-											onUnlinkModpack={handleUnlink}
-											onDeleteModpackAndUnlink={
-												handleDeleteModpackFilesAndUnlink
-											}
-											onRowClick={handleRowClick}
-											selectedToUpdateCount={selectedToUpdateCount()}
-											busy={busy()}
-											checkingUpdates={checkingUpdates()}
-											checkUpdates={() => void checkUpdates(true)}
-											onCompactChange={setIsCompactTable}
-										/>
+										>
+											<Suspense
+												fallback={<InstanceTabLoading label="resources" />}
+											>
+												<ResourcesTab
+													instance={inst()}
+													resourceTypeFilter={resourceTypeFilter()}
+													resourceSearch={resourceSearch()}
+													setResourceSearch={setResourceSearch}
+													setResourceTypeFilter={setResourceTypeFilter}
+													table={table}
+													resourcesStore={resources}
+													installedResources={installedResources}
+													modpackResources={modpackOwnedResources()}
+													modpackIcon={() =>
+														modpackIconBase64() || inst().modpackIconUrl || null
+													}
+													modpackExpanded={modpackResourcesExpanded()}
+													setModpackExpanded={setModpackResourcesExpanded}
+													currentModpackVersion={currentModpackVersion()}
+													availableModpackUpdate={availableModpackUpdate()}
+													router={activeRouter()}
+													handleBatchUpdate={handleBatchUpdate}
+													handleBatchDelete={handleBatchDelete}
+													onManageModpackVersions={() =>
+														handleTabChange("versioning")
+													}
+													onUnlinkModpack={handleUnlink}
+													onDeleteModpackAndUnlink={
+														handleDeleteModpackFilesAndUnlink
+													}
+													onRowClick={handleRowClick}
+													selectedToUpdateCount={selectedToUpdateCount()}
+													busy={busy()}
+													checkingUpdates={checkingUpdates()}
+													checkUpdates={() => void checkUpdates(true)}
+													onCompactChange={setIsCompactTable}
+												/>
+											</Suspense>
+										</Show>
 									</TabsContent>
 
 									<TabsContent value="crash">
-										<CrashTab
-											instanceSlug={slug()}
-											instanceId={inst().id}
-											gameVersion={inst().minecraftVersion}
-											loader={inst().modloader ?? undefined}
-											crash={currentCrash()}
-											installedResources={
-												installedResources.latest || installedResources() || []
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("crash") &&
+												instance.latest
 											}
-											projectRecords={projectRecords.latest || projectRecords()}
-											router={activeRouter()}
-											onCleared={() => void handleRefetch()}
-										/>
+										>
+											<Suspense
+												fallback={<InstanceTabLoading label="crash report" />}
+											>
+												<CrashTab
+													instanceSlug={slug()}
+													instanceId={inst().id}
+													gameVersion={inst().minecraftVersion}
+													loader={inst().modloader ?? undefined}
+													crash={currentCrash()}
+													installedResources={
+														installedResources.latest ||
+														installedResources() ||
+														[]
+													}
+													projectRecords={projectRecords}
+													router={activeRouter()}
+													onCleared={() => void handleRefetch()}
+												/>
+											</Suspense>
+										</Show>
 									</TabsContent>
 
 									<TabsContent value="screenshots">
-										<ScreenshotsTab instanceIdSlug={slug()} />
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("screenshots") &&
+												instance.latest
+											}
+										>
+											<Suspense
+												fallback={<InstanceTabLoading label="screenshots" />}
+											>
+												<ScreenshotsTab instanceIdSlug={slug()} />
+											</Suspense>
+										</Show>
 									</TabsContent>
 
 									<TabsContent value="versioning">
-										<Show when={instance.latest}>
-											<VersioningTab
-												instance={inst()}
-												modpackIcon={() =>
-													modpackIconBase64() || inst().modpackIconUrl || null
-												}
-												isGuest={isGuest()}
-												busy={busy()}
-												isInstalling={isInstalling()}
-												checkingUpdates={checkingUpdates()}
-												checkUpdates={() => void checkUpdates(true)}
-												modpackVersions={modpackVersions}
-												availableModpackUpdate={availableModpackUpdate()}
-												handleModpackVersionSelect={handleModpackVersionSelect}
-												rolloutModpackUpdate={rolloutModpackUpdate}
-												handleUnlink={handleUnlink}
-												handleDeleteModpackAndUnlink={
-													handleDeleteModpackFilesAndUnlink
-												}
-												router={activeRouter()}
-												searchableMcVersions={searchableMcVersions}
-												includeSnapshots={includeSnapshots}
-												setIncludeSnapshots={setIncludeSnapshots}
-												selectedMcVersion={selectedMcVersion}
-												setSelectedMcVersion={setSelectedMcVersion}
-												selectedLoader={selectedLoader}
-												setSelectedLoader={setSelectedLoader}
-												selectedLoaderVersion={selectedLoaderVersion}
-												setSelectedLoaderVersion={setSelectedLoaderVersion}
-												loadersList={loadersList()}
-												currentVersionSupportedLoaders={
-													currentVersionSupportedLoaders
-												}
-												searchableLoaderVersions={searchableLoaderVersions}
-												handleStandardUpdate={handleStandardUpdate}
-												setShowExportDialog={setShowExportDialog}
-												handleDuplicate={async () => {
-													const n = await dialogStore.prompt(
-														"Duplicate Instance",
-														"Enter name for the copy:",
-														{
-															defaultValue: `${inst().name} (Copy)`,
-														},
-													);
-													if (n) duplicateInstance(inst().id, n);
-												}}
-												handleHardReset={() => handleHardReset(inst())}
-												handleUninstall={() =>
-													handleUninstall(inst(), () =>
-														activeRouter()?.navigate("/"),
-													)
-												}
-												repairInstance={repairInstance}
-												mcVersions={mcVersions}
-											/>
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("versioning") &&
+												instance.latest
+											}
+										>
+											<Suspense
+												fallback={<InstanceTabLoading label="version tools" />}
+											>
+												<VersioningTab
+													instance={inst()}
+													modpackIcon={() =>
+														modpackIconBase64() || inst().modpackIconUrl || null
+													}
+													isGuest={isGuest()}
+													busy={busy()}
+													isInstalling={isInstalling()}
+													checkingUpdates={checkingUpdates()}
+													checkUpdates={() => void checkUpdates(true)}
+													modpackVersions={modpackVersions}
+													availableModpackUpdate={availableModpackUpdate()}
+													handleModpackVersionSelect={
+														handleModpackVersionSelect
+													}
+													rolloutModpackUpdate={rolloutModpackUpdate}
+													handleUnlink={handleUnlink}
+													handleDeleteModpackAndUnlink={
+														handleDeleteModpackFilesAndUnlink
+													}
+													router={activeRouter()}
+													searchableMcVersions={searchableMcVersions}
+													includeSnapshots={includeSnapshots}
+													setIncludeSnapshots={setIncludeSnapshots}
+													selectedMcVersion={selectedMcVersion}
+													setSelectedMcVersion={setSelectedMcVersion}
+													selectedLoader={selectedLoader}
+													setSelectedLoader={setSelectedLoader}
+													selectedLoaderVersion={selectedLoaderVersion}
+													setSelectedLoaderVersion={setSelectedLoaderVersion}
+													loadersList={loadersList()}
+													currentVersionSupportedLoaders={
+														currentVersionSupportedLoaders
+													}
+													searchableLoaderVersions={searchableLoaderVersions}
+													handleStandardUpdate={handleStandardUpdate}
+													setShowExportDialog={setShowExportDialog}
+													handleDuplicate={async () => {
+														const n = await dialogStore.prompt(
+															"Duplicate Instance",
+															"Enter name for the copy:",
+															{
+																defaultValue: `${inst().name} (Copy)`,
+															},
+														);
+														if (n) duplicateInstance(inst().id, n);
+													}}
+													handleHardReset={() => handleHardReset(inst())}
+													handleUninstall={() =>
+														handleUninstall(inst(), () =>
+															activeRouter()?.navigate("/"),
+														)
+													}
+													repairInstance={repairInstance}
+													mcVersions={mcVersions}
+												/>
+											</Suspense>
 										</Show>
 									</TabsContent>
 
 									<TabsContent value="settings">
-										<Show when={instance.loading && !instance.latest}>
-											<div class={styles["skeleton-settings"]}>
-												<Skeleton class={styles["skeleton-field"]} />
-												<Skeleton class={styles["skeleton-field"]} />
-											</div>
-										</Show>
-										<Show when={instance.latest}>
-											<SettingsTab
-												instance={inst()}
-												name={name()}
-												setName={setName}
-												setIsNameDirty={setIsNameDirty}
-												iconPath={iconPath()}
-												setIconPath={setIconPath}
-												setIsIconDirty={setIsIconDirty}
-												uploadedIcons={uploadedIcons}
-												modpackIcon={() => modpackIconBase64() || null}
-												isInstalling={isInstalling()}
-												jreOptions={jreOptions}
-												javaPath={javaPath()}
-												setJavaPath={setJavaPath}
-												setIsJavaPathDirty={setIsJavaPathDirty}
-												isCustomMode={isCustomMode()}
-												setIsCustomMode={setIsCustomMode}
-												javaArgs={javaArgs()}
-												setJavaArgs={setJavaArgs}
-												setIsJvmDirty={setIsJvmDirty}
-												minMemory={minMemory()}
-												setMinMemory={setMinMemory}
-												setIsMinMemDirty={setIsMinMemDirty}
-												maxMemory={maxMemory()}
-												setMaxMemory={setMaxMemory}
-												setIsMaxMemDirty={setIsMaxMemDirty}
-												handleSave={handleSave}
-												saving={saving}
-												totalRam={totalRam()}
-												useGlobalResolution={useGlobalResolution()}
-												setUseGlobalResolution={setUseGlobalResolution}
-												gameWidth={gameWidth()}
-												setGameWidth={setGameWidth}
-												gameHeight={gameHeight()}
-												setGameHeight={setGameHeight}
-												setIsResolutionDirty={setIsResolutionDirty}
-												useGlobalJavaArgs={useGlobalJavaArgs()}
-												setUseGlobalJavaArgs={setUseGlobalJavaArgs}
-												useGlobalJavaPath={useGlobalJavaPath()}
-												setUseGlobalJavaPath={setUseGlobalJavaPath}
-												preLaunchHook={preLaunchHook()}
-												setPreLaunchHook={setPreLaunchHook}
-												postExitHook={postExitHook()}
-												setPostExitHook={setPostExitHook}
-												wrapperCommand={wrapperCommand()}
-												setWrapperCommand={setWrapperCommand}
-												useGlobalHooks={useGlobalHooks()}
-												setUseGlobalHooks={setUseGlobalHooks}
-												setIsHooksDirty={setIsHooksDirty}
-												environmentVariables={environmentVariables()}
-												setEnvironmentVariables={setEnvironmentVariables}
-												useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
-												setUseGlobalEnvironmentVariables={
-													setUseGlobalEnvironmentVariables
-												}
-												setIsEnvDirty={setIsEnvDirty}
-												useGlobalLauncherAction={useGlobalLauncherAction()}
-												setUseGlobalLauncherAction={setUseGlobalLauncherAction}
-												launcherActionOnLaunch={launcherActionOnLaunch()}
-												setLauncherActionOnLaunch={setLauncherActionOnLaunch}
-												setIsLaunchActionDirty={setIsLaunchActionDirty}
-												invoke={invoke}
-												showToast={showToast}
-											/>
+										<Show
+											when={instanceTabLoader.visitedTabs().has("settings")}
+										>
+											<Show when={instance.loading && !instance.latest}>
+												<div class={styles["skeleton-settings"]}>
+													<Skeleton class={styles["skeleton-field"]} />
+													<Skeleton class={styles["skeleton-field"]} />
+												</div>
+											</Show>
+											<Show when={instance.latest}>
+												<Suspense
+													fallback={
+														<InstanceTabLoading label="instance settings" />
+													}
+												>
+													<SettingsTab
+														instance={inst()}
+														name={name()}
+														setName={setName}
+														setIsNameDirty={setIsNameDirty}
+														iconPath={iconPath()}
+														setIconPath={setIconPath}
+														setIsIconDirty={setIsIconDirty}
+														uploadedIcons={uploadedIcons}
+														modpackIcon={() => modpackIconBase64() || null}
+														isInstalling={isInstalling()}
+														jreOptions={jreOptions}
+														javaPath={javaPath()}
+														setJavaPath={setJavaPath}
+														setIsJavaPathDirty={setIsJavaPathDirty}
+														isCustomMode={isCustomMode()}
+														setIsCustomMode={setIsCustomMode}
+														javaArgs={javaArgs()}
+														setJavaArgs={setJavaArgs}
+														setIsJvmDirty={setIsJvmDirty}
+														minMemory={minMemory()}
+														setMinMemory={setMinMemory}
+														setIsMinMemDirty={setIsMinMemDirty}
+														maxMemory={maxMemory()}
+														setMaxMemory={setMaxMemory}
+														setIsMaxMemDirty={setIsMaxMemDirty}
+														handleSave={handleSave}
+														saving={saving}
+														totalRam={totalRam()}
+														useGlobalResolution={useGlobalResolution()}
+														setUseGlobalResolution={setUseGlobalResolution}
+														gameWidth={gameWidth()}
+														setGameWidth={setGameWidth}
+														gameHeight={gameHeight()}
+														setGameHeight={setGameHeight}
+														setIsResolutionDirty={setIsResolutionDirty}
+														useGlobalJavaArgs={useGlobalJavaArgs()}
+														setUseGlobalJavaArgs={setUseGlobalJavaArgs}
+														useGlobalJavaPath={useGlobalJavaPath()}
+														setUseGlobalJavaPath={setUseGlobalJavaPath}
+														preLaunchHook={preLaunchHook()}
+														setPreLaunchHook={setPreLaunchHook}
+														postExitHook={postExitHook()}
+														setPostExitHook={setPostExitHook}
+														wrapperCommand={wrapperCommand()}
+														setWrapperCommand={setWrapperCommand}
+														useGlobalHooks={useGlobalHooks()}
+														setUseGlobalHooks={setUseGlobalHooks}
+														setIsHooksDirty={setIsHooksDirty}
+														environmentVariables={environmentVariables()}
+														setEnvironmentVariables={setEnvironmentVariables}
+														useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
+														setUseGlobalEnvironmentVariables={
+															setUseGlobalEnvironmentVariables
+														}
+														setIsEnvDirty={setIsEnvDirty}
+														useGlobalLauncherAction={useGlobalLauncherAction()}
+														setUseGlobalLauncherAction={
+															setUseGlobalLauncherAction
+														}
+														launcherActionOnLaunch={launcherActionOnLaunch()}
+														setLauncherActionOnLaunch={
+															setLauncherActionOnLaunch
+														}
+														setIsLaunchActionDirty={setIsLaunchActionDirty}
+														invoke={invoke}
+														showToast={showToast}
+													/>
+												</Suspense>
+											</Show>
 										</Show>
 									</TabsContent>
 								</div>

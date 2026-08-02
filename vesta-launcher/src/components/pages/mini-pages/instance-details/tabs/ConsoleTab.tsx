@@ -3,7 +3,11 @@ import HistoryIcon from "@assets/history.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
-import { consoleStore, type LogLevel } from "@stores/console";
+import {
+	CONSOLE_FILTER_LEVELS,
+	consoleStore,
+	type LogLevel,
+} from "@stores/console";
 import { instancesState } from "@stores/instances";
 import Button from "@ui/button/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
@@ -61,14 +65,18 @@ interface ConsoleTabProps {
 }
 
 export const ConsoleTab = (props: ConsoleTabProps) => {
-	let outputRef: HTMLDivElement | undefined;
+	const [outputElement, setOutputElement] = createSignal<
+		HTMLDivElement | undefined
+	>();
 	const [unlisten, setUnlisten] = createSignal<(() => void) | null>(null);
 	const [historyOpen, setHistoryOpen] = createSignal(false);
 	const [isScrollable, setIsScrollable] = createSignal(false);
 	const [atBottom, setAtBottom] = createSignal(true);
 	const [isSearchExpanded, setIsSearchExpanded] = createSignal(false);
 	const hasFilters = () =>
-		consoleStore.state.filterLevels.length < 4 ||
+		CONSOLE_FILTER_LEVELS.some(
+			(level) => !consoleStore.state.filterLevels.includes(level),
+		) ||
 		consoleStore.state.searchQuery.length > 0;
 
 	onMount(async () => {
@@ -82,8 +90,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	});
 
 	const checkScroll = () => {
-		if (!outputRef) return;
-		const { scrollTop, scrollHeight, clientHeight } = outputRef;
+		const output = outputElement();
+		if (!output) return;
+		const { scrollTop, scrollHeight, clientHeight } = output;
 		const atBottomNow = scrollHeight - scrollTop - clientHeight < 50;
 
 		setIsScrollable(scrollHeight > clientHeight + 10);
@@ -104,7 +113,12 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 		const filtered = consoleStore.state.lines.filter((line) => {
 			const matchesQuery = !query || line.raw.toLowerCase().includes(query);
-			const matchesLevel = levels.includes(line.level);
+			// Unclassified lines are still real console output (stack traces,
+			// crash reports, native-loader diagnostics). FATAL shares the
+			// visible ERROR category because there is no separate FATAL control.
+			const matchesLevel =
+				line.level === "UNKNOWN" ||
+				levels.includes(line.level === "FATAL" ? "ERROR" : line.level);
 			return matchesQuery && matchesLevel;
 		});
 
@@ -115,9 +129,13 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 	// Handle autoscroll
 	createEffect(() => {
-		if (consoleStore.state.autoScroll && outputRef) {
-			filteredLines(); // Dependency
-			outputRef.scrollTop = outputRef.scrollHeight;
+		const count = filteredLines().length;
+		const output = outputElement();
+		if (consoleStore.state.autoScroll && output && count > 0) {
+			requestAnimationFrame(() => {
+				output.scrollTop = output.scrollHeight;
+				checkScroll();
+			});
 		}
 	});
 
@@ -138,11 +156,12 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	};
 
 	const toggleScroll = () => {
-		if (!outputRef) return;
+		const output = outputElement();
+		if (!output) return;
 		if (atBottom()) {
-			outputRef.scrollTop = 0;
+			output.scrollTop = 0;
 		} else {
-			outputRef.scrollTop = outputRef.scrollHeight;
+			output.scrollTop = output.scrollHeight;
 		}
 		checkScroll();
 	};
@@ -298,7 +317,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 				</div>
 
 				<div class={styles["console-filters"]}>
-					<For each={["INFO", "WARN", "ERROR", "DEBUG"] as LogLevel[]}>
+					<For each={CONSOLE_FILTER_LEVELS}>
 						{(level) => (
 							<button
 								onClick={() => consoleStore.toggleFilterLevel(level)}
@@ -319,7 +338,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 			<div
 				class={clsx(styles["console-output"], styles["v2"])}
-				ref={outputRef}
+				ref={(element) => setOutputElement(element)}
 				style={{ "font-family": "var(--font-mono)" }}
 				onScroll={checkScroll}
 			>
@@ -359,11 +378,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									<Button
 										variant="slate"
 										size="sm"
-										onClick={() => {
-											["INFO", "WARN", "ERROR", "DEBUG"].forEach((l) =>
-												consoleStore.toggleFilterLevel(l as LogLevel),
-											);
-										}}
+										onClick={() => consoleStore.resetFilters()}
 									>
 										Reset Filters
 									</Button>
@@ -401,7 +416,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 						</div>
 					}
 				>
-					<div class={styles["console-virtual-container"]}>
+					<div class={styles["console-lines"]}>
 						<For each={filteredLines()}>
 							{(line) => (
 								<div class={styles["console-line-wrapper"]}>

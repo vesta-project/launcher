@@ -107,6 +107,7 @@ impl Task for ResourceDownloadTask {
         let project_name = self.project_name.clone();
         let version = self.version.clone();
         let resource_type = self.resource_type;
+        let app_handle = ctx.app_handle.clone();
 
         Box::pin(async move {
             ctx.set_title(format!("Installing {}", project_name));
@@ -320,6 +321,7 @@ impl Task for ResourceDownloadTask {
                 .await
                 .map_err(|e| e.to_string())?;
 
+            let metadata_project_id = project_id.clone();
             let project_id = project_id.clone();
             let project_name = project_name.clone();
             let version = version.clone();
@@ -347,6 +349,22 @@ impl Task for ResourceDownloadTask {
             })
             .await
             .map_err(|e| format!("Failed to record installed resource: {}", e))??;
+            crate::resources::reconciliation::emit_rows_changed(
+                &app_handle,
+                instance_id,
+                "resource-download",
+            )
+            .map_err(|error| error.to_string())?;
+            crate::resources::reconciliation::emit_metadata_changed(
+                &app_handle,
+                instance_id,
+                vec![crate::models::resource::ResourceProjectRef {
+                    platform,
+                    id: metadata_project_id,
+                }],
+                "complete",
+            )
+            .map_err(|error| error.to_string())?;
 
             if let Err(e) =
                 crate::resources::update_cache::invalidate_instance_update_snapshot(instance_id)

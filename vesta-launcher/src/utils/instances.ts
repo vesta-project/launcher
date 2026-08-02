@@ -111,14 +111,9 @@ export interface Instance {
 	totalPlaytimeMinutes: number;
 	createdAt: string | null;
 	updatedAt: string | null;
-	// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
-	installationStatus?:
-		| "pending"
-		| "installing"
-		| "installed"
-		| "failed"
-		| "interrupted"
-		| null;
+	// The backend appends the failure reason (`failed:<reason>`), so this must
+	// remain a string rather than a closed union of the base status names.
+	installationStatus?: string | null;
 	crashed?: boolean;
 	crashDetails?: string | null;
 	modpackId: string | null;
@@ -442,6 +437,33 @@ export function isInstanceOperationInProgress(instance: Instance): boolean {
 	return instance.installationStatus === "installing";
 }
 
+export function isInstanceInstallationFailed(instance: Instance): boolean {
+	const status = instance.installationStatus;
+	return status === "failed" || status?.startsWith("failed:") === true;
+}
+
+export function isInstanceUpdateRecovery(instance: Instance): boolean {
+	return (
+		instance.installationStatus === "interrupted" &&
+		instance.lastOperation === "update"
+	);
+}
+
+export function getInstanceInstallationFailureReason(
+	instance: Instance,
+): string | null {
+	if (!isInstanceInstallationFailed(instance)) return null;
+	const status = instance.installationStatus;
+	if (!status?.startsWith("failed:")) return "Installation failed";
+
+	const reason = status.slice("failed:".length).trim();
+	return reason || "Installation failed";
+}
+
+export function needsInstanceInstallation(instance: Instance): boolean {
+	return !instance.installationStatus || isInstanceInstallationFailed(instance);
+}
+
 export function getInstanceOperationLabel(
 	instance: Instance,
 	fallback = "Installing",
@@ -463,6 +485,10 @@ export async function getInstance(id: number): Promise<Instance> {
 	if (id === DEMO_INSTANCE_ID) {
 		return createDemoInstance();
 	}
+	const cached = instancesState.instances.find(
+		(instance) => instance.id === id,
+	);
+	if (cached) return cached;
 	return await invoke<Instance>("get_instance", { instanceId: id });
 }
 
@@ -471,6 +497,10 @@ export async function getInstanceBySlug(slug: string): Promise<Instance> {
 	if (slug === DEMO_INSTANCE_SLUG) {
 		return createDemoInstance();
 	}
+	const cached = instancesState.instances.find(
+		(instance) => getInstanceSlug(instance) === slug,
+	);
+	if (cached) return cached;
 	return await invoke<Instance>("get_instance_by_slug", { slugVal: slug });
 }
 

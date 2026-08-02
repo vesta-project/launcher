@@ -110,6 +110,17 @@ pub struct ResourceProjectRecord {
     pub icon_synced_at: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable, AsChangeset)]
+#[diesel(table_name = crate::schema::vesta::resource_project_peer)]
+pub struct ResourceProjectPeerRecord {
+    pub source: String,
+    pub project_id: String,
+    pub peer_source: String,
+    pub peer_project_id: String,
+    pub evidence: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceProjectRef {

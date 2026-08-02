@@ -3,6 +3,7 @@ import RightArrowIcon from "@assets/right-arrow.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
 import { flexRender } from "@tanstack/solid-table";
+import { createVirtualizer } from "@tanstack/solid-virtual";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import {
@@ -30,7 +31,7 @@ import {
 	createMemo,
 	createSignal,
 	For,
-	onCleanup,
+	on,
 	Show,
 } from "solid-js";
 import styles from "../instance-details.module.css";
@@ -51,6 +52,8 @@ const COLUMN_WIDTHS: Record<string, string | undefined> = {
 	actions: "68px",
 };
 
+const RESOURCE_ROW_OVERSCAN = 40;
+
 const COLUMN_CLASS: Record<string, string> = {
 	select: "col-select",
 	display_name: "col-display_name",
@@ -63,24 +66,6 @@ function getColumnClass(columnId: string): string | undefined {
 	const key = COLUMN_CLASS[columnId];
 	return key ? styles[key] : undefined;
 }
-
-type IdleCallbackHandle = number;
-type WindowWithIdleCallback = Window &
-	typeof globalThis & {
-		requestIdleCallback?: (callback: () => void) => IdleCallbackHandle;
-		cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
-	};
-
-const scheduleIdleWarmup = (callback: () => void) => {
-	const win = window as WindowWithIdleCallback;
-	if (typeof win.requestIdleCallback === "function") {
-		const handle = win.requestIdleCallback(callback);
-		return () => win.cancelIdleCallback?.(handle);
-	}
-
-	const handle = window.setTimeout(callback, 0);
-	return () => window.clearTimeout(handle);
-};
 
 interface ResourcesTabProps {
 	instance: any;
@@ -123,6 +108,12 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	const customRows = createMemo(() =>
 		sortedRows().filter((row: any) => !isModpackOwnedResource(row.original)),
 	);
+	const visibleResourceRows = createMemo(() => {
+		if (!props.instance?.modpackId) return sortedRows();
+		return props.modpackExpanded
+			? [...modpackRows(), ...customRows()]
+			: customRows();
+	});
 	const installedResourceList = createMemo(() =>
 		Array.isArray(props.installedResources.latest)
 			? props.installedResources.latest
@@ -146,23 +137,19 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 		return `${modpackRows().length} bundled ${noun}`;
 	});
-	const modpackRowsWarmupKey = createMemo(() =>
-		props.instance?.modpackId
-			? `${props.instance?.id ?? "unknown"}:${modpackRows()
-					.map((row: any) => row.id)
-					.join(",")}`
-			: "",
-	);
-	const [shouldMountModpackRows, setShouldMountModpackRows] =
-		createSignal(false);
-	let cancelModpackRowsWarmup: (() => void) | undefined;
 	let appliedDefaultExpansionKey = "";
 
 	const renderResourceRow = (
 		row: any,
-		options?: { hidden?: () => boolean },
+		options?: {
+			hidden?: () => boolean;
+			virtualIndex?: number;
+			measure?: (element: HTMLTableRowElement) => void;
+		},
 	) => (
 		<tr
+			ref={(element) => options?.measure?.(element)}
+			data-index={options?.virtualIndex}
 			onClick={(e) => props.onRowClick(row, e)}
 			style={{ cursor: "default" }}
 			hidden={options?.hidden?.()}
@@ -307,6 +294,54 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	};
 
 	const [panelRef, setPanelRef] = createSignal<HTMLElement | undefined>();
+	let tableScrollElement: HTMLDivElement | undefined;
+	const rowVirtualizer = createVirtualizer<HTMLDivElement, HTMLTableRowElement>(
+		{
+			get count() {
+				return visibleResourceRows().length;
+			},
+			getScrollElement: () => tableScrollElement ?? null,
+			estimateSize: () => 49,
+			initialRect: { width: 1000, height: 600 },
+			overscan: RESOURCE_ROW_OVERSCAN,
+			getItemKey: (index) => visibleResourceRows()[index]?.id ?? index,
+		},
+	);
+	const virtualRows = createMemo(() => {
+		const measuredRows = rowVirtualizer.getVirtualItems();
+		if (measuredRows.length > 0) return measuredRows;
+
+		// Keep first paint deterministic before ResizeObserver reports the scroll
+		// viewport (and in non-layout test environments).
+		return Array.from(
+			{ length: Math.min(25, visibleResourceRows().length) },
+			(_, index) => ({
+				key: visibleResourceRows()[index]?.id ?? index,
+				index,
+				start: index * 49,
+				end: (index + 1) * 49,
+				size: 49,
+				lane: 0,
+			}),
+		);
+	});
+	const topVirtualPadding = createMemo(() => virtualRows()[0]?.start ?? 0);
+	const bottomVirtualPadding = createMemo(() => {
+		const rows = virtualRows();
+		const last = rows[rows.length - 1];
+		return last ? Math.max(0, rowVirtualizer.getTotalSize() - last.end) : 0;
+	});
+	createEffect(
+		on(
+			() => [props.resourceTypeFilter, props.resourceSearch] as const,
+			() => {
+				if (!tableScrollElement) return;
+				tableScrollElement.scrollTop = 0;
+				tableScrollElement.dispatchEvent(new Event("scroll"));
+			},
+			{ defer: true },
+		),
+	);
 	const isCompactTable = createContainerQuery(
 		panelRef,
 		RESOURCES_TABLE_COMPACT_WIDTH,
@@ -318,25 +353,6 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 	createEffect(() => {
 		props.onCompactChange?.(isCompactTable());
-	});
-
-	createEffect(() => {
-		const key = modpackRowsWarmupKey();
-		cancelModpackRowsWarmup?.();
-		cancelModpackRowsWarmup = undefined;
-		setShouldMountModpackRows(false);
-
-		if (!key || !props.installedResources.latest || modpackRows().length === 0)
-			return;
-		if (props.modpackExpanded) {
-			setShouldMountModpackRows(true);
-			return;
-		}
-
-		cancelModpackRowsWarmup = scheduleIdleWarmup(() => {
-			cancelModpackRowsWarmup = undefined;
-			setShouldMountModpackRows(true);
-		});
 	});
 
 	createEffect(() => {
@@ -353,16 +369,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 		const shouldExpandByDefault =
 			installedModpackResources().length > 0 && !hasManualResources();
-		if (shouldExpandByDefault) {
-			cancelModpackRowsWarmup?.();
-			cancelModpackRowsWarmup = undefined;
-			setShouldMountModpackRows(true);
-		}
 		props.setModpackExpanded(shouldExpandByDefault);
-	});
-
-	onCleanup(() => {
-		cancelModpackRowsWarmup?.();
 	});
 
 	const handleSearchInput = (e: InputEvent) => {
@@ -371,11 +378,6 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	};
 
 	const setModpackExpanded = (expanded: boolean) => {
-		if (expanded) {
-			cancelModpackRowsWarmup?.();
-			cancelModpackRowsWarmup = undefined;
-			setShouldMountModpackRows(true);
-		}
 		props.setModpackExpanded(expanded);
 	};
 
@@ -587,20 +589,19 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			</div>
 
 			<div class={styles["installed-resources-list"]}>
-				<Show
-					when={
-						props.installedResources.loading && !props.installedResources.latest
-					}
+				<div
+					ref={tableScrollElement}
+					class={`${styles["vesta-table-container"]} v-instance-resources-table`}
 				>
-					<Skeleton class={styles["skeleton-resources"]} />
-				</Show>
-				<Show when={props.installedResources.latest}>
-					<div
-						class={`${styles["vesta-table-container"]} v-instance-resources-table`}
-						classList={{
-							[styles.refetching]: props.installedResources.loading,
-						}}
+					<Show
+						when={
+							props.installedResources.loading &&
+							!props.installedResources.latest
+						}
 					>
+						<Skeleton class={styles["skeleton-resources"]} />
+					</Show>
+					<Show when={props.installedResources.latest}>
 						<table class={styles["vesta-table"]}>
 							<colgroup>
 								<For each={props.table.getVisibleLeafColumns()}>
@@ -667,22 +668,41 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										</For>
 									</tr>
 								</Show>
-								<Show
-									when={props.instance?.modpackId && shouldMountModpackRows()}
-								>
-									<For each={modpackRows()}>
-										{(row) =>
-											renderResourceRow(row, {
-												hidden: () => !props.modpackExpanded,
-											})
-										}
-									</For>
+								<Show when={topVirtualPadding() > 0}>
+									<tr aria-hidden="true">
+										<td
+											colSpan={props.table.getVisibleLeafColumns().length}
+											style={{
+												height: `${topVirtualPadding()}px`,
+												padding: "0",
+											}}
+										/>
+									</tr>
 								</Show>
-								<For
-									each={props.instance?.modpackId ? customRows() : sortedRows()}
-								>
-									{renderResourceRow}
+								<For each={virtualRows()}>
+									{(virtualRow) => {
+										const row = () => visibleResourceRows()[virtualRow.index];
+										return (
+											<Show when={row()}>
+												{renderResourceRow(row(), {
+													virtualIndex: virtualRow.index,
+													measure: rowVirtualizer.measureElement,
+												})}
+											</Show>
+										);
+									}}
 								</For>
+								<Show when={bottomVirtualPadding() > 0}>
+									<tr aria-hidden="true">
+										<td
+											colSpan={props.table.getVisibleLeafColumns().length}
+											style={{
+												height: `${bottomVirtualPadding()}px`,
+												padding: "0",
+											}}
+										/>
+									</tr>
+								</Show>
 							</tbody>
 						</table>
 
@@ -699,8 +719,8 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								</p>
 							</div>
 						</Show>
-					</div>
-				</Show>
+					</Show>
+				</div>
 			</div>
 		</section>
 	);
