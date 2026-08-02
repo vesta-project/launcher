@@ -179,18 +179,6 @@ export function KeyboardSettingsTab() {
 	return (
 		<div class={pageStyles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
-				<div class={styles.recordingHelp} aria-label="Shortcut recording help">
-					<span>While recording</span>
-					<span class={styles.helpAction}>
-						<kbd>Esc</kbd>
-						Cancel
-					</span>
-					<span class={styles.helpAction}>
-						<kbd>⌫</kbd>
-						Clear
-					</span>
-				</div>
-
 				<Show when={keybindingsPersistenceError()}>
 					<SettingsCard>
 						<div class={styles.error} role="alert">
@@ -209,8 +197,28 @@ export function KeyboardSettingsTab() {
 					}
 				>
 					<For each={groupedCommands()}>
-						{(group) => (
-							<SettingsCard header={group.category}>
+						{(group, index) => (
+							<SettingsCard
+								header={group.category}
+								headerRight={
+									index() === 0 ? (
+										<div
+											class={styles.recordingHelp}
+											aria-label="Shortcut recording help"
+										>
+											<span>While recording</span>
+											<span class={styles.helpAction}>
+												<kbd>Esc</kbd>
+												Cancel
+											</span>
+											<span class={styles.helpAction}>
+												<kbd>⌫</kbd>
+												Clear
+											</span>
+										</div>
+									) : undefined
+								}
+							>
 								<div class={styles.commands}>
 									<For each={group.commands}>
 										{(command) => {

@@ -18,12 +18,10 @@
 .recordingHelp {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
-	gap: 12px;
-	min-height: 28px;
-	padding: 0 4px;
+	gap: 10px;
 	color: var(--text-tertiary);
 	font-size: var(--font-xxsmall);
+	white-space: nowrap;
 }
 
 .helpAction {

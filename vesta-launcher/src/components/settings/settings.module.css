@@ -85,6 +85,13 @@
 	line-height: 1.3;
 }
 
+.settings-card-header-right {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	margin-left: auto;
+}
+
 .settings-card-subheader {
 	font-size: var(--font-xsmall);
 	color: var(--text-secondary);
