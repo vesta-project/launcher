@@ -121,8 +121,8 @@ const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
 	},
 	{
 		value: "keyboard",
-		label: "Keyboard",
-		loadingLabel: "Keyboard Settings",
+		labelMessageId: "settings-tab-keyboard",
+		loadingMessageId: "settings-keyboard-loading",
 		preload: KeyboardSettingsModule.preload,
 		render: () => <KeyboardSettingsTab />,
 	},
