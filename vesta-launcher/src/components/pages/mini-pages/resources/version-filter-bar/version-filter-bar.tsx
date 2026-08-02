@@ -374,8 +374,8 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 					</Show>
 				</div>
 
-				<span class={styles["filter-count"]}>
-					{props.filteredCount} / {props.totalCount} versions
+        <span class={styles["filter-count"]}>
+          {props.filteredCount} / {props.totalCount}
 				</span>
 			</div>
 

@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
     ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
-    ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::models::resource_update::{
     InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
@@ -748,6 +748,18 @@ pub async fn get_resource_versions(
             None,
             None,
         )
+        .await?)
+}
+
+#[tauri::command]
+pub async fn get_resource_version_details(
+    resource_manager: State<'_, ResourceManager>,
+    platform: SourcePlatform,
+    project_id: String,
+    version_id: String,
+) -> Result<ResourceVersionDetails> {
+    Ok(resource_manager
+        .get_version_details(platform, &project_id, &version_id)
         .await?)
 }
 

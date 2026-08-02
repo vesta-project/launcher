@@ -9,7 +9,7 @@ use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
     DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceMetadataCacheRecord,
     ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion,
-    SearchQuery, SearchResponse, SourcePlatform,
+    ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
@@ -689,6 +689,16 @@ impl ResourceManager {
     ) -> Result<ResourceVersion> {
         let source = self.get_source(platform).await?;
         source.get_version(project_id, version_id).await
+    }
+
+    pub async fn get_version_details(
+        &self,
+        platform: SourcePlatform,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<ResourceVersionDetails> {
+        let source = self.get_source(platform).await?;
+        source.get_version_details(project_id, version_id).await
     }
 
     pub async fn get_by_hash(
