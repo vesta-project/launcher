@@ -39,10 +39,24 @@ import {
 	NumberFieldIncrementTrigger,
 	NumberFieldInput,
 } from "@ui/number-field/number-field";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { createEffect, createMemo, createSignal } from "solid-js";
+import {
+	changeLanguagePreference,
+	getSupportedLocales,
+	languagePreference,
+	SYSTEM_LANGUAGE,
+	t,
+} from "~/localization";
 import styles from "../settings-page.module.css";
 
 export function GeneralSettingsTab() {
@@ -126,10 +140,67 @@ export function GeneralSettingsTab() {
 			Math.round((artifactCacheLimitBytes() || 1024 * 1024) / (1024 * 1024)),
 		),
 	);
+	const languageOptions = createMemo(() => [
+		SYSTEM_LANGUAGE,
+		...getSupportedLocales().map((locale) => locale.code),
+	]);
+	const languageOptionLabel = (preference: string) => {
+		if (preference === SYSTEM_LANGUAGE) return t("common-system-default");
+		const locale = getSupportedLocales().find(
+			(candidate) => candidate.code === preference,
+		);
+		return locale?.nativeName ?? preference;
+	};
+	const handleLanguageChange = async (preference: string | null) => {
+		if (!preference || preference === languagePreference()) return;
+
+		try {
+			await changeLanguagePreference(preference);
+		} catch (error) {
+			console.error("Failed to change language:", error);
+			showToast({
+				title: t("common-language-change-failed"),
+				description: t("common-language-change-failed-description"),
+				severity: "error",
+			});
+		}
+	};
 
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
+				<SettingsCard header={t("settings-language-card-title")}>
+					<SettingsField
+						label={t("settings-language-label")}
+						description={t("settings-language-description")}
+						headerRight={
+							<Select<string>
+								options={languageOptions()}
+								value={languagePreference()}
+								onChange={handleLanguageChange}
+								optionValue={(value) => value}
+								optionTextValue={languageOptionLabel}
+								itemComponent={(props) => (
+									<SelectItem item={props.item}>
+										{languageOptionLabel(props.item.rawValue)}
+									</SelectItem>
+								)}
+							>
+								<SelectTrigger style={{ "min-width": "180px" }}>
+									<SelectValue<string>>
+										{(state) =>
+											languageOptionLabel(
+												state.selectedOption() ?? languagePreference(),
+											)
+										}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
+						}
+					/>
+				</SettingsCard>
+
 				<SettingsCard header="Accessibility">
 					{osReducedMotion() && (
 						<div

@@ -310,7 +310,7 @@ impl Default for AppConfig {
             id: 1,
             background_hue: 180,
             theme: "dark".to_string(),
-            language: "en".to_string(),
+            language: crate::localization::SYSTEM_LANGUAGE.to_string(),
             max_download_threads: 4,
             default_max_memory: 4096,
             java_path: None,

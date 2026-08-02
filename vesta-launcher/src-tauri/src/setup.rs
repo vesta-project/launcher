@@ -48,6 +48,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         log::error!("Failed to normalize startup memory config state: {}", e);
     }
 
+    let config = crate::utils::config::get_app_config()?;
+    app.manage(crate::localization::LocalizationManager::new(
+        &config.language,
+    )?);
+
     crate::startup::updates::initialize_version_tracking();
 
     log::info!("✓ Database initialization complete");

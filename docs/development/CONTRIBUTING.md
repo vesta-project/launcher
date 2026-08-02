@@ -131,8 +131,10 @@ Create a pull request with:
 - **Performance Tests**: Benchmark critical paths
 
 ### Translation
-- **Localization**: Add support for new languages
-- **String Extraction**: Help maintain translation files
+- **Crowdin**: Translate source strings through the Crowdin project
+- **Locale rollout**: Follow the [localization guide](LOCALIZATION.md) when
+  adding or enabling a language
+- **String extraction**: Move hard-coded UI copy into the nearest Fluent catalog
 
 ## Communication
 

@@ -20,6 +20,7 @@ import {
 	Show,
 	Suspense,
 } from "solid-js";
+import { t } from "~/localization";
 import { GeneralSettingsTab } from "./general/GeneralTab";
 import styles from "./settings-page.module.css";
 
@@ -69,8 +70,9 @@ const HelpSettingsTab = HelpSettingsModule.Component;
 
 interface SettingsTabDefinition {
 	value: string;
-	label: string;
-	loadingLabel: string;
+	labelMessageId: string;
+	loadingMessageId: string;
+	errorMessageId?: string;
 	preload?: () => Promise<unknown>;
 	render: (props: { close?: () => void }) => JSXElement;
 }
@@ -78,56 +80,57 @@ interface SettingsTabDefinition {
 const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
 	{
 		value: "general",
-		label: "General",
-		loadingLabel: "General Settings",
+		labelMessageId: "settings-tab-general",
+		loadingMessageId: "settings-general-loading",
+		errorMessageId: "settings-general-error",
 		render: () => <GeneralSettingsTab />,
 	},
 	{
 		value: "account",
-		label: "Account",
-		loadingLabel: "Account Settings",
+		labelMessageId: "settings-tab-account",
+		loadingMessageId: "settings-generic-loading",
 		preload: AccountSettingsModule.preload,
 		render: () => <AccountSettingsTab />,
 	},
 	{
 		value: "appearance",
-		label: "Appearance",
-		loadingLabel: "Appearance",
+		labelMessageId: "settings-tab-appearance",
+		loadingMessageId: "settings-appearance-loading",
 		preload: AppearanceSettingsModule.preload,
 		render: () => <AppearanceSettingsTab />,
 	},
 	{
 		value: "java",
-		label: "Java",
-		loadingLabel: "Java Settings",
+		labelMessageId: "settings-tab-java",
+		loadingMessageId: "settings-java-loading",
 		preload: JavaSettingsModule.preload,
 		render: () => <JavaSettingsTab />,
 	},
 	{
 		value: "notifications",
-		label: "Notifications",
-		loadingLabel: "Notification Settings",
+		labelMessageId: "settings-tab-notifications",
+		loadingMessageId: "settings-generic-loading",
 		preload: NotificationSettingsModule.preload,
 		render: () => <NotificationSettingsTab />,
 	},
 	{
 		value: "defaults",
-		label: "Defaults",
-		loadingLabel: "Instance Defaults",
+		labelMessageId: "settings-tab-defaults",
+		loadingMessageId: "settings-generic-loading",
 		preload: InstanceDefaultsModule.preload,
 		render: () => <InstanceDefaultsTab />,
 	},
 	{
 		value: "developer",
-		label: "Developer",
-		loadingLabel: "Developer Settings",
+		labelMessageId: "settings-tab-developer",
+		loadingMessageId: "settings-developer-loading",
 		preload: DeveloperSettingsModule.preload,
 		render: () => <DeveloperSettingsTab />,
 	},
 	{
 		value: "help",
-		label: "Help",
-		loadingLabel: "Help",
+		labelMessageId: "settings-tab-help",
+		loadingMessageId: "settings-generic-loading",
 		preload: HelpSettingsModule.preload,
 		render: (props) => <HelpSettingsTab close={props.close} />,
 	},
@@ -177,10 +180,17 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		cleanupSettings();
 	});
 
+	const settingsTabs = createMemo(() =>
+		SETTINGS_TABS.map((tab) => ({
+			value: tab.value,
+			label: t(tab.labelMessageId),
+		})),
+	);
+
 	return (
 		<div class={styles["settings-page"]}>
 			<PageSidebar
-				tabs={[...SETTINGS_TABS]}
+				tabs={settingsTabs()}
 				activeTab={selectedTab()}
 				onTabChange={selectTab}
 				onTabIntent={settingsTabLoader.preload}
@@ -188,7 +198,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				<Show
 					when={!loading()}
 					fallback={
-						<div class={styles["settings-loading"]}>Loading settings...</div>
+						<div class={styles["settings-loading"]}>
+							{t("settings-loading")}
+						</div>
 					}
 				>
 					<For each={SETTINGS_TABS}>
@@ -198,7 +210,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 									<Suspense
 										fallback={
 											<div class={styles["settings-tab-loading"]}>
-												Loading {tab.loadingLabel}...
+												{t(tab.loadingMessageId)}
 											</div>
 										}
 									>
@@ -206,7 +218,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 											fallback={(error) => (
 												<div class={styles["settings-tab-error"]}>
 													<strong>
-														{tab.label} settings could not be displayed.
+														{t(tab.errorMessageId ?? "settings-tab-error", {
+															tab: t(tab.labelMessageId),
+														})}
 													</strong>
 													<span>{String(error)}</span>
 												</div>

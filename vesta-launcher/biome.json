@@ -4,6 +4,7 @@
 		"includes": [
 			"src/**",
 			"ui/**",
+			"scripts/**",
 			"package.json",
 			"tsconfig.json",
 			"vite.config.ts",

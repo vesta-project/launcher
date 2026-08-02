@@ -1,0 +1,12 @@
+{
+	"sourceLocale": "en",
+	"locales": [
+		{
+			"code": "en",
+			"name": "English",
+			"nativeName": "English",
+			"direction": "ltr",
+			"enabled": true
+		}
+	]
+}
