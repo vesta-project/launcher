@@ -3,10 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { createSignal } from "solid-js";
 import { commandDefinitions } from "./catalog";
-import type {
-	BindingMutationResult,
-	PersistedCommand,
-} from "./types";
+import type { BindingMutationResult, PersistedCommand } from "./types";
 
 function fallbackCommands(): PersistedCommand[] {
 	return commandDefinitions.map((definition) => ({
@@ -52,9 +49,9 @@ function applyMutation(result: BindingMutationResult): BindingMutationResult {
 }
 
 export function initializeKeybindings(): Promise<void> {
+	if (!hasTauriRuntime()) return Promise.resolve();
 	if (initializationPromise) return initializationPromise;
 	initializationPromise = (async () => {
-		if (!hasTauriRuntime()) return;
 		setLoading(true);
 		try {
 			if (!subscribedToUpdates) {
@@ -95,8 +92,7 @@ export async function assignKeybinding(
 		if (!command) throw new Error(`Unknown command ${commandId}`);
 		const conflict =
 			commands().find(
-				(item) =>
-					item.commandId !== commandId && item.currentChord === chord,
+				(item) => item.commandId !== commandId && item.currentChord === chord,
 			) ?? null;
 		if (conflict && !replaceConflict) {
 			return { command, conflict, applied: false };

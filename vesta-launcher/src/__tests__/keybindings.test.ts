@@ -1,13 +1,10 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { chordFromKeyboardEvent, displayChord } from "~/keybindings/chords";
 import {
 	dispatchKeybinding,
 	isEditableTarget,
 } from "~/keybindings/dispatcher-core";
-import type {
-	CommandDefinition,
-	PersistedCommand,
-} from "~/keybindings/types";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CommandDefinition, PersistedCommand } from "~/keybindings/types";
 
 function setPlatform(platform: string): void {
 	Object.defineProperty(navigator, "platform", {
@@ -60,6 +57,7 @@ describe("keybinding chords", () => {
 
 describe("keybinding dispatch", () => {
 	beforeEach(() => setPlatform("MacIntel"));
+	afterEach(() => vi.restoreAllMocks());
 
 	it("executes one matching command and prevents the native shortcut", () => {
 		const execute = vi.fn();
@@ -148,5 +146,77 @@ describe("keybinding dispatch", () => {
 		input.dispatchEvent(event);
 		expect(dispatchKeybinding(event, [persisted()], new Map())).toBe(false);
 		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it("contains synchronous command failures", () => {
+		const failure = new Error("sync failure");
+		const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
+		const definition: CommandDefinition = {
+			commandId: "app.reload",
+			handlerId: "app.reload",
+			label: "Reload",
+			description: "Reload",
+			category: "Application",
+			defaultChord: "Mod+KeyR",
+			sortOrder: 0,
+			execute: () => {
+				throw failure;
+			},
+		};
+		const event = new KeyboardEvent("keydown", {
+			code: "KeyR",
+			key: "r",
+			metaKey: true,
+			cancelable: true,
+		});
+
+		expect(() =>
+			dispatchKeybinding(
+				event,
+				[persisted()],
+				new Map([["app.reload", definition]]),
+			),
+		).not.toThrow();
+		expect(event.defaultPrevented).toBe(true);
+		expect(reportError).toHaveBeenCalledWith(
+			"Keybinding handler failed:",
+			failure,
+		);
+	});
+
+	it("contains rejected asynchronous command failures", async () => {
+		const failure = new Error("async failure");
+		const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
+		const definition: CommandDefinition = {
+			commandId: "app.reload",
+			handlerId: "app.reload",
+			label: "Reload",
+			description: "Reload",
+			category: "Application",
+			defaultChord: "Mod+KeyR",
+			sortOrder: 0,
+			execute: vi.fn().mockRejectedValue(failure),
+		};
+		const event = new KeyboardEvent("keydown", {
+			code: "KeyR",
+			key: "r",
+			metaKey: true,
+			cancelable: true,
+		});
+
+		expect(
+			dispatchKeybinding(
+				event,
+				[persisted()],
+				new Map([["app.reload", definition]]),
+			),
+		).toBe(true);
+		expect(event.defaultPrevented).toBe(true);
+		await vi.waitFor(() =>
+			expect(reportError).toHaveBeenCalledWith(
+				"Keybinding handler failed:",
+				failure,
+			),
+		);
 	});
 });

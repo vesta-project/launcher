@@ -15,7 +15,11 @@ export function dispatchKeybinding(
 	commands: readonly PersistedCommand[],
 	handlers: ReadonlyMap<string, CommandDefinition>,
 ): boolean {
-	if (event.defaultPrevented || event.repeat || isEditableTarget(event.target)) {
+	if (
+		event.defaultPrevented ||
+		event.repeat ||
+		isEditableTarget(event.target)
+	) {
 		return false;
 	}
 
@@ -30,6 +34,14 @@ export function dispatchKeybinding(
 	if (!definition || definition.canExecute?.() === false) return false;
 
 	event.preventDefault();
-	void definition.execute();
+
+	try {
+		void Promise.resolve(definition.execute()).catch((error) => {
+			console.error("Keybinding handler failed:", error);
+		});
+	} catch (error) {
+		console.error("Keybinding handler failed:", error);
+	}
+
 	return true;
 }
