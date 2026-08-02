@@ -146,7 +146,7 @@ export function ResourceToolbar(props: {
 					<SelectContent />
 				</Select>
 
-				<div class={styles["search-container"]}>
+				<div class={styles["search-container"]} data-keybinding-search>
 					<SearchIcon class={styles["search-svg"]} />
 					<TextField
 						placeholder="Search resources..."

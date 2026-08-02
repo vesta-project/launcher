@@ -4,9 +4,8 @@ import { pageViewerOpen, router } from "@components/page-viewer/page-viewer";
 import {
 	handleNavigationBack,
 	handleNavigationForward,
-	handleNavigationKeyDown,
 } from "@utils/flat-shell-navigation";
-import { createMemo, onCleanup, onMount } from "solid-js";
+import { createMemo } from "solid-js";
 import styles from "./flat-navigation-controls.module.css";
 
 function FlatNavigationControls() {
@@ -37,14 +36,6 @@ function FlatNavigationControls() {
 		if (!r) return;
 		handleNavigationForward(r);
 	};
-
-	onMount(() => {
-		const onKeyDown = (event: KeyboardEvent) => {
-			void handleNavigationKeyDown(event, router());
-		};
-		window.addEventListener("keydown", onKeyDown);
-		onCleanup(() => window.removeEventListener("keydown", onKeyDown));
-	});
 
 	return (
 		<div class={styles["flat-navigation-controls"]}>

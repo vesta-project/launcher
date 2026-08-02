@@ -90,6 +90,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 
 	return (
 		<div
+			id="sidebar-notifications-panel"
 			classList={{
 				[styles["sidebar__notifications-root"]]: true,
 				[styles["sidebar__notifications-root--open"]]: props.open,
