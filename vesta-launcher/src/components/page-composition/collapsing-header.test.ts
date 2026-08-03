@@ -6,7 +6,7 @@ import {
 	resetHeaderCollapseElement,
 	shouldUseCssDrivenHeaderProgress,
 	supportsScrollDrivenHeaderCollapse,
-} from "./resource-details-header-scroll";
+} from "./collapsing-header";
 
 describe("isHeaderCollapseEnabled", () => {
 	it("is disabled on mobile or when reduced motion is enabled", () => {

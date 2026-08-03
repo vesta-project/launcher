@@ -1,11 +1,11 @@
 import FolderIcon from "@assets/folder.svg";
 import HistoryIcon from "@assets/history.svg";
-import RefreshIcon from "@assets/refresh.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
 import {
 	CONSOLE_FILTER_LEVELS,
 	consoleStore,
+	type LogFileInfo,
 	type LogLevel,
 } from "@stores/console";
 import { instancesState } from "@stores/instances";
@@ -24,6 +24,10 @@ import {
 	Show,
 } from "solid-js";
 import styles from "../instance-details.module.css";
+import {
+	formatLogFileMetadata,
+	getConsoleLogDisplay,
+} from "../console-log-display";
 
 const ArrowUpIcon = (props: { class?: string }) => (
 	<svg
@@ -76,8 +80,15 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	const hasFilters = () =>
 		CONSOLE_FILTER_LEVELS.some(
 			(level) => !consoleStore.state.filterLevels.includes(level),
-		) ||
-		consoleStore.state.searchQuery.length > 0;
+		) || consoleStore.state.searchQuery.length > 0;
+	const logDisplay = createMemo(() =>
+		getConsoleLogDisplay({
+			isLive: consoleStore.state.isLive,
+			currentLogPath: consoleStore.state.currentLogPath,
+			history: consoleStore.state.history as LogFileInfo[],
+			instanceSlug: props.instanceSlug,
+		}),
+	);
 
 	onMount(async () => {
 		const cleanup = await consoleStore.init(props.instanceSlug);
@@ -171,33 +182,21 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 			<div class={styles["console-header"]}>
 				<div class={styles["console-toolbar"]}>
 					<div class={styles["console-toolbar-left"]}>
-						<span class={styles["console-title"]}>
-							{consoleStore.state.isLive
-								? "Viewing Session Logs"
-								: consoleStore.state.currentLogPath
-									? `Viewing Historical Log: ${consoleStore.state.currentLogPath.split(/[/\\]/).pop()}`
-									: "Viewing Historical Logs"}
-						</span>
-						<Show
-							when={
-								!consoleStore.state.isLive &&
-								instancesState.runningIds[props.instanceSlug]
-							}
-						>
-							<Tooltip placement="top">
-								<TooltipTrigger>
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => consoleStore.goLive(props.instanceSlug)}
-										class={styles["console-back-live"]}
-									>
-										<RefreshIcon /> Switch to Live
-									</Button>
-								</TooltipTrigger>
-								<TooltipContent>Switch back to live logs</TooltipContent>
-							</Tooltip>
-						</Show>
+						<div class={styles["console-file-context"]}>
+							<div>
+								<span class={styles["console-title"]}>
+									{logDisplay().title}
+								</span>
+								<Show when={logDisplay().live}>
+									<span class={styles["console-live-indicator"]}>LIVE</span>
+								</Show>
+							</div>
+							<Show when={logDisplay().metadata}>
+								{(metadata) => (
+									<span class={styles["console-file-meta"]}>{metadata()}</span>
+								)}
+							</Show>
+						</div>
 					</div>
 
 					<div class={styles["console-toolbar-buttons"]}>
@@ -252,6 +251,34 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							<TooltipContent>Open logs folder</TooltipContent>
 						</Tooltip>
 
+						<Show
+							when={
+								!consoleStore.state.isLive &&
+								instancesState.runningIds[props.instanceSlug]
+							}
+						>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => consoleStore.goLive(props.instanceSlug)}
+								class={styles["console-back-live"]}
+								aria-label="Follow live output"
+								tooltip_text="Return to the live console output"
+							>
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+								>
+									<circle cx="12" cy="12" r="2" fill="currentColor" />
+									<path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7" />
+								</svg>
+								<span>Follow live</span>
+							</Button>
+						</Show>
+
 						<Popover open={historyOpen()} onOpenChange={setHistoryOpen}>
 							<Tooltip placement="top">
 								<TooltipTrigger>
@@ -289,7 +316,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 											>
 												<span class={styles["history-name"]}>{file.name}</span>
 												<span class={styles["history-meta"]}>
-													{(file.size / 1024).toFixed(1)} KB
+													{formatLogFileMetadata(file)}
 												</span>
 											</button>
 										)}

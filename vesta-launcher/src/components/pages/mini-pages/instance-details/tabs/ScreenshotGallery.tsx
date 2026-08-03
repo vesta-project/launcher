@@ -22,7 +22,7 @@ import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
 import { createResource, createSignal, For, Show, Suspense } from "solid-js";
-import styles from "./ScreenshotsTab.module.css";
+import styles from "./ScreenshotGallery.module.css";
 
 interface Screenshot {
 	name: string;
@@ -31,11 +31,11 @@ interface Screenshot {
 	size: number;
 }
 
-interface ScreenshotsTabProps {
+interface ScreenshotGalleryProps {
 	instanceIdSlug: string;
 }
 
-export function ScreenshotsTab(props: ScreenshotsTabProps) {
+export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 	const [viewMode, setViewMode] = createSignal<"grid" | "list">("grid");
 	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">(
 		"newest",
@@ -114,116 +114,144 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 	};
 
 	return (
-		<div class={styles.container}>
-			<div class={styles.toolbar}>
-				<div class={styles.group}>
-					<ToggleGroup
-						value={viewMode()}
-						onChange={(next) => {
-							if (next) setViewMode(next as "grid" | "list");
-						}}
+		<section class={styles.container} aria-labelledby="screenshots-heading">
+			<div class={styles.sectionHeading}>
+				<div class={styles.headingCopy}>
+					<h2 id="screenshots-heading">Screenshots</h2>
+					<Show
+						when={
+							!screenshots.loading &&
+							!screenshots.error &&
+							(screenshots()?.length ?? 0) > 0
+						}
 					>
-						<ToggleGroupItem
-							value="list"
-							icon_only={true}
-							title="List View"
-							aria-label="List View"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<line x1="8" y1="6" x2="21" y2="6" />
-								<line x1="8" y1="12" x2="21" y2="12" />
-								<line x1="8" y1="18" x2="21" y2="18" />
-								<line x1="3" y1="6" x2="3.01" y2="6" />
-								<line x1="3" y1="12" x2="3.01" y2="12" />
-								<line x1="3" y1="18" x2="3.01" y2="18" />
-							</svg>
-						</ToggleGroupItem>
-						<ToggleGroupItem
-							value="grid"
-							icon_only={true}
-							title="Grid View"
-							aria-label="Grid View"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<rect x="3" y="3" width="7" height="7" />
-								<rect x="14" y="3" width="7" height="7" />
-								<rect x="14" y="14" width="7" height="7" />
-								<rect x="3" y="14" width="7" height="7" />
-							</svg>
-						</ToggleGroupItem>
-					</ToggleGroup>
+						<span>{screenshots()?.length ?? 0} files</span>
+					</Show>
 				</div>
-
-				<div class={styles.group}>
-					<Select
-						value={sortBy()}
-						onChange={(val) => setSortBy(val as any)}
-						options={["newest", "oldest", "name"]}
-						itemComponent={(props) => (
-							<SelectItem item={props.item}>
-								{(() => {
-									if (props.item.rawValue === "newest") return "Newest First";
-									if (props.item.rawValue === "oldest") return "Oldest First";
-									if (props.item.rawValue === "name") return "Name";
-									return props.item.rawValue;
-								})()}
-							</SelectItem>
-						)}
-					>
-						<SelectTrigger class={styles.selectTrigger}>
-							<SelectValue<string>>
-								{(state) => {
-									const val = state.selectedOption();
-									if (val === "newest") return "Newest First";
-									if (val === "oldest") return "Oldest First";
-									if (val === "name") return "Name";
-									return val;
+				<Show when={(screenshots()?.length ?? 0) > 0}>
+					<div class={styles.toolbar}>
+						<div class={styles.group}>
+							<ToggleGroup
+								value={viewMode()}
+								onChange={(next) => {
+									if (next) setViewMode(next as "grid" | "list");
 								}}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent />
-					</Select>
-					<Button
-						variant="slate"
-						size="sm"
-						icon_only={true}
-						onClick={refetch}
-						title="Refresh screenshots"
-					>
-						<RefreshIcon />
-					</Button>
-				</div>
+							>
+								<ToggleGroupItem
+									value="list"
+									icon_only={true}
+									title="List View"
+									aria-label="List View"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<line x1="8" y1="6" x2="21" y2="6" />
+										<line x1="8" y1="12" x2="21" y2="12" />
+										<line x1="8" y1="18" x2="21" y2="18" />
+										<line x1="3" y1="6" x2="3.01" y2="6" />
+										<line x1="3" y1="12" x2="3.01" y2="12" />
+										<line x1="3" y1="18" x2="3.01" y2="18" />
+									</svg>
+								</ToggleGroupItem>
+								<ToggleGroupItem
+									value="grid"
+									icon_only={true}
+									title="Grid View"
+									aria-label="Grid View"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<rect x="3" y="3" width="7" height="7" />
+										<rect x="14" y="3" width="7" height="7" />
+										<rect x="14" y="14" width="7" height="7" />
+										<rect x="3" y="14" width="7" height="7" />
+									</svg>
+								</ToggleGroupItem>
+							</ToggleGroup>
+						</div>
+
+						<div class={styles.group}>
+							<Select
+								value={sortBy()}
+								onChange={(val) => setSortBy(val as any)}
+								options={["newest", "oldest", "name"]}
+								itemComponent={(props) => (
+									<SelectItem item={props.item}>
+										{(() => {
+											if (props.item.rawValue === "newest")
+												return "Newest First";
+											if (props.item.rawValue === "oldest")
+												return "Oldest First";
+											if (props.item.rawValue === "name") return "Name";
+											return props.item.rawValue;
+										})()}
+									</SelectItem>
+								)}
+							>
+								<SelectTrigger class={styles.selectTrigger}>
+									<SelectValue<string>>
+										{(state) => {
+											const val = state.selectedOption();
+											if (val === "newest") return "Newest First";
+											if (val === "oldest") return "Oldest First";
+											if (val === "name") return "Name";
+											return val;
+										}}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
+							<Button
+								variant="slate"
+								size="sm"
+								icon_only={true}
+								onClick={refetch}
+								title="Refresh screenshots"
+							>
+								<RefreshIcon />
+							</Button>
+						</div>
+					</div>
+				</Show>
 			</div>
 
 			<Suspense
-				fallback={<div class={styles.loading}>Loading screenshots...</div>}
+				fallback={<div class={styles.loading}>Loading screenshots…</div>}
 			>
+				<Show when={screenshots.error}>
+					<div class={styles.empty} role="alert">
+						<p>Could not load screenshots.</p>
+						<Button size="sm" variant="outline" onClick={() => void refetch()}>
+							Retry
+						</Button>
+					</div>
+				</Show>
 				<Show
-					when={(screenshots()?.length ?? 0) > 0}
+					when={!screenshots.error && (screenshots()?.length ?? 0) > 0}
 					fallback={
-						<div class={styles.empty}>
-							<p>No screenshots found for this instance.</p>
-						</div>
+						<Show when={!screenshots.error}>
+							<div class={styles.empty}>
+								<p>No screenshots yet.</p>
+							</div>
+						</Show>
 					}
 				>
 					<div class={viewMode() === "grid" ? styles.grid : styles.list}>
@@ -328,6 +356,6 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 					}
 				}}
 			/>
-		</div>
+		</section>
 	);
 }

@@ -1,4 +1,5 @@
 import ReloadIcon from "@assets/reload.svg";
+import PlusIcon from "@assets/plus.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
@@ -148,7 +149,16 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 		},
 	) => (
 		<tr
-			ref={(element) => options?.measure?.(element)}
+			ref={(element) => {
+				// Solid invokes refs before applying JSX attributes. TanStack reads
+				// data-index synchronously, so seed it before measurement.
+				if (options?.virtualIndex !== undefined) {
+					element.dataset.index = String(options.virtualIndex);
+				}
+				if (options?.measure) {
+					queueMicrotask(() => options.measure?.(element));
+				}
+			}}
 			data-index={options?.virtualIndex}
 			onClick={(e) => props.onRowClick(row, e)}
 			style={{ cursor: "default" }}
@@ -295,6 +305,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 	const [panelRef, setPanelRef] = createSignal<HTMLElement | undefined>();
 	let tableScrollElement: HTMLDivElement | undefined;
+	const [observedScrollOffset, setObservedScrollOffset] = createSignal(0);
 	const rowVirtualizer = createVirtualizer<HTMLDivElement, HTMLTableRowElement>(
 		{
 			get count() {
@@ -309,6 +320,36 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	);
 	const virtualRows = createMemo(() => {
 		const measuredRows = rowVirtualizer.getVirtualItems();
+		const scrollOffset = observedScrollOffset();
+		const expectedIndex = Math.min(
+			Math.max(0, visibleResourceRows().length - 1),
+			Math.floor(scrollOffset / 49),
+		);
+		if (
+			scrollOffset > 0 &&
+			!measuredRows.some((row) => row.index === expectedIndex)
+		) {
+			// Resize/scroll observers are asynchronous and are absent in some webviews
+			// and DOM test harnesses. Keep the mounted range deterministic until the
+			// virtualizer catches up, without weakening row virtualization.
+			const viewportHeight = tableScrollElement?.clientHeight || 600;
+			const start = Math.max(0, expectedIndex - RESOURCE_ROW_OVERSCAN);
+			const end = Math.min(
+				visibleResourceRows().length,
+				expectedIndex + Math.ceil(viewportHeight / 49) + RESOURCE_ROW_OVERSCAN,
+			);
+			return Array.from({ length: end - start }, (_, offset) => {
+				const index = start + offset;
+				return {
+					key: visibleResourceRows()[index]?.id ?? index,
+					index,
+					start: index * 49,
+					end: (index + 1) * 49,
+					size: 49,
+					lane: 0,
+				};
+			});
+		}
 		if (measuredRows.length > 0) return measuredRows;
 
 		// Keep first paint deterministic before ResizeObserver reports the scroll
@@ -448,150 +489,131 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 				</div>
 
 				<div class={styles["toolbar-lower-wrapper"]}>
-					<Show when={selectionCount() === 0}>
-						<div class={styles["toolbar-actions"]}>
-							<Button
-								size="sm"
-								variant="ghost"
-								class={styles["check-updates-btn"]}
-								onClick={props.checkUpdates}
-								disabled={props.busy || props.checkingUpdates}
-								tooltip_text="Check for available updates"
+					<div class={styles["toolbar-actions"]}>
+						<Button
+							size="sm"
+							variant="ghost"
+							icon_only
+							class={styles["check-updates-btn"]}
+							onClick={props.checkUpdates}
+							disabled={props.busy || props.checkingUpdates}
+							tooltip_text="Check for available updates"
+							aria-label="Check for available updates"
+						>
+							<Show
+								when={props.checkingUpdates}
+								fallback={<ReloadIcon class={styles["check-updates-icon"]} />}
 							>
-								<Show
-									when={props.checkingUpdates}
-									fallback={
-										<>
-											<ReloadIcon class={styles["check-updates-icon"]} />
-											<span>Check Updates</span>
-										</>
-									}
-								>
-									<span class={styles["checking-updates-spinner"]} />
-									<span>Checking...</span>
-								</Show>
-							</Button>
+								<span class={styles["checking-updates-spinner"]} />
+							</Show>
+						</Button>
 
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={() => {
-									const inst = props.instance;
-									if (inst) {
-										props.resourcesStore.setInstance(inst.id);
-										props.resourcesStore.setGameVersion(inst.minecraftVersion);
-										props.resourcesStore.setLoader(inst.modloader);
-										props.router?.navigate("/resources");
-									}
-								}}
-								tooltip_text="Browse and add resources"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<circle cx="11" cy="11" r="8" />
-									<line x1="21" y1="21" x2="16.65" y2="16.65" />
-									<line x1="11" y1="8" x2="11" y2="14" />
-									<line x1="8" y1="11" x2="14" y2="11" />
-								</svg>
-								<span>Browse</span>
-							</Button>
-						</div>
-					</Show>
-
-					<Show when={selectionCount() > 0}>
-						<div class={styles["selection-action-bar"]}>
-							<div class={styles["selection-info"]}>
-								<button
-									class={styles["clear-selection"]}
-									onClick={() => props.resourcesStore.clearSelection()}
-									title="Clear Selection"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<line x1="18" y1="6" x2="6" y2="18" />
-										<line x1="6" y1="6" x2="18" y2="18" />
-									</svg>
-								</button>
-								<span class={styles["selection-count"]}>
-									{selectionCount()} resources selected
-								</span>
-							</div>
-							<div class={styles["selection-actions"]}>
-								<Button
-									size="sm"
-									variant="ghost"
-									onClick={props.handleBatchUpdate}
-									disabled={props.busy || props.selectedToUpdateCount === 0}
-									tooltip_text={
-										isCompactTable()
-											? `Update ${props.selectedToUpdateCount} selected`
-											: undefined
-									}
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-										<polyline points="7 10 12 15 17 10" />
-										<line x1="12" y1="15" x2="12" y2="3" />
-									</svg>
-									<Show
-										when={!isCompactTable()}
-										fallback={<span>({props.selectedToUpdateCount})</span>}
-									>
-										<span>Update ({props.selectedToUpdateCount})</span>
-									</Show>
-								</Button>
-								<Button
-									size="sm"
-									variant="ghost"
-									class={styles["delete-selected"]}
-									onClick={props.handleBatchDelete}
-									disabled={props.busy}
-									tooltip_text={
-										isCompactTable() ? "Delete selected" : undefined
-									}
-									icon_only={isCompactTable()}
-								>
-									<TrashIcon />
-									<Show when={!isCompactTable()}>Delete Selected</Show>
-								</Button>
-							</div>
-						</div>
-					</Show>
+						<Button
+							size="sm"
+							variant="outline"
+							icon_only
+							onClick={() => {
+								const inst = props.instance;
+								if (inst) {
+									props.resourcesStore.setInstance(inst.id);
+									props.resourcesStore.setGameVersion(inst.minecraftVersion);
+									props.resourcesStore.setLoader(inst.modloader);
+									props.router?.navigate("/resources");
+								}
+							}}
+							tooltip_text="Add resources"
+							aria-label="Add resources"
+						>
+							<PlusIcon />
+						</Button>
+					</div>
 				</div>
 			</div>
+
+			<Show when={selectionCount() > 0}>
+				<div class={styles["selection-action-bar"]}>
+					<div class={styles["selection-info"]}>
+						<button
+							class={styles["clear-selection"]}
+							onClick={() => props.resourcesStore.clearSelection()}
+							title="Clear Selection"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<line x1="18" y1="6" x2="6" y2="18" />
+								<line x1="6" y1="6" x2="18" y2="18" />
+							</svg>
+						</button>
+						<span class={styles["selection-count"]}>
+							{selectionCount()} resources selected
+						</span>
+					</div>
+					<div class={styles["selection-actions"]}>
+						<Button
+							size="sm"
+							variant="ghost"
+							onClick={props.handleBatchUpdate}
+							disabled={props.busy || props.selectedToUpdateCount === 0}
+							tooltip_text={
+								isCompactTable()
+									? `Update ${props.selectedToUpdateCount} selected`
+									: undefined
+							}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+								<polyline points="7 10 12 15 17 10" />
+								<line x1="12" y1="15" x2="12" y2="3" />
+							</svg>
+							<Show
+								when={!isCompactTable()}
+								fallback={<span>({props.selectedToUpdateCount})</span>}
+							>
+								<span>Update ({props.selectedToUpdateCount})</span>
+							</Show>
+						</Button>
+						<Button
+							size="sm"
+							variant="ghost"
+							class={styles["delete-selected"]}
+							onClick={props.handleBatchDelete}
+							disabled={props.busy}
+							tooltip_text={isCompactTable() ? "Delete selected" : undefined}
+							icon_only={isCompactTable()}
+						>
+							<TrashIcon />
+							<Show when={!isCompactTable()}>Delete Selected</Show>
+						</Button>
+					</div>
+				</div>
+			</Show>
 
 			<div class={styles["installed-resources-list"]}>
 				<div
 					ref={tableScrollElement}
 					class={`${styles["vesta-table-container"]} v-instance-resources-table`}
+					onScroll={(event) =>
+						setObservedScrollOffset(event.currentTarget.scrollTop)
+					}
 				>
 					<Show
 						when={
