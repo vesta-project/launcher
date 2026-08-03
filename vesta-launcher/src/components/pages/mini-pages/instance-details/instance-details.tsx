@@ -2690,7 +2690,7 @@ export default function InstanceDetails(
 							<>
 								<InstanceHeader
 									instance={inst()}
-									compact={activeTab() !== "home"}
+									compact={activeTab() !== "home" || !isDesktopHeader()}
 									action={primaryAction()}
 									busy={busy() || isInstalling() || isLaunchingGlobal()}
 									isPinned={isPinned()}

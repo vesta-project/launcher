@@ -62,7 +62,6 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 		const minutes = props.instance.totalPlaytimeMinutes ?? 0;
 		return `${Math.floor(minutes / 60)}h ${minutes % 60}m total`;
 	};
-
 	return (
 		<>
 			<header
@@ -113,75 +112,81 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 								</button>
 							</Show>
 						</div>
-						<div class={styles.facts}>
-							<span>{played() ? `Played ${played()}` : "Never played"}</span>
-							<Show when={(props.instance.totalPlaytimeMinutes ?? 0) > 0}>
-								<span>{playtime()}</span>
-							</Show>
+						<div class={styles.lower}>
+							<div class={styles.facts}>
+								<span>{played() ? `Played ${played()}` : "Never played"}</span>
+								<Show when={(props.instance.totalPlaytimeMinutes ?? 0) > 0}>
+									<span>{playtime()}</span>
+								</Show>
+							</div>
+							<div class={styles.actions}>
+								<Button
+									variant="ghost"
+									size="md"
+									icon_only
+									onClick={props.onOpenFolder}
+									title="Open instance folder"
+									aria-label="Open instance folder"
+								>
+									<FolderIcon />
+								</Button>
+								<Button
+									variant="ghost"
+									size="md"
+									icon_only
+									onClick={props.onTogglePin}
+									title={props.isPinned ? "Unpin instance" : "Pin instance"}
+									aria-label={
+										props.isPinned ? "Unpin instance" : "Pin instance"
+									}
+								>
+									<Show when={props.isPinned} fallback={<PinIcon />}>
+										<PinOffIcon />
+									</Show>
+								</Button>
+								<Button
+									class={styles.primary}
+									variant="solid"
+									color={
+										props.action.tone === "destructive"
+											? "destructive"
+											: "primary"
+									}
+									onClick={props.onPrimaryAction}
+									disabled={props.busy}
+									aria-label={props.action.label}
+									title={props.action.label}
+								>
+									<span
+										class={styles.actionIcon}
+										classList={{
+											[styles.actionIconFilled]:
+												props.action.icon === "play" ||
+												props.action.icon === "stop" ||
+												props.action.icon === "error",
+										}}
+									>
+										<Show when={props.action.icon === "spinner"}>
+											<span class={styles.spinner} />
+										</Show>
+										<Show when={props.action.icon === "play"}>
+											<PlayIcon />
+										</Show>
+										<Show when={props.action.icon === "stop"}>
+											<KillIcon />
+										</Show>
+										<Show when={props.action.icon === "error"}>
+											<ErrorIcon />
+										</Show>
+										<Show when={props.action.icon === "recovery"}>
+											<RecoveryIcon />
+										</Show>
+									</span>
+									<span class={styles.actionLabel}>{props.action.label}</span>
+								</Button>
+							</div>
 						</div>
 					</div>
-				</div>
-				<div class={styles.actions}>
-					<Button
-						variant="ghost"
-						size="md"
-						icon_only
-						onClick={props.onOpenFolder}
-						title="Open instance folder"
-						aria-label="Open instance folder"
-					>
-						<FolderIcon />
-					</Button>
-					<Button
-						variant="ghost"
-						size="md"
-						icon_only
-						onClick={props.onTogglePin}
-						title={props.isPinned ? "Unpin instance" : "Pin instance"}
-						aria-label={props.isPinned ? "Unpin instance" : "Pin instance"}
-					>
-						<Show when={props.isPinned} fallback={<PinIcon />}>
-							<PinOffIcon />
-						</Show>
-					</Button>
-					<Button
-						class={styles.primary}
-						variant="solid"
-						color={
-							props.action.tone === "destructive" ? "destructive" : "primary"
-						}
-						onClick={props.onPrimaryAction}
-						disabled={props.busy}
-						aria-label={props.action.label}
-						title={props.action.label}
-					>
-						<span
-							class={styles.actionIcon}
-							classList={{
-								[styles.actionIconFilled]:
-									props.action.icon === "play" ||
-									props.action.icon === "stop" ||
-									props.action.icon === "error",
-							}}
-						>
-							<Show when={props.action.icon === "spinner"}>
-								<span class={styles.spinner} />
-							</Show>
-							<Show when={props.action.icon === "play"}>
-								<PlayIcon />
-							</Show>
-							<Show when={props.action.icon === "stop"}>
-								<KillIcon />
-							</Show>
-							<Show when={props.action.icon === "error"}>
-								<ErrorIcon />
-							</Show>
-							<Show when={props.action.icon === "recovery"}>
-								<RecoveryIcon />
-							</Show>
-						</span>
-						<span class={styles.actionLabel}>{props.action.label}</span>
-					</Button>
 				</div>
 			</header>
 			<Show when={props.failureReason || props.updateRecovery}>
