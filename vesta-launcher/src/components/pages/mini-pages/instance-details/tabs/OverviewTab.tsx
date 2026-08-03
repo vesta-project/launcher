@@ -1,4 +1,3 @@
-import CubeIcon from "@assets/cube.svg";
 import Button from "@ui/button/button";
 import { Show, Suspense } from "solid-js";
 import styles from "../instance-details.module.css";
@@ -19,7 +18,6 @@ export const OverviewTab = (props: OverviewTabProps) => {
 		<section class={styles["tab-overview"]}>
 			<div class={styles["overview-resource-rail"]}>
 				<div class={styles["overview-resource-copy"]}>
-					<CubeIcon />
 					<div>
 						<h2>Resources</h2>
 						<p>
