@@ -22,7 +22,8 @@ const routeLoaders: Record<string, RouteLoader> = {
 		() => import("@components/pages/mini-pages/install/install-page"),
 	),
 	"/install/source": memoizeRouteLoader(
-		() => import("@components/pages/mini-pages/install/source-select-page"),
+		() =>
+			import("@components/pages/mini-pages/install/install-source-redirect"),
 	),
 	"/install/import": memoizeRouteLoader(
 		() => import("@components/pages/mini-pages/install/import-page"),
@@ -66,7 +67,7 @@ const DebugTestPage = routeComponent("/debug-test");
 const FileDropPage = routeComponent("/file-drop");
 const ImportPage = routeComponent("/install/import");
 const InstallPage = routeComponent("/install");
-const SourceSelectPage = routeComponent("/install/source");
+const InstallSourceRedirectPage = routeComponent("/install/source");
 const InstanceDetailsPage = routeComponent("/instance");
 const LoginPage = routeComponent("/login");
 const ResourceBrowser = routeComponent("/resources");
@@ -130,7 +131,7 @@ export const miniRouterPaths = {
 	...CreateMiniRouterPath("/install", InstallPage, "Install"),
 	...CreateMiniRouterPath(
 		"/install/source",
-		SourceSelectPage,
+		InstallSourceRedirectPage,
 		"Install Source",
 	),
 	...CreateMiniRouterPath("/install/import", ImportPage, "Launcher Import"),

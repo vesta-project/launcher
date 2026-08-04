@@ -15,7 +15,23 @@ import {
 	SidebarProfileButton,
 } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
+import {
+	EXPLORE_RESOURCE_TYPES,
+	openBlankInstall,
+	openBrowseModpacks,
+	openExploreResourceType,
+	openLauncherImport,
+	pickAndOpenLocalModpack,
+} from "@components/pages/mini-pages/install/install-entry-actions";
 import { type PinnedPage, pinning } from "@stores/pinning";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuPortal,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@ui/context-menu/context-menu";
 import { Popover, PopoverAnchor } from "@ui/popover/popover";
 import { Separator } from "@ui/separator/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
@@ -74,6 +90,13 @@ function Sidebar(props: SidebarProps) {
 	) => {
 		openMiniPage(path, params ?? {}, routeProps);
 		props.openChanged(false);
+	};
+
+	const navigateFromSidebar: (
+		path: string,
+		params?: Record<string, unknown>,
+	) => void = (path, params) => {
+		openPage(path, params);
 	};
 
 	const activeSection = createMemo(() => {
@@ -231,47 +254,104 @@ function Sidebar(props: SidebarProps) {
 							</SidebarActionButton>
 						</Show>
 
-						<SidebarActionButton
-							id={"sidebar-new"}
-							tooltip_text={tooltipWithShortcut(
-								"New Instance",
-								"navigation.new-instance",
-							)}
-							aria-keyshortcuts={ariaShortcut(
-								keybindingFor("navigation.new-instance"),
-							)}
-							aria-current={activeSection() === "create" ? "page" : undefined}
-							class={
-								activeSection() === "create"
-									? styles["sidebar-tab-active"]
-									: undefined
-							}
-							onClick={() => openPage("/install/source")}
-						>
-							<PlusIcon />
-						</SidebarActionButton>
+						<ContextMenu>
+							<ContextMenuTrigger as="div" class={styles["sidebar-ctx-wrap"]}>
+								<SidebarActionButton
+									id={"sidebar-new"}
+									tooltip_text={tooltipWithShortcut(
+										"New Instance",
+										"navigation.new-instance",
+									)}
+									aria-keyshortcuts={ariaShortcut(
+										keybindingFor("navigation.new-instance"),
+									)}
+									aria-current={
+										activeSection() === "create" ? "page" : undefined
+									}
+									class={
+										activeSection() === "create"
+											? styles["sidebar-tab-active"]
+											: undefined
+									}
+									onClick={() => openBlankInstall(navigateFromSidebar)}
+								>
+									<PlusIcon />
+								</SidebarActionButton>
+							</ContextMenuTrigger>
+							<ContextMenuPortal>
+								<ContextMenuContent>
+									<ContextMenuItem
+										onSelect={() => openBlankInstall(navigateFromSidebar)}
+									>
+										New blank instance
+									</ContextMenuItem>
+									<ContextMenuItem
+										onSelect={() => {
+											void pickAndOpenLocalModpack(navigateFromSidebar);
+										}}
+									>
+										Import local file…
+									</ContextMenuItem>
+									<ContextMenuItem
+										onSelect={() => {
+											void openBrowseModpacks(navigateFromSidebar);
+										}}
+									>
+										Browse modpacks…
+									</ContextMenuItem>
+									<ContextMenuSeparator />
+									<ContextMenuItem
+										onSelect={() => openLauncherImport(navigateFromSidebar)}
+									>
+										Import from another launcher…
+									</ContextMenuItem>
+								</ContextMenuContent>
+							</ContextMenuPortal>
+						</ContextMenu>
 
-						<SidebarActionButton
-							id={"sidebar-explore"}
-							tooltip_text={tooltipWithShortcut(
-								"Explore",
-								"navigation.explore",
-							)}
-							aria-keyshortcuts={ariaShortcut(
-								keybindingFor("navigation.explore"),
-							)}
-							aria-current={
-								activeSection() === "explore" ? "page" : undefined
-							}
-							class={
-								activeSection() === "explore"
-									? styles["sidebar-tab-active"]
-									: undefined
-							}
-							onClick={onExploreClicked}
-						>
-							<SearchIcon />
-						</SidebarActionButton>
+						<ContextMenu>
+							<ContextMenuTrigger as="div" class={styles["sidebar-ctx-wrap"]}>
+								<SidebarActionButton
+									id={"sidebar-explore"}
+									tooltip_text={tooltipWithShortcut(
+										"Explore",
+										"navigation.explore",
+									)}
+									aria-keyshortcuts={ariaShortcut(
+										keybindingFor("navigation.explore"),
+									)}
+									aria-current={
+										activeSection() === "explore" ? "page" : undefined
+									}
+									class={
+										activeSection() === "explore"
+											? styles["sidebar-tab-active"]
+											: undefined
+									}
+									onClick={onExploreClicked}
+								>
+									<SearchIcon />
+								</SidebarActionButton>
+							</ContextMenuTrigger>
+							<ContextMenuPortal>
+								<ContextMenuContent>
+									<For each={[...EXPLORE_RESOURCE_TYPES]}>
+										{(type) => (
+											<ContextMenuItem
+												onSelect={() => {
+													void openExploreResourceType(
+														navigateFromSidebar,
+														type.value,
+													);
+												}}
+											>
+												{type.label}
+											</ContextMenuItem>
+										)}
+									</For>
+								</ContextMenuContent>
+							</ContextMenuPortal>
+						</ContextMenu>
 
 						<Show when={pinning.pins.length > 0}>
 							<div class={styles["sidebar__pins-container"]}>
