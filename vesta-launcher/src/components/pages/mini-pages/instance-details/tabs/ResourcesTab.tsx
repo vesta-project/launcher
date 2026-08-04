@@ -489,7 +489,12 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 				</div>
 
 				<div class={styles["toolbar-lower-wrapper"]}>
-					<div class={styles["toolbar-actions"]}>
+					<div
+						class={styles["toolbar-actions"]}
+						classList={{
+							[styles["toolbar-actions-hidden"]]: selectionCount() > 0,
+						}}
+					>
 						<Button
 							size="sm"
 							variant="ghost"
@@ -527,85 +532,87 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 							<PlusIcon />
 						</Button>
 					</div>
+
+					<Show when={selectionCount() > 0}>
+						<div class={styles["selection-action-bar"]}>
+							<div class={styles["selection-info"]}>
+								<button
+									class={styles["clear-selection"]}
+									onClick={() => props.resourcesStore.clearSelection()}
+									title="Clear Selection"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<line x1="18" y1="6" x2="6" y2="18" />
+										<line x1="6" y1="6" x2="18" y2="18" />
+									</svg>
+								</button>
+								<span class={styles["selection-count"]}>
+									{selectionCount()} resources selected
+								</span>
+							</div>
+							<div class={styles["selection-actions"]}>
+								<Button
+									size="sm"
+									variant="ghost"
+									onClick={props.handleBatchUpdate}
+									disabled={props.busy || props.selectedToUpdateCount === 0}
+									tooltip_text={
+										isCompactTable()
+											? `Update ${props.selectedToUpdateCount} selected`
+											: undefined
+									}
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+										<polyline points="7 10 12 15 17 10" />
+										<line x1="12" y1="15" x2="12" y2="3" />
+									</svg>
+									<Show
+										when={!isCompactTable()}
+										fallback={<span>({props.selectedToUpdateCount})</span>}
+									>
+										<span>Update ({props.selectedToUpdateCount})</span>
+									</Show>
+								</Button>
+								<Button
+									size="sm"
+									variant="ghost"
+									class={styles["delete-selected"]}
+									onClick={props.handleBatchDelete}
+									disabled={props.busy}
+									tooltip_text={
+										isCompactTable() ? "Delete selected" : undefined
+									}
+									icon_only={isCompactTable()}
+								>
+									<TrashIcon />
+									<Show when={!isCompactTable()}>Delete Selected</Show>
+								</Button>
+							</div>
+						</div>
+					</Show>
 				</div>
 			</div>
-
-			<Show when={selectionCount() > 0}>
-				<div class={styles["selection-action-bar"]}>
-					<div class={styles["selection-info"]}>
-						<button
-							class={styles["clear-selection"]}
-							onClick={() => props.resourcesStore.clearSelection()}
-							title="Clear Selection"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<line x1="18" y1="6" x2="6" y2="18" />
-								<line x1="6" y1="6" x2="18" y2="18" />
-							</svg>
-						</button>
-						<span class={styles["selection-count"]}>
-							{selectionCount()} resources selected
-						</span>
-					</div>
-					<div class={styles["selection-actions"]}>
-						<Button
-							size="sm"
-							variant="ghost"
-							onClick={props.handleBatchUpdate}
-							disabled={props.busy || props.selectedToUpdateCount === 0}
-							tooltip_text={
-								isCompactTable()
-									? `Update ${props.selectedToUpdateCount} selected`
-									: undefined
-							}
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-								<polyline points="7 10 12 15 17 10" />
-								<line x1="12" y1="15" x2="12" y2="3" />
-							</svg>
-							<Show
-								when={!isCompactTable()}
-								fallback={<span>({props.selectedToUpdateCount})</span>}
-							>
-								<span>Update ({props.selectedToUpdateCount})</span>
-							</Show>
-						</Button>
-						<Button
-							size="sm"
-							variant="ghost"
-							class={styles["delete-selected"]}
-							onClick={props.handleBatchDelete}
-							disabled={props.busy}
-							tooltip_text={isCompactTable() ? "Delete selected" : undefined}
-							icon_only={isCompactTable()}
-						>
-							<TrashIcon />
-							<Show when={!isCompactTable()}>Delete Selected</Show>
-						</Button>
-					</div>
-				</div>
-			</Show>
 
 			<div class={styles["installed-resources-list"]}>
 				<div

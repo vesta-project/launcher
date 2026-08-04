@@ -938,6 +938,11 @@
 	min-width: 0;
 }
 
+.toolbar-actions-hidden {
+	visibility: hidden;
+	pointer-events: none;
+}
+
 .toolbar-actions button {
 	display: inline-flex !important;
 	align-items: center !important;
@@ -959,17 +964,39 @@
 }
 
 .selection-action-bar {
-	position: relative;
+	position: absolute;
+	inset: 0;
+	width: max-content;
+	min-width: 100%;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	min-height: 42px;
-	padding: 4px 16px;
+	padding: 0 12px;
+	white-space: nowrap;
 	background: var(--surface-sunken);
-	border-inline: 1px solid var(--border-subtle);
-	border-bottom: 1px solid var(--border-subtle);
-	z-index: 5;
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	z-index: 2;
 	box-sizing: border-box;
+	animation: resourcesSelectionSlideDown 180ms cubic-bezier(0.2, 0.8, 0.2, 1)
+		both;
+}
+
+@keyframes resourcesSelectionSlideDown {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.selection-action-bar {
+		animation: none;
+	}
 }
 
 .selection-actions {
@@ -2071,6 +2098,10 @@
 		width: 100%;
 		margin-left: 0;
 		justify-content: flex-end;
+	}
+
+	.selection-action-bar {
+		width: 100%;
 	}
 }
 
