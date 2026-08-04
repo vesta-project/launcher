@@ -880,8 +880,14 @@
 }
 
 /* Resources Toolbar */
-.resources-toolbar {
+.resources-toolbar-shell {
+	position: sticky;
+	top: 0;
+	z-index: 6;
 	flex-shrink: 0;
+}
+
+.resources-toolbar {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
@@ -892,9 +898,6 @@
 	border-bottom: 2px solid var(--border-subtle);
 	gap: 10px;
 	margin-bottom: 0;
-	position: sticky;
-	top: 0;
-	z-index: 6;
 	box-sizing: border-box;
 }
 
@@ -964,10 +967,8 @@
 }
 
 .selection-action-bar {
-	position: absolute;
-	inset: 0;
-	width: max-content;
-	min-width: 100%;
+	position: relative;
+	width: 100%;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -2083,6 +2084,10 @@
 }
 
 @media (max-width: 799px) {
+	.resources-toolbar-shell {
+		position: sticky;
+	}
+
 	.resources-toolbar {
 		flex-wrap: wrap;
 	}
@@ -2101,6 +2106,9 @@
 	}
 
 	.selection-action-bar {
+		position: absolute;
+		inset-inline: 0;
+		bottom: 0;
 		width: 100%;
 	}
 }

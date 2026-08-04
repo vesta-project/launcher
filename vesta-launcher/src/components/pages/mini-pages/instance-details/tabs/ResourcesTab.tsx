@@ -424,194 +424,194 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 	return (
 		<section ref={setPanelRef} class={styles["tab-resources"]}>
-			<div class={styles["resources-toolbar"]}>
-				<div class={styles["toolbar-search-filter"]}>
-					<Show when={!isFilterCompact()}>
-						<div class={styles["filter-group"]}>
-							<For each={FILTER_OPTIONS}>
-								{(option) => (
-									<button
-										class={styles["filter-btn"]}
-										classList={{
-											[styles.active]: props.resourceTypeFilter === option.id,
-										}}
-										onClick={() => props.setResourceTypeFilter(option.id)}
-									>
-										{option.label}
-									</button>
-								)}
-							</For>
-						</div>
-					</Show>
+			<div class={styles["resources-toolbar-shell"]}>
+				<div class={styles["resources-toolbar"]}>
+					<div class={styles["toolbar-search-filter"]}>
+						<Show when={!isFilterCompact()}>
+							<div class={styles["filter-group"]}>
+								<For each={FILTER_OPTIONS}>
+									{(option) => (
+										<button
+											class={styles["filter-btn"]}
+											classList={{
+												[styles.active]: props.resourceTypeFilter === option.id,
+											}}
+											onClick={() => props.setResourceTypeFilter(option.id)}
+										>
+											{option.label}
+										</button>
+									)}
+								</For>
+							</div>
+						</Show>
 
-					<Show when={isFilterCompact()}>
-						<div class={styles["mobile-filter-select"]}>
-							<Select
-								value={props.resourceTypeFilter}
-								onChange={(val: string | null) => {
-									if (val !== null) props.setResourceTypeFilter(val);
-								}}
-								options={FILTER_OPTIONS.map((o) => o.id)}
-								itemComponent={(p) => (
-									<SelectItem item={p.item}>
-										{
-											FILTER_OPTIONS.find((o) => o.id === p.item.rawValue)
-												?.label
-										}
-									</SelectItem>
-								)}
-							>
-								<SelectTrigger>
-									<SelectValue<string>>
-										{(state) =>
-											FILTER_OPTIONS.find(
-												(o) => o.id === state.selectedOption(),
-											)?.label || "All"
-										}
-									</SelectValue>
-								</SelectTrigger>
-								<SelectContent />
-							</Select>
-						</div>
-					</Show>
+						<Show when={isFilterCompact()}>
+							<div class={styles["mobile-filter-select"]}>
+								<Select
+									value={props.resourceTypeFilter}
+									onChange={(val: string | null) => {
+										if (val !== null) props.setResourceTypeFilter(val);
+									}}
+									options={FILTER_OPTIONS.map((o) => o.id)}
+									itemComponent={(p) => (
+										<SelectItem item={p.item}>
+											{
+												FILTER_OPTIONS.find((o) => o.id === p.item.rawValue)
+													?.label
+											}
+										</SelectItem>
+									)}
+								>
+									<SelectTrigger>
+										<SelectValue<string>>
+											{(state) =>
+												FILTER_OPTIONS.find(
+													(o) => o.id === state.selectedOption(),
+												)?.label || "All"
+											}
+										</SelectValue>
+									</SelectTrigger>
+									<SelectContent />
+								</Select>
+							</div>
+						</Show>
 
-					<div class={styles["resources-search"]}>
-						<div class={styles["search-input-wrapper"]}>
-							<SearchIcon class={styles["search-icon"]} />
-							<input
-								type="text"
-								placeholder="Search resources..."
-								value={props.resourceSearch}
-								onInput={handleSearchInput}
-							/>
+						<div class={styles["resources-search"]}>
+							<div class={styles["search-input-wrapper"]}>
+								<SearchIcon class={styles["search-icon"]} />
+								<input
+									type="text"
+									placeholder="Search resources..."
+									value={props.resourceSearch}
+									onInput={handleSearchInput}
+								/>
+							</div>
 						</div>
 					</div>
-				</div>
 
-				<div class={styles["toolbar-lower-wrapper"]}>
-					<div
-						class={styles["toolbar-actions"]}
-						classList={{
-							[styles["toolbar-actions-hidden"]]: selectionCount() > 0,
-						}}
-					>
-						<Button
-							size="sm"
-							variant="ghost"
-							icon_only
-							class={styles["check-updates-btn"]}
-							onClick={props.checkUpdates}
-							disabled={props.busy || props.checkingUpdates}
-							tooltip_text="Check for available updates"
-							aria-label="Check for available updates"
-						>
-							<Show
-								when={props.checkingUpdates}
-								fallback={<ReloadIcon class={styles["check-updates-icon"]} />}
-							>
-								<span class={styles["checking-updates-spinner"]} />
-							</Show>
-						</Button>
-
-						<Button
-							size="sm"
-							variant="outline"
-							icon_only
-							onClick={() => {
-								const inst = props.instance;
-								if (inst) {
-									props.resourcesStore.setInstance(inst.id);
-									props.resourcesStore.setGameVersion(inst.minecraftVersion);
-									props.resourcesStore.setLoader(inst.modloader);
-									props.router?.navigate("/resources");
-								}
+					<div class={styles["toolbar-lower-wrapper"]}>
+						<div
+							class={styles["toolbar-actions"]}
+							classList={{
+								[styles["toolbar-actions-hidden"]]: selectionCount() > 0,
 							}}
-							tooltip_text="Add resources"
-							aria-label="Add resources"
 						>
-							<PlusIcon />
-						</Button>
-					</div>
+							<Button
+								size="sm"
+								variant="ghost"
+								icon_only
+								class={styles["check-updates-btn"]}
+								onClick={props.checkUpdates}
+								disabled={props.busy || props.checkingUpdates}
+								tooltip_text="Check for available updates"
+								aria-label="Check for available updates"
+							>
+								<Show
+									when={props.checkingUpdates}
+									fallback={<ReloadIcon class={styles["check-updates-icon"]} />}
+								>
+									<span class={styles["checking-updates-spinner"]} />
+								</Show>
+							</Button>
 
-					<Show when={selectionCount() > 0}>
-						<div class={styles["selection-action-bar"]}>
-							<div class={styles["selection-info"]}>
-								<button
-									class={styles["clear-selection"]}
-									onClick={() => props.resourcesStore.clearSelection()}
-									title="Clear Selection"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<line x1="18" y1="6" x2="6" y2="18" />
-										<line x1="6" y1="6" x2="18" y2="18" />
-									</svg>
-								</button>
-								<span class={styles["selection-count"]}>
-									{selectionCount()} resources selected
-								</span>
-							</div>
-							<div class={styles["selection-actions"]}>
-								<Button
-									size="sm"
-									variant="ghost"
-									onClick={props.handleBatchUpdate}
-									disabled={props.busy || props.selectedToUpdateCount === 0}
-									tooltip_text={
-										isCompactTable()
-											? `Update ${props.selectedToUpdateCount} selected`
-											: undefined
+							<Button
+								size="sm"
+								variant="outline"
+								icon_only
+								onClick={() => {
+									const inst = props.instance;
+									if (inst) {
+										props.resourcesStore.setInstance(inst.id);
+										props.resourcesStore.setGameVersion(inst.minecraftVersion);
+										props.resourcesStore.setLoader(inst.modloader);
+										props.router?.navigate("/resources");
 									}
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-										<polyline points="7 10 12 15 17 10" />
-										<line x1="12" y1="15" x2="12" y2="3" />
-									</svg>
-									<Show
-										when={!isCompactTable()}
-										fallback={<span>({props.selectedToUpdateCount})</span>}
-									>
-										<span>Update ({props.selectedToUpdateCount})</span>
-									</Show>
-								</Button>
-								<Button
-									size="sm"
-									variant="ghost"
-									class={styles["delete-selected"]}
-									onClick={props.handleBatchDelete}
-									disabled={props.busy}
-									tooltip_text={
-										isCompactTable() ? "Delete selected" : undefined
-									}
-									icon_only={isCompactTable()}
-								>
-									<TrashIcon />
-									<Show when={!isCompactTable()}>Delete Selected</Show>
-								</Button>
-							</div>
+								}}
+								tooltip_text="Add resources"
+								aria-label="Add resources"
+							>
+								<PlusIcon />
+							</Button>
 						</div>
-					</Show>
+					</div>
 				</div>
+
+				<Show when={selectionCount() > 0}>
+					<div class={styles["selection-action-bar"]}>
+						<div class={styles["selection-info"]}>
+							<button
+								class={styles["clear-selection"]}
+								onClick={() => props.resourcesStore.clearSelection()}
+								title="Clear Selection"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<line x1="18" y1="6" x2="6" y2="18" />
+									<line x1="6" y1="6" x2="18" y2="18" />
+								</svg>
+							</button>
+							<span class={styles["selection-count"]}>
+								{selectionCount()} resources selected
+							</span>
+						</div>
+						<div class={styles["selection-actions"]}>
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={props.handleBatchUpdate}
+								disabled={props.busy || props.selectedToUpdateCount === 0}
+								tooltip_text={
+									isCompactTable()
+										? `Update ${props.selectedToUpdateCount} selected`
+										: undefined
+								}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="14"
+									height="14"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+									<polyline points="7 10 12 15 17 10" />
+									<line x1="12" y1="15" x2="12" y2="3" />
+								</svg>
+								<Show
+									when={!isCompactTable()}
+									fallback={<span>({props.selectedToUpdateCount})</span>}
+								>
+									<span>Update ({props.selectedToUpdateCount})</span>
+								</Show>
+							</Button>
+							<Button
+								size="sm"
+								variant="ghost"
+								class={styles["delete-selected"]}
+								onClick={props.handleBatchDelete}
+								disabled={props.busy}
+								tooltip_text={isCompactTable() ? "Delete selected" : undefined}
+								icon_only={isCompactTable()}
+							>
+								<TrashIcon />
+								<Show when={!isCompactTable()}>Delete Selected</Show>
+							</Button>
+						</div>
+					</div>
+				</Show>
 			</div>
 
 			<div class={styles["installed-resources-list"]}>
