@@ -1,6 +1,7 @@
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceProject,
-    ResourceType, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceCategory, ResourceChangelogFormat,
+    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceType, ResourceVersion,
+    ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use anyhow::anyhow;
@@ -33,7 +34,6 @@ struct ModrinthProjectHit {
     icon_url: Option<String>,
     #[serde(default)]
     author: String,
-    #[serde(default)]
     downloads: u64,
     categories: Option<Vec<String>>,
     project_type: String,
@@ -99,6 +99,9 @@ struct ModrinthVersion {
     version_type: String,
     dependencies: Vec<ModrinthDependency>,
     date_published: String,
+    #[serde(default)]
+    downloads: Option<u64>,
+    changelog: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -115,6 +118,8 @@ struct ModrinthFile {
     filename: String,
     hashes: ModrinthHashes,
     primary: bool,
+    #[serde(default)]
+    size: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -200,6 +205,27 @@ impl ModrinthSource {
                 })
                 .collect(),
             published_at: Some(v.date_published),
+            download_count: v.downloads,
+            file_size: selected_file.size,
+        })
+    }
+
+    fn map_version_details(mut version: ModrinthVersion) -> Result<ResourceVersionDetails> {
+        let changelog = version
+            .changelog
+            .take()
+            .filter(|value| !value.trim().is_empty());
+        let changelog_status = if changelog.is_some() {
+            ResourceChangelogStatus::Available
+        } else {
+            ResourceChangelogStatus::Empty
+        };
+
+        Ok(ResourceVersionDetails {
+            version: Self::map_version(version, None)?,
+            changelog,
+            changelog_format: ResourceChangelogFormat::Markdown,
+            changelog_status,
         })
     }
 }
@@ -638,6 +664,8 @@ impl ResourceSource for ModrinthSource {
                         })
                         .collect(),
                     published_at: Some(v.date_published),
+                    download_count: v.downloads,
+                    file_size: primary_file.size,
                 }
             })
             .collect())
@@ -655,57 +683,25 @@ impl ResourceSource for ModrinthSource {
         }
 
         let v: ModrinthVersion = response.json().await?;
-        let primary_file = v
-            .files
-            .iter()
-            .find(|f| f.primary)
-            .or_else(|| {
-                v.files.iter().find(|f| {
-                    let url = f.url.to_lowercase();
-                    (url.ends_with(".mrpack") || url.ends_with(".jar") || url.ends_with(".zip"))
-                        && !url.ends_with(".cosign-bundle.json")
-                })
-            })
-            .unwrap_or_else(|| v.files.first().expect("No files in version"));
+        Self::map_version(v, None)
+    }
 
-        log::info!(
-            "[Modrinth] get_version: Selected {} (primary: {})",
-            primary_file.filename,
-            primary_file.primary
-        );
+    async fn get_version_details(
+        &self,
+        _project_id: &str,
+        version_id: &str,
+    ) -> Result<ResourceVersionDetails> {
+        let url = format!("https://api.modrinth.com/v2/version/{}", version_id);
+        let response = self.client.get(&url).send().await?;
 
-        Ok(ResourceVersion {
-            id: v.id,
-            project_id: v.project_id,
-            version_number: v.version_number,
-            game_versions: v.game_versions,
-            loaders: v.loaders,
-            download_url: primary_file.url.clone(),
-            file_name: primary_file.filename.clone(),
-            release_type: match v.version_type.as_str() {
-                "release" => ReleaseType::Release,
-                "beta" => ReleaseType::Beta,
-                "alpha" => ReleaseType::Alpha,
-                _ => ReleaseType::Release,
-            },
-            hash: primary_file.hashes.sha1.clone(),
-            dependencies: v
-                .dependencies
-                .into_iter()
-                .map(|d| ResourceDependency {
-                    project_id: d.project_id.unwrap_or_default(),
-                    version_id: d.version_id,
-                    file_name: d.file_name,
-                    dependency_type: match d.dependency_type.as_str() {
-                        "required" => DependencyType::Required,
-                        "optional" => DependencyType::Optional,
-                        "incompatible" => DependencyType::Incompatible,
-                        _ => DependencyType::Embedded,
-                    },
-                })
-                .collect(),
-            published_at: Some(v.date_published),
-        })
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "Modrinth version details fetch failed: {}",
+                response.status()
+            ));
+        }
+
+        Self::map_version_details(response.json().await?)
     }
 
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {
@@ -789,6 +785,8 @@ impl ResourceSource for ModrinthSource {
                 })
                 .collect(),
             published_at: Some(v.date_published),
+            download_count: v.downloads,
+            file_size: primary_file.size,
         };
 
         Ok((project, version))
@@ -912,5 +910,58 @@ impl ResourceSource for ModrinthSource {
 
     fn platform(&self) -> SourcePlatform {
         SourcePlatform::Modrinth
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ModrinthSource, ModrinthVersion};
+    use crate::models::resource::{
+        DependencyType, ResourceChangelogFormat, ResourceChangelogStatus,
+    };
+
+    #[test]
+    fn maps_version_details_fixture() {
+        let payload: ModrinthVersion = serde_json::from_value(serde_json::json!({
+            "id": "version-1",
+            "project_id": "project-1",
+            "version_number": "1.2.3",
+            "game_versions": ["1.21.1"],
+            "loaders": ["fabric"],
+            "files": [{
+                "url": "https://example.invalid/file.jar",
+                "filename": "file.jar",
+                "hashes": { "sha1": "abc123" },
+                "primary": true,
+                "size": 4096
+            }],
+            "version_type": "release",
+            "dependencies": [{
+                "version_id": "dependency-version",
+                "project_id": "dependency-project",
+                "file_name": null,
+                "dependency_type": "required"
+            }],
+            "date_published": "2026-08-01T00:00:00Z",
+            "downloads": 42,
+            "changelog": "## Changes\n\n- Faster"
+        }))
+        .unwrap();
+
+        let details = ModrinthSource::map_version_details(payload).unwrap();
+
+        assert_eq!(
+            details.version.published_at.as_deref(),
+            Some("2026-08-01T00:00:00Z")
+        );
+        assert_eq!(details.version.download_count, Some(42));
+        assert_eq!(details.version.file_size, Some(4096));
+        assert_eq!(
+            details.version.dependencies[0].dependency_type,
+            DependencyType::Required
+        );
+        assert_eq!(details.changelog.as_deref(), Some("## Changes\n\n- Faster"));
+        assert_eq!(details.changelog_format, ResourceChangelogFormat::Markdown);
+        assert_eq!(details.changelog_status, ResourceChangelogStatus::Available);
     }
 }

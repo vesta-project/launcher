@@ -91,7 +91,35 @@ pub struct ResourceVersion {
     pub release_type: ReleaseType,
     pub hash: String, // SHA1
     pub dependencies: Vec<ResourceDependency>,
+    #[serde(default)]
     pub published_at: Option<String>,
+    #[serde(default)]
+    pub download_count: Option<u64>,
+    #[serde(default)]
+    pub file_size: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ResourceChangelogFormat {
+    Markdown,
+    Html,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ResourceChangelogStatus {
+    Available,
+    Empty,
+    Unavailable,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceVersionDetails {
+    pub version: ResourceVersion,
+    pub changelog: Option<String>,
+    pub changelog_format: ResourceChangelogFormat,
+    pub changelog_status: ResourceChangelogStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable, AsChangeset)]
@@ -156,4 +184,31 @@ pub struct ResourceCategory {
     pub project_type: Option<ResourceType>,
     pub parent_id: Option<String>,
     pub display_index: Option<i32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ResourceVersion;
+
+    #[test]
+    fn cached_resource_version_without_detail_stats_still_deserializes() {
+        let cached = r#"{
+            "id":"version-1",
+            "project_id":"project-1",
+            "version_number":"1.0.0",
+            "game_versions":["1.21.1"],
+            "loaders":["fabric"],
+            "download_url":"https://example.invalid/file.jar",
+            "file_name":"file.jar",
+            "release_type":"release",
+            "hash":"abc123",
+            "dependencies":[]
+        }"#;
+
+        let version: ResourceVersion = serde_json::from_str(cached).unwrap();
+
+        assert_eq!(version.published_at, None);
+        assert_eq!(version.download_count, None);
+        assert_eq!(version.file_size, None);
+    }
 }

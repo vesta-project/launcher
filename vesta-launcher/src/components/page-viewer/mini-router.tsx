@@ -1,3 +1,4 @@
+import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { generateVestaDeepLink } from "@utils/deep-links";
 
 import {
@@ -12,8 +13,8 @@ import {
 	batch,
 	createMemo,
 	createSignal,
-	Suspense,
 	type JSXElement,
+	Suspense,
 	type ValidComponent,
 } from "solid-js";
 import { Dynamic } from "solid-js/web";
@@ -121,8 +122,7 @@ class MiniRouter {
 
 	constructor(props: MiniRouterProps) {
 		this.paths = props.paths;
-		this.sessionId =
-			props.sessionId ?? globalThis.crypto.randomUUID();
+		this.sessionId = props.sessionId ?? globalThis.crypto.randomUUID();
 
 		this.paths["404"] = { element: props.invalid ?? (() => <div />) };
 
@@ -260,7 +260,9 @@ class MiniRouter {
 
 		this.restoreSnapshot = (snapshot) => {
 			if (snapshot.version !== 1) {
-				throw new Error(`Unsupported mini-router snapshot: ${snapshot.version}`);
+				throw new Error(
+					`Unsupported mini-router snapshot: ${snapshot.version}`,
+				);
 			}
 			batch(() => {
 				setHistoryPast([...snapshot.past]);
@@ -495,8 +497,28 @@ class MiniRouter {
 	}
 
 	getRouterView(additionalProps?: Record<string, unknown>) {
+		const loadingTitle = () =>
+			this.currentPath.get() === "/resource-details"
+				? "Fetching project details..."
+				: `Loading ${this.currentElement().name || "page"}...`;
+		const loadingMessage = () => {
+			if (this.currentPath.get() !== "/resource-details") return undefined;
+			const name = this.currentParams.get().name;
+			return typeof name === "string" ? name : undefined;
+		};
+
 		return (
-			<Suspense fallback={<div data-mini-route-loading />}>
+			<Suspense
+				fallback={
+					<div data-mini-route-loading>
+						<FetchingOverlay
+							isVisible
+							title={loadingTitle()}
+							message={loadingMessage()}
+						/>
+					</div>
+				}
+			>
 				<div
 					data-mini-route-ready={this.currentPath.get()}
 					style={{ display: "contents" }}

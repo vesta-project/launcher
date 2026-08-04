@@ -67,6 +67,16 @@ export type ResourceVersion = {
 	release_type: "release" | "beta" | "alpha";
 	hash: string;
 	dependencies: ResourceDependency[];
+	published_at?: string | null;
+	download_count?: number | null;
+	file_size?: number | null;
+};
+
+export type ResourceVersionDetails = {
+	version: ResourceVersion;
+	changelog: string | null;
+	changelog_format: "markdown" | "html";
+	changelog_status: "available" | "empty" | "unavailable";
 };
 
 export type ResourceDependency = {
@@ -172,6 +182,7 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 });
 
 const searchCache = new Map<string, CachedSearchResponse>();
+const versionDetailsCache = new Map<string, ResourceVersionDetails>();
 
 function normalizedSearchValue(value: string | null | undefined) {
 	const trimmed = value?.trim();
@@ -474,6 +485,32 @@ export const resources = {
 			projectId,
 			ignoreCache,
 		});
+	},
+
+	getVersionDetails: async (
+		platform: SourcePlatform,
+		projectId: string,
+		versionId: string,
+		ignoreCache: boolean = false,
+	) => {
+		const cacheKey = `${platform}:${projectId}:${versionId}`;
+		if (!ignoreCache) {
+			const cached = versionDetailsCache.get(cacheKey);
+			if (cached) return cached;
+		}
+
+		const details = await invoke<ResourceVersionDetails>(
+			"get_resource_version_details",
+			{
+				platform,
+				projectId,
+				versionId,
+			},
+		);
+		if (details.changelog_status !== "unavailable") {
+			versionDetailsCache.set(cacheKey, details);
+		}
+		return details;
 	},
 
 	install: async (

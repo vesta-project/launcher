@@ -312,6 +312,7 @@ fn main() {
             commands::resources::get_or_hydrate_resource_projects,
             commands::resources::get_resource_projects,
             commands::resources::get_resource_versions,
+            commands::resources::get_resource_version_details,
             commands::resources::find_peer_resource,
             commands::resources::install_resource,
             commands::resources::delete_resource,

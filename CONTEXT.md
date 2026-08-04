@@ -205,8 +205,19 @@ Primary modules:
 ### Resource Browse Session
 
 The frontend state around browsing Resources. It includes query text, filters,
-source platform, selected Instance, categories, sort, pagination, router state,
-and search timing.
+source platform, selected Instance, categories, sort, pagination, project
+version lists, session-cached version details, router state, nested version
+focus, and search timing. Provider Adapters normalize changelog format and
+availability so missing release notes do not erase already-available file
+metadata, and distinguish CurseForge client/server environment labels from
+Minecraft versions. Provider switching accepts only peer lookups keyed to the
+current source/project identity, and only the latest project request may publish
+details into the active route. The page viewer supplies visible loading feedback
+while the lazy resource-details route module is fetched. Once mounted, Resource
+details uses the established project-fetch overlay for an uncached project, then
+hydrates the description, version list, sidebar, and focused-version regions
+behind independent loading boundaries; background refreshes do not unmount
+already-available regions.
 
 Primary modules:
 
@@ -214,6 +225,12 @@ Primary modules:
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-browser.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-toolbar.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/filter-popover.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-details.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-details-loading.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-details-loading-state.ts`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-version-focus.tsx`
+- `vesta-launcher/src-tauri/src/resources/sources/mod.rs`
+- `vesta-launcher/src-tauri/src/resources/manager.rs`
 
 ### Resource Install Intent
 

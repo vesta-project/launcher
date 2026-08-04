@@ -36,12 +36,38 @@ describe("parseResourceUrl", () => {
 		});
 	});
 
+	it("should parse a Modrinth version URL into nested version focus", () => {
+		expect(
+			parseResourceUrl(
+				"https://modrinth.com/mod/sodium/version/mc1.21.4-0.6.7",
+			),
+		).toEqual({
+			platform: "modrinth",
+			id: "sodium",
+			activeTab: "versions",
+			versionId: "mc1.21.4-0.6.7",
+		});
+	});
+
 	it("should parse a CurseForge resource URL", () => {
 		const url = "https://www.curseforge.com/minecraft/mc-mods/jei";
 		expect(parseResourceUrl(url)).toEqual({
 			platform: "curseforge",
 			id: "jei",
 			activeTab: undefined,
+		});
+	});
+
+	it("should parse a CurseForge file URL into nested version focus", () => {
+		expect(
+			parseResourceUrl(
+				"https://www.curseforge.com/minecraft/mc-mods/jei/files/6123456",
+			),
+		).toEqual({
+			platform: "curseforge",
+			id: "jei",
+			activeTab: "versions",
+			versionId: "6123456",
 		});
 	});
 
