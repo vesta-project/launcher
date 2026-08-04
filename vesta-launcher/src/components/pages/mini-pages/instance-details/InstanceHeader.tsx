@@ -62,12 +62,28 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 		const minutes = props.instance.totalPlaytimeMinutes ?? 0;
 		return `${Math.floor(minutes / 60)}h ${minutes % 60}m total`;
 	};
+	const failureSummary = () => {
+		const reason = props.failureReason?.replace(/\s+/g, " ").trim();
+		if (!reason) return "The instance could not be installed.";
+		const withoutUrl = reason.replace(
+			/https?:\/\/\S+/g,
+			"the requested resource",
+		);
+		return withoutUrl.length > 150
+			? `${withoutUrl.slice(0, 147).trimEnd()}…`
+			: withoutUrl;
+	};
 	return (
 		<>
 			<header
 				ref={props.setRef}
 				class={styles.header}
-				classList={{ [styles.compact]: props.compact }}
+				classList={{
+					[styles.compact]: props.compact,
+					[styles.hasNotice]: Boolean(
+						props.failureReason || props.updateRecovery,
+					),
+				}}
 			>
 				<div
 					class={styles.texture}
@@ -190,20 +206,28 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 				</div>
 			</header>
 			<Show when={props.failureReason || props.updateRecovery}>
-				<div
-					class={styles.statusNotice}
-					role="alert"
-					title={
-						props.failureReason ||
-						"The previous version could not be fully restored"
-					}
-				>
-					<ErrorIcon />
-					<span>
-						{props.failureReason
-							? `Installation failed · ${props.failureReason}`
-							: "Update recovery required · The previous version could not be fully restored"}
-					</span>
+				<div class={styles.statusNotice} role="alert">
+					<ErrorIcon class={styles.statusNoticeIcon} />
+					<div class={styles.statusNoticeContent}>
+						<div class={styles.statusNoticeHeading}>
+							<strong>
+								{props.failureReason
+									? "Installation failed"
+									: "Update recovery required"}
+							</strong>
+							<span class={styles.statusNoticeDescription}>
+								{props.failureReason
+									? failureSummary()
+									: "The previous version could not be fully restored"}
+							</span>
+						</div>
+						<Show when={props.failureReason}>
+							<details class={styles.statusNoticeDetails}>
+								<summary>Show error details</summary>
+								<code>{props.failureReason}</code>
+							</details>
+						</Show>
+					</div>
 				</div>
 			</Show>
 		</>
