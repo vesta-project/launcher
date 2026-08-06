@@ -2,7 +2,6 @@ const ALLOWED_NAVIGATE_PATHS = new Set([
 	"/config",
 	"/changelog",
 	"/install",
-	"/install/source",
 	"/install/import",
 	"/modding-guide",
 	"/resources",

@@ -128,7 +128,7 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 						<span>{screenshots()?.length ?? 0} files</span>
 					</Show>
 				</div>
-				<Show when={(screenshots()?.length ?? 0) > 0}>
+				<Show when={!screenshots.error && (screenshots()?.length ?? 0) > 0}>
 					<div class={styles.toolbar}>
 						<div class={styles.group}>
 							<ToggleGroup
