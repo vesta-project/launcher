@@ -106,6 +106,13 @@ interface SettingsTabProps {
 	totalRam: number;
 	invoke: any;
 	showToast: any;
+	isGuest: boolean;
+	busy: boolean;
+	setShowExportDialog: (v: boolean) => void;
+	handleDuplicate: () => void;
+	handleHardReset: () => void;
+	handleUninstall: () => void;
+	repairInstance: (id: number) => void;
 }
 
 export const SettingsTab = (p: SettingsTabProps) => {
@@ -791,6 +798,17 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							}
 						/>
 					</Show>
+				</SettingsCard>
+
+				<SettingsCard header="Maintenance">
+					<SettingsField label="Export Instance" description="Pack this instance into a file for sharing or backup." actionLabel="Export…" onAction={() => p.setShowExportDialog(true)} disabled={p.isGuest || p.busy || p.isInstalling} />
+					<SettingsField label="Duplicate Instance" description="Create an exact clone of this instance." actionLabel="Duplicate" onAction={p.handleDuplicate} disabled={p.busy || p.isInstalling} />
+					<SettingsField label={p.instance.modpackId ? "Repair Files" : "Repair Instance"} description="Verify instance files and re-download anything missing." actionLabel="Repair" onAction={() => p.repairInstance(p.instance.id)} disabled={p.isGuest || p.busy || p.isInstalling} />
+				</SettingsCard>
+
+				<SettingsCard header="Danger Zone" destructive>
+					<SettingsField label="Reset Instance" description={<span>Reinstall from scratch and <strong>permanently delete</strong> worlds, configs, and screenshots.</span>} actionLabel="Reset" destructive onAction={p.handleHardReset} disabled={p.isGuest || p.busy || p.isInstalling} />
+					<SettingsField label="Delete Instance" description={<span>Remove this instance and all its files. This action is <strong>permanent and irreversible</strong>.</span>} actionLabel="Delete" destructive onAction={p.handleUninstall} disabled={p.isGuest || p.busy || p.isInstalling} />
 				</SettingsCard>
 			</div>
 		</div>

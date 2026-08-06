@@ -105,10 +105,16 @@ export function createAnimatedIconPreview(
 		if (!isAnimated()) return current;
 		return active() ? current : posterFrame() || current;
 	});
+	const posterSource = createMemo(() => {
+		const current = source();
+		if (!current) return undefined;
+		return isAnimated() ? posterFrame() || undefined : current;
+	});
 
 	return {
 		source,
 		displaySource,
+		posterSource,
 		isAnimated,
 		setActive,
 		activate: () => setActive(true),

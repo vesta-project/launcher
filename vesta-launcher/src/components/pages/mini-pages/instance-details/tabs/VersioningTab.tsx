@@ -49,11 +49,6 @@ interface VersioningTabProps {
 	currentVersionSupportedLoaders: () => string[];
 	searchableLoaderVersions: () => any[];
 	handleStandardUpdate: () => void;
-	setShowExportDialog: (v: boolean) => void;
-	handleDuplicate: () => void;
-	handleHardReset: () => void;
-	handleUninstall: () => void;
-	repairInstance: (id: number) => void;
 	mcVersions: any;
 }
 
@@ -288,33 +283,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					</SettingsCard>
 				</Show>
 
-				<SettingsCard header="General Operations">
-					<SettingsField
-						label="Export Instance"
-						description="Pack this instance into a file for sharing or backup."
-						actionLabel="Export..."
-						onAction={() => props.setShowExportDialog(true)}
-						disabled={props.isGuest}
-					/>
-					<SettingsField
-						label="Duplicate Instance"
-						description="Create an exact clone of this instance."
-						actionLabel="Duplicate"
-						onAction={props.handleDuplicate}
-					/>
-					<SettingsField
-						label={inst().modpackId ? "Repair Files" : "Repair Instance"}
-						description={
-							inst().modpackId
-								? "Verify all modpack assets and re-download missing files."
-								: "Force a re-check of all files and re-download any missing components."
-						}
-						actionLabel="Repair"
-						onAction={() => props.repairInstance(inst().id)}
-					/>
-				</SettingsCard>
-
-				<SettingsCard header="Danger Zone" destructive>
+				<Show when={inst().modpackId}>
+				<SettingsCard header="Connection" subHeader="Control the relationship between this instance and its modpack source.">
 					<Show when={inst().modpackId}>
 						<SettingsField
 							label="Unlink Connection"
@@ -333,32 +303,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							disabled={props.busy || props.isInstalling || props.isGuest}
 						/>
 					</Show>
-					<SettingsField
-						label="Hard Reset"
-						description={
-							<span>
-								Reinstalls the game from scratch. This{" "}
-								<strong>permanently deletes</strong> your worlds, configs, and
-								screenshots!
-							</span>
-						}
-						actionLabel="Reset"
-						destructive
-						onAction={props.handleHardReset}
-					/>
-					<SettingsField
-						label="Uninstall Instance"
-						description={
-							<span>
-								Remove this instance and all its files from your computer. This
-								action is <strong>permanent and irreversible</strong>.
-							</span>
-						}
-						actionLabel="Uninstall"
-						destructive
-						onAction={props.handleUninstall}
-					/>
 				</SettingsCard>
+				</Show>
 			</div>
 		</div>
 	);

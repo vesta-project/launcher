@@ -9,6 +9,10 @@ vi.mock("@assets/reload.svg", () => ({
 	default: (props: any) => <svg data-testid="reload-icon" {...props} />,
 }));
 
+vi.mock("@assets/plus.svg", () => ({
+	default: (props: any) => <svg data-testid="plus-icon" {...props} />,
+}));
+
 vi.mock("@assets/right-arrow.svg", () => ({
 	default: (props: any) => <svg data-testid="right-arrow-icon" {...props} />,
 }));

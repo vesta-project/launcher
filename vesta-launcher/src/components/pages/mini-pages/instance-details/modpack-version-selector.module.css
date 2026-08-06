@@ -1,5 +1,6 @@
 .control {
 	width: 100%;
+	container-type: inline-size;
 }
 
 .disabled {
@@ -45,7 +46,7 @@
 	display: grid;
 	grid-template-columns: minmax(180px, 1.15fr) minmax(220px, 0.85fr);
 	align-items: center;
-	gap: 8px;
+	gap: 20px;
 	min-width: 0;
 }
 
@@ -98,6 +99,8 @@
 
 .triggerContent {
 	min-width: 0;
+	flex: 1;
+	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	gap: 5px;
@@ -105,12 +108,17 @@
 
 .projectLine {
 	display: flex;
-	align-items: center;
-	gap: 8px;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
 	min-width: 0;
+	width: 100%;
 }
 
 .projectName {
+	display: block;
+	width: 100%;
+	max-width: 100%;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -141,6 +149,7 @@
 }
 
 .versionButton {
+	position: relative;
 	min-width: 0;
 	min-height: 52px;
 	display: grid;
@@ -159,6 +168,17 @@
 		background 160ms ease,
 		border-color 160ms ease,
 		transform 160ms ease;
+}
+
+.versionButton::before {
+	content: "";
+	position: absolute;
+	left: -10px;
+	top: 12px;
+	bottom: 12px;
+	width: 1px;
+	background: var(--border-subtle);
+	pointer-events: none;
 }
 
 .versionButton:hover,
@@ -473,7 +493,7 @@
 	white-space: nowrap;
 }
 
-@media (max-width: 620px) {
+@container (max-width: 600px) {
 	.triggerCard {
 		padding: 10px;
 	}
@@ -485,8 +505,18 @@
 	}
 
 	.versionButton {
-		border-top: 1px solid var(--border-subtle);
+		margin-top: 4px;
 		padding: 10px 8px;
+	}
+
+	.versionButton::before {
+		display: block;
+		left: 8px;
+		right: 8px;
+		top: -7px;
+		bottom: auto;
+		width: auto;
+		height: 1px;
 	}
 
 	.statusArea {

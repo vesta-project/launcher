@@ -2,6 +2,7 @@ import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { router } from "@components/page-viewer/page-viewer";
 import type { ResourceVersion } from "@stores/resources";
 import type { Instance } from "@utils/instances";
+import type { LauncherKind } from "@utils/launcher-imports";
 import {
 	countVersionResources,
 	deriveVersionScopedResourceState,
@@ -9,6 +10,7 @@ import {
 } from "@utils/modpack-prefill";
 import { getModpackArchiveSummaryFromUrl } from "@utils/modpacks";
 import {
+	batch,
 	createEffect,
 	createMemo,
 	createSignal,
@@ -16,12 +18,19 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
+import { ImportMethodModal } from "./components/ImportMethodModal";
 import { InstallForm } from "./components/InstallForm";
 import { InstallStageHeader } from "./components/InstallStageHeader";
 import { useInstallCapabilities } from "./hooks/use-install-capabilities";
 import { useInstallSubmit } from "./hooks/use-install-submit";
 import { useModpackSource } from "./hooks/use-modpack-source";
 import { useProjectVersions } from "./hooks/use-project-versions";
+import {
+	openBrowseModpacks,
+	openLauncherImport,
+	openLocalModpackInstall,
+	openUrlModpackInstall,
+} from "./install-entry-actions";
 import styles from "./install-page.module.css";
 import type { InstallPageRouteProps } from "./types";
 
@@ -30,18 +39,23 @@ import type { InstallPageRouteProps } from "./types";
  *
  * Standard installs arrive directly at /install.
  * Modpack installs arrive here with modpackUrl/modpackPath/projectId params
- * (set by the resource browser, source-select-page, or file-drop).
+ * (set by the resource browser, import modal, or file-drop).
  */
 function InstallPage(props: InstallPageRouteProps) {
 	const [formState, setFormState] = createSignal<Partial<Instance>>({});
 	const [selectedModpackVersionId, setSelectedModpackVersionId] =
 		createSignal("");
+	const [importModalOpen, setImportModalOpen] = createSignal(false);
+	const [importModalExpandUrl, setImportModalExpandUrl] = createSignal(false);
 	let archiveSummaryRequest = 0;
 	let lastArchiveSummaryAttemptKey = "";
 	const routeParams = createMemo(
 		() => (props.router || router())?.currentParams.get() || {},
 	);
 	const activeRouter = createMemo(() => props.router || router());
+	const navigateInstall = (path: string, params?: Record<string, unknown>) => {
+		activeRouter()?.navigate(path, params);
+	};
 
 	// --- Effective props (merge route params with direct props) ---
 	const effectiveIsModpack = createMemo(() => {
@@ -322,6 +336,70 @@ function InstallPage(props: InstallPageRouteProps) {
 		projectVersions: () => projectVersions(),
 	});
 
+	// Same-path navigations (e.g. blank /install → local/URL) do not remount;
+	// sync route params into the source signals when they change.
+	createEffect(() => {
+		const routeUrl = effectiveModpackUrl() || "";
+		const routePath = effectiveModpackPath() || "";
+		const currentUrl = untrack(() => source.modpackUrl());
+		const currentPath = untrack(() => source.modpackPath());
+		if (routeUrl === currentUrl && routePath === currentPath) return;
+
+		batch(() => {
+			if (routeUrl && routeUrl !== currentUrl) {
+				source.setModpackInfo(undefined);
+				source.setModpackUrl(routeUrl);
+				source.setModpackPath("");
+			} else if (routePath && routePath !== currentPath) {
+				source.setModpackInfo(undefined);
+				source.setModpackPath(routePath);
+				source.setModpackUrl("");
+			} else if (!routeUrl && !routePath && (currentUrl || currentPath)) {
+				// Navigated to blank install — clear stale source.
+				source.resetSource();
+			}
+		});
+	});
+
+	const openImportModal = (options?: { expandUrl?: boolean }) => {
+		setImportModalExpandUrl(!!options?.expandUrl);
+		setImportModalOpen(true);
+	};
+
+	const closeImportModal = () => {
+		setImportModalOpen(false);
+		setImportModalExpandUrl(false);
+	};
+
+	const handleImportLocal = (path: string) => {
+		closeImportModal();
+		if (path === source.modpackPath() && !source.modpackUrl()) {
+			source.retryMetadata();
+			return;
+		}
+		openLocalModpackInstall(navigateInstall, path);
+	};
+
+	const handleImportUrl = (url: string) => {
+		closeImportModal();
+		const trimmed = url.trim();
+		if (trimmed === source.modpackUrl() && !source.modpackPath()) {
+			source.retryMetadata();
+			return;
+		}
+		openUrlModpackInstall(navigateInstall, trimmed);
+	};
+
+	const handleImportBrowse = () => {
+		closeImportModal();
+		void openBrowseModpacks(navigateInstall);
+	};
+
+	const handleImportLauncher = (kind: LauncherKind) => {
+		closeImportModal();
+		openLauncherImport(navigateInstall, kind);
+	};
+
 	onMount(() => {
 		console.log(
 			"[InstallPage] Mounted with props:",
@@ -393,8 +471,9 @@ function InstallPage(props: InstallPageRouteProps) {
 
 	const contextBackLabel = createMemo(() => {
 		if (effectiveProjectId()) return "Back to Browser";
-		if (isLocalModpackUpload()) return "Back";
-		return "Back to Source";
+		if (isLocalModpackUpload() || !!source.modpackUrl()) return "Change import";
+		if (isResourceInstanceMode()) return "Back";
+		return "Import";
 	});
 
 	const handleContextBack = () => {
@@ -403,12 +482,15 @@ function InstallPage(props: InstallPageRouteProps) {
 			return;
 		}
 
-		if (isLocalModpackUpload()) {
-			goBackFromLocalUpload();
+		if (isResourceInstanceMode()) {
+			activeRouter()?.backwards();
 			return;
 		}
 
-		source.resetSource();
+		// Blank form, URL, or local modpack — open the import method modal.
+		openImportModal({
+			expandUrl: metadataStatus().phase === "failed" && !!source.modpackUrl(),
+		});
 	};
 
 	return (
@@ -459,14 +541,8 @@ function InstallPage(props: InstallPageRouteProps) {
 						isMatchingSource() ||
 						(!source.modpackInfo() && !effectiveProjectName()))
 				}
-				actionLabel={isModpackMode() ? contextBackLabel() : "Back"}
-				onAction={
-					isModpackMode()
-						? handleContextBack
-						: isResourceInstanceMode()
-							? () => activeRouter()?.backwards()
-							: () => activeRouter()?.navigate("/install/source")
-				}
+				actionLabel={contextBackLabel()}
+				onAction={handleContextBack}
 			/>
 
 			<div class={styles["page-wrapper"]}>
@@ -481,6 +557,19 @@ function InstallPage(props: InstallPageRouteProps) {
 					onChooseAnother={
 						metadataStatus().phase === "failed" && source.modpackPath()
 							? source.handleLocalImport
+							: undefined
+					}
+					secondaryAction={
+						metadataStatus().phase === "failed" &&
+						(source.modpackUrl() || source.modpackPath()) &&
+						!effectiveProjectId()
+							? {
+									label: "Change import",
+									onClick: () =>
+										openImportModal({
+											expandUrl: !!source.modpackUrl(),
+										}),
+								}
 							: undefined
 					}
 				/>
@@ -555,7 +644,7 @@ function InstallPage(props: InstallPageRouteProps) {
 								isModpackMode() &&
 								(source.modpackUrl() || source.modpackPath())
 							)
-								source.resetSource();
+								openImportModal({ expandUrl: !!source.modpackUrl() });
 							else if (props.close) props.close();
 							else
 								activeRouter()?.navigate(
@@ -567,6 +656,17 @@ function InstallPage(props: InstallPageRouteProps) {
 					/>
 				</Show>
 			</div>
+
+			<ImportMethodModal
+				isOpen={importModalOpen()}
+				onClose={closeImportModal}
+				initialUrl={source.modpackUrl() || undefined}
+				expandUrlOnOpen={importModalExpandUrl()}
+				onSelectLocal={handleImportLocal}
+				onSelectBrowseModpacks={handleImportBrowse}
+				onSelectLauncher={handleImportLauncher}
+				onSelectUrl={handleImportUrl}
+			/>
 		</div>
 	);
 }

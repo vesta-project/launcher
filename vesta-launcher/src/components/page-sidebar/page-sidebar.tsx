@@ -120,6 +120,7 @@ export function PageSidebar(props: PageSidebarProps) {
 				<main
 					ref={(element) => setContentElement(element)}
 					class={styles.content}
+					data-page-scroll-container
 				>
 					{props.children}
 				</main>

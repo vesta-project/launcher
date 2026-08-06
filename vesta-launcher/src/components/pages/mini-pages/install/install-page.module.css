@@ -775,7 +775,6 @@
 	);
 	border-radius: 10px;
 	padding: 12px;
-	fill: currentColor;
 	border: 1px solid
 		color-mix(in srgb, var(--launcher-accent) 30%, var(--border-subtle));
 }
@@ -974,6 +973,22 @@
 .launcher-title-icon svg {
 	width: 100%;
 	height: 100%;
+}
+
+.launcher-title-icon--modrinth {
+	color: #1bd96a;
+}
+
+.launcher-title-icon--curseforge {
+	color: rgb(183, 91, 58);
+}
+
+.launcher-title-icon--modrinth svg,
+.launcher-title-icon--modrinth svg *,
+.launcher-title-icon--curseforge svg,
+.launcher-title-icon--curseforge svg * {
+	fill: currentColor;
+	stroke: currentColor;
 }
 
 .launcher-details-inline-title {
@@ -1438,6 +1453,16 @@
 	height: 18px;
 }
 
+.import-launcher-icon-stack .stack-icon--curseforge {
+	color: rgb(183, 91, 58);
+}
+
+.import-launcher-icon-stack .stack-icon--curseforge,
+.import-launcher-icon-stack .stack-icon--curseforge * {
+	fill: currentColor;
+	stroke: currentColor;
+}
+
 .url-input-row {
 	display: flex;
 	gap: 12px;
@@ -1747,61 +1772,175 @@
 	opacity: 0.7;
 }
 
-.source-footer {
-	margin-top: 40px;
+.import-method-dialog {
+	width: min(520px, 92vw) !important;
+	max-width: 520px !important;
+}
+
+.import-method-list {
 	display: flex;
 	flex-direction: column;
-	align-items: center;
-	gap: 16px;
-	width: 100%;
+	gap: 8px;
+	margin-top: 8px;
 }
 
-.url-toggle {
-	background: transparent;
-	border: none;
-	color: var(--text-secondary);
-	font-size: 14px;
-	font-weight: 600;
-	text-decoration: underline;
-	cursor: default;
-	opacity: 0.7;
-	transition: opacity 0.2s;
+.import-method-list--launchers {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
 }
 
-.url-toggle:hover {
-	opacity: 1;
-	color: var(--primary);
+.import-method-header-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
 }
 
-.url-input-box {
+.import-method-header-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.import-method-back-btn {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	background: var(--surface-raised);
-	padding: 12px 16px;
-	border-radius: 12px;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	margin-top: 2px;
+	flex-shrink: 0;
 	border: 1px solid var(--border-subtle);
-	width: 100%;
-	max-width: 600px;
-	animation: slide-up 0.3s ease-out;
+	border-radius: 8px;
+	background: var(--surface-raised);
+	color: var(--text-secondary);
+	cursor: default;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease,
+		color 0.15s ease;
 }
 
-.url-input-box input {
+.import-method-back-btn:hover {
+	background: var(--surface-medium);
+	border-color: var(--border);
+	color: var(--text-primary);
+}
+
+.import-method-back-btn svg {
+	display: block;
+}
+
+.import-method-row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	width: 100%;
+	padding: 12px 14px;
+	border-radius: 10px;
+	border: 1px solid var(--border-subtle);
+	background: var(--surface-low);
+	color: var(--text-primary);
+	text-align: left;
+	cursor: default;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.import-method-row:hover {
+	background: var(--surface-medium);
+	border-color: var(--border);
+}
+
+.import-method-row-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	border-radius: 8px;
+	background: var(--surface-raised);
+	color: var(--text-secondary);
+}
+
+.import-method-row-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* Only Modrinth / CurseForge SVGs are currentColor outlines — fill brand colors. */
+.launcher-row--modrinth .import-method-row-icon {
+	color: #1bd96a;
+}
+
+.launcher-row--curseforge .import-method-row-icon {
+	color: rgb(183, 91, 58);
+}
+
+.launcher-row--modrinth .import-method-row-icon svg,
+.launcher-row--modrinth .import-method-row-icon svg *,
+.launcher-row--curseforge .import-method-row-icon svg,
+.launcher-row--curseforge .import-method-row-icon svg * {
+	fill: currentColor;
+	stroke: currentColor;
+}
+
+.import-method-row-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.import-method-row-title {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.import-method-row-desc {
+	font-size: 12px;
+	color: var(--text-secondary);
+}
+
+.import-method-url-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	border: 1px solid var(--border-subtle);
+	background: var(--surface-low);
+}
+
+.import-method-url-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.import-method-url-row input {
 	flex: 1;
-	background: transparent;
-	border: none;
-	outline: none;
+	min-width: 0;
+	background: var(--surface-raised);
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	padding: 8px 12px;
 	color: var(--text-primary);
 	font-size: 14px;
+	outline: none;
 }
 
-@keyframes slide-up {
-	from {
-		opacity: 0;
-		transform: translateY(10px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
+.import-method-url-row input:focus {
+	border-color: var(--primary);
 }
+
+.import-method-url-error {
+	margin: 0;
+	font-size: 12px;
+	color: var(--text-error, #e57373);
+}
+

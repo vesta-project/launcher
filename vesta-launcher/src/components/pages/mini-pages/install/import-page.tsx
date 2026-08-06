@@ -1,11 +1,20 @@
 import { router } from "@components/page-viewer/page-viewer";
 import type { LauncherKind } from "@utils/launcher-imports";
-import { createMemo, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
+import {
+	ImportMethodModal,
+	type ImportMethodModalStep,
+} from "./components/ImportMethodModal";
 import { InstallStageHeader } from "./components/InstallStageHeader";
 import { LauncherDetailsPanel } from "./components/LauncherDetailsPanel";
-import { LauncherMenuGrid } from "./components/LauncherMenuGrid";
-import { launcherOptions, launcherVisualMap } from "./config/launcher-options";
+import { launcherVisualMap } from "./config/launcher-options";
 import { useLauncherImport } from "./hooks/use-launcher-import";
+import {
+	openBrowseModpacks,
+	openLauncherImport,
+	openLocalModpackInstall,
+	openUrlModpackInstall,
+} from "./install-entry-actions";
 import styles from "./install-page.module.css";
 
 interface ImportPageRouteProps {
@@ -14,11 +23,17 @@ interface ImportPageRouteProps {
 }
 
 /**
- * ImportPage is a self-contained page for the launcher import flow.
- * It handles: launcher selection → instance scanning → import.
+ * ImportPage hosts the launcher-details step only.
+ * Launcher picking lives in ImportMethodModal (same density as method choice).
  */
 function ImportPage(props: ImportPageRouteProps) {
 	const activeRouter = () => props.router || router();
+	const navigateInstall = (path: string, params?: Record<string, unknown>) => {
+		activeRouter()?.navigate(path, params);
+	};
+	const [importModalOpen, setImportModalOpen] = createSignal(false);
+	const [importModalStep, setImportModalStep] =
+		createSignal<ImportMethodModalStep>("launchers");
 	const routeParams = createMemo(
 		() => activeRouter()?.currentParams.get() || {},
 	);
@@ -42,27 +57,45 @@ function ImportPage(props: ImportPageRouteProps) {
 
 	const isDetailsMode = createMemo(() => !!selectedLauncherFromQuery());
 
+	onMount(() => {
+		if (!selectedLauncherFromQuery()) {
+			setImportModalStep("launchers");
+			setImportModalOpen(true);
+		}
+	});
+
+	const openMethodModal = (step: ImportMethodModalStep) => {
+		setImportModalStep(step);
+		setImportModalOpen(true);
+	};
+
+	const closeImportModal = () => {
+		setImportModalOpen(false);
+		if (!selectedLauncherFromQuery()) {
+			if (activeRouter()?.canGoBack?.()) activeRouter()?.backwards();
+			else activeRouter()?.navigate("/install");
+		}
+	};
+
 	return (
 		<div class={styles["page-root"]}>
-			<Show
-				when={isDetailsMode()}
-				fallback={
-					<InstallStageHeader
-						title="Launcher Import"
-						description="Choose which launcher you want to import from."
-						actionLabel="Back"
-						onAction={() => activeRouter()?.navigate("/install/source")}
-					/>
-				}
-			>
+			<Show when={isDetailsMode()}>
 				<InstallStageHeader
 					title={activeLauncherVisual()?.label ?? "Launcher Import"}
 					description="Select a launcher path, rescan detected instances, then import one."
-					actionLabel="Back to Launchers"
-					onAction={() => activeRouter()?.removeQuery("launcher")}
+					actionLabel="Change import"
+					onAction={() => openMethodModal("methods")}
 					prefixIcon={
 						activeLauncherVisual()?.icon ? (
-							<span class={styles["launcher-title-icon"]}>
+							<span
+								class={styles["launcher-title-icon"]}
+								classList={{
+									[styles["launcher-title-icon--modrinth"]]:
+										activeLauncherVisual()?.tone === "modrinth",
+									[styles["launcher-title-icon--curseforge"]]:
+										activeLauncherVisual()?.tone === "curseforge",
+								}}
+							>
 								{(() => {
 									const Icon = activeLauncherVisual()?.icon;
 									return Icon ? <Icon /> : null;
@@ -74,15 +107,6 @@ function ImportPage(props: ImportPageRouteProps) {
 			</Show>
 			<div class={styles["page-wrapper"]}>
 				<div class={styles["import-selection-wrapper"]}>
-					<Show when={!isDetailsMode()}>
-						<LauncherMenuGrid
-							launchers={launcherOptions}
-							onSelect={(kind) => {
-								launcherImport.setSelectedLauncher(kind);
-								activeRouter()?.updateQuery("launcher", kind, true);
-							}}
-						/>
-					</Show>
 					<Show when={isDetailsMode()}>
 						<LauncherDetailsPanel
 							basePath={launcherImport.launcherBasePath()}
@@ -100,6 +124,29 @@ function ImportPage(props: ImportPageRouteProps) {
 					</Show>
 				</div>
 			</div>
+
+			<ImportMethodModal
+				isOpen={importModalOpen()}
+				onClose={closeImportModal}
+				initialStep={importModalStep()}
+				onSelectLocal={(path) => {
+					setImportModalOpen(false);
+					openLocalModpackInstall(navigateInstall, path);
+				}}
+				onSelectBrowseModpacks={() => {
+					setImportModalOpen(false);
+					void openBrowseModpacks(navigateInstall);
+				}}
+				onSelectLauncher={(kind) => {
+					setImportModalOpen(false);
+					launcherImport.setSelectedLauncher(kind);
+					openLauncherImport(navigateInstall, kind);
+				}}
+				onSelectUrl={(url) => {
+					setImportModalOpen(false);
+					openUrlModpackInstall(navigateInstall, url);
+				}}
+			/>
 		</div>
 	);
 }

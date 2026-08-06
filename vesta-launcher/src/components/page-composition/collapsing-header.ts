@@ -2,7 +2,7 @@ import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js";
 import {
 	computeHeaderCollapseProgress,
 	deriveHeaderCompactState,
-} from "./resource-details-header-progress";
+} from "./collapsing-header-progress";
 
 const PROGRESS_EPSILON = 0.001;
 
@@ -110,7 +110,10 @@ export function resetHeaderCollapseElement(
 	}
 }
 
-export function createHeaderCollapseController(options: {
+export function createCollapsingHeaderController(options: {
+	enabled?: Accessor<boolean>;
+	cssDrivenProgress?: Accessor<boolean>;
+	disabledProgress?: Accessor<number>;
 	isDesktop: Accessor<boolean>;
 	prefersReducedMotion: Accessor<boolean>;
 	classNames: HeaderCollapseClassNames;
@@ -125,6 +128,7 @@ export function createHeaderCollapseController(options: {
 	let scrollRaf: number | null = null;
 
 	const useCssDrivenProgress = () =>
+		options.cssDrivenProgress?.() ??
 		shouldUseCssDrivenHeaderProgress(options.prefersReducedMotion());
 
 	const applyToHeader = (progress: number, compact: boolean) => {
@@ -149,10 +153,17 @@ export function createHeaderCollapseController(options: {
 				options.classNames,
 				useCssDrivenProgress(),
 			);
+			if (!useCssDrivenProgress()) {
+				header.style.setProperty(
+					"--header-collapse-progress",
+					String(options.disabledProgress?.() ?? 0),
+				);
+			}
 		}
 	};
 
 	const isCollapseEnabled = () =>
+		(options.enabled?.() ?? true) &&
 		isHeaderCollapseEnabled(
 			options.isDesktop(),
 			options.prefersReducedMotion(),

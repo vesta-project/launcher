@@ -70,8 +70,8 @@ import {
 } from "solid-js";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import styles from "./resource-details.module.css";
-import { RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX } from "./resource-details-header-progress";
-import { createHeaderCollapseController } from "./resource-details-header-scroll";
+import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-composition/collapsing-header-progress";
+import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
 	ResourceDescriptionLoading,
 	ResourceDetailsSidebarLoading,
@@ -422,7 +422,7 @@ const ResourceDetailsPage: Component<{
 		HTMLElement | undefined
 	>();
 
-	const headerCollapse = createHeaderCollapseController({
+	const headerCollapse = createCollapsingHeaderController({
 		isDesktop: isDesktopHeaderAnimation,
 		prefersReducedMotion: reducedMotion,
 		classNames: {
@@ -1774,7 +1774,7 @@ const ResourceDetailsPage: Component<{
 		if (typeof window === "undefined") return;
 
 		const mq = window.matchMedia(
-			`(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`,
+			`(max-width: ${COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX}px)`,
 		);
 
 		const applyLayoutMode = () => {
@@ -1814,7 +1814,7 @@ const ResourceDetailsPage: Component<{
 		if (
 			typeof window !== "undefined" &&
 			window.matchMedia(
-				`(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`,
+				`(max-width: ${COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX}px)`,
 			).matches
 		) {
 			spacer.style.height = "";
