@@ -20,6 +20,7 @@ mod startup;
 mod sync;
 mod tasks;
 pub mod utils;
+pub mod worlds;
 
 use tauri::Manager;
 #[allow(unused_imports)]
@@ -328,6 +329,10 @@ fn main() {
             commands::resources::check_resource_updates,
             commands::resources::resolve_image_url,
             commands::resources::resolve_image_urls,
+            commands::worlds::list_instance_worlds,
+            commands::worlds::open_world_folder,
+            commands::worlds::transfer_world,
+            commands::worlds::submit_world_archive_selection,
             commands::sync::check_modpack_update,
             commands::sync::start_modpack_update,
             commands::launcher_imports::detect_external_launchers,

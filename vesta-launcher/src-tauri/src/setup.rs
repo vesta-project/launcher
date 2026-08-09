@@ -115,6 +115,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)
     app.manage(crate::resources::ResourceManager::new());
+    app.manage(crate::worlds::WorldManager::default());
     app.manage(crate::launcher_import::ImportManager::new());
 
     crate::startup::updates::notify_current_version(app.handle().clone());
