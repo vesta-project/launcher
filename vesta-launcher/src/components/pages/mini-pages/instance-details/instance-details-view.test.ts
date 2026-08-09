@@ -4,6 +4,7 @@ import { getInstancePrimaryAction, normalizeInstanceTab, summarizeResources } fr
 describe("normalizeInstanceTab", () => {
 	it("keeps canonical tabs and redirects legacy screenshots", () => {
 		expect(normalizeInstanceTab("resources")).toBe("resources");
+		expect(normalizeInstanceTab("worlds")).toBe("worlds");
 		expect(normalizeInstanceTab("screenshots")).toBe("home");
 		expect(normalizeInstanceTab("unknown")).toBe("home");
 	});

@@ -17,6 +17,7 @@ import {
 	findBestVersionForInstance,
 	findInstalledResource,
 	isResourceUpdateAvailable,
+	requiresWorldTarget,
 } from "@utils/resource-install-intent";
 import { getProjectCompatibilityForInstance } from "@utils/resources";
 import {
@@ -254,10 +255,22 @@ const ResourceCard: Component<{
 			if (isUpdateAvailable() && latest) {
 				const instanceId = resources.state.selectedInstanceId;
 				if (!instanceId) return;
+				if (requiresWorldTarget(props.project, latest)) {
+					resources.setInstallRequest({
+						project: props.project,
+						versions: [latest],
+						version: latest,
+						preferredInstanceId: instanceId,
+					});
+					return;
+				}
 
 				setLocalInstalling(true);
 				try {
-					await resources.install(props.project, latest);
+					await resources.install(props.project, latest, {
+						kind: "instance",
+						instanceId,
+					});
 					showToast({
 						title: "Update Started",
 						description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
@@ -331,6 +344,15 @@ const ResourceCard: Component<{
 				instance,
 			);
 			if (best) {
+				if (requiresWorldTarget(props.project, best)) {
+					resources.setInstallRequest({
+						project: props.project,
+						versions,
+						version: best,
+						preferredInstanceId: instance.id,
+					});
+					return;
+				}
 				const instLoader = instance.modloader?.toLowerCase() || "";
 				const hasDirectLoader = best.loaders.some(
 					(l) => l.toLowerCase() === instLoader,
@@ -348,7 +370,10 @@ const ResourceCard: Component<{
 					});
 				}
 
-				await resources.install(props.project, best);
+				await resources.install(props.project, best, {
+					kind: "instance",
+					instanceId: instance.id,
+				});
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,

@@ -516,15 +516,16 @@ export const resources = {
 	install: async (
 		project: ResourceProject,
 		version: ResourceVersion,
-		targetInstanceId?: number | null,
+		target?: import("@stores/worlds").ResourceInstallTarget | null,
 	) => {
 		const isModpack = project.resource_type === "modpack";
-		const instanceId =
-			targetInstanceId !== undefined
-				? targetInstanceId
-				: resourceStore.selectedInstanceId;
+		const resolvedTarget =
+			target ??
+			(resourceStore.selectedInstanceId
+				? { kind: "instance" as const, instanceId: resourceStore.selectedInstanceId }
+				: null);
 
-		if (!instanceId && !isModpack) return;
+		if (!resolvedTarget && !isModpack) return;
 
 		// Immediate UI feedback
 		setResourceStore("installingVersionIds", (ids) => [...ids, version.id]);
@@ -538,7 +539,7 @@ export const resources = {
 			});
 
 			const result = await invoke<string>("install_resource", {
-				instanceId: instanceId || 0,
+				target: resolvedTarget ?? { kind: "instance", instanceId: 0 },
 				platform: project.source,
 				projectId: project.id,
 				projectName: project.name,

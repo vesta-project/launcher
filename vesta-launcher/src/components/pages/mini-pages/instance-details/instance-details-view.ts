@@ -1,6 +1,7 @@
 export const INSTANCE_TABS = [
 	"home",
 	"resources",
+	"worlds",
 	"console",
 	"crash",
 	"versioning",

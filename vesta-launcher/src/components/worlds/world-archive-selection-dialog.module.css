@@ -1,0 +1,60 @@
+.dialog {
+	width: min(680px, 92vw);
+	max-width: 680px !important;
+}
+.list {
+	display: grid;
+	gap: 8px;
+	max-height: min(470px, 56vh);
+	margin: 14px 0;
+	overflow-y: auto;
+}
+.candidate {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 11px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--surface-low);
+	cursor: pointer;
+}
+.candidate:hover {
+	background: var(--surface-medium);
+}
+.candidate[data-selected="true"] {
+	border-color: color-mix(in srgb, var(--primary) 70%, var(--border));
+	background: color-mix(in srgb, var(--primary) 8%, var(--surface-low));
+}
+.candidate input {
+	width: 16px;
+	height: 16px;
+	accent-color: var(--primary);
+}
+.copy {
+	min-width: 0;
+	flex: 1;
+}
+.name {
+	display: block;
+	overflow: hidden;
+	font-size: 14px;
+	font-weight: 650;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.meta {
+	display: block;
+	margin-top: 3px;
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+.footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.error {
+	color: var(--destructive);
+	font-size: 12px;
+}

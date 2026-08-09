@@ -8,6 +8,7 @@ import {
 } from "@utils/instances";
 import { installModpackFromUrl, installModpackFromZip } from "@utils/modpacks";
 import type { PendingResourceInstall } from "@utils/resource-install-intent";
+import { requiresWorldTarget } from "@utils/resource-install-intent";
 import { type Accessor, createSignal } from "solid-js";
 
 interface UseInstallSubmitParams {
@@ -26,6 +27,19 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 	const handleInstall = async (data: Partial<Instance>) => {
 		setIsInstalling(true);
 		try {
+			const pending = params.pendingResource?.();
+			if (
+				pending?.project &&
+				requiresWorldTarget(pending.project, pending.version)
+			) {
+				showToast({
+					title: "Create and play a world first",
+					description:
+						"Datapacks belong to a Java world. Finish creating this instance, launch Minecraft, and play a world before installing the datapack.",
+					severity: "warning",
+				});
+				return;
+			}
 			if (
 				params.isModpackMode() &&
 				(params.modpackUrl() || params.modpackPath())
@@ -55,7 +69,10 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 					const project = pendingResource?.project;
 					const version = pendingResource?.version;
 					if (project && version) {
-						await resources.install(project, version, id);
+						await resources.install(project, version, {
+							kind: "instance",
+							instanceId: id,
+						});
 						showToast({
 							title: "Resource Installation Started",
 							description: `${project.name} will be installed into ${data.name || "the new instance"}.`,

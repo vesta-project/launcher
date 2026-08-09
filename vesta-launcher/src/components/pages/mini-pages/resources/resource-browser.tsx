@@ -1,7 +1,9 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { type Instance, instancesState } from "@stores/instances";
-import { resources } from "@stores/resources";
+import { type ResourceProject, type ResourceVersion, resources } from "@stores/resources";
+import type { WorldRef } from "@stores/worlds";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import {
 	Pagination,
 	PaginationEllipsis,
@@ -19,7 +21,7 @@ import {
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
-import { findBestVersionForInstance } from "@utils/resource-install-intent";
+import { findBestVersionForInstance, requiresWorldTarget } from "@utils/resource-install-intent";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
@@ -80,6 +82,11 @@ const ResourceBrowser: Component<{
 	const activeRouter = createMemo(() => props.router || router());
 	let debounceTimer: number | undefined;
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
+	const [worldInstall, setWorldInstall] = createSignal<{
+		project: ResourceProject;
+		version: ResourceVersion;
+		instanceId: number;
+	} | null>(null);
 	let isInitializedFromProps = false;
 
 	const currentSortOptions = createMemo(
@@ -89,9 +96,22 @@ const ResourceBrowser: Component<{
 	);
 
 	createEffect(() => {
-		if (resources.state.installRequest) {
-			setIsInstanceDialogOpen(true);
+		const request = resources.state.installRequest;
+		if (!request) return;
+		if (
+			request.preferredInstanceId != null &&
+			request.version &&
+			requiresWorldTarget(request.project, request.version)
+		) {
+			setWorldInstall({
+				project: request.project,
+				version: request.version,
+				instanceId: request.preferredInstanceId,
+			});
+			resources.setInstallRequest(null);
+			return;
 		}
+		setIsInstanceDialogOpen(true);
 	});
 
 	const handleSelectInstance = async (instance: Instance) => {
@@ -114,7 +134,14 @@ const ResourceBrowser: Component<{
 			);
 
 			if (bestVersion) {
-				await resources.install(project, bestVersion, instance.id);
+				if (requiresWorldTarget(project, bestVersion)) {
+					setWorldInstall({ project, version: bestVersion, instanceId: instance.id });
+					return;
+				}
+				await resources.install(project, bestVersion, {
+					kind: "instance",
+					instanceId: instance.id,
+				});
 			} else {
 				showToast({
 					title: "No compatible version",
@@ -128,6 +155,25 @@ const ResourceBrowser: Component<{
 				description: err instanceof Error ? err.message : String(err),
 				severity: "error",
 			});
+		}
+	};
+
+	const handleSelectWorld = async (world: WorldRef) => {
+		const context = worldInstall();
+		if (!context) return;
+		setWorldInstall(null);
+		try {
+			await resources.install(context.project, context.version, {
+				kind: "world",
+				world,
+			});
+			showToast({
+				title: "Installation started",
+				description: `${context.project.name} will be installed into the selected world.`,
+				severity: "success",
+			});
+		} catch (err) {
+			showToast({ title: "Installation failed", description: String(err), severity: "error" });
 		}
 	};
 
@@ -645,6 +691,13 @@ const ResourceBrowser: Component<{
 				onCreateNew={handleCreateNew}
 				project={resources.state.installRequest?.project}
 				versions={resources.state.installRequest?.versions ?? []}
+			/>
+			<WorldSelectionDialog
+				isOpen={Boolean(worldInstall())}
+				initialInstanceId={worldInstall()?.instanceId}
+				projectName={worldInstall()?.project.name}
+				onClose={() => setWorldInstall(null)}
+				onSelect={handleSelectWorld}
 			/>
 		</div>
 	);

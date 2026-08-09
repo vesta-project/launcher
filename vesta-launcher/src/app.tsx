@@ -2,6 +2,7 @@ import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 import { DialogRoot } from "@components/dialog/dialog-root";
 import { openMiniPage, router } from "@components/page-viewer/page-viewer";
 import { FatalPage } from "@components/pages/fatal/fatal-page";
+import { WorldArchiveSelectionDialog } from "@components/worlds/WorldArchiveSelectionDialog";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
@@ -456,6 +457,7 @@ function Root(props: ChildrenProp) {
 			<SessionExpiredDialog />
 			<DialogRoot />
 			<GlobalModpackInstallDialog />
+			<WorldArchiveSelectionDialog />
 		</>
 	);
 }

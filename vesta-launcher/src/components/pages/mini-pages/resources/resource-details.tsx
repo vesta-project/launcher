@@ -5,6 +5,7 @@ import HeartIcon from "@assets/heart.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
@@ -17,6 +18,7 @@ import {
 	type SourcePlatform,
 } from "@stores/resources";
 import { reducedMotion } from "@stores/settings";
+import type { WorldRef } from "@stores/worlds";
 import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
@@ -48,7 +50,10 @@ import {
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
-import { findBestVersionForInstance } from "@utils/resource-install-intent";
+import {
+	findBestVersionForInstance,
+	requiresWorldTarget,
+} from "@utils/resource-install-intent";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
 import {
 	type CompatibilityResult,
@@ -1081,6 +1086,11 @@ const ResourceDetailsPage: Component<{
 	const [installContext, setInstallContext] = createSignal<{
 		version: ResourceVersion;
 	} | null>(null);
+	const [worldInstall, setWorldInstall] = createSignal<{
+		project: ResourceProject;
+		version: ResourceVersion;
+		instanceId: number;
+	} | null>(null);
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
 	const [confirmVersionId, setConfirmVersionId] = createSignal<string | null>(
 		null,
@@ -1468,7 +1478,12 @@ const ResourceDetailsPage: Component<{
 			return;
 		}
 
-		if (!version.download_url) {
+		if (p && inst && requiresWorldTarget(p, version)) {
+			setWorldInstall({ project: p, version, instanceId: inst.id });
+			return;
+		}
+
+		if (!version.download_url && !(version.files?.length)) {
 			showToast({
 				title: "Third-party download required",
 				description:
@@ -1501,7 +1516,10 @@ const ResourceDetailsPage: Component<{
 					}
 				}
 
-				await resources.install(p, version, inst?.id);
+				await resources.install(p, version, {
+					kind: "instance",
+					instanceId: inst!.id,
+				});
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${p.name}.`,
@@ -1514,6 +1532,25 @@ const ResourceDetailsPage: Component<{
 					severity: "error",
 				});
 			}
+		}
+	};
+
+	const handleSelectWorld = async (world: WorldRef) => {
+		const context = worldInstall();
+		if (!context) return;
+		setWorldInstall(null);
+		try {
+			await resources.install(context.project, context.version, {
+				kind: "world",
+				world,
+			});
+			showToast({
+				title: "Installation Started",
+				description: `Check notifications for progress on ${context.project.name}.`,
+				severity: "success",
+			});
+		} catch (err) {
+			showToast({ title: "Failed to install", description: String(err), severity: "error" });
 		}
 	};
 
@@ -3076,6 +3113,13 @@ const ResourceDetailsPage: Component<{
 						project={project()}
 						version={installContext()?.version}
 						versions={resources.state.versions}
+					/>
+					<WorldSelectionDialog
+						isOpen={Boolean(worldInstall())}
+						initialInstanceId={worldInstall()?.instanceId}
+						projectName={worldInstall()?.project.name}
+						onClose={() => setWorldInstall(null)}
+						onSelect={handleSelectWorld}
 					/>
 				</div>
 			</Show>

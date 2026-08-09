@@ -1,0 +1,217 @@
+import { instancesState } from "@stores/instances";
+import {
+	listInstanceWorlds,
+	type WorldRef,
+	type WorldSummary,
+} from "@stores/worlds";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@ui/dialog/dialog";
+import { formatDate } from "@utils/date";
+import { formatBytes } from "@utils/format-bytes";
+import {
+	type Component,
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	Show,
+} from "solid-js";
+import { WorldIcon } from "./WorldIcon";
+import styles from "./world-selection-dialog.module.css";
+
+export type WorldSelectionDialogProps = {
+	isOpen: boolean;
+	initialInstanceId?: number | null;
+	projectName?: string;
+	onClose: () => void;
+	onSelect: (world: WorldRef) => void | Promise<void>;
+};
+
+export const worldDisabledReason = (world: WorldSummary): string | null => {
+	if (world.running) return "Close Minecraft before installing a datapack.";
+	if (world.levelStatus === "unreadable")
+		return "This world's level data is unreadable.";
+	return null;
+};
+
+export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
+	props,
+) => {
+	const [instanceId, setInstanceId] = createSignal<number | null>(null);
+	const [worlds, setWorlds] = createSignal<WorldSummary[]>([]);
+	const [loading, setLoading] = createSignal(false);
+	const [error, setError] = createSignal<string | null>(null);
+	let requestGeneration = 0;
+
+	const selectedInstance = createMemo(() =>
+		instancesState.instances.find((instance) => instance.id === instanceId()),
+	);
+	const sortedInstances = createMemo(() =>
+		[...instancesState.instances].sort((a, b) => {
+			const left = a.lastPlayed ? new Date(a.lastPlayed).getTime() : 0;
+			const right = b.lastPlayed ? new Date(b.lastPlayed).getTime() : 0;
+			return right - left || a.name.localeCompare(b.name);
+		}),
+	);
+
+	createEffect(() => {
+		if (!props.isOpen) {
+			requestGeneration += 1;
+			return;
+		}
+		setInstanceId(props.initialInstanceId ?? null);
+		setWorlds([]);
+		setError(null);
+	});
+
+	createEffect(() => {
+		const id = instanceId();
+		if (!props.isOpen || id == null) return;
+		const generation = ++requestGeneration;
+		setLoading(true);
+		setError(null);
+		void listInstanceWorlds(id)
+			.then((loaded) => {
+				if (generation === requestGeneration && instanceId() === id) {
+					setWorlds(loaded);
+				}
+			})
+			.catch((reason) => {
+				if (generation === requestGeneration && instanceId() === id) {
+					setError(String(reason));
+				}
+			})
+			.finally(() => {
+				if (generation === requestGeneration) setLoading(false);
+			});
+	});
+
+	const selectInstance = (id: number) => {
+		setWorlds([]);
+		setInstanceId(id);
+	};
+
+	return (
+		<Dialog
+			open={props.isOpen}
+			onOpenChange={(open) => !open && props.onClose()}
+		>
+			<DialogContent class={styles.dialog}>
+				<DialogHeader>
+					<DialogTitle>
+						{instanceId() == null ? "Choose an instance" : "Choose a world"}
+					</DialogTitle>
+					<DialogDescription>
+						{instanceId() == null
+							? `First choose the instance that owns the world for ${props.projectName ?? "this datapack"}.`
+							: `Install ${props.projectName ?? "this datapack"} into one world. Companion packs will use the same instance.`}
+					</DialogDescription>
+				</DialogHeader>
+
+				<div class={styles.body}>
+					<Show when={instanceId() != null && props.initialInstanceId == null}>
+						<button
+							class={styles.back}
+							type="button"
+							onClick={() => setInstanceId(null)}
+						>
+							← Choose another instance
+						</button>
+					</Show>
+
+					<Show when={instanceId() == null}>
+						<div class={styles.list} aria-label="Instances">
+							<For each={sortedInstances()}>
+								{(instance) => (
+									<button
+										class={styles.row}
+										type="button"
+										onClick={() => selectInstance(instance.id)}
+									>
+										<span class={styles["instance-mark"]}>
+											{instance.name.charAt(0).toUpperCase() || "?"}
+										</span>
+										<span class={styles.copy}>
+											<span class={styles.name}>{instance.name}</span>
+											<span class={styles.meta}>
+												{instance.minecraftVersion} ·{" "}
+												{instance.modloader || "Vanilla"}
+											</span>
+										</span>
+									</button>
+								)}
+							</For>
+						</div>
+					</Show>
+
+					<Show when={instanceId() != null}>
+						<Show
+							when={!loading()}
+							fallback={<div class={styles.loading}>Finding worlds…</div>}
+						>
+							<Show
+								when={!error() && worlds().length > 0}
+								fallback={
+									<div class={styles.empty}>
+										<strong>
+											{error()
+												? "Worlds could not be loaded"
+												: "No Java worlds yet"}
+										</strong>
+										<p>
+											{error() ??
+												`Create and play a world in ${selectedInstance()?.name ?? "this instance"} first, then return here. Vesta will not hold datapacks outside a world.`}
+										</p>
+									</div>
+								}
+							>
+								<div class={styles.list} aria-label="Worlds">
+									<For each={worlds()}>
+										{(world) => {
+											const disabled = () => worldDisabledReason(world);
+											return (
+												<button
+													class={styles.row}
+													type="button"
+													disabled={Boolean(disabled())}
+													title={disabled() ?? ""}
+													onClick={() => void props.onSelect(world.ref)}
+												>
+													<WorldIcon
+														src={world.iconDataUrl}
+														name={world.displayName}
+													/>
+													<span class={styles.copy}>
+														<span class={styles.name}>{world.displayName}</span>
+														<span class={styles.meta}>
+															{formatDate(world.lastPlayedAt)} ·{" "}
+															{formatBytes(world.sizeBytes)} ·{" "}
+															{world.gameVersion ??
+																(world.dataVersion != null
+																	? `DataVersion ${world.dataVersion}`
+																	: "Unknown version")}
+														</span>
+														<Show when={disabled()}>
+															{(reason) => (
+																<span class={styles.reason}>{reason()}</span>
+															)}
+														</Show>
+													</span>
+												</button>
+											);
+										}}
+									</For>
+								</div>
+							</Show>
+						</Show>
+					</Show>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+};

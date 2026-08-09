@@ -1,0 +1,204 @@
+.root {
+	display: grid;
+	gap: 16px;
+	padding-bottom: 24px;
+}
+.toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.title h2 {
+	margin: 0;
+	font-size: 19px;
+	letter-spacing: -0.02em;
+}
+.title p {
+	margin: 4px 0 0;
+	color: var(--text-secondary);
+	font-size: 12px;
+}
+.controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.select {
+	height: 34px;
+	padding: 0 30px 0 10px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: var(--surface-low);
+	color: var(--text);
+	font: inherit;
+	font-size: 12px;
+}
+.segmented {
+	display: flex;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: var(--surface-sunken);
+}
+.segmented button {
+	padding: 5px 9px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text-secondary);
+	cursor: pointer;
+	font: inherit;
+	font-size: 11px;
+}
+.segmented button[data-active="true"] {
+	background: var(--surface-medium);
+	color: var(--text);
+	box-shadow: 0 1px 3px color-mix(in srgb, black 18%, transparent);
+}
+.worlds {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+	gap: 12px;
+}
+.worlds[data-view="list"] {
+	grid-template-columns: 1fr;
+}
+.card {
+	min-width: 0;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: var(--surface-low);
+}
+.card-main {
+	display: flex;
+	gap: 12px;
+	padding: 14px;
+}
+.icon {
+	width: 58px !important;
+	height: 58px !important;
+	border-radius: 12px !important;
+}
+.copy {
+	min-width: 0;
+	flex: 1;
+}
+.name {
+	margin: 1px 0 0;
+	overflow: hidden;
+	font-size: 14px;
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.folder {
+	margin-top: 3px;
+	overflow: hidden;
+	color: var(--text-secondary);
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px 9px;
+	margin-top: 10px;
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+.status {
+	margin-top: 8px;
+	color: var(--destructive);
+	font-size: 11px;
+}
+.actions {
+	display: flex;
+	gap: 4px;
+	padding: 8px;
+	border-top: 1px solid var(--border-subtle);
+	background: color-mix(in srgb, var(--surface-sunken) 55%, transparent);
+}
+.actions button {
+	flex: 1;
+	padding: 6px 4px;
+	border: 0;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-secondary);
+	cursor: pointer;
+	font: inherit;
+	font-size: 11px;
+}
+.actions button:hover:not(:disabled) {
+	background: var(--surface-medium);
+	color: var(--text);
+}
+.actions button:disabled {
+	cursor: not-allowed;
+	opacity: 0.45;
+}
+.empty,
+.loading,
+.error {
+	display: grid;
+	place-items: center;
+	min-height: 240px;
+	padding: 30px;
+	border: 1px dashed var(--border);
+	border-radius: 14px;
+	color: var(--text-secondary);
+	text-align: center;
+}
+.error {
+	color: var(--destructive);
+}
+.destination-dialog {
+	width: min(500px, 92vw);
+	max-width: 500px !important;
+}
+.destination-list {
+	display: grid;
+	gap: 8px;
+	max-height: 380px;
+	margin-top: 14px;
+	overflow-y: auto;
+}
+.destination {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 11px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface-low);
+	color: var(--text);
+	cursor: pointer;
+	text-align: left;
+}
+.destination:hover {
+	background: var(--surface-medium);
+}
+.destination:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+.destination small {
+	color: var(--text-secondary);
+}
+
+@media (max-width: 620px) {
+	.worlds {
+		grid-template-columns: 1fr;
+	}
+	.controls {
+		width: 100%;
+	}
+	.select {
+		flex: 1;
+	}
+}

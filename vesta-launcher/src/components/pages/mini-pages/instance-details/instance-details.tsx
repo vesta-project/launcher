@@ -1,4 +1,5 @@
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
 	PageSidebar,
@@ -31,9 +32,11 @@ import {
 } from "@stores/pinning";
 import {
 	type InstalledResource,
+	type ResourceProject,
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
+import type { WorldRef } from "@stores/worlds";
 import { useMinecraftVersions } from "@stores/versions";
 import {
 	createColumnHelper,
@@ -92,6 +95,7 @@ import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm"
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
 import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
 import { createMediaQuery } from "@utils/media-query";
+import { requiresWorldTarget } from "@utils/resource-install-intent";
 import {
 	afterStablePaint,
 	markPerformance,
@@ -152,6 +156,11 @@ const ResourcesTabModule = createPreloadableLazyComponent(() =>
 		default: module.ResourcesTab,
 	})),
 );
+const WorldsTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/WorldsTab").then((module) => ({
+		default: module.WorldsTab,
+	})),
+);
 const SettingsTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/SettingsTab").then((module) => ({
 		default: module.SettingsTab,
@@ -166,6 +175,7 @@ const VersioningTabModule = createPreloadableLazyComponent(() =>
 const ConsoleTab = ConsoleTabModule.Component;
 const CrashTab = CrashTabModule.Component;
 const ResourcesTab = ResourcesTabModule.Component;
+const WorldsTab = WorldsTabModule.Component;
 const SettingsTab = SettingsTabModule.Component;
 const VersioningTab = VersioningTabModule.Component;
 
@@ -173,6 +183,7 @@ const instanceTabLoaders: Partial<Record<TabType, () => Promise<unknown>>> = {
 	console: ConsoleTabModule.preload,
 	crash: CrashTabModule.preload,
 	resources: ResourcesTabModule.preload,
+	worlds: WorldsTabModule.preload,
 	settings: SettingsTabModule.preload,
 	versioning: VersioningTabModule.preload,
 };
@@ -638,6 +649,11 @@ export default function InstanceDetails(
 	>({});
 	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
 		createSignal(false);
+	const [worldUpdate, setWorldUpdate] = createSignal<{
+		project: ResourceProject;
+		version: ResourceVersion;
+		resourceId: number;
+	} | null>(null);
 
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
@@ -1256,12 +1272,21 @@ export default function InstanceDetails(
 
 		setBusy(true);
 		try {
+			let worldScopedSkipped = 0;
 			for (const id of toUpdate) {
 				const res = (installedResources() || []).find((r) => r.id === id);
 				const update = updates()[id];
 				if (res && update) {
-					await handleUpdate(res, update);
+					const started = await handleUpdate(res, update, false);
+					if (!started) worldScopedSkipped += 1;
 				}
+			}
+			if (worldScopedSkipped > 0) {
+				showToast({
+					title: "World selection required",
+					description: `${worldScopedSkipped} datapack update${worldScopedSkipped === 1 ? "" : "s"} must be updated individually so you can confirm the target world.`,
+					severity: "info",
+				});
 			}
 			resources.clearSelection();
 		} catch (e) {
@@ -2009,6 +2034,7 @@ export default function InstanceDetails(
 	const handleUpdate = async (
 		resource: InstalledResource,
 		version: ResourceVersion,
+		allowWorldPrompt = true,
 	) => {
 		const inst = instance();
 		if (!inst) return;
@@ -2018,15 +2044,44 @@ export default function InstanceDetails(
 				resource.platform as any,
 				resource.remote_id,
 			);
-			await resources.install(project, version, inst.id);
+			if (requiresWorldTarget(project, version)) {
+				if (!allowWorldPrompt) return false;
+				setWorldUpdate({ project, version, resourceId: resource.id });
+				return true;
+			}
+			await resources.install(project, version, {
+				kind: "instance",
+				instanceId: inst.id,
+			});
 
 			setUpdates((prev) => {
 				const next = { ...prev };
 				delete next[resource.id];
 				return next;
 			});
+			return true;
 		} catch (e) {
 			console.error("Update failed:", e);
+			return false;
+		}
+	};
+
+	const handleWorldUpdate = async (world: WorldRef) => {
+		const context = worldUpdate();
+		if (!context) return;
+		setWorldUpdate(null);
+		try {
+			await resources.install(context.project, context.version, {
+				kind: "world",
+				world,
+			});
+			setUpdates((previous) => {
+				const next = { ...previous };
+				delete next[context.resourceId];
+				return next;
+			});
+		} catch (error) {
+			showToast({ title: "Update failed", description: String(error), severity: "error" });
 		}
 	};
 
@@ -2593,6 +2648,7 @@ export default function InstanceDetails(
 		const tabs: PageSidebarTab[] = [
 			{ value: "home", label: "Overview" },
 			{ value: "resources", label: "Resources" },
+			{ value: "worlds", label: "Worlds" },
 			{ value: "console", label: "Console" },
 		];
 		if (currentCrash()) {
@@ -2628,6 +2684,14 @@ export default function InstanceDetails(
 			const instanceId = instance()?.id;
 			if (instanceId) {
 				void loadInstanceResourceOverview(instanceId);
+			}
+		}
+		if (tab === "worlds") {
+			const instanceId = instance()?.id;
+			if (instanceId) {
+				void import("@stores/worlds").then(({ listInstanceWorlds }) =>
+					listInstanceWorlds(instanceId),
+				);
 			}
 		}
 	};
@@ -2797,6 +2861,19 @@ export default function InstanceDetails(
 													checkUpdates={() => void checkUpdates(true)}
 													onCompactChange={setIsCompactTable}
 												/>
+											</Suspense>
+										</Show>
+									</TabsContent>
+
+									<TabsContent value="worlds">
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("worlds") &&
+												instance.latest
+											}
+										>
+											<Suspense fallback={<InstanceTabLoading label="worlds" />}>
+												<WorldsTab instance={inst()} />
 											</Suspense>
 										</Show>
 									</TabsContent>
@@ -3054,6 +3131,13 @@ export default function InstanceDetails(
 					instanceName={instance()?.name || ""}
 				/>
 			</Show>
+			<WorldSelectionDialog
+				isOpen={Boolean(worldUpdate())}
+				initialInstanceId={instance()?.id}
+				projectName={worldUpdate()?.project.name}
+				onClose={() => setWorldUpdate(null)}
+				onSelect={handleWorldUpdate}
+			/>
 		</div>
 	);
 }
