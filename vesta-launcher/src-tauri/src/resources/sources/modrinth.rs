@@ -158,6 +158,8 @@ impl ModrinthSource {
     }
 
     fn map_version(v: ModrinthVersion, preferred_hash: Option<&str>) -> Result<ResourceVersion> {
+        use crate::models::resource::ResourceVersionFile;
+
         let selected_file = preferred_hash
             .and_then(|hash| v.files.iter().find(|file| file.hashes.sha1 == hash))
             .or_else(|| v.files.iter().find(|file| file.primary))
@@ -170,6 +172,22 @@ impl ModrinthSource {
             })
             .or_else(|| v.files.first())
             .ok_or_else(|| anyhow!("Modrinth version {} has no files", v.id))?;
+
+        let files = v
+            .files
+            .iter()
+            .map(|file| ResourceVersionFile {
+                url: file.url.clone(),
+                file_name: file.filename.clone(),
+                hash: file.hashes.sha1.clone(),
+                file_size: file.size,
+                role: if std::ptr::eq(file, selected_file) {
+                    "primary".to_string()
+                } else {
+                    "alternate".to_string()
+                },
+            })
+            .collect();
 
         Ok(ResourceVersion {
             id: v.id,
@@ -207,6 +225,7 @@ impl ModrinthSource {
             published_at: Some(v.date_published),
             download_count: v.downloads,
             file_size: selected_file.size,
+            files,
         })
     }
 
@@ -666,6 +685,7 @@ impl ResourceSource for ModrinthSource {
                     published_at: Some(v.date_published),
                     download_count: v.downloads,
                     file_size: primary_file.size,
+                    files: Vec::new(),
                 }
             })
             .collect())
@@ -787,6 +807,7 @@ impl ResourceSource for ModrinthSource {
             published_at: Some(v.date_published),
             download_count: v.downloads,
             file_size: primary_file.size,
+            files: Vec::new(),
         };
 
         Ok((project, version))

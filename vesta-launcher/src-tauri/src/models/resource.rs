@@ -20,6 +20,32 @@ pub enum SourcePlatform {
     CurseForge,
 }
 
+impl SourcePlatform {
+    pub const ALL: [SourcePlatform; 2] = [SourcePlatform::Modrinth, SourcePlatform::CurseForge];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SourcePlatform::Modrinth => "modrinth",
+            SourcePlatform::CurseForge => "curseforge",
+        }
+    }
+
+    pub fn from_str_id(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "modrinth" => Some(SourcePlatform::Modrinth),
+            "curseforge" => Some(SourcePlatform::CurseForge),
+            _ => None,
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            SourcePlatform::Modrinth => "Modrinth",
+            SourcePlatform::CurseForge => "CurseForge",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable)]
 #[diesel(table_name = crate::schema::vesta::resource_metadata_cache)]
 pub struct ResourceMetadataCacheRecord {
@@ -79,6 +105,20 @@ pub struct ResourceDependency {
     pub dependency_type: DependencyType,
 }
 
+/// A downloadable artifact belonging to a provider version. Roles allow the
+/// shared installer to plan compound versions without knowing the provider.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ResourceVersionFile {
+    pub url: String,
+    pub file_name: String,
+    #[serde(default)]
+    pub hash: String,
+    #[serde(default)]
+    pub file_size: Option<u64>,
+    /// Semantic role such as `primary`, `datapack`, or `resourcepack`.
+    pub role: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResourceVersion {
     pub id: String,
@@ -97,6 +137,15 @@ pub struct ResourceVersion {
     pub download_count: Option<u64>,
     #[serde(default)]
     pub file_size: Option<u64>,
+    /// All known artifacts for this version. Empty for legacy cache rows.
+    #[serde(default)]
+    pub files: Vec<ResourceVersionFile>,
+}
+
+impl ResourceVersion {
+    pub fn file_for_role(&self, role: &str) -> Option<&ResourceVersionFile> {
+        self.files.iter().find(|file| file.role == role)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]

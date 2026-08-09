@@ -56,6 +56,14 @@ export type ResourceCategory = {
 	display_index: number | null;
 };
 
+export type ResourceVersionFile = {
+	url: string;
+	file_name: string;
+	hash?: string;
+	file_size?: number | null;
+	role: string;
+};
+
 export type ResourceVersion = {
 	id: string;
 	project_id: string;
@@ -70,6 +78,7 @@ export type ResourceVersion = {
 	published_at?: string | null;
 	download_count?: number | null;
 	file_size?: number | null;
+	files?: ResourceVersionFile[];
 };
 
 export type ResourceVersionDetails = {

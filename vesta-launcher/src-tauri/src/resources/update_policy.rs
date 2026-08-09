@@ -157,6 +157,7 @@ mod tests {
             published_at: None,
             download_count: None,
             file_size: None,
+            files: Vec::new(),
         }
     }
 

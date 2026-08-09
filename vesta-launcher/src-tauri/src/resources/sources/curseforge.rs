@@ -413,6 +413,7 @@ impl CurseForgeSource {
             download_count: file.download_count,
             file_size: file.file_length,
             published_at: Some(file.file_date),
+            files: Vec::new(),
         }
     }
 
@@ -920,6 +921,7 @@ impl ResourceSource for CurseForgeSource {
                     download_count: file.download_count,
                     file_size: file.file_length,
                     published_at: Some(file.file_date),
+                    files: Vec::new(),
                 }
             })
             .collect())
@@ -1013,6 +1015,7 @@ impl ResourceSource for CurseForgeSource {
             download_count: file.download_count,
             file_size: file.file_length,
             published_at: Some(file.file_date),
+            files: Vec::new(),
         })
     }
 
@@ -1175,6 +1178,7 @@ impl ResourceSource for CurseForgeSource {
             download_count: file.download_count,
             file_size: file.file_length,
             published_at: Some(file.file_date.clone()),
+            files: Vec::new(),
         };
 
         Ok((project, version))
