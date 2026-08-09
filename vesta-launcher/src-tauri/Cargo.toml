@@ -87,6 +87,7 @@ tempfile = "3"
 uuid = { version = "1.23.2", features = ["v3", "v4", "v1", "serde"] }
 tauri-plugin-clipboard-manager = "2.3"
 flate2 = "1.1.9"
+fastnbt = "2.6.2"
 tauri-plugin-fs = "2.5"
 hex = "0.4.3"
 rand = "0.10.1"
@@ -102,6 +103,7 @@ cocoa = "0.26.1"
 
 [target."cfg(target_os = \"windows\")".dependencies]
 winver = "1.0.0"
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
 [target."cfg(any(target_os = \"macos\", target_os = \"windows\", target_os = \"linux\"))".dependencies]
 tauri-plugin-single-instance = { version = "2.4", features = ["deep-link"] }
