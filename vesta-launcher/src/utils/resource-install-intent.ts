@@ -9,11 +9,35 @@ import type {
 export interface ResourceInstallRequest {
 	project: ResourceProject;
 	versions: ResourceVersion[];
+	version?: ResourceVersion;
+	preferredInstanceId?: number;
 }
 
 export interface PendingResourceInstall {
 	project: ResourceProject;
 	version?: ResourceVersion;
+}
+
+const normalizeArtifactRole = (role: string) =>
+	role.toLowerCase().replaceAll("-", "").replaceAll("_", "");
+
+/**
+ * Returns true when installing this version needs a concrete Java world.
+ * `primary` inherits the project's advertised type; companion artifacts keep
+ * their own role so provider-neutral bundles can target both scopes.
+ */
+export function requiresWorldTarget(
+	project: Pick<ResourceProject, "resource_type">,
+	version?: Pick<ResourceVersion, "files"> | null,
+): boolean {
+	if (project.resource_type === "datapack") return true;
+	return (version?.files ?? []).some((file) => {
+		const role = normalizeArtifactRole(file.role);
+		return (
+			role === "datapack" ||
+			(role === "primary" && project.resource_type === "datapack")
+		);
+	});
 }
 
 export function isGameVersionCompatible(

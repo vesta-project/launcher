@@ -8,6 +8,7 @@ import {
 	findInstalledResource,
 	isGameVersionCompatible,
 	isResourceUpdateAvailable,
+	requiresWorldTarget,
 } from "@utils/resource-install-intent";
 import { describe, expect, it } from "vitest";
 
@@ -70,6 +71,24 @@ const version = (
 });
 
 describe("resource install intent", () => {
+	it("requires a world for datapacks and combined bundles", () => {
+		expect(
+			requiresWorldTarget(project({ resource_type: "datapack" }), version()),
+		).toBe(true);
+		expect(
+			requiresWorldTarget(
+				project({ resource_type: "resourcepack" }),
+				version({ files: [{ url: "", file_name: "data.zip", role: "datapack" }] }),
+			),
+		).toBe(true);
+		expect(
+			requiresWorldTarget(
+				project({ resource_type: "resourcepack" }),
+				version({ files: [{ url: "", file_name: "resources.zip", role: "primary" }] }),
+			),
+		).toBe(false);
+	});
+
 	it("matches exact, normalized, and explicit wildcard game versions", () => {
 		expect(isGameVersionCompatible(["1.21.0"], "1.21")).toBe(true);
 		expect(isGameVersionCompatible(["1.21.x"], "1.21.4")).toBe(true);
