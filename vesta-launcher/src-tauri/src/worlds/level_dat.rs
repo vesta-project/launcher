@@ -1,5 +1,6 @@
+use fastnbt::Value;
 use flate2::read::GzDecoder;
-use serde_json::Value;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -108,11 +109,11 @@ fn decompress_level_dat(reader: impl Read, path: &Path) -> Result<Vec<u8>, Strin
 }
 
 fn parse_nbt_bytes(bytes: &[u8], path: &Path) -> Result<LevelDat, String> {
-    let root: Value = fastnbt::from_bytes(bytes)
+    let root: HashMap<String, Value> = fastnbt::from_bytes(bytes)
         .map_err(|error| format!("Failed to parse {}: {error}", path.display()))?;
     let data = root
         .get("Data")
-        .and_then(Value::as_object)
+        .and_then(as_compound)
         .ok_or_else(|| format!("{} has no Data compound", path.display()))?;
 
     let level_name = data
@@ -126,7 +127,7 @@ fn parse_nbt_bytes(bytes: &[u8], path: &Path) -> Result<LevelDat, String> {
         .get("DataVersion")
         .and_then(number_as_i64)
         .and_then(|value| i32::try_from(value).ok());
-    let version = data.get("Version").and_then(Value::as_object);
+    let version = data.get("Version").and_then(as_compound);
     let version_name = version
         .and_then(|value| value.get("Name"))
         .and_then(Value::as_str)
@@ -161,6 +162,13 @@ fn parse_nbt_bytes(bytes: &[u8], path: &Path) -> Result<LevelDat, String> {
         status: LevelStatus::Valid,
         source_path: path.to_path_buf(),
     })
+}
+
+fn as_compound(value: &Value) -> Option<&HashMap<String, Value>> {
+    match value {
+        Value::Compound(compound) => Some(compound),
+        _ => None,
+    }
 }
 
 fn number_as_i64(value: &Value) -> Option<i64> {
@@ -257,6 +265,29 @@ mod tests {
         assert_eq!(level.version_name.as_deref(), Some("26.1"));
         assert_eq!(level.data_version, Some(4671));
         assert_eq!(level.storage_family, StorageFamily::Anvil);
+    }
+
+    #[test]
+    fn tolerates_unknown_nbt_array_fields_used_by_java_26_1() {
+        #[derive(Serialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Data {
+            level_name: String,
+            #[serde(rename = "singleplayer_uuid")]
+            singleplayer_uuid: fastnbt::ByteArray,
+        }
+        let temp = TempDir::new().unwrap();
+        write_level(
+            &temp.path().join("level.dat"),
+            Data {
+                level_name: "Java 26.1".into(),
+                singleplayer_uuid: fastnbt::ByteArray::new(vec![1; 16]),
+            },
+        );
+
+        let level = read_world_level(temp.path());
+        assert_eq!(level.status, LevelStatus::Valid);
+        assert_eq!(level.level_name.as_deref(), Some("Java 26.1"));
     }
 
     #[test]
