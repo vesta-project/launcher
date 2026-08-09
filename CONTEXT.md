@@ -176,6 +176,54 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/resources/watcher.rs`
 - `vesta-launcher/src-tauri/src/tasks/resource_download.rs`
 
+### World
+
+A Java Edition folder world discovered as an immediate child of an Instance's
+`saves` directory. The filesystem is authoritative: a stable root `level.dat`
+or recovery `level.dat_old` establishes the world boundary, while all internal
+region, player, dimension, datapack, conversion, and future-version layouts are
+opaque to Vesta and preserved verbatim. Listing a World is read-only and does
+not create Vesta metadata.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/worlds/level_dat.rs`
+- `vesta-launcher/src-tauri/src/worlds/mod.rs`
+- `vesta-launcher/src/stores/worlds.ts`
+- `vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx`
+
+### World Manifest
+
+The optional portable `<world>/.vesta/world.json` document that stores only a
+Vesta world identity, source provenance, and managed component links. It never
+stores absolute paths, database identifiers, or derived presentation facts.
+The manifest is created only by a Vesta management action. Move preserves world
+and bundle identities; copy and duplicate regenerate them.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/worlds/manifest.rs`
+- `vesta-launcher/src-tauri/src/resources/ledger.rs`
+- `docs/adr/0009-filesystem-owned-worlds-and-portable-world-manifests.md`
+
+### World Management
+
+The provider-neutral workflow for installing archive-contained Java worlds,
+selecting a World as a datapack target, and moving, copying, or duplicating a
+World between Instances. The World Module owns archive safety, discovery,
+metadata, transfer verification, and publication. The Installed Resource Ledger
+owns installed datapack and companion resource-pack files. Resource source
+Adapters describe artifacts but do not choose filesystem destinations.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/worlds/archive.rs`
+- `vesta-launcher/src-tauri/src/worlds/transfer.rs`
+- `vesta-launcher/src-tauri/src/tasks/world_install.rs`
+- `vesta-launcher/src-tauri/src/tasks/world_transfer.rs`
+- `vesta-launcher/src-tauri/src/commands/worlds.rs`
+- `vesta-launcher/src/components/pages/mini-pages/resources/world-selection-dialog.tsx`
+
 ### Resource Reconciliation
 
 The Tauri workflow Module between Resource Watcher discovery, Resource Manager

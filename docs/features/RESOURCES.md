@@ -171,10 +171,12 @@ Detailed view for individual resources:
 - Checks for conflicts and version compatibility
 
 ### 4. Download and Installation
-- Downloads resource files from platform CDN
-- Verifies file integrity using hashes
-- Extracts archives (for modpacks)
-- Places files in appropriate instance directories
+- Plans all version artifacts before downloading and rejects unknown roles
+- Downloads and verifies the complete bundle in a unique staging directory
+- Publishes all files atomically, rolling back the bundle if any artifact fails
+- Places datapacks in the selected world's `datapacks` directory
+- Safely extracts world archives into collision-free directories under `saves`
+- Delegates modpack archives to the existing modpack workflow
 
 ### 5. Database Registration
 - Creates `installed_resource` records
@@ -243,16 +245,37 @@ instance/
 ├── mods/           # Mod JAR files
 ├── resourcepacks/  # Resource pack ZIPs
 ├── shaderpacks/    # Shader pack folders/ZIPs
-├── datapacks/      # Data pack folders/ZIPs
-├── saves/          # World folders
+├── saves/          # Java folder worlds
+│   └── My World/
+│       ├── level.dat
+│       ├── datapacks/  # World-scoped data pack folders/ZIPs
+│       └── .vesta/world.json  # Optional Vesta identity/provenance
 └── config/         # Configuration files (from modpacks)
 ```
 
 ### File Watching
-- Monitors all resource directories for changes
+- Watches instance resource directories, `saves` topology, and each known
+  world's `datapacks` directory without recursively watching region data
 - Automatically updates database when files are added/removed
 - Triggers UI refresh for real-time status updates
 - Handles external modifications (manual installs, other launchers)
+
+### World Ownership
+
+Java folder worlds are filesystem-owned directories, not `installed_resource`
+rows. Vesta discovers immediate children of `saves` through root `level.dat` or
+`level.dat_old` and leaves internal layouts opaque. Listing an existing world is
+read-only. Vesta creates `.vesta/world.json` only when it installs a world or
+datapack, or moves, copies, or duplicates a world.
+
+World archives are preflighted before extraction. Unsafe paths, links, case
+collisions, unreasonable expansion, and archives without a Java folder world
+are rejected. Archives with multiple worlds require a candidate selection or
+explicit install-all action and never overwrite or merge existing worlds.
+
+The Installed Resource Ledger continues to own installed files. Datapack rows
+are scoped by their exact path under a world, while companion resource-pack rows
+remain instance-scoped and are linked through the portable world manifest.
 
 ## Error Handling
 
@@ -277,6 +300,10 @@ instance/
 - `check_instance_updates_lightweight`: Check instance for resource/modpack updates (uses snapshot + version cache)
 - `get_instance_update_snapshot`: Read cached update snapshot without triggering a check
 - `install_resource`: Download and install resource
+- `list_instance_worlds`: Discover and summarize Java worlds for one Instance
+- `open_world_folder`: Open a validated world directory
+- `transfer_world`: Submit a safe move, copy, or duplicate World task
+- `submit_world_archive_selection`: Continue or cancel a multi-world archive install
 - `delete_resource`: Remove installed resource
 - `toggle_resource`: Enable/disable resource
 - `rescan_instance_resources`: Discover local rows and batch-identify all or selected unresolved resources
@@ -287,6 +314,8 @@ instance/
 - `core://instance-resource-metadata-changed`: Cached project metadata changed for source-aware project refs
 - `core://resource-install-progress`: Installation progress updates
 - `core://resource-install-error`: Installation failures
+- `core://instance-worlds-changed`: World topology or managed contents changed for one Instance
+- `core://world-install-selection-required`: A world archive needs candidate selection
 
 ## Future Enhancements
 

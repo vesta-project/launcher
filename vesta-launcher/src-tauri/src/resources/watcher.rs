@@ -9,7 +9,7 @@ use notify::{Config, Event, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use walkdir::WalkDir;
@@ -81,7 +81,7 @@ impl ResourceWatcher {
         }
 
         let game_path = PathBuf::from(&game_dir);
-        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
+        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks"];
 
         let app_handle = self.app_handle.clone();
         let watchers_ptr = self.watchers.clone();
@@ -105,6 +105,18 @@ impl ResourceWatcher {
                 watcher.watch(&path, RecursiveMode::NonRecursive)?;
                 log::info!("[ResourceWatcher] Watching: {:?}", path);
             }
+        }
+        let saves = game_path.join("saves");
+        if saves.exists() {
+            watcher.watch(&saves, RecursiveMode::NonRecursive)?;
+            log::info!("[ResourceWatcher] Watching world topology: {:?}", saves);
+        }
+        for datapacks in world_datapack_directories(&game_path) {
+            watcher.watch(&datapacks, RecursiveMode::NonRecursive)?;
+            log::info!(
+                "[ResourceWatcher] Watching world datapacks: {:?}",
+                datapacks
+            );
         }
 
         {
@@ -131,7 +143,22 @@ impl ResourceWatcher {
                     w.contains_key(&db_id)
                 };
                 if is_watched {
-                    handle_events(&app_handle, db_id, events).await;
+                    let topology_changed = handle_events(&app_handle, db_id, events).await;
+                    if topology_changed {
+                        if let Some(watcher) = watchers_ptr.lock().await.get_mut(&db_id) {
+                            for datapacks in world_datapack_directories(&game_path) {
+                                if let Err(error) =
+                                    watcher.watch(&datapacks, RecursiveMode::NonRecursive)
+                                {
+                                    log::debug!(
+                                        "[ResourceWatcher] World datapack watch unchanged for {:?}: {}",
+                                        datapacks,
+                                        error
+                                    );
+                                }
+                            }
+                        }
+                    }
                 } else {
                     log::debug!(
                         "[ResourceWatcher] Dropping event for db_id {} as it is no longer watched",
@@ -172,6 +199,29 @@ impl ResourceWatcher {
         watchers.remove(&db_id);
     }
 
+    /// Attaches non-recursive watches for datapack directories belonging to
+    /// worlds discovered after the instance watcher was first registered.
+    pub async fn refresh_world_watches(
+        &self,
+        db_id: i32,
+        game_dir: impl AsRef<Path>,
+    ) -> anyhow::Result<()> {
+        let mut watchers = self.watchers.lock().await;
+        let Some(watcher) = watchers.get_mut(&db_id) else {
+            return Ok(());
+        };
+        for datapacks in world_datapack_directories(game_dir.as_ref()) {
+            if let Err(error) = watcher.watch(&datapacks, RecursiveMode::NonRecursive) {
+                log::debug!(
+                    "[ResourceWatcher] World datapack watch unchanged for {:?}: {}",
+                    datapacks,
+                    error
+                );
+            }
+        }
+        Ok(())
+    }
+
     pub async fn refresh_instance(&self, db_id: i32, game_dir: String) -> anyhow::Result<()> {
         let _ = self
             .refresh_instance_with_progress(db_id, game_dir, None)
@@ -186,7 +236,7 @@ impl ResourceWatcher {
         progress_tx: Option<tokio::sync::mpsc::UnboundedSender<ScanProgressSnapshot>>,
     ) -> anyhow::Result<ScanSummary> {
         let game_path = PathBuf::from(&game_dir);
-        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
+        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks"];
         let mut paths = Vec::new();
         let mut existing_folders = Vec::new();
         for folder in folders_to_watch {
@@ -194,6 +244,17 @@ impl ResourceWatcher {
             if !folder_path.exists() {
                 continue;
             }
+            existing_folders.push(folder_path.clone());
+            paths.extend(
+                WalkDir::new(&folder_path)
+                    .max_depth(1)
+                    .into_iter()
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| entry.file_type().is_file() && is_resource_file(entry.path()))
+                    .map(|entry| entry.path().to_path_buf()),
+            );
+        }
+        for folder_path in world_datapack_directories(&game_path) {
             existing_folders.push(folder_path.clone());
             paths.extend(
                 WalkDir::new(&folder_path)
@@ -296,12 +357,27 @@ fn instance_name_for_log(instance_id: i32) -> String {
         .unwrap_or_else(|| "unknown instance".to_string())
 }
 
-async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) {
+async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool {
     use notify::EventKind;
 
     let mut changed = HashSet::new();
     let mut removed = HashSet::new();
+    let mut world_topology_changed = false;
+    let mut world_datapacks_changed = false;
     for event in events {
+        if event.paths.iter().any(|path| {
+            path.parent()
+                .and_then(Path::file_name)
+                .is_some_and(|name| name == "saves")
+        }) {
+            world_topology_changed = true;
+        }
+        if event.paths.iter().any(|path| {
+            path.ancestors()
+                .any(|ancestor| ancestor.file_name().is_some_and(|name| name == "datapacks"))
+        }) {
+            world_datapacks_changed = true;
+        }
         match event.kind {
             EventKind::Create(_) | EventKind::Modify(_) => {
                 for path in event.paths {
@@ -342,7 +418,16 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) {
 
     let mut removed_any = false;
     for path in removed {
-        match crate::resources::ledger::unlink_path(db_id, &path) {
+        let removed_world = path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|name| name == "saves");
+        let result = if removed_world {
+            crate::resources::ledger::unlink_subtree(db_id, &path)
+        } else {
+            crate::resources::ledger::unlink_path(db_id, &path)
+        };
+        match result {
             Ok(count) => removed_any |= count > 0,
             Err(error) => log::warn!(
                 "[ResourceWatcher] Failed to unlink {:?} for {}: {}",
@@ -356,6 +441,46 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) {
         let _ =
             crate::resources::reconciliation::emit_rows_changed(app, db_id, "filesystem-remove");
     }
+    if world_topology_changed || world_datapacks_changed {
+        if let Some(world_manager) = app.try_state::<crate::worlds::WorldManager>() {
+            world_manager.invalidate(db_id);
+        }
+        let _ = app.emit(
+            "core://instance-worlds-changed",
+            serde_json::json!({
+                "instanceId": db_id,
+                "revision": chrono::Utc::now().timestamp_millis(),
+                "reason": if world_topology_changed {
+                    "filesystem-topology"
+                } else {
+                    "datapack-filesystem"
+                }
+            }),
+        );
+    }
+    world_topology_changed
+}
+
+fn world_datapack_directories(game_path: &Path) -> Vec<PathBuf> {
+    let saves = game_path.join("saves");
+    let Ok(entries) = std::fs::read_dir(saves) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let file_type = entry.file_type().ok()?;
+            if !file_type.is_dir() || file_type.is_symlink() {
+                return None;
+            }
+            let world = entry.path();
+            if !crate::worlds::level_dat::has_level_marker(&world) {
+                return None;
+            }
+            let datapacks = world.join("datapacks");
+            datapacks.is_dir().then_some(datapacks)
+        })
+        .collect()
 }
 
 fn is_resource_file(path: &Path) -> bool {

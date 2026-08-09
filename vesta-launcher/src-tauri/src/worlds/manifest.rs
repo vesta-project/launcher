@@ -105,6 +105,59 @@ pub struct ManifestRead {
     pub manifest: Option<WorldManifest>,
 }
 
+pub fn managed_datapack_manifest(
+    resource: &crate::models::installed_resource::InstalledResource,
+) -> Result<Option<(PathBuf, WorldManifest, usize)>, String> {
+    if !resource.resource_type.eq_ignore_ascii_case("datapack") {
+        return Ok(None);
+    }
+    let path = Path::new(&resource.local_path);
+    let Some(datapacks) = path.parent() else {
+        return Ok(None);
+    };
+    let Some(world) = datapacks.parent() else {
+        return Ok(None);
+    };
+    if datapacks.file_name().and_then(|name| name.to_str()) != Some("datapacks")
+        || world
+            .parent()
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str())
+            != Some("saves")
+    {
+        return Ok(None);
+    }
+
+    let read = read_manifest(world);
+    match read.status {
+        MetadataStatus::Absent => return Ok(None),
+        MetadataStatus::Corrupt => {
+            return Err(
+                "World metadata is corrupt; manage the world before changing this datapack"
+                    .to_string(),
+            )
+        }
+        MetadataStatus::Future => {
+            return Err("World metadata was created by a newer Vesta version".to_string())
+        }
+        MetadataStatus::Valid => {}
+    }
+    let Some(manifest) = read.manifest else {
+        return Ok(None);
+    };
+    let relative = path
+        .strip_prefix(world)
+        .map_err(|_| "Managed datapack escaped its world".to_string())?
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    let component = manifest.managed_components.iter().position(|component| {
+        component.kind == ManagedComponentKind::Datapack && component.relative_path == relative
+    });
+    Ok(component.map(|index| (world.to_path_buf(), manifest, index)))
+}
+
 pub fn manifest_path(world_root: &Path) -> PathBuf {
     world_root.join(".vesta").join("world.json")
 }
