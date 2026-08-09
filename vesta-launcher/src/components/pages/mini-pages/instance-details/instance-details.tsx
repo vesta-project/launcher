@@ -2873,7 +2873,14 @@ export default function InstanceDetails(
 											}
 										>
 											<Suspense fallback={<InstanceTabLoading label="worlds" />}>
-												<WorldsTab instance={inst()} />
+												<WorldsTab
+													instance={inst()}
+													onManageDatapacks={(world) => {
+														setResourceTypeFilter("datapack");
+														setResourceSearch(world.ref.directoryName);
+														handleTabChange("resources");
+													}}
+												/>
 											</Suspense>
 										</Show>
 									</TabsContent>

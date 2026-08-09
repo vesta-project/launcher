@@ -1,3 +1,6 @@
+import CubeIcon from "@assets/cube.svg";
+import ReloadIcon from "@assets/reload.svg";
+import TimerIcon from "@assets/timer.svg";
 import InstanceSelectionDialog, {
 	type InstanceSelectionOption,
 } from "@components/instances/InstanceSelectionDialog";
@@ -12,6 +15,7 @@ import {
 	type WorldTransferMode,
 	worldsState,
 } from "@stores/worlds";
+import { Badge } from "@ui/badge/badge";
 import Button from "@ui/button/button";
 import {
 	ContextMenu,
@@ -27,10 +31,17 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@ui/dropdown-menu/dropdown-menu";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
+import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
 import { formatBytes } from "@utils/format-bytes";
-import { getInstanceSlug } from "@utils/instances";
 import {
 	type Component,
 	createEffect,
@@ -48,6 +59,12 @@ type PendingTransfer = {
 	world: WorldSummary;
 	mode: Exclude<WorldTransferMode, "duplicate">;
 };
+
+const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
+	{ value: "recency", label: "Recently played" },
+	{ value: "name", label: "Name" },
+	{ value: "size", label: "Size" },
+];
 
 type WorldAction = {
 	label: string;
@@ -91,6 +108,35 @@ const MoreIcon: Component = () => (
 	</svg>
 );
 
+const GridIcon: Component = () => (
+	<svg viewBox="0 0 24 24" aria-hidden="true">
+		<rect x="3" y="3" width="7" height="7" />
+		<rect x="14" y="3" width="7" height="7" />
+		<rect x="14" y="14" width="7" height="7" />
+		<rect x="3" y="14" width="7" height="7" />
+	</svg>
+);
+
+const ListIcon: Component = () => (
+	<svg viewBox="0 0 24 24" aria-hidden="true">
+		<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+	</svg>
+);
+
+const StorageIcon: Component = () => (
+	<svg class={styles["outline-icon"]} viewBox="0 0 24 24" aria-hidden="true">
+		<ellipse cx="12" cy="5" rx="8" ry="3" />
+		<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+	</svg>
+);
+
+const DatapackIcon: Component = () => (
+	<svg class={styles["outline-icon"]} viewBox="0 0 24 24" aria-hidden="true">
+		<path d="m12 3 9 5-9 5-9-5 9-5Z" />
+		<path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
+	</svg>
+);
+
 const ActionLabel: Component<{ action: WorldAction }> = (props) => (
 	<span class={styles["menu-action"]}>
 		<props.action.icon />
@@ -104,12 +150,18 @@ const WorldCard: Component<{
 	onMove: () => void;
 	onCopy: () => void;
 	onDuplicate: () => void;
+	onManageDatapacks: () => void;
 }> = (props) => {
 	const actions = (): WorldAction[] => [
 		{
 			label: "Open folder",
 			icon: FolderIcon,
 			run: () => void openWorldFolder(props.world.ref),
+		},
+		{
+			label: "Manage datapacks",
+			icon: DatapackIcon,
+			run: props.onManageDatapacks,
 		},
 		{
 			label: "Move to another instance…",
@@ -136,12 +188,6 @@ const WorldCard: Component<{
 		(props.world.dataVersion != null
 			? `DataVersion ${props.world.dataVersion}`
 			: "Unknown");
-	const transferStatus = () => {
-		if (props.world.running) return "Running";
-		if (props.world.levelStatus === "unreadable") return "Unreadable";
-		return null;
-	};
-
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger as="article" class={styles.card}>
@@ -152,10 +198,12 @@ const WorldCard: Component<{
 						name={props.world.displayName}
 					/>
 					<div class={styles["media-fade"]} aria-hidden="true" />
-					<Show when={transferStatus()}>
-						{(status) => (
-							<span class={styles["status-badge"]}>{status()}</span>
-						)}
+					<Show
+						when={props.world.levelStatus === "unreadable"}
+					>
+						<Badge variant="error" class={styles["world-status"]}>
+							Unreadable
+						</Badge>
 					</Show>
 					<DropdownMenu>
 						<DropdownMenuTrigger
@@ -192,38 +240,59 @@ const WorldCard: Component<{
 
 				<div class={styles["card-body"]}>
 					<div class={styles.identity}>
-						<h3 class={styles.name} title={props.world.displayName}>
-							{props.world.displayName}
-						</h3>
-						<div class={styles.folder} title={props.world.folderName}>
-							{props.world.folderName}
+						<div class={styles["identity-copy"]}>
+							<h3
+								class={styles.name}
+								title={
+									props.world.folderName === props.world.displayName
+										? props.world.displayName
+										: `${props.world.displayName} (${props.world.folderName})`
+								}
+							>
+								{props.world.displayName}
+							</h3>
 						</div>
+						<Badge
+							variant="surface"
+							pill
+							class={styles["version-badge"]}
+							title={`Minecraft ${version()}`}
+						>
+							<CubeIcon class={styles["filled-icon"]} />
+							{version()}
+						</Badge>
 					</div>
-					<div class={styles.stats}>
-						<div class={styles.stat}>
-							<span>Last played</span>
-							<strong>{formatDate(props.world.lastPlayedAt)}</strong>
-						</div>
-						<div class={styles.stat}>
-							<span>Size</span>
-							<strong>{formatBytes(props.world.sizeBytes)}</strong>
-						</div>
-						<div class={styles.stat}>
-							<span>Version</span>
-							<strong title={version()}>{version()}</strong>
-						</div>
-						<div class={styles.stat}>
-							<span>Data packs</span>
-							<strong>{props.world.datapackCount}</strong>
-						</div>
+					<div class={styles.metadata}>
+						<span
+							class={styles["metadata-item"]}
+							title={`Last played ${formatDate(props.world.lastPlayedAt)}`}
+							aria-label={`Last played ${formatDate(props.world.lastPlayedAt)}`}
+						>
+							<TimerIcon class={styles["filled-icon"]} />
+							{formatDate(props.world.lastPlayedAt)}
+						</span>
+						<span
+							class={styles["metadata-item"]}
+							title={`World size ${formatBytes(props.world.sizeBytes)}`}
+							aria-label={`World size ${formatBytes(props.world.sizeBytes)}`}
+						>
+							<StorageIcon />
+							{formatBytes(props.world.sizeBytes)}
+						</span>
+						<button
+							type="button"
+							class={`${styles["metadata-item"]} ${styles["metadata-button"]}`}
+							title={`Manage ${props.world.datapackCount} datapacks`}
+							aria-label={`Manage ${props.world.datapackCount} datapacks in ${props.world.displayName}`}
+							onClick={(event: MouseEvent) => {
+								event.stopPropagation();
+								props.onManageDatapacks();
+							}}
+						>
+							<DatapackIcon />
+							{props.world.datapackCount}
+						</button>
 					</div>
-					<Show when={props.world.running || props.world.levelStatus === "unreadable"}>
-						<p class={styles.status}>
-							{props.world.running
-								? "Close Minecraft to transfer this world."
-								: "Level data is unreadable, so transfers are unavailable."}
-						</p>
-					</Show>
 				</div>
 			</ContextMenuTrigger>
 			<ContextMenuContent class={styles.menu}>
@@ -269,7 +338,10 @@ export const sortWorlds = (worlds: readonly WorldSummary[], sort: SortMode) =>
 		);
 	});
 
-export const WorldsTab: Component<{ instance: Instance }> = (props) => {
+export const WorldsTab: Component<{
+	instance: Instance;
+	onManageDatapacks: (world: WorldSummary) => void;
+}> = (props) => {
 	const [sort, setSort] = createSignal<SortMode>("recency");
 	const [view, setView] = createSignal<ViewMode>("grid");
 	const [pending, setPending] = createSignal<PendingTransfer | null>(null);
@@ -284,21 +356,8 @@ export const WorldsTab: Component<{ instance: Instance }> = (props) => {
 			(candidate) => candidate.id !== props.instance.id,
 		),
 	);
-	const destinationRunning = (destination: Instance) =>
-		Boolean(instancesState.runningIds[getInstanceSlug(destination)]);
 	const destinationOptions = createMemo<InstanceSelectionOption[]>(() =>
-		destinations().map((instance) => {
-			const running = destinationRunning(instance);
-			return {
-				instance,
-				disabled: running,
-				detail: running
-					? "Close Minecraft before transferring a world here."
-					: undefined,
-				badge: running ? "Running" : undefined,
-				tone: running ? "danger" : "neutral",
-			};
-		}),
+		destinations().map((instance) => ({ instance })),
 	);
 
 	const performTransfer = async (
@@ -354,47 +413,64 @@ export const WorldsTab: Component<{ instance: Instance }> = (props) => {
 			<header class={styles.toolbar}>
 				<div class={styles.title}>
 					<h2>Worlds</h2>
-					<p>
-						{worlds().length} Java {worlds().length === 1 ? "world" : "worlds"}{" "}
-						in this instance
-					</p>
 				</div>
 				<div class={styles.controls}>
-					<select
-						class={styles.select}
-						aria-label="Sort worlds"
+					<Select
 						value={sort()}
-						onChange={(event) => setSort(event.currentTarget.value as SortMode)}
+						onChange={(value) => value && setSort(value as SortMode)}
+						options={SORT_OPTIONS.map((option) => option.value)}
+						itemComponent={(itemProps) => (
+							<SelectItem item={itemProps.item}>
+								{SORT_OPTIONS.find(
+									(option) => option.value === itemProps.item.rawValue,
+								)?.label ?? itemProps.item.rawValue}
+							</SelectItem>
+						)}
 					>
-						<option value="recency">Recently played</option>
-						<option value="name">Name</option>
-						<option value="size">Size</option>
-					</select>
-					<div class={styles.segmented} aria-label="World layout">
-						<button
-							type="button"
-							data-active={view() === "grid"}
-							aria-pressed={view() === "grid"}
-							onClick={() => setView("grid")}
+						<SelectTrigger class={styles["sort-select"]} aria-label="Sort worlds">
+							<SelectValue<string>>
+								{(state) =>
+									SORT_OPTIONS.find(
+										(option) => option.value === state.selectedOption(),
+									)?.label ?? "Recently played"
+								}
+							</SelectValue>
+						</SelectTrigger>
+						<SelectContent />
+					</Select>
+					<ToggleGroup
+						value={view()}
+						onChange={(value) => value && setView(value as ViewMode)}
+						aria-label="World layout"
+					>
+						<ToggleGroupItem
+							value="grid"
+							icon_only
+							aria-label="Grid view"
+							title="Grid view"
 						>
-							Grid
-						</button>
-						<button
-							type="button"
-							data-active={view() === "list"}
-							aria-pressed={view() === "list"}
-							onClick={() => setView("list")}
+							<GridIcon />
+						</ToggleGroupItem>
+						<ToggleGroupItem
+							value="list"
+							icon_only
+							aria-label="List view"
+							title="List view"
 						>
-							List
-						</button>
-					</div>
+							<ListIcon />
+						</ToggleGroupItem>
+					</ToggleGroup>
 					<Button
 						size="sm"
-						variant="outline"
+						variant="ghost"
+						icon_only
+						class={styles["refresh-button"]}
+						tooltip_text="Refresh worlds"
+						aria-label="Refresh worlds"
 						disabled={worldsState.loading[props.instance.id]}
 						onClick={() => void listInstanceWorlds(props.instance.id, true)}
 					>
-						Refresh
+						<ReloadIcon />
 					</Button>
 				</div>
 			</header>
@@ -424,16 +500,17 @@ export const WorldsTab: Component<{ instance: Instance }> = (props) => {
 						<div class={styles.worlds} data-view={view()}>
 							<For each={worlds()}>
 								{(world) => {
-									const disabled = () =>
-										world.running ||
-										world.levelStatus === "unreadable" ||
+									const busy = () =>
 										busyWorld() === world.ref.directoryName;
 									return (
 										<WorldCard
 											world={world}
-											busy={disabled()}
+											busy={busy()}
 											onMove={() => setPending({ world, mode: "move" })}
 											onCopy={() => setPending({ world, mode: "copy" })}
+											onManageDatapacks={() =>
+												props.onManageDatapacks(world)
+											}
 											onDuplicate={() =>
 												void performTransfer(
 													world,

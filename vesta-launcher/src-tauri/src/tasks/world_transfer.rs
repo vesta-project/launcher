@@ -77,18 +77,6 @@ impl Task for WorldTransferTask {
         let acknowledged = self.risk_acknowledged;
         let cleanup_warning = self.cleanup_warning.clone();
         Box::pin(async move {
-            let source_slug = source.slug();
-            let destination_slug = destination.slug();
-            let (source_running, destination_running) = tokio::try_join!(
-                piston_lib::game::launcher::is_instance_running(&source_slug),
-                piston_lib::game::launcher::is_instance_running(&destination_slug),
-            )
-            .map_err(|error| format!("Failed to check instance run state: {error}"))?;
-            if source_running || destination_running {
-                return Err(
-                    "Worlds cannot be transferred while either instance is running".to_string(),
-                );
-            }
             ctx.update_full(
                 20,
                 "Copying and verifying world…".to_string(),

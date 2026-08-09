@@ -35,6 +35,12 @@ and move/copy/duplicate workflows. Resource sources remain unaware of local
 destinations; the shared installer resolves provider-neutral artifacts against
 an explicit Instance or World target.
 
+World transfer availability is determined by the filesystem operation itself,
+not by whether Vesta observes a source or destination Instance process. A
+running process is not a transfer precondition; inaccessible or changing files
+fail through the transfer Task's normal copy, verification, or publication
+errors.
+
 ## Consequences
 
 Existing Java folder worlds can be listed without modification and remain

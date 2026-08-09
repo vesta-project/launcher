@@ -214,6 +214,9 @@ World between Instances. The World Module owns archive safety, discovery,
 metadata, transfer verification, and publication. The Installed Resource Ledger
 owns installed datapack and companion resource-pack files. Resource source
 Adapters describe artifacts but do not choose filesystem destinations.
+World transfers do not infer file availability from Instance process state;
+actual filesystem reads, copies, verification, and publication are authoritative,
+and inaccessible files surface as Task failures.
 
 Primary modules:
 

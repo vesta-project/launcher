@@ -1,7 +1,11 @@
 .root {
 	display: grid;
+	width: 100%;
+	max-width: var(--page-content-max);
+	box-sizing: border-box;
 	gap: 16px;
-	padding-bottom: 24px;
+	margin-inline: auto;
+	padding: 0 var(--page-gutter-x) var(--page-gutter-bottom);
 }
 .toolbar {
 	display: flex;
@@ -15,52 +19,33 @@
 	font-size: 19px;
 	letter-spacing: -0.02em;
 }
-.title p {
-	margin: 4px 0 0;
-	color: var(--text-secondary);
-	font-size: 12px;
-}
 .controls {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
 }
-.select {
-	height: 34px;
-	padding: 0 30px 0 10px;
-	border: 1px solid var(--border);
-	border-radius: 9px;
-	background: var(--surface-low);
-	color: var(--text);
-	font: inherit;
+.sort-select {
+	width: 152px;
+	min-height: 32px;
 	font-size: 12px;
 }
-.segmented {
-	display: flex;
-	padding: 3px;
-	border: 1px solid var(--border);
-	border-radius: 9px;
-	background: var(--surface-sunken);
+.refresh-button {
+	width: 32px !important;
+	height: 32px !important;
+	box-sizing: border-box;
+	padding: 0 !important;
 }
-.segmented button {
-	padding: 5px 9px;
-	border: 0;
-	border-radius: 6px;
-	background: transparent;
-	color: var(--text-secondary);
-	cursor: pointer;
-	font: inherit;
-	font-size: 11px;
-}
-.segmented button[data-active="true"] {
-	background: var(--surface-medium);
-	color: var(--text);
-	box-shadow: 0 1px 3px color-mix(in srgb, black 18%, transparent);
+.controls [aria-label$="view"] svg {
+	fill: none;
+	stroke: currentcolor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2;
 }
 .worlds {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 	gap: 12px;
 }
 .worlds[data-view="list"] {
@@ -86,7 +71,7 @@
 }
 .media {
 	position: relative;
-	height: 138px;
+	height: 150px;
 	overflow: hidden;
 	flex: 0 0 auto;
 	background: var(--surface-sunken);
@@ -143,17 +128,11 @@
 	height: 17px;
 	fill: currentcolor;
 }
-.status-badge {
+.world-status {
 	position: absolute;
 	top: 10px;
 	left: 10px;
-	padding: 4px 7px;
-	border: 1px solid color-mix(in srgb, var(--destructive) 38%, transparent);
-	border-radius: 7px;
-	background: color-mix(in srgb, var(--surface-sunken) 82%, transparent);
-	color: var(--destructive);
-	font-size: 10px;
-	font-weight: 650;
+	box-shadow: 0 2px 8px color-mix(in srgb, black 24%, transparent);
 	backdrop-filter: blur(10px);
 }
 .card-body {
@@ -161,10 +140,17 @@
 	min-width: 0;
 	flex: 1;
 	flex-direction: column;
-	gap: 13px;
+	gap: 12px;
 	padding: 12px 14px 14px;
 }
 .identity {
+	display: grid;
+	min-width: 0;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 10px;
+}
+.identity-copy {
 	min-width: 0;
 }
 .name {
@@ -177,43 +163,62 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.folder {
-	margin-top: 2px;
-	overflow: hidden;
-	color: var(--text-tertiary);
-	font-size: 11px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.stats {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	gap: 10px 18px;
-}
-.stat {
-	display: grid;
+.metadata {
+	display: flex;
 	min-width: 0;
-	gap: 2px;
-}
-.stat span {
+	align-items: center;
+	gap: 10px;
 	color: var(--text-tertiary);
 	font-size: 10px;
-	line-height: 1.2;
 }
-.stat strong {
-	overflow: hidden;
-	color: var(--text-secondary);
-	font-size: 11px;
-	font-weight: 600;
-	line-height: 1.3;
-	text-overflow: ellipsis;
+.metadata-item {
+	display: inline-flex;
+	min-width: 0;
+	align-items: center;
+	gap: 4px;
 	white-space: nowrap;
 }
-.status {
-	margin: -3px 0 0;
-	color: var(--destructive);
-	font-size: 11px;
-	line-height: 1.35;
+.metadata-item svg,
+.version-badge svg {
+	width: 13px;
+	height: 13px;
+	flex: 0 0 auto;
+	fill: currentcolor;
+	stroke: none;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.8;
+}
+.metadata-item .outline-icon,
+.version-badge .outline-icon {
+	fill: none;
+	stroke: currentcolor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.8;
+}
+.metadata-button {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+.metadata-button:hover,
+.metadata-button:focus-visible {
+	color: var(--text-primary);
+}
+.metadata-button:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 3px;
+}
+.version-badge {
+	max-width: 100%;
+	overflow: hidden;
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .menu {
 	min-width: 210px;
@@ -237,13 +242,13 @@
 	flex-direction: column;
 }
 .worlds[data-view="list"] .card {
-	min-height: 86px;
+	min-height: 78px;
 	align-items: stretch;
 }
 .worlds[data-view="list"] .media {
-	width: 92px;
+	width: 84px;
 	height: auto;
-	min-height: 86px;
+	min-height: 78px;
 }
 .worlds[data-view="list"] .media-fade {
 	inset: 0 0 0 auto;
@@ -260,7 +265,7 @@
 	right: auto;
 	left: 8px;
 }
-.worlds[data-view="list"] .status-badge {
+.worlds[data-view="list"] .world-status {
 	top: auto;
 	bottom: 8px;
 	left: 8px;
@@ -270,19 +275,10 @@
 }
 .worlds[data-view="list"] .card-body {
 	display: grid;
-	grid-template-columns: minmax(130px, 1.2fr) minmax(320px, 2fr);
+	grid-template-columns: minmax(130px, 1fr) auto;
 	align-items: center;
 	gap: 18px;
 	padding: 13px 16px;
-}
-.worlds[data-view="list"] .stats {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(68px, 1fr));
-	gap: 14px;
-}
-.worlds[data-view="list"] .status {
-	grid-column: 1 / -1;
-	margin-top: -8px;
 }
 .empty,
 .loading,
@@ -306,14 +302,11 @@
 	.controls {
 		width: 100%;
 	}
-	.select {
+	.sort-select {
 		flex: 1;
 	}
 	.worlds[data-view="list"] .card-body {
 		grid-template-columns: 1fr;
 		gap: 10px;
-	}
-	.worlds[data-view="list"] .stats {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
