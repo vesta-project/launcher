@@ -3,21 +3,17 @@ mod tests {
     use crate::models::resource::{ResourceType, SearchQuery};
     use crate::resources::sources::curseforge::CurseForgeSource;
     use crate::resources::sources::modrinth::ModrinthSource;
-    use crate::resources::sources::smithed::SmithedSource;
     use crate::resources::sources::ResourceSource;
 
     #[test]
     fn provider_identification_limits_bound_large_scans() {
         let modrinth = ModrinthSource::new();
         let curseforge = CurseForgeSource::new();
-        let smithed = SmithedSource::new();
 
         assert_eq!(500usize.div_ceil(modrinth.identification_batch_size()), 5);
         assert_eq!(500usize.div_ceil(curseforge.identification_batch_size()), 1);
         assert!(modrinth.identification_concurrency() <= 3);
         assert!(curseforge.identification_concurrency() <= 2);
-        assert!(!smithed.capabilities().supports_hash_lookup);
-        assert!(smithed.capabilities().multi_artifact_versions);
     }
 
     #[tokio::test]
