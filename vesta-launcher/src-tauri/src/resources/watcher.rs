@@ -521,28 +521,19 @@ pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i3
                 && r.platform == pack_resource.platform
                 && r.remote_id == pack_resource.remote_id
         }) {
-            let pack_should_win = match pack_resource.platform.as_str() {
-                "modrinth" => {
+            let pack_should_win = match SourcePlatform::from_str_id(pack_resource.platform.as_str())
+            {
+                Some(platform) => {
                     version_is_at_least(
                         &rm,
-                        SourcePlatform::Modrinth,
+                        platform,
                         &pack_resource.remote_id,
                         &pack_resource.remote_version_id,
                         &custom_resource.remote_version_id,
                     )
                     .await
                 }
-                "curseforge" => {
-                    version_is_at_least(
-                        &rm,
-                        SourcePlatform::CurseForge,
-                        &pack_resource.remote_id,
-                        &pack_resource.remote_version_id,
-                        &custom_resource.remote_version_id,
-                    )
-                    .await
-                }
-                _ => true,
+                None => false,
             };
 
             if pack_should_win {

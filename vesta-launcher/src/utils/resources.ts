@@ -144,7 +144,7 @@ export const SHADER_ENGINES = {
 
 export interface ShaderEngineInfo {
 	id: string;
-	source: "modrinth" | "curseforge";
+	source: "modrinth" | "curseforge" | "smithed";
 	name: string;
 	key: "iris" | "oculus";
 }

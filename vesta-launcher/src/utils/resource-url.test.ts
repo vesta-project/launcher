@@ -96,4 +96,15 @@ describe("parseResourceUrl", () => {
 		const url = `https://www.curseforge.com/linkout?remoteUrl=${encodeURIComponent(remoteUrl)}`;
 		expect(parseResourceUrl(url)).toBeNull();
 	});
+
+	it("should parse a Smithed pack URL", () => {
+		expect(parseResourceUrl("https://smithed.dev/packs/coc")).toEqual({
+			platform: "smithed",
+			id: "coc",
+		});
+		expect(parseResourceUrl("https://nightly.smithed.net/packs/coc")).toEqual({
+			platform: "smithed",
+			id: "coc",
+		});
+	});
 });

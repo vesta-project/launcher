@@ -1,13 +1,15 @@
 import BellIcon from "@assets/bell.svg";
-import CurseForgeIcon from "@assets/curseforge.svg";
 import DownloadIcon from "@assets/download-compact.svg";
 import HeartIcon from "@assets/heart.svg";
-import ModrinthIcon from "@assets/modrinth.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import {
+	getSourceDescriptor,
+	RESOURCE_SOURCES,
+} from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
 import {
 	type ResourceDependency,
@@ -659,6 +661,18 @@ const ResourceDetailsPage: Component<{
 		currentPeerProject(project(), peerProjectLookup()),
 	);
 
+	const platformSwitcherSources = createMemo(() => {
+		const current = project()?.source;
+		if (!current) return [];
+		const ids = new Set<SourcePlatform>([current]);
+		for (const peer of getSourceDescriptor(current)?.peerPlatforms ?? []) {
+			ids.add(peer);
+		}
+		const peer = peerProject();
+		if (peer) ids.add(peer.source);
+		return RESOURCE_SOURCES.filter((source) => ids.has(source.id));
+	});
+
 	const canSwitchToPlatform = (target: SourcePlatform) => {
 		const current = project()?.source;
 		if (current === target) return true;
@@ -678,6 +692,30 @@ const ResourceDetailsPage: Component<{
 			});
 		}
 	};
+
+	const renderPlatformSwitcher = () => (
+		<div class={styles["source-toggle"]}>
+			<For each={platformSwitcherSources()}>
+				{(source) => (
+					<button
+						type="button"
+						class={styles["source-btn"]}
+						classList={{ [styles.active]: project()?.source === source.id }}
+						disabled={!canSwitchToPlatform(source.id)}
+						title={
+							canSwitchToPlatform(source.id)
+								? source.label
+								: `Not available on ${source.label}`
+						}
+						onClick={() => navigateToPlatform(source.id)}
+					>
+						<source.Icon width="14" height="14" />
+						<span>{source.label}</span>
+					</button>
+				)}
+			</For>
+		</div>
+	);
 
 	const [dependencyData] = createResource(
 		() => ({
@@ -2013,38 +2051,7 @@ const ResourceDetailsPage: Component<{
 
 	const focusedInstallationControls = (version: ResourceVersion) => (
 		<div class={styles["sidebar-instance-picker"]}>
-			<div class={styles["source-toggle"]}>
-				<button
-					type="button"
-					class={styles["source-btn"]}
-					classList={{ [styles.active]: project()?.source === "modrinth" }}
-					disabled={!canSwitchToPlatform("modrinth")}
-					title={
-						canSwitchToPlatform("modrinth")
-							? "Modrinth"
-							: "Not available on Modrinth"
-					}
-					onClick={() => navigateToPlatform("modrinth")}
-				>
-					<ModrinthIcon width="14" height="14" />
-					<span>Modrinth</span>
-				</button>
-				<button
-					type="button"
-					class={styles["source-btn"]}
-					classList={{ [styles.active]: project()?.source === "curseforge" }}
-					disabled={!canSwitchToPlatform("curseforge")}
-					title={
-						canSwitchToPlatform("curseforge")
-							? "CurseForge"
-							: "Not available on CurseForge"
-					}
-					onClick={() => navigateToPlatform("curseforge")}
-				>
-					<CurseForgeIcon width="14" height="14" />
-					<span>CurseForge</span>
-				</button>
-			</div>
+			{renderPlatformSwitcher()}
 			<Show
 				when={!isModpack()}
 				fallback={
@@ -2176,42 +2183,7 @@ const ResourceDetailsPage: Component<{
 		<div class={styles["sidebar-scrollable-area"]}>
 			<div class={styles["sidebar-section"]}>
 				<div class={styles["sidebar-instance-picker"]}>
-					<div class={styles["source-toggle"]}>
-						<button
-							type="button"
-							class={styles["source-btn"]}
-							classList={{
-								[styles.active]: project()?.source === "modrinth",
-							}}
-							disabled={!canSwitchToPlatform("modrinth")}
-							title={
-								canSwitchToPlatform("modrinth")
-									? "Modrinth"
-									: "Not available on Modrinth"
-							}
-							onClick={() => navigateToPlatform("modrinth")}
-						>
-							<ModrinthIcon width="14" height="14" />
-							<span>Modrinth</span>
-						</button>
-						<button
-							type="button"
-							class={styles["source-btn"]}
-							classList={{
-								[styles.active]: project()?.source === "curseforge",
-							}}
-							disabled={!canSwitchToPlatform("curseforge")}
-							title={
-								canSwitchToPlatform("curseforge")
-									? "CurseForge"
-									: "Not available on CurseForge"
-							}
-							onClick={() => navigateToPlatform("curseforge")}
-						>
-							<CurseForgeIcon width="14" height="14" />
-							<span>CurseForge</span>
-						</button>
-					</div>
+					{renderPlatformSwitcher()}
 					<Show
 						when={!isModpack()}
 						fallback={
@@ -2673,7 +2645,7 @@ const ResourceDetailsPage: Component<{
 											size="icon"
 											onClick={() => openExternal(project()?.web_url ?? "")}
 											class={styles["header-action-btn"]}
-											tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
+											tooltip_text={`View on ${getSourceDescriptor(project()?.source ?? "modrinth")?.label ?? "provider"}`}
 											tooltip_placement="left"
 										>
 											<svg

@@ -13,7 +13,8 @@ use crate::models::resource::{
 };
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
-use crate::resources::sources::ResourceSource;
+use crate::resources::sources::smithed::SmithedSource;
+use crate::resources::sources::{ResourceSource, SourceCapabilities};
 use crate::resources::update_cache::{now_datetime_str, VERSION_CACHE_TTL_MINUTES};
 use crate::schema::vesta::installed_resource::dsl as ir_dsl;
 use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
@@ -59,6 +60,7 @@ impl ResourceManager {
         let sources: Vec<Arc<dyn ResourceSource>> = vec![
             Arc::new(ModrinthSource::new()),
             Arc::new(CurseForgeSource::new()),
+            Arc::new(SmithedSource::new()),
         ];
 
         Self {
@@ -100,10 +102,12 @@ impl ResourceManager {
     }
 
     fn platform_to_source_str(platform: SourcePlatform) -> &'static str {
-        match platform {
-            SourcePlatform::Modrinth => "modrinth",
-            SourcePlatform::CurseForge => "curseforge",
-        }
+        platform.as_str()
+    }
+
+    pub async fn list_source_capabilities(&self) -> Vec<SourceCapabilities> {
+        let sources = self.sources.read().await;
+        sources.iter().map(|source| source.capabilities()).collect()
     }
 
     fn parse_cache_datetime(value: &str) -> Option<NaiveDateTime> {
@@ -589,89 +593,87 @@ impl ResourceManager {
         &self,
         current: &ResourceProject,
     ) -> Result<Option<ResourceProject>> {
-        let other_platform = match current.source {
-            SourcePlatform::Modrinth => SourcePlatform::CurseForge,
-            SourcePlatform::CurseForge => SourcePlatform::Modrinth,
-        };
-
-        if let Some((platform, project_id)) =
-            crate::resources::reconciliation::find_persisted_peer(current.source, &current.id)?
-        {
-            if platform == other_platform {
-                if let Ok(project) = self.get_project(platform, &project_id).await {
-                    return Ok(Some(project));
-                }
-            }
+        let peer_platforms = SourceCapabilities::for_platform(current.source).peer_platforms;
+        if peer_platforms.is_empty() {
+            return Ok(None);
         }
 
-        if let Some(ref external_ids) = current.external_ids {
-            let key = match other_platform {
-                SourcePlatform::Modrinth => "modrinth",
-                SourcePlatform::CurseForge => "curseforge",
-            };
-            if let Some(id) = external_ids.get(key) {
-                if let Ok(p) = self.get_project(other_platform, id).await {
-                    return Ok(Some(p));
+        for &other_platform in &peer_platforms {
+            if let Some((platform, project_id)) =
+                crate::resources::reconciliation::find_persisted_peer(current.source, &current.id)?
+            {
+                if platform == other_platform {
+                    if let Ok(project) = self.get_project(platform, &project_id).await {
+                        return Ok(Some(project));
+                    }
                 }
             }
-        }
 
-        if current.source == SourcePlatform::CurseForge
-            && other_platform == SourcePlatform::Modrinth
-        {
-            let facet_query = SearchQuery {
-                facets: Some(vec![format!("curseforge_id:{}", current.id)]),
+            if let Some(ref external_ids) = current.external_ids {
+                if let Some(id) = external_ids.get(other_platform.as_str()) {
+                    if let Ok(p) = self.get_project(other_platform, id).await {
+                        return Ok(Some(p));
+                    }
+                }
+            }
+
+            if current.source == SourcePlatform::CurseForge
+                && other_platform == SourcePlatform::Modrinth
+            {
+                let facet_query = SearchQuery {
+                    facets: Some(vec![format!("curseforge_id:{}", current.id)]),
+                    resource_type: current.resource_type,
+                    limit: 1,
+                    ..Default::default()
+                };
+
+                if let Ok(results) = self.search(other_platform, facet_query).await {
+                    if let Some(hit) = results.hits.into_iter().next() {
+                        return Ok(Some(hit));
+                    }
+                }
+            }
+
+            let query = SearchQuery {
+                text: Some(current.name.clone()),
                 resource_type: current.resource_type,
-                limit: 1,
+                limit: 10,
                 ..Default::default()
             };
 
-            if let Ok(results) = self.search(other_platform, facet_query).await {
-                if let Some(hit) = results.hits.into_iter().next() {
-                    return Ok(Some(hit));
+            if let Ok(results) = self.search(other_platform, query).await {
+                let c_name = current.name.to_lowercase();
+                let c_author = current.author.to_lowercase();
+
+                for hit in results.hits {
+                    let h_name = hit.name.to_lowercase();
+                    let h_author = hit.author.to_lowercase();
+
+                    let name_match =
+                        h_name == c_name || h_name.contains(&c_name) || c_name.contains(&h_name);
+                    let exact_name = h_name == c_name;
+                    let author_match = h_author.contains(&c_author)
+                        || c_author.contains(&h_author)
+                        || (c_author.starts_with("yung") && h_author.starts_with("yung"));
+
+                    if exact_name || (name_match && author_match) {
+                        return Ok(Some(hit));
+                    }
                 }
             }
-        }
 
-        let query = SearchQuery {
-            text: Some(current.name.clone()),
-            resource_type: current.resource_type,
-            limit: 10,
-            ..Default::default()
-        };
-
-        if let Ok(results) = self.search(other_platform, query).await {
-            let c_name = current.name.to_lowercase();
-            let c_author = current.author.to_lowercase();
-
-            for hit in results.hits {
-                let h_name = hit.name.to_lowercase();
-                let h_author = hit.author.to_lowercase();
-
-                let name_match =
-                    h_name == c_name || h_name.contains(&c_name) || c_name.contains(&h_name);
-                let exact_name = h_name == c_name;
-                let author_match = h_author.contains(&c_author)
-                    || c_author.contains(&h_author)
-                    || (c_author.starts_with("yung") && h_author.starts_with("yung"));
-
-                if exact_name || (name_match && author_match) {
-                    return Ok(Some(hit));
-                }
-            }
-        }
-
-        if other_platform == SourcePlatform::Modrinth {
-            if let Ok(versions) = self
-                .get_versions(current.source, &current.id, false, None, None)
-                .await
-            {
-                for v in versions.iter().take(3) {
-                    if v.hash.len() == 40 {
-                        if let Ok((project, _)) =
-                            self.get_by_hash(SourcePlatform::Modrinth, &v.hash).await
-                        {
-                            return Ok(Some(project));
+            if other_platform == SourcePlatform::Modrinth {
+                if let Ok(versions) = self
+                    .get_versions(current.source, &current.id, false, None, None)
+                    .await
+                {
+                    for v in versions.iter().take(3) {
+                        if v.hash.len() == 40 {
+                            if let Ok((project, _)) =
+                                self.get_by_hash(SourcePlatform::Modrinth, &v.hash).await
+                            {
+                                return Ok(Some(project));
+                            }
                         }
                     }
                 }
@@ -897,10 +899,8 @@ impl ResourceManager {
                 continue;
             }
 
-            let platform = match res.platform.as_str() {
-                "curseforge" => SourcePlatform::CurseForge,
-                "modrinth" => SourcePlatform::Modrinth,
-                _ => continue,
+            let Some(platform) = SourcePlatform::from_str_id(&res.platform) else {
+                continue;
             };
 
             let _ = self.get_project(platform, &res.remote_id).await;
@@ -940,7 +940,7 @@ impl ResourceManager {
         }
         let mut conn = get_vesta_conn()?;
         let now = chrono::Utc::now().to_rfc3339();
-        let platform_str = format!("{:?}", platform).to_lowercase();
+        let platform_str = platform.as_str().to_string();
         let ids = projects
             .iter()
             .map(|project| &project.id)

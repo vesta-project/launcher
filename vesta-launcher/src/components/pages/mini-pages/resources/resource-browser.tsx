@@ -1,3 +1,4 @@
+import { getSourceDescriptor } from "@resources/source-catalog";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { type Instance, instancesState } from "@stores/instances";
@@ -41,26 +42,6 @@ import ResourceCard from "./resource-card";
 import { ResourceSkeletonGrid } from "./resource-skeleton";
 import { ResourceToolbar } from "./resource-toolbar";
 
-const SORT_OPTIONS = {
-	modrinth: [
-		{ label: "Relevance", value: "relevance" },
-		{ label: "Downloads", value: "downloads" },
-		{ label: "Followers", value: "follows" },
-		{ label: "Newest", value: "newest" },
-		{ label: "Updated", value: "updated" },
-	],
-	curseforge: [
-		{ label: "Featured", value: "featured" },
-		{ label: "Popularity", value: "popularity" },
-		{ label: "Last Updated", value: "updated" },
-		{ label: "Newest", value: "newest" },
-		{ label: "Rating", value: "rating" },
-		{ label: "Name", value: "name" },
-		{ label: "Author", value: "author" },
-		{ label: "Total Downloads", value: "total_downloads" },
-	],
-};
-
 const ResourceBrowser: Component<{
 	setRefetch?: (fn: () => Promise<void>) => void;
 	query?: string;
@@ -90,9 +71,7 @@ const ResourceBrowser: Component<{
 	let isInitializedFromProps = false;
 
 	const currentSortOptions = createMemo(
-		() =>
-			SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] ||
-			[],
+		() => getSourceDescriptor(resources.state.activeSource)?.sortOptions ?? [],
 	);
 
 	createEffect(() => {

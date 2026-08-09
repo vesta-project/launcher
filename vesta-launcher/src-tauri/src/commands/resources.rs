@@ -369,21 +369,17 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
         let mut refs = Vec::new();
         let mut seen_refs = HashSet::new();
         for resource in &resources {
-            let platform = match resource.platform.as_str() {
-                "modrinth" => Some(SourcePlatform::Modrinth),
-                "curseforge" => Some(SourcePlatform::CurseForge),
-                _ => None,
+            let Some(platform) = SourcePlatform::from_str_id(resource.platform.as_str()) else {
+                continue;
             };
             if resource.remote_id.is_empty() {
                 continue;
             }
-            if let Some(platform) = platform {
-                if seen_refs.insert((platform, resource.remote_id.clone())) {
-                    refs.push(ResourceProjectRef {
-                        platform,
-                        id: resource.remote_id.clone(),
-                    });
-                }
+            if seen_refs.insert((platform, resource.remote_id.clone())) {
+                refs.push(ResourceProjectRef {
+                    platform,
+                    id: resource.remote_id.clone(),
+                });
             }
         }
 
@@ -443,7 +439,10 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
 
         let has_unresolved_rows = resources.iter().any(|resource| {
             resource.remote_id.is_empty()
-                || !matches!(resource.platform.as_str(), "modrinth" | "curseforge")
+                || !matches!(
+                    resource.platform.as_str(),
+                    "modrinth" | "curseforge" | "smithed"
+                )
         });
         Ok(InstanceResourceOverview {
             instance_id,
@@ -974,11 +973,14 @@ pub async fn check_instance_updates_lightweight(
 }
 
 fn source_platform_from_str(platform: &str) -> Option<SourcePlatform> {
-    match platform {
-        "modrinth" => Some(SourcePlatform::Modrinth),
-        "curseforge" => Some(SourcePlatform::CurseForge),
-        _ => None,
-    }
+    SourcePlatform::from_str_id(platform)
+}
+
+#[tauri::command]
+pub async fn list_resource_sources(
+    resource_manager: State<'_, ResourceManager>,
+) -> Result<Vec<crate::resources::sources::SourceCapabilities>> {
+    Ok(resource_manager.list_source_capabilities().await)
 }
 
 #[tauri::command]

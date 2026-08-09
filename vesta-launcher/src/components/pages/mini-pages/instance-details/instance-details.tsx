@@ -357,7 +357,9 @@ const isCustomResource = (resource: InstalledResource | undefined) =>
 
 const hasCanonicalResourceLink = (resource: InstalledResource | undefined) =>
 	!!resource?.remote_id &&
-	(resource.platform === "modrinth" || resource.platform === "curseforge");
+	(resource.platform === "modrinth" ||
+		resource.platform === "curseforge" ||
+		resource.platform === "smithed");
 
 const isSameCanonicalProject = (
 	a: InstalledResource | undefined,
@@ -600,7 +602,12 @@ export default function InstanceDetails(
 		platform: string | null | undefined,
 		id: string | null | undefined,
 	) => {
-		if ((platform !== "modrinth" && platform !== "curseforge") || !id) {
+		if (
+			(platform !== "modrinth" &&
+				platform !== "curseforge" &&
+				platform !== "smithed") ||
+			!id
+		) {
 			return;
 		}
 		const key = `${platform}:${id}`;

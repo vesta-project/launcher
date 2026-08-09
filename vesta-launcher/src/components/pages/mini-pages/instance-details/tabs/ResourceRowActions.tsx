@@ -31,7 +31,7 @@ export function ResourceRowActions(props: ResourceRowActionsProps) {
 	const notifyMenuSelect = () => props.onMenuItemSelect?.();
 	const isUnresolved = () =>
 		!props.resource.remote_id ||
-		!["modrinth", "curseforge"].includes(props.resource.platform);
+		!["modrinth", "curseforge", "smithed"].includes(props.resource.platform);
 
 	const handleMenuOpenChange = (open: boolean) => {
 		if (!open) props.onMenuItemSelect?.();

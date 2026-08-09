@@ -2,6 +2,10 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ProgressUpdate } from "@utils/notifications";
 import type { ResourceInstallRequest } from "@utils/resource-install-intent";
+import {
+	firstSourceForResourceType,
+	getSourceDescriptor,
+} from "@resources/source-catalog";
 import { createStore, reconcile } from "solid-js/store";
 import { refreshInstanceResourceRows } from "./instance-resource-overview";
 import { Instance } from "./instances";
@@ -13,8 +17,7 @@ export type ResourceType =
 	| "datapack"
 	| "modpack"
 	| "world";
-export type SourcePlatform = "modrinth" | "curseforge";
-// ... (rest of imports)
+export type SourcePlatform = "modrinth" | "curseforge" | "smithed";
 
 export type ResourceProject = {
 	id: string;
@@ -221,16 +224,22 @@ export const resources = {
 
 	setQuery: (q: string) => setResourceStore("query", q),
 	setSource: (s: SourcePlatform) => {
+		const descriptor = getSourceDescriptor(s);
 		setResourceStore("reconcilingCategories", true);
 		setResourceStore("activeSource", s);
 		setResourceStore("availableCategories", []);
-		setResourceStore("sortBy", s === "modrinth" ? "relevance" : "featured");
+		setResourceStore("sortBy", descriptor?.defaultSort ?? "relevance");
 		setResourceStore("categories", []);
 		setResourceStore("offset", 0);
 
-		// Modrinth doesn't support Worlds
-		if (s === "modrinth" && resourceStore.resourceType === "world") {
-			setResourceStore("resourceType", "mod");
+		if (
+			descriptor &&
+			!descriptor.supportedResourceTypes.includes(resourceStore.resourceType)
+		) {
+			setResourceStore(
+				"resourceType",
+				descriptor.supportedResourceTypes[0] ?? "mod",
+			);
 		}
 
 		resources.fetchCategories();
@@ -244,6 +253,14 @@ export const resources = {
 		// Clear loader if not on 'mod' as it doesn't apply to resourcepacks/shaders
 		if (t !== "mod") {
 			setResourceStore("loader", null);
+		}
+
+		const active = getSourceDescriptor(resourceStore.activeSource);
+		if (active && !active.supportedResourceTypes.includes(t)) {
+			const fallback = firstSourceForResourceType(t);
+			setResourceStore("activeSource", fallback.id);
+			setResourceStore("sortBy", fallback.defaultSort);
+			setResourceStore("categories", []);
 		}
 
 		resources.fetchCategories();
@@ -371,7 +388,8 @@ export const resources = {
 			loader: null,
 			offset: 0,
 			sortBy:
-				resourceStore.activeSource === "modrinth" ? "relevance" : "featured",
+				getSourceDescriptor(resourceStore.activeSource)?.defaultSort ??
+				"relevance",
 			sortOrder: "desc",
 		});
 		resources.search();

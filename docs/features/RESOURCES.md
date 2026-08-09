@@ -18,6 +18,15 @@ Vesta's resource system enables users to discover and install mods, resource pac
 - **API**: RESTful API with project and file metadata
 - **Features**: Categories, search, dependency information
 
+### Smithed
+- **Pack Platform**: Datapack / resourcepack ecosystem (`api.smithed.dev/v2`)
+- **Browse types**: Data Packs and Resource Packs only
+- **Artifacts**: A pack version may expose datapack and/or resourcepack downloads (`ResourceVersion.files` with roles); the shared artifact planner installs every recognized artifact as one bundle
+- **Peers / hash lookup**: Not supported
+
+### Source catalog
+Platform toggles, sort options, and peer targets are driven by `SourceCapabilities` (Rust) and `RESOURCE_SOURCES` (frontend) rather than hardcoded Modrinth/CurseForge pairs. Search remains **single-source** (`activeSource`).
+
 ## Resource Types
 
 The system supports six main resource types:

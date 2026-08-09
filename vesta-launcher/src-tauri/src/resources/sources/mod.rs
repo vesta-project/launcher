@@ -6,11 +6,15 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 
+pub mod capabilities;
 pub mod curseforge;
 pub mod modrinth;
+pub mod smithed;
 
 #[cfg(test)]
 mod tests;
+
+pub use capabilities::SourceCapabilities;
 
 #[async_trait]
 pub trait ResourceSource: Send + Sync {
@@ -43,4 +47,8 @@ pub trait ResourceSource: Send + Sync {
     async fn get_categories(&self) -> Result<Vec<ResourceCategory>>;
 
     fn platform(&self) -> SourcePlatform;
+
+    fn capabilities(&self) -> SourceCapabilities {
+        SourceCapabilities::for_platform(self.platform())
+    }
 }

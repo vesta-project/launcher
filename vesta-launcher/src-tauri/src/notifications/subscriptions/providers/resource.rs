@@ -64,6 +64,9 @@ impl SubscriptionProvider for ResourceProvider {
                         project_id, latest.id
                     )
                 }
+                SourcePlatform::Smithed => {
+                    format!("https://smithed.dev/packs/{}", project_id)
+                }
             };
 
             items.push(NotificationUpdateItem {

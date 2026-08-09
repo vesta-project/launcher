@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { markPerformance, measurePerformance } from "@utils/performance-trace";
 
 export interface ResourceProjectRef {
-	platform: "modrinth" | "curseforge";
+	platform: "modrinth" | "curseforge" | "smithed";
 	id: string;
 }
 

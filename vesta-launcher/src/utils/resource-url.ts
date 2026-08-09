@@ -119,6 +119,22 @@ export function parseResourceUrl(url: string): ParsedResourceUrl | null {
 			}
 		}
 
+		// 4. Smithed
+		// e.g. smithed.dev/packs/coc , nightly.smithed.net/packs/coc
+		if (
+			hostname === "smithed.dev" ||
+			hostname.endsWith(".smithed.dev") ||
+			hostname === "smithed.net" ||
+			hostname.endsWith(".smithed.net")
+		) {
+			if (pathParts[0] === "packs" && pathParts[1]) {
+				return {
+					platform: "smithed",
+					id: pathParts[1],
+				};
+			}
+		}
+
 		return null;
 	} catch {
 		return null;

@@ -304,6 +304,7 @@ fn main() {
             commands::onboarding::set_setup_step,
             commands::onboarding::download_managed_java,
             commands::resources::get_resource_categories,
+            commands::resources::list_resource_sources,
             commands::resources::search_resources,
             commands::resources::get_resource_project,
             commands::resources::cache_resource_metadata,

@@ -18,15 +18,21 @@ pub enum ResourceType {
 pub enum SourcePlatform {
     Modrinth,
     CurseForge,
+    Smithed,
 }
 
 impl SourcePlatform {
-    pub const ALL: [SourcePlatform; 2] = [SourcePlatform::Modrinth, SourcePlatform::CurseForge];
+    pub const ALL: [SourcePlatform; 3] = [
+        SourcePlatform::Modrinth,
+        SourcePlatform::CurseForge,
+        SourcePlatform::Smithed,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
             SourcePlatform::Modrinth => "modrinth",
             SourcePlatform::CurseForge => "curseforge",
+            SourcePlatform::Smithed => "smithed",
         }
     }
 
@@ -34,6 +40,7 @@ impl SourcePlatform {
         match value.trim().to_ascii_lowercase().as_str() {
             "modrinth" => Some(SourcePlatform::Modrinth),
             "curseforge" => Some(SourcePlatform::CurseForge),
+            "smithed" => Some(SourcePlatform::Smithed),
             _ => None,
         }
     }
@@ -42,6 +49,7 @@ impl SourcePlatform {
         match self {
             SourcePlatform::Modrinth => "Modrinth",
             SourcePlatform::CurseForge => "CurseForge",
+            SourcePlatform::Smithed => "Smithed",
         }
     }
 }
@@ -105,8 +113,9 @@ pub struct ResourceDependency {
     pub dependency_type: DependencyType,
 }
 
-/// A downloadable artifact belonging to a provider version. Roles allow the
-/// shared installer to plan compound versions without knowing the provider.
+/// Extra downloadable artifact on a version (companion packs, alternate files).
+/// Primary install still uses [`ResourceVersion::download_url`] until multi-file
+/// install is wired for all sources.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct ResourceVersionFile {
     pub url: String,
@@ -237,7 +246,7 @@ pub struct ResourceCategory {
 
 #[cfg(test)]
 mod tests {
-    use super::ResourceVersion;
+    use super::{ResourceVersion, SourcePlatform};
 
     #[test]
     fn cached_resource_version_without_detail_stats_still_deserializes() {
@@ -259,5 +268,15 @@ mod tests {
         assert_eq!(version.published_at, None);
         assert_eq!(version.download_count, None);
         assert_eq!(version.file_size, None);
+        assert!(version.files.is_empty());
+    }
+
+    #[test]
+    fn source_platform_round_trips_stable_ids() {
+        for platform in SourcePlatform::ALL {
+            assert_eq!(SourcePlatform::from_str_id(platform.as_str()), Some(platform));
+        }
+        assert_eq!(SourcePlatform::from_str_id("Smithed"), Some(SourcePlatform::Smithed));
+        assert_eq!(SourcePlatform::from_str_id("unknown"), None);
     }
 }

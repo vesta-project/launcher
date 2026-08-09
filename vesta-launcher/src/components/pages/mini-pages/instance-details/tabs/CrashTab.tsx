@@ -35,7 +35,9 @@ const getProjectRecordKey = (
 
 const hasCanonicalResourceLink = (resource: InstalledResource | undefined) =>
 	!!resource?.remote_id &&
-	(resource.platform === "modrinth" || resource.platform === "curseforge");
+	(resource.platform === "modrinth" ||
+		resource.platform === "curseforge" ||
+		resource.platform === "smithed");
 
 function SuspectIcon(props: { name: string; iconUrl?: string | null }) {
 	const displayChar = () => {

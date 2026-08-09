@@ -485,10 +485,7 @@ fn match_result_from_project_version(
     version: ResourceVersion,
     method: &str,
 ) -> ModpackSourceMatch {
-    let platform = match project.source {
-        SourcePlatform::Modrinth => "modrinth",
-        SourcePlatform::CurseForge => "curseforge",
-    };
+    let platform = project.source.as_str();
     ModpackSourceMatch {
         matched: true,
         method: Some(method.to_string()),
