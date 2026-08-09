@@ -10,12 +10,26 @@ import {
 } from "@stores/worlds";
 import Button from "@ui/button/button";
 import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@ui/context-menu/context-menu";
+import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@ui/dropdown-menu/dropdown-menu";
 import { showToast } from "@ui/toast/toast";
 import { formatDate } from "@utils/date";
 import { formatBytes } from "@utils/format-bytes";
@@ -37,6 +51,201 @@ type ViewMode = "grid" | "list";
 type PendingTransfer = {
 	world: WorldSummary;
 	mode: Exclude<WorldTransferMode, "duplicate">;
+};
+
+type WorldAction = {
+	label: string;
+	disabled?: boolean;
+	separatorBefore?: boolean;
+	icon: Component;
+	run: () => void;
+};
+
+const FolderIcon: Component = () => (
+	<svg viewBox="0 0 24 24" aria-hidden="true">
+		<path d="M3 6.5h6l2 2h10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11Z" />
+	</svg>
+);
+
+const MoveIcon: Component = () => (
+	<svg viewBox="0 0 24 24" aria-hidden="true">
+		<path d="M4 12h16m-5-5 5 5-5 5" />
+	</svg>
+);
+
+const CopyIcon: Component = () => (
+	<svg viewBox="0 0 24 24" aria-hidden="true">
+		<rect x="8" y="8" width="11" height="11" rx="2" />
+		<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+	</svg>
+);
+
+const DuplicateIcon: Component = () => (
+	<svg viewBox="0 0 24 24" aria-hidden="true">
+		<rect x="5" y="5" width="12" height="12" rx="2" />
+		<path d="M9 17v2h8a2 2 0 0 0 2-2V9h-2M11 8v6m-3-3h6" />
+	</svg>
+);
+
+const MoreIcon: Component = () => (
+	<svg viewBox="0 0 24 24" aria-hidden="true">
+		<circle cx="12" cy="5" r="1.5" />
+		<circle cx="12" cy="12" r="1.5" />
+		<circle cx="12" cy="19" r="1.5" />
+	</svg>
+);
+
+const ActionLabel: Component<{ action: WorldAction }> = (props) => (
+	<span class={styles["menu-action"]}>
+		<props.action.icon />
+		{props.action.label}
+	</span>
+);
+
+const WorldCard: Component<{
+	world: WorldSummary;
+	busy: boolean;
+	onMove: () => void;
+	onCopy: () => void;
+	onDuplicate: () => void;
+}> = (props) => {
+	const actions = (): WorldAction[] => [
+		{
+			label: "Open folder",
+			icon: FolderIcon,
+			run: () => void openWorldFolder(props.world.ref),
+		},
+		{
+			label: "Move to another instance…",
+			icon: MoveIcon,
+			disabled: props.busy,
+			separatorBefore: true,
+			run: props.onMove,
+		},
+		{
+			label: "Copy to another instance…",
+			icon: CopyIcon,
+			disabled: props.busy,
+			run: props.onCopy,
+		},
+		{
+			label: "Duplicate",
+			icon: DuplicateIcon,
+			disabled: props.busy,
+			run: props.onDuplicate,
+		},
+	];
+	const version = () =>
+		props.world.gameVersion ??
+		(props.world.dataVersion != null
+			? `DataVersion ${props.world.dataVersion}`
+			: "Unknown");
+	const transferStatus = () => {
+		if (props.world.running) return "Running";
+		if (props.world.levelStatus === "unreadable") return "Unreadable";
+		return null;
+	};
+
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger as="article" class={styles.card}>
+				<div class={styles.media}>
+					<WorldIcon
+						class={styles["media-image"]}
+						src={props.world.iconDataUrl}
+						name={props.world.displayName}
+					/>
+					<div class={styles["media-fade"]} aria-hidden="true" />
+					<Show when={transferStatus()}>
+						{(status) => (
+							<span class={styles["status-badge"]}>{status()}</span>
+						)}
+					</Show>
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							as="button"
+							type="button"
+							class={styles["menu-trigger"]}
+							aria-label={`Actions for ${props.world.displayName}`}
+							onClick={(event: MouseEvent) => event.stopPropagation()}
+						>
+							<MoreIcon />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent
+							class={styles.menu}
+							onCloseAutoFocus={(event) => event.preventDefault()}
+						>
+							<For each={actions()}>
+								{(action) => (
+									<>
+										<Show when={action.separatorBefore}>
+											<DropdownMenuSeparator />
+										</Show>
+										<DropdownMenuItem
+											disabled={action.disabled}
+											onSelect={action.run}
+										>
+											<ActionLabel action={action} />
+										</DropdownMenuItem>
+									</>
+								)}
+							</For>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
+
+				<div class={styles["card-body"]}>
+					<div class={styles.identity}>
+						<h3 class={styles.name} title={props.world.displayName}>
+							{props.world.displayName}
+						</h3>
+						<div class={styles.folder} title={props.world.folderName}>
+							{props.world.folderName}
+						</div>
+					</div>
+					<div class={styles.stats}>
+						<div class={styles.stat}>
+							<span>Last played</span>
+							<strong>{formatDate(props.world.lastPlayedAt)}</strong>
+						</div>
+						<div class={styles.stat}>
+							<span>Size</span>
+							<strong>{formatBytes(props.world.sizeBytes)}</strong>
+						</div>
+						<div class={styles.stat}>
+							<span>Version</span>
+							<strong title={version()}>{version()}</strong>
+						</div>
+						<div class={styles.stat}>
+							<span>Data packs</span>
+							<strong>{props.world.datapackCount}</strong>
+						</div>
+					</div>
+					<Show when={props.world.running || props.world.levelStatus === "unreadable"}>
+						<p class={styles.status}>
+							{props.world.running
+								? "Close Minecraft to transfer this world."
+								: "Level data is unreadable, so transfers are unavailable."}
+						</p>
+					</Show>
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent class={styles.menu}>
+				<For each={actions()}>
+					{(action) => (
+						<>
+							<Show when={action.separatorBefore}>
+								<ContextMenuSeparator />
+							</Show>
+							<ContextMenuItem disabled={action.disabled} onSelect={action.run}>
+								<ActionLabel action={action} />
+							</ContextMenuItem>
+						</>
+					)}
+				</For>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
 };
 
 export const sortWorlds = (worlds: readonly WorldSummary[], sort: SortMode) =>
@@ -210,80 +419,19 @@ export const WorldsTab: Component<{ instance: Instance }> = (props) => {
 										world.levelStatus === "unreadable" ||
 										busyWorld() === world.ref.directoryName;
 									return (
-										<article class={styles.card}>
-											<div class={styles["card-main"]}>
-												<WorldIcon
-													class={styles.icon}
-													src={world.iconDataUrl}
-													name={world.displayName}
-												/>
-												<div class={styles.copy}>
-													<h3 class={styles.name}>{world.displayName}</h3>
-													<div class={styles.folder}>{world.folderName}</div>
-													<div class={styles.facts}>
-														<span>{formatDate(world.lastPlayedAt)}</span>
-														<span>{formatBytes(world.sizeBytes)}</span>
-														<span>
-															{world.gameVersion ??
-																(world.dataVersion != null
-																	? `DataVersion ${world.dataVersion}`
-																	: "Unknown version")}
-														</span>
-														<span>
-															{world.datapackCount} datapack
-															{world.datapackCount === 1 ? "" : "s"}
-														</span>
-													</div>
-													<Show
-														when={
-															world.running ||
-															world.levelStatus === "unreadable"
-														}
-													>
-														<div class={styles.status}>
-															{world.running
-																? "Close Minecraft to transfer this world."
-																: "Level data is unreadable."}
-														</div>
-													</Show>
-												</div>
-											</div>
-											<div class={styles.actions}>
-												<button
-													type="button"
-													onClick={() => void openWorldFolder(world.ref)}
-												>
-													Open folder
-												</button>
-												<button
-													type="button"
-													disabled={disabled()}
-													onClick={() => setPending({ world, mode: "move" })}
-												>
-													Move
-												</button>
-												<button
-													type="button"
-													disabled={disabled()}
-													onClick={() => setPending({ world, mode: "copy" })}
-												>
-													Copy
-												</button>
-												<button
-													type="button"
-													disabled={disabled()}
-													onClick={() =>
-														void performTransfer(
-															world,
-															props.instance,
-															"duplicate",
-														)
-													}
-												>
-													Duplicate
-												</button>
-											</div>
-										</article>
+										<WorldCard
+											world={world}
+											busy={disabled()}
+											onMove={() => setPending({ world, mode: "move" })}
+											onCopy={() => setPending({ world, mode: "copy" })}
+											onDuplicate={() =>
+												void performTransfer(
+													world,
+													props.instance,
+													"duplicate",
+												)
+											}
+										/>
 									);
 								}}
 							</For>
