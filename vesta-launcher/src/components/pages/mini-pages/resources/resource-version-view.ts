@@ -1,5 +1,6 @@
 import type { Instance } from "@stores/instances";
 import type { ResourceProject, ResourceVersion } from "@stores/resources";
+import { versionMatchesResourceType } from "@utils/resource-install-intent";
 import { getCompatibilityForInstance } from "@utils/resources";
 import { sanitizeHtml } from "@utils/security";
 import { marked } from "marked";
@@ -72,8 +73,13 @@ export function versionsSupportedByInstance(
 	versions: readonly ResourceVersion[],
 	instance: Instance | null | undefined,
 ): ResourceVersion[] {
-	if (!instance || project?.resource_type === "modpack") return [...versions];
-	return versions.filter(
+	const matchingProjectType = versions.filter((version) =>
+		versionMatchesResourceType(project?.resource_type, version),
+	);
+	if (!instance || project?.resource_type === "modpack") {
+		return matchingProjectType;
+	}
+	return matchingProjectType.filter(
 		(version) =>
 			getCompatibilityForInstance(project, version, instance).type !==
 			"incompatible",

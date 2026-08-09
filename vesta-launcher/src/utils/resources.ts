@@ -1,6 +1,9 @@
 import type { Instance } from "@stores/instances";
 import { type ResourceProject, type ResourceVersion } from "@stores/resources";
-import { isGameVersionCompatible } from "@utils/resource-install-intent";
+import {
+	isGameVersionCompatible,
+	versionMatchesResourceType,
+} from "@utils/resource-install-intent";
 
 export interface CompatibilityResult {
 	type: "compatible" | "warning" | "incompatible";
@@ -61,6 +64,12 @@ export const getCompatibilityForInstance = (
 ): CompatibilityResult => {
 	const instLoader = instance.modloader?.toLowerCase() || "";
 	const resType = project?.resource_type;
+	if (!versionMatchesResourceType(resType, version)) {
+		return {
+			type: "incompatible",
+			reason: "This release is not a datapack build.",
+		};
+	}
 
 	// 1. Version check (Most important)
 	const matchesVersion = isGameVersionCompatible(

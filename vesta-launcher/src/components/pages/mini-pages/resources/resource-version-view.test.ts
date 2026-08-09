@@ -83,6 +83,27 @@ describe("versionsSupportedByInstance", () => {
 			),
 		).toEqual(versions);
 	});
+
+	it("shows only datapack builds from a multi-platform project", () => {
+		const mixedVersions = [
+			version("fabric", ["1.21"], ["fabric"]),
+			version("paper", ["1.21"], ["paper"]),
+			version("datapack", ["1.21"], ["datapack"]),
+		];
+
+		expect(
+			versionsSupportedByInstance(project("datapack"), mixedVersions, null).map(
+				(item) => item.id,
+			),
+		).toEqual(["datapack"]);
+		expect(
+			versionsSupportedByInstance(
+				project("datapack"),
+				mixedVersions,
+				instance("1.21", "vanilla"),
+			).map((item) => item.id),
+		).toEqual(["datapack"]);
+	});
 });
 
 describe("summarizeGameVersions", () => {

@@ -914,10 +914,13 @@ const ResourceDetailsPage: Component<{
 			selectedInstance(),
 		);
 	});
+	const projectTypeVersions = createMemo(() =>
+		versionsSupportedByInstance(project(), resources.state.versions, null),
+	);
 
 	const uniqueGameVersions = createMemo(() => {
 		const seen = new Set<string>();
-		for (const v of resources.state.versions) {
+		for (const v of projectTypeVersions()) {
 			for (const gv of minecraftGameVersions(v.game_versions)) {
 				seen.add(gv);
 			}
@@ -936,7 +939,7 @@ const ResourceDetailsPage: Component<{
 
 	const uniqueLoaders = createMemo(() => {
 		const seen = new Set<string>();
-		for (const v of resources.state.versions) {
+		for (const v of projectTypeVersions()) {
 			for (const l of v.loaders) {
 				const lower = l.toLowerCase();
 				if (lower && lower !== "vanilla") {
@@ -1341,6 +1344,10 @@ const ResourceDetailsPage: Component<{
 		options?: { skipCache?: boolean },
 	) {
 		const requestSequence = ++projectRequestSequence;
+		const contextualResourceType =
+			project()?.id === id && project()?.source === platform
+				? project()?.resource_type
+				: undefined;
 		setLoading(true);
 		setError(null);
 
@@ -1369,8 +1376,12 @@ const ResourceDetailsPage: Component<{
 		}
 
 		try {
-			const p = await resources.getProject(platform, id);
+			const fetchedProject = await resources.getProject(platform, id);
 			if (requestSequence !== projectRequestSequence) return;
+			const p =
+				fetchedProject && contextualResourceType
+					? { ...fetchedProject, resource_type: contextualResourceType }
+					: fetchedProject;
 			if (p) setProjectCache(platform, p);
 
 			setProject(p);

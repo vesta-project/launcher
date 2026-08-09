@@ -58,6 +58,22 @@ export function isGameVersionCompatible(
 	});
 }
 
+/**
+ * A provider project can publish several distribution variants in one version
+ * feed. Datapack projects must not reinterpret a mod or server-plugin release
+ * as a datapack merely because the project itself is categorized as one.
+ * Loaderless releases remain valid for providers that do not expose variant
+ * metadata.
+ */
+export function versionMatchesResourceType(
+	resourceType: ResourceType | undefined,
+	version: Pick<ResourceVersion, "loaders">,
+): boolean {
+	if (resourceType !== "datapack") return true;
+	const loaders = version.loaders.map((loader) => loader.toLowerCase());
+	return loaders.length === 0 || loaders.includes("datapack");
+}
+
 export type InstalledResourceMatch = Pick<
 	InstalledResource,
 	| "remote_id"
@@ -131,19 +147,18 @@ export function findBestVersion(
 				: ["release", "beta", "alpha"];
 
 	const compatible = versions.filter((version) => {
+		if (!versionMatchesResourceType(resourceType, version)) return false;
 		if (!isGameVersionCompatible(version.game_versions, gameVersion))
 			return false;
 
 		const loaders = version.loaders.map((loader) => loader.toLowerCase());
 		let matchesLoader = false;
-		if (
-			resourceType === "shader" ||
-			resourceType === "resourcepack" ||
-			resourceType === "datapack"
-		) {
+		if (resourceType === "shader" || resourceType === "resourcepack") {
 			matchesLoader =
 				resourceType !== "shader" ||
 				(instanceLoader !== "" && instanceLoader !== "vanilla");
+		} else if (resourceType === "datapack") {
+			matchesLoader = true;
 		} else if (instanceLoader === "" || instanceLoader === "vanilla") {
 			if (resourceType === "mod") matchesLoader = false;
 			else if (resourceType === "modpack") matchesLoader = true;

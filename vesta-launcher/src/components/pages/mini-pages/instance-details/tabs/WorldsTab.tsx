@@ -1,4 +1,3 @@
-import CubeIcon from "@assets/cube.svg";
 import ReloadIcon from "@assets/reload.svg";
 import TimerIcon from "@assets/timer.svg";
 import InstanceSelectionDialog, {
@@ -6,7 +5,7 @@ import InstanceSelectionDialog, {
 } from "@components/instances/InstanceSelectionDialog";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
-import { instancesState, type Instance } from "@stores/instances";
+import { type Instance, instancesState } from "@stores/instances";
 import {
 	listInstanceWorlds,
 	openWorldFolder,
@@ -183,11 +182,6 @@ const WorldCard: Component<{
 			run: props.onDuplicate,
 		},
 	];
-	const version = () =>
-		props.world.gameVersion ??
-		(props.world.dataVersion != null
-			? `DataVersion ${props.world.dataVersion}`
-			: "Unknown");
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger as="article" class={styles.card}>
@@ -198,69 +192,25 @@ const WorldCard: Component<{
 						name={props.world.displayName}
 					/>
 					<div class={styles["media-fade"]} aria-hidden="true" />
-					<Show
-						when={props.world.levelStatus === "unreadable"}
-					>
+					<Show when={props.world.levelStatus === "unreadable"}>
 						<Badge variant="error" class={styles["world-status"]}>
 							Unreadable
 						</Badge>
 					</Show>
-					<DropdownMenu>
-						<DropdownMenuTrigger
-							as="button"
-							type="button"
-							class={styles["menu-trigger"]}
-							aria-label={`Actions for ${props.world.displayName}`}
-							onClick={(event: MouseEvent) => event.stopPropagation()}
-						>
-							<MoreIcon />
-						</DropdownMenuTrigger>
-						<DropdownMenuContent
-							class={styles.menu}
-							onCloseAutoFocus={(event) => event.preventDefault()}
-						>
-							<For each={actions()}>
-								{(action) => (
-									<>
-										<Show when={action.separatorBefore}>
-											<DropdownMenuSeparator />
-										</Show>
-										<DropdownMenuItem
-											disabled={action.disabled}
-											onSelect={action.run}
-										>
-											<ActionLabel action={action} />
-										</DropdownMenuItem>
-									</>
-								)}
-							</For>
-						</DropdownMenuContent>
-					</DropdownMenu>
 				</div>
 
 				<div class={styles["card-body"]}>
 					<div class={styles.identity}>
-						<div class={styles["identity-copy"]}>
-							<h3
-								class={styles.name}
-								title={
-									props.world.folderName === props.world.displayName
-										? props.world.displayName
-										: `${props.world.displayName} (${props.world.folderName})`
-								}
-							>
-								{props.world.displayName}
-							</h3>
-						</div>
-						<Badge
-							variant="surface"
-							pill
-							class={styles["version-badge"]}
-							title={`Minecraft ${version()}`}
+						<h3
+							class={styles.name}
+							title={
+								props.world.folderName === props.world.displayName
+									? props.world.displayName
+									: `${props.world.displayName} (${props.world.folderName})`
+							}
 						>
-							<CubeIcon class={styles["filled-icon"]} />
-							{version()}
-						</Badge>
+							{props.world.displayName}
+						</h3>
 					</div>
 					<div class={styles.metadata}>
 						<span
@@ -293,6 +243,39 @@ const WorldCard: Component<{
 							{props.world.datapackCount}
 						</button>
 					</div>
+				</div>
+				<div class={styles["card-actions"]}>
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							as="button"
+							type="button"
+							class={styles["menu-trigger"]}
+							aria-label={`Actions for ${props.world.displayName}`}
+							onClick={(event: MouseEvent) => event.stopPropagation()}
+						>
+							<MoreIcon />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent
+							class={styles.menu}
+							onCloseAutoFocus={(event) => event.preventDefault()}
+						>
+							<For each={actions()}>
+								{(action) => (
+									<>
+										<Show when={action.separatorBefore}>
+											<DropdownMenuSeparator />
+										</Show>
+										<DropdownMenuItem
+											disabled={action.disabled}
+											onSelect={action.run}
+										>
+											<ActionLabel action={action} />
+										</DropdownMenuItem>
+									</>
+								)}
+							</For>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</div>
 			</ContextMenuTrigger>
 			<ContextMenuContent class={styles.menu}>
@@ -427,7 +410,10 @@ export const WorldsTab: Component<{
 							</SelectItem>
 						)}
 					>
-						<SelectTrigger class={styles["sort-select"]} aria-label="Sort worlds">
+						<SelectTrigger
+							class={styles["sort-select"]}
+							aria-label="Sort worlds"
+						>
 							<SelectValue<string>>
 								{(state) =>
 									SORT_OPTIONS.find(
@@ -500,23 +486,16 @@ export const WorldsTab: Component<{
 						<div class={styles.worlds} data-view={view()}>
 							<For each={worlds()}>
 								{(world) => {
-									const busy = () =>
-										busyWorld() === world.ref.directoryName;
+									const busy = () => busyWorld() === world.ref.directoryName;
 									return (
 										<WorldCard
 											world={world}
 											busy={busy()}
 											onMove={() => setPending({ world, mode: "move" })}
 											onCopy={() => setPending({ world, mode: "copy" })}
-											onManageDatapacks={() =>
-												props.onManageDatapacks(world)
-											}
+											onManageDatapacks={() => props.onManageDatapacks(world)}
 											onDuplicate={() =>
-												void performTransfer(
-													world,
-													props.instance,
-													"duplicate",
-												)
+												void performTransfer(world, props.instance, "duplicate")
 											}
 										/>
 									);
@@ -537,11 +516,7 @@ export const WorldsTab: Component<{
 				onSelect={(destination) => {
 					const action = pending();
 					if (action)
-						void performTransfer(
-							action.world,
-							destination,
-							action.mode,
-						);
+						void performTransfer(action.world, destination, action.mode);
 				}}
 			/>
 		</section>

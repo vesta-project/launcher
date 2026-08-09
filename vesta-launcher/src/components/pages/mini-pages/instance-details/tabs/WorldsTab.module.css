@@ -45,7 +45,7 @@
 }
 .worlds {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 	gap: 12px;
 }
 .worlds[data-view="list"] {
@@ -71,7 +71,7 @@
 }
 .media {
 	position: relative;
-	height: 150px;
+	height: 132px;
 	overflow: hidden;
 	flex: 0 0 auto;
 	background: var(--surface-sunken);
@@ -98,10 +98,12 @@
 .card:focus-within .media-fade {
 	background: linear-gradient(to top, var(--surface-raised), transparent);
 }
-.menu-trigger {
+.card-actions {
 	position: absolute;
 	top: 9px;
 	right: 9px;
+}
+.menu-trigger {
 	display: grid;
 	width: 30px;
 	height: 30px;
@@ -144,13 +146,6 @@
 	padding: 12px 14px 14px;
 }
 .identity {
-	display: grid;
-	min-width: 0;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: start;
-	gap: 10px;
-}
-.identity-copy {
 	min-width: 0;
 }
 .name {
@@ -178,8 +173,7 @@
 	gap: 4px;
 	white-space: nowrap;
 }
-.metadata-item svg,
-.version-badge svg {
+.metadata-item svg {
 	width: 13px;
 	height: 13px;
 	flex: 0 0 auto;
@@ -189,8 +183,7 @@
 	stroke-linejoin: round;
 	stroke-width: 1.8;
 }
-.metadata-item .outline-icon,
-.version-badge .outline-icon {
+.metadata-item .outline-icon {
 	fill: none;
 	stroke: currentcolor;
 	stroke-linecap: round;
@@ -212,13 +205,6 @@
 .metadata-button:focus-visible {
 	outline: 2px solid var(--primary);
 	outline-offset: 3px;
-}
-.version-badge {
-	max-width: 100%;
-	overflow: hidden;
-	font-size: 10px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 .menu {
 	min-width: 210px;
@@ -242,13 +228,15 @@
 	flex-direction: column;
 }
 .worlds[data-view="list"] .card {
-	min-height: 78px;
+	display: grid;
+	min-height: 96px;
+	grid-template-columns: 96px minmax(0, 1fr) auto;
 	align-items: stretch;
 }
 .worlds[data-view="list"] .media {
-	width: 84px;
+	width: auto;
 	height: auto;
-	min-height: 78px;
+	min-height: 96px;
 }
 .worlds[data-view="list"] .media-fade {
 	inset: 0 0 0 auto;
@@ -260,11 +248,6 @@
 .worlds[data-view="list"] .card:focus-within .media-fade {
 	background: linear-gradient(to left, var(--surface-raised), transparent);
 }
-.worlds[data-view="list"] .menu-trigger {
-	top: 8px;
-	right: auto;
-	left: 8px;
-}
 .worlds[data-view="list"] .world-status {
 	top: auto;
 	bottom: 8px;
@@ -275,10 +258,26 @@
 }
 .worlds[data-view="list"] .card-body {
 	display: grid;
-	grid-template-columns: minmax(130px, 1fr) auto;
-	align-items: center;
-	gap: 18px;
+	align-content: center;
+	gap: 9px;
 	padding: 13px 16px;
+}
+.worlds[data-view="list"] .metadata {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, max-content));
+	gap: 7px 18px;
+}
+.worlds[data-view="list"] .card-actions {
+	position: static;
+	display: flex;
+	align-items: center;
+	padding-right: 12px;
+}
+.worlds[data-view="list"] .menu-trigger {
+	border-color: var(--border);
+	background: var(--surface-sunken);
+	box-shadow: none;
+	backdrop-filter: none;
 }
 .empty,
 .loading,
@@ -295,7 +294,7 @@
 .error {
 	color: var(--destructive);
 }
-@media (max-width: 620px) {
+@media (max-width: 500px) {
 	.worlds {
 		grid-template-columns: 1fr;
 	}
@@ -306,7 +305,10 @@
 		flex: 1;
 	}
 	.worlds[data-view="list"] .card-body {
+		padding: 12px;
+	}
+	.worlds[data-view="list"] .metadata {
 		grid-template-columns: 1fr;
-		gap: 10px;
+		gap: 6px;
 	}
 }

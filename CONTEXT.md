@@ -287,7 +287,11 @@ Primary modules:
 
 The user intent to install, update, remove, or navigate from a Resource into an
 Instance flow. It includes compatibility, installed matching, update availability,
-and action feedback.
+and action feedback. Compatible-version selection first constrains a provider's
+release feed to the Resource type the user is browsing. This is significant for
+multi-platform projects whose feed mixes datapack, mod, and server-plugin builds:
+declared loader metadata selects the datapack build, while loaderless datapack
+releases remain supported for providers without variant metadata.
 
 Primary modules:
 

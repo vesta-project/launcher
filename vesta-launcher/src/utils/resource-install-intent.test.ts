@@ -9,6 +9,7 @@ import {
 	isGameVersionCompatible,
 	isResourceUpdateAvailable,
 	requiresWorldTarget,
+	versionMatchesResourceType,
 } from "@utils/resource-install-intent";
 import { describe, expect, it } from "vitest";
 
@@ -78,13 +79,17 @@ describe("resource install intent", () => {
 		expect(
 			requiresWorldTarget(
 				project({ resource_type: "resourcepack" }),
-				version({ files: [{ url: "", file_name: "data.zip", role: "datapack" }] }),
+				version({
+					files: [{ url: "", file_name: "data.zip", role: "datapack" }],
+				}),
 			),
 		).toBe(true);
 		expect(
 			requiresWorldTarget(
 				project({ resource_type: "resourcepack" }),
-				version({ files: [{ url: "", file_name: "resources.zip", role: "primary" }] }),
+				version({
+					files: [{ url: "", file_name: "resources.zip", role: "primary" }],
+				}),
 			),
 		).toBe(false);
 	});
@@ -143,6 +148,38 @@ describe("resource install intent", () => {
 				"shader",
 			),
 		).toBeNull();
+	});
+
+	it("selects the datapack release from a multi-platform project", () => {
+		const selected = findBestVersion(
+			[
+				version({ id: "fabric", loaders: ["fabric"], file_name: "mod.jar" }),
+				version({ id: "paper", loaders: ["paper"], file_name: "plugin.jar" }),
+				version({
+					id: "datapack",
+					loaders: ["datapack"],
+					file_name: "pack.zip",
+				}),
+			],
+			"1.21.1",
+			"vanilla",
+			"release",
+			"datapack",
+		);
+
+		expect(selected?.id).toBe("datapack");
+	});
+
+	it("accepts loaderless datapacks but rejects declared non-datapack variants", () => {
+		expect(
+			versionMatchesResourceType("datapack", version({ loaders: [] })),
+		).toBe(true);
+		expect(
+			versionMatchesResourceType(
+				"datapack",
+				version({ loaders: ["neoforge"] }),
+			),
+		).toBe(false);
 	});
 
 	it("matches installed resources by primary or external project id", () => {
