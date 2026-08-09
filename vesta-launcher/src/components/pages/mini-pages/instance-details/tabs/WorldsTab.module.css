@@ -299,40 +299,6 @@
 .error {
 	color: var(--destructive);
 }
-.destination-dialog {
-	width: min(500px, 92vw);
-	max-width: 500px !important;
-}
-.destination-list {
-	display: grid;
-	gap: 8px;
-	max-height: 380px;
-	margin-top: 14px;
-	overflow-y: auto;
-}
-.destination {
-	display: flex;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 11px;
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	background: var(--surface-low);
-	color: var(--text);
-	cursor: pointer;
-	text-align: left;
-}
-.destination:hover {
-	background: var(--surface-medium);
-}
-.destination:disabled {
-	cursor: not-allowed;
-	opacity: 0.55;
-}
-.destination small {
-	color: var(--text-secondary);
-}
-
 @media (max-width: 620px) {
 	.worlds {
 		grid-template-columns: 1fr;

@@ -73,7 +73,7 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
-import InstanceSelectionDialog from "./instance-selection-dialog";
+import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import styles from "./resource-details.module.css";
 import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-composition/collapsing-header-progress";
 import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
@@ -3101,7 +3101,7 @@ const ResourceDetailsPage: Component<{
 						<div class={styles["link-preview-statusBar"]}>{hoveredLink()}</div>
 					</Show>
 
-					<InstanceSelectionDialog
+					<ResourceInstanceSelectionDialog
 						isOpen={isInstanceDialogOpen()}
 						onClose={() => {
 							setIsInstanceDialogOpen(false);

@@ -1,3 +1,7 @@
+import InstanceSelectionDialog, {
+	type InstanceSelectionOption,
+} from "@components/instances/InstanceSelectionDialog";
+import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
 import { instancesState, type Instance } from "@stores/instances";
 import {
@@ -17,13 +21,6 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@ui/dialog/dialog";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -42,7 +39,6 @@ import {
 	For,
 	Show,
 } from "solid-js";
-import { WorldIcon } from "@components/worlds/WorldIcon";
 import styles from "./WorldsTab.module.css";
 import { getWorldTransferWarnings } from "./world-transfer";
 
@@ -290,6 +286,20 @@ export const WorldsTab: Component<{ instance: Instance }> = (props) => {
 	);
 	const destinationRunning = (destination: Instance) =>
 		Boolean(instancesState.runningIds[getInstanceSlug(destination)]);
+	const destinationOptions = createMemo<InstanceSelectionOption[]>(() =>
+		destinations().map((instance) => {
+			const running = destinationRunning(instance);
+			return {
+				instance,
+				disabled: running,
+				detail: running
+					? "Close Minecraft before transferring a world here."
+					: undefined,
+				badge: running ? "Running" : undefined,
+				tone: running ? "danger" : "neutral",
+			};
+		}),
+	);
 
 	const performTransfer = async (
 		world: WorldSummary,
@@ -440,55 +450,23 @@ export const WorldsTab: Component<{ instance: Instance }> = (props) => {
 				</Show>
 			</Show>
 
-			<Dialog
-				open={Boolean(pending())}
-				onOpenChange={(open) => !open && setPending(null)}
-			>
-				<DialogContent class={styles["destination-dialog"]}>
-					<DialogHeader>
-						<DialogTitle>
-							{pending()?.mode === "move" ? "Move" : "Copy"}{" "}
-							{pending()?.world.displayName}
-						</DialogTitle>
-						<DialogDescription>
-							Choose a destination instance. Existing worlds are never
-							overwritten or merged.
-						</DialogDescription>
-					</DialogHeader>
-					<div class={styles["destination-list"]}>
-						<For each={destinations()}>
-							{(destination) => (
-								<button
-									type="button"
-									class={styles.destination}
-									disabled={destinationRunning(destination)}
-									title={
-										destinationRunning(destination)
-											? "Close Minecraft before transferring a world here."
-											: ""
-									}
-									onClick={() => {
-										const action = pending();
-										if (action)
-											void performTransfer(
-												action.world,
-												destination,
-												action.mode,
-											);
-									}}
-								>
-									<span>{destination.name}</span>
-									<small>
-										{destinationRunning(destination)
-											? "Running — close Minecraft first"
-											: `${destination.minecraftVersion} · ${destination.modloader || "Vanilla"}`}
-									</small>
-								</button>
-							)}
-						</For>
-					</div>
-				</DialogContent>
-			</Dialog>
+			<InstanceSelectionDialog
+				isOpen={Boolean(pending())}
+				title={`${pending()?.mode === "move" ? "Move" : "Copy"} ${pending()?.world.displayName ?? "world"}`}
+				description="Choose a destination instance. Existing worlds are never overwritten or merged."
+				options={destinationOptions()}
+				emptyMessage="No other instances are available for this transfer."
+				onClose={() => setPending(null)}
+				onSelect={(destination) => {
+					const action = pending();
+					if (action)
+						void performTransfer(
+							action.world,
+							destination,
+							action.mode,
+						);
+				}}
+			/>
 		</section>
 	);
 };

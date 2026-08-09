@@ -35,7 +35,7 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
-import InstanceSelectionDialog from "./instance-selection-dialog";
+import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import styles from "./resource-browser.module.css";
 import ResourceCard from "./resource-card";
 import { ResourceSkeletonGrid } from "./resource-skeleton";
@@ -681,7 +681,7 @@ const ResourceBrowser: Component<{
 				</Show>
 			</div>
 
-			<InstanceSelectionDialog
+			<ResourceInstanceSelectionDialog
 				isOpen={isInstanceDialogOpen()}
 				onClose={() => {
 					setIsInstanceDialogOpen(false);

@@ -61,17 +61,6 @@
 	opacity: 0.58;
 }
 
-.instance-mark {
-	display: grid;
-	place-items: center;
-	width: 42px;
-	height: 42px;
-	flex: 0 0 auto;
-	border-radius: 10px;
-	background: color-mix(in srgb, var(--primary) 14%, var(--surface-medium));
-	font-weight: 750;
-}
-
 .copy {
 	min-width: 0;
 	flex: 1;

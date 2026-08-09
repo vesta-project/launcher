@@ -1,3 +1,6 @@
+import InstanceSelectionDialog, {
+	type InstanceSelectionOption,
+} from "@components/instances/InstanceSelectionDialog";
 import { instancesState } from "@stores/instances";
 import {
 	listInstanceWorlds,
@@ -42,7 +45,9 @@ export const worldDisabledReason = (world: WorldSummary): string | null => {
 export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 	props,
 ) => {
-	const [instanceId, setInstanceId] = createSignal<number | null>(null);
+	const [instanceId, setInstanceId] = createSignal<number | null>(
+		props.initialInstanceId ?? null,
+	);
 	const [worlds, setWorlds] = createSignal<WorldSummary[]>([]);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
@@ -51,12 +56,8 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 	const selectedInstance = createMemo(() =>
 		instancesState.instances.find((instance) => instance.id === instanceId()),
 	);
-	const sortedInstances = createMemo(() =>
-		[...instancesState.instances].sort((a, b) => {
-			const left = a.lastPlayed ? new Date(a.lastPlayed).getTime() : 0;
-			const right = b.lastPlayed ? new Date(b.lastPlayed).getTime() : 0;
-			return right - left || a.name.localeCompare(b.name);
-		}),
+	const instanceOptions = createMemo<InstanceSelectionOption[]>(() =>
+		instancesState.instances.map((instance) => ({ instance })),
 	);
 
 	createEffect(() => {
@@ -97,59 +98,41 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 	};
 
 	return (
-		<Dialog
-			open={props.isOpen}
-			onOpenChange={(open) => !open && props.onClose()}
-		>
-			<DialogContent class={styles.dialog}>
-				<DialogHeader>
-					<DialogTitle>
-						{instanceId() == null ? "Choose an instance" : "Choose a world"}
-					</DialogTitle>
-					<DialogDescription>
-						{instanceId() == null
-							? `First choose the instance that owns the world for ${props.projectName ?? "this datapack"}.`
-							: `Install ${props.projectName ?? "this datapack"} into one world. Companion packs will use the same instance.`}
-					</DialogDescription>
-				</DialogHeader>
+		<>
+			<InstanceSelectionDialog
+				isOpen={props.isOpen && instanceId() == null}
+				title="Choose an instance"
+				description={`First choose the instance that owns the world for ${props.projectName ?? "this datapack"}.`}
+				options={instanceOptions()}
+				emptyMessage="Create an instance and play a world before installing this datapack."
+				onClose={props.onClose}
+				onSelect={(instance) => selectInstance(instance.id)}
+			/>
 
-				<div class={styles.body}>
-					<Show when={instanceId() != null && props.initialInstanceId == null}>
-						<button
-							class={styles.back}
-							type="button"
-							onClick={() => setInstanceId(null)}
-						>
-							← Choose another instance
-						</button>
-					</Show>
+			<Dialog
+				open={props.isOpen && instanceId() != null}
+				onOpenChange={(open) => !open && props.onClose()}
+			>
+				<DialogContent class={styles.dialog}>
+					<DialogHeader>
+						<DialogTitle>Choose a world</DialogTitle>
+						<DialogDescription>
+							Install {props.projectName ?? "this datapack"} into one world.
+							Companion packs will use the same instance.
+						</DialogDescription>
+					</DialogHeader>
 
-					<Show when={instanceId() == null}>
-						<div class={styles.list} aria-label="Instances">
-							<For each={sortedInstances()}>
-								{(instance) => (
-									<button
-										class={styles.row}
-										type="button"
-										onClick={() => selectInstance(instance.id)}
-									>
-										<span class={styles["instance-mark"]}>
-											{instance.name.charAt(0).toUpperCase() || "?"}
-										</span>
-										<span class={styles.copy}>
-											<span class={styles.name}>{instance.name}</span>
-											<span class={styles.meta}>
-												{instance.minecraftVersion} ·{" "}
-												{instance.modloader || "Vanilla"}
-											</span>
-										</span>
-									</button>
-								)}
-							</For>
-						</div>
-					</Show>
+					<div class={styles.body}>
+						<Show when={props.initialInstanceId == null}>
+							<button
+								class={styles.back}
+								type="button"
+								onClick={() => setInstanceId(null)}
+							>
+								← Choose another instance
+							</button>
+						</Show>
 
-					<Show when={instanceId() != null}>
 						<Show
 							when={!loading()}
 							fallback={<div class={styles.loading}>Finding worlds…</div>}
@@ -209,9 +192,9 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 								</div>
 							</Show>
 						</Show>
-					</Show>
-				</div>
-			</DialogContent>
-		</Dialog>
+					</div>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 };
