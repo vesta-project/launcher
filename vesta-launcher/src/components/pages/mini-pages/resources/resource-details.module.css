@@ -748,6 +748,58 @@
 	color: var(--text-muted);
 }
 
+.artifact-bundle-label {
+	color: var(--text-secondary);
+	font-size: 11px;
+	font-weight: 650;
+	white-space: nowrap;
+}
+
+.artifact-role-row {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	min-width: 0;
+}
+
+.artifact-role-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 6px;
+	border-radius: 999px;
+	border: 1px solid var(--border-subtle);
+	background: color-mix(in srgb, var(--surface-raised) 70%, transparent);
+	color: var(--text-secondary);
+	font-size: 10px;
+	font-weight: 650;
+	line-height: 1.3;
+	white-space: nowrap;
+}
+
+.artifact-file-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.artifact-file-list li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.artifact-file-list li > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-secondary);
+	font-size: 12px;
+}
+
 .version-summary-row,
 .recent-version-row {
 	position: relative;

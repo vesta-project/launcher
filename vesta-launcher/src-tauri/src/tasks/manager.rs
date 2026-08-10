@@ -382,7 +382,7 @@ impl TaskManager {
 
                         // Notify frontend about failure if it's a resource download
                         if let Some(task_id) = task.id() {
-                            if task_id.starts_with("download_") {
+                            if task_id.starts_with("download_") || task_id.starts_with("download|") {
                                 let _ = app.emit("resource-install-error", task_id);
                             }
                         }
@@ -474,7 +474,7 @@ impl TaskManager {
 
                             // Notify frontend about failure if it follows the resource download pattern
                             if let Some(task_id) = task.id() {
-                                if task_id.starts_with("download_") {
+                                if task_id.starts_with("download_") || task_id.starts_with("download|") {
                                     let _ = app.emit("resource-install-error", task_id);
                                 }
                             }
@@ -596,10 +596,19 @@ impl TaskManager {
     pub fn cancel_instance_tasks(&self, instance_id: i32) {
         let tokens = self.cancellation_tokens.lock().unwrap();
         let install_prefix = format!("install_instance_{}", instance_id);
-        let download_prefix = format!("download_{}_", instance_id);
+        let download_instance_prefix = format!("download|instance-{}|", instance_id);
+        let download_world_prefix = format!("download|world-{}-", instance_id);
+        // Legacy underscore task ids (pre-separator change).
+        let legacy_download_prefix = format!("download_instance-{}_", instance_id);
+        let legacy_world_prefix = format!("download_world-{}-", instance_id);
 
         for (key, tx) in tokens.iter() {
-            if key.starts_with(&install_prefix) || key.starts_with(&download_prefix) {
+            if key.starts_with(&install_prefix)
+                || key.starts_with(&download_instance_prefix)
+                || key.starts_with(&download_world_prefix)
+                || key.starts_with(&legacy_download_prefix)
+                || key.starts_with(&legacy_world_prefix)
+            {
                 let _ = tx.send(true);
                 log::info!(
                     "TaskManager: Sent automatic cancel signal to associated task: {}",

@@ -146,9 +146,18 @@ const ResourceCard: Component<{
 
 	const bgImage = createMemo(() => {
 		const p = props.project;
-		if (p.featured_gallery) return p.featured_gallery;
-		if (p.gallery.length > 0) return p.gallery[0];
-		return null;
+		// Prefer the first gallery image for browse banners.
+		const remote =
+			p.gallery.length > 0
+				? p.gallery[0]
+				: (p.featured_gallery ?? null);
+		if (!remote) return null;
+		const resolved = resources.resolvedBrowseImage(remote);
+		if (resolved) return resolved;
+		// Smithed gallery URLs redirect through their API; let search warm them via
+		// resolve_image_urls so we don't double-fetch in the webview.
+		if (remote.includes("api.smithed.dev")) return null;
+		return remote;
 	});
 
 	const iconHue = createMemo(() => {

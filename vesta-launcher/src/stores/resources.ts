@@ -158,6 +158,8 @@ type ResourceStoreState = {
 	installRequest: ResourceInstallRequest | null;
 	selection: Record<string, boolean>;
 	sorting: { id: string; desc: boolean }[];
+	/** Remote image URL → base64 data URL from `resolve_image_urls`. */
+	resolvedBrowseImages: Record<string, string>;
 };
 
 const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
@@ -191,10 +193,68 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	installRequest: null,
 	selection: {},
 	sorting: [{ id: "display_name", desc: false }],
+	resolvedBrowseImages: {},
 });
 
 const searchCache = new Map<string, CachedSearchResponse>();
 const versionDetailsCache = new Map<string, ResourceVersionDetails>();
+
+function clearInstallingMatchedByInstalled(results: InstalledResource[]) {
+	const installedRemoteVersionIds = new Set(
+		results.map((r) => r.remote_version_id),
+	);
+	const installedRemoteIds = new Set(
+		results.map((r) => r.remote_id.toLowerCase()),
+	);
+
+	setResourceStore("installingVersionIds", (ids) =>
+		ids.filter((id) => !installedRemoteVersionIds.has(id)),
+	);
+	setResourceStore("installingProjectIds", (ids) =>
+		ids.filter((id) => !installedRemoteIds.has(id.toLowerCase())),
+	);
+}
+
+function clearInstallingFromTaskId(taskId: string) {
+	// Task ids look like: download_{target}_{projectId}_{versionId}
+	// Project/version ids may contain underscores, so match by substring.
+	setResourceStore("installingProjectIds", (ids) =>
+		ids.filter((id) => !taskId.includes(id)),
+	);
+	setResourceStore("installingVersionIds", (ids) =>
+		ids.filter((id) => !taskId.includes(id)),
+	);
+}
+
+function bannerUrlForProject(project: ResourceProject): string | null {
+	if (project.gallery.length > 0) return project.gallery[0];
+	return project.featured_gallery ?? null;
+}
+
+/** Warm Rust image cache for browse banners; mirrors into `resolvedBrowseImages`. */
+async function warmBrowseBannerImages(hits: ResourceProject[]) {
+	const urls = [
+		...new Set(
+			hits
+				.map(bannerUrlForProject)
+				.filter((url): url is string => Boolean(url))
+				.filter((url) => !resourceStore.resolvedBrowseImages[url]),
+		),
+	];
+	if (urls.length === 0) return;
+
+	try {
+		const resolved = await invoke<string[]>("resolve_image_urls", { urls });
+		for (let i = 0; i < urls.length; i++) {
+			const dataUrl = resolved[i];
+			if (dataUrl) {
+				setResourceStore("resolvedBrowseImages", urls[i], dataUrl);
+			}
+		}
+	} catch (e) {
+		console.error("Failed to warm browse banner images:", e);
+	}
+}
 
 function normalizedSearchValue(value: string | null | undefined) {
 	const trimmed = value?.trim();
@@ -218,6 +278,9 @@ function currentSearchCacheKey() {
 
 export const resources = {
 	state: resourceStore,
+
+	resolvedBrowseImage: (url: string | null | undefined) =>
+		url ? (resourceStore.resolvedBrowseImages[url] ?? null) : null,
 
 	setInstallRequest: (request: ResourceInstallRequest | null) =>
 		setResourceStore("installRequest", request),
@@ -428,6 +491,7 @@ export const resources = {
 				totalHits: cached.total_hits,
 				loading: false,
 			});
+			void warmBrowseBannerImages(cached.hits);
 		} else {
 			setResourceStore("loading", true);
 		}
@@ -462,6 +526,7 @@ export const resources = {
 				source: resourceStore.activeSource,
 				resourceType: resourceStore.resourceType,
 			});
+			void warmBrowseBannerImages(response.hits);
 		} catch (e) {
 			console.error("Failed to search resources:", e);
 			const message = e instanceof Error ? e.message : String(e);
@@ -474,6 +539,7 @@ export const resources = {
 					searchWarning:
 						"Showing cached results while the source is unavailable.",
 				});
+				void warmBrowseBannerImages(cached.hits);
 			} else {
 				setResourceStore({
 					results: [],
@@ -602,18 +668,7 @@ export const resources = {
 			{ instanceId },
 		);
 		setResourceStore("installedResources", results);
-
-		// Clear any installing IDs that are now in the results.
-		// This is the source of truth for when an installation is "finished".
-		const installedRemoteVersionIds = results.map((r) => r.remote_version_id);
-		const installedRemoteIds = results.map((r) => r.remote_id.toLowerCase());
-
-		setResourceStore("installingVersionIds", (ids) =>
-			ids.filter((id) => !installedRemoteVersionIds.includes(id)),
-		);
-		setResourceStore("installingProjectIds", (ids) =>
-			ids.filter((id) => !installedRemoteIds.includes(id.toLowerCase())),
-		);
+		clearInstallingMatchedByInstalled(results);
 
 		return results;
 	},
@@ -667,6 +722,7 @@ if (typeof window !== "undefined") {
 					event.payload.revision,
 				).then((results) => {
 					setResourceStore("installedResources", results);
+					clearInstallingMatchedByInstalled(results);
 				});
 			}
 		},
@@ -674,18 +730,11 @@ if (typeof window !== "undefined") {
 
 	listen("resource-install-error", (event) => {
 		const taskId = event.payload as string;
-		// Format: download_{instance_id}_{project_id}_{version_id}
-		const parts = taskId.split("_");
-		if (parts.length >= 4 && parts[0] === "download") {
-			const projectId = parts[2];
-			const versionId = parts[3];
-
-			setResourceStore("installingProjectIds", (ids) =>
-				ids.filter((id) => id !== projectId),
-			);
-			setResourceStore("installingVersionIds", (ids) =>
-				ids.filter((id) => id !== versionId),
-			);
+		if (
+			typeof taskId === "string" &&
+			(taskId.startsWith("download_") || taskId.startsWith("download|"))
+		) {
+			clearInstallingFromTaskId(taskId);
 		}
 	});
 }

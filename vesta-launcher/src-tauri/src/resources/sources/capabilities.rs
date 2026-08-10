@@ -70,7 +70,8 @@ impl SourceCapabilities {
             SourcePlatform::Smithed => Self {
                 platform,
                 display_name: platform.display_name().to_string(),
-                supported_resource_types: vec![ResourceType::DataPack, ResourceType::ResourcePack],
+                // Datapack-first platform; companion resource packs install with the datapack.
+                supported_resource_types: vec![ResourceType::DataPack],
                 default_sort: "trending".to_string(),
                 sort_options: vec![
                     "trending".into(),
@@ -105,7 +106,7 @@ mod tests {
     fn smithed_is_pack_oriented_without_peers() {
         let caps = SourceCapabilities::for_platform(SourcePlatform::Smithed);
         assert!(caps.supports_resource_type(ResourceType::DataPack));
-        assert!(caps.supports_resource_type(ResourceType::ResourcePack));
+        assert!(!caps.supports_resource_type(ResourceType::ResourcePack));
         assert!(!caps.supports_resource_type(ResourceType::Mod));
         assert!(caps.peer_platforms.is_empty());
         assert!(!caps.supports_hash_lookup);

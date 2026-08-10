@@ -81,7 +81,7 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		id: "smithed",
 		label: "Smithed",
 		Icon: SmithedIcon,
-		supportedResourceTypes: ["datapack", "resourcepack"],
+		supportedResourceTypes: ["datapack"],
 		defaultSort: "trending",
 		sortOptions: [
 			{ label: "Trending", value: "trending" },

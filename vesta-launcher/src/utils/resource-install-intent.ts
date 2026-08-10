@@ -61,9 +61,10 @@ export function isGameVersionCompatible(
 
 /**
  * Providers describe release variants differently. Modrinth exposes datapack
- * as a loader and may mix distribution variants in one project. CurseForge
- * classifies datapacks as their own projects, so the project's Resource type is
- * authoritative there. Downloaded datapacks receive content validation later.
+ * as a loader and may mix distribution variants in one project. CurseForge and
+ * Smithed classify datapacks as their own projects/feeds, so the project's
+ * Resource type is authoritative there. Downloaded datapacks receive content
+ * validation later.
  */
 export function versionMatchesResourceType(
 	resourceType: ResourceType | undefined,
@@ -73,7 +74,7 @@ export function versionMatchesResourceType(
 	if (resourceType !== "datapack") return true;
 	const loaders = version.loaders.map((loader) => loader.toLowerCase());
 	if (source === "modrinth") return loaders.includes("datapack");
-	if (source === "curseforge") return true;
+	if (source === "curseforge" || source === "smithed") return true;
 	return loaders.length === 0 || loaders.includes("datapack");
 }
 

@@ -52,6 +52,7 @@ import {
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
+import { projectTypeLabel } from "@utils/resource-artifacts";
 import {
 	findBestVersionForInstance,
 	requiresWorldTarget,
@@ -159,7 +160,7 @@ const HeaderCategoryTags: Component<{
 		}[] = [
 			{
 				key: "__type__",
-				label: p.resource_type,
+				label: projectTypeLabel(p, resources.state.versions),
 				onClick: (e) => {
 					e.stopPropagation();
 					props.onBrowseType();

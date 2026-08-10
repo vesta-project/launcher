@@ -198,6 +198,16 @@ describe("resource install intent", () => {
 		).toBe(true);
 	});
 
+	it("treats Smithed as a datapack project feed without loader tags", () => {
+		expect(
+			versionMatchesResourceType(
+				"datapack",
+				version({ file_name: "pack.zip", loaders: [] }),
+				"smithed",
+			),
+		).toBe(true);
+	});
+
 	it("matches installed resources by primary or external project id", () => {
 		expect(findInstalledResource(project(), [installed()])).toBeDefined();
 		expect(

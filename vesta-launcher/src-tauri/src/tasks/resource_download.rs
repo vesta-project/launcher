@@ -265,6 +265,18 @@ async fn download_artifact(
     if !response.status().is_success() {
         return Err(format!("Download failed with status {}", response.status()));
     }
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if content_type.contains("text/html") {
+        return Err(format!(
+            "Download URL returned a web page instead of a pack file ({}). The provider likely linked a project page rather than a direct .zip/.jar.",
+            artifact.url
+        ));
+    }
     let expected_bytes = response
         .content_length()
         .or(artifact.file_size)
@@ -381,8 +393,9 @@ impl Task for ResourceDownloadTask {
                 world.directory_name.replace(['/', '\\'], "_")
             ),
         };
+        // Use '|' so project/version ids with underscores stay parseable.
         Some(format!(
-            "download_{}_{}_{}",
+            "download|{}|{}|{}",
             target, self.project_id, self.version.id
         ))
     }
