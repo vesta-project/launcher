@@ -74,7 +74,11 @@ export function versionsSupportedByInstance(
 	instance: Instance | null | undefined,
 ): ResourceVersion[] {
 	const matchingProjectType = versions.filter((version) =>
-		versionMatchesResourceType(project?.resource_type, version),
+		versionMatchesResourceType(
+			project?.resource_type,
+			version,
+			project?.source,
+		),
 	);
 	if (!instance || project?.resource_type === "modpack") {
 		return matchingProjectType;

@@ -165,21 +165,37 @@ describe("resource install intent", () => {
 			"vanilla",
 			"release",
 			"datapack",
+			"modrinth",
 		);
 
 		expect(selected?.id).toBe("datapack");
 	});
 
-	it("accepts loaderless datapacks but rejects declared non-datapack variants", () => {
+	it("uses Modrinth's datapack loader to reject its mod and plugin variants", () => {
 		expect(
-			versionMatchesResourceType("datapack", version({ loaders: [] })),
+			versionMatchesResourceType(
+				"datapack",
+				version({ file_name: "pack.zip", loaders: ["datapack"] }),
+				"modrinth",
+			),
 		).toBe(true);
 		expect(
 			versionMatchesResourceType(
 				"datapack",
-				version({ loaders: ["neoforge"] }),
+				version({ file_name: "mod.jar", loaders: ["neoforge"] }),
+				"modrinth",
 			),
 		).toBe(false);
+	});
+
+	it("uses CurseForge's datapack project class instead of loader tags", () => {
+		expect(
+			versionMatchesResourceType(
+				"datapack",
+				version({ file_name: "pack.zip", loaders: ["fabric"] }),
+				"curseforge",
+			),
+		).toBe(true);
 	});
 
 	it("matches installed resources by primary or external project id", () => {

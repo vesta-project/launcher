@@ -4,6 +4,7 @@ import type {
 	ResourceProject,
 	ResourceType,
 	ResourceVersion,
+	SourcePlatform,
 } from "@stores/resources";
 
 export interface ResourceInstallRequest {
@@ -59,18 +60,20 @@ export function isGameVersionCompatible(
 }
 
 /**
- * A provider project can publish several distribution variants in one version
- * feed. Datapack projects must not reinterpret a mod or server-plugin release
- * as a datapack merely because the project itself is categorized as one.
- * Loaderless releases remain valid for providers that do not expose variant
- * metadata.
+ * Providers describe release variants differently. Modrinth exposes datapack
+ * as a loader and may mix distribution variants in one project. CurseForge
+ * classifies datapacks as their own projects, so the project's Resource type is
+ * authoritative there. Downloaded datapacks receive content validation later.
  */
 export function versionMatchesResourceType(
 	resourceType: ResourceType | undefined,
 	version: Pick<ResourceVersion, "loaders">,
+	source?: SourcePlatform,
 ): boolean {
 	if (resourceType !== "datapack") return true;
 	const loaders = version.loaders.map((loader) => loader.toLowerCase());
+	if (source === "modrinth") return loaders.includes("datapack");
+	if (source === "curseforge") return true;
 	return loaders.length === 0 || loaders.includes("datapack");
 }
 
@@ -137,6 +140,7 @@ export function findBestVersion(
 	modloader: string | null,
 	currentReleaseType?: "release" | "beta" | "alpha",
 	resourceType?: ResourceType,
+	source?: SourcePlatform,
 ): ResourceVersion | null {
 	const instanceLoader = modloader?.toLowerCase() || "";
 	const allowedReleaseTypes =
@@ -147,7 +151,7 @@ export function findBestVersion(
 				: ["release", "beta", "alpha"];
 
 	const compatible = versions.filter((version) => {
-		if (!versionMatchesResourceType(resourceType, version)) return false;
+		if (!versionMatchesResourceType(resourceType, version, source)) return false;
 		if (!isGameVersionCompatible(version.game_versions, gameVersion))
 			return false;
 
@@ -203,5 +207,6 @@ export function findBestVersionForInstance(
 		instance.modloader,
 		releaseType,
 		project.resource_type,
+		project.source,
 	);
 }

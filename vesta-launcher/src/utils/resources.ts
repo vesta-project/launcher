@@ -64,7 +64,7 @@ export const getCompatibilityForInstance = (
 ): CompatibilityResult => {
 	const instLoader = instance.modloader?.toLowerCase() || "";
 	const resType = project?.resource_type;
-	if (!versionMatchesResourceType(resType, version)) {
+	if (!versionMatchesResourceType(resType, version, project?.source)) {
 		return {
 			type: "incompatible",
 			reason: "This release is not a datapack build.",
