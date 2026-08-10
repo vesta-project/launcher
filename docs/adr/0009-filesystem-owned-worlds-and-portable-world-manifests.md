@@ -35,11 +35,29 @@ and move/copy/duplicate workflows. Resource sources remain unaware of local
 destinations; the shared installer resolves provider-neutral artifacts against
 an explicit Instance or World target.
 
+Datapack presentation and mutation are World-scoped. Instance Resource
+overviews, installed matching, batch actions, and update snapshots exclude
+datapacks even though their file facts remain in the Ledger. The World Module
+joins direct entries under a validated `<world>/datapacks` directory to exact
+Ledger paths and revalidates the WorldRef and row containment before mutations.
+Directory-form datapacks are listed read-only until the Ledger gains explicit
+directory ownership.
+
+Datapack install type is explicit user intent and is not inferred from a
+provider project's primary classification. Modrinth mixed projects use their
+version-level `datapack` loader while CurseForge uses its datapack project class.
+Quick selection is permitted only for a provider version explicitly tagged for
+the selected World's saved Minecraft version. Other versions remain available
+through manual selection and compatibility acknowledgement; provider version
+tags do not become filesystem validation rules.
+
 World transfer availability is determined by the filesystem operation itself,
 not by whether Vesta observes a source or destination Instance process. A
 running process is not a transfer precondition; inaccessible or changing files
 fail through the transfer Task's normal copy, verification, or publication
 errors.
+The same rule applies to datapack publication: observed Instance process state
+is informational, while actual filesystem access determines success.
 
 ## Consequences
 
@@ -49,6 +67,8 @@ MCRegion, Anvil, custom dimensions, and newer reorganized dimension layouts do
 not require version-specific traversal. Installed world archives never overwrite
 or merge an existing world. Transfers can preserve or regenerate portable
 identity while the Ledger keeps managed component provenance consistent.
+The same datapack project can be installed independently in several Worlds, and
+an update, toggle, or removal is resolved against only the selected World.
 
 Standalone Classic and Indev save files, arbitrary NBT editing, deletion,
 backups, restore, and staged creation of worlds are outside this decision.

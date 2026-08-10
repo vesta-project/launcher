@@ -1,5 +1,6 @@
 import {
 	getCachedInstanceResourceOverview,
+	instanceOwnedResources,
 	invalidateInstanceResourceOverview,
 	loadInstanceResourceOverview,
 	projectRecordMap,
@@ -79,6 +80,16 @@ describe("instance resource overview cache", () => {
 		]);
 		expect(records["modrinth:sodium"]?.name).toBe("Sodium");
 		expect(records["curseforge:sodium"]?.name).toBe("Different Sodium");
+	});
+
+	it("keeps datapacks out of instance-owned resource state", () => {
+		expect(
+			instanceOwnedResources([
+				{ id: 1, resource_type: "mod" },
+				{ id: 2, resource_type: "datapack" },
+				{ id: 3, resource_type: "DataPack" },
+			] as never),
+		).toEqual([{ id: 1, resource_type: "mod" }]);
 	});
 
 	it("coalesces rapid row events into one request plus one trailing refresh", async () => {

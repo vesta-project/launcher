@@ -128,6 +128,31 @@ pub fn get_resource(instance_id: i32, resource_id: i32) -> Result<InstalledResou
         .first::<InstalledResource>(&mut conn)?)
 }
 
+/// Returns Ledger rows whose exact direct parent is `directory`.
+///
+/// Filesystem modules use this Interface to join their own discovered entries
+/// without taking ownership of persisted Resource facts.
+pub fn list_in_directory(
+    instance_id: i32,
+    resource_type: &str,
+    directory: &Path,
+) -> Result<Vec<InstalledResource>> {
+    let mut conn = get_vesta_conn()?;
+    let directory = normalize_path(directory);
+    let rows = ir_dsl::installed_resource
+        .filter(ir_dsl::instance_id.eq(instance_id))
+        .filter(ir_dsl::resource_type.eq(resource_type.to_ascii_lowercase()))
+        .load::<InstalledResource>(&mut conn)?;
+    Ok(rows
+        .into_iter()
+        .filter(|row| {
+            Path::new(&row.local_path)
+                .parent()
+                .is_some_and(|parent| normalize_path(parent) == directory)
+        })
+        .collect())
+}
+
 pub fn set_enabled(resource_id: i32, enabled: bool) -> Result<()> {
     let mut conn = get_vesta_conn()?;
     let resource = ir_dsl::installed_resource

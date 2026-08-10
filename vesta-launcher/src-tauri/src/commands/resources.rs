@@ -25,7 +25,7 @@ use crate::tasks::resource_download::{
 use crate::worlds::ResourceInstallTarget;
 use anyhow_tauri::TAResult as Result;
 use std::sync::{Mutex, OnceLock};
-use tauri::{ipc::Channel, Emitter, Manager, State};
+use tauri::{ipc::Channel, Manager, State};
 
 const MAX_CONCURRENT_UPDATE_CHECKS: usize = 6;
 
@@ -339,7 +339,10 @@ pub async fn get_installed_resources(
     let resources = ir_dsl::installed_resource
         .filter(ir_dsl::instance_id.eq(instance_id))
         .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        .into_iter()
+        .filter(|resource| !resource.resource_type.eq_ignore_ascii_case("datapack"))
+        .collect();
 
     Ok(resources)
 }
@@ -364,7 +367,10 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
         let mut conn = get_vesta_conn()?;
         let resources = ir_dsl::installed_resource
             .filter(ir_dsl::instance_id.eq(instance_id))
-            .load::<InstalledResource>(&mut conn)?;
+            .load::<InstalledResource>(&mut conn)?
+            .into_iter()
+            .filter(|resource| !resource.resource_type.eq_ignore_ascii_case("datapack"))
+            .collect::<Vec<_>>();
 
         let mut refs = Vec::new();
         let mut seen_refs = HashSet::new();
@@ -865,7 +871,8 @@ pub async fn check_instance_updates_lightweight(
     let all_candidates: Vec<InstalledResource> = resources
         .into_iter()
         .filter(|res| {
-            res.source_kind != "modpack"
+            !res.resource_type.eq_ignore_ascii_case("datapack")
+                && res.source_kind != "modpack"
                 && res.platform != "manual"
                 && source_platform_from_str(&res.platform).is_some()
         })
@@ -997,6 +1004,11 @@ pub async fn delete_resource(
 ) -> Result<()> {
     let resource = crate::resources::ledger::get_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if resource.resource_type.eq_ignore_ascii_case("datapack") {
+        return Err(
+            anyhow!("Datapacks are managed from their world; use delete_world_datapack").into(),
+        );
+    }
     let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
         .map_err(anyhow::Error::msg)?;
     let mut backup = None;
@@ -1044,14 +1056,6 @@ pub async fn delete_resource(
         instance_id,
         "resource-deleted",
     )?;
-    let _ = app_handle.emit(
-        "core://instance-worlds-changed",
-        serde_json::json!({
-            "instanceId": instance_id,
-            "revision": chrono::Utc::now().timestamp_millis(),
-            "reason": "datapack-deleted"
-        }),
-    );
     Ok(())
 }
 
@@ -1064,6 +1068,11 @@ pub async fn toggle_resource(
 ) -> Result<()> {
     let resource = crate::resources::ledger::get_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if resource.resource_type.eq_ignore_ascii_case("datapack") {
+        return Err(
+            anyhow!("Datapacks are managed from their world; use toggle_world_datapack").into(),
+        );
+    }
     let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
         .map_err(anyhow::Error::msg)?;
     let current_path = std::path::PathBuf::from(&resource.local_path);
@@ -1096,14 +1105,6 @@ pub async fn toggle_resource(
         instance_id,
         "resource-toggled",
     )?;
-    let _ = app_handle.emit(
-        "core://instance-worlds-changed",
-        serde_json::json!({
-            "instanceId": instance_id,
-            "revision": chrono::Utc::now().timestamp_millis(),
-            "reason": "datapack-toggled"
-        }),
-    );
     Ok(())
 }
 
@@ -1284,13 +1285,15 @@ pub async fn install_resource(
     project_id: String,
     project_name: String,
     version: ResourceVersion,
-    resource_type: ResourceType,
+    install_type: ResourceType,
+    compatibility_acknowledged: Option<bool>,
+    replacement_resource_id: Option<i32>,
 ) -> Result<String> {
     let instance_id = match &target {
         ResourceInstallTarget::Instance { instance_id } => *instance_id,
         ResourceInstallTarget::World { world } => world.instance_id,
     };
-    let planned = plan_artifacts(&version, resource_type).map_err(anyhow::Error::msg)?;
+    let planned = plan_artifacts(&version, install_type).map_err(anyhow::Error::msg)?;
     let world_artifact_count = planned
         .iter()
         .filter(|artifact| artifact.resource_type == ResourceType::World)
@@ -1308,8 +1311,65 @@ pub async fn install_resource(
     {
         return Err(anyhow!("Datapack installation requires a world target").into());
     }
+    if let Some(resource_id) = replacement_resource_id {
+        let ResourceInstallTarget::World { world } = &target else {
+            return Err(anyhow!("A datapack replacement requires a world target").into());
+        };
+        crate::worlds::datapacks::replacement_path(world, resource_id)
+            .map_err(anyhow::Error::msg)?;
+        let replacement = crate::resources::ledger::get_resource(world.instance_id, resource_id)
+            .map_err(|error| anyhow!(error.to_string()))?;
+        if !replacement.platform.eq_ignore_ascii_case(platform.as_str())
+            || replacement.remote_id != project_id
+        {
+            return Err(
+                anyhow!("The selected datapack replacement belongs to another project").into(),
+            );
+        }
+        if planned
+            .iter()
+            .filter(|artifact| artifact.resource_type == ResourceType::DataPack)
+            .count()
+            != 1
+        {
+            return Err(anyhow!(
+                "A world datapack replacement requires exactly one datapack artifact"
+            )
+            .into());
+        }
+    }
     if world_artifact_count > 0 && !matches!(&target, ResourceInstallTarget::Instance { .. }) {
         return Err(anyhow!("World archives install into an instance, not another world").into());
+    }
+
+    if planned
+        .iter()
+        .any(|artifact| artifact.resource_type == ResourceType::DataPack)
+    {
+        let ResourceInstallTarget::World { world } = &target else {
+            return Err(anyhow!("Datapack installation requires a world target").into());
+        };
+        let world_path = crate::worlds::resolve_world_path(world).map_err(anyhow::Error::msg)?;
+        let saved_version = crate::worlds::level_dat::read_world_level(&world_path).version_name;
+        let exact_match = saved_version.as_deref().is_some_and(|saved| {
+            let normalize = |value: &str| {
+                value
+                    .trim()
+                    .strip_suffix(".0")
+                    .unwrap_or(value.trim())
+                    .to_string()
+            };
+            version
+                .game_versions
+                .iter()
+                .any(|listed| normalize(listed) == normalize(saved))
+        });
+        if !exact_match && !compatibility_acknowledged.unwrap_or(false) {
+            return Err(anyhow!(
+                "This datapack does not explicitly list the selected world's saved Minecraft version. Choose the version manually and confirm compatibility."
+            )
+            .into());
+        }
     }
     // Check if we are in guest mode
     let active_account = match crate::auth::get_active_account() {
@@ -1369,13 +1429,26 @@ pub async fn install_resource(
 
     // 2. Resolve dependencies
     let loader = instance.modloader.as_deref().unwrap_or("vanilla");
+    let dependency_mc_version = if install_type == ResourceType::DataPack {
+        match &target {
+            ResourceInstallTarget::World { world } => crate::worlds::resolve_world_path(world)
+                .ok()
+                .and_then(|path| crate::worlds::level_dat::read_world_level(&path).version_name)
+                .unwrap_or_else(|| instance.minecraft_version.clone()),
+            ResourceInstallTarget::Instance { .. } => instance.minecraft_version.clone(),
+        }
+    } else {
+        instance.minecraft_version.clone()
+    };
     let mut dependencies = resource_manager
         .resolve_dependencies(
             platform,
-            resource_type,
+            install_type,
             &version,
+            &dependency_mc_version,
             &instance.minecraft_version,
             loader,
+            compatibility_acknowledged.unwrap_or(false),
         )
         .await?;
 
@@ -1384,7 +1457,7 @@ pub async fn install_resource(
         // If auto-install is off, we only keep "synthetic" dependencies (like Iris/Oculus)
         // that are injected for Shaders to ensure they work.
         // For other mods, we clear the list.
-        if resource_type != ResourceType::Shader {
+        if install_type != ResourceType::Shader {
             dependencies.clear();
         } else {
             // Keep only the shader engines (Iris/Oculus)
@@ -1439,8 +1512,9 @@ pub async fn install_resource(
         project_id,
         project_name: project_name.clone(),
         version,
-        resource_type,
+        resource_type: install_type,
         dependency_for: None,
+        replacement_resource_id,
     };
     task_manager
         .submit(Box::new(main_task))
@@ -1506,6 +1580,7 @@ pub async fn install_resource(
             version: dep_version,
             resource_type: dep_project.resource_type,
             dependency_for: Some(project_name.clone()),
+            replacement_resource_id: None,
         };
 
         task_manager

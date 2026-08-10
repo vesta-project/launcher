@@ -103,6 +103,16 @@ describe("versionsSupportedByInstance", () => {
 				instance("1.21", "vanilla"),
 			).map((item) => item.id),
 		).toEqual(["datapack"]);
+		expect(
+			versionsSupportedByInstance(
+				project("datapack"),
+				[
+					...mixedVersions,
+					version("older-datapack", ["1.20.6"], ["datapack"]),
+				],
+				instance("1.21", "fabric"),
+			).map((item) => item.id),
+		).toEqual(["datapack", "older-datapack"]);
 	});
 });
 

@@ -42,7 +42,6 @@ const FILTER_OPTIONS = [
 	{ id: "mod", label: "Mods" },
 	{ id: "resourcepack", label: "Packs" },
 	{ id: "shader", label: "Shaders" },
-	{ id: "datapack", label: "Datapacks" },
 ];
 
 const COLUMN_WIDTHS: Record<string, string | undefined> = {

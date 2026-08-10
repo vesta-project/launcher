@@ -52,7 +52,9 @@ const ResourceCard: Component<{
 	router?: MiniRouter;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
+	const installType = () => resources.state.resourceType;
 	const isInstalled = createMemo(() => {
+		if (installType() === "datapack") return false;
 		const instanceId = resources.state.selectedInstanceId;
 		return !!findInstalledResource(
 			props.project,
@@ -64,6 +66,7 @@ const ResourceCard: Component<{
 	});
 
 	const installedResource = createMemo(() => {
+		if (installType() === "datapack") return undefined;
 		const instanceId = resources.state.selectedInstanceId;
 		return findInstalledResource(
 			props.project,
@@ -75,6 +78,14 @@ const ResourceCard: Component<{
 	});
 
 	const isInstallingProject = createMemo(() => {
+		const target = resources.state.preferredInstallTarget;
+		if (installType() === "datapack" && target?.kind === "world") {
+			return resources.state.installingTargetKeys.some((key) =>
+				key.includes(
+					`:${props.project.id}:`,
+				) && key.endsWith(`:world:${target.world.instanceId}:${target.world.directoryName}`),
+			);
+		}
 		return resources.state.installingProjectIds.includes(props.project.id);
 	});
 
@@ -217,6 +228,7 @@ const ResourceCard: Component<{
 				platform: props.project.source,
 				name: props.project.name,
 				iconUrl: props.project.icon_url,
+				resourceType: installType(),
 			},
 			{
 				project: props.project,
@@ -227,7 +239,7 @@ const ResourceCard: Component<{
 	const handleQuickInstall = async (e: MouseEvent) => {
 		e.stopPropagation();
 
-		if (props.project.resource_type === "modpack") {
+		if (installType() === "modpack") {
 			const prefilledModpackInfo = buildBrowseModpackInfo(props.project, null, {
 				minecraftVersion: resources.state.gameVersion,
 				loader: resources.state.loader,
@@ -255,12 +267,13 @@ const ResourceCard: Component<{
 			if (isUpdateAvailable() && latest) {
 				const instanceId = resources.state.selectedInstanceId;
 				if (!instanceId) return;
-				if (requiresWorldTarget(props.project, latest)) {
+				if (requiresWorldTarget(props.project, latest, installType())) {
 					resources.setInstallRequest({
 						project: props.project,
 						versions: [latest],
 						version: latest,
 						preferredInstanceId: instanceId,
+						installType: installType(),
 					});
 					return;
 				}
@@ -270,7 +283,7 @@ const ResourceCard: Component<{
 					await resources.install(props.project, latest, {
 						kind: "instance",
 						instanceId,
-					});
+					}, { installType: installType() });
 					showToast({
 						title: "Update Started",
 						description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
@@ -319,10 +332,22 @@ const ResourceCard: Component<{
 					props.project.source,
 					props.project.id,
 				);
-				resources.setInstallRequest({ project: props.project, versions });
+				resources.setInstallRequest({
+					project: props.project,
+					versions,
+					installType: installType(),
+					preferredWorld:
+						resources.state.preferredInstallTarget?.kind === "world"
+							? resources.state.preferredInstallTarget.world
+							: undefined,
+				});
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
-				resources.setInstallRequest({ project: props.project, versions: [] });
+				resources.setInstallRequest({
+					project: props.project,
+					versions: [],
+					installType: installType(),
+				});
 			} finally {
 				setLocalInstalling(false);
 			}
@@ -338,18 +363,33 @@ const ResourceCard: Component<{
 				props.project.source,
 				props.project.id,
 			);
+			if (installType() === "datapack") {
+				const preferredTarget = resources.state.preferredInstallTarget;
+				resources.setInstallRequest({
+					project: props.project,
+					versions,
+					installType: "datapack",
+					preferredInstanceId: instance.id,
+					preferredWorld:
+						preferredTarget?.kind === "world"
+							? preferredTarget.world
+							: undefined,
+				});
+				return;
+			}
 			const best = findBestVersionForInstance(
 				props.project,
 				versions,
 				instance,
 			);
 			if (best) {
-				if (requiresWorldTarget(props.project, best)) {
+				if (requiresWorldTarget(props.project, best, installType())) {
 					resources.setInstallRequest({
 						project: props.project,
 						versions,
 						version: best,
 						preferredInstanceId: instance.id,
+						installType: installType(),
 					});
 					return;
 				}
@@ -373,7 +413,7 @@ const ResourceCard: Component<{
 				await resources.install(props.project, best, {
 					kind: "instance",
 					instanceId: instance.id,
-				});
+				}, { installType: installType() });
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,

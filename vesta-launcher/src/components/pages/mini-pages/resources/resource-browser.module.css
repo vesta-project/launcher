@@ -585,6 +585,13 @@
 	line-height: 1.4;
 }
 
+.world-target {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
 /* ===== Grid View ===== */
 .resource-grid {
 	display: grid;

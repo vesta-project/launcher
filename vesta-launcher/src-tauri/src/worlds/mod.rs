@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod datapacks;
 pub mod install_selection;
 pub mod level_dat;
 pub mod manifest;
@@ -333,12 +334,10 @@ fn count_datapacks(world_root: &Path) -> usize {
             let Ok(file_type) = entry.file_type() else {
                 return false;
             };
-            (file_type.is_dir() && !file_type.is_symlink())
-                || (file_type.is_file()
-                    && entry
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension.eq_ignore_ascii_case("zip")))
+            (file_type.is_dir()
+                && !file_type.is_symlink()
+                && datapacks::is_directory_datapack(&entry.path()))
+                || (file_type.is_file() && datapacks::is_datapack_file(&entry.path()))
         })
         .count()
 }
@@ -451,6 +450,18 @@ mod tests {
         fs::create_dir_all(&dimension).unwrap();
         fs::write(dimension.join("r.0.0.mca"), [1_u8, 2, 3]).unwrap();
         assert_eq!(logical_world_size(temp.path()), 3);
+    }
+
+    #[test]
+    fn datapack_count_ignores_noise_directories_without_root_metadata() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let datapacks = temp.path().join("datapacks");
+        fs::create_dir_all(datapacks.join("valid")).unwrap();
+        fs::write(datapacks.join("valid/pack.mcmeta"), b"{}").unwrap();
+        fs::create_dir_all(datapacks.join("noise/nested")).unwrap();
+        fs::write(datapacks.join("noise/nested/pack.mcmeta"), b"{}").unwrap();
+        fs::write(datapacks.join("archive.zip.disabled"), b"zip").unwrap();
+        assert_eq!(count_datapacks(temp.path()), 2);
     }
 
     #[cfg(unix)]

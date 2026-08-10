@@ -69,6 +69,13 @@
 	border-color: var(--border-subtle);
 	background: var(--surface-raised);
 }
+.card--interactive {
+	cursor: pointer;
+}
+.card--interactive:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
 .media {
 	position: relative;
 	height: 132px;

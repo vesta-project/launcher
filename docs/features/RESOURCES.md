@@ -164,6 +164,13 @@ Detailed view for individual resources:
 - Backend fetches available versions for selected project
 - Filters by Minecraft version and mod loader compatibility
 - Presents version options to user
+- Datapacks select their World before quick version resolution and ignore the
+  Instance mod loader
+- Modrinth mixed projects retain only versions tagged with the `datapack`
+  loader; CurseForge uses its datapack project class
+- Only an exact provider tag for the World's saved Minecraft version may be
+  selected automatically. Nearby, wildcard, unlisted, and unknown matches
+  require explicit version selection and acknowledgement
 
 ### 3. Dependency Analysis
 - Backend analyzes version dependencies recursively
@@ -181,7 +188,8 @@ Detailed view for individual resources:
 ### 5. Database Registration
 - Creates `installed_resource` records
 - Links dependencies in database
-- Updates instance resource lists
+- Updates Instance resource lists for Instance-owned files and the dedicated
+  World datapack view for World-owned files
 
 ## Dependency Resolution
 
@@ -276,6 +284,12 @@ explicit install-all action and never overwrite or merge existing worlds.
 The Installed Resource Ledger continues to own installed files. Datapack rows
 are scoped by their exact path under a world, while companion resource-pack rows
 remain instance-scoped and are linked through the portable world manifest.
+Datapacks are not shown in the Instance Resources tab or its batch/update state.
+Clicking a World opens its dedicated datapack view, where direct file packs can
+be enabled, removed, checked for updates, or used as an exact update target.
+Directory-form datapacks are counted and listed read-only. Listing never creates
+World metadata, and the same remote datapack can be installed independently in
+several Worlds.
 
 ## Error Handling
 
@@ -302,6 +316,11 @@ remain instance-scoped and are linked through the portable world manifest.
 - `install_resource`: Download and install resource
 - `list_instance_worlds`: Discover and summarize Java worlds for one Instance
 - `open_world_folder`: Open a validated world directory
+- `list_world_datapacks`: List direct datapack entries and exact Ledger facts for one World
+- `check_world_datapack_updates`: Check one World's remote datapacks against its saved version
+- `open_world_datapacks_folder`: Open the validated World datapacks directory
+- `toggle_world_datapack`: Toggle an exact file-form datapack in one World
+- `delete_world_datapack`: Remove an exact file-form datapack from one World
 - `transfer_world`: Submit a safe move, copy, or duplicate World task
 - `submit_world_archive_selection`: Continue or cancel a multi-world archive install
 - `delete_resource`: Remove installed resource
@@ -315,6 +334,7 @@ remain instance-scoped and are linked through the portable world manifest.
 - `core://resource-install-progress`: Installation progress updates
 - `core://resource-install-error`: Installation failures
 - `core://instance-worlds-changed`: World topology or managed contents changed for one Instance
+- `core://world-datapacks-changed`: Datapack contents changed for one exact WorldRef
 - `core://world-install-selection-required`: A world archive needs candidate selection
 
 ## Future Enhancements

@@ -363,7 +363,11 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
     let mut changed = HashSet::new();
     let mut removed = HashSet::new();
     let mut world_topology_changed = false;
-    let mut world_datapacks_changed = false;
+    let instance = crate::commands::instances::get_instance(db_id).ok();
+    let game_path = instance
+        .as_ref()
+        .and_then(|instance| crate::worlds::instance_game_directory(instance).ok());
+    let mut changed_worlds = HashSet::new();
     for event in events {
         if event.paths.iter().any(|path| {
             path.parent()
@@ -372,11 +376,13 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
         }) {
             world_topology_changed = true;
         }
-        if event.paths.iter().any(|path| {
-            path.ancestors()
-                .any(|ancestor| ancestor.file_name().is_some_and(|name| name == "datapacks"))
-        }) {
-            world_datapacks_changed = true;
+        if let Some(game_path) = game_path.as_deref() {
+            changed_worlds.extend(
+                event
+                    .paths
+                    .iter()
+                    .filter_map(|path| world_ref_for_datapack_path(game_path, db_id, path)),
+            );
         }
         match event.kind {
             EventKind::Create(_) | EventKind::Modify(_) => {
@@ -441,24 +447,47 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
         let _ =
             crate::resources::reconciliation::emit_rows_changed(app, db_id, "filesystem-remove");
     }
-    if world_topology_changed || world_datapacks_changed {
+    if world_topology_changed || !changed_worlds.is_empty() {
         if let Some(world_manager) = app.try_state::<crate::worlds::WorldManager>() {
             world_manager.invalidate(db_id);
         }
+    }
+    if world_topology_changed {
         let _ = app.emit(
             "core://instance-worlds-changed",
             serde_json::json!({
                 "instanceId": db_id,
                 "revision": chrono::Utc::now().timestamp_millis(),
-                "reason": if world_topology_changed {
-                    "filesystem-topology"
-                } else {
-                    "datapack-filesystem"
-                }
+                "reason": "filesystem-topology"
             }),
         );
     }
+    for world_ref in changed_worlds {
+        let _ = crate::worlds::datapacks::emit_world_datapacks_changed(
+            app,
+            &world_ref,
+            "datapack-filesystem",
+        );
+    }
     world_topology_changed
+}
+
+fn world_ref_for_datapack_path(
+    game_path: &Path,
+    instance_id: i32,
+    path: &Path,
+) -> Option<crate::worlds::WorldRef> {
+    let relative = path.strip_prefix(game_path.join("saves")).ok()?;
+    let mut components = relative.components();
+    let directory_name = components.next()?.as_os_str().to_str()?.to_string();
+    if components.next()?.as_os_str() != "datapacks" {
+        return None;
+    }
+    crate::worlds::validate_directory_name(&directory_name).ok()?;
+    Some(crate::worlds::WorldRef {
+        instance_id,
+        directory_name,
+    })
 }
 
 fn world_datapack_directories(game_path: &Path) -> Vec<PathBuf> {
@@ -489,6 +518,42 @@ fn is_resource_file(path: &Path) -> bool {
         || s.ends_with(".zip")
         || s.ends_with(".jar.disabled")
         || s.ends_with(".zip.disabled")
+}
+
+#[cfg(test)]
+mod world_datapack_event_tests {
+    use super::world_ref_for_datapack_path;
+    use std::path::Path;
+
+    #[test]
+    fn scopes_datapack_events_to_the_exact_world() {
+        let game = Path::new("/instances/example");
+        let world = world_ref_for_datapack_path(
+            game,
+            42,
+            Path::new("/instances/example/saves/My World/datapacks/pack.zip"),
+        )
+        .unwrap();
+        assert_eq!(world.instance_id, 42);
+        assert_eq!(world.directory_name, "My World");
+    }
+
+    #[test]
+    fn ignores_non_world_datapack_named_directories() {
+        let game = Path::new("/instances/example");
+        assert!(world_ref_for_datapack_path(
+            game,
+            42,
+            Path::new("/instances/example/mods/datapacks/pack.zip"),
+        )
+        .is_none());
+        assert!(world_ref_for_datapack_path(
+            game,
+            42,
+            Path::new("/instances/example/saves/My World/data/foo"),
+        )
+        .is_none());
+    }
 }
 
 pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i32) -> Result<()> {

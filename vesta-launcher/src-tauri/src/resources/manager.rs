@@ -239,8 +239,10 @@ impl ResourceManager {
         platform: SourcePlatform,
         resource_type: ResourceType,
         version: &ResourceVersion,
-        mc_version: &str,
+        datapack_mc_version: &str,
+        instance_mc_version: &str,
         loader: &str,
+        allow_inexact_datapacks: bool,
     ) -> Result<Vec<(ResourceProject, ResourceVersion)>> {
         let mut resolved = Vec::new();
         let mut visited = HashSet::new();
@@ -336,7 +338,7 @@ impl ResourceManager {
                     }
                 };
 
-                let project = match project {
+                let mut project = match project {
                     Some(p) => p,
                     None => {
                         log::warn!("[DependencyResolution] Could not find project metadata for {} in fetched results", dep.project_id);
@@ -345,14 +347,38 @@ impl ResourceManager {
                 };
 
                 // 2. Find best version for environment
-                let versions = match self
-                    .get_versions(
-                        platform,
-                        &dep.project_id,
-                        false,
-                        Some(mc_version),
-                        Some(loader),
-                    )
+                let pinned_datapack = dep.version_id.as_ref().is_some_and(|version_id| {
+                    // The cached list is fetched below; this flag is refined after
+                    // fetching. Dedicated datapack projects are known up front.
+                    !version_id.is_empty() && project.resource_type == ResourceType::DataPack
+                });
+                let dependency_type = if pinned_datapack {
+                    ResourceType::DataPack
+                } else {
+                    project.resource_type
+                };
+                let version_loader = if dependency_type == ResourceType::DataPack
+                    && platform == SourcePlatform::CurseForge
+                {
+                    None
+                } else if dependency_type == ResourceType::DataPack {
+                    Some("datapack")
+                } else {
+                    Some(loader)
+                };
+                let dependency_mc_version = if dependency_type == ResourceType::DataPack {
+                    datapack_mc_version
+                } else {
+                    instance_mc_version
+                };
+                let version_mc =
+                    if dependency_type == ResourceType::DataPack && allow_inexact_datapacks {
+                        None
+                    } else {
+                        Some(dependency_mc_version)
+                    };
+                let mut versions = match self
+                    .get_versions(platform, &dep.project_id, false, version_mc, version_loader)
                     .await
                 {
                     Ok(v) => v,
@@ -365,18 +391,67 @@ impl ResourceManager {
                         continue;
                     }
                 };
+                if let Some(version_id) = &dep.version_id {
+                    if !versions.iter().any(|version| &version.id == version_id) {
+                        if let Ok(pinned) = self
+                            .get_version(platform, &dep.project_id, version_id)
+                            .await
+                        {
+                            versions.push(pinned);
+                        }
+                    }
+                }
+
+                // A pinned Modrinth dependency can point at a datapack release
+                // even when the provider classifies the project itself as a mod.
+                let dependency_type = dep
+                    .version_id
+                    .as_ref()
+                    .and_then(|version_id| versions.iter().find(|v| &v.id == version_id))
+                    .filter(|version| {
+                        platform == SourcePlatform::Modrinth
+                            && version
+                                .loaders
+                                .iter()
+                                .any(|loader| loader.eq_ignore_ascii_case("datapack"))
+                    })
+                    .map(|_| ResourceType::DataPack)
+                    .unwrap_or(dependency_type);
+                if dependency_type == ResourceType::DataPack {
+                    project.resource_type = ResourceType::DataPack;
+                }
 
                 // 3. Find compatible version
                 let mut best_version = None;
                 if let Some(vid) = &dep.version_id {
                     if let Some(v) = versions.iter().find(|v| &v.id == vid) {
-                        if is_game_version_compatible(&v.game_versions, mc_version)
-                            && is_loader_compatible(&v.loaders, loader)
-                        {
+                        let game_matches = if dependency_type == ResourceType::DataPack {
+                            let exact = v.game_versions.iter().any(|listed| {
+                                normalize_mc_version(listed)
+                                    == normalize_mc_version(dependency_mc_version)
+                            });
+                            exact
+                                || (allow_inexact_datapacks
+                                    && is_game_version_compatible(
+                                        &v.game_versions,
+                                        dependency_mc_version,
+                                    ))
+                        } else {
+                            is_game_version_compatible(&v.game_versions, dependency_mc_version)
+                        };
+                        let loader_matches = if dependency_type == ResourceType::DataPack {
+                            platform == SourcePlatform::CurseForge
+                                || v.loaders
+                                    .iter()
+                                    .any(|candidate| candidate.eq_ignore_ascii_case("datapack"))
+                        } else {
+                            is_loader_compatible(&v.loaders, loader)
+                        };
+                        if game_matches && loader_matches {
                             best_version = Some(v.clone());
                         } else {
                             log::info!("Pinned version {} for {} is incompatible with current environment ({}, {}). Finding better alternative...",
-                                vid, dep.project_id, mc_version, loader);
+                                vid, dep.project_id, dependency_mc_version, loader);
                         }
                     }
                 }
@@ -386,13 +461,34 @@ impl ResourceManager {
                     let mut compatible: Vec<ResourceVersion> = versions
                         .into_iter()
                         .filter(|v| {
-                            is_game_version_compatible(&v.game_versions, mc_version)
-                                && is_loader_compatible(&v.loaders, loader)
+                            let game_matches = if dependency_type == ResourceType::DataPack {
+                                let exact = v.game_versions.iter().any(|listed| {
+                                    normalize_mc_version(listed)
+                                        == normalize_mc_version(dependency_mc_version)
+                                });
+                                exact
+                                    || (allow_inexact_datapacks
+                                        && is_game_version_compatible(
+                                            &v.game_versions,
+                                            dependency_mc_version,
+                                        ))
+                            } else {
+                                is_game_version_compatible(&v.game_versions, dependency_mc_version)
+                            };
+                            let loader_matches = if dependency_type == ResourceType::DataPack {
+                                platform == SourcePlatform::CurseForge
+                                    || v.loaders
+                                        .iter()
+                                        .any(|candidate| candidate.eq_ignore_ascii_case("datapack"))
+                            } else {
+                                is_loader_compatible(&v.loaders, loader)
+                            };
+                            game_matches && loader_matches
                         })
                         .collect();
 
                     compatible.sort_by(|a, b| {
-                        let target_norm = normalize_mc_version(mc_version);
+                        let target_norm = normalize_mc_version(dependency_mc_version);
                         let a_exact = a
                             .game_versions
                             .iter()
@@ -435,8 +531,15 @@ impl ResourceManager {
                     next_level_deps.extend(v.dependencies.clone());
                     resolved.push((project, v));
                 } else {
+                    if dependency_type == ResourceType::DataPack && !allow_inexact_datapacks {
+                        return Err(anyhow!(
+                            "Required datapack dependency {} has no exact release for Minecraft {}. Its compatibility must be acknowledged before installation.",
+                            project.name,
+                            dependency_mc_version
+                        ));
+                    }
                     log::warn!("[DependencyResolution] Could not find compatible version for dependency {} (MC: {}, Loader: {})",
-                        dep.project_id, mc_version, loader);
+                        dep.project_id, dependency_mc_version, loader);
                 }
             }
 

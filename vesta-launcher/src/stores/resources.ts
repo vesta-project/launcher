@@ -5,6 +5,7 @@ import type { ResourceInstallRequest } from "@utils/resource-install-intent";
 import { createStore, reconcile } from "solid-js/store";
 import { refreshInstanceResourceRows } from "./instance-resource-overview";
 import { Instance } from "./instances";
+import type { ResourceInstallTarget } from "./worlds";
 
 export type ResourceType =
 	| "mod"
@@ -153,6 +154,8 @@ type ResourceStoreState = {
 	showFilters: boolean;
 	reconcilingCategories: boolean;
 	installRequest: ResourceInstallRequest | null;
+	preferredInstallTarget: ResourceInstallTarget | null;
+	installingTargetKeys: string[];
 	selection: Record<string, boolean>;
 	sorting: { id: string; desc: boolean }[];
 };
@@ -186,6 +189,8 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	showFilters: true,
 	reconcilingCategories: false,
 	installRequest: null,
+	preferredInstallTarget: null,
+	installingTargetKeys: [],
 	selection: {},
 	sorting: [{ id: "display_name", desc: false }],
 });
@@ -218,6 +223,8 @@ export const resources = {
 
 	setInstallRequest: (request: ResourceInstallRequest | null) =>
 		setResourceStore("installRequest", request),
+	setPreferredInstallTarget: (target: ResourceInstallTarget | null) =>
+		setResourceStore("preferredInstallTarget", target),
 
 	setQuery: (q: string) => setResourceStore("query", q),
 	setSource: (s: SourcePlatform) => {
@@ -240,6 +247,9 @@ export const resources = {
 		setResourceStore("resourceType", t);
 		setResourceStore("availableCategories", []);
 		setResourceStore("offset", 0);
+		// Changing the global browse category starts a fresh install session.
+		// World Details binds its target explicitly after selecting Datapacks.
+		setResourceStore("preferredInstallTarget", null);
 
 		// Clear loader if not on 'mod' as it doesn't apply to resourcepacks/shaders
 		if (t !== "mod") {
@@ -280,6 +290,12 @@ export const resources = {
 
 	setInstance: (id: number | null) => {
 		setResourceStore("selectedInstanceId", id);
+		if (
+			resourceStore.preferredInstallTarget?.kind === "world" &&
+			resourceStore.preferredInstallTarget.world.instanceId !== id
+		) {
+			setResourceStore("preferredInstallTarget", null);
+		}
 		if (id) {
 			resources.fetchInstalled(id);
 		} else {
@@ -525,11 +541,17 @@ export const resources = {
 	install: async (
 		project: ResourceProject,
 		version: ResourceVersion,
-		target?: import("@stores/worlds").ResourceInstallTarget | null,
+		target?: ResourceInstallTarget | null,
+		options?: {
+			installType?: ResourceType;
+			compatibilityAcknowledged?: boolean;
+			replacementResourceId?: number;
+		},
 	) => {
-		const isModpack = project.resource_type === "modpack";
+		const installType = options?.installType ?? project.resource_type;
+		const isModpack = installType === "modpack";
 		const resolvedTarget =
-			target ??
+			target ?? resourceStore.preferredInstallTarget ??
 			(resourceStore.selectedInstanceId
 				? { kind: "instance" as const, instanceId: resourceStore.selectedInstanceId }
 				: null);
@@ -539,6 +561,12 @@ export const resources = {
 		// Immediate UI feedback
 		setResourceStore("installingVersionIds", (ids) => [...ids, version.id]);
 		setResourceStore("installingProjectIds", (ids) => [...ids, project.id]);
+		const targetKey = resolvedTarget
+			? resolvedTarget.kind === "world"
+				? `${project.source}:${project.id}:${version.id}:world:${resolvedTarget.world.instanceId}:${resolvedTarget.world.directoryName}`
+				: `${project.source}:${project.id}:${version.id}:instance:${resolvedTarget.instanceId}`
+			: `${project.source}:${project.id}:${version.id}:modpack`;
+		setResourceStore("installingTargetKeys", (keys) => [...keys, targetKey]);
 
 		try {
 			// Cache project metadata for future offline/icon use
@@ -553,7 +581,10 @@ export const resources = {
 				projectId: project.id,
 				projectName: project.name,
 				version,
-				resourceType: project.resource_type,
+				installType,
+				compatibilityAcknowledged:
+					options?.compatibilityAcknowledged ?? false,
+				replacementResourceId: options?.replacementResourceId ?? null,
 			});
 
 			// Installing IDs are cleared by the scoped rows event after the
@@ -567,6 +598,9 @@ export const resources = {
 			);
 			setResourceStore("installingProjectIds", (ids) =>
 				ids.filter((id) => id !== project.id),
+			);
+			setResourceStore("installingTargetKeys", (keys) =>
+				keys.filter((key) => key !== targetKey),
 			);
 			throw e;
 		}
@@ -639,6 +673,41 @@ export function preloadDefaultBrowseData(): Promise<void> {
 
 // Listen for resource updates from the backend (watcher)
 if (typeof window !== "undefined") {
+	listen<{ world: import("@stores/worlds").WorldRef }>(
+		"core://world-datapacks-changed",
+		(event) => {
+			const suffix = `:world:${event.payload.world.instanceId}:${event.payload.world.directoryName}`;
+			const completed = resourceStore.installingTargetKeys.filter((key) =>
+				key.endsWith(suffix),
+			);
+			if (completed.length === 0) return;
+			setResourceStore("installingTargetKeys", (keys) =>
+				keys.filter((key) => !key.endsWith(suffix)),
+			);
+			for (const key of completed) {
+				const [, projectId, versionId] = key.split(":");
+				if (
+					!resourceStore.installingTargetKeys.some((candidate) =>
+						candidate.includes(`:${projectId}:`),
+					)
+				) {
+					setResourceStore("installingProjectIds", (ids) =>
+						ids.filter((id) => id !== projectId),
+					);
+				}
+				if (
+					!resourceStore.installingTargetKeys.some((candidate) =>
+						candidate.includes(`:${projectId}:${versionId}:`),
+					)
+				) {
+					setResourceStore("installingVersionIds", (ids) =>
+						ids.filter((id) => id !== versionId),
+					);
+				}
+			}
+		},
+	);
+
 	listen<{ instanceId: number; revision: string }>(
 		"core://instance-resource-rows-changed",
 		(event) => {

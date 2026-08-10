@@ -5,6 +5,7 @@ import { type Instance, instancesState } from "@stores/instances";
 import {
 	type InstalledResource,
 	type ResourceProject,
+	type ResourceType,
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
@@ -33,6 +34,7 @@ interface ResourceInstanceSelectionDialogProps {
 	project?: ResourceProject;
 	version?: ResourceVersion;
 	versions?: ResourceVersion[];
+	installType?: ResourceType;
 }
 
 const ResourceInstanceSelectionDialog: Component<
@@ -99,6 +101,9 @@ const ResourceInstanceSelectionDialog: Component<
 
 	const getCompatibility = (instance: Instance) => {
 		if (!props.project) return { type: "compatible" as const };
+		if (props.installType === "datapack") {
+			return { type: "compatible" as const };
+		}
 		if (props.version) {
 			return getCompatibilityForInstance(props.project, props.version, instance);
 		}
@@ -169,7 +174,7 @@ const ResourceInstanceSelectionDialog: Component<
 	const options = createMemo<InstanceSelectionOption[]>(() =>
 		instancesState.instances.map((instance) => {
 			const compatibility = getCompatibility(instance);
-			const installed = props.project
+			const installed = props.project && props.installType !== "datapack"
 				? findInstalledResource(
 						props.project,
 						installedMap()[instance.id] || [],
