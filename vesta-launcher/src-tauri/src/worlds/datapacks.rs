@@ -128,12 +128,15 @@ pub fn select_update_status(
         .take_while(|version| version.id != resource.remote_version_id)
         .filter(|version| {
             release_allowed(version.release_type, &resource.release_type)
-                && match platform {
-                    SourcePlatform::Modrinth => version
+                && if platform == SourcePlatform::Modrinth {
+                    version
                         .loaders
                         .iter()
-                        .any(|loader| loader.eq_ignore_ascii_case("datapack")),
-                    SourcePlatform::CurseForge => project_type == ResourceType::DataPack,
+                        .any(|loader| loader.eq_ignore_ascii_case("datapack"))
+                } else if platform == SourcePlatform::CurseForge {
+                    project_type == ResourceType::DataPack
+                } else {
+                    crate::tasks::resource_download::requires_world_target(version, project_type)
                 }
         })
         .collect::<Vec<_>>();
