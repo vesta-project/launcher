@@ -83,6 +83,9 @@ export function versionsSupportedByInstance(
 	if (!instance || project?.resource_type === "modpack") {
 		return matchingProjectType;
 	}
+	// Datapack version tags are advisory and the selected world's saved version,
+	// not the instance loader, decides whether confirmation is needed at install.
+	if (project?.resource_type === "datapack") return matchingProjectType;
 	return matchingProjectType.filter(
 		(version) =>
 			getCompatibilityForInstance(project, version, instance).type !==

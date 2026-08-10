@@ -10,7 +10,7 @@ use reqwest::Url;
 use sha1::{Digest, Sha1};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
@@ -101,6 +101,7 @@ pub struct ResourceDownloadTask {
     pub version: ResourceVersion,
     pub resource_type: ResourceType,
     pub dependency_for: Option<String>,
+    pub replacement_resource_id: Option<i32>,
 }
 
 fn resource_type_name(resource_type: ResourceType) -> &'static str {
@@ -440,10 +441,23 @@ impl Task for ResourceDownloadTask {
         let project_name = self.project_name.clone();
         let version = self.version.clone();
         let project_type = self.resource_type;
+        let replacement_resource_id = self.replacement_resource_id;
         let app_handle = ctx.app_handle.clone();
 
         Box::pin(async move {
             let artifacts = plan_artifacts(&version, project_type)?;
+            if replacement_resource_id.is_some()
+                && artifacts
+                    .iter()
+                    .filter(|artifact| artifact.resource_type == ResourceType::DataPack)
+                    .count()
+                    != 1
+            {
+                return Err(
+                    "A world datapack replacement requires exactly one datapack artifact"
+                        .to_string(),
+                );
+            }
             if artifacts
                 .iter()
                 .any(|a| a.resource_type == ResourceType::Modpack)
@@ -492,19 +506,21 @@ impl Task for ResourceDownloadTask {
                 }
                 ResourceInstallTarget::Instance { .. } => None,
             };
+            let requested_replacement = match (&target, replacement_resource_id) {
+                (ResourceInstallTarget::World { world }, Some(resource_id)) => Some(
+                    crate::worlds::datapacks::replacement_path(world, resource_id)?,
+                ),
+                (ResourceInstallTarget::Instance { .. }, Some(_)) => {
+                    return Err("A world datapack replacement requires a world target".to_string())
+                }
+                (_, None) => None,
+            };
             if artifacts
                 .iter()
                 .any(|a| a.resource_type == ResourceType::DataPack)
+                && world_path.is_none()
             {
-                if world_path.is_none() {
-                    return Err("Datapack installation requires a world target".to_string());
-                }
-                if piston_lib::game::launcher::is_instance_running(&instance.slug())
-                    .await
-                    .map_err(|error| format!("Failed to check instance state: {error}"))?
-                {
-                    return Err("Close Minecraft before installing a datapack".to_string());
-                }
+                return Err("Datapack installation requires a world target".to_string());
             }
 
             let staging = instance_path
@@ -635,7 +651,11 @@ impl Task for ResourceDownloadTask {
                     let exact = rollback_try!(exact_query);
                     if let Some(existing) = exact.filter(|existing| {
                         let path = Path::new(&existing.local_path);
-                        path.is_file()
+                        let requested_matches = requested_replacement
+                            .as_ref()
+                            .is_none_or(|requested| requested == path);
+                        requested_matches
+                            && path.is_file()
                             && sha1_file(path)
                                 .is_ok_and(|actual| actual.eq_ignore_ascii_case(&hash))
                     }) {
@@ -668,6 +688,11 @@ impl Task for ResourceDownloadTask {
                         ),
                         _ => None,
                     };
+                    if artifact.resource_type == ResourceType::DataPack {
+                        if let Some(requested) = requested_replacement.as_ref() {
+                            managed_replacement = Some(requested.clone());
+                        }
+                    }
                     if artifact.resource_type == ResourceType::ResourcePack
                         && managed_replacement.as_deref().is_some_and(|path| {
                             companion_path_is_shared(
@@ -860,14 +885,13 @@ impl Task for ResourceDownloadTask {
                             );
                         }
                     }
-                    let _ = app_handle.emit(
-                        "core://instance-worlds-changed",
-                        serde_json::json!({
-                            "instanceId": instance_id,
-                            "revision": chrono::Utc::now().timestamp_millis(),
-                            "reason": "datapack-install"
-                        }),
-                    );
+                    if let ResourceInstallTarget::World { world } = &target {
+                        let _ = crate::worlds::datapacks::emit_world_datapacks_changed(
+                            &app_handle,
+                            world,
+                            "datapack-install",
+                        );
+                    }
                 }
                 for artifact in &published {
                     if let Some((_, backup)) = &artifact.backup {

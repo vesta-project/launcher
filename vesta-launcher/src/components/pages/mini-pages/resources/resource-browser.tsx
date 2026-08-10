@@ -2,8 +2,9 @@ import { getSourceDescriptor } from "@resources/source-catalog";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { type Instance, instancesState } from "@stores/instances";
+import { dialogStore } from "@stores/dialog-store";
 import { type ResourceProject, type ResourceVersion, resources } from "@stores/resources";
-import type { WorldRef } from "@stores/worlds";
+import { listInstanceWorlds, type WorldSummary } from "@stores/worlds";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import {
 	Pagination,
@@ -20,9 +21,15 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
+import Button from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
-import { findBestVersionForInstance, requiresWorldTarget } from "@utils/resource-install-intent";
+import {
+	classifyDatapackVersionCompatibility,
+	findBestExactDatapackVersion,
+	findBestVersionForInstance,
+	requiresWorldTarget,
+} from "@utils/resource-install-intent";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
@@ -65,7 +72,9 @@ const ResourceBrowser: Component<{
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
 	const [worldInstall, setWorldInstall] = createSignal<{
 		project: ResourceProject;
-		version: ResourceVersion;
+		versions: ResourceVersion[];
+		version?: ResourceVersion;
+		installType: ResourceProject["resource_type"];
 		instanceId: number;
 	} | null>(null);
 	let isInitializedFromProps = false;
@@ -79,15 +88,38 @@ const ResourceBrowser: Component<{
 		if (!request) return;
 		if (
 			request.preferredInstanceId != null &&
-			request.version &&
-			requiresWorldTarget(request.project, request.version)
+			requiresWorldTarget(request.project, request.version, request.installType)
 		) {
 			setWorldInstall({
 				project: request.project,
+				versions: request.versions,
 				version: request.version,
+				installType: request.installType,
 				instanceId: request.preferredInstanceId,
 			});
 			resources.setInstallRequest(null);
+			if (request.preferredWorld) {
+				const preferredWorld = request.preferredWorld;
+				void listInstanceWorlds(preferredWorld.instanceId)
+					.then((worlds) =>
+						worlds.find(
+							(world) =>
+								world.ref.directoryName === preferredWorld.directoryName,
+						),
+					)
+					.then((world) => {
+						if (world) return handleSelectWorld(world);
+						throw new Error("The selected world is no longer available.");
+					})
+					.catch((error) => {
+						setWorldInstall(null);
+						showToast({
+							title: "World unavailable",
+							description: String(error),
+							severity: "error",
+						});
+					});
+			}
 			return;
 		}
 		setIsInstanceDialogOpen(true);
@@ -96,7 +128,7 @@ const ResourceBrowser: Component<{
 	const handleSelectInstance = async (instance: Instance) => {
 		const request = resources.state.installRequest;
 		if (!request) return;
-		const { project, versions } = request;
+		const { project, versions, installType } = request;
 
 		setIsInstanceDialogOpen(false);
 		resources.setInstallRequest(null);
@@ -106,21 +138,23 @@ const ResourceBrowser: Component<{
 				versions.length > 0
 					? versions
 					: await resources.getVersions(project.source, project.id);
-			const bestVersion = findBestVersionForInstance(
-				project,
-				finalVersions,
-				instance,
-			);
+			if (requiresWorldTarget(project, request.version, installType)) {
+				setWorldInstall({
+					project,
+					versions: finalVersions,
+					version: request.version,
+					installType,
+					instanceId: instance.id,
+				});
+				return;
+			}
+			const bestVersion = findBestVersionForInstance(project, finalVersions, instance);
 
 			if (bestVersion) {
-				if (requiresWorldTarget(project, bestVersion)) {
-					setWorldInstall({ project, version: bestVersion, instanceId: instance.id });
-					return;
-				}
 				await resources.install(project, bestVersion, {
 					kind: "instance",
 					instanceId: instance.id,
-				});
+				}, { installType });
 			} else {
 				showToast({
 					title: "No compatible version",
@@ -137,14 +171,59 @@ const ResourceBrowser: Component<{
 		}
 	};
 
-	const handleSelectWorld = async (world: WorldRef) => {
+	const handleSelectWorld = async (world: WorldSummary) => {
 		const context = worldInstall();
 		if (!context) return;
+		let selectedVersion = context.version;
+		if (!selectedVersion) {
+			selectedVersion = findBestExactDatapackVersion(
+				context.versions,
+				world.gameVersion,
+				context.project.source,
+			) ?? undefined;
+			if (!selectedVersion) {
+				resources.setPreferredInstallTarget({ kind: "world", world: world.ref });
+				resources.setInstallRequest(null);
+				setWorldInstall(null);
+				activeRouter()?.navigate(
+					"/resource-details",
+					{
+						projectId: context.project.id,
+						platform: context.project.source,
+						resourceType: context.installType,
+						activeTab: "versions",
+					},
+					{ project: context.project },
+				);
+				showToast({
+					title: "Choose a datapack version",
+					description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version to install manually.`,
+					severity: "warning",
+				});
+				return;
+			}
+		}
+
+		const compatibility = classifyDatapackVersionCompatibility(
+			selectedVersion.game_versions,
+			world.gameVersion,
+		);
+		const acknowledged =
+			compatibility === "exact" ||
+			(await dialogStore.confirm(
+				"Confirm datapack compatibility",
+				`${selectedVersion.version_number} does not explicitly list ${world.gameVersion ?? "this world's saved version"}. Datapacks are often compatible across nearby releases, but Vesta cannot verify this one.`,
+				{ okLabel: "Install anyway", cancelLabel: "Choose another version" },
+			));
+		if (!acknowledged) return;
 		setWorldInstall(null);
 		try {
-			await resources.install(context.project, context.version, {
+			await resources.install(context.project, selectedVersion, {
 				kind: "world",
-				world,
+				world: world.ref,
+			}, {
+				installType: context.installType,
+				compatibilityAcknowledged: compatibility !== "exact",
 			});
 			showToast({
 				title: "Installation started",
@@ -210,6 +289,7 @@ const ResourceBrowser: Component<{
 				projectId: parsed.id,
 				platform: parsed.platform,
 				activeTab: parsed.activeTab,
+				resourceType: resources.state.resourceType,
 			});
 			resources.setQuery("");
 			return;
@@ -391,6 +471,29 @@ const ResourceBrowser: Component<{
 				onSearchInput={handleSearchInput}
 				searchValue={resources.state.query}
 			/>
+			<Show
+				when={
+					resources.state.resourceType === "datapack" &&
+					resources.state.preferredInstallTarget?.kind === "world"
+						? resources.state.preferredInstallTarget.world
+						: null
+				}
+			>
+				{(world) => (
+					<div class={`${styles["resource-warning"]} ${styles["world-target"]}`}>
+						<span>
+							Installing into <strong>{world().directoryName}</strong>
+						</span>
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => resources.setPreferredInstallTarget(null)}
+						>
+							Choose a world each time
+						</Button>
+					</div>
+				)}
+			</Show>
 
 			<div class={styles["resource-results-info"]}>
 				<div class={styles["results-stats"]}>
@@ -670,13 +773,14 @@ const ResourceBrowser: Component<{
 				onCreateNew={handleCreateNew}
 				project={resources.state.installRequest?.project}
 				versions={resources.state.installRequest?.versions ?? []}
+				installType={resources.state.installRequest?.installType}
 			/>
 			<WorldSelectionDialog
 				isOpen={Boolean(worldInstall())}
 				initialInstanceId={worldInstall()?.instanceId}
 				projectName={worldInstall()?.project.name}
 				onClose={() => setWorldInstall(null)}
-				onSelect={handleSelectWorld}
+				onSelectWorld={handleSelectWorld}
 			/>
 		</div>
 	);

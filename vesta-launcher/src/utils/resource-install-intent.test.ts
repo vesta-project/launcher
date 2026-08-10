@@ -4,7 +4,9 @@ import type {
 	ResourceVersion,
 } from "@stores/resources";
 import {
+	classifyDatapackVersionCompatibility,
 	findBestVersion,
+	findBestExactDatapackVersion,
 	findInstalledResource,
 	isGameVersionCompatible,
 	isResourceUpdateAvailable,
@@ -169,6 +171,37 @@ describe("resource install intent", () => {
 		);
 
 		expect(selected?.id).toBe("datapack");
+	});
+
+	it("only quick-selects datapacks with an exact Minecraft version tag", () => {
+		const versions = [
+			version({ id: "wildcard", loaders: ["datapack"], game_versions: ["1.21.x"] }),
+			version({ id: "same-line", loaders: ["datapack"], game_versions: ["1.21.4"] }),
+		];
+		expect(findBestExactDatapackVersion(versions, "1.21.1", "modrinth")).toBeNull();
+		expect(
+			findBestExactDatapackVersion(
+				[...versions, version({ id: "exact", loaders: ["datapack"] })],
+				"1.21.1",
+				"modrinth",
+			)?.id,
+		).toBe("exact");
+	});
+
+	it("classifies non-exact datapack tags as advisory", () => {
+		expect(classifyDatapackVersionCompatibility(["1.21.4"], "1.21.1")).toBe(
+			"sameRelease",
+		);
+		expect(classifyDatapackVersionCompatibility(["1.20.6"], "1.21.1")).toBe(
+			"unlisted",
+		);
+		expect(classifyDatapackVersionCompatibility(["1.21.1"], null)).toBe(
+			"unknown",
+		);
+	});
+
+	it("uses explicit install intent when a Modrinth mod has datapack builds", () => {
+		expect(requiresWorldTarget(project(), version(), "datapack")).toBe(true);
 	});
 
 	it("uses Modrinth's datapack loader to reject its mod and plugin variants", () => {

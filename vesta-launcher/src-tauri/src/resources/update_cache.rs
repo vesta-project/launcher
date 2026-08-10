@@ -1,7 +1,9 @@
 use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use std::collections::HashSet;
 
+use crate::models::installed_resource::InstalledResource;
 use crate::models::instance::Instance;
 use crate::models::instance_resource_update_check::InstanceResourceUpdateCheck;
 use crate::models::resource_update::{
@@ -15,7 +17,7 @@ pub const INSTANCE_UPDATE_CHECK_TTL_MINUTES: i64 = 5;
 
 pub fn instance_update_fingerprint(inst: &Instance) -> String {
     format!(
-        "{}|{}|{}",
+        "instance-resources-v2|{}|{}|{}",
         inst.minecraft_version,
         inst.modloader.as_deref().unwrap_or("vanilla"),
         inst.modpack_version_id.as_deref().unwrap_or("")
@@ -83,7 +85,17 @@ pub fn get_instance_update_snapshot_response(
         return Ok(None);
     };
 
-    let data = snapshot_to_result(&record)?;
+    let mut data = snapshot_to_result(&record)?;
+    let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
+    let instance_resource_ids = crate::schema::installed_resource::dsl::installed_resource
+        .filter(crate::schema::installed_resource::dsl::instance_id.eq(instance_id))
+        .load::<InstalledResource>(&mut conn)?
+        .into_iter()
+        .filter(|resource| !resource.resource_type.eq_ignore_ascii_case("datapack"))
+        .map(|resource| resource.id)
+        .collect::<HashSet<_>>();
+    data.resource_updates
+        .retain(|update| instance_resource_ids.contains(&update.resource_id));
     let is_stale = !is_snapshot_fresh(&record, &fingerprint);
 
     Ok(Some(InstanceUpdateSnapshotResponse {

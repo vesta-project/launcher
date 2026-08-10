@@ -2,7 +2,7 @@ use crate::tasks::manager::TaskManager;
 use crate::tasks::world_transfer::WorldTransferTask;
 use crate::worlds::install_selection;
 use crate::worlds::transfer::TransferMode;
-use crate::worlds::{WorldManager, WorldRef, WorldSummary};
+use crate::worlds::{datapacks::WorldDatapackOverview, WorldManager, WorldRef, WorldSummary};
 use tauri::State;
 
 #[tauri::command]
@@ -22,6 +22,126 @@ pub async fn list_instance_worlds(
 pub fn open_world_folder(world_ref: WorldRef) -> Result<(), String> {
     let path = crate::worlds::resolve_world_path(&world_ref)?;
     open::that(path).map_err(|error| format!("Failed to open world folder: {error}"))
+}
+
+#[tauri::command]
+pub fn list_world_datapacks(world_ref: WorldRef) -> Result<WorldDatapackOverview, String> {
+    crate::worlds::datapacks::list_world_datapacks(&world_ref)
+}
+
+#[tauri::command]
+pub async fn check_world_datapack_updates(
+    resource_manager: State<'_, crate::resources::ResourceManager>,
+    world_ref: WorldRef,
+    force_refresh: bool,
+) -> Result<crate::worlds::datapacks::WorldDatapackUpdateCheck, String> {
+    use crate::models::resource::{ResourceType, SourcePlatform};
+
+    let (game_version, resources) = crate::worlds::datapacks::update_check_context(&world_ref)?;
+    let mut updates = Vec::with_capacity(resources.len());
+    for resource in resources {
+        let Some(platform) = SourcePlatform::from_str_id(&resource.platform) else {
+            continue;
+        };
+        let project_type = if platform == SourcePlatform::CurseForge {
+            match resource_manager
+                .get_project(platform, &resource.remote_id)
+                .await
+            {
+                Ok(project) => project.resource_type,
+                Err(error) => {
+                    updates.push(crate::worlds::datapacks::WorldDatapackUpdateStatus {
+                        resource_id: resource.id,
+                        exact_version: None,
+                        manual_review_available: false,
+                        error: Some(format!("Failed to inspect datapack project: {error}")),
+                    });
+                    continue;
+                }
+            }
+        } else {
+            // Mixed Modrinth projects can remain typed as mods. The selected
+            // version's `datapack` loader is the authoritative variant tag.
+            ResourceType::Mod
+        };
+        match resource_manager
+            .get_versions(platform, &resource.remote_id, force_refresh, None, None)
+            .await
+        {
+            Ok(versions) => updates.push(crate::worlds::datapacks::select_update_status(
+                &versions,
+                &resource,
+                game_version.as_deref(),
+                platform,
+                project_type,
+            )),
+            Err(error) => {
+                updates.push(crate::worlds::datapacks::WorldDatapackUpdateStatus {
+                    resource_id: resource.id,
+                    exact_version: None,
+                    manual_review_available: false,
+                    error: Some(format!("Failed to check datapack versions: {error}")),
+                });
+            }
+        }
+    }
+    Ok(crate::worlds::datapacks::WorldDatapackUpdateCheck {
+        world: world_ref,
+        game_version,
+        updates,
+    })
+}
+
+#[tauri::command]
+pub fn open_world_datapacks_folder(world_ref: WorldRef) -> Result<(), String> {
+    crate::worlds::datapacks::open_world_datapacks_folder(&world_ref)
+}
+
+#[tauri::command]
+pub fn toggle_world_datapack(
+    app_handle: tauri::AppHandle,
+    world_manager: State<'_, WorldManager>,
+    world_ref: WorldRef,
+    resource_id: i32,
+    enabled: bool,
+) -> Result<(), String> {
+    crate::worlds::datapacks::toggle_world_datapack(&world_ref, resource_id, enabled)?;
+    world_manager.invalidate(world_ref.instance_id);
+    let rows_result = crate::resources::reconciliation::emit_rows_changed(
+        &app_handle,
+        world_ref.instance_id,
+        "world-datapack-toggled",
+    );
+    let world_result = crate::worlds::datapacks::emit_world_datapacks_changed(
+        &app_handle,
+        &world_ref,
+        "datapack-toggled",
+    );
+    world_result?;
+    rows_result.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_world_datapack(
+    app_handle: tauri::AppHandle,
+    world_manager: State<'_, WorldManager>,
+    world_ref: WorldRef,
+    resource_id: i32,
+) -> Result<(), String> {
+    crate::worlds::datapacks::delete_world_datapack(&world_ref, resource_id)?;
+    world_manager.invalidate(world_ref.instance_id);
+    let rows_result = crate::resources::reconciliation::emit_rows_changed(
+        &app_handle,
+        world_ref.instance_id,
+        "world-datapack-deleted",
+    );
+    let world_result = crate::worlds::datapacks::emit_world_datapacks_changed(
+        &app_handle,
+        &world_ref,
+        "datapack-deleted",
+    );
+    world_result?;
+    rows_result.map_err(|error| error.to_string())
 }
 
 #[tauri::command]

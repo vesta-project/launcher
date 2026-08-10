@@ -11,16 +11,18 @@ import {
 	RESOURCE_SOURCES,
 } from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
+import { dialogStore } from "@stores/dialog-store";
 import {
 	type ResourceDependency,
 	type ResourceProject,
 	type ResourceVersion,
 	type ResourceVersionDetails,
+	type ResourceType,
 	resources,
 	type SourcePlatform,
 } from "@stores/resources";
 import { reducedMotion } from "@stores/settings";
-import type { WorldRef } from "@stores/worlds";
+import { listInstanceWorlds, type WorldSummary } from "@stores/worlds";
 import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
@@ -54,6 +56,8 @@ import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import { projectTypeLabel } from "@utils/resource-artifacts";
 import {
+	classifyDatapackVersionCompatibility,
+	findBestExactDatapackVersion,
 	findBestVersionForInstance,
 	requiresWorldTarget,
 } from "@utils/resource-install-intent";
@@ -312,6 +316,7 @@ const ResourceDetailsPage: Component<{
 	platform?: SourcePlatform;
 	name?: string;
 	iconUrl?: string;
+	resourceType?: ResourceType;
 	setRefetch?: (fn: () => Promise<void>) => void;
 	router?: MiniRouter;
 }> = (props) => {
@@ -319,6 +324,21 @@ const ResourceDetailsPage: Component<{
 	const [project, setProject] = createSignal<ResourceProject | undefined>(
 		props.project,
 	);
+	const installType = createMemo<ResourceType>(() => {
+		const routed = activeRouter()?.currentParams.get().resourceType;
+		return (
+			props.resourceType ||
+			(typeof routed === "string" ? (routed as ResourceType) : undefined) ||
+			project()?.resource_type ||
+			"mod"
+		);
+	});
+	const replacementResourceId = createMemo<number | undefined>(() => {
+		const value = activeRouter()?.currentParams.get().replacementResourceId;
+		if (typeof value !== "string" && typeof value !== "number") return undefined;
+		const parsed = Number(value);
+		return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+	});
 	const projectIconPreview = createAnimatedIconPreview(
 		() => project()?.icon_url || props.iconUrl,
 	);
@@ -470,6 +490,7 @@ const ResourceDetailsPage: Component<{
 
 	onCleanup(() => {
 		activeRouter()?.customName.set(null);
+		resources.setPreferredInstallTarget(null);
 	});
 
 	const bestVersionForCurrent = createMemo(() => {
@@ -776,18 +797,30 @@ const ResourceDetailsPage: Component<{
 	};
 
 	const isVersionInstalled = (versionId: string, hash?: string) => {
+		if (installType() === "datapack") return false;
 		return resources.state.installedResources.some(
 			(ir) => ir.remote_version_id === versionId || (hash && ir.hash === hash),
 		);
 	};
 
 	const isVersionInstalling = (versionId: string) => {
+		const target = resources.state.preferredInstallTarget;
+		if (installType() === "datapack" && target?.kind === "world") {
+			return resources.state.installingTargetKeys.some(
+				(key) =>
+					key.includes(`:${project()?.id ?? ""}:${versionId}:`) &&
+					key.endsWith(
+						`:world:${target.world.instanceId}:${target.world.directoryName}`,
+					),
+			);
+		}
 		return resources.state.installingVersionIds.includes(versionId);
 	};
 
 	const isModpack = () => project()?.resource_type === "modpack";
 
 	const isProjectInstalled = createMemo(() => {
+		if (installType() === "datapack") return false;
 		const p = project();
 		if (!p) return false;
 
@@ -822,6 +855,7 @@ const ResourceDetailsPage: Component<{
 	});
 
 	const installedResource = createMemo(() => {
+		if (installType() === "datapack") return null;
 		const p = project();
 		if (!p) return null;
 
@@ -853,6 +887,16 @@ const ResourceDetailsPage: Component<{
 	const isProjectInstalling = createMemo(() => {
 		const p = project();
 		if (!p) return false;
+		const target = resources.state.preferredInstallTarget;
+		if (installType() === "datapack" && target?.kind === "world") {
+			return resources.state.installingTargetKeys.some(
+				(key) =>
+					key.includes(`:${p.id}:`) &&
+					key.endsWith(
+						`:world:${target.world.instanceId}:${target.world.directoryName}`,
+					),
+			);
+		}
 		return resources.state.installingProjectIds.includes(p.id);
 	});
 
@@ -1130,7 +1174,9 @@ const ResourceDetailsPage: Component<{
 	} | null>(null);
 	const [worldInstall, setWorldInstall] = createSignal<{
 		project: ResourceProject;
-		version: ResourceVersion;
+		versions: ResourceVersion[];
+		version?: ResourceVersion;
+		installType: ResourceType;
 		instanceId: number;
 	} | null>(null);
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
@@ -1149,6 +1195,7 @@ const ResourceDetailsPage: Component<{
 	};
 
 	const isProjectIncompatible = createMemo(() => {
+		if (installType() === "datapack") return false;
 		const instId = resources.state.selectedInstanceId;
 		if (!instId || isModpack()) return false;
 
@@ -1235,6 +1282,39 @@ const ResourceDetailsPage: Component<{
 			return;
 		}
 
+		if (installType() === "datapack") {
+			const p = project();
+			if (!p) return;
+			const instId = resources.state.selectedInstanceId;
+			if (!instId) {
+				resources.setInstallRequest({
+					project: p,
+					versions: resources.state.versions,
+					installType: "datapack",
+				});
+				setIsInstanceDialogOpen(true);
+				return;
+			}
+			setWorldInstall({
+				project: p,
+				versions: resources.state.versions,
+				installType: "datapack",
+				instanceId: instId,
+			});
+			const preferred = resources.state.preferredInstallTarget;
+			if (preferred?.kind === "world") {
+				void listInstanceWorlds(preferred.world.instanceId)
+					.then((worlds) =>
+						worlds.find(
+							(world) =>
+								world.ref.directoryName === preferred.world.directoryName,
+						),
+					)
+					.then((world) => world && handleSelectWorld(world));
+			}
+			return;
+		}
+
 		const instId = resources.state.selectedInstanceId;
 		if (!instId) {
 			// Logic similar to card quick install when no instance selected
@@ -1243,6 +1323,7 @@ const ResourceDetailsPage: Component<{
 				resources.setInstallRequest({
 					project: p,
 					versions: resources.state.versions,
+					installType: installType(),
 				});
 				setIsInstanceDialogOpen(true);
 			}
@@ -1383,10 +1464,7 @@ const ResourceDetailsPage: Component<{
 		options?: { skipCache?: boolean },
 	) {
 		const requestSequence = ++projectRequestSequence;
-		const contextualResourceType =
-			project()?.id === id && project()?.source === platform
-				? project()?.resource_type
-				: undefined;
+		const contextualResourceType = installType();
 		setLoading(true);
 		setError(null);
 
@@ -1487,7 +1565,7 @@ const ResourceDetailsPage: Component<{
 	) => {
 		const p = project();
 
-		if (p?.resource_type === "modpack") {
+		if (installType() === "modpack" && p) {
 			const prefilledModpackInfo = buildBrowseModpackInfo(p, version);
 			activeRouter()?.navigate(
 				"/install",
@@ -1528,8 +1606,37 @@ const ResourceDetailsPage: Component<{
 			return;
 		}
 
-		if (p && inst && requiresWorldTarget(p, version)) {
-			setWorldInstall({ project: p, version, instanceId: inst.id });
+		if (p && inst && requiresWorldTarget(p, version, installType())) {
+			const context = {
+				project: p,
+				versions: resources.state.versions,
+				version,
+				installType: installType(),
+				instanceId: inst.id,
+			};
+			setWorldInstall(context);
+			const preferred = resources.state.preferredInstallTarget;
+			if (preferred?.kind === "world") {
+				void listInstanceWorlds(preferred.world.instanceId)
+					.then((worlds) =>
+						worlds.find(
+							(world) =>
+								world.ref.directoryName === preferred.world.directoryName,
+						),
+					)
+					.then((world) => {
+						if (!world) throw new Error("The selected world is no longer available.");
+						return handleSelectWorld(world);
+					})
+					.catch((error) => {
+						setWorldInstall(null);
+						showToast({
+							title: "World unavailable",
+							description: String(error),
+							severity: "error",
+						});
+					});
+			}
 			return;
 		}
 
@@ -1569,7 +1676,7 @@ const ResourceDetailsPage: Component<{
 				await resources.install(p, version, {
 					kind: "instance",
 					instanceId: inst!.id,
-				});
+				}, { installType: installType() });
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${p.name}.`,
@@ -1585,15 +1692,50 @@ const ResourceDetailsPage: Component<{
 		}
 	};
 
-	const handleSelectWorld = async (world: WorldRef) => {
+	const handleSelectWorld = async (world: WorldSummary) => {
 		const context = worldInstall();
 		if (!context) return;
+		const selectedVersion =
+			context.version ??
+			findBestExactDatapackVersion(
+				context.versions,
+				world.gameVersion,
+				context.project.source,
+			);
+		if (!selectedVersion) {
+			resources.setPreferredInstallTarget({ kind: "world", world: world.ref });
+			setWorldInstall(null);
+			transitionRouteState({ activeTab: "versions", versionId: null }, true);
+			showToast({
+				title: "Choose a datapack version",
+				description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version to install manually.`,
+				severity: "warning",
+			});
+			return;
+		}
+		const compatibility = classifyDatapackVersionCompatibility(
+			selectedVersion.game_versions,
+			world.gameVersion,
+		);
+		const acknowledged =
+			compatibility === "exact" ||
+			(await dialogStore.confirm(
+				"Confirm datapack compatibility",
+				`${selectedVersion.version_number} does not explicitly list ${world.gameVersion ?? "this world's saved version"}. Datapacks are often compatible across nearby releases, but Vesta cannot verify this one.`,
+				{ okLabel: "Install anyway", cancelLabel: "Choose another version" },
+			));
+		if (!acknowledged) return;
 		setWorldInstall(null);
 		try {
-			await resources.install(context.project, context.version, {
+			await resources.install(context.project, selectedVersion, {
 				kind: "world",
-				world,
+				world: world.ref,
+			}, {
+				installType: context.installType,
+				compatibilityAcknowledged: compatibility !== "exact",
+				replacementResourceId: replacementResourceId(),
 			});
+			resources.setPreferredInstallTarget(null);
 			showToast({
 				title: "Installation Started",
 				description: `Check notifications for progress on ${context.project.name}.`,
@@ -1665,6 +1807,15 @@ const ResourceDetailsPage: Component<{
 		} else {
 			// This was a quick install from the header button
 			const p = project();
+			if (p && installType() === "datapack") {
+				setWorldInstall({
+					project: p,
+					versions: resources.state.versions,
+					installType: "datapack",
+					instanceId: instance.id,
+				});
+				return;
+			}
 			const best = p
 				? findBestVersionForInstance(p, resources.state.versions, instance)
 				: null;
@@ -2061,6 +2212,20 @@ const ResourceDetailsPage: Component<{
 					</div>
 				}
 			>
+				<Show
+					when={
+						installType() === "datapack" &&
+						resources.state.preferredInstallTarget?.kind === "world"
+							? resources.state.preferredInstallTarget.world
+							: null
+					}
+				>
+					{(world) => (
+						<div class={styles["modpack-instance-notice"]}>
+							Installing into {world().directoryName}
+						</div>
+					)}
+				</Show>
 				<Select<any>
 					options={[
 						{ id: null, name: "No Instance" },
@@ -2193,6 +2358,20 @@ const ResourceDetailsPage: Component<{
 							</div>
 						}
 					>
+						<Show
+							when={
+								installType() === "datapack" &&
+								resources.state.preferredInstallTarget?.kind === "world"
+									? resources.state.preferredInstallTarget.world
+									: null
+							}
+						>
+							{(world) => (
+								<div class={styles["modpack-instance-notice"]}>
+									Installing into {world().directoryName}
+								</div>
+							)}
+						</Show>
 						<Select<any>
 							options={[
 								{ id: null, name: "No Instance" },
@@ -3097,13 +3276,14 @@ const ResourceDetailsPage: Component<{
 						project={project()}
 						version={installContext()?.version}
 						versions={resources.state.versions}
+						installType={installType()}
 					/>
 					<WorldSelectionDialog
 						isOpen={Boolean(worldInstall())}
 						initialInstanceId={worldInstall()?.instanceId}
 						projectName={worldInstall()?.project.name}
 						onClose={() => setWorldInstall(null)}
-						onSelect={handleSelectWorld}
+						onSelectWorld={handleSelectWorld}
 					/>
 				</div>
 			</Show>

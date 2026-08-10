@@ -6,17 +6,22 @@ import type {
 	ResourceVersion,
 	SourcePlatform,
 } from "@stores/resources";
+import type { WorldRef } from "@stores/worlds";
 
 export interface ResourceInstallRequest {
 	project: ResourceProject;
 	versions: ResourceVersion[];
 	version?: ResourceVersion;
+	/** The destination semantics chosen by the user, independent of provider classification. */
+	installType: ResourceType;
 	preferredInstanceId?: number;
+	preferredWorld?: WorldRef;
 }
 
 export interface PendingResourceInstall {
 	project: ResourceProject;
 	version?: ResourceVersion;
+	installType?: ResourceType;
 }
 
 const normalizeArtifactRole = (role: string) =>
@@ -30,28 +35,94 @@ const normalizeArtifactRole = (role: string) =>
 export function requiresWorldTarget(
 	project: Pick<ResourceProject, "resource_type">,
 	version?: Pick<ResourceVersion, "files"> | null,
+	installType: ResourceType = project.resource_type,
 ): boolean {
-	if (project.resource_type === "datapack") return true;
+	if (installType === "datapack") return true;
 	return (version?.files ?? []).some((file) => {
 		const role = normalizeArtifactRole(file.role);
 		return (
 			role === "datapack" ||
-			(role === "primary" && project.resource_type === "datapack")
+			(role === "primary" && installType === "datapack")
 		);
 	});
+}
+
+const normalizeMinecraftVersion = (version: string) =>
+	version.trim().endsWith(".0") ? version.trim().slice(0, -2) : version.trim();
+
+export type DatapackVersionCompatibility =
+	| "exact"
+	| "sameRelease"
+	| "unlisted"
+	| "unknown";
+
+/**
+ * Provider compatibility tags are advisory for datapacks. Only an explicit,
+ * normalized exact tag is safe for quick selection; every other result needs
+ * a user-selected version and acknowledgement.
+ */
+export function classifyDatapackVersionCompatibility(
+	supported: readonly string[],
+	target: string | null | undefined,
+): DatapackVersionCompatibility {
+	if (!target?.trim()) return "unknown";
+	const normalizedTarget = normalizeMinecraftVersion(target);
+	const normalizedSupported = supported.map(normalizeMinecraftVersion);
+	if (normalizedSupported.includes(normalizedTarget)) return "exact";
+
+	const releaseLine = (value: string) => {
+		const segments = value.split(".");
+		return segments.length >= 2 ? segments.slice(0, 2).join(".") : value;
+	};
+	return normalizedSupported.some(
+		(version) => releaseLine(version) === releaseLine(normalizedTarget),
+	)
+		? "sameRelease"
+		: "unlisted";
+}
+
+export function findBestExactDatapackVersion(
+	versions: readonly ResourceVersion[],
+	gameVersion: string | null | undefined,
+	source?: SourcePlatform,
+	currentReleaseType: "release" | "beta" | "alpha" = "release",
+): ResourceVersion | null {
+	if (!gameVersion) return null;
+	const allowedReleaseTypes =
+		currentReleaseType === "release"
+			? ["release"]
+			: currentReleaseType === "beta"
+				? ["release", "beta"]
+				: ["release", "beta", "alpha"];
+	const stabilityOrder = { release: 0, beta: 1, alpha: 2 };
+	return (
+		versions
+			.filter(
+				(version) =>
+					versionMatchesResourceType("datapack", version, source) &&
+					classifyDatapackVersionCompatibility(
+						version.game_versions,
+						gameVersion,
+					) === "exact" &&
+					allowedReleaseTypes.includes(version.release_type),
+			)
+			.sort(
+				(left, right) =>
+					stabilityOrder[left.release_type] -
+					stabilityOrder[right.release_type],
+			)[0] ?? null
+	);
 }
 
 export function isGameVersionCompatible(
 	supported: readonly string[],
 	target: string,
 ): boolean {
-	const normalize = (version: string) =>
-		version.endsWith(".0") ? version.slice(0, -2) : version;
-	const normalizedTarget = normalize(target);
+	const normalizedTarget = normalizeMinecraftVersion(target);
 	const targetMajorMinor = normalizedTarget.split(".").slice(0, 2).join(".");
 
 	return supported.some((version) => {
-		const normalizedVersion = normalize(version);
+		const normalizedVersion = normalizeMinecraftVersion(version);
 		return (
 			normalizedVersion === normalizedTarget ||
 			normalizedVersion === `${targetMajorMinor}.x`

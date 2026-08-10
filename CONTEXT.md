@@ -169,6 +169,12 @@ identity, file metadata, provenance fields, row cleanup, and local presence
 lookup. Resource discovery, remote metadata lookup, manifest matching, and
 workflow notifications remain outside the Ledger.
 
+Datapack rows remain Ledger-owned file facts, but their management scope is the
+exact World derived from the row's normalized path. They are intentionally
+absent from Instance Resource overviews, matching, batch actions, and update
+snapshots. The same remote datapack may therefore have independent rows in
+several Worlds.
+
 Primary modules:
 
 - `vesta-launcher/src-tauri/src/resources/ledger.rs`
@@ -214,6 +220,10 @@ World between Instances. The World Module owns archive safety, discovery,
 metadata, transfer verification, and publication. The Installed Resource Ledger
 owns installed datapack and companion resource-pack files. Resource source
 Adapters describe artifacts but do not choose filesystem destinations.
+The dedicated World Datapack Interface lists direct ZIP/JAR and directory-form
+packs for one validated WorldRef, exposes no absolute paths, and validates the
+exact World again before file mutations. Directory-form packs are visible but
+read-only. Instance Resource commands reject datapack rows.
 World transfers do not infer file availability from Instance process state;
 actual filesystem reads, copies, verification, and publication are authoritative,
 and inaccessible files surface as Task failures.
@@ -221,11 +231,13 @@ and inaccessible files surface as Task failures.
 Primary modules:
 
 - `vesta-launcher/src-tauri/src/worlds/archive.rs`
+- `vesta-launcher/src-tauri/src/worlds/datapacks.rs`
 - `vesta-launcher/src-tauri/src/worlds/transfer.rs`
 - `vesta-launcher/src-tauri/src/tasks/world_install.rs`
 - `vesta-launcher/src-tauri/src/tasks/world_transfer.rs`
 - `vesta-launcher/src-tauri/src/commands/worlds.rs`
-- `vesta-launcher/src/components/pages/mini-pages/resources/world-selection-dialog.tsx`
+- `vesta-launcher/src/components/worlds/WorldSelectionDialog.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldDatapacksView.tsx`
 
 ### Resource Reconciliation
 
@@ -286,12 +298,16 @@ Primary modules:
 ### Resource Install Intent
 
 The user intent to install, update, remove, or navigate from a Resource into an
-Instance flow. It includes compatibility, installed matching, update availability,
-and action feedback. Compatible-version selection first constrains a provider's
-release feed to the Resource type the user is browsing. Provider metadata is not
-interchangeable: Modrinth's explicit datapack loader distinguishes mixed builds,
-while CurseForge's project class supplies the Resource type. Downloaded datapacks
-remain subject to root `pack.mcmeta` validation before publication.
+Instance or World flow. It includes an explicit install type, target,
+compatibility, installed matching, update availability, and action feedback.
+The install type is user intent rather than provider project classification.
+Compatible-version selection first constrains a provider's release feed to that
+intent. Provider metadata is not interchangeable: Modrinth's explicit datapack
+loader distinguishes mixed builds, while CurseForge's project class supplies the
+Resource type. Datapack quick selection uses the selected World's saved version,
+ignores its Instance loader, and requires an exact provider Minecraft-version
+tag; other tags remain manually installable after acknowledgement. Downloaded
+datapacks remain subject to root `pack.mcmeta` validation before publication.
 
 Primary modules:
 
@@ -299,7 +315,7 @@ Primary modules:
 - `vesta-launcher/src/utils/resources.ts`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-card.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-details.tsx`
-- `vesta-launcher/src/components/pages/mini-pages/resources/instance-selection-dialog.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-instance-selection-dialog.tsx`
 
 ### Instance Draft
 

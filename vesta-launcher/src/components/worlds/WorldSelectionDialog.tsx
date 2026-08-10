@@ -32,11 +32,11 @@ export type WorldSelectionDialogProps = {
 	initialInstanceId?: number | null;
 	projectName?: string;
 	onClose: () => void;
-	onSelect: (world: WorldRef) => void | Promise<void>;
+	onSelect?: (world: WorldRef) => void | Promise<void>;
+	onSelectWorld?: (world: WorldSummary) => void | Promise<void>;
 };
 
 export const worldDisabledReason = (world: WorldSummary): string | null => {
-	if (world.running) return "Close Minecraft before installing a datapack.";
 	if (world.levelStatus === "unreadable")
 		return "This world's level data is unreadable.";
 	return null;
@@ -163,7 +163,10 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 													type="button"
 													disabled={Boolean(disabled())}
 													title={disabled() ?? ""}
-													onClick={() => void props.onSelect(world.ref)}
+												onClick={() =>
+													void (props.onSelectWorld?.(world) ??
+														props.onSelect?.(world.ref))
+												}
 												>
 													<WorldIcon
 														src={world.iconDataUrl}

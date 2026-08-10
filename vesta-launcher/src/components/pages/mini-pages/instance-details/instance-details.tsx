@@ -36,7 +36,11 @@ import {
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
-import type { WorldRef } from "@stores/worlds";
+import type {
+	WorldDatapackSummary,
+	WorldRef,
+	WorldSummary,
+} from "@stores/worlds";
 import { useMinecraftVersions } from "@stores/versions";
 import {
 	createColumnHelper,
@@ -140,6 +144,10 @@ import type { ModpackVersion } from "./modpack-version-selector";
 // Tabs
 import { OverviewTab } from "./tabs/OverviewTab";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
+import {
+	openWorldDatapackBrowser,
+	openWorldDatapackVersions,
+} from "./tabs/world-datapack-navigation";
 
 const ConsoleTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/ConsoleTab").then((module) => ({
@@ -402,6 +410,10 @@ export default function InstanceDetails(
 	const activeTab = createMemo<TabType>(() => {
 		const params = activeRouter()?.currentParams.get();
 		return normalizeInstanceTab(params?.activeTab as string | undefined);
+	});
+	const selectedWorldDirectory = createMemo(() => {
+		const value = activeRouter()?.currentParams.get()?.world;
+		return typeof value === "string" && value.length > 0 ? value : null;
 	});
 	createEffect(() => {
 		const rawTab = activeRouter()?.currentParams.get()?.activeTab as
@@ -2088,7 +2100,11 @@ export default function InstanceDetails(
 				return next;
 			});
 		} catch (error) {
-			showToast({ title: "Update failed", description: String(error), severity: "error" });
+			showToast({
+				title: "Update failed",
+				description: String(error),
+				severity: "error",
+			});
 		}
 	};
 
@@ -2370,6 +2386,7 @@ export default function InstanceDetails(
 			: installedResources() || [];
 		const search = resourceSearch().toLowerCase();
 		return data.filter((res) => {
+			if (res.resource_type.toLowerCase() === "datapack") return false;
 			const matchesType =
 				resourceTypeFilter() === "All" ||
 				res.resource_type.toLowerCase() === resourceTypeFilter().toLowerCase();
@@ -2879,14 +2896,34 @@ export default function InstanceDetails(
 												instance.latest
 											}
 										>
-											<Suspense fallback={<InstanceTabLoading label="worlds" />}>
+											<Suspense
+												fallback={<InstanceTabLoading label="worlds" />}
+											>
 												<WorldsTab
 													instance={inst()}
-													onManageDatapacks={(world) => {
-														setResourceTypeFilter("datapack");
-														setResourceSearch(world.ref.directoryName);
-														handleTabChange("resources");
+													selectedWorldDirectory={selectedWorldDirectory()}
+													onSelectedWorldChange={(
+														directoryName: string | null,
+													) =>
+														activeRouter()?.updateQuery(
+															"world",
+															directoryName,
+															true,
+														)
+													}
+													onAddDatapack={(world: WorldSummary) => {
+														openWorldDatapackBrowser(world, activeRouter());
 													}}
+													onReviewDatapackVersions={(
+														world: WorldSummary,
+														entry: WorldDatapackSummary,
+													) =>
+														openWorldDatapackVersions(
+															world,
+															entry,
+															activeRouter(),
+														)
+													}
 												/>
 											</Suspense>
 										</Show>

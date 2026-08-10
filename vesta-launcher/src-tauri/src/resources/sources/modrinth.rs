@@ -131,6 +131,14 @@ pub struct ModrinthSource {
     client: Client,
 }
 
+fn project_type_facet(resource_type: ResourceType) -> &'static str {
+    if resource_type == ResourceType::DataPack {
+        "all_project_types"
+    } else {
+        "project_type"
+    }
+}
+
 impl ModrinthSource {
     pub fn new() -> Self {
         Self {
@@ -275,7 +283,11 @@ impl ResourceSource for ModrinthSource {
             ResourceType::Modpack => "modpack",
             ResourceType::World => "world",
         };
-        facets.push(format!("[\"project_type:{}\"]", mr_type));
+        // A Modrinth project can publish mod, plugin, and datapack versions
+        // under one project. `all_project_types` searches those version-level
+        // distributions while `project_type` only describes the project shell.
+        let project_type_facet = project_type_facet(query.resource_type);
+        facets.push(format!("[\"{}:{}\"]", project_type_facet, mr_type));
 
         let has_optional_filters = query.game_version.is_some()
             || query.loader.is_some()
@@ -330,7 +342,7 @@ impl ResourceSource for ModrinthSource {
         let mut result = self.fetch_search_url(&url).await?;
 
         if result.hits.is_empty() && is_blank_query && has_optional_filters && query.offset == 0 {
-            let fallback_facets = format!("[[\"project_type:{}\"]]", mr_type);
+            let fallback_facets = format!("[[\"{}:{}\"]]", project_type_facet, mr_type);
             let mut fallback_url = format!(
                 "https://api.modrinth.com/v2/search?query=&limit={}&offset=0",
                 query.limit
@@ -936,10 +948,19 @@ impl ResourceSource for ModrinthSource {
 
 #[cfg(test)]
 mod tests {
-    use super::{ModrinthSource, ModrinthVersion};
+    use super::{project_type_facet, ModrinthSource, ModrinthVersion};
     use crate::models::resource::{
-        DependencyType, ResourceChangelogFormat, ResourceChangelogStatus,
+        DependencyType, ResourceChangelogFormat, ResourceChangelogStatus, ResourceType,
     };
+
+    #[test]
+    fn datapack_searches_include_mixed_modrinth_projects() {
+        assert_eq!(
+            project_type_facet(ResourceType::DataPack),
+            "all_project_types"
+        );
+        assert_eq!(project_type_facet(ResourceType::Mod), "project_type");
+    }
 
     #[test]
     fn maps_version_details_fixture() {

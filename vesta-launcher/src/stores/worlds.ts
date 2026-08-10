@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { createStore, reconcile } from "solid-js/store";
+import type { ResourceVersion } from "./resources";
 
 export type WorldRef = {
 	instanceId: number;
@@ -67,6 +68,48 @@ export type InstanceWorldsChangedEvent = {
 	reason: string;
 };
 
+export type WorldDatapackEntryKind = "file" | "directory";
+
+export type WorldDatapackSummary = {
+	resourceId: number | null;
+	fileName: string;
+	displayName: string;
+	entryKind: WorldDatapackEntryKind;
+	platform: string | null;
+	projectId: string | null;
+	versionId: string | null;
+	versionNumber: string | null;
+	enabled: boolean;
+	managed: boolean;
+	readOnly: boolean;
+	sizeBytes: number;
+	modifiedAt: string | null;
+};
+
+export type WorldDatapackOverview = {
+	world: WorldRef;
+	entries: WorldDatapackSummary[];
+};
+
+export type WorldDatapacksChangedEvent = {
+	world: WorldRef;
+	revision: number;
+	reason: string;
+};
+
+export type WorldDatapackUpdateStatus = {
+	resourceId: number;
+	exactVersion: ResourceVersion | null;
+	manualReviewAvailable: boolean;
+	error: string | null;
+};
+
+export type WorldDatapackUpdateCheck = {
+	world: WorldRef;
+	gameVersion: string | null;
+	updates: WorldDatapackUpdateStatus[];
+};
+
 type WorldsState = {
 	byInstance: Record<number, WorldSummary[]>;
 	loading: Record<number, boolean>;
@@ -79,9 +122,38 @@ const [worldsState, setWorldsState] = createStore<WorldsState>({
 	errors: {},
 });
 
+type WorldDatapacksState = {
+	byWorld: Record<string, WorldDatapackOverview | undefined>;
+	updatesByWorld: Record<string, WorldDatapackUpdateCheck | undefined>;
+	loading: Record<string, boolean>;
+	updatesLoading: Record<string, boolean>;
+	errors: Record<string, string | null>;
+	updateErrors: Record<string, string | null>;
+};
+
+const [worldDatapacksState, setWorldDatapacksState] =
+	createStore<WorldDatapacksState>({
+		byWorld: {},
+		updatesByWorld: {},
+		loading: {},
+		updatesLoading: {},
+		errors: {},
+		updateErrors: {},
+	});
+
 const inFlight = new Map<number, Promise<WorldSummary[]>>();
 const subscriptions = new Map<number, Set<() => void>>();
 let eventUnlisten: Promise<UnlistenFn> | null = null;
+const datapackInFlight = new Map<string, Promise<WorldDatapackOverview>>();
+const datapackUpdatesInFlight = new Map<
+	string,
+	Promise<WorldDatapackUpdateCheck>
+>();
+let datapackEventUnlisten: Promise<UnlistenFn> | null = null;
+
+export function worldRefKey(world: WorldRef): string {
+	return `${world.instanceId}:${world.directoryName}`;
+}
 
 async function ensureWorldEventListener() {
 	if (eventUnlisten) return eventUnlisten;
@@ -97,6 +169,23 @@ async function ensureWorldEventListener() {
 		},
 	);
 	return eventUnlisten;
+}
+
+async function ensureWorldDatapackEventListener() {
+	if (datapackEventUnlisten) return datapackEventUnlisten;
+	datapackEventUnlisten = listen<WorldDatapacksChangedEvent>(
+		"core://world-datapacks-changed",
+		(event) => {
+			const key = worldRefKey(event.payload.world);
+			if (worldDatapacksState.byWorld[key]) {
+				void listWorldDatapacks(event.payload.world, true);
+			}
+			if (worldDatapacksState.updatesByWorld[key]) {
+				void checkWorldDatapackUpdates(event.payload.world, true);
+			}
+		},
+	);
+	return datapackEventUnlisten;
 }
 
 export async function listInstanceWorlds(
@@ -148,6 +237,92 @@ export function openWorldFolder(world: WorldRef): Promise<void> {
 	return invoke("open_world_folder", { worldRef: world });
 }
 
+export async function listWorldDatapacks(
+	world: WorldRef,
+	forceRefresh = false,
+): Promise<WorldDatapackOverview> {
+	void ensureWorldDatapackEventListener();
+	const key = worldRefKey(world);
+	if (!forceRefresh && datapackInFlight.has(key)) {
+		return datapackInFlight.get(key)!;
+	}
+
+	setWorldDatapacksState("loading", key, true);
+	setWorldDatapacksState("errors", key, null);
+	const request = invoke<WorldDatapackOverview>("list_world_datapacks", {
+		worldRef: world,
+	})
+		.then((overview) => {
+			setWorldDatapacksState("byWorld", key, reconcile(overview));
+			return overview;
+		})
+		.catch((error) => {
+			setWorldDatapacksState("errors", key, String(error));
+			throw error;
+		})
+		.finally(() => {
+			setWorldDatapacksState("loading", key, false);
+			datapackInFlight.delete(key);
+		});
+	datapackInFlight.set(key, request);
+	return request;
+}
+
+export async function checkWorldDatapackUpdates(
+	world: WorldRef,
+	forceRefresh = false,
+): Promise<WorldDatapackUpdateCheck> {
+	void ensureWorldDatapackEventListener();
+	const key = worldRefKey(world);
+	if (!forceRefresh && datapackUpdatesInFlight.has(key)) {
+		return datapackUpdatesInFlight.get(key)!;
+	}
+
+	setWorldDatapacksState("updatesLoading", key, true);
+	setWorldDatapacksState("updateErrors", key, null);
+	const request = invoke<WorldDatapackUpdateCheck>(
+		"check_world_datapack_updates",
+		{ worldRef: world, forceRefresh },
+	)
+		.then((result) => {
+			setWorldDatapacksState("updatesByWorld", key, reconcile(result));
+			return result;
+		})
+		.catch((error) => {
+			setWorldDatapacksState("updateErrors", key, String(error));
+			throw error;
+		})
+		.finally(() => {
+			setWorldDatapacksState("updatesLoading", key, false);
+			datapackUpdatesInFlight.delete(key);
+		});
+	datapackUpdatesInFlight.set(key, request);
+	return request;
+}
+
+export async function toggleWorldDatapack(
+	world: WorldRef,
+	resourceId: number,
+	enabled: boolean,
+): Promise<void> {
+	await invoke("toggle_world_datapack", {
+		worldRef: world,
+		resourceId,
+		enabled,
+	});
+}
+
+export async function deleteWorldDatapack(
+	world: WorldRef,
+	resourceId: number,
+): Promise<void> {
+	await invoke("delete_world_datapack", { worldRef: world, resourceId });
+}
+
+export function openWorldDatapacksFolder(world: WorldRef): Promise<void> {
+	return invoke("open_world_datapacks_folder", { worldRef: world });
+}
+
 export function transferWorld(
 	world: WorldRef,
 	destinationInstanceId: number,
@@ -172,4 +347,4 @@ export function submitWorldArchiveSelection(
 	});
 }
 
-export { worldsState };
+export { worldDatapacksState, worldsState };

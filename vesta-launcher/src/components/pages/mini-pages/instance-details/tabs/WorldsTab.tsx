@@ -49,6 +49,7 @@ import {
 	For,
 	Show,
 } from "solid-js";
+import { WorldDatapacksView } from "./WorldDatapacksView";
 import styles from "./WorldsTab.module.css";
 import { getWorldTransferWarnings } from "./world-transfer";
 
@@ -143,13 +144,14 @@ const ActionLabel: Component<{ action: WorldAction }> = (props) => (
 	</span>
 );
 
-const WorldCard: Component<{
+export const WorldCard: Component<{
 	world: WorldSummary;
 	busy: boolean;
 	onMove: () => void;
 	onCopy: () => void;
 	onDuplicate: () => void;
 	onManageDatapacks: () => void;
+	onOpen: () => void;
 }> = (props) => {
 	const actions = (): WorldAction[] => [
 		{
@@ -184,7 +186,30 @@ const WorldCard: Component<{
 	];
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger as="article" class={styles.card}>
+			<ContextMenuTrigger
+				as="article"
+				class={styles.card}
+				classList={{
+					[styles["card--interactive"]]:
+						props.world.levelStatus !== "unreadable",
+				}}
+				role="button"
+				tabIndex={props.world.levelStatus === "unreadable" ? undefined : 0}
+				aria-disabled={props.world.levelStatus === "unreadable" || undefined}
+				aria-label={`Open ${props.world.displayName}`}
+				onClick={() => {
+					if (props.world.levelStatus !== "unreadable") props.onOpen();
+				}}
+				onKeyDown={(event: KeyboardEvent) => {
+					if (
+						props.world.levelStatus !== "unreadable" &&
+						(event.key === "Enter" || event.key === " ")
+					) {
+						event.preventDefault();
+						props.onOpen();
+					}
+				}}
+			>
 				<div class={styles.media}>
 					<WorldIcon
 						class={styles["media-image"]}
@@ -323,7 +348,13 @@ export const sortWorlds = (worlds: readonly WorldSummary[], sort: SortMode) =>
 
 export const WorldsTab: Component<{
 	instance: Instance;
-	onManageDatapacks: (world: WorldSummary) => void;
+	selectedWorldDirectory?: string | null;
+	onSelectedWorldChange: (directoryName: string | null) => void;
+	onAddDatapack: (world: WorldSummary) => void;
+	onReviewDatapackVersions: (
+		world: WorldSummary,
+		entry: import("@stores/worlds").WorldDatapackSummary,
+	) => void;
 }> = (props) => {
 	const [sort, setSort] = createSignal<SortMode>("recency");
 	const [view, setView] = createSignal<ViewMode>("grid");
@@ -334,6 +365,23 @@ export const WorldsTab: Component<{
 	const worlds = createMemo(() =>
 		sortWorlds(worldsState.byInstance[props.instance.id] ?? [], sort()),
 	);
+	const selectedWorld = createMemo(() =>
+		props.selectedWorldDirectory
+			? (worldsState.byInstance[props.instance.id] ?? []).find(
+					(world) => world.ref.directoryName === props.selectedWorldDirectory,
+				)
+			: undefined,
+	);
+	createEffect(() => {
+		if (
+			props.selectedWorldDirectory &&
+			worldsState.byInstance[props.instance.id] !== undefined &&
+			!worldsState.loading[props.instance.id] &&
+			!selectedWorld()
+		) {
+			props.onSelectedWorldChange(null);
+		}
+	});
 	const destinations = createMemo(() =>
 		instancesState.instances.filter(
 			(candidate) => candidate.id !== props.instance.id,
@@ -392,133 +440,159 @@ export const WorldsTab: Component<{
 	};
 
 	return (
-		<section class={styles.root} aria-label="Worlds">
-			<header class={styles.toolbar}>
-				<div class={styles.title}>
-					<h2>Worlds</h2>
-				</div>
-				<div class={styles.controls}>
-					<Select
-						value={sort()}
-						onChange={(value) => value && setSort(value as SortMode)}
-						options={SORT_OPTIONS.map((option) => option.value)}
-						itemComponent={(itemProps) => (
-							<SelectItem item={itemProps.item}>
-								{SORT_OPTIONS.find(
-									(option) => option.value === itemProps.item.rawValue,
-								)?.label ?? itemProps.item.rawValue}
-							</SelectItem>
-						)}
-					>
-						<SelectTrigger
-							class={styles["sort-select"]}
-							aria-label="Sort worlds"
-						>
-							<SelectValue<string>>
-								{(state) =>
-									SORT_OPTIONS.find(
-										(option) => option.value === state.selectedOption(),
-									)?.label ?? "Recently played"
-								}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent />
-					</Select>
-					<ToggleGroup
-						value={view()}
-						onChange={(value) => value && setView(value as ViewMode)}
-						aria-label="World layout"
-					>
-						<ToggleGroupItem
-							value="grid"
-							icon_only
-							aria-label="Grid view"
-							title="Grid view"
-						>
-							<GridIcon />
-						</ToggleGroupItem>
-						<ToggleGroupItem
-							value="list"
-							icon_only
-							aria-label="List view"
-							title="List view"
-						>
-							<ListIcon />
-						</ToggleGroupItem>
-					</ToggleGroup>
-					<Button
-						size="sm"
-						variant="ghost"
-						icon_only
-						class={styles["refresh-button"]}
-						tooltip_text="Refresh worlds"
-						aria-label="Refresh worlds"
-						disabled={worldsState.loading[props.instance.id]}
-						onClick={() => void listInstanceWorlds(props.instance.id, true)}
-					>
-						<ReloadIcon />
-					</Button>
-				</div>
-			</header>
-
-			<Show
-				when={!worldsState.loading[props.instance.id] || worlds().length > 0}
-				fallback={<div class={styles.loading}>Finding worlds…</div>}
-			>
-				<Show
-					when={!worldsState.errors[props.instance.id]}
-					fallback={
-						<div class={styles.error}>
-							Worlds could not be loaded:{" "}
-							{worldsState.errors[props.instance.id]}
+		<Show
+			when={selectedWorld()}
+			fallback={
+				<section class={styles.root} aria-label="Worlds">
+					<header class={styles.toolbar}>
+						<div class={styles.title}>
+							<h2>Worlds</h2>
 						</div>
-					}
-				>
+						<div class={styles.controls}>
+							<Select
+								value={sort()}
+								onChange={(value) => value && setSort(value as SortMode)}
+								options={SORT_OPTIONS.map((option) => option.value)}
+								itemComponent={(itemProps) => (
+									<SelectItem item={itemProps.item}>
+										{SORT_OPTIONS.find(
+											(option) => option.value === itemProps.item.rawValue,
+										)?.label ?? itemProps.item.rawValue}
+									</SelectItem>
+								)}
+							>
+								<SelectTrigger
+									class={styles["sort-select"]}
+									aria-label="Sort worlds"
+								>
+									<SelectValue<string>>
+										{(state) =>
+											SORT_OPTIONS.find(
+												(option) => option.value === state.selectedOption(),
+											)?.label ?? "Recently played"
+										}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
+							<ToggleGroup
+								value={view()}
+								onChange={(value) => value && setView(value as ViewMode)}
+								aria-label="World layout"
+							>
+								<ToggleGroupItem
+									value="grid"
+									icon_only
+									aria-label="Grid view"
+									title="Grid view"
+								>
+									<GridIcon />
+								</ToggleGroupItem>
+								<ToggleGroupItem
+									value="list"
+									icon_only
+									aria-label="List view"
+									title="List view"
+								>
+									<ListIcon />
+								</ToggleGroupItem>
+							</ToggleGroup>
+							<Button
+								size="sm"
+								variant="ghost"
+								icon_only
+								class={styles["refresh-button"]}
+								tooltip_text="Refresh worlds"
+								aria-label="Refresh worlds"
+								disabled={worldsState.loading[props.instance.id]}
+								onClick={() => void listInstanceWorlds(props.instance.id, true)}
+							>
+								<ReloadIcon />
+							</Button>
+						</div>
+					</header>
+
 					<Show
-						when={worlds().length > 0}
-						fallback={
-							<div class={styles.empty}>
-								No Java worlds found. Create and play a world in Minecraft and
-								it will appear here.
-							</div>
+						when={
+							!worldsState.loading[props.instance.id] || worlds().length > 0
 						}
+						fallback={<div class={styles.loading}>Finding worlds…</div>}
 					>
-						<div class={styles.worlds} data-view={view()}>
-							<For each={worlds()}>
-								{(world) => {
-									const busy = () => busyWorld() === world.ref.directoryName;
-									return (
-										<WorldCard
-											world={world}
-											busy={busy()}
-											onMove={() => setPending({ world, mode: "move" })}
-											onCopy={() => setPending({ world, mode: "copy" })}
-											onManageDatapacks={() => props.onManageDatapacks(world)}
-											onDuplicate={() =>
-												void performTransfer(world, props.instance, "duplicate")
-											}
-										/>
-									);
-								}}
-							</For>
-						</div>
+						<Show
+							when={!worldsState.errors[props.instance.id]}
+							fallback={
+								<div class={styles.error}>
+									Worlds could not be loaded:{" "}
+									{worldsState.errors[props.instance.id]}
+								</div>
+							}
+						>
+							<Show
+								when={worlds().length > 0}
+								fallback={
+									<div class={styles.empty}>
+										No Java worlds found. Create and play a world in Minecraft
+										and it will appear here.
+									</div>
+								}
+							>
+								<div class={styles.worlds} data-view={view()}>
+									<For each={worlds()}>
+										{(world) => {
+											const busy = () =>
+												busyWorld() === world.ref.directoryName;
+											return (
+												<WorldCard
+													world={world}
+													busy={busy()}
+													onMove={() => setPending({ world, mode: "move" })}
+													onCopy={() => setPending({ world, mode: "copy" })}
+													onOpen={() =>
+														props.onSelectedWorldChange(world.ref.directoryName)
+													}
+													onManageDatapacks={() =>
+														props.onSelectedWorldChange(world.ref.directoryName)
+													}
+													onDuplicate={() =>
+														void performTransfer(
+															world,
+															props.instance,
+															"duplicate",
+														)
+													}
+												/>
+											);
+										}}
+									</For>
+								</div>
+							</Show>
+						</Show>
 					</Show>
-				</Show>
-			</Show>
 
-			<InstanceSelectionDialog
-				isOpen={Boolean(pending())}
-				title={`${pending()?.mode === "move" ? "Move" : "Copy"} ${pending()?.world.displayName ?? "world"}`}
-				description="Choose a destination instance. Existing worlds are never overwritten or merged."
-				options={destinationOptions()}
-				emptyMessage="No other instances are available for this transfer."
-				onClose={() => setPending(null)}
-				onSelect={(destination) => {
-					const action = pending();
-					if (action)
-						void performTransfer(action.world, destination, action.mode);
-				}}
-			/>
-		</section>
+					<InstanceSelectionDialog
+						isOpen={Boolean(pending())}
+						title={`${pending()?.mode === "move" ? "Move" : "Copy"} ${pending()?.world.displayName ?? "world"}`}
+						description="Choose a destination instance. Existing worlds are never overwritten or merged."
+						options={destinationOptions()}
+						emptyMessage="No other instances are available for this transfer."
+						onClose={() => setPending(null)}
+						onSelect={(destination) => {
+							const action = pending();
+							if (action)
+								void performTransfer(action.world, destination, action.mode);
+						}}
+					/>
+				</section>
+			}
+		>
+			{(world) => (
+				<WorldDatapacksView
+					world={world()}
+					onBack={() => props.onSelectedWorldChange(null)}
+					onAddDatapack={props.onAddDatapack}
+					onReviewVersions={props.onReviewDatapackVersions}
+				/>
+			)}
+		</Show>
 	);
 };

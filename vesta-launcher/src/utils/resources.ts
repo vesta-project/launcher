@@ -76,6 +76,12 @@ export const getCompatibilityForInstance = (
 		version.game_versions,
 		instance.minecraftVersion,
 	);
+	if (!matchesVersion && resType === "datapack") {
+		return {
+			type: "warning",
+			reason: `This datapack does not explicitly list ${instance.minecraftVersion}; choose a world to confirm compatibility.`,
+		};
+	}
 	if (!matchesVersion) {
 		return {
 			type: "incompatible",
