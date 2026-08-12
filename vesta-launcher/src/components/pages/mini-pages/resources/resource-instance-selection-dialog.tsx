@@ -24,6 +24,7 @@ import {
 	createEffect,
 	createMemo,
 	createSignal,
+	onCleanup,
 } from "solid-js";
 
 interface ResourceInstanceSelectionDialogProps {
@@ -47,51 +48,106 @@ const ResourceInstanceSelectionDialog: Component<
 		[],
 	);
 	const [isLoadingVersions, setIsLoadingVersions] = createSignal(false);
+	const [installedLookupState, setInstalledLookupState] = createSignal<
+		Record<number, "loading" | "ready" | "error">
+	>({});
+	let installedRequestGeneration = 0;
+	let versionRequestGeneration = 0;
+	const installType = () => props.installType ?? props.project?.resource_type;
 
-	createEffect(async () => {
-		if (!props.isOpen || !props.project) return;
-		const newMap: Record<number, InstalledResource[]> = {};
-		await Promise.all(
-			instancesState.instances.map(async (instance) => {
+	createEffect(() => {
+		const isOpen = props.isOpen;
+		const project = props.project;
+		const currentInstallType = props.installType ?? project?.resource_type;
+		const instances = [...instancesState.instances];
+		const generation = ++installedRequestGeneration;
+		onCleanup(() => {
+			if (generation === installedRequestGeneration) {
+				installedRequestGeneration += 1;
+			}
+		});
+		if (!isOpen || !project || currentInstallType === "datapack") {
+			setInstalledMap({});
+			setInstalledLookupState({});
+			return;
+		}
+
+		setInstalledMap({});
+		setInstalledLookupState(
+			Object.fromEntries(instances.map((instance) => [instance.id, "loading"])),
+		);
+		void Promise.all(
+			instances.map(async (instance) => {
 				try {
-					newMap[instance.id] =
-						instance.id === resources.state.selectedInstanceId
-							? [...resources.state.installedResources]
-							: await invoke<InstalledResource[]>("get_installed_resources", {
-									instanceId: instance.id,
-								});
+					const rows = await invoke<InstalledResource[]>(
+						"get_installed_resources",
+						{ instanceId: instance.id },
+					);
+					return { instanceId: instance.id, rows, failed: false };
 				} catch (error) {
 					console.error(
 						`Failed to fetch installed resources for instance ${instance.id}`,
 						error,
 					);
-					newMap[instance.id] = [];
+					return { instanceId: instance.id, rows: [], failed: true };
 				}
 			}),
-		);
-		setInstalledMap(newMap);
+		).then((results) => {
+			if (generation !== installedRequestGeneration) return;
+			setInstalledMap(
+				Object.fromEntries(
+					results.map((result) => [result.instanceId, result.rows]),
+				),
+			);
+			setInstalledLookupState(
+				Object.fromEntries(
+					results.map((result) => [
+						result.instanceId,
+						result.failed ? "error" : "ready",
+					]),
+				),
+			);
+		});
 	});
 
-	createEffect(async () => {
-		if (
-			props.isOpen &&
-			props.project &&
-			(!props.versions || props.versions.length === 0)
-		) {
-			setIsLoadingVersions(true);
-			try {
-				setFetchedVersions(
-					await resources.getVersions(props.project.source, props.project.id),
-				);
-			} catch (error) {
-				console.error("Failed to fetch versions for compatibility check", error);
-			} finally {
-				setIsLoadingVersions(false);
+	createEffect(() => {
+		const isOpen = props.isOpen;
+		const project = props.project;
+		const suppliedVersions = props.versions;
+		const generation = ++versionRequestGeneration;
+		onCleanup(() => {
+			if (generation === versionRequestGeneration) {
+				versionRequestGeneration += 1;
 			}
-		} else if (!props.isOpen) {
+		});
+		if (!isOpen || !project || (suppliedVersions?.length ?? 0) > 0) {
 			setFetchedVersions([]);
 			setIsLoadingVersions(false);
+			return;
 		}
+
+		setFetchedVersions([]);
+		setIsLoadingVersions(true);
+		void resources
+			.getVersions(project.source, project.id)
+			.then((versions) => {
+				if (generation === versionRequestGeneration) {
+					setFetchedVersions(versions);
+				}
+			})
+			.catch((error) => {
+				if (generation === versionRequestGeneration) {
+					console.error(
+						"Failed to fetch versions for compatibility check",
+						error,
+					);
+				}
+			})
+			.finally(() => {
+				if (generation === versionRequestGeneration) {
+					setIsLoadingVersions(false);
+				}
+			});
 	});
 
 	const versionsToUse = () =>
@@ -184,11 +240,26 @@ const ResourceInstanceSelectionDialog: Component<
 	const options = createMemo<InstanceSelectionOption[]>(() =>
 		instancesState.instances.map((instance) => {
 			const compatibility = getCompatibility(instance);
-			const installed = props.project && props.installType !== "datapack"
+			const tracksInstalledResources =
+				!!props.project && installType() !== "datapack";
+			const lookupState = installedLookupState()[instance.id] ?? "loading";
+			if (tracksInstalledResources && lookupState !== "ready") {
+				return {
+					instance,
+					disabled: true,
+					detail:
+						lookupState === "error"
+							? "Could not verify installed resources"
+							: "Checking installed resources…",
+					badge: lookupState === "error" ? "Unavailable" : "Checking",
+					tone: lookupState === "error" ? "danger" : "neutral",
+				};
+			}
+			const installed = props.project && installType() !== "datapack"
 				? findInstalledResource(
 						props.project,
 						installedMap()[instance.id] || [],
-						props.versions,
+						versionsToUse(),
 					)
 				: null;
 			const updateAvailable = hasUpdate(instance, installed);
