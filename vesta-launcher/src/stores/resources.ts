@@ -304,7 +304,11 @@ async function warmBrowseBannerImages(hits: ResourceProject[]) {
 			// Firebase CDN banners load in the webview; skip Rust warm for them.
 			!url.includes("firebasestorage.googleapis.com"),
 	);
-	if (urls.length === 0) return;
+	if (urls.length === 0) {
+		// Invalidate any in-flight warm from a previous result set.
+		++browseWarmGeneration;
+		return;
+	}
 
 	const token = ++browseWarmGeneration;
 	try {
@@ -365,10 +369,11 @@ export const resources = {
 			descriptor &&
 			!descriptor.supportedResourceTypes.includes(resourceStore.resourceType)
 		) {
-			setResourceStore(
-				"resourceType",
-				descriptor.supportedResourceTypes[0] ?? "mod",
-			);
+			const fallbackType = descriptor.supportedResourceTypes[0] ?? "mod";
+			setResourceStore("resourceType", fallbackType);
+			if (fallbackType !== "mod") {
+				setResourceStore("loader", null);
+			}
 		}
 
 		resources.fetchCategories();

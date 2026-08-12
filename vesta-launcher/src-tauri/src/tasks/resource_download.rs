@@ -7,6 +7,7 @@ use crate::tasks::manager::{
 };
 use crate::utils::db::get_vesta_conn;
 pub use crate::worlds::ResourceInstallTarget;
+use base64::Engine;
 use diesel::prelude::*;
 use reqwest::Url;
 use sha1::{Digest, Sha1};
@@ -417,11 +418,11 @@ impl Task for ResourceDownloadTask {
                 world.directory_name.replace(['/', '\\'], "_")
             ),
         };
-        // Use '|' so project/version ids with underscores stay parseable.
-        Some(format!(
-            "download|{}|{}|{}",
-            target, self.project_id, self.version.id
-        ))
+        // Use pipe separators with base64url field encoding so delimiters in IDs
+        // (e.g. world names containing `|`) cannot corrupt task-id parsing.
+        let project_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&self.project_id);
+        let version_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&self.version.id);
+        Some(format!("download|{}|{}|{}", target, project_id, version_id))
     }
 
     fn cancellable(&self) -> bool {

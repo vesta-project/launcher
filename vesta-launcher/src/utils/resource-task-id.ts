@@ -3,17 +3,36 @@ export type ParsedDownloadTaskId = {
 	versionId: string;
 };
 
-/** Parse `download|{target}|{projectId}|{versionId}` or the older underscore form. */
+const B64URL = /^[A-Za-z0-9_-]+$/;
+
+function decodeBase64Url(value: string): string | null {
+	if (!value || !B64URL.test(value)) return null;
+	const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (value.length % 4)) % 4);
+	try {
+		if (typeof atob === "function") {
+			return atob(padded);
+		}
+		return Buffer.from(padded, "base64").toString("utf8");
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Parse `download|{target}|{projectB64}|{versionB64}` or legacy task id formats.
+ * New pipe-format fields are base64url-encoded to avoid delimiter collisions.
+ */
 export function parseDownloadTaskId(
 	taskId: string,
 ): ParsedDownloadTaskId | null {
 	if (taskId.startsWith("download|")) {
 		const parts = taskId.split("|");
-		if (parts.length >= 4 && parts[2] && parts[3]) {
-			return {
-				projectId: parts[2],
-				versionId: parts.slice(3).join("|"),
-			};
+		if (parts.length === 4) {
+			const projectId = decodeBase64Url(parts[2]);
+			const versionId = decodeBase64Url(parts[3]);
+			if (projectId && versionId) {
+				return { projectId, versionId };
+			}
 		}
 		return null;
 	}

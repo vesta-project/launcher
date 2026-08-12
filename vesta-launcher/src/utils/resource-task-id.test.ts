@@ -2,26 +2,18 @@ import { describe, expect, it } from "vitest";
 import { parseDownloadTaskId } from "./resource-task-id";
 
 describe("parseDownloadTaskId", () => {
-	it("parses pipe-delimited download task ids by field", () => {
+	it("parses base64url-encoded pipe task ids", () => {
 		expect(
-			parseDownloadTaskId("download|instance-123|pack|1.0.0"),
+			parseDownloadTaskId("download|instance-123|cGFjaw|MS4wLjA"),
 		).toEqual({ projectId: "pack", versionId: "1.0.0" });
 	});
 
-	it("does not treat target fragments as project ids", () => {
+	it("supports delimiters inside ids when encoded", () => {
 		expect(
-			parseDownloadTaskId("download|instance-123|myriad|2.1")?.projectId,
-		).toBe("myriad");
-		expect(
-			parseDownloadTaskId("download|instance-123|myriad|2.1"),
-		).not.toMatchObject({ projectId: "123" });
+			parseDownloadTaskId("download|world-1-my|cHJvfGplY3Q|djF8ZXh0cmE"),
+		).toEqual({ projectId: "pro|ject", versionId: "v1|extra" });
 	});
 
-	it("keeps version ids that contain extra pipes", () => {
-		expect(
-			parseDownloadTaskId("download|world-1-save|pack|1.0|beta"),
-		).toEqual({ projectId: "pack", versionId: "1.0|beta" });
-	});
 
 	it("parses the destination-branch underscore format", () => {
 		expect(
@@ -29,8 +21,10 @@ describe("parseDownloadTaskId", () => {
 		).toEqual({ projectId: "sodium", versionId: "mc1.21" });
 	});
 
-	it("returns null for unrelated task ids", () => {
+	it("returns null for malformed task ids", () => {
 		expect(parseDownloadTaskId("launch|instance-1")).toBeNull();
 		expect(parseDownloadTaskId("download|only-two")).toBeNull();
+		expect(parseDownloadTaskId("download|instance|myriad|2.1")).toBeNull();
+		expect(parseDownloadTaskId("download|instance|not-base64|still-not")).toBeNull();
 	});
 });
