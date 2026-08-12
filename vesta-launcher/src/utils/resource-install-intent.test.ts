@@ -9,6 +9,7 @@ import {
 	findBestVersion,
 	findBestVersionForInstance,
 	findInstalledResource,
+	hasDownloadableArtifact,
 	isGameVersionCompatible,
 	isResourceUpdateAvailable,
 	replacementResourceIdForWorld,
@@ -95,6 +96,33 @@ describe("resource install intent", () => {
 				version({
 					files: [{ url: "", file_name: "resources.zip", role: "primary" }],
 				}),
+			),
+		).toBe(false);
+	});
+
+	it("recognizes legacy and multi-artifact download locations", () => {
+		expect(hasDownloadableArtifact(version())).toBe(false);
+		expect(
+			hasDownloadableArtifact(
+				version({ download_url: "https://example.test/pack.zip" }),
+			),
+		).toBe(true);
+		expect(
+			hasDownloadableArtifact(
+				version({
+					files: [
+						{
+							url: "https://example.test/data.zip",
+							file_name: "data.zip",
+							role: "datapack",
+						},
+					],
+				}),
+			),
+		).toBe(true);
+		expect(
+			hasDownloadableArtifact(
+				version({ files: [{ url: "", file_name: "data.zip", role: "datapack" }] }),
 			),
 		).toBe(false);
 	});

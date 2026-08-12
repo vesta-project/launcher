@@ -25,10 +25,12 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
+import { openExternal } from "@utils/external-link";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import {
 	classifyDatapackVersionCompatibility,
 	findBestExactDatapackVersion,
+	hasDownloadableArtifact,
 	requiresWorldTarget,
 	resolveInstanceInstallDecision,
 } from "@utils/resource-install-intent";
@@ -147,6 +149,19 @@ const ResourceBrowser: Component<{
 				installType,
 				request.version,
 			);
+			if (
+				decision.kind !== "unavailable" &&
+				decision.version &&
+				!hasDownloadableArtifact(decision.version)
+			) {
+				showToast({
+					title: "Third-party download required",
+					description: `Opening ${project.name} on the provider website.`,
+					severity: "info",
+				});
+				await openExternal(project.web_url);
+				return;
+			}
 			if (decision.kind === "world") {
 				setWorldInstall({
 					project,
@@ -216,6 +231,16 @@ const ResourceBrowser: Component<{
 				return;
 			}
 		}
+		if (!hasDownloadableArtifact(selectedVersion)) {
+			setWorldInstall(null);
+			showToast({
+				title: "Third-party download required",
+				description: `Opening ${context.project.name} on the provider website.`,
+				severity: "info",
+			});
+			await openExternal(context.project.web_url);
+			return;
+		}
 
 		const compatibility = classifyDatapackVersionCompatibility(
 			selectedVersion.game_versions,
@@ -228,7 +253,25 @@ const ResourceBrowser: Component<{
 				`${selectedVersion.version_number} does not explicitly list ${world.gameVersion ?? "this world's saved version"}. Datapacks are often compatible across nearby releases, but Vesta cannot verify this one.`,
 				{ okLabel: "Install anyway", cancelLabel: "Choose another version" },
 			));
-		if (!acknowledged) return;
+		if (!acknowledged) {
+			setWorldInstall(null);
+			activeRouter()?.navigate(
+				"/resource-details",
+				{
+					projectId: context.project.id,
+					platform: context.project.source,
+					resourceType: context.installType,
+					activeTab: "versions",
+				},
+				{ project: context.project },
+			);
+			showToast({
+				title: "Choose a datapack version",
+				description: `Choose another ${context.project.name} release. Vesta will ask for the destination world again when you install it.`,
+				severity: "warning",
+			});
+			return;
+		}
 		setWorldInstall(null);
 		try {
 			await resources.install(

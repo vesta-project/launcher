@@ -60,6 +60,13 @@ export function requiresWorldTarget(
 	});
 }
 
+export function hasDownloadableArtifact(
+	version: Pick<ResourceVersion, "download_url" | "files">,
+): boolean {
+	if (version.download_url.trim()) return true;
+	return (version.files ?? []).some((file) => file.url.trim().length > 0);
+}
+
 const normalizeMinecraftVersion = (version: string) =>
 	version.trim().endsWith(".0") ? version.trim().slice(0, -2) : version.trim();
 
