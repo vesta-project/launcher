@@ -59,6 +59,27 @@ errors.
 The same rule applies to datapack publication: observed Instance process state
 is informational, while actual filesystem access determines success.
 
+Managed datapacks and companion resource packs share a bundle identity in the
+World Manifest. Removing a datapack removes the exact companion file and Ledger
+row only when no other bundle in the same World or any other discovered World
+may reference its relative path and its content still matches the recorded
+hash. Ambiguous topology, corrupt/future metadata, and content mismatch retain
+the companion. Generic Instance Resource actions refuse to remove or disable a
+linked companion; bundle lifecycle is initiated from the owning World.
+
+World and bundle mutations use Task Manager conflict keys for an exact World,
+an Instance's `saves`, and an Instance's `resourcepacks`. A Task reserves its
+complete normalized key set atomically. This serializes overlapping archive
+installs, transfers, datapack publication, toggles, and removals without making
+unrelated Worlds wait or allowing a waiting multi-key Task to hold partial
+locks. Watcher reconciliation resolves debounced paths from final disk state.
+
+Archive preflight rejects traversal and link entries, Unicode/case-colliding or
+non-portable names, excessive candidate counts or expansion, and suspicious
+per-entry or aggregate compression ratios. Publication uses an atomic
+no-replace rename where the operating system provides one, preserving any World
+that appears after preflight rather than overwriting it.
+
 ## Consequences
 
 Existing Java folder worlds can be listed without modification and remain
@@ -69,6 +90,10 @@ or merge an existing world. Transfers can preserve or regenerate portable
 identity while the Ledger keeps managed component provenance consistent.
 The same datapack project can be installed independently in several Worlds, and
 an update, toggle, or removal is resolved against only the selected World.
+Companion files may be reused across bundles, so their lifetime is reference-
+safe rather than coupled to one Instance Resource row action. Concurrent World
+mutations are coordinated by logical filesystem ownership, while process state
+remains informational.
 
 Standalone Classic and Indev save files, arbitrary NBT editing, deletion,
 backups, restore, and staged creation of worlds are outside this decision.

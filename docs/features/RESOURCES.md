@@ -181,6 +181,8 @@ Detailed view for individual resources:
 - Plans all version artifacts before downloading and rejects unknown roles
 - Downloads and verifies the complete bundle in a unique staging directory
 - Publishes all files atomically, rolling back the bundle if any artifact fails
+- Serializes overlapping World, saves-directory, and companion-pack mutations
+  through Task Manager conflict keys
 - Places datapacks in the selected world's `datapacks` directory
 - Safely extracts world archives into collision-free directories under `saves`
 - Delegates modpack archives to the existing modpack workflow
@@ -265,6 +267,8 @@ instance/
 - Watches instance resource directories, `saves` topology, and each known
   world's `datapacks` directory without recursively watching region data
 - Automatically updates database when files are added/removed
+- Reconciles debounced paths from their final on-disk state so Vesta staging
+  renames do not unlink newly published Ledger rows
 - Triggers UI refresh for real-time status updates
 - Handles external modifications (manual installs, other launchers)
 
@@ -276,10 +280,13 @@ rows. Vesta discovers immediate children of `saves` through root `level.dat` or
 read-only. Vesta creates `.vesta/world.json` only when it installs a world or
 datapack, or moves, copies, or duplicates a world.
 
-World archives are preflighted before extraction. Unsafe paths, links, case
-collisions, unreasonable expansion, and archives without a Java folder world
-are rejected. Archives with multiple worlds require a candidate selection or
-explicit install-all action and never overwrite or merge existing worlds.
+World archives are preflighted before extraction. Unsafe paths, links,
+Unicode/case collisions, non-portable names, excessive candidate counts,
+unreasonable expansion/compression ratios, and archives without a Java folder
+world are rejected. Archives with multiple worlds require a candidate selection
+or explicit install-all action. Publication uses no-replace filesystem
+operations and never overwrites or merges existing worlds, including a World
+that appears after preflight.
 
 The Installed Resource Ledger continues to own installed files. Datapack rows
 are scoped by their exact path under a world, while companion resource-pack rows
@@ -290,6 +297,19 @@ be enabled, removed, checked for updates, or used as an exact update target.
 Directory-form datapacks are counted and listed read-only. Listing never creates
 World metadata, and the same remote datapack can be installed independently in
 several Worlds.
+
+A datapack and its managed companion resource pack share a bundle identity.
+Removing the datapack removes the companion only when no remaining bundle in
+the same World or another discovered World may reference its exact relative
+path and the file still matches its recorded hash. Ambiguous metadata retains
+the pack. Linked companions cannot be removed or disabled through generic
+Instance Resource actions; manage their lifecycle from the owning World.
+
+Archive installs, transfers, datapack updates, toggles, removals, and companion
+publication coordinate through normalized Task Manager keys for the exact
+World, the destination `saves`, and involved `resourcepacks` directories.
+Observed Minecraft process state is informational; actual filesystem access is
+the success criterion.
 
 ## Error Handling
 
