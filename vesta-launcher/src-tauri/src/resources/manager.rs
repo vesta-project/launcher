@@ -45,6 +45,41 @@ async fn download_icon_with_timeout(url: &str) -> Result<Vec<u8>> {
     Ok(bytes.to_vec())
 }
 
+fn dependency_version_filters<'a>(
+    platform: SourcePlatform,
+    dependency_type: ResourceType,
+    datapack_mc_version: &'a str,
+    instance_mc_version: &'a str,
+    loader: &'a str,
+    allow_inexact_datapacks: bool,
+) -> (Option<&'a str>, Option<&'a str>) {
+    if dependency_type == ResourceType::DataPack {
+        let minecraft_version = (!allow_inexact_datapacks).then_some(datapack_mc_version);
+        let loader = (platform != SourcePlatform::CurseForge).then_some("datapack");
+        (minecraft_version, loader)
+    } else {
+        (Some(instance_mc_version), Some(loader))
+    }
+}
+
+fn dependency_type_for_pinned_loaders(
+    platform: SourcePlatform,
+    dependency_type: ResourceType,
+    pinned_loaders: Option<&[String]>,
+) -> ResourceType {
+    if platform == SourcePlatform::Modrinth
+        && pinned_loaders.is_some_and(|loaders| {
+            loaders
+                .iter()
+                .any(|loader| loader.eq_ignore_ascii_case("datapack"))
+        })
+    {
+        ResourceType::DataPack
+    } else {
+        dependency_type
+    }
+}
+
 #[derive(Clone)]
 pub struct ResourceManager {
     sources: Arc<RwLock<Vec<Arc<dyn ResourceSource>>>>,
@@ -352,36 +387,15 @@ impl ResourceManager {
                 };
 
                 // 2. Find best version for environment
-                let pinned_datapack = dep.version_id.as_ref().is_some_and(|version_id| {
-                    // The cached list is fetched below; this flag is refined after
-                    // fetching. Dedicated datapack projects are known up front.
-                    !version_id.is_empty() && project.resource_type == ResourceType::DataPack
-                });
-                let dependency_type = if pinned_datapack {
-                    ResourceType::DataPack
-                } else {
-                    project.resource_type
-                };
-                let version_loader = if dependency_type == ResourceType::DataPack
-                    && platform == SourcePlatform::CurseForge
-                {
-                    None
-                } else if dependency_type == ResourceType::DataPack {
-                    Some("datapack")
-                } else {
-                    Some(loader)
-                };
-                let dependency_mc_version = if dependency_type == ResourceType::DataPack {
-                    datapack_mc_version
-                } else {
-                    instance_mc_version
-                };
-                let version_mc =
-                    if dependency_type == ResourceType::DataPack && allow_inexact_datapacks {
-                        None
-                    } else {
-                        Some(dependency_mc_version)
-                    };
+                let mut dependency_type = project.resource_type;
+                let (version_mc, version_loader) = dependency_version_filters(
+                    platform,
+                    dependency_type,
+                    datapack_mc_version,
+                    instance_mc_version,
+                    loader,
+                    allow_inexact_datapacks,
+                );
                 let mut versions = match self
                     .get_versions(platform, &dep.project_id, false, version_mc, version_loader)
                     .await
@@ -409,22 +423,59 @@ impl ResourceManager {
 
                 // A pinned Modrinth dependency can point at a datapack release
                 // even when the provider classifies the project itself as a mod.
-                let dependency_type = dep
+                let refined_dependency_type = dep
                     .version_id
                     .as_ref()
                     .and_then(|version_id| versions.iter().find(|v| &v.id == version_id))
-                    .filter(|version| {
-                        platform == SourcePlatform::Modrinth
-                            && version
-                                .loaders
-                                .iter()
-                                .any(|loader| loader.eq_ignore_ascii_case("datapack"))
-                    })
-                    .map(|_| ResourceType::DataPack)
-                    .unwrap_or(dependency_type);
+                    .map(|version| version.loaders.as_slice());
+                let refined_dependency_type = dependency_type_for_pinned_loaders(
+                    platform,
+                    dependency_type,
+                    refined_dependency_type,
+                );
+                if refined_dependency_type != dependency_type {
+                    dependency_type = refined_dependency_type;
+                    let (version_mc, version_loader) = dependency_version_filters(
+                        platform,
+                        dependency_type,
+                        datapack_mc_version,
+                        instance_mc_version,
+                        loader,
+                        allow_inexact_datapacks,
+                    );
+                    match self
+                        .get_versions(platform, &dep.project_id, false, version_mc, version_loader)
+                        .await
+                    {
+                        Ok(mut datapack_versions) => {
+                            if let Some(version_id) = &dep.version_id {
+                                if !datapack_versions.iter().any(|v| &v.id == version_id) {
+                                    if let Some(pinned) =
+                                        versions.iter().find(|v| &v.id == version_id)
+                                    {
+                                        datapack_versions.push(pinned.clone());
+                                    }
+                                }
+                            }
+                            versions = datapack_versions;
+                        }
+                        Err(error) => {
+                            log::warn!(
+                                "Failed to re-fetch datapack versions for dependency {}: {}",
+                                dep.project_id,
+                                error
+                            );
+                        }
+                    }
+                }
                 if dependency_type == ResourceType::DataPack {
                     project.resource_type = ResourceType::DataPack;
                 }
+                let dependency_mc_version = if dependency_type == ResourceType::DataPack {
+                    datapack_mc_version
+                } else {
+                    instance_mc_version
+                };
 
                 // 3. Find compatible version
                 let mut best_version = None;
@@ -1303,5 +1354,66 @@ pub fn is_loader_compatible(supported: &[String], target: &str) -> bool {
         })
     } else {
         supported.iter().any(|l| l.to_lowercase() == t)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dependency_type_for_pinned_loaders, dependency_version_filters};
+    use crate::models::resource::{ResourceType, SourcePlatform};
+
+    #[test]
+    fn pinned_modrinth_datapack_refines_a_mixed_project_dependency() {
+        let loaders = vec!["datapack".to_string()];
+
+        assert_eq!(
+            dependency_type_for_pinned_loaders(
+                SourcePlatform::Modrinth,
+                ResourceType::Mod,
+                Some(&loaders),
+            ),
+            ResourceType::DataPack
+        );
+    }
+
+    #[test]
+    fn refined_datapack_query_uses_the_world_version_and_datapack_loader() {
+        assert_eq!(
+            dependency_version_filters(
+                SourcePlatform::Modrinth,
+                ResourceType::DataPack,
+                "1.21.5",
+                "1.20.1",
+                "fabric",
+                false,
+            ),
+            (Some("1.21.5"), Some("datapack"))
+        );
+        assert_eq!(
+            dependency_version_filters(
+                SourcePlatform::Modrinth,
+                ResourceType::DataPack,
+                "1.21.5",
+                "1.20.1",
+                "fabric",
+                true,
+            ),
+            (None, Some("datapack"))
+        );
+    }
+
+    #[test]
+    fn curseforge_datapack_query_does_not_send_a_loader_filter() {
+        assert_eq!(
+            dependency_version_filters(
+                SourcePlatform::CurseForge,
+                ResourceType::DataPack,
+                "1.21.5",
+                "1.20.1",
+                "neoforge",
+                false,
+            ),
+            (Some("1.21.5"), None)
+        );
     }
 }

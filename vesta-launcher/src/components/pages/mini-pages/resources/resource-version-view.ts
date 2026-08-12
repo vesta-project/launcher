@@ -60,6 +60,17 @@ export function currentPeerProject(
 	return lookup.peer;
 }
 
+export function focusedResourceVersion(
+	focusedVersionId: string,
+	latest: ResourceVersion | null | undefined,
+	optimistic: ResourceVersion | null | undefined,
+	versions: readonly ResourceVersion[],
+): ResourceVersion | null {
+	if (latest?.id === focusedVersionId) return latest;
+	if (optimistic?.id === focusedVersionId) return optimistic;
+	return versions.find((version) => version.id === focusedVersionId) ?? null;
+}
+
 export function renderVersionChangelog(
 	changelog: string | null | undefined,
 	format: "markdown" | "html",
