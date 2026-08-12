@@ -128,6 +128,48 @@ pub fn get_resource(instance_id: i32, resource_id: i32) -> Result<InstalledResou
         .first::<InstalledResource>(&mut conn)?)
 }
 
+/// Finds the Ledger fact for one exact normalized local path.
+pub fn get_resource_by_path(instance_id: i32, path: &Path) -> Result<Option<InstalledResource>> {
+    let mut conn = get_vesta_conn()?;
+    Ok(ir_dsl::installed_resource
+        .filter(ir_dsl::instance_id.eq(instance_id))
+        .filter(ir_dsl::local_path.eq(normalize_path(path)))
+        .first::<InstalledResource>(&mut conn)
+        .optional()?)
+}
+
+/// Removes several exact Ledger facts in one transaction. Filesystem-owning
+/// Modules stage their files before calling this Interface so publication can
+/// be rolled back without exposing a half-removed bundle.
+pub fn remove_resource_rows(instance_id: i32, resource_ids: &[i32]) -> Result<usize> {
+    if resource_ids.is_empty() {
+        return Ok(0);
+    }
+    let mut conn = get_vesta_conn()?;
+    conn.transaction::<usize, anyhow::Error, _>(|conn| {
+        remove_resource_rows_with_conn(conn, instance_id, resource_ids)
+    })
+}
+
+fn remove_resource_rows_with_conn(
+    conn: &mut SqliteConnection,
+    instance_id: i32,
+    resource_ids: &[i32],
+) -> Result<usize> {
+    let owned = ir_dsl::installed_resource
+        .filter(ir_dsl::instance_id.eq(instance_id))
+        .filter(ir_dsl::id.eq_any(resource_ids))
+        .select(ir_dsl::id)
+        .load::<i32>(conn)?;
+    if owned.len() != resource_ids.iter().copied().collect::<HashSet<_>>().len() {
+        anyhow::bail!("One or more Resources do not belong to the selected Instance");
+    }
+    Ok(
+        diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq_any(owned)))
+            .execute(conn)?,
+    )
+}
+
 /// Returns Ledger rows whose exact direct parent is `directory`.
 ///
 /// Filesystem modules use this Interface to join their own discovered entries
@@ -1139,8 +1181,8 @@ fn resource_type_for_path(path: &Path) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        record_download_with_conn, record_many_with_conn, toggled_path, DownloadLedgerEntry,
-        InstalledResourceFact, ResourceProvenance,
+        record_download_with_conn, record_many_with_conn, remove_resource_rows_with_conn,
+        toggled_path, DownloadLedgerEntry, InstalledResourceFact, ResourceProvenance,
     };
     use crate::models::resource::{ReleaseType, ResourceVersion, SourcePlatform};
     use diesel::connection::SimpleConnection;
@@ -1377,5 +1419,44 @@ mod tests {
             .load::<String>(&mut conn)
             .unwrap();
         assert_eq!(types, vec!["datapack", "resourcepack"]);
+    }
+
+    #[test]
+    fn bundle_row_removal_is_atomic_and_instance_scoped() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+        let mut conn = test_connection();
+        for (path, resource_type) in [
+            ("/instance/saves/one/datapacks/data.zip", "datapack"),
+            ("/instance/resourcepacks/resources.zip", "resourcepack"),
+        ] {
+            record_download_with_conn(&mut conn, download(Path::new(path), resource_type, path))
+                .unwrap();
+        }
+        let ids = installed_dsl::installed_resource
+            .select(installed_dsl::id)
+            .order(installed_dsl::id.asc())
+            .load::<i32>(&mut conn)
+            .unwrap();
+
+        assert!(remove_resource_rows_with_conn(&mut conn, 2, &ids).is_err());
+        assert_eq!(
+            installed_dsl::installed_resource
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap(),
+            2
+        );
+
+        assert_eq!(
+            remove_resource_rows_with_conn(&mut conn, 1, &ids).unwrap(),
+            2
+        );
+        assert_eq!(
+            installed_dsl::installed_resource
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap(),
+            0
+        );
     }
 }

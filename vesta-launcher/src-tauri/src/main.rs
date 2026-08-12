@@ -312,6 +312,7 @@ fn main() {
             commands::resources::get_cached_resource_projects,
             commands::resources::hydrate_resource_project_icons,
             commands::resources::get_or_hydrate_resource_projects,
+            commands::resources::get_cached_resource_projects_by_provider,
             commands::resources::get_resource_projects,
             commands::resources::get_resource_versions,
             commands::resources::get_resource_version_details,

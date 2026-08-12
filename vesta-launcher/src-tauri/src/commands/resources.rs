@@ -6,8 +6,9 @@ use std::hash::{Hash, Hasher};
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
-    ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
+    CachedResourceProjectRef, ResourceCategory, ResourceProject, ResourceProjectRecord,
+    ResourceProjectRef, ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use crate::models::resource_update::{
     InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
@@ -18,7 +19,7 @@ use crate::resources::update_cache::{
     load_instance_update_snapshot, save_instance_update_snapshot, snapshot_to_result,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
-use crate::tasks::manager::TaskManager;
+use crate::tasks::manager::{resourcepacks_conflict_key, TaskManager};
 use crate::tasks::resource_download::{
     plan_artifacts, requires_world_target, ResourceDownloadTask,
 };
@@ -700,6 +701,26 @@ pub async fn get_cached_resource_projects(
 }
 
 #[tauri::command]
+pub async fn get_cached_resource_projects_by_provider(
+    resource_manager: State<'_, ResourceManager>,
+    refs: Vec<CachedResourceProjectRef>,
+    hydrate_icons: Option<bool>,
+) -> Result<Vec<ResourceProjectOverviewRecord>> {
+    let records = if hydrate_icons.unwrap_or(false) {
+        resource_manager
+            .hydrate_cached_project_icons(&refs)
+            .await?
+            .into_iter()
+            .map(process_resource_record_icon)
+            .collect::<Vec<_>>()
+    } else {
+        resource_manager.get_cached_project_records(&refs)?
+    };
+
+    Ok(records.into_iter().map(Into::into).collect())
+}
+
+#[tauri::command]
 pub async fn hydrate_resource_project_icons(
     resource_manager: State<'_, ResourceManager>,
     refs: Vec<ResourceProjectRef>,
@@ -1001,16 +1022,38 @@ pub async fn find_peer_resource(
 #[tauri::command]
 pub async fn delete_resource(
     app_handle: tauri::AppHandle,
+    task_manager: State<'_, TaskManager>,
     instance_id: i32,
     resource_id: i32,
 ) -> Result<()> {
-    let resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+    let mut resource = crate::resources::ledger::get_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     if resource.resource_type.eq_ignore_ascii_case("datapack") {
         return Err(
             anyhow!("Datapacks are managed from their world; use delete_world_datapack").into(),
         );
     }
+    let _resourcepack_guard = if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
+        let guard = task_manager
+            .acquire_conflicts([resourcepacks_conflict_key(instance_id)])
+            .await;
+        resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        if crate::worlds::datapacks::companion_resourcepack_may_be_referenced(
+            instance_id,
+            std::path::Path::new(&resource.local_path),
+        )
+        .map_err(anyhow::Error::msg)?
+        {
+            return Err(anyhow!(
+                "This Resource pack is linked to a managed World datapack and cannot be removed here"
+            )
+            .into());
+        }
+        Some(guard)
+    } else {
+        None
+    };
     let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
         .map_err(anyhow::Error::msg)?;
     let mut backup = None;
@@ -1053,28 +1096,52 @@ pub async fn delete_resource(
         );
     }
 
-    crate::resources::reconciliation::emit_rows_changed(
+    if let Err(error) = crate::resources::reconciliation::emit_rows_changed(
         &app_handle,
         instance_id,
         "resource-deleted",
-    )?;
+    ) {
+        log::warn!("Resource was deleted, but change notification failed: {error}");
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn toggle_resource(
     app_handle: tauri::AppHandle,
+    task_manager: State<'_, TaskManager>,
     instance_id: i32,
     resource_id: i32,
     enabled: bool,
 ) -> Result<()> {
-    let resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+    let mut resource = crate::resources::ledger::get_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     if resource.resource_type.eq_ignore_ascii_case("datapack") {
         return Err(
             anyhow!("Datapacks are managed from their world; use toggle_world_datapack").into(),
         );
     }
+    let _resourcepack_guard = if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
+        let guard = task_manager
+            .acquire_conflicts([resourcepacks_conflict_key(instance_id)])
+            .await;
+        resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        if crate::worlds::datapacks::companion_resourcepack_may_be_referenced(
+            instance_id,
+            std::path::Path::new(&resource.local_path),
+        )
+        .map_err(anyhow::Error::msg)?
+        {
+            return Err(anyhow!(
+                "This Resource pack is linked to a managed World datapack and cannot be disabled here"
+            )
+            .into());
+        }
+        Some(guard)
+    } else {
+        None
+    };
     let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
         .map_err(anyhow::Error::msg)?;
     let current_path = std::path::PathBuf::from(&resource.local_path);
@@ -1102,11 +1169,13 @@ pub async fn toggle_resource(
         crate::resources::ledger::set_enabled(resource_id, enabled)
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     }
-    crate::resources::reconciliation::emit_rows_changed(
+    if let Err(error) = crate::resources::reconciliation::emit_rows_changed(
         &app_handle,
         instance_id,
         "resource-toggled",
-    )?;
+    ) {
+        log::warn!("Resource was toggled, but change notification failed: {error}");
+    }
     Ok(())
 }
 

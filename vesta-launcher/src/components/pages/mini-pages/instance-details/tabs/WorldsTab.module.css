@@ -1,60 +1,73 @@
 .root {
+	container: worlds-tab / inline-size;
 	display: grid;
 	width: 100%;
 	max-width: var(--page-content-max);
 	box-sizing: border-box;
-	gap: 16px;
+	gap: 14px;
 	margin-inline: auto;
 	padding: 0 var(--page-gutter-x) var(--page-gutter-bottom);
 }
+
 .toolbar {
 	display: flex;
+	min-height: 56px;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	flex-wrap: wrap;
+	gap: 16px;
+	padding: 9px 10px 9px 14px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--surface-base);
 }
+
 .title h2 {
 	margin: 0;
-	font-size: 19px;
+	color: var(--text-primary);
+	font-size: 18px;
+	font-weight: 650;
 	letter-spacing: -0.02em;
 }
+
 .controls {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
+	gap: 7px;
 }
+
 .sort-select {
-	width: 152px;
+	width: 150px;
 	min-height: 32px;
 	font-size: 12px;
 }
+
 .refresh-button {
 	width: 32px !important;
 	height: 32px !important;
 	box-sizing: border-box;
 	padding: 0 !important;
 }
+
 .controls [aria-label$="view"] svg {
+	width: 16px;
+	height: 16px;
 	fill: none;
 	stroke: currentcolor;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 	stroke-width: 2;
 }
+
 .worlds {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(228px, 286px));
+	justify-content: start;
 	gap: 12px;
 }
-.worlds[data-view="list"] {
-	grid-template-columns: 1fr;
-}
+
 .card {
 	position: relative;
 	display: flex;
-	min-height: 0;
 	min-width: 0;
 	overflow: hidden;
 	border: 1px solid var(--border);
@@ -64,115 +77,134 @@
 		background-color 150ms ease,
 		border-color 150ms ease;
 }
+
 .card:hover,
 .card:focus-within {
 	border-color: var(--border-subtle);
 	background: var(--surface-raised);
 }
+
 .card--interactive {
 	cursor: pointer;
 }
+
 .card--interactive:focus-visible {
 	outline: 2px solid var(--primary);
 	outline-offset: 2px;
 }
+
 .media {
 	position: relative;
-	height: 132px;
 	overflow: hidden;
 	flex: 0 0 auto;
 	background: var(--surface-sunken);
 }
+
 .media-image {
 	width: 100% !important;
 	height: 100% !important;
 	border: 0 !important;
 	border-radius: 0 !important;
 	object-fit: cover;
-	transition: transform 400ms ease;
+	transition: transform 300ms ease;
 }
+
 .card:hover .media-image {
-	transform: scale(1.015);
+	transform: scale(1.02);
 }
+
 .media-fade {
 	position: absolute;
 	inset: auto 0 0;
-	height: 36px;
+	height: 28px;
 	background: linear-gradient(to top, var(--surface-base), transparent);
 	pointer-events: none;
 }
+
 .card:hover .media-fade,
 .card:focus-within .media-fade {
 	background: linear-gradient(to top, var(--surface-raised), transparent);
 }
+
 .card-actions {
 	position: absolute;
-	top: 9px;
-	right: 9px;
+	top: 8px;
+	right: 8px;
 }
+
 .menu-trigger {
 	display: grid;
-	width: 30px;
-	height: 30px;
+	width: 32px;
+	height: 32px;
 	place-items: center;
 	padding: 0;
 	border: 1px solid color-mix(in srgb, white 18%, transparent);
 	border-radius: 8px;
-	background: color-mix(in srgb, var(--surface-sunken) 72%, transparent);
+	background: color-mix(in srgb, var(--surface-sunken) 78%, transparent);
 	box-shadow: 0 2px 8px color-mix(in srgb, black 24%, transparent);
 	color: var(--text-primary);
 	cursor: pointer;
 	backdrop-filter: blur(10px);
 }
+
 .menu-trigger:hover,
 .menu-trigger[data-expanded] {
-	background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+	background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
 }
+
 .menu-trigger:focus-visible {
 	outline: 2px solid var(--primary);
 	outline-offset: 2px;
 }
+
 .menu-trigger svg {
 	width: 17px;
 	height: 17px;
 	fill: currentcolor;
 }
+
 .world-status {
 	position: absolute;
-	top: 10px;
-	left: 10px;
+	top: 9px;
+	left: 9px;
 	box-shadow: 0 2px 8px color-mix(in srgb, black 24%, transparent);
-	backdrop-filter: blur(10px);
 }
+
 .card-body {
 	display: flex;
 	min-width: 0;
 	flex: 1;
 	flex-direction: column;
-	gap: 12px;
-	padding: 12px 14px 14px;
+	justify-content: center;
+	gap: 8px;
 }
-.identity {
+
+.identity,
+.name {
 	min-width: 0;
 }
+
 .name {
 	margin: 0;
 	overflow: hidden;
 	color: var(--text-primary);
-	font-size: 15px;
+	font-size: 14px;
 	font-weight: 700;
 	line-height: 1.3;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
 .metadata {
 	display: flex;
 	min-width: 0;
 	align-items: center;
-	gap: 10px;
+	gap: 9px;
+	overflow: hidden;
 	color: var(--text-tertiary);
-	font-size: 10px;
+	font-size: 11px;
 }
+
 .metadata-item {
 	display: inline-flex;
 	min-width: 0;
@@ -180,16 +212,15 @@
 	gap: 4px;
 	white-space: nowrap;
 }
+
 .metadata-item svg {
 	width: 13px;
 	height: 13px;
 	flex: 0 0 auto;
 	fill: currentcolor;
 	stroke: none;
-	stroke-linecap: round;
-	stroke-linejoin: round;
-	stroke-width: 1.8;
 }
+
 .metadata-item .outline-icon {
 	fill: none;
 	stroke: currentcolor;
@@ -197,6 +228,7 @@
 	stroke-linejoin: round;
 	stroke-width: 1.8;
 }
+
 .metadata-button {
 	padding: 0;
 	border: 0;
@@ -205,22 +237,27 @@
 	font: inherit;
 	cursor: pointer;
 }
+
 .metadata-button:hover,
 .metadata-button:focus-visible {
 	color: var(--text-primary);
 }
+
 .metadata-button:focus-visible {
 	outline: 2px solid var(--primary);
 	outline-offset: 3px;
 }
+
 .menu {
 	min-width: 210px;
 }
+
 .menu-action {
 	display: flex;
 	align-items: center;
 	gap: 9px;
 }
+
 .menu-action svg {
 	width: 15px;
 	height: 15px;
@@ -231,91 +268,115 @@
 	stroke-linejoin: round;
 	stroke-width: 1.8;
 }
+
 .worlds[data-view="grid"] .card {
 	flex-direction: column;
 }
-.worlds[data-view="list"] .card {
+
+.worlds[data-view="grid"] .media {
+	height: 112px;
+}
+
+.worlds[data-view="grid"] .card-body {
+	padding: 11px 12px 13px;
+}
+
+.worlds[data-view="compact"] {
+	grid-template-columns: repeat(auto-fill, minmax(310px, 430px));
+}
+
+.worlds[data-view="compact"] .card {
 	display: grid;
-	min-height: 96px;
-	grid-template-columns: 96px minmax(0, 1fr) auto;
+	min-height: 68px;
+	grid-template-columns: 68px minmax(0, 1fr) 40px;
 	align-items: stretch;
 }
-.worlds[data-view="list"] .media {
-	width: auto;
-	height: auto;
-	min-height: 96px;
+
+.worlds[data-view="compact"] .media {
+	width: 68px;
+	height: 68px;
 }
-.worlds[data-view="list"] .media-fade {
-	inset: 0 0 0 auto;
-	width: 24px;
-	height: auto;
-	background: linear-gradient(to left, var(--surface-base), transparent);
+
+.worlds[data-view="compact"] .media-fade {
+	display: none;
 }
-.worlds[data-view="list"] .card:hover .media-fade,
-.worlds[data-view="list"] .card:focus-within .media-fade {
-	background: linear-gradient(to left, var(--surface-raised), transparent);
-}
-.worlds[data-view="list"] .world-status {
+
+.worlds[data-view="compact"] .world-status {
 	top: auto;
-	bottom: 8px;
-	left: 8px;
-	max-width: calc(100% - 16px);
+	bottom: 5px;
+	left: 5px;
+	max-width: calc(100% - 10px);
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-.worlds[data-view="list"] .card-body {
-	display: grid;
-	align-content: center;
-	gap: 9px;
-	padding: 13px 16px;
+
+.worlds[data-view="compact"] .card-body {
+	gap: 6px;
+	padding: 9px 10px 9px 12px;
 }
-.worlds[data-view="list"] .metadata {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, max-content));
-	gap: 7px 18px;
+
+.worlds[data-view="compact"] .metadata {
+	gap: 8px;
 }
-.worlds[data-view="list"] .card-actions {
+
+.worlds[data-view="compact"] .card-actions {
 	position: static;
 	display: flex;
 	align-items: center;
-	padding-right: 12px;
+	padding-right: 7px;
 }
-.worlds[data-view="list"] .menu-trigger {
-	border-color: var(--border);
-	background: var(--surface-sunken);
+
+.worlds[data-view="compact"] .menu-trigger {
+	border-color: transparent;
+	background: transparent;
 	box-shadow: none;
 	backdrop-filter: none;
 }
+
+.worlds[data-view="compact"] .menu-trigger:hover,
+.worlds[data-view="compact"] .menu-trigger[data-expanded] {
+	background: var(--surface-sunken);
+}
+
 .empty,
 .loading,
 .error {
 	display: grid;
+	min-height: 220px;
 	place-items: center;
-	min-height: 240px;
 	padding: 30px;
 	border: 1px dashed var(--border);
-	border-radius: 14px;
+	border-radius: 12px;
 	color: var(--text-secondary);
 	text-align: center;
 }
+
 .error {
 	color: var(--destructive);
 }
-@media (max-width: 500px) {
-	.worlds {
-		grid-template-columns: 1fr;
+
+@container worlds-tab (max-width: 680px) {
+	.toolbar {
+		align-items: flex-start;
+		flex-direction: column;
 	}
+
 	.controls {
 		width: 100%;
 	}
+
 	.sort-select {
 		flex: 1;
 	}
-	.worlds[data-view="list"] .card-body {
-		padding: 12px;
+
+	.worlds,
+	.worlds[data-view="compact"] {
+		grid-template-columns: minmax(0, 1fr);
 	}
-	.worlds[data-view="list"] .metadata {
-		grid-template-columns: 1fr;
-		gap: 6px;
+}
+
+@container worlds-tab (max-width: 420px) {
+	.worlds[data-view="compact"] .metadata-item:nth-child(2) {
+		display: none;
 	}
 }

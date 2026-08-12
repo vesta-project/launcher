@@ -3,7 +3,7 @@ use crate::tasks::manager::TaskContext;
 use crate::worlds::archive::{self, InstalledWorld};
 use crate::worlds::install_selection;
 use crate::worlds::manifest::WorldSource;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{Emitter, Manager};
 
 pub async fn install_world_archive(
@@ -14,14 +14,8 @@ pub async fn install_world_archive(
     project: serde_json::Value,
     ctx: TaskContext,
 ) -> Result<Vec<InstalledWorld>, String> {
-    if piston_lib::game::launcher::is_instance_running(&instance.slug())
-        .await
-        .map_err(|error| format!("Failed to check instance run state: {error}"))?
-    {
-        return Err("Worlds cannot be installed while the instance is running".to_string());
-    }
     let saves = crate::worlds::instance_game_directory(&instance)?.join("saves");
-    std::fs::create_dir_all(&saves).map_err(|error| error.to_string())?;
+    ensure_saves_directory(&saves)?;
     let inspect_archive = archive_path.clone();
     let inspect_saves = saves.clone();
     let inspection = tauri::async_runtime::spawn_blocking(move || {
@@ -99,4 +93,30 @@ pub async fn install_world_archive(
         }),
     );
     Ok(installed)
+}
+
+fn ensure_saves_directory(saves: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(saves).map_err(|error| {
+        format!(
+            "Failed to access the world saves directory {}: {error}",
+            saves.display()
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saves_directory_errors_include_the_affected_path() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let saves = temp.path().join("saves");
+        std::fs::write(&saves, b"not a directory").unwrap();
+
+        let error = ensure_saves_directory(&saves).unwrap_err();
+
+        assert!(error.contains("Failed to access the world saves directory"));
+        assert!(error.contains(&saves.display().to_string()));
+    }
 }

@@ -637,9 +637,13 @@ export const resources = {
 		const installType = options?.installType ?? project.resource_type;
 		const isModpack = installType === "modpack";
 		const resolvedTarget =
-			target ?? resourceStore.preferredInstallTarget ??
+			target ??
+			resourceStore.preferredInstallTarget ??
 			(resourceStore.selectedInstanceId
-				? { kind: "instance" as const, instanceId: resourceStore.selectedInstanceId }
+				? {
+						kind: "instance" as const,
+						instanceId: resourceStore.selectedInstanceId,
+					}
 				: null);
 
 		if (!resolvedTarget && !isModpack) return;
@@ -657,7 +661,7 @@ export const resources = {
 		try {
 			// Cache project metadata for future offline/icon use
 			await invoke("cache_resource_metadata", {
-				platform: resourceStore.activeSource,
+				platform: project.source,
 				project: project,
 			});
 
@@ -668,8 +672,7 @@ export const resources = {
 				projectName: project.name,
 				version,
 				installType,
-				compatibilityAcknowledged:
-					options?.compatibilityAcknowledged ?? false,
+				compatibilityAcknowledged: options?.compatibilityAcknowledged ?? false,
 				replacementResourceId: options?.replacementResourceId ?? null,
 			});
 

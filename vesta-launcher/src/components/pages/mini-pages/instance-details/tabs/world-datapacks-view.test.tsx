@@ -1,6 +1,6 @@
 /* @refresh skip */
 
-import { fireEvent, render, screen } from "@solidjs/testing-library";
+import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import type { WorldSummary } from "@stores/worlds";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorldDatapacksView } from "./WorldDatapacksView";
@@ -15,7 +15,13 @@ const mocks = vi.hoisted(() => ({
 	checkWorldDatapackUpdates: vi.fn().mockResolvedValue(undefined),
 	openWorldDatapacksFolder: vi.fn().mockResolvedValue(undefined),
 	toggleWorldDatapack: vi.fn().mockResolvedValue(undefined),
-	deleteWorldDatapack: vi.fn().mockResolvedValue(undefined),
+	deleteWorldDatapack: vi.fn().mockResolvedValue({
+		removedCompanionCount: 0,
+		retainedCompanionCount: 0,
+		cleanupWarning: null,
+	}),
+	confirm: vi.fn().mockResolvedValue(true),
+	showToast: vi.fn(),
 	setType: vi.fn(),
 	setInstance: vi.fn(),
 	setGameVersion: vi.fn(),
@@ -27,6 +33,44 @@ const mocks = vi.hoisted(() => ({
 		name: "Managed Pack",
 	}),
 	install: vi.fn().mockResolvedValue("task"),
+	invoke: vi.fn().mockImplementation((command: string, args?: any) => {
+		if (command === "get_cached_resource_projects_by_provider") {
+			return Promise.resolve(
+				(args?.refs ?? []).map((ref: { platform: string; id: string }) => ({
+					id: ref.id,
+					source: ref.platform,
+					name: ref.id === "recipes_plus" ? "Recipes Plus" : "Managed Pack",
+					icon_url: args?.hydrateIcons
+						? "data:image/png;base64,cHJvdmlkZXI="
+						: `https://example.test/${ref.id}.png`,
+					has_cached_icon: Boolean(args?.hydrateIcons),
+				})),
+			);
+		}
+		if (command === "get_or_hydrate_resource_projects") {
+			return Promise.resolve([
+				{
+					id: "pack",
+					source: "modrinth",
+					name: "Managed Pack",
+					icon_url: "https://example.test/pack.png",
+					has_cached_icon: false,
+				},
+			]);
+		}
+		if (command === "hydrate_resource_project_icons") {
+			return Promise.resolve([
+				{
+					id: "pack",
+					source: "modrinth",
+					name: "Managed Pack",
+					icon_url: "data:image/png;base64,cGFjaw==",
+					has_cached_icon: true,
+				},
+			]);
+		}
+		return Promise.resolve(undefined);
+	}),
 	navigate: vi.fn(),
 	worldsState: {
 		byInstance: {},
@@ -40,6 +84,13 @@ const mocks = vi.hoisted(() => ({
 		updatesLoading: {} as Record<string, boolean>,
 		errors: {} as Record<string, string | null>,
 		updateErrors: {} as Record<string, string | null>,
+	},
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+	invoke: mocks.invoke,
+	Channel: class {
+		onmessage?: (message: unknown) => void;
 	},
 }));
 
@@ -93,9 +144,9 @@ vi.mock("@stores/resources", () => ({
 
 vi.mock("@stores/instances", () => ({ instancesState: { instances: [] } }));
 vi.mock("@stores/dialog-store", () => ({
-	dialogStore: { confirm: vi.fn().mockResolvedValue(true) },
+	dialogStore: { confirm: mocks.confirm },
 }));
-vi.mock("@ui/toast/toast", () => ({ showToast: vi.fn() }));
+vi.mock("@ui/toast/toast", () => ({ showToast: mocks.showToast }));
 vi.mock("@components/instances/InstanceSelectionDialog", () => ({
 	default: () => null,
 }));
@@ -103,7 +154,13 @@ vi.mock("@components/worlds/WorldIcon", () => ({
 	WorldIcon: (props: any) => <div data-testid="world-icon">{props.name}</div>,
 }));
 vi.mock("@ui/avatar", () => ({
-	ResourceAvatar: () => <div data-testid="pack-avatar" />,
+	ResourceAvatar: (props: any) => (
+		<div
+			data-testid="pack-avatar"
+			data-name={props.name}
+			data-icon={props.icon ?? ""}
+		/>
+	),
 }));
 vi.mock("@ui/badge/badge", () => ({
 	Badge: (props: any) => <span>{props.children}</span>,
@@ -221,6 +278,28 @@ describe("world datapack navigation", () => {
 		expect(onOpen).toHaveBeenCalledTimes(2);
 	});
 
+	it("does not open the world when a nested card action is used", async () => {
+		const onOpen = vi.fn();
+		const onManageDatapacks = vi.fn();
+		render(() => (
+			<WorldCard
+				world={world()}
+				busy={false}
+				onMove={vi.fn()}
+				onCopy={vi.fn()}
+				onDuplicate={vi.fn()}
+				onManageDatapacks={onManageDatapacks}
+				onOpen={onOpen}
+			/>
+		));
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Manage 2 datapacks in Test World" }),
+		);
+		expect(onManageDatapacks).toHaveBeenCalledOnce();
+		expect(onOpen).not.toHaveBeenCalled();
+	});
+
 	it("binds Add datapack to the exact world before navigating", () => {
 		const targetWorld = world();
 		openWorldDatapackBrowser(targetWorld, {
@@ -283,6 +362,12 @@ describe("world datapack navigation", () => {
 describe("WorldDatapacksView", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mocks.confirm.mockResolvedValue(true);
+		mocks.deleteWorldDatapack.mockResolvedValue({
+			removedCompanionCount: 0,
+			retainedCompanionCount: 0,
+			cleanupWarning: null,
+		});
 		mocks.worldDatapacksState.loading = {};
 		mocks.worldDatapacksState.errors = {};
 		mocks.worldDatapacksState.updatesLoading = {};
@@ -357,6 +442,84 @@ describe("WorldDatapacksView", () => {
 		).toBeTruthy();
 	});
 
+	it("hydrates provider icons once and keeps local packs on the fallback", async () => {
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onReviewVersions={vi.fn()}
+			/>
+		));
+
+		await waitFor(() =>
+			expect(
+				screen.getAllByTestId("pack-avatar")[0]?.getAttribute("data-icon"),
+			).toBe("data:image/png;base64,cGFjaw=="),
+		);
+		expect(mocks.invoke).toHaveBeenCalledWith(
+			"get_or_hydrate_resource_projects",
+			expect.objectContaining({
+				refs: [{ platform: "modrinth", id: "pack" }],
+			}),
+		);
+		expect(mocks.invoke).toHaveBeenCalledWith(
+			"hydrate_resource_project_icons",
+			{ refs: [{ platform: "modrinth", id: "pack" }] },
+		);
+	});
+
+	it("loads cached icons for providers that are not network sources in this build", async () => {
+		mocks.worldDatapacksState.byWorld["7:World One"] = {
+			world: world().ref,
+			entries: [
+				{
+					resourceId: 12,
+					fileName: "recipes_plus.zip",
+					displayName: "Recipes Plus",
+					entryKind: "file",
+					platform: "smithed",
+					projectId: "recipes_plus",
+					versionId: "1.3.5",
+					versionNumber: "1.3.5",
+					enabled: true,
+					managed: true,
+					readOnly: false,
+					sizeBytes: 810_578,
+					modifiedAt: null,
+				},
+			],
+		};
+
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onReviewVersions={vi.fn()}
+			/>
+		));
+
+		await waitFor(() =>
+			expect(screen.getByTestId("pack-avatar").getAttribute("data-icon")).toBe(
+				"data:image/png;base64,cHJvdmlkZXI=",
+			),
+		);
+		expect(mocks.invoke).toHaveBeenCalledWith(
+			"get_cached_resource_projects_by_provider",
+			{
+				refs: [{ platform: "smithed", id: "recipes_plus" }],
+				hydrateIcons: true,
+			},
+		);
+		expect(mocks.invoke).not.toHaveBeenCalledWith(
+			"get_or_hydrate_resource_projects",
+			expect.objectContaining({
+				refs: [{ platform: "smithed", id: "recipes_plus" }],
+			}),
+		);
+	});
+
 	it("returns the exact world from Add datapack", async () => {
 		const targetWorld = world();
 		const onAddDatapack = vi.fn();
@@ -418,6 +581,42 @@ describe("WorldDatapacksView", () => {
 				compatibilityAcknowledged: false,
 				replacementResourceId: 11,
 			},
+		);
+	});
+
+	it("explains when a linked resource pack is retained for another world", async () => {
+		mocks.deleteWorldDatapack.mockResolvedValue({
+			removedCompanionCount: 0,
+			retainedCompanionCount: 1,
+			cleanupWarning: "Temporary-file cleanup needs attention.",
+		});
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onReviewVersions={vi.fn()}
+			/>
+		));
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Remove from world" }),
+		);
+
+		await waitFor(() =>
+			expect(mocks.deleteWorldDatapack).toHaveBeenCalledWith(world().ref, 11),
+		);
+		expect(mocks.showToast).toHaveBeenCalledWith(
+			expect.objectContaining({
+				title: "Datapack removed",
+				description: expect.stringContaining(
+					"retained because Vesta could not prove it was unused",
+				),
+				severity: "warning",
+			}),
+		);
+		expect(mocks.showToast.mock.calls.at(-1)?.[0].description).toContain(
+			"Temporary-file cleanup needs attention.",
 		);
 	});
 });

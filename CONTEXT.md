@@ -175,6 +175,13 @@ absent from Instance Resource overviews, matching, batch actions, and update
 snapshots. The same remote datapack may therefore have independent rows in
 several Worlds.
 
+When a managed datapack bundle includes a companion resource pack, the World
+Manifest is the portable ownership link and the Ledger remains the file fact.
+Removing one datapack removes its companion only when no other bundle in the
+same World or any other discovered World may reference that exact relative
+path. Unreadable/corrupt metadata and hash mismatches retain the companion.
+Generic Instance Resource actions cannot remove or disable a linked companion.
+
 Primary modules:
 
 - `vesta-launcher/src-tauri/src/resources/ledger.rs`
@@ -227,6 +234,15 @@ read-only. Instance Resource commands reject datapack rows.
 World transfers do not infer file availability from Instance process state;
 actual filesystem reads, copies, verification, and publication are authoritative,
 and inaccessible files surface as Task failures.
+
+World mutations participate in Task Manager conflict coordination. Logical
+keys cover exact Worlds, each Instance's `saves`, and each Instance's
+`resourcepacks`; multi-key reservations publish as one atomic set so waiting
+Tasks do not monopolize unrelated resources. Filesystem watcher bursts reconcile
+their final on-disk state after managed staging rather than racing Ledger rows.
+World archive publication uses no-replace filesystem primitives, and preflight
+enforces portable names, Unicode-aware collision detection, bounded candidate
+counts/expansion, compression-ratio limits, and regular file/directory entries.
 
 Primary modules:
 

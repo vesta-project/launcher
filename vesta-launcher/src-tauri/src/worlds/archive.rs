@@ -7,13 +7,18 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Cursor, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use sysinfo::Disks;
+use unicode_casefold::UnicodeCaseFold;
+use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 use zip::ZipArchive;
 
 const MAX_ARCHIVE_ENTRIES: usize = 100_000;
+const MAX_WORLD_CANDIDATES: usize = 32;
 const MAX_EXPANDED_BYTES: u64 = 64 * 1024 * 1024 * 1024;
-const MAX_COMPRESSION_RATIO: u64 = 1_000;
+const MAX_COMPRESSION_RATIO: u64 = 500;
 const MAX_ARCHIVE_ICON_BYTES: u64 = 1024 * 1024;
+const MAX_PORTABLE_COMPONENT_BYTES: usize = 255;
+const MAX_PORTABLE_RELATIVE_PATH_BYTES: usize = 240;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,26 +68,30 @@ pub fn inspect_archive(
     let mut normalized_names = HashSet::new();
     let mut roots = HashSet::new();
     let mut declared_size = 0_u64;
+    let mut declared_compressed_size = 0_u64;
     for index in 0..archive.len() {
         let entry = archive
             .by_index(index)
             .map_err(|error| format!("Failed to inspect archive entry: {error}"))?;
         let path = safe_entry_path(entry.name())?;
-        let folded = path.to_string_lossy().to_lowercase();
+        let folded = portable_collision_key(&path);
         if !normalized_names.insert(folded) {
             return Err(format!(
-                "Archive contains case-colliding entry {}",
+                "Archive contains colliding entry {}",
                 path.display()
             ));
         }
-        reject_link(&entry, &path)?;
+        reject_unsupported_entry_kind(&entry, &path)?;
         declared_size = declared_size
             .checked_add(entry.size())
             .ok_or_else(|| "Archive expansion size overflowed".to_string())?;
         if declared_size > MAX_EXPANDED_BYTES {
             return Err("Archive declares an unreasonable expanded size".to_string());
         }
-        if entry.size() > 1024 * 1024
+        declared_compressed_size = declared_compressed_size
+            .checked_add(entry.compressed_size())
+            .ok_or_else(|| "Archive compressed size overflowed".to_string())?;
+        if entry.size() > 64 * 1024
             && (entry.compressed_size() == 0
                 || entry.size() / entry.compressed_size().max(1) > MAX_COMPRESSION_RATIO)
         {
@@ -97,7 +106,18 @@ pub fn inspect_archive(
                 .is_some_and(|name| name == "level.dat" || name == "level.dat_old")
         {
             roots.insert(path.parent().unwrap_or(Path::new("")).to_path_buf());
+            if roots.len() > MAX_WORLD_CANDIDATES {
+                return Err(format!(
+                    "Archive contains more than {MAX_WORLD_CANDIDATES} Java worlds"
+                ));
+            }
         }
+    }
+    if declared_size > 1024 * 1024
+        && (declared_compressed_size == 0
+            || declared_size / declared_compressed_size.max(1) > MAX_COMPRESSION_RATIO)
+    {
+        return Err("Archive has a suspicious aggregate compression ratio".to_string());
     }
     ensure_available_space(saves_directory, declared_size)?;
 
@@ -259,7 +279,7 @@ where
     let mut published: Vec<InstalledWorld> = Vec::new();
     for (directory_name, staged_world) in staged {
         let destination = saves_directory.join(&directory_name);
-        if let Err(error) = fs::rename(&staged_world, &destination) {
+        if let Err(error) = publish_directory_no_replace(&staged_world, &destination) {
             for world in &published {
                 let _ = fs::remove_dir_all(&world.path);
             }
@@ -272,6 +292,69 @@ where
     }
     let _ = fs::remove_dir_all(staging_root);
     Ok(published)
+}
+
+#[cfg(target_os = "macos")]
+fn publish_directory_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+    // SAFETY: both C strings live for the duration of the call and contain no NUL bytes.
+    let result = unsafe {
+        libc::renameatx_np(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_EXCL,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn publish_directory_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+    // SAFETY: both C strings live for the duration of the call and contain no NUL bytes.
+    let result = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn publish_directory_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    if destination.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "world destination already exists",
+        ));
+    }
+    fs::rename(source, destination)
 }
 
 fn summarize_candidate(
@@ -386,14 +469,93 @@ fn safe_entry_path(name: &str) -> Result<PathBuf, String> {
     {
         return Err(format!("Archive contains unsafe path {name:?}"));
     }
+
+    let path_without_directory_marker = name.strip_suffix('/').unwrap_or(name);
+    if path_without_directory_marker.is_empty()
+        || path_without_directory_marker.len() > MAX_PORTABLE_RELATIVE_PATH_BYTES
+    {
+        return Err(format!(
+            "Archive path exceeds portable length limits: {name:?}"
+        ));
+    }
+    for component in path_without_directory_marker.split('/') {
+        validate_portable_component(component, name)?;
+    }
     Ok(path)
 }
 
-fn reject_link(entry: &zip::read::ZipFile<'_, File>, path: &Path) -> Result<(), String> {
+fn validate_portable_component(component: &str, full_path: &str) -> Result<(), String> {
+    if component.is_empty() || component == "." || component == ".." {
+        return Err(format!("Archive contains unsafe path {full_path:?}"));
+    }
+    if component.len() > MAX_PORTABLE_COMPONENT_BYTES {
+        return Err(format!(
+            "Archive path component exceeds portable length limits: {full_path:?}"
+        ));
+    }
+    if component.ends_with(['.', ' '])
+        || component
+            .chars()
+            .any(|character| character.is_control() || r#"<>:"/\|?*"#.contains(character))
+    {
+        return Err(format!(
+            "Archive path contains a Windows-incompatible component: {full_path:?}"
+        ));
+    }
+
+    let stem = component
+        .split('.')
+        .next()
+        .unwrap_or(component)
+        .trim_end_matches(' ');
+    let reserved_stem: String = stem.nfkc().flat_map(char::to_uppercase).collect();
+    let is_reserved = matches!(
+        reserved_stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$"
+    ) || reserved_stem
+        .strip_prefix("COM")
+        .or_else(|| reserved_stem.strip_prefix("LPT"))
+        .is_some_and(|suffix| {
+            matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+        });
+    if is_reserved {
+        return Err(format!(
+            "Archive path contains a Windows-reserved component: {full_path:?}"
+        ));
+    }
+    Ok(())
+}
+
+fn portable_collision_key(path: &Path) -> String {
+    let normalized: String = path
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => value.to_str(),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+        .nfc()
+        .case_fold()
+        .collect();
+    normalized.nfc().collect()
+}
+
+fn reject_unsupported_entry_kind(
+    entry: &zip::read::ZipFile<'_, File>,
+    path: &Path,
+) -> Result<(), String> {
     if let Some(mode) = entry.unix_mode() {
         let kind = mode & 0o170000;
-        if kind == 0o120000 || kind == 0o060000 {
-            return Err(format!("Archive links are not allowed: {}", path.display()));
+        let expected_kind = if entry.is_dir() { 0o040000 } else { 0o100000 };
+        // Some ZIP writers store permission bits without Unix file-type bits.
+        // Treat that portable representation as unspecified, while rejecting
+        // every explicitly encoded special type.
+        if kind != 0 && kind != expected_kind {
+            return Err(format!(
+                "Archive entry type is not allowed: {}",
+                path.display()
+            ));
         }
     }
     Ok(())
@@ -522,6 +684,18 @@ mod tests {
         (temp, path)
     }
 
+    fn set_first_entry_unix_mode(path: &Path, mode: u32) {
+        let mut bytes = fs::read(path).unwrap();
+        let central_directory = bytes
+            .windows(4)
+            .position(|window| window == b"PK\x01\x02")
+            .expect("central directory entry");
+        bytes[central_directory + 5] = 3;
+        bytes[central_directory + 38..central_directory + 42]
+            .copy_from_slice(&(mode << 16).to_le_bytes());
+        fs::write(path, bytes).unwrap();
+    }
+
     #[test]
     fn finds_root_wrapped_and_multiple_worlds_while_ignoring_macos_noise() {
         let (_temp, zip) = zip_with(&[
@@ -552,6 +726,72 @@ mod tests {
     }
 
     #[test]
+    fn rejects_unicode_equivalent_collisions() {
+        let (_temp, zip) = zip_with(&[
+            ("World/Caf\u{e9}.txt", Vec::new()),
+            ("World/Cafe\u{301}.txt", Vec::new()),
+            ("World/level.dat", level_bytes("World")),
+        ]);
+        let saves = TempDir::new().unwrap();
+        assert!(inspect_archive(&zip, saves.path())
+            .unwrap_err()
+            .contains("colliding entry"));
+    }
+
+    #[test]
+    fn rejects_unicode_case_equivalent_collisions() {
+        let (_temp, zip) = zip_with(&[
+            ("World/Stra\u{df}e.dat", Vec::new()),
+            ("World/STRASSE.dat", Vec::new()),
+            ("World/level.dat", level_bytes("World")),
+        ]);
+        let saves = TempDir::new().unwrap();
+        assert!(inspect_archive(&zip, saves.path())
+            .unwrap_err()
+            .contains("colliding entry"));
+    }
+
+    #[test]
+    fn rejects_windows_reserved_and_ambiguous_components() {
+        for name in [
+            "World/CON.txt",
+            "World/lpt9",
+            "World/trailing. ",
+            "World/trailing.",
+            "World/has:colon.dat",
+            "World/has?.dat",
+            "World/back\\slash.dat",
+            "World/CONIN$",
+            "World//region.mca",
+            "World/./region.mca",
+        ] {
+            let (_temp, zip) = zip_with(&[(name, Vec::new())]);
+            let saves = TempDir::new().unwrap();
+            assert!(
+                inspect_archive(&zip, saves.path()).is_err(),
+                "expected {name:?} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_paths_beyond_portable_length_limits() {
+        let long_component = format!("{}.dat", "a".repeat(MAX_PORTABLE_COMPONENT_BYTES));
+        let long_path = format!("World/{long_component}");
+        let (_temp, zip) = zip_with(&[(&long_path, Vec::new())]);
+        let saves = TempDir::new().unwrap();
+        assert!(inspect_archive(&zip, saves.path())
+            .unwrap_err()
+            .contains("portable length limits"));
+
+        let long_path = format!("World/{}/file.dat", "a/".repeat(120));
+        let (_temp, zip) = zip_with(&[(&long_path, Vec::new())]);
+        assert!(inspect_archive(&zip, saves.path())
+            .unwrap_err()
+            .contains("portable length limits"));
+    }
+
+    #[test]
     fn installs_all_candidates_with_collision_safe_names() {
         let (_temp, zip) = zip_with(&[
             ("World/level.dat", level_bytes("One")),
@@ -569,6 +809,86 @@ mod tests {
         assert_eq!(installed.len(), 2);
         assert!(saves.path().join("World (2)/level.dat").exists());
         assert!(saves.path().join("Other/level.dat").exists());
+    }
+
+    #[test]
+    fn publish_never_replaces_a_world_created_after_preflight() {
+        let (_temp, zip) = zip_with(&[("World/level.dat", level_bytes("World"))]);
+        let saves = TempDir::new().unwrap();
+        let inspection = inspect_archive(&zip, saves.path()).unwrap();
+        let selected = vec![inspection.candidates[0].id.clone()];
+        let destination = saves.path().join("World");
+        let mut created = false;
+
+        let error = install_archive(&zip, saves.path(), &selected, None, |_, _| {
+            if !created {
+                fs::create_dir(&destination).unwrap();
+                fs::write(destination.join("owner.txt"), b"existing").unwrap();
+                created = true;
+            }
+            Ok(())
+        })
+        .unwrap_err();
+
+        assert!(error.contains("Failed to publish world"));
+        assert_eq!(
+            fs::read(destination.join("owner.txt")).unwrap(),
+            b"existing"
+        );
+        assert!(!destination.join("level.dat").exists());
+    }
+
+    #[test]
+    fn rejects_unreasonable_world_candidate_counts() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("many-worlds.zip");
+        let file = File::create(&path).unwrap();
+        let mut writer = ZipWriter::new(file);
+        for index in 0..=MAX_WORLD_CANDIDATES {
+            writer
+                .start_file(
+                    format!("World {index}/level.dat"),
+                    SimpleFileOptions::default().compression_method(CompressionMethod::Stored),
+                )
+                .unwrap();
+            writer.write_all(&level_bytes("World")).unwrap();
+        }
+        writer.finish().unwrap();
+
+        let saves = TempDir::new().unwrap();
+        assert!(inspect_archive(&path, saves.path())
+            .unwrap_err()
+            .contains("Java worlds"));
+    }
+
+    #[test]
+    fn rejects_suspicious_aggregate_compression_ratio() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("compressed.zip");
+        let file = File::create(&path).unwrap();
+        let mut writer = ZipWriter::new(file);
+        writer
+            .start_file(
+                "World/level.dat",
+                SimpleFileOptions::default().compression_method(CompressionMethod::Stored),
+            )
+            .unwrap();
+        writer.write_all(&level_bytes("World")).unwrap();
+        for index in 0..32 {
+            writer
+                .start_file(
+                    format!("World/region/bomb-{index}.mca"),
+                    SimpleFileOptions::default().compression_method(CompressionMethod::Deflated),
+                )
+                .unwrap();
+            writer.write_all(&vec![0_u8; 64 * 1024]).unwrap();
+        }
+        writer.finish().unwrap();
+
+        let saves = TempDir::new().unwrap();
+        assert!(inspect_archive(&path, saves.path())
+            .unwrap_err()
+            .contains("compression ratio"));
     }
 
     #[test]
@@ -617,6 +937,56 @@ mod tests {
         let saves = TempDir::new().unwrap();
         assert!(inspect_archive(&path, saves.path())
             .unwrap_err()
-            .contains("links are not allowed"));
+            .contains("entry type is not allowed"));
+    }
+
+    #[test]
+    fn unix_special_file_entries_are_rejected() {
+        let (_temp, zip) = zip_with(&[("World/fifo", Vec::new())]);
+        set_first_entry_unix_mode(&zip, 0o010644);
+        let saves = TempDir::new().unwrap();
+        assert!(inspect_archive(&zip, saves.path())
+            .unwrap_err()
+            .contains("entry type is not allowed"));
+    }
+
+    #[test]
+    fn regular_file_and_directory_entries_are_allowed() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("world.zip");
+        let file = File::create(&path).unwrap();
+        let mut writer = ZipWriter::new(file);
+        writer
+            .add_directory("World/", SimpleFileOptions::default())
+            .unwrap();
+        writer
+            .start_file("World/level.dat", SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(&level_bytes("World")).unwrap();
+        writer.finish().unwrap();
+
+        let saves = TempDir::new().unwrap();
+        assert_eq!(
+            inspect_archive(&path, saves.path())
+                .unwrap()
+                .candidates
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn entries_with_permissions_but_no_unix_type_are_allowed() {
+        let (_temp, zip) = zip_with(&[("World/level.dat", level_bytes("World"))]);
+        set_first_entry_unix_mode(&zip, 0o600);
+        let saves = TempDir::new().unwrap();
+
+        assert_eq!(
+            inspect_archive(&zip, saves.path())
+                .unwrap()
+                .candidates
+                .len(),
+            1
+        );
     }
 }

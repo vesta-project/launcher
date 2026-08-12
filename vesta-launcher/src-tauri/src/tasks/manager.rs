@@ -3,7 +3,7 @@ use crate::notifications::models::{
     CreateNotificationInput, NotificationAction, NotificationSeverity, NotificationType,
     ProgressUpdate, PROGRESS_INDETERMINATE,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,7 +11,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{mpsc, watch, Semaphore};
+use tokio::sync::{mpsc, watch, Notify, Semaphore};
+use unicode_casefold::UnicodeCaseFold;
+use unicode_normalization::UnicodeNormalization;
 
 #[derive(Clone)]
 pub struct TaskContext {
@@ -151,6 +153,11 @@ pub trait Task: Send + Sync {
     fn pausable(&self) -> bool {
         false
     }
+    /// Filesystem or database resources that must not be mutated concurrently.
+    /// Keys are normalized, sorted, and deduplicated by Task Manager before use.
+    fn conflict_keys(&self) -> Vec<String> {
+        Vec::new()
+    }
     #[allow(dead_code)]
     fn serialize(&self) -> Option<String> {
         None
@@ -186,6 +193,88 @@ pub struct QueuedTask {
     pub progress_channel: Option<Channel<ProgressUpdate>>,
 }
 
+pub fn world_conflict_key(instance_id: i32, directory_name: &str) -> String {
+    let directory_name: String = directory_name.nfc().case_fold().collect();
+    format!("world:{instance_id}:{directory_name}")
+}
+
+pub fn saves_conflict_key(instance_id: i32) -> String {
+    format!("saves:{instance_id}")
+}
+
+pub fn resourcepacks_conflict_key(instance_id: i32) -> String {
+    format!("resourcepacks:{instance_id}")
+}
+
+fn normalize_conflict_keys<I, S>(keys: I) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    let mut keys = keys
+        .into_iter()
+        .map(Into::into)
+        .filter(|key| !key.trim().is_empty())
+        .collect::<Vec<_>>();
+    keys.sort_unstable();
+    keys.dedup();
+    keys
+}
+
+/// Coordinates mutations that share a logical filesystem or ledger resource.
+/// A complete key set is reserved atomically, avoiding deadlocks and preventing
+/// a waiting multi-resource task from holding unrelated keys.
+#[derive(Clone, Default)]
+pub struct TaskConflictCoordinator {
+    state: Arc<TaskConflictState>,
+}
+
+pub struct TaskConflictGuard {
+    state: Arc<TaskConflictState>,
+    keys: Vec<String>,
+}
+
+#[derive(Default)]
+struct TaskConflictState {
+    active: Mutex<HashSet<String>>,
+    changed: Notify,
+}
+
+impl Drop for TaskConflictGuard {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.state.active.lock() {
+            for key in &self.keys {
+                active.remove(key);
+            }
+        }
+        self.state.changed.notify_waiters();
+    }
+}
+
+impl TaskConflictCoordinator {
+    pub async fn acquire<I, S>(&self, keys: I) -> TaskConflictGuard
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let keys = normalize_conflict_keys(keys);
+        loop {
+            let changed = self.state.changed.notified();
+            {
+                let mut active = self.state.active.lock().unwrap();
+                if keys.iter().all(|key| !active.contains(key)) {
+                    active.extend(keys.iter().cloned());
+                    return TaskConflictGuard {
+                        state: self.state.clone(),
+                        keys,
+                    };
+                }
+            }
+            changed.await;
+        }
+    }
+}
+
 pub struct TaskManager {
     app_handle: AppHandle,
     sender: mpsc::Sender<QueuedTask>,
@@ -194,6 +283,7 @@ pub struct TaskManager {
     cancellation_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
     pause_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
     active_tasks: Arc<Mutex<HashMap<String, String>>>,
+    conflicts: TaskConflictCoordinator,
 }
 
 impl TaskManager {
@@ -205,12 +295,14 @@ impl TaskManager {
         let cancellation_tokens = Arc::new(Mutex::new(HashMap::new()));
         let pause_tokens = Arc::new(Mutex::new(HashMap::new()));
         let active_tasks = Arc::new(Mutex::new(HashMap::new()));
+        let conflicts = TaskConflictCoordinator::default();
 
         let manager_semaphore = semaphore.clone();
         let manager_app = app_handle.clone();
         let manager_tokens = cancellation_tokens.clone();
         let manager_pause_tokens = pause_tokens.clone();
         let manager_active_tasks = active_tasks.clone();
+        let manager_conflicts = conflicts.clone();
 
         tauri::async_runtime::spawn(async move {
             static TASK_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -331,27 +423,46 @@ impl TaskManager {
                         .insert(client_key.clone(), pause_tx);
                 }
 
-                // Acquire permit to respect concurrency limit
-                log::info!(
-                    "TaskManager: Waiting for worker permit for task: {}",
-                    task_name
-                );
-                let permit = match manager_semaphore.clone().acquire_owned().await {
-                    Ok(p) => p,
-                    Err(_) => break, // Semaphore closed
-                };
-                log::info!(
-                    "TaskManager: Acquired worker permit for task: {}",
-                    task_name
-                );
-
                 let app = manager_app.clone();
                 let tokens = manager_tokens.clone();
                 let p_tokens = manager_pause_tokens.clone();
                 let active_tasks = manager_active_tasks.clone();
+                let conflicts = manager_conflicts.clone();
+                let worker_semaphore = manager_semaphore.clone();
                 let key_clone = client_key.clone();
+                let conflict_keys = task.conflict_keys();
 
                 tokio::spawn(async move {
+                    log::info!(
+                        "TaskManager: Waiting for resource locks for task: {}",
+                        task_name
+                    );
+                    let _conflict_guard = conflicts.acquire(conflict_keys).await;
+
+                    // Resource locks are acquired before a worker permit so tasks waiting on
+                    // another mutation do not consume the global concurrency allowance.
+                    log::info!(
+                        "TaskManager: Waiting for worker permit for task: {}",
+                        task_name
+                    );
+                    let permit = match worker_semaphore.acquire_owned().await {
+                        Ok(permit) => permit,
+                        Err(_) => {
+                            if is_cancellable {
+                                tokens.lock().unwrap().remove(&key_clone);
+                            }
+                            if is_pausable {
+                                p_tokens.lock().unwrap().remove(&key_clone);
+                            }
+                            active_tasks.lock().unwrap().remove(&key_clone);
+                            return;
+                        }
+                    };
+                    log::info!(
+                        "TaskManager: Acquired worker permit for task: {}",
+                        task_name
+                    );
+
                     // Check if cancelled while waiting
                     if *rx.borrow() {
                         if notifications_enabled {
@@ -530,6 +641,7 @@ impl TaskManager {
             cancellation_tokens,
             pause_tokens,
             active_tasks,
+            conflicts,
         }
     }
 
@@ -540,6 +652,16 @@ impl TaskManager {
             .values()
             .cloned()
             .collect()
+    }
+
+    /// Acquires the same conflict locks used by queued tasks. Command adapters
+    /// can hold the returned guard while performing a short direct mutation.
+    pub async fn acquire_conflicts<I, S>(&self, keys: I) -> TaskConflictGuard
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.conflicts.acquire(keys).await
     }
 
     pub async fn submit(&self, task: Box<dyn Task>) -> Result<(), String> {
@@ -910,5 +1032,113 @@ impl Task for TestTask {
 
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod conflict_tests {
+    use super::{normalize_conflict_keys, TaskConflictCoordinator};
+    use std::time::Duration;
+
+    #[test]
+    fn conflict_keys_are_sorted_deduplicated_and_empty_keys_are_ignored() {
+        assert_eq!(
+            normalize_conflict_keys(["world:2:b", "", "world:1:a", "world:2:b"]),
+            vec!["world:1:a", "world:2:b"]
+        );
+    }
+
+    #[test]
+    fn world_keys_normalize_case_and_unicode_equivalents() {
+        assert_eq!(
+            super::world_conflict_key(1, "Straße"),
+            super::world_conflict_key(1, "STRASSE")
+        );
+        assert_eq!(
+            super::world_conflict_key(1, "Café"),
+            super::world_conflict_key(1, "Café")
+        );
+    }
+
+    #[tokio::test]
+    async fn tasks_sharing_a_conflict_key_are_serialized() {
+        let coordinator = TaskConflictCoordinator::default();
+        let first = coordinator.acquire(["world:1:test"]).await;
+        let waiting_coordinator = coordinator.clone();
+        let (acquired_tx, mut acquired_rx) = tokio::sync::oneshot::channel();
+
+        let waiter = tokio::spawn(async move {
+            let _guard = waiting_coordinator.acquire(["world:1:test"]).await;
+            let _ = acquired_tx.send(());
+        });
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(25), &mut acquired_rx)
+                .await
+                .is_err()
+        );
+        drop(first);
+        tokio::time::timeout(Duration::from_secs(1), &mut acquired_rx)
+            .await
+            .expect("waiter should acquire the released conflict key")
+            .expect("waiter should report acquisition");
+        waiter.await.expect("waiter should finish");
+    }
+
+    #[tokio::test]
+    async fn unrelated_conflict_keys_can_be_held_concurrently() {
+        let coordinator = TaskConflictCoordinator::default();
+        let _first = coordinator.acquire(["world:1:first"]).await;
+
+        tokio::time::timeout(
+            Duration::from_millis(100),
+            coordinator.acquire(["world:1:second"]),
+        )
+        .await
+        .expect("an unrelated key should not wait");
+    }
+
+    #[tokio::test]
+    async fn multi_key_acquisition_uses_a_deadlock_safe_order() {
+        let coordinator = TaskConflictCoordinator::default();
+        let first_coordinator = coordinator.clone();
+        let second_coordinator = coordinator.clone();
+
+        let first = tokio::spawn(async move {
+            let _guard = first_coordinator.acquire(["world:1:b", "world:1:a"]).await;
+            tokio::task::yield_now().await;
+        });
+        let second = tokio::spawn(async move {
+            let _guard = second_coordinator.acquire(["world:1:a", "world:1:b"]).await;
+            tokio::task::yield_now().await;
+        });
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            first.await.expect("first acquisition should finish");
+            second.await.expect("second acquisition should finish");
+        })
+        .await
+        .expect("opposite input orders should not deadlock");
+    }
+
+    #[tokio::test]
+    async fn waiting_key_sets_do_not_hold_their_unblocked_keys() {
+        let coordinator = TaskConflictCoordinator::default();
+        let saves = coordinator.acquire(["saves:1"]).await;
+        let waiting = coordinator.clone();
+        let waiter = tokio::spawn(async move {
+            let _guard = waiting.acquire(["resourcepacks:1", "saves:1"]).await;
+        });
+        tokio::task::yield_now().await;
+
+        tokio::time::timeout(
+            Duration::from_millis(100),
+            coordinator.acquire(["resourcepacks:1"]),
+        )
+        .await
+        .expect("a waiting key set must not reserve resourcepacks");
+
+        drop(saves);
+        waiter.await.unwrap();
     }
 }

@@ -110,6 +110,12 @@ export type WorldDatapackUpdateCheck = {
 	updates: WorldDatapackUpdateStatus[];
 };
 
+export type WorldDatapackRemoval = {
+	removedCompanionCount: number;
+	retainedCompanionCount: number;
+	cleanupWarning: string | null;
+};
+
 type WorldsState = {
 	byInstance: Record<number, WorldSummary[]>;
 	loading: Record<number, boolean>;
@@ -142,13 +148,16 @@ const [worldDatapacksState, setWorldDatapacksState] =
 	});
 
 const inFlight = new Map<number, Promise<WorldSummary[]>>();
+const worldRequestGenerations = new Map<number, number>();
 const subscriptions = new Map<number, Set<() => void>>();
 let eventUnlisten: Promise<UnlistenFn> | null = null;
 const datapackInFlight = new Map<string, Promise<WorldDatapackOverview>>();
+const datapackRequestGenerations = new Map<string, number>();
 const datapackUpdatesInFlight = new Map<
 	string,
 	Promise<WorldDatapackUpdateCheck>
 >();
+const datapackUpdateRequestGenerations = new Map<string, number>();
 let datapackEventUnlisten: Promise<UnlistenFn> | null = null;
 
 export function worldRefKey(world: WorldRef): string {
@@ -161,11 +170,16 @@ async function ensureWorldEventListener() {
 		"core://instance-worlds-changed",
 		(event) => {
 			const instanceId = event.payload.instanceId;
-			void listInstanceWorlds(instanceId, true).then(() => {
-				for (const subscriber of subscriptions.get(instanceId) ?? []) {
-					subscriber();
+			void (async () => {
+				try {
+					await listInstanceWorlds(instanceId, true);
+					for (const subscriber of subscriptions.get(instanceId) ?? []) {
+						subscriber();
+					}
+				} catch {
+					// Store state already carries the scoped refresh error.
 				}
-			});
+			})();
 		},
 	);
 	return eventUnlisten;
@@ -178,17 +192,21 @@ async function ensureWorldDatapackEventListener() {
 		(event) => {
 			const key = worldRefKey(event.payload.world);
 			if (worldDatapacksState.byWorld[key]) {
-				void listWorldDatapacks(event.payload.world, true);
+				void listWorldDatapacks(event.payload.world, true).catch(
+					() => undefined,
+				);
 			}
 			if (worldDatapacksState.updatesByWorld[key]) {
-				void checkWorldDatapackUpdates(event.payload.world, true);
+				void checkWorldDatapackUpdates(event.payload.world, true).catch(
+					() => undefined,
+				);
 			}
 		},
 	);
 	return datapackEventUnlisten;
 }
 
-export async function listInstanceWorlds(
+export function listInstanceWorlds(
 	instanceId: number,
 	forceRefresh = false,
 ): Promise<WorldSummary[]> {
@@ -199,22 +217,31 @@ export async function listInstanceWorlds(
 
 	setWorldsState("loading", instanceId, true);
 	setWorldsState("errors", instanceId, null);
+	const generation = (worldRequestGenerations.get(instanceId) ?? 0) + 1;
+	worldRequestGenerations.set(instanceId, generation);
 	const request = invoke<WorldSummary[]>("list_instance_worlds", {
 		instanceId,
 		forceRefresh,
 	})
 		.then((worlds) => {
-			setWorldsState("byInstance", instanceId, reconcile(worlds));
+			if (worldRequestGenerations.get(instanceId) === generation) {
+				setWorldsState("byInstance", instanceId, reconcile(worlds));
+			}
 			return worlds;
 		})
 		.catch((error) => {
-			setWorldsState("errors", instanceId, String(error));
+			if (worldRequestGenerations.get(instanceId) === generation) {
+				setWorldsState("errors", instanceId, String(error));
+			}
 			throw error;
 		})
 		.finally(() => {
-			setWorldsState("loading", instanceId, false);
-			inFlight.delete(instanceId);
+			if (worldRequestGenerations.get(instanceId) === generation) {
+				setWorldsState("loading", instanceId, false);
+			}
+			if (inFlight.get(instanceId) === request) inFlight.delete(instanceId);
 		});
+	void request.catch(() => undefined);
 	inFlight.set(instanceId, request);
 	return request;
 }
@@ -237,7 +264,7 @@ export function openWorldFolder(world: WorldRef): Promise<void> {
 	return invoke("open_world_folder", { worldRef: world });
 }
 
-export async function listWorldDatapacks(
+export function listWorldDatapacks(
 	world: WorldRef,
 	forceRefresh = false,
 ): Promise<WorldDatapackOverview> {
@@ -249,26 +276,35 @@ export async function listWorldDatapacks(
 
 	setWorldDatapacksState("loading", key, true);
 	setWorldDatapacksState("errors", key, null);
+	const generation = (datapackRequestGenerations.get(key) ?? 0) + 1;
+	datapackRequestGenerations.set(key, generation);
 	const request = invoke<WorldDatapackOverview>("list_world_datapacks", {
 		worldRef: world,
 	})
 		.then((overview) => {
-			setWorldDatapacksState("byWorld", key, reconcile(overview));
+			if (datapackRequestGenerations.get(key) === generation) {
+				setWorldDatapacksState("byWorld", key, reconcile(overview));
+			}
 			return overview;
 		})
 		.catch((error) => {
-			setWorldDatapacksState("errors", key, String(error));
+			if (datapackRequestGenerations.get(key) === generation) {
+				setWorldDatapacksState("errors", key, String(error));
+			}
 			throw error;
 		})
 		.finally(() => {
-			setWorldDatapacksState("loading", key, false);
-			datapackInFlight.delete(key);
+			if (datapackRequestGenerations.get(key) === generation) {
+				setWorldDatapacksState("loading", key, false);
+			}
+			if (datapackInFlight.get(key) === request) datapackInFlight.delete(key);
 		});
+	void request.catch(() => undefined);
 	datapackInFlight.set(key, request);
 	return request;
 }
 
-export async function checkWorldDatapackUpdates(
+export function checkWorldDatapackUpdates(
 	world: WorldRef,
 	forceRefresh = false,
 ): Promise<WorldDatapackUpdateCheck> {
@@ -280,22 +316,33 @@ export async function checkWorldDatapackUpdates(
 
 	setWorldDatapacksState("updatesLoading", key, true);
 	setWorldDatapacksState("updateErrors", key, null);
+	const generation = (datapackUpdateRequestGenerations.get(key) ?? 0) + 1;
+	datapackUpdateRequestGenerations.set(key, generation);
 	const request = invoke<WorldDatapackUpdateCheck>(
 		"check_world_datapack_updates",
 		{ worldRef: world, forceRefresh },
 	)
 		.then((result) => {
-			setWorldDatapacksState("updatesByWorld", key, reconcile(result));
+			if (datapackUpdateRequestGenerations.get(key) === generation) {
+				setWorldDatapacksState("updatesByWorld", key, reconcile(result));
+			}
 			return result;
 		})
 		.catch((error) => {
-			setWorldDatapacksState("updateErrors", key, String(error));
+			if (datapackUpdateRequestGenerations.get(key) === generation) {
+				setWorldDatapacksState("updateErrors", key, String(error));
+			}
 			throw error;
 		})
 		.finally(() => {
-			setWorldDatapacksState("updatesLoading", key, false);
-			datapackUpdatesInFlight.delete(key);
+			if (datapackUpdateRequestGenerations.get(key) === generation) {
+				setWorldDatapacksState("updatesLoading", key, false);
+			}
+			if (datapackUpdatesInFlight.get(key) === request) {
+				datapackUpdatesInFlight.delete(key);
+			}
 		});
+	void request.catch(() => undefined);
 	datapackUpdatesInFlight.set(key, request);
 	return request;
 }
@@ -315,8 +362,8 @@ export async function toggleWorldDatapack(
 export async function deleteWorldDatapack(
 	world: WorldRef,
 	resourceId: number,
-): Promise<void> {
-	await invoke("delete_world_datapack", { worldRef: world, resourceId });
+): Promise<WorldDatapackRemoval> {
+	return invoke("delete_world_datapack", { worldRef: world, resourceId });
 }
 
 export function openWorldDatapacksFolder(world: WorldRef): Promise<void> {

@@ -6,6 +6,10 @@ import ReloadIcon from "@assets/reload.svg";
 import TrashIcon from "@assets/trash.svg";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
+import type {
+	ResourceProjectOverviewRecord,
+	ResourceProjectRef,
+} from "@stores/instance-resource-overview";
 import { resources, type SourcePlatform } from "@stores/resources";
 import {
 	checkWorldDatapackUpdates,
@@ -19,6 +23,7 @@ import {
 	worldDatapacksState,
 	worldRefKey,
 } from "@stores/worlds";
+import { invoke } from "@tauri-apps/api/core";
 import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge/badge";
 import Button from "@ui/button/button";
@@ -39,6 +44,7 @@ import {
 	createMemo,
 	createSignal,
 	For,
+	onCleanup,
 	Show,
 } from "solid-js";
 import styles from "./WorldDatapacksView.module.css";
@@ -69,12 +75,21 @@ const providerName = (platform: string | null) => {
 const displayVersion = (entry: WorldDatapackSummary) =>
 	entry.versionNumber || (entry.managed ? "Managed" : "Local pack");
 
+const projectKey = (platform: string | null, projectId: string | null) =>
+	platform && projectId ? `${platform.toLowerCase()}:${projectId}` : null;
+
+type ProviderProjectRef = {
+	platform: string;
+	id: string;
+};
+
 const DatapackRow: Component<{
 	entry: WorldDatapackSummary;
 	world: WorldSummary;
 	busy: boolean;
 	onBusyChange: (busy: boolean) => void;
 	update?: WorldDatapackUpdateStatus;
+	icon?: string | null;
 	onReviewVersions: () => void;
 }> = (props) => {
 	const canManage = () =>
@@ -104,7 +119,7 @@ const DatapackRow: Component<{
 		if (!canManage() || props.busy) return;
 		const confirmed = await dialogStore.confirm(
 			`Remove ${props.entry.displayName}?`,
-			`This removes the datapack from ${props.world.displayName}. Other worlds are not affected.`,
+			`This removes the datapack from ${props.world.displayName}. A linked resource pack is removed only when no other world still references it.`,
 			{
 				okLabel: "Remove datapack",
 				severity: "warning",
@@ -114,11 +129,23 @@ const DatapackRow: Component<{
 
 		props.onBusyChange(true);
 		try {
-			await deleteWorldDatapack(props.world.ref, props.entry.resourceId!);
+			const removal = await deleteWorldDatapack(
+				props.world.ref,
+				props.entry.resourceId!,
+			);
+			const companionDescription =
+				removal.removedCompanionCount > 0
+					? " Its linked resource pack was also removed."
+					: removal.retainedCompanionCount > 0
+						? " Its linked resource pack was retained because Vesta could not prove it was unused."
+						: "";
+			const cleanupDescription = removal.cleanupWarning
+				? ` ${removal.cleanupWarning}`
+				: "";
 			showToast({
 				title: "Datapack removed",
-				description: `${props.entry.displayName} was removed from ${props.world.displayName}.`,
-				severity: "success",
+				description: `${props.entry.displayName} was removed from ${props.world.displayName}.${companionDescription}${cleanupDescription}`,
+				severity: removal.cleanupWarning ? "warning" : "success",
 			});
 		} catch (error) {
 			showToast({
@@ -185,6 +212,7 @@ const DatapackRow: Component<{
 		>
 			<ResourceAvatar
 				name={props.entry.displayName}
+				icon={props.icon}
 				size={44}
 				shape="square"
 				class={styles["pack-avatar"]}
@@ -308,14 +336,100 @@ export const WorldDatapacksView: Component<{
 }> = (props) => {
 	const key = createMemo(() => worldRefKey(props.world.ref));
 	const [busyResourceId, setBusyResourceId] = createSignal<number | null>(null);
+	const [projectIcons, setProjectIcons] = createSignal<Record<string, string>>(
+		{},
+	);
 	const overview = createMemo(() => worldDatapacksState.byWorld[key()]);
 	const updates = createMemo(() => worldDatapacksState.updatesByWorld[key()]);
+	const projectRefs = createMemo<ProviderProjectRef[]>(() => {
+		const refs = new Map<string, ProviderProjectRef>();
+		for (const entry of overview()?.entries ?? []) {
+			const key = projectKey(entry.platform, entry.projectId);
+			if (key && entry.platform && entry.projectId) {
+				refs.set(key, {
+					platform: entry.platform.toLowerCase(),
+					id: entry.projectId,
+				});
+			}
+		}
+		return [...refs.values()];
+	});
+	let iconRequestGeneration = 0;
 
 	createEffect(() => {
 		props.world.ref.instanceId;
 		props.world.ref.directoryName;
 		void listWorldDatapacks(props.world.ref).catch(() => undefined);
 		void checkWorldDatapackUpdates(props.world.ref).catch(() => undefined);
+	});
+
+	createEffect(() => {
+		const worldKey = key();
+		const refs = projectRefs();
+		const generation = ++iconRequestGeneration;
+		onCleanup(() => {
+			if (iconRequestGeneration === generation) iconRequestGeneration += 1;
+		});
+		setProjectIcons({});
+		if (refs.length === 0) return;
+
+		const publish = (records: ResourceProjectOverviewRecord[]) => {
+			if (generation !== iconRequestGeneration || key() !== worldKey) return;
+			setProjectIcons((current) => {
+				const next = { ...current };
+				for (const record of records) {
+					if (record.icon_url) {
+						next[`${record.source.toLowerCase()}:${record.id}`] =
+							record.icon_url;
+					}
+				}
+				return next;
+			});
+		};
+
+		void (async () => {
+			try {
+				const cached = await invoke<ResourceProjectOverviewRecord[]>(
+					"get_cached_resource_projects_by_provider",
+					{ refs, hydrateIcons: false },
+				);
+				publish(cached);
+
+				const supportedRefs = refs.filter(
+					(ref): ref is ResourceProjectRef =>
+						ref.platform === "modrinth" || ref.platform === "curseforge",
+				);
+				if (supportedRefs.length > 0) {
+					const metadata = await invoke<ResourceProjectOverviewRecord[]>(
+						"get_or_hydrate_resource_projects",
+						{
+							refs: supportedRefs,
+							allowNetwork: true,
+							refreshStale: false,
+						},
+					);
+					publish(metadata);
+					const icons = await invoke<ResourceProjectOverviewRecord[]>(
+						"hydrate_resource_project_icons",
+						{ refs: supportedRefs },
+					);
+					publish(icons);
+				}
+
+				const cachedProviderRefs = refs.filter(
+					(ref) => ref.platform !== "modrinth" && ref.platform !== "curseforge",
+				);
+				if (cachedProviderRefs.length > 0) {
+					const icons = await invoke<ResourceProjectOverviewRecord[]>(
+						"get_cached_resource_projects_by_provider",
+						{ refs: cachedProviderRefs, hydrateIcons: true },
+					);
+					publish(icons);
+				}
+			} catch (error) {
+				console.warn("Failed to load world datapack icons:", error);
+			}
+		})();
 	});
 
 	const refresh = () =>
@@ -329,7 +443,7 @@ export const WorldDatapacksView: Component<{
 			class={styles.root}
 			aria-label={`Datapacks in ${props.world.displayName}`}
 		>
-			<header class={styles.hero}>
+			<header class={styles["context-rail"]}>
 				<Button
 					size="sm"
 					variant="ghost"
@@ -342,12 +456,11 @@ export const WorldDatapacksView: Component<{
 					<BackIcon />
 				</Button>
 				<WorldIcon
-					class={styles["world-icon"]}
+					class={styles["context-icon"]}
 					src={props.world.iconDataUrl}
 					name={props.world.displayName}
 				/>
-				<div class={styles["hero-copy"]}>
-					<p class={styles.eyebrow}>World datapacks</p>
+				<div class={styles["context-copy"]}>
 					<h2>{props.world.displayName}</h2>
 					<div class={styles["world-meta"]}>
 						<span title="World folder">{props.world.folderName}</span>
@@ -360,13 +473,6 @@ export const WorldDatapacksView: Component<{
 							</span>
 						</Show>
 					</div>
-				</div>
-			</header>
-
-			<div class={styles.toolbar}>
-				<div>
-					<h3>Datapacks</h3>
-					<p>Each pack here belongs only to this world.</p>
 				</div>
 				<div class={styles.actions}>
 					<Button
@@ -402,7 +508,7 @@ export const WorldDatapacksView: Component<{
 						Add datapack
 					</Button>
 				</div>
-			</div>
+			</header>
 
 			<Show
 				when={!worldDatapacksState.loading[key()] || overview()}
@@ -451,6 +557,11 @@ export const WorldDatapacksView: Component<{
 										entry={entry}
 										world={props.world}
 										busy={busyResourceId() === entry.resourceId}
+										icon={
+											projectIcons()[
+												projectKey(entry.platform, entry.projectId) ?? ""
+											]
+										}
 										update={updates()?.updates.find(
 											(update) => update.resourceId === entry.resourceId,
 										)}

@@ -1,4 +1,4 @@
-use crate::tasks::manager::TaskManager;
+use crate::tasks::manager::{resourcepacks_conflict_key, world_conflict_key, TaskManager};
 use crate::tasks::world_transfer::WorldTransferTask;
 use crate::worlds::install_selection;
 use crate::worlds::transfer::TransferMode;
@@ -98,13 +98,20 @@ pub fn open_world_datapacks_folder(world_ref: WorldRef) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn toggle_world_datapack(
+pub async fn toggle_world_datapack(
     app_handle: tauri::AppHandle,
     world_manager: State<'_, WorldManager>,
+    task_manager: State<'_, TaskManager>,
     world_ref: WorldRef,
     resource_id: i32,
     enabled: bool,
 ) -> Result<(), String> {
+    let _conflict_guard = task_manager
+        .acquire_conflicts([world_conflict_key(
+            world_ref.instance_id,
+            &world_ref.directory_name,
+        )])
+        .await;
     crate::worlds::datapacks::toggle_world_datapack(&world_ref, resource_id, enabled)?;
     world_manager.invalidate(world_ref.instance_id);
     let rows_result = crate::resources::reconciliation::emit_rows_changed(
@@ -117,18 +124,30 @@ pub fn toggle_world_datapack(
         &world_ref,
         "datapack-toggled",
     );
-    world_result?;
-    rows_result.map_err(|error| error.to_string())
+    if let Err(error) = world_result {
+        log::warn!("Datapack was toggled, but World change notification failed: {error}");
+    }
+    if let Err(error) = rows_result {
+        log::warn!("Datapack was toggled, but Resource change notification failed: {error}");
+    }
+    Ok(())
 }
 
 #[tauri::command]
-pub fn delete_world_datapack(
+pub async fn delete_world_datapack(
     app_handle: tauri::AppHandle,
     world_manager: State<'_, WorldManager>,
+    task_manager: State<'_, TaskManager>,
     world_ref: WorldRef,
     resource_id: i32,
-) -> Result<(), String> {
-    crate::worlds::datapacks::delete_world_datapack(&world_ref, resource_id)?;
+) -> Result<crate::worlds::datapacks::WorldDatapackRemoval, String> {
+    let _conflict_guard = task_manager
+        .acquire_conflicts([
+            world_conflict_key(world_ref.instance_id, &world_ref.directory_name),
+            resourcepacks_conflict_key(world_ref.instance_id),
+        ])
+        .await;
+    let removal = crate::worlds::datapacks::delete_world_datapack(&world_ref, resource_id)?;
     world_manager.invalidate(world_ref.instance_id);
     let rows_result = crate::resources::reconciliation::emit_rows_changed(
         &app_handle,
@@ -140,8 +159,13 @@ pub fn delete_world_datapack(
         &world_ref,
         "datapack-deleted",
     );
-    world_result?;
-    rows_result.map_err(|error| error.to_string())
+    if let Err(error) = world_result {
+        log::warn!("Datapack was deleted, but World change notification failed: {error}");
+    }
+    if let Err(error) = rows_result {
+        log::warn!("Datapack was deleted, but Resource change notification failed: {error}");
+    }
+    Ok(removal)
 }
 
 #[tauri::command]

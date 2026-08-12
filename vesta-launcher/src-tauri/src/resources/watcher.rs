@@ -399,6 +399,17 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
         }
     }
 
+    // Debounced rename/staging bursts may contain both remove and create for
+    // one path. Reconcile from final disk state so a managed publication does
+    // not unlink the newly committed Ledger row.
+    for path in removed.clone() {
+        if path.exists() {
+            removed.remove(&path);
+            if is_resource_file(&path) {
+                changed.insert(path);
+            }
+        }
+    }
     changed.retain(|path| !removed.contains(path));
     if !changed.is_empty() {
         let candidates = crate::resources::reconciliation::candidates_from_paths(

@@ -100,4 +100,27 @@ mod tests {
     fn unknown_selection_id_is_rejected() {
         assert!(submit_selection("missing", vec!["candidate-1".into()]).is_err());
     }
+
+    #[tokio::test]
+    async fn selected_candidate_ids_are_delivered_once() {
+        let id = Uuid::new_v4().to_string();
+        let (sender, receiver) = oneshot::channel();
+        pending().lock().unwrap().insert(id.clone(), sender);
+
+        submit_selection(&id, vec!["one".into(), "two".into()]).unwrap();
+
+        assert_eq!(receiver.await.unwrap(), vec!["one", "two"]);
+        assert!(submit_selection(&id, vec!["one".into()]).is_err());
+    }
+
+    #[tokio::test]
+    async fn empty_selection_is_delivered_as_cancellation() {
+        let id = Uuid::new_v4().to_string();
+        let (sender, receiver) = oneshot::channel();
+        pending().lock().unwrap().insert(id.clone(), sender);
+
+        submit_selection(&id, Vec::new()).unwrap();
+
+        assert!(receiver.await.unwrap().is_empty());
+    }
 }

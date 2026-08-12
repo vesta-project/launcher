@@ -1,5 +1,8 @@
 use crate::models::instance::Instance;
-use crate::tasks::manager::{BoxFuture, Task, TaskContext};
+use crate::tasks::manager::{
+    resourcepacks_conflict_key, saves_conflict_key, world_conflict_key, BoxFuture, Task,
+    TaskContext,
+};
 use crate::worlds::transfer::{self, TransferMode};
 use crate::worlds::WorldRef;
 use std::sync::{Arc, Mutex};
@@ -47,6 +50,15 @@ impl Task for WorldTransferTask {
 
     fn cancellable(&self) -> bool {
         false
+    }
+
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![
+            world_conflict_key(self.source_instance.id, &self.world_ref.directory_name),
+            resourcepacks_conflict_key(self.source_instance.id),
+            saves_conflict_key(self.destination_instance.id),
+            resourcepacks_conflict_key(self.destination_instance.id),
+        ]
     }
 
     fn show_completion_notification(&self) -> bool {
@@ -145,7 +157,10 @@ impl Task for WorldTransferTask {
                 TransferMode::Copy => "copied",
                 TransferMode::Duplicate => "duplicated",
             };
-            for instance_id in [source.id, destination.id] {
+            let mut affected_instances = vec![source.id, destination.id];
+            affected_instances.sort_unstable();
+            affected_instances.dedup();
+            for instance_id in affected_instances {
                 if let Some(world_manager) =
                     ctx.app_handle.try_state::<crate::worlds::WorldManager>()
                 {

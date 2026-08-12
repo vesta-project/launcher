@@ -1,7 +1,9 @@
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{ReleaseType, ResourceType, ResourceVersion, SourcePlatform};
 use crate::utils::instance_helpers::normalize_path;
-use crate::worlds::manifest::{ManagedComponentKind, MetadataStatus, WorldManifest};
+use crate::worlds::manifest::{
+    ComponentScope, ManagedComponent, ManagedComponentKind, MetadataStatus, WorldManifest,
+};
 use crate::worlds::WorldRef;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -59,6 +61,14 @@ pub struct WorldDatapackUpdateStatus {
 pub enum DatapackEntryKind {
     File,
     Directory,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldDatapackRemoval {
+    pub removed_companion_count: usize,
+    pub retained_companion_count: usize,
+    pub cleanup_warning: Option<String>,
 }
 
 pub fn list_world_datapacks(world_ref: &WorldRef) -> Result<WorldDatapackOverview, String> {
@@ -234,53 +244,400 @@ pub fn toggle_world_datapack(
     Ok(())
 }
 
-pub fn delete_world_datapack(world_ref: &WorldRef, resource_id: i32) -> Result<(), String> {
+pub fn delete_world_datapack(
+    world_ref: &WorldRef,
+    resource_id: i32,
+) -> Result<WorldDatapackRemoval, String> {
     let datapacks_root = resolve_datapacks_root(world_ref, false)?
         .ok_or_else(|| "This world has no datapacks directory".to_string())?;
     let resource = crate::resources::ledger::get_resource(world_ref.instance_id, resource_id)
         .map_err(|error| format!("Failed to find datapack: {error}"))?;
     validate_resource(&resource, &datapacks_root)?;
 
-    let original = PathBuf::from(&resource.local_path);
-    let staged = datapacks_root.join(format!(".vesta-delete-{}.tmp", Uuid::new_v4()));
-    fs::rename(&original, &staged)
-        .map_err(|error| format!("Failed to stage datapack deletion: {error}"))?;
+    delete_world_datapack_bundle(world_ref, resource, &datapacks_root)
+}
 
-    let managed = match crate::worlds::manifest::managed_datapack_manifest(&resource) {
-        Ok(value) => value,
-        Err(error) => {
-            let _ = fs::rename(&staged, &original);
-            return Err(error);
-        }
-    };
-    let mut manifest_backup = None;
-    if let Some((world, mut manifest, component_index)) = managed {
-        if world != datapacks_root.parent().unwrap_or(Path::new("")) {
-            let _ = fs::rename(&staged, &original);
+#[derive(Debug)]
+struct StagedFileRemoval {
+    original: PathBuf,
+    staged: PathBuf,
+}
+
+fn delete_world_datapack_bundle(
+    world_ref: &WorldRef,
+    resource: InstalledResource,
+    datapacks_root: &Path,
+) -> Result<WorldDatapackRemoval, String> {
+    let world_root = datapacks_root
+        .parent()
+        .ok_or_else(|| "Invalid world datapacks directory".to_string())?;
+    let instance = crate::commands::instances::get_instance(world_ref.instance_id)?;
+    let game_root = crate::worlds::instance_game_directory(&instance)?;
+    let saves_root = game_root.join("saves");
+    let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)?;
+
+    let mut manifest_publication = None;
+    let mut companion_files = Vec::new();
+    let mut retained_companion_count = 0;
+    if let Some((managed_world, mut manifest, component_index)) = managed {
+        if managed_world != world_root {
             return Err("The managed datapack belongs to another world".to_string());
         }
-        let previous = manifest.clone();
-        manifest.managed_components.remove(component_index);
-        manifest.updated_at = Utc::now();
-        if let Err(error) = crate::worlds::manifest::write_manifest(&world, &manifest) {
-            let _ = fs::rename(&staged, &original);
-            return Err(error);
+        let bundle_id = manifest.managed_components[component_index].bundle_id;
+        let companions = manifest
+            .managed_components
+            .iter()
+            .filter(|component| {
+                component.bundle_id == bundle_id
+                    && component.kind == ManagedComponentKind::CompanionResourcepack
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for companion in &companions {
+            let path = managed_companion_path(&game_root, companion)?;
+            if companion_is_referenced_in_manifest(&manifest, bundle_id, &companion.relative_path)
+                || companion_is_referenced_elsewhere(
+                    &saves_root,
+                    world_root,
+                    &companion.relative_path,
+                )
+                || !managed_companion_matches(&path, companion)
+            {
+                retained_companion_count += 1;
+            } else {
+                companion_files.push(path);
+            }
         }
-        manifest_backup = Some((world, previous));
+        let previous = manifest.clone();
+        manifest.managed_components.retain(|component| {
+            component.bundle_id != bundle_id
+                || (component.kind != ManagedComponentKind::Datapack
+                    && component.kind != ManagedComponentKind::CompanionResourcepack)
+        });
+        manifest.updated_at = Utc::now();
+        manifest_publication = Some((managed_world, previous, manifest));
     }
 
-    if let Err(error) =
-        crate::resources::ledger::remove_resource(world_ref.instance_id, resource_id)
-    {
-        let _ = fs::rename(&staged, &original);
-        if let Some((world, previous)) = manifest_backup {
-            let _ = crate::worlds::manifest::write_manifest(&world, &previous);
+    companion_files.sort();
+    companion_files.dedup();
+    let mut staged = Vec::with_capacity(1 + companion_files.len());
+    stage_removal(Path::new(&resource.local_path), &mut staged, "datapack")?;
+    for companion in &companion_files {
+        if let Err(error) = stage_removal(companion, &mut staged, "companion") {
+            return Err(with_rollback(error, restore_staged_files(&staged)));
         }
-        return Err(format!("Failed to delete datapack: {error}"));
     }
-    fs::remove_file(&staged)
-        .map_err(|error| format!("Datapack was removed, but cleanup failed: {error}"))?;
+
+    if let Some((world, _, manifest)) = &manifest_publication {
+        if let Err(error) = crate::worlds::manifest::write_manifest(world, manifest) {
+            return Err(with_rollback(error, restore_staged_files(&staged)));
+        }
+    }
+
+    let mut resource_ids = vec![resource.id];
+    for path in &companion_files {
+        match crate::resources::ledger::get_resource_by_path(world_ref.instance_id, path) {
+            Ok(Some(row)) if row.resource_type.eq_ignore_ascii_case("resourcepack") => {
+                resource_ids.push(row.id);
+            }
+            Ok(_) => {}
+            Err(error) => {
+                return Err(with_rollback(
+                    format!("Failed to inspect companion Resource: {error}"),
+                    restore_bundle_removal(&staged, manifest_publication.as_ref()),
+                ));
+            }
+        }
+    }
+    if let Err(error) =
+        crate::resources::ledger::remove_resource_rows(world_ref.instance_id, &resource_ids)
+    {
+        return Err(with_rollback(
+            format!("Failed to update installed Resource records: {error}"),
+            restore_bundle_removal(&staged, manifest_publication.as_ref()),
+        ));
+    }
+
+    let cleanup_failures = staged
+        .iter()
+        .filter_map(|entry| {
+            fs::remove_file(&entry.staged)
+                .err()
+                .map(|error| format!("{}: {error}", entry.staged.display()))
+        })
+        .collect::<Vec<_>>();
+    Ok(WorldDatapackRemoval {
+        removed_companion_count: companion_files.len(),
+        retained_companion_count,
+        cleanup_warning: (!cleanup_failures.is_empty()).then(|| {
+            format!(
+                "Removed the bundle, but temporary-file cleanup failed: {}",
+                cleanup_failures.join("; ")
+            )
+        }),
+    })
+}
+
+fn stage_removal(
+    original: &Path,
+    staged: &mut Vec<StagedFileRemoval>,
+    label: &str,
+) -> Result<(), String> {
+    let parent = original
+        .parent()
+        .ok_or_else(|| format!("Invalid managed {label} path"))?;
+    let temporary = parent.join(format!(".vesta-delete-{}-{label}.tmp", Uuid::new_v4()));
+    fs::rename(original, &temporary).map_err(|error| {
+        format!(
+            "Failed to stage managed {label} {} for removal: {error}",
+            original.display()
+        )
+    })?;
+    staged.push(StagedFileRemoval {
+        original: original.to_path_buf(),
+        staged: temporary,
+    });
     Ok(())
+}
+
+fn restore_staged_files(staged: &[StagedFileRemoval]) -> Result<(), String> {
+    let mut failures = Vec::new();
+    for entry in staged.iter().rev() {
+        if entry.staged.exists() && !entry.original.exists() {
+            if let Err(error) = fs::rename(&entry.staged, &entry.original) {
+                failures.push(format!("{}: {error}", entry.original.display()));
+            }
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "failed to restore staged files: {}",
+            failures.join("; ")
+        ))
+    }
+}
+
+fn restore_bundle_removal(
+    staged: &[StagedFileRemoval],
+    manifest_publication: Option<&(PathBuf, WorldManifest, WorldManifest)>,
+) -> Result<(), String> {
+    let files = restore_staged_files(staged).err();
+    let mut manifest_error = None;
+    if let Some((world, previous, _)) = manifest_publication {
+        manifest_error = crate::worlds::manifest::write_manifest(world, previous).err();
+    }
+    match (files, manifest_error) {
+        (None, None) => Ok(()),
+        (files, manifest) => Err([files, manifest]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("; ")),
+    }
+}
+
+fn with_rollback(error: String, rollback: Result<(), String>) -> String {
+    match rollback {
+        Ok(()) => error,
+        Err(rollback_error) => format!("{error}; rollback also failed: {rollback_error}"),
+    }
+}
+
+fn managed_companion_path(
+    game_root: &Path,
+    component: &ManagedComponent,
+) -> Result<PathBuf, String> {
+    if component.scope != ComponentScope::Instance {
+        return Err("Managed companion Resource pack has an invalid scope".to_string());
+    }
+    let relative = Path::new(&component.relative_path);
+    let components = relative.components().collect::<Vec<_>>();
+    if relative.is_absolute()
+        || components.iter().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        })
+        || components.len() != 2
+        || components[0].as_os_str() != "resourcepacks"
+        || !matches!(components[1], std::path::Component::Normal(_))
+    {
+        return Err("World metadata contains an unsafe companion Resource path".to_string());
+    }
+    Ok(game_root.join(relative))
+}
+
+fn managed_companion_matches(path: &Path, component: &ManagedComponent) -> bool {
+    let parent_metadata = path
+        .parent()
+        .and_then(|parent| fs::symlink_metadata(parent).ok());
+    if !parent_metadata
+        .is_some_and(|metadata| metadata.file_type().is_dir() && !metadata.file_type().is_symlink())
+    {
+        return false;
+    }
+    let metadata = fs::symlink_metadata(path).ok();
+    if !metadata.is_some_and(|metadata| {
+        metadata.file_type().is_file() && !metadata.file_type().is_symlink()
+    }) {
+        return false;
+    }
+    sha1_path(path).is_some_and(|hash| hash.eq_ignore_ascii_case(&component.sha1))
+}
+
+fn companion_is_referenced_in_manifest(
+    manifest: &WorldManifest,
+    removing_bundle_id: Uuid,
+    relative_path: &str,
+) -> bool {
+    let expected = normalize_manifest_path(relative_path);
+    manifest.managed_components.iter().any(|component| {
+        component.bundle_id != removing_bundle_id
+            && component.kind == ManagedComponentKind::CompanionResourcepack
+            && component.scope == ComponentScope::Instance
+            && normalize_manifest_path(&component.relative_path) == expected
+    })
+}
+
+fn sha1_path(path: &Path) -> Option<String> {
+    use sha1::{Digest, Sha1};
+    use std::io::Read;
+
+    let mut file = fs::File::open(path).ok()?;
+    let mut hasher = Sha1::new();
+    let mut buffer = [0_u8; 128 * 1024];
+    loop {
+        let read = file.read(&mut buffer).ok()?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Some(hex::encode(hasher.finalize()))
+}
+
+/// Unknown or unreadable metadata is treated as a possible reference. It is
+/// safer to retain an orphaned Resource pack than to remove one another World
+/// may still require.
+fn companion_is_referenced_elsewhere(
+    saves_root: &Path,
+    current_world: &Path,
+    relative_path: &str,
+) -> bool {
+    let Ok(entries) = fs::read_dir(saves_root) else {
+        return true;
+    };
+    let expected = normalize_manifest_path(relative_path);
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path == current_world
+            || !entry
+                .file_type()
+                .is_ok_and(|file_type| file_type.is_dir() && !file_type.is_symlink())
+            || !crate::worlds::level_dat::has_level_marker(&path)
+        {
+            continue;
+        }
+        let read = crate::worlds::manifest::read_manifest(&path);
+        match read.status {
+            MetadataStatus::Valid => {
+                if read.manifest.is_some_and(|manifest| {
+                    manifest.managed_components.iter().any(|component| {
+                        component.kind == ManagedComponentKind::CompanionResourcepack
+                            && component.scope == ComponentScope::Instance
+                            && normalize_manifest_path(&component.relative_path) == expected
+                    })
+                }) {
+                    return true;
+                }
+            }
+            MetadataStatus::Corrupt | MetadataStatus::Future => return true,
+            MetadataStatus::Absent => {}
+        }
+    }
+    false
+}
+
+/// Returns true when an instance Resource pack may still be owned by any
+/// managed World. Unreadable topology or metadata is intentionally treated as
+/// a possible reference so generic Resource actions cannot break a bundle.
+pub fn companion_resourcepack_may_be_referenced(
+    instance_id: i32,
+    resourcepack_path: &Path,
+) -> Result<bool, String> {
+    let instance = crate::commands::instances::get_instance(instance_id)?;
+    let game_root = crate::worlds::instance_game_directory(&instance)?;
+    companion_resourcepack_may_be_referenced_in_game_root(&game_root, resourcepack_path)
+}
+
+fn companion_resourcepack_may_be_referenced_in_game_root(
+    game_root: &Path,
+    resourcepack_path: &Path,
+) -> Result<bool, String> {
+    let resourcepacks_root = game_root.join("resourcepacks");
+    if resourcepack_path
+        .parent()
+        .is_none_or(|parent| normalize_path(parent) != normalize_path(&resourcepacks_root))
+    {
+        return Ok(false);
+    }
+    let relative = resourcepack_path
+        .strip_prefix(&game_root)
+        .map_err(|_| "Resource pack escaped its Instance".to_string())?;
+    let expected = normalize_manifest_path(&relative.to_string_lossy());
+    let saves_root = game_root.join("saves");
+    let entries = fs::read_dir(&saves_root).map_err(|error| {
+        format!(
+            "Cannot verify World references in {}: {error}",
+            saves_root.display()
+        )
+    })?;
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Cannot verify every World reference in {}: {error}",
+                saves_root.display()
+            )
+        })?;
+        let world = entry.path();
+        if !entry
+            .file_type()
+            .is_ok_and(|file_type| file_type.is_dir() && !file_type.is_symlink())
+            || !crate::worlds::level_dat::has_level_marker(&world)
+        {
+            continue;
+        }
+        let read = crate::worlds::manifest::read_manifest(&world);
+        match read.status {
+            MetadataStatus::Valid => {
+                if read.manifest.is_some_and(|manifest| {
+                    manifest.managed_components.iter().any(|component| {
+                        component.kind == ManagedComponentKind::CompanionResourcepack
+                            && component.scope == ComponentScope::Instance
+                            && normalize_manifest_path(&component.relative_path) == expected
+                    })
+                }) {
+                    return Ok(true);
+                }
+            }
+            MetadataStatus::Corrupt | MetadataStatus::Future => return Ok(true),
+            MetadataStatus::Absent => {}
+        }
+    }
+    Ok(false)
+}
+
+fn normalize_manifest_path(path: &str) -> String {
+    path.replace('\\', "/")
+        .split('/')
+        .filter(|component| !component.is_empty() && *component != ".")
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 pub fn emit_world_datapacks_changed(
@@ -690,5 +1047,146 @@ mod tests {
         let outside = tempfile::NamedTempFile::new().unwrap();
         symlink(outside.path(), datapacks.join("linked.zip")).unwrap();
         assert!(list_entries(&datapacks, &[], None).unwrap().is_empty());
+    }
+
+    fn marker_world(path: &Path) {
+        fs::create_dir_all(path).unwrap();
+        fs::write(path.join("level.dat"), b"marker").unwrap();
+    }
+
+    fn companion_component(relative_path: &str, sha1: &str) -> ManagedComponent {
+        ManagedComponent {
+            bundle_id: Uuid::new_v4(),
+            kind: ManagedComponentKind::CompanionResourcepack,
+            platform: "provider".into(),
+            project_id: "project".into(),
+            version_id: "version".into(),
+            version_number: "1".into(),
+            display_name: "Pack".into(),
+            sha1: sha1.into(),
+            scope: ComponentScope::Instance,
+            relative_path: relative_path.into(),
+            installed_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn shared_companion_reference_is_retained_for_another_world() {
+        let temp = TempDir::new().unwrap();
+        let saves = temp.path().join("saves");
+        let current = saves.join("Current");
+        let other = saves.join("Other");
+        marker_world(&current);
+        marker_world(&other);
+        let mut manifest = WorldManifest::new(None);
+        manifest
+            .managed_components
+            .push(companion_component("resourcepacks/shared.zip", "abc"));
+        crate::worlds::manifest::write_manifest(&other, &manifest).unwrap();
+
+        assert!(companion_is_referenced_elsewhere(
+            &saves,
+            &current,
+            "resourcepacks/shared.zip"
+        ));
+        assert!(!companion_is_referenced_elsewhere(
+            &saves,
+            &current,
+            "resourcepacks/unused.zip"
+        ));
+    }
+
+    #[test]
+    fn shared_companion_reference_is_retained_for_another_bundle_in_the_same_world() {
+        let removing_bundle = Uuid::new_v4();
+        let mut manifest = WorldManifest::new(None);
+        let mut first = companion_component("resourcepacks/shared.zip", "abc");
+        first.bundle_id = removing_bundle;
+        manifest.managed_components.push(first);
+        manifest
+            .managed_components
+            .push(companion_component("resourcepacks/shared.zip", "abc"));
+
+        assert!(companion_is_referenced_in_manifest(
+            &manifest,
+            removing_bundle,
+            "resourcepacks/shared.zip"
+        ));
+    }
+
+    #[test]
+    fn uncertain_world_metadata_conservatively_retains_companions() {
+        let temp = TempDir::new().unwrap();
+        let saves = temp.path().join("saves");
+        let current = saves.join("Current");
+        let other = saves.join("Other");
+        marker_world(&current);
+        marker_world(&other);
+        fs::create_dir_all(other.join(".vesta")).unwrap();
+        fs::write(crate::worlds::manifest::manifest_path(&other), b"not-json").unwrap();
+
+        assert!(companion_is_referenced_elsewhere(
+            &saves,
+            &current,
+            "resourcepacks/shared.zip"
+        ));
+    }
+
+    #[test]
+    fn companion_content_must_match_manifest_hash_before_removal() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("pack.zip");
+        fs::write(&path, b"pack").unwrap();
+        let actual = sha1_path(&path).unwrap();
+        assert!(managed_companion_matches(
+            &path,
+            &companion_component("resourcepacks/pack.zip", &actual)
+        ));
+        assert!(!managed_companion_matches(
+            &path,
+            &companion_component("resourcepacks/pack.zip", "different")
+        ));
+    }
+
+    #[test]
+    fn generic_resource_actions_detect_managed_companion_references() {
+        let temp = TempDir::new().unwrap();
+        let world = temp.path().join("saves/World");
+        marker_world(&world);
+        fs::create_dir_all(temp.path().join("resourcepacks")).unwrap();
+        let pack = temp.path().join("resourcepacks/shared.zip");
+        fs::write(&pack, b"pack").unwrap();
+        let mut manifest = WorldManifest::new(None);
+        manifest
+            .managed_components
+            .push(companion_component("resourcepacks/shared.zip", "abc"));
+        crate::worlds::manifest::write_manifest(&world, &manifest).unwrap();
+
+        assert!(companion_resourcepack_may_be_referenced_in_game_root(temp.path(), &pack).unwrap());
+        assert!(!companion_resourcepack_may_be_referenced_in_game_root(
+            temp.path(),
+            &temp.path().join("resourcepacks/unmanaged.zip")
+        )
+        .unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_resourcepack_directory_is_never_removed_through() {
+        use std::os::unix::fs::symlink;
+
+        let temp = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let path = outside.path().join("pack.zip");
+        fs::write(&path, b"pack").unwrap();
+        symlink(outside.path(), temp.path().join("resourcepacks")).unwrap();
+        let linked_path = temp.path().join("resourcepacks/pack.zip");
+        let actual = sha1_path(&linked_path).unwrap();
+
+        assert!(!managed_companion_matches(
+            &linked_path,
+            &companion_component("resourcepacks/pack.zip", &actual)
+        ));
+        assert!(path.exists());
     }
 }

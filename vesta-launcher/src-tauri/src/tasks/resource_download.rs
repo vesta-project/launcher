@@ -2,7 +2,9 @@ use crate::models::resource::{ResourceType, ResourceVersion, ResourceVersionFile
 use crate::notifications::models::PROGRESS_INDETERMINATE;
 use crate::resources::ledger::DownloadLedgerEntry;
 use crate::schema::instance::dsl as instances_dsl;
-use crate::tasks::manager::{Task, TaskContext};
+use crate::tasks::manager::{
+    resourcepacks_conflict_key, saves_conflict_key, world_conflict_key, Task, TaskContext,
+};
 use crate::utils::db::get_vesta_conn;
 pub use crate::worlds::ResourceInstallTarget;
 use diesel::prelude::*;
@@ -230,23 +232,44 @@ fn companion_path_is_shared(
         return true;
     };
     let Ok(worlds) = std::fs::read_dir(instance_path.join("saves")) else {
-        return false;
+        return true;
     };
-    worlds.flatten().any(|entry| {
+    for entry in worlds {
+        let Ok(entry) = entry else {
+            return true;
+        };
         let world = entry.path();
-        if world == current_world {
-            return false;
+        if !entry
+            .file_type()
+            .is_ok_and(|file_type| file_type.is_dir() && !file_type.is_symlink())
+            || !crate::worlds::level_dat::has_level_marker(&world)
+        {
+            continue;
         }
-        crate::worlds::manifest::read_manifest(&world)
-            .manifest
-            .is_some_and(|manifest| {
-                manifest.managed_components.iter().any(|component| {
-                    component.kind
-                        == crate::worlds::manifest::ManagedComponentKind::CompanionResourcepack
-                        && Path::new(&component.relative_path) == relative
-                })
-            })
-    })
+        let read = crate::worlds::manifest::read_manifest(&world);
+        match read.status {
+            crate::worlds::manifest::MetadataStatus::Valid => {
+                let references = read.manifest.map_or(0, |manifest| {
+                    manifest
+                        .managed_components
+                        .iter()
+                        .filter(|component| {
+                            component.kind
+                                == crate::worlds::manifest::ManagedComponentKind::CompanionResourcepack
+                                && Path::new(&component.relative_path) == relative
+                        })
+                        .count()
+                });
+                if references > usize::from(world == current_world) {
+                    return true;
+                }
+            }
+            crate::worlds::manifest::MetadataStatus::Corrupt
+            | crate::worlds::manifest::MetadataStatus::Future => return true,
+            crate::worlds::manifest::MetadataStatus::Absent => {}
+        }
+    }
+    false
 }
 
 async fn download_artifact(
@@ -403,6 +426,37 @@ impl Task for ResourceDownloadTask {
 
     fn cancellable(&self) -> bool {
         true
+    }
+
+    fn conflict_keys(&self) -> Vec<String> {
+        let Ok(artifacts) = plan_artifacts(&self.version, self.resource_type) else {
+            return Vec::new();
+        };
+        let instance_id = target_instance_id(&self.target);
+        let mut keys = Vec::new();
+
+        if artifacts
+            .iter()
+            .any(|artifact| artifact.resource_type == ResourceType::DataPack)
+        {
+            if let ResourceInstallTarget::World { world } = &self.target {
+                keys.push(world_conflict_key(world.instance_id, &world.directory_name));
+            }
+        }
+        if artifacts
+            .iter()
+            .any(|artifact| artifact.resource_type == ResourceType::ResourcePack)
+        {
+            keys.push(resourcepacks_conflict_key(instance_id));
+        }
+        if artifacts
+            .iter()
+            .any(|artifact| artifact.resource_type == ResourceType::World)
+        {
+            keys.push(saves_conflict_key(instance_id));
+        }
+
+        keys
     }
 
     fn show_completion_notification(&self) -> bool {
@@ -1011,5 +1065,65 @@ mod tests {
             &version(vec![]),
             ResourceType::DataPack
         ));
+    }
+
+    #[test]
+    fn combined_world_bundle_locks_world_and_companion_directory() {
+        let task = ResourceDownloadTask {
+            target: ResourceInstallTarget::World {
+                world: crate::worlds::WorldRef {
+                    instance_id: 7,
+                    directory_name: "New World".to_string(),
+                },
+            },
+            platform: SourcePlatform::Modrinth,
+            project_id: "project".to_string(),
+            project_name: "Bundle".to_string(),
+            version: version(vec![
+                ResourceVersionFile {
+                    url: "https://example.invalid/data.zip".to_string(),
+                    file_name: "data.zip".to_string(),
+                    hash: String::new(),
+                    file_size: None,
+                    role: "datapack".to_string(),
+                },
+                ResourceVersionFile {
+                    url: "https://example.invalid/resources.zip".to_string(),
+                    file_name: "resources.zip".to_string(),
+                    hash: String::new(),
+                    file_size: None,
+                    role: "resourcepack".to_string(),
+                },
+            ]),
+            resource_type: ResourceType::DataPack,
+            dependency_for: None,
+            replacement_resource_id: None,
+        };
+
+        let mut keys = task.conflict_keys();
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                resourcepacks_conflict_key(7),
+                world_conflict_key(7, "New World"),
+            ]
+        );
+    }
+
+    #[test]
+    fn world_archive_install_locks_the_destination_saves_directory() {
+        let task = ResourceDownloadTask {
+            target: ResourceInstallTarget::Instance { instance_id: 9 },
+            platform: SourcePlatform::Modrinth,
+            project_id: "world".to_string(),
+            project_name: "World".to_string(),
+            version: version(vec![]),
+            resource_type: ResourceType::World,
+            dependency_for: None,
+            replacement_resource_id: None,
+        };
+
+        assert_eq!(task.conflict_keys(), vec![saves_conflict_key(9)]);
     }
 }
