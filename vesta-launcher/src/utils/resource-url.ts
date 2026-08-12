@@ -3,7 +3,8 @@ import type { SourcePlatform } from "@stores/resources";
 export interface ParsedResourceUrl {
 	platform: SourcePlatform;
 	id: string;
-	activeTab?: "description" | "versions" | "gallery" | "dependencies";
+	activeTab?: "description" | "versions" | "gallery";
+	versionId?: string;
 }
 
 /**
@@ -63,13 +64,19 @@ export function parseResourceUrl(url: string): ParsedResourceUrl | null {
 				];
 				if (validTypes.includes(type)) {
 					let activeTab: ParsedResourceUrl["activeTab"];
+					let versionId: string | undefined;
 					if (tab === "gallery") activeTab = "gallery";
 					else if (tab === "versions") activeTab = "versions";
+					else if (tab === "version" && pathParts[3]) {
+						activeTab = "versions";
+						versionId = pathParts[3];
+					}
 
 					return {
 						platform: "modrinth",
 						id: slug,
 						activeTab,
+						...(versionId ? { versionId } : {}),
 					};
 				}
 			}
@@ -82,17 +89,21 @@ export function parseResourceUrl(url: string): ParsedResourceUrl | null {
 				const slug = pathParts[2];
 				const subPath = pathParts.slice(3).join("/");
 				let activeTab: ParsedResourceUrl["activeTab"];
+				let versionId: string | undefined;
 
 				if (subPath === "gallery") {
 					activeTab = "gallery";
 				} else if (subPath.startsWith("files")) {
 					activeTab = "versions";
+					const fileId = pathParts[4];
+					if (fileId && /^\d+$/.test(fileId)) versionId = fileId;
 				}
 
 				return {
 					platform: "curseforge",
 					id: slug,
 					activeTab,
+					...(versionId ? { versionId } : {}),
 				};
 			}
 		}
@@ -103,6 +114,22 @@ export function parseResourceUrl(url: string): ParsedResourceUrl | null {
 			if (pathParts[0] === "projects" && pathParts[1]) {
 				return {
 					platform: "curseforge",
+					id: pathParts[1],
+				};
+			}
+		}
+
+		// 4. Smithed
+		// e.g. smithed.dev/packs/coc , nightly.smithed.net/packs/coc
+		if (
+			hostname === "smithed.dev" ||
+			hostname.endsWith(".smithed.dev") ||
+			hostname === "smithed.net" ||
+			hostname.endsWith(".smithed.net")
+		) {
+			if (pathParts[0] === "packs" && pathParts[1]) {
+				return {
+					platform: "smithed",
 					id: pathParts[1],
 				};
 			}

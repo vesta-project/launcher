@@ -17,6 +17,7 @@ import {
 	findBestVersionForInstance,
 	findInstalledResource,
 	isResourceUpdateAvailable,
+	requiresWorldTarget,
 } from "@utils/resource-install-intent";
 import { getProjectCompatibilityForInstance } from "@utils/resources";
 import {
@@ -49,9 +50,12 @@ const ResourceCard: Component<{
 	project: ResourceProject;
 	viewMode: "grid" | "list";
 	router?: MiniRouter;
+	installSelectionActive?: boolean;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
+	const installType = () => resources.state.resourceType;
 	const isInstalled = createMemo(() => {
+		if (installType() === "datapack") return false;
 		const instanceId = resources.state.selectedInstanceId;
 		return !!findInstalledResource(
 			props.project,
@@ -63,6 +67,7 @@ const ResourceCard: Component<{
 	});
 
 	const installedResource = createMemo(() => {
+		if (installType() === "datapack") return undefined;
 		const instanceId = resources.state.selectedInstanceId;
 		return findInstalledResource(
 			props.project,
@@ -81,7 +86,10 @@ const ResourceCard: Component<{
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
 	const [latestCompatibleVersion, setLatestCompatibleVersion] =
 		createSignal<ResourceVersion | null>(null);
-	const installing = () => localInstalling() || isInstallingProject();
+	const installing = () =>
+		localInstalling() ||
+		Boolean(props.installSelectionActive) ||
+		(installType() !== "datapack" && isInstallingProject());
 
 	const isUpdateAvailable = createMemo(() => {
 		return isResourceUpdateAvailable(
@@ -102,7 +110,13 @@ const ResourceCard: Component<{
 						project.source,
 						project.id,
 					);
-					const best = findBestVersionForInstance(project, versions, inst);
+					const best = findBestVersionForInstance(
+						project,
+						versions,
+						inst,
+						"release",
+						installType(),
+					);
 					setLatestCompatibleVersion(best);
 				} catch (_) {
 					// Silently fail
@@ -120,7 +134,11 @@ const ResourceCard: Component<{
 		const instance = instancesState.instances.find((i) => i.id === instanceId);
 		if (!instance) return { type: "compatible" as const };
 
-		return getProjectCompatibilityForInstance(props.project, instance);
+		return getProjectCompatibilityForInstance(
+			props.project,
+			instance,
+			installType(),
+		);
 	});
 
 	const buttonVariant = createMemo(() => {
@@ -145,9 +163,28 @@ const ResourceCard: Component<{
 
 	const bgImage = createMemo(() => {
 		const p = props.project;
-		if (p.featured_gallery) return p.featured_gallery;
-		if (p.gallery.length > 0) return p.gallery[0];
-		return null;
+		// Prefer the first gallery image for browse banners.
+		const remote =
+			p.gallery.length > 0
+				? p.gallery[0]
+				: (p.featured_gallery ?? null);
+		if (!remote) return null;
+		const resolved = resources.resolvedBrowseImage(remote);
+		if (resolved) return resolved;
+		// Remaining Smithed API gallery redirects (e.g. bucket type) still need
+		// resolve_image_urls warm; file-type banners use Firebase CDN directly.
+		if (remote.includes("api.smithed.dev")) return null;
+		return remote;
+	});
+
+	// Keep the dot-grid fallback visible until the banner finishes loading
+	// (covers Modrinth/CurseForge CDN, Smithed Firebase, and warmed data URLs).
+	const [loadedBannerUrl, setLoadedBannerUrl] = createSignal<string | null>(
+		null,
+	);
+	const bannerReady = createMemo(() => {
+		const url = bgImage();
+		return Boolean(url && loadedBannerUrl() === url);
 	});
 
 	const iconHue = createMemo(() => {
@@ -216,6 +253,7 @@ const ResourceCard: Component<{
 				platform: props.project.source,
 				name: props.project.name,
 				iconUrl: props.project.icon_url,
+				resourceType: installType(),
 			},
 			{
 				project: props.project,
@@ -225,8 +263,9 @@ const ResourceCard: Component<{
 
 	const handleQuickInstall = async (e: MouseEvent) => {
 		e.stopPropagation();
+		const requestedInstallType = installType();
 
-		if (props.project.resource_type === "modpack") {
+		if (requestedInstallType === "modpack") {
 			const prefilledModpackInfo = buildBrowseModpackInfo(props.project, null, {
 				minecraftVersion: resources.state.gameVersion,
 				loader: resources.state.loader,
@@ -254,10 +293,28 @@ const ResourceCard: Component<{
 			if (isUpdateAvailable() && latest) {
 				const instanceId = resources.state.selectedInstanceId;
 				if (!instanceId) return;
+				if (requiresWorldTarget(props.project, latest, requestedInstallType)) {
+					resources.setInstallRequest({
+						project: props.project,
+						versions: [latest],
+						version: latest,
+						preferredInstanceId: instanceId,
+						installType: requestedInstallType,
+					});
+					return;
+				}
 
 				setLocalInstalling(true);
 				try {
-					await resources.install(props.project, latest);
+					await resources.install(
+						props.project,
+						latest,
+						{
+							kind: "instance",
+							instanceId,
+						},
+						{ installType: requestedInstallType },
+					);
 					showToast({
 						title: "Update Started",
 						description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
@@ -306,10 +363,18 @@ const ResourceCard: Component<{
 					props.project.source,
 					props.project.id,
 				);
-				resources.setInstallRequest({ project: props.project, versions });
+				resources.setInstallRequest({
+					project: props.project,
+					versions,
+					installType: requestedInstallType,
+				});
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
-				resources.setInstallRequest({ project: props.project, versions: [] });
+				resources.setInstallRequest({
+					project: props.project,
+					versions: [],
+					installType: requestedInstallType,
+				});
 			} finally {
 				setLocalInstalling(false);
 			}
@@ -325,12 +390,35 @@ const ResourceCard: Component<{
 				props.project.source,
 				props.project.id,
 			);
+			if (requestedInstallType === "datapack") {
+				resources.setInstallRequest({
+					project: props.project,
+					versions,
+					installType: "datapack",
+					preferredInstanceId: instance.id,
+				});
+				return;
+			}
 			const best = findBestVersionForInstance(
 				props.project,
 				versions,
 				instance,
+				"release",
+				requestedInstallType,
 			);
 			if (best) {
+				if (
+					requiresWorldTarget(props.project, best, requestedInstallType)
+				) {
+					resources.setInstallRequest({
+						project: props.project,
+						versions,
+						version: best,
+						preferredInstanceId: instance.id,
+						installType: requestedInstallType,
+					});
+					return;
+				}
 				const instLoader = instance.modloader?.toLowerCase() || "";
 				const hasDirectLoader = best.loaders.some(
 					(l) => l.toLowerCase() === instLoader,
@@ -348,7 +436,15 @@ const ResourceCard: Component<{
 					});
 				}
 
-				await resources.install(props.project, best);
+				await resources.install(
+					props.project,
+					best,
+					{
+						kind: "instance",
+						instanceId: instance.id,
+					},
+					{ installType: requestedInstallType },
+				);
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
@@ -416,20 +512,41 @@ const ResourceCard: Component<{
 			classList={{ [styles.installed]: isInstalled() }}
 		>
 			<Show when={props.viewMode === "grid"}>
-				<Show when={bgImage()}>
-					{(imageUrl) => (
-						<div class={styles["card-image-banner"]}>
-							<img src={imageUrl()} alt="" />
-							<div class={styles["card-image-fade"]} />
-						</div>
-					)}
-				</Show>
-				<Show when={!bgImage()}>
-					<div
-						class={styles["card-image-fallback"]}
-						style={{ "--fallback-hue": String(iconHue()) }}
-					/>
-				</Show>
+				<div class={styles["card-image-banner"]}>
+					<Show when={!bannerReady()}>
+						<div
+							class={styles["card-image-fallback"]}
+							style={{ "--fallback-hue": String(iconHue()) }}
+						/>
+					</Show>
+					<Show when={bgImage()}>
+						{(imageUrl) => {
+							const url = imageUrl();
+							return (
+								<img
+									src={url}
+									alt=""
+									classList={{
+										[styles["card-image-visible"]]: bannerReady(),
+									}}
+									ref={(el) => {
+										// Cached images may already be complete before onLoad binds.
+										if (el.complete && el.naturalWidth > 0) {
+											setLoadedBannerUrl(url);
+										}
+									}}
+									onLoad={() => setLoadedBannerUrl(url)}
+									onError={() => {
+										if (loadedBannerUrl() === url) {
+											setLoadedBannerUrl(null);
+										}
+									}}
+								/>
+							);
+						}}
+					</Show>
+					<div class={styles["card-image-fade"]} />
+				</div>
 				<div class={styles["card-content"]}>
 					<div class={styles["card-row-1"]}>
 						<div class={styles["card-icon"]}>

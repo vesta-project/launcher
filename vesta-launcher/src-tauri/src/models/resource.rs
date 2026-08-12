@@ -18,6 +18,40 @@ pub enum ResourceType {
 pub enum SourcePlatform {
     Modrinth,
     CurseForge,
+    Smithed,
+}
+
+impl SourcePlatform {
+    pub const ALL: [SourcePlatform; 3] = [
+        SourcePlatform::Modrinth,
+        SourcePlatform::CurseForge,
+        SourcePlatform::Smithed,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SourcePlatform::Modrinth => "modrinth",
+            SourcePlatform::CurseForge => "curseforge",
+            SourcePlatform::Smithed => "smithed",
+        }
+    }
+
+    pub fn from_str_id(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "modrinth" => Some(SourcePlatform::Modrinth),
+            "curseforge" => Some(SourcePlatform::CurseForge),
+            "smithed" => Some(SourcePlatform::Smithed),
+            _ => None,
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            SourcePlatform::Modrinth => "Modrinth",
+            SourcePlatform::CurseForge => "CurseForge",
+            SourcePlatform::Smithed => "Smithed",
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable)]
@@ -79,6 +113,21 @@ pub struct ResourceDependency {
     pub dependency_type: DependencyType,
 }
 
+/// Extra downloadable artifact on a version (companion packs, alternate files).
+/// Primary install still uses [`ResourceVersion::download_url`] until multi-file
+/// install is wired for all sources.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ResourceVersionFile {
+    pub url: String,
+    pub file_name: String,
+    #[serde(default)]
+    pub hash: String,
+    #[serde(default)]
+    pub file_size: Option<u64>,
+    /// Semantic role such as `primary`, `datapack`, or `resourcepack`.
+    pub role: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResourceVersion {
     pub id: String,
@@ -91,7 +140,44 @@ pub struct ResourceVersion {
     pub release_type: ReleaseType,
     pub hash: String, // SHA1
     pub dependencies: Vec<ResourceDependency>,
+    #[serde(default)]
     pub published_at: Option<String>,
+    #[serde(default)]
+    pub download_count: Option<u64>,
+    #[serde(default)]
+    pub file_size: Option<u64>,
+    /// All known artifacts for this version. Empty for legacy cache rows.
+    #[serde(default)]
+    pub files: Vec<ResourceVersionFile>,
+}
+
+impl ResourceVersion {
+    pub fn file_for_role(&self, role: &str) -> Option<&ResourceVersionFile> {
+        self.files.iter().find(|file| file.role == role)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ResourceChangelogFormat {
+    Markdown,
+    Html,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ResourceChangelogStatus {
+    Available,
+    Empty,
+    Unavailable,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceVersionDetails {
+    pub version: ResourceVersion,
+    pub changelog: Option<String>,
+    pub changelog_format: ResourceChangelogFormat,
+    pub changelog_status: ResourceChangelogStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable, AsChangeset)]
@@ -128,6 +214,16 @@ pub struct ResourceProjectRef {
     pub id: String,
 }
 
+/// A provider-neutral reference used for cache-only lookups. Unlike
+/// `ResourceProjectRef`, this does not imply that Vesta can query the provider
+/// over the network in this build.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedResourceProjectRef {
+    pub platform: String,
+    pub id: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct SearchQuery {
     pub text: Option<String>,
@@ -156,4 +252,47 @@ pub struct ResourceCategory {
     pub project_type: Option<ResourceType>,
     pub parent_id: Option<String>,
     pub display_index: Option<i32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ResourceVersion, SourcePlatform};
+
+    #[test]
+    fn cached_resource_version_without_detail_stats_still_deserializes() {
+        let cached = r#"{
+            "id":"version-1",
+            "project_id":"project-1",
+            "version_number":"1.0.0",
+            "game_versions":["1.21.1"],
+            "loaders":["fabric"],
+            "download_url":"https://example.invalid/file.jar",
+            "file_name":"file.jar",
+            "release_type":"release",
+            "hash":"abc123",
+            "dependencies":[]
+        }"#;
+
+        let version: ResourceVersion = serde_json::from_str(cached).unwrap();
+
+        assert_eq!(version.published_at, None);
+        assert_eq!(version.download_count, None);
+        assert_eq!(version.file_size, None);
+        assert!(version.files.is_empty());
+    }
+
+    #[test]
+    fn source_platform_round_trips_stable_ids() {
+        for platform in SourcePlatform::ALL {
+            assert_eq!(
+                SourcePlatform::from_str_id(platform.as_str()),
+                Some(platform)
+            );
+        }
+        assert_eq!(
+            SourcePlatform::from_str_id("Smithed"),
+            Some(SourcePlatform::Smithed)
+        );
+        assert_eq!(SourcePlatform::from_str_id("unknown"), None);
+    }
 }

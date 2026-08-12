@@ -1,9 +1,8 @@
-import CurseForgeIcon from "@assets/curseforge.svg";
 import FilterIcon from "@assets/filter.svg";
-import ModrinthIcon from "@assets/modrinth.svg";
 import SearchIcon from "@assets/search.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { sourcesForResourceType } from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
@@ -21,7 +20,7 @@ import {
 	iconBackgroundStyle,
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS } from "@utils/instances";
-import { batch, createMemo, Show } from "solid-js";
+import { batch, createMemo, For, Show } from "solid-js";
 import { ActiveFilterChips } from "./active-filter-chips";
 import { FilterPopover } from "./filter-popover";
 import styles from "./resource-browser.module.css";
@@ -159,40 +158,29 @@ export function ResourceToolbar(props: {
 				</div>
 
 				<div class={styles["source-toggle"]}>
-					<button
-						class={styles["source-btn"]}
-						classList={{
-							[styles.active]: resources.state.activeSource === "modrinth",
-						}}
-						onClick={() => {
-							batch(() => {
-								resources.setSource("modrinth");
-								resources.setOffset(0);
-								activeRouter()?.updateQuery("activeSource", "modrinth");
-							});
-						}}
-						title="Modrinth"
+					<For
+						each={sourcesForResourceType(resources.state.resourceType)}
 					>
-						<ModrinthIcon width="14" height="14" />
-						<span>Modrinth</span>
-					</button>
-					<button
-						class={styles["source-btn"]}
-						classList={{
-							[styles.active]: resources.state.activeSource === "curseforge",
-						}}
-						onClick={() => {
-							batch(() => {
-								resources.setSource("curseforge");
-								resources.setOffset(0);
-								activeRouter()?.updateQuery("activeSource", "curseforge");
-							});
-						}}
-						title="CurseForge"
-					>
-						<CurseForgeIcon width="14" height="14" />
-						<span>CurseForge</span>
-					</button>
+						{(source) => (
+							<button
+								class={styles["source-btn"]}
+								classList={{
+									[styles.active]: resources.state.activeSource === source.id,
+								}}
+								onClick={() => {
+									batch(() => {
+										resources.setSource(source.id);
+										resources.setOffset(0);
+										activeRouter()?.updateQuery("activeSource", source.id);
+									});
+								}}
+								title={source.label}
+							>
+								<source.Icon width="14" height="14" />
+								<span>{source.label}</span>
+							</button>
+						)}
+					</For>
 				</div>
 			</div>
 

@@ -4,10 +4,18 @@ import type {
 	ResourceVersion,
 } from "@stores/resources";
 import {
+	classifyDatapackVersionCompatibility,
+	findBestExactDatapackVersion,
 	findBestVersion,
+	findBestVersionForInstance,
 	findInstalledResource,
+	hasDownloadableArtifact,
 	isGameVersionCompatible,
 	isResourceUpdateAvailable,
+	replacementResourceIdForWorld,
+	requiresWorldTarget,
+	resolveInstanceInstallDecision,
+	versionMatchesResourceType,
 } from "@utils/resource-install-intent";
 import { describe, expect, it } from "vitest";
 
@@ -70,6 +78,55 @@ const version = (
 });
 
 describe("resource install intent", () => {
+	it("requires a world for datapacks and combined bundles", () => {
+		expect(
+			requiresWorldTarget(project({ resource_type: "datapack" }), version()),
+		).toBe(true);
+		expect(
+			requiresWorldTarget(
+				project({ resource_type: "resourcepack" }),
+				version({
+					files: [{ url: "", file_name: "data.zip", role: "datapack" }],
+				}),
+			),
+		).toBe(true);
+		expect(
+			requiresWorldTarget(
+				project({ resource_type: "resourcepack" }),
+				version({
+					files: [{ url: "", file_name: "resources.zip", role: "primary" }],
+				}),
+			),
+		).toBe(false);
+	});
+
+	it("recognizes legacy and multi-artifact download locations", () => {
+		expect(hasDownloadableArtifact(version())).toBe(false);
+		expect(
+			hasDownloadableArtifact(
+				version({ download_url: "https://example.test/pack.zip" }),
+			),
+		).toBe(true);
+		expect(
+			hasDownloadableArtifact(
+				version({
+					files: [
+						{
+							url: "https://example.test/data.zip",
+							file_name: "data.zip",
+							role: "datapack",
+						},
+					],
+				}),
+			),
+		).toBe(true);
+		expect(
+			hasDownloadableArtifact(
+				version({ files: [{ url: "", file_name: "data.zip", role: "datapack" }] }),
+			),
+		).toBe(false);
+	});
+
 	it("matches exact, normalized, and explicit wildcard game versions", () => {
 		expect(isGameVersionCompatible(["1.21.0"], "1.21")).toBe(true);
 		expect(isGameVersionCompatible(["1.21.x"], "1.21.4")).toBe(true);
@@ -124,6 +181,169 @@ describe("resource install intent", () => {
 				"shader",
 			),
 		).toBeNull();
+	});
+
+	it("selects the datapack release from a multi-platform project", () => {
+		const selected = findBestVersion(
+			[
+				version({ id: "fabric", loaders: ["fabric"], file_name: "mod.jar" }),
+				version({ id: "paper", loaders: ["paper"], file_name: "plugin.jar" }),
+				version({
+					id: "datapack",
+					loaders: ["datapack"],
+					file_name: "pack.zip",
+				}),
+			],
+			"1.21.1",
+			"vanilla",
+			"release",
+			"datapack",
+			"modrinth",
+		);
+
+		expect(selected?.id).toBe("datapack");
+	});
+
+	it("uses explicit datapack intent when selecting for a vanilla instance", () => {
+		const selected = findBestVersionForInstance(
+			project(),
+			[
+				version({ id: "mod", loaders: ["fabric"] }),
+				version({ id: "datapack", loaders: ["datapack"] }),
+			],
+			{ minecraftVersion: "1.21.1", modloader: "vanilla" },
+			"release",
+			"datapack",
+		);
+
+		expect(selected?.id).toBe("datapack");
+	});
+
+	it("chooses destination scope after selecting the bundle version", () => {
+		const combined = version({
+			id: "combined",
+			loaders: [],
+			files: [
+				{ url: "", file_name: "resources.zip", role: "primary" },
+				{ url: "", file_name: "data.zip", role: "datapack" },
+			],
+		});
+		expect(
+			resolveInstanceInstallDecision(
+				project({ resource_type: "resourcepack" }),
+				[combined],
+				{ minecraftVersion: "1.21.1", modloader: "vanilla" },
+				"resourcepack",
+			),
+		).toEqual({ kind: "world", version: combined });
+		expect(
+			resolveInstanceInstallDecision(
+				project(),
+				[version({ loaders: ["datapack"] })],
+				{ minecraftVersion: "1.21.1", modloader: "vanilla" },
+				"datapack",
+			),
+		).toEqual({ kind: "world" });
+	});
+
+	it("only quick-selects datapacks with an exact Minecraft version tag", () => {
+		const versions = [
+			version({
+				id: "wildcard",
+				loaders: ["datapack"],
+				game_versions: ["1.21.x"],
+			}),
+			version({
+				id: "same-line",
+				loaders: ["datapack"],
+				game_versions: ["1.21.4"],
+			}),
+		];
+		expect(
+			findBestExactDatapackVersion(versions, "1.21.1", "modrinth"),
+		).toBeNull();
+		expect(
+			findBestExactDatapackVersion(
+				[...versions, version({ id: "exact", loaders: ["datapack"] })],
+				"1.21.1",
+				"modrinth",
+			)?.id,
+		).toBe("exact");
+	});
+
+	it("classifies non-exact datapack tags as advisory", () => {
+		expect(classifyDatapackVersionCompatibility(["1.21.4"], "1.21.1")).toBe(
+			"sameRelease",
+		);
+		expect(classifyDatapackVersionCompatibility(["1.20.6"], "1.21.1")).toBe(
+			"unlisted",
+		);
+		expect(classifyDatapackVersionCompatibility(["1.21.1"], null)).toBe(
+			"unknown",
+		);
+	});
+
+	it("replaces a managed datapack only when the selected world is its source", () => {
+		const replacement = {
+			resourceId: 42,
+			world: { instanceId: 7, directoryName: "World One" },
+		};
+		expect(replacementResourceIdForWorld(replacement, replacement.world)).toBe(
+			42,
+		);
+		expect(
+			replacementResourceIdForWorld(replacement, {
+				instanceId: 7,
+				directoryName: "World Two",
+			}),
+		).toBeUndefined();
+		expect(
+			replacementResourceIdForWorld(replacement, {
+				instanceId: 8,
+				directoryName: "World One",
+			}),
+		).toBeUndefined();
+	});
+
+	it("uses explicit install intent when a Modrinth mod has datapack builds", () => {
+		expect(requiresWorldTarget(project(), version(), "datapack")).toBe(true);
+	});
+
+	it("uses Modrinth's datapack loader to reject its mod and plugin variants", () => {
+		expect(
+			versionMatchesResourceType(
+				"datapack",
+				version({ file_name: "pack.zip", loaders: ["datapack"] }),
+				"modrinth",
+			),
+		).toBe(true);
+		expect(
+			versionMatchesResourceType(
+				"datapack",
+				version({ file_name: "mod.jar", loaders: ["neoforge"] }),
+				"modrinth",
+			),
+		).toBe(false);
+	});
+
+	it("uses CurseForge's datapack project class instead of loader tags", () => {
+		expect(
+			versionMatchesResourceType(
+				"datapack",
+				version({ file_name: "pack.zip", loaders: ["fabric"] }),
+				"curseforge",
+			),
+		).toBe(true);
+	});
+
+	it("treats Smithed as a datapack project feed without loader tags", () => {
+		expect(
+			versionMatchesResourceType(
+				"datapack",
+				version({ file_name: "pack.zip", loaders: [] }),
+				"smithed",
+			),
+		).toBe(true);
 	});
 
 	it("matches installed resources by primary or external project id", () => {

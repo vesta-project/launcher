@@ -1,6 +1,13 @@
 import type { Instance } from "@stores/instances";
-import { type ResourceProject, type ResourceVersion } from "@stores/resources";
-import { isGameVersionCompatible } from "@utils/resource-install-intent";
+import {
+	type ResourceProject,
+	type ResourceType,
+	type ResourceVersion,
+} from "@stores/resources";
+import {
+	isGameVersionCompatible,
+	versionMatchesResourceType,
+} from "@utils/resource-install-intent";
 
 export interface CompatibilityResult {
 	type: "compatible" | "warning" | "incompatible";
@@ -10,9 +17,10 @@ export interface CompatibilityResult {
 export const getProjectCompatibilityForInstance = (
 	project: ResourceProject,
 	instance: Instance,
+	installType: ResourceType = project.resource_type,
 ): CompatibilityResult => {
 	const loader = instance.modloader?.toLowerCase() || "";
-	const resourceType = project.resource_type;
+	const resourceType = installType;
 
 	if (loader === "" || loader === "vanilla") {
 		if (resourceType === "mod" || resourceType === "shader") {
@@ -58,15 +66,28 @@ export const getCompatibilityForInstance = (
 	project: ResourceProject | undefined,
 	version: ResourceVersion,
 	instance: Instance,
+	installType?: ResourceType,
 ): CompatibilityResult => {
 	const instLoader = instance.modloader?.toLowerCase() || "";
-	const resType = project?.resource_type;
+	const resType = installType ?? project?.resource_type;
+	if (!versionMatchesResourceType(resType, version, project?.source)) {
+		return {
+			type: "incompatible",
+			reason: "This release is not a datapack build.",
+		};
+	}
 
 	// 1. Version check (Most important)
 	const matchesVersion = isGameVersionCompatible(
 		version.game_versions,
 		instance.minecraftVersion,
 	);
+	if (!matchesVersion && resType === "datapack") {
+		return {
+			type: "warning",
+			reason: `This datapack does not explicitly list ${instance.minecraftVersion}; choose a world to confirm compatibility.`,
+		};
+	}
 	if (!matchesVersion) {
 		return {
 			type: "incompatible",
@@ -135,7 +156,7 @@ export const SHADER_ENGINES = {
 
 export interface ShaderEngineInfo {
 	id: string;
-	source: "modrinth" | "curseforge";
+	source: "modrinth" | "curseforge" | "smithed";
 	name: string;
 	key: "iris" | "oculus";
 }

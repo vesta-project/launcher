@@ -1,7 +1,7 @@
 export const HEADER_COLLAPSE_RANGE_PX = 72;
 export const HEADER_COMPACT_ENTER_PROGRESS = 0.92;
 export const HEADER_COMPACT_EXIT_PROGRESS = 0.12;
-export const RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX = 900;
+export const COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX = 900;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 

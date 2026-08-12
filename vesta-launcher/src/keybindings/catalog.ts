@@ -164,7 +164,7 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 		defaultChord: "Mod+Digit2",
 		sortOrder: 22,
 		canExecute: isMainWindow,
-		execute: () => openMiniPage("/install/source"),
+		execute: () => openMiniPage("/install"),
 	},
 	{
 		commandId: "navigation.explore",

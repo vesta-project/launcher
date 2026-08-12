@@ -33,11 +33,7 @@ impl SubscriptionProvider for ResourceProvider {
             .get("platform")
             .and_then(|p| p.as_str())
             .unwrap_or("modrinth");
-        let platform = if platform_str == "curseforge" {
-            SourcePlatform::CurseForge
-        } else {
-            SourcePlatform::Modrinth
-        };
+        let platform = subscription_platform(platform_str);
 
         let rm = app_handle.state::<ResourceManager>();
 
@@ -64,6 +60,9 @@ impl SubscriptionProvider for ResourceProvider {
                         project_id, latest.id
                     )
                 }
+                SourcePlatform::Smithed => {
+                    format!("https://smithed.dev/packs/{}", project_id)
+                }
             };
 
             items.push(NotificationUpdateItem {
@@ -85,5 +84,25 @@ impl SubscriptionProvider for ResourceProvider {
         }
 
         Ok(items)
+    }
+}
+
+fn subscription_platform(platform_str: &str) -> SourcePlatform {
+    SourcePlatform::from_str_id(platform_str).unwrap_or(SourcePlatform::Modrinth)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subscription_platform_maps_known_sources() {
+        assert_eq!(subscription_platform("smithed"), SourcePlatform::Smithed);
+        assert_eq!(
+            subscription_platform("CurseForge"),
+            SourcePlatform::CurseForge
+        );
+        assert_eq!(subscription_platform("modrinth"), SourcePlatform::Modrinth);
+        assert_eq!(subscription_platform("unknown"), SourcePlatform::Modrinth);
     }
 }

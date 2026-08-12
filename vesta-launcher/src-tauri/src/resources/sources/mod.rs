@@ -1,15 +1,20 @@
 use crate::models::resource::{
-    ResourceCategory, ResourceProject, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    ResourceCategory, ResourceProject, ResourceVersion, ResourceVersionDetails, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 
+pub mod capabilities;
 pub mod curseforge;
 pub mod modrinth;
+pub mod smithed;
 
 #[cfg(test)]
 mod tests;
+
+pub use capabilities::SourceCapabilities;
 
 #[async_trait]
 pub trait ResourceSource: Send + Sync {
@@ -23,6 +28,11 @@ pub trait ResourceSource: Send + Sync {
         loader: Option<&str>,
     ) -> Result<Vec<ResourceVersion>>;
     async fn get_version(&self, project_id: &str, version_id: &str) -> Result<ResourceVersion>;
+    async fn get_version_details(
+        &self,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<ResourceVersionDetails>;
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)>;
     async fn get_by_hashes(
         &self,
@@ -37,4 +47,8 @@ pub trait ResourceSource: Send + Sync {
     async fn get_categories(&self) -> Result<Vec<ResourceCategory>>;
 
     fn platform(&self) -> SourcePlatform;
+
+    fn capabilities(&self) -> SourceCapabilities {
+        SourceCapabilities::for_platform(self.platform())
+    }
 }

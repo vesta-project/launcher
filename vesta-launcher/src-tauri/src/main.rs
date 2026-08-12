@@ -20,6 +20,7 @@ mod startup;
 mod sync;
 mod tasks;
 pub mod utils;
+pub mod worlds;
 
 use tauri::Manager;
 #[allow(unused_imports)]
@@ -303,6 +304,7 @@ fn main() {
             commands::onboarding::set_setup_step,
             commands::onboarding::download_managed_java,
             commands::resources::get_resource_categories,
+            commands::resources::list_resource_sources,
             commands::resources::search_resources,
             commands::resources::get_resource_project,
             commands::resources::cache_resource_metadata,
@@ -310,8 +312,10 @@ fn main() {
             commands::resources::get_cached_resource_projects,
             commands::resources::hydrate_resource_project_icons,
             commands::resources::get_or_hydrate_resource_projects,
+            commands::resources::get_cached_resource_projects_by_provider,
             commands::resources::get_resource_projects,
             commands::resources::get_resource_versions,
+            commands::resources::get_resource_version_details,
             commands::resources::find_peer_resource,
             commands::resources::install_resource,
             commands::resources::delete_resource,
@@ -327,6 +331,15 @@ fn main() {
             commands::resources::check_resource_updates,
             commands::resources::resolve_image_url,
             commands::resources::resolve_image_urls,
+            commands::worlds::list_instance_worlds,
+            commands::worlds::open_world_folder,
+            commands::worlds::list_world_datapacks,
+            commands::worlds::check_world_datapack_updates,
+            commands::worlds::open_world_datapacks_folder,
+            commands::worlds::toggle_world_datapack,
+            commands::worlds::delete_world_datapack,
+            commands::worlds::transfer_world,
+            commands::worlds::submit_world_archive_selection,
             commands::sync::check_modpack_update,
             commands::sync::start_modpack_update,
             commands::launcher_imports::detect_external_launchers,

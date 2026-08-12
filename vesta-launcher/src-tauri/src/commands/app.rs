@@ -771,7 +771,6 @@ fn is_allowed_navigate_path(path: &str) -> bool {
         "/config"
             | "/changelog"
             | "/install"
-            | "/install/source"
             | "/install/import"
             | "/modding-guide"
             | "/resources"

@@ -1,10 +1,20 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ProgressUpdate } from "@utils/notifications";
+import {
+	installingIdsFromTargets,
+	installTargetMatchesTaskId,
+	reconcileInstalledInstanceTargets,
+} from "@utils/resource-install-progress";
 import type { ResourceInstallRequest } from "@utils/resource-install-intent";
+import {
+	firstSourceForResourceType,
+	getSourceDescriptor,
+} from "@resources/source-catalog";
 import { createStore, reconcile } from "solid-js/store";
 import { refreshInstanceResourceRows } from "./instance-resource-overview";
 import { Instance } from "./instances";
+import type { ResourceInstallTarget } from "./worlds";
 
 export type ResourceType =
 	| "mod"
@@ -13,8 +23,7 @@ export type ResourceType =
 	| "datapack"
 	| "modpack"
 	| "world";
-export type SourcePlatform = "modrinth" | "curseforge";
-// ... (rest of imports)
+export type SourcePlatform = "modrinth" | "curseforge" | "smithed";
 
 export type ResourceProject = {
 	id: string;
@@ -56,6 +65,14 @@ export type ResourceCategory = {
 	display_index: number | null;
 };
 
+export type ResourceVersionFile = {
+	url: string;
+	file_name: string;
+	hash?: string;
+	file_size?: number | null;
+	role: string;
+};
+
 export type ResourceVersion = {
 	id: string;
 	project_id: string;
@@ -67,6 +84,17 @@ export type ResourceVersion = {
 	release_type: "release" | "beta" | "alpha";
 	hash: string;
 	dependencies: ResourceDependency[];
+	published_at?: string | null;
+	download_count?: number | null;
+	file_size?: number | null;
+	files?: ResourceVersionFile[];
+};
+
+export type ResourceVersionDetails = {
+	version: ResourceVersion;
+	changelog: string | null;
+	changelog_format: "markdown" | "html";
+	changelog_status: "available" | "empty" | "unavailable";
 };
 
 export type ResourceDependency = {
@@ -134,8 +162,11 @@ type ResourceStoreState = {
 	showFilters: boolean;
 	reconcilingCategories: boolean;
 	installRequest: ResourceInstallRequest | null;
+	installingTargetKeys: string[];
 	selection: Record<string, boolean>;
 	sorting: { id: string; desc: boolean }[];
+	/** Remote image URL → base64 data URL from `resolve_image_urls`. */
+	resolvedBrowseImages: Record<string, string>;
 };
 
 const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
@@ -167,12 +198,101 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	showFilters: true,
 	reconcilingCategories: false,
 	installRequest: null,
+	installingTargetKeys: [],
 	selection: {},
 	sorting: [{ id: "display_name", desc: false }],
+	resolvedBrowseImages: {},
 });
 
 const searchCache = new Map<string, CachedSearchResponse>();
+const versionDetailsCache = new Map<string, ResourceVersionDetails>();
 
+function publishInstallingTargets(keys: string[]) {
+	const uniqueKeys = [...new Set(keys)];
+	const ids = installingIdsFromTargets(uniqueKeys);
+	setResourceStore("installingTargetKeys", uniqueKeys);
+	setResourceStore("installingProjectIds", [...ids.projects]);
+	setResourceStore("installingVersionIds", [...ids.versions]);
+}
+
+function reconcileInstanceInstallProgress(
+	instanceId: number,
+	rows: InstalledResource[],
+) {
+	publishInstallingTargets(
+		reconcileInstalledInstanceTargets(
+			resourceStore.installingTargetKeys,
+			instanceId,
+			rows,
+		),
+	);
+}
+
+function bannerUrlForProject(project: ResourceProject): string | null {
+	if (project.gallery.length > 0) return project.gallery[0];
+	return project.featured_gallery ?? null;
+}
+
+const MAX_RESOLVED_BROWSE_IMAGES = 64;
+let browseWarmGeneration = 0;
+
+function pruneResolvedBrowseImages(keepUrls: string[]) {
+	const keep = new Set(keepUrls);
+	const next: Record<string, string> = {};
+	for (const url of keep) {
+		const dataUrl = resourceStore.resolvedBrowseImages[url];
+		if (dataUrl) next[url] = dataUrl;
+	}
+	const keys = Object.keys(next);
+	if (keys.length > MAX_RESOLVED_BROWSE_IMAGES) {
+		for (const extra of keys.slice(
+			0,
+			keys.length - MAX_RESOLVED_BROWSE_IMAGES,
+		)) {
+			delete next[extra];
+		}
+	}
+	setResourceStore("resolvedBrowseImages", reconcile(next));
+}
+
+/** Warm Rust image cache for browse banners; mirrors into `resolvedBrowseImages`. */
+async function warmBrowseBannerImages(hits: ResourceProject[]) {
+	const hitUrls = [
+		...new Set(
+			hits
+				.map(bannerUrlForProject)
+				.filter((url): url is string => Boolean(url)),
+		),
+	];
+	pruneResolvedBrowseImages(hitUrls);
+
+	const urls = hitUrls.filter(
+		(url) =>
+			!resourceStore.resolvedBrowseImages[url] &&
+			// Firebase CDN banners load in the webview; skip Rust warm for them.
+			!url.includes("firebasestorage.googleapis.com"),
+	);
+	if (urls.length === 0) {
+		// Invalidate any in-flight warm from a previous result set.
+		++browseWarmGeneration;
+		return;
+	}
+
+	const token = ++browseWarmGeneration;
+	try {
+		const resolved = await invoke<string[]>("resolve_image_urls", { urls });
+		if (token !== browseWarmGeneration) return;
+		for (let i = 0; i < urls.length; i++) {
+			const dataUrl = resolved[i];
+			if (dataUrl) {
+				setResourceStore("resolvedBrowseImages", urls[i], dataUrl);
+			}
+		}
+		pruneResolvedBrowseImages(hitUrls);
+	} catch (e) {
+		console.error("Failed to warm browse banner images:", e);
+	}
+}
 function normalizedSearchValue(value: string | null | undefined) {
 	const trimmed = value?.trim();
 	return trimmed ? trimmed : null;
@@ -196,21 +316,31 @@ function currentSearchCacheKey() {
 export const resources = {
 	state: resourceStore,
 
+	resolvedBrowseImage: (url: string | null | undefined) =>
+		url ? (resourceStore.resolvedBrowseImages[url] ?? null) : null,
+
 	setInstallRequest: (request: ResourceInstallRequest | null) =>
 		setResourceStore("installRequest", request),
 
 	setQuery: (q: string) => setResourceStore("query", q),
 	setSource: (s: SourcePlatform) => {
+		const descriptor = getSourceDescriptor(s);
 		setResourceStore("reconcilingCategories", true);
 		setResourceStore("activeSource", s);
 		setResourceStore("availableCategories", []);
-		setResourceStore("sortBy", s === "modrinth" ? "relevance" : "featured");
+		setResourceStore("sortBy", descriptor?.defaultSort ?? "relevance");
 		setResourceStore("categories", []);
 		setResourceStore("offset", 0);
 
-		// Modrinth doesn't support Worlds
-		if (s === "modrinth" && resourceStore.resourceType === "world") {
-			setResourceStore("resourceType", "mod");
+		if (
+			descriptor &&
+			!descriptor.supportedResourceTypes.includes(resourceStore.resourceType)
+		) {
+			const fallbackType = descriptor.supportedResourceTypes[0] ?? "mod";
+			setResourceStore("resourceType", fallbackType);
+			if (fallbackType !== "mod") {
+				setResourceStore("loader", null);
+			}
 		}
 
 		resources.fetchCategories();
@@ -220,10 +350,17 @@ export const resources = {
 		setResourceStore("resourceType", t);
 		setResourceStore("availableCategories", []);
 		setResourceStore("offset", 0);
-
 		// Clear loader if not on 'mod' as it doesn't apply to resourcepacks/shaders
 		if (t !== "mod") {
 			setResourceStore("loader", null);
+		}
+
+		const active = getSourceDescriptor(resourceStore.activeSource);
+		if (active && !active.supportedResourceTypes.includes(t)) {
+			const fallback = firstSourceForResourceType(t);
+			setResourceStore("activeSource", fallback.id);
+			setResourceStore("sortBy", fallback.defaultSort);
+			setResourceStore("categories", []);
 		}
 
 		resources.fetchCategories();
@@ -351,7 +488,8 @@ export const resources = {
 			loader: null,
 			offset: 0,
 			sortBy:
-				resourceStore.activeSource === "modrinth" ? "relevance" : "featured",
+				getSourceDescriptor(resourceStore.activeSource)?.defaultSort ??
+				"relevance",
 			sortOrder: "desc",
 		});
 		resources.search();
@@ -390,6 +528,7 @@ export const resources = {
 				totalHits: cached.total_hits,
 				loading: false,
 			});
+			void warmBrowseBannerImages(cached.hits);
 		} else {
 			setResourceStore("loading", true);
 		}
@@ -424,6 +563,7 @@ export const resources = {
 				source: resourceStore.activeSource,
 				resourceType: resourceStore.resourceType,
 			});
+			void warmBrowseBannerImages(response.hits);
 		} catch (e) {
 			console.error("Failed to search resources:", e);
 			const message = e instanceof Error ? e.message : String(e);
@@ -436,6 +576,7 @@ export const resources = {
 					searchWarning:
 						"Showing cached results while the source is unavailable.",
 				});
+				void warmBrowseBannerImages(cached.hits);
 			} else {
 				setResourceStore({
 					results: [],
@@ -476,37 +617,78 @@ export const resources = {
 		});
 	},
 
+	getVersionDetails: async (
+		platform: SourcePlatform,
+		projectId: string,
+		versionId: string,
+		ignoreCache: boolean = false,
+	) => {
+		const cacheKey = `${platform}:${projectId}:${versionId}`;
+		if (!ignoreCache) {
+			const cached = versionDetailsCache.get(cacheKey);
+			if (cached) return cached;
+		}
+
+		const details = await invoke<ResourceVersionDetails>(
+			"get_resource_version_details",
+			{
+				platform,
+				projectId,
+				versionId,
+			},
+		);
+		if (details.changelog_status !== "unavailable") {
+			versionDetailsCache.set(cacheKey, details);
+		}
+		return details;
+	},
+
 	install: async (
 		project: ResourceProject,
 		version: ResourceVersion,
-		targetInstanceId?: number | null,
+		target?: ResourceInstallTarget | null,
+		options?: {
+			installType?: ResourceType;
+			compatibilityAcknowledged?: boolean;
+			replacementResourceId?: number;
+		},
 	) => {
-		const isModpack = project.resource_type === "modpack";
-		const instanceId =
-			targetInstanceId !== undefined
-				? targetInstanceId
-				: resourceStore.selectedInstanceId;
+		const installType = options?.installType ?? project.resource_type;
+		const isModpack = installType === "modpack";
+		const resolvedTarget =
+			target ??
+			(resourceStore.selectedInstanceId
+				? {
+						kind: "instance" as const,
+						instanceId: resourceStore.selectedInstanceId,
+					}
+				: null);
 
-		if (!instanceId && !isModpack) return;
+		if (!resolvedTarget && !isModpack) return;
 
-		// Immediate UI feedback
-		setResourceStore("installingVersionIds", (ids) => [...ids, version.id]);
-		setResourceStore("installingProjectIds", (ids) => [...ids, project.id]);
+		const targetKey = resolvedTarget
+			? resolvedTarget.kind === "world"
+				? `${project.source}:${project.id}:${version.id}:world:${resolvedTarget.world.instanceId}:${resolvedTarget.world.directoryName}`
+				: `${project.source}:${project.id}:${version.id}:instance:${resolvedTarget.instanceId}`
+			: `${project.source}:${project.id}:${version.id}:modpack`;
+		publishInstallingTargets([...resourceStore.installingTargetKeys, targetKey]);
 
 		try {
 			// Cache project metadata for future offline/icon use
 			await invoke("cache_resource_metadata", {
-				platform: resourceStore.activeSource,
+				platform: project.source,
 				project: project,
 			});
 
 			const result = await invoke<string>("install_resource", {
-				instanceId: instanceId || 0,
+				target: resolvedTarget ?? { kind: "instance", instanceId: 0 },
 				platform: project.source,
 				projectId: project.id,
 				projectName: project.name,
 				version,
-				resourceType: project.resource_type,
+				installType,
+				compatibilityAcknowledged: options?.compatibilityAcknowledged ?? false,
+				replacementResourceId: options?.replacementResourceId ?? null,
 			});
 
 			// Installing IDs are cleared by the scoped rows event after the
@@ -514,12 +696,8 @@ export const resources = {
 
 			return result;
 		} catch (e) {
-			// Remove from installing list ONLY on error
-			setResourceStore("installingVersionIds", (ids) =>
-				ids.filter((id) => id !== version.id),
-			);
-			setResourceStore("installingProjectIds", (ids) =>
-				ids.filter((id) => id !== project.id),
+			publishInstallingTargets(
+				resourceStore.installingTargetKeys.filter((key) => key !== targetKey),
 			);
 			throw e;
 		}
@@ -538,17 +716,7 @@ export const resources = {
 		);
 		setResourceStore("installedResources", results);
 
-		// Clear any installing IDs that are now in the results.
-		// This is the source of truth for when an installation is "finished".
-		const installedRemoteVersionIds = results.map((r) => r.remote_version_id);
-		const installedRemoteIds = results.map((r) => r.remote_id.toLowerCase());
-
-		setResourceStore("installingVersionIds", (ids) =>
-			ids.filter((id) => !installedRemoteVersionIds.includes(id)),
-		);
-		setResourceStore("installingProjectIds", (ids) =>
-			ids.filter((id) => !installedRemoteIds.includes(id.toLowerCase())),
-		);
+		reconcileInstanceInstallProgress(instanceId, results);
 
 		return results;
 	},
@@ -592,35 +760,43 @@ export function preloadDefaultBrowseData(): Promise<void> {
 
 // Listen for resource updates from the backend (watcher)
 if (typeof window !== "undefined") {
+	listen<{ world: import("@stores/worlds").WorldRef }>(
+		"core://world-datapacks-changed",
+		(event) => {
+			const suffix = `:world:${event.payload.world.instanceId}:${event.payload.world.directoryName}`;
+			const completed = resourceStore.installingTargetKeys.filter((key) =>
+				key.endsWith(suffix),
+			);
+			if (completed.length === 0) return;
+			publishInstallingTargets(
+				resourceStore.installingTargetKeys.filter(
+					(key) => !key.endsWith(suffix),
+				),
+			);
+		},
+	);
+
 	listen<{ instanceId: number; revision: string }>(
 		"core://instance-resource-rows-changed",
 		(event) => {
 			const instanceId = event.payload.instanceId;
-			if (resourceStore.selectedInstanceId === instanceId) {
-				void refreshInstanceResourceRows(
-					instanceId,
-					event.payload.revision,
-				).then((results) => {
-					setResourceStore("installedResources", results);
-				});
-			}
+			void refreshInstanceResourceRows(instanceId, event.payload.revision).then(
+				(results) => {
+					reconcileInstanceInstallProgress(instanceId, results);
+					if (resourceStore.selectedInstanceId === instanceId) {
+						setResourceStore("installedResources", results);
+					}
+				},
+			);
 		},
 	);
 
 	listen("resource-install-error", (event) => {
 		const taskId = event.payload as string;
-		// Format: download_{instance_id}_{project_id}_{version_id}
-		const parts = taskId.split("_");
-		if (parts.length >= 4 && parts[0] === "download") {
-			const projectId = parts[2];
-			const versionId = parts[3];
-
-			setResourceStore("installingProjectIds", (ids) =>
-				ids.filter((id) => id !== projectId),
-			);
-			setResourceStore("installingVersionIds", (ids) =>
-				ids.filter((id) => id !== versionId),
-			);
-		}
+		publishInstallingTargets(
+			resourceStore.installingTargetKeys.filter(
+				(key) => !installTargetMatchesTaskId(key, taskId),
+			),
+		);
 	});
 }

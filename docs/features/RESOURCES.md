@@ -18,6 +18,21 @@ Vesta's resource system enables users to discover and install mods, resource pac
 - **API**: RESTful API with project and file metadata
 - **Features**: Categories, search, dependency information
 
+### Smithed
+- **Pack Platform**: Datapack-first ecosystem (`api.smithed.dev/v2`); optional companion resource packs ship with the datapack
+- **Browse types**: Data Packs only (not listed under Resource Pack search)
+- **Artifacts**: A pack version may expose datapack and/or resourcepack downloads (`ResourceVersion.files` with roles); the shared artifact planner installs every recognized artifact as one bundle
+- **Description**: Short `display.description` is the summary; `display.webPage` is often an author-hosted markdown URL which the adapter fetches into `description` (falls back to a markdown link if fetch fails / returns HTML)
+- **Browse banners**: Search builds Firebase CDN URLs for `type: "file"` gallery items (`gallery_images/{docId}-{uid}.webp`) so cards can load banners without `/packs/{id}/gallery/{index}` hops. Bucket-type items still use the API gallery URL and are warmed via `resolve_image_urls`. Full gallery still loads on project details
+- **Authors**: Browse uses Typesense `scope=owner` (displayName in the packs hit). Details still resolve `/users/{id}` when needed for contributors
+- **Browse search**: Packs list and `/packs/count` run in parallel (2 requests total; no per-author fan-out)
+- **Download URLs**: Direct file URLs install as-is; Modrinth project/version page links are resolved to CDN files when possible; HTML page downloads are rejected with a clear error
+- **Browse pagination**: Uses 1-indexed `page` (live API); docs still mention unused `start`
+- **Peers / hash lookup**: Not supported
+
+### Source catalog
+Platform toggles, sort options, and peer targets are driven by `SourceCapabilities` (Rust) and `RESOURCE_SOURCES` (frontend) rather than hardcoded Modrinth/CurseForge pairs. Search remains **single-source** (`activeSource`).
+
 ## Resource Types
 
 The system supports six main resource types:
@@ -164,6 +179,13 @@ Detailed view for individual resources:
 - Backend fetches available versions for selected project
 - Filters by Minecraft version and mod loader compatibility
 - Presents version options to user
+- Datapacks select their World before quick version resolution and ignore the
+  Instance mod loader
+- Modrinth mixed projects retain only versions tagged with the `datapack`
+  loader; CurseForge uses its datapack project class
+- Only an exact provider tag for the World's saved Minecraft version may be
+  selected automatically. Nearby, wildcard, unlisted, and unknown matches
+  require explicit version selection and acknowledgement
 
 ### 3. Dependency Analysis
 - Backend analyzes version dependencies recursively
@@ -171,15 +193,20 @@ Detailed view for individual resources:
 - Checks for conflicts and version compatibility
 
 ### 4. Download and Installation
-- Downloads resource files from platform CDN
-- Verifies file integrity using hashes
-- Extracts archives (for modpacks)
-- Places files in appropriate instance directories
+- Plans all version artifacts before downloading and rejects unknown roles
+- Downloads and verifies the complete bundle in a unique staging directory
+- Publishes all files atomically, rolling back the bundle if any artifact fails
+- Serializes overlapping World, saves-directory, and companion-pack mutations
+  through Task Manager conflict keys
+- Places datapacks in the selected world's `datapacks` directory
+- Safely extracts world archives into collision-free directories under `saves`
+- Delegates modpack archives to the existing modpack workflow
 
 ### 5. Database Registration
 - Creates `installed_resource` records
 - Links dependencies in database
-- Updates instance resource lists
+- Updates Instance resource lists for Instance-owned files and the dedicated
+  World datapack view for World-owned files
 
 ## Dependency Resolution
 
@@ -243,16 +270,61 @@ instance/
 ├── mods/           # Mod JAR files
 ├── resourcepacks/  # Resource pack ZIPs
 ├── shaderpacks/    # Shader pack folders/ZIPs
-├── datapacks/      # Data pack folders/ZIPs
-├── saves/          # World folders
+├── saves/          # Java folder worlds
+│   └── My World/
+│       ├── level.dat
+│       ├── datapacks/  # World-scoped data pack folders/ZIPs
+│       └── .vesta/world.json  # Optional Vesta identity/provenance
 └── config/         # Configuration files (from modpacks)
 ```
 
 ### File Watching
-- Monitors all resource directories for changes
+- Watches instance resource directories, `saves` topology, and each known
+  world's `datapacks` directory without recursively watching region data
 - Automatically updates database when files are added/removed
+- Reconciles debounced paths from their final on-disk state so Vesta staging
+  renames do not unlink newly published Ledger rows
 - Triggers UI refresh for real-time status updates
 - Handles external modifications (manual installs, other launchers)
+
+### World Ownership
+
+Java folder worlds are filesystem-owned directories, not `installed_resource`
+rows. Vesta discovers immediate children of `saves` through root `level.dat` or
+`level.dat_old` and leaves internal layouts opaque. Listing an existing world is
+read-only. Vesta creates `.vesta/world.json` only when it installs a world or
+datapack, or moves, copies, or duplicates a world.
+
+World archives are preflighted before extraction. Unsafe paths, links,
+Unicode/case collisions, non-portable names, excessive candidate counts,
+unreasonable expansion/compression ratios, and archives without a Java folder
+world are rejected. Archives with multiple worlds require a candidate selection
+or explicit install-all action. Publication uses no-replace filesystem
+operations and never overwrites or merges existing worlds, including a World
+that appears after preflight.
+
+The Installed Resource Ledger continues to own installed files. Datapack rows
+are scoped by their exact path under a world, while companion resource-pack rows
+remain instance-scoped and are linked through the portable world manifest.
+Datapacks are not shown in the Instance Resources tab or its batch/update state.
+Clicking a World opens its dedicated datapack view, where direct file packs can
+be enabled, removed, checked for updates, or used as an exact update target.
+Directory-form datapacks are counted and listed read-only. Listing never creates
+World metadata, and the same remote datapack can be installed independently in
+several Worlds.
+
+A datapack and its managed companion resource pack share a bundle identity.
+Removing the datapack removes the companion only when no remaining bundle in
+the same World or another discovered World may reference its exact relative
+path and the file still matches its recorded hash. Ambiguous metadata retains
+the pack. Linked companions cannot be removed or disabled through generic
+Instance Resource actions; manage their lifecycle from the owning World.
+
+Archive installs, transfers, datapack updates, toggles, removals, and companion
+publication coordinate through normalized Task Manager keys for the exact
+World, the destination `saves`, and involved `resourcepacks` directories.
+Observed Minecraft process state is informational; actual filesystem access is
+the success criterion.
 
 ## Error Handling
 
@@ -277,6 +349,15 @@ instance/
 - `check_instance_updates_lightweight`: Check instance for resource/modpack updates (uses snapshot + version cache)
 - `get_instance_update_snapshot`: Read cached update snapshot without triggering a check
 - `install_resource`: Download and install resource
+- `list_instance_worlds`: Discover and summarize Java worlds for one Instance
+- `open_world_folder`: Open a validated world directory
+- `list_world_datapacks`: List direct datapack entries and exact Ledger facts for one World
+- `check_world_datapack_updates`: Check one World's remote datapacks against its saved version
+- `open_world_datapacks_folder`: Open the validated World datapacks directory
+- `toggle_world_datapack`: Toggle an exact file-form datapack in one World
+- `delete_world_datapack`: Remove an exact file-form datapack from one World
+- `transfer_world`: Submit a safe move, copy, or duplicate World task
+- `submit_world_archive_selection`: Continue or cancel a multi-world archive install
 - `delete_resource`: Remove installed resource
 - `toggle_resource`: Enable/disable resource
 - `rescan_instance_resources`: Discover local rows and batch-identify all or selected unresolved resources
@@ -287,6 +368,9 @@ instance/
 - `core://instance-resource-metadata-changed`: Cached project metadata changed for source-aware project refs
 - `core://resource-install-progress`: Installation progress updates
 - `core://resource-install-error`: Installation failures
+- `core://instance-worlds-changed`: World topology or managed contents changed for one Instance
+- `core://world-datapacks-changed`: Datapack contents changed for one exact WorldRef
+- `core://world-install-selection-required`: A world archive needs candidate selection
 
 ## Future Enhancements
 

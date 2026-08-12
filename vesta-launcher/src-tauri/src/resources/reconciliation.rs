@@ -76,18 +76,11 @@ pub struct ResourceMetadataChanged {
 }
 
 fn platform_name(platform: SourcePlatform) -> &'static str {
-    match platform {
-        SourcePlatform::Modrinth => "modrinth",
-        SourcePlatform::CurseForge => "curseforge",
-    }
+    platform.as_str()
 }
 
 fn source_platform(value: &str) -> Option<SourcePlatform> {
-    match value {
-        "modrinth" => Some(SourcePlatform::Modrinth),
-        "curseforge" => Some(SourcePlatform::CurseForge),
-        _ => None,
-    }
+    SourcePlatform::from_str_id(value)
 }
 
 fn event_revision() -> String {
@@ -334,7 +327,8 @@ fn select_platform_match<T>(
     match preferred {
         Some(SourcePlatform::CurseForge) => curseforge.or(modrinth),
         Some(SourcePlatform::Modrinth) => modrinth.or(curseforge),
-        None => modrinth.or(curseforge),
+        // Smithed (and unknown peers) are not part of the MR/CF hash identity pair.
+        Some(SourcePlatform::Smithed) | None => modrinth.or(curseforge),
     }
 }
 

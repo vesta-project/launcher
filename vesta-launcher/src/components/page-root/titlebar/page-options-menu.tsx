@@ -1,5 +1,6 @@
 import DesktopAddIcon from "@assets/desktop-add.svg";
 import EllipsisVIcon from "@assets/ellipsis-v.svg";
+import FolderIcon from "@assets/folder.svg";
 import LinkIcon from "@assets/link.svg";
 import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
@@ -151,6 +152,24 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		}
 	};
 
+	const handleOpenInstanceFolder = async () => {
+		const info = pageInfo();
+		if (!info || info.type !== "instance") return;
+
+		setIsOpen(false);
+
+		try {
+			await invoke("open_instance_folder", { instanceIdSlug: info.id });
+		} catch (e) {
+			console.error("Failed to open instance folder:", e);
+			showToast({
+				title: "Open folder failed",
+				description: String(e),
+				severity: "error",
+			});
+		}
+	};
+
 	const copyUrl = async () => {
 		const url = activeRouter()?.generateUrl();
 		if (!url) return;
@@ -191,6 +210,14 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 
 						<Show when={pageInfo()?.type !== "settings"}>
 							<Show when={pageInfo()?.type === "instance"}>
+								<button
+									class={styles["menu-item"]}
+									onClick={handleOpenInstanceFolder}
+								>
+									<FolderIcon />
+									<span>Open Folder</span>
+								</button>
+
 								<button
 									class={styles["menu-item"]}
 									onClick={() => handleCreateShortcut(true)}

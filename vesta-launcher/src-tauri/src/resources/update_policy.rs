@@ -155,6 +155,9 @@ mod tests {
             hash: String::new(),
             dependencies: vec![],
             published_at: None,
+            download_count: None,
+            file_size: None,
+            files: Vec::new(),
         }
     }
 

@@ -1,15 +1,12 @@
-import ErrorIcon from "@assets/error.svg";
-import PinIcon from "@assets/pin.svg";
-import PinOffIcon from "@assets/pin-off.svg";
-import PlayIcon from "@assets/play.svg";
-import KillIcon from "@assets/rounded-square.svg";
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
+import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
 	PageSidebar,
 	type PageSidebarTab,
 } from "@components/page-sidebar/page-sidebar";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
 import {
@@ -35,10 +32,16 @@ import {
 } from "@stores/pinning";
 import {
 	type InstalledResource,
+	type ResourceProject,
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
 import { useMinecraftVersions } from "@stores/versions";
+import type {
+	WorldDatapackSummary,
+	WorldRef,
+	WorldSummary,
+} from "@stores/worlds";
 import {
 	createColumnHelper,
 	createSolidTable,
@@ -48,7 +51,6 @@ import {
 } from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { Checkbox } from "@ui/checkbox/checkbox";
 import { ExportDialog } from "@ui/export-dialog";
@@ -57,7 +59,6 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { TabsContent } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { resolveResourceUrl } from "@utils/assets";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import { getCrashDetails, parseCrashDetails } from "@utils/crash-handler";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
@@ -94,6 +95,7 @@ import {
 	updateInstance,
 	updateInstanceModpackVersion,
 } from "@utils/instances";
+import { createMediaQuery } from "@utils/media-query";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
 import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
@@ -106,6 +108,7 @@ import {
 	createPreloadableLazyComponent,
 	createRetainedTabLoader,
 } from "@utils/preloadable-lazy";
+import { requiresWorldTarget } from "@utils/resource-install-intent";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -130,11 +133,21 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
+import { InstanceHeader } from "./InstanceHeader";
 import styles from "./instance-details.module.css";
+import {
+	getInstancePrimaryAction,
+	type InstanceTab,
+	normalizeInstanceTab,
+} from "./instance-details-view";
 import type { ModpackVersion } from "./modpack-version-selector";
 // Tabs
-import { HomeTab } from "./tabs/HomeTab";
+import { OverviewTab } from "./tabs/OverviewTab";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
+import {
+	openWorldDatapackBrowser,
+	openWorldDatapackDetails,
+} from "./tabs/world-datapack-navigation";
 
 const ConsoleTabModule = createPreloadableLazyComponent(() =>
 	import("./tabs/ConsoleTab").then((module) => ({
@@ -151,9 +164,9 @@ const ResourcesTabModule = createPreloadableLazyComponent(() =>
 		default: module.ResourcesTab,
 	})),
 );
-const ScreenshotsTabModule = createPreloadableLazyComponent(() =>
-	import("./tabs/ScreenshotsTab").then((module) => ({
-		default: module.ScreenshotsTab,
+const WorldsTabModule = createPreloadableLazyComponent(() =>
+	import("./tabs/WorldsTab").then((module) => ({
+		default: module.WorldsTab,
 	})),
 );
 const SettingsTabModule = createPreloadableLazyComponent(() =>
@@ -170,7 +183,7 @@ const VersioningTabModule = createPreloadableLazyComponent(() =>
 const ConsoleTab = ConsoleTabModule.Component;
 const CrashTab = CrashTabModule.Component;
 const ResourcesTab = ResourcesTabModule.Component;
-const ScreenshotsTab = ScreenshotsTabModule.Component;
+const WorldsTab = WorldsTabModule.Component;
 const SettingsTab = SettingsTabModule.Component;
 const VersioningTab = VersioningTabModule.Component;
 
@@ -178,7 +191,7 @@ const instanceTabLoaders: Partial<Record<TabType, () => Promise<unknown>>> = {
 	console: ConsoleTabModule.preload,
 	crash: CrashTabModule.preload,
 	resources: ResourcesTabModule.preload,
-	screenshots: ScreenshotsTabModule.preload,
+	worlds: WorldsTabModule.preload,
 	settings: SettingsTabModule.preload,
 	versioning: VersioningTabModule.preload,
 };
@@ -203,14 +216,7 @@ type LightweightUpdateCheckResult = {
 	modpackVersions: ResourceVersion[];
 };
 
-type TabType =
-	| "home"
-	| "console"
-	| "resources"
-	| "crash"
-	| "settings"
-	| "versioning"
-	| "screenshots";
+type TabType = InstanceTab;
 
 interface InstanceDetailsProps {
 	id?: number;
@@ -359,7 +365,9 @@ const isCustomResource = (resource: InstalledResource | undefined) =>
 
 const hasCanonicalResourceLink = (resource: InstalledResource | undefined) =>
 	!!resource?.remote_id &&
-	(resource.platform === "modrinth" || resource.platform === "curseforge");
+	(resource.platform === "modrinth" ||
+		resource.platform === "curseforge" ||
+		resource.platform === "smithed");
 
 const isSameCanonicalProject = (
 	a: InstalledResource | undefined,
@@ -401,19 +409,36 @@ export default function InstanceDetails(
 	// gated instead of every hidden tab fetching during the first render.
 	const activeTab = createMemo<TabType>(() => {
 		const params = activeRouter()?.currentParams.get();
-		const tab = params?.activeTab as TabType | undefined;
-		return tab &&
-			[
-				"home",
-				"console",
-				"resources",
-				"crash",
-				"screenshots",
-				"settings",
-				"versioning",
-			].includes(tab)
-			? tab
-			: "home";
+		return normalizeInstanceTab(params?.activeTab as string | undefined);
+	});
+	const selectedWorldDirectory = createMemo(() => {
+		const value = activeRouter()?.currentParams.get()?.world;
+		return typeof value === "string" && value.length > 0 ? value : null;
+	});
+	createEffect(() => {
+		const rawTab = activeRouter()?.currentParams.get()?.activeTab as
+			| string
+			| undefined;
+		const canonicalTab = normalizeInstanceTab(rawTab);
+		if (rawTab && rawTab !== canonicalTab) {
+			activeRouter()?.updateQuery("activeTab", canonicalTab);
+		}
+	});
+	const isDesktopHeader = createMediaQuery("(min-width: 901px)");
+	const prefersReducedMotion = createMediaQuery(
+		"(prefers-reduced-motion: reduce)",
+	);
+	const headerCollapse = createCollapsingHeaderController({
+		enabled: () => activeTab() === "home",
+		isDesktop: isDesktopHeader,
+		prefersReducedMotion,
+		cssDrivenProgress: () => false,
+		disabledProgress: () =>
+			activeTab() !== "home" || !isDesktopHeader() ? 1 : 0,
+		classNames: {
+			compact: "instance-header-compact",
+			floating: "instance-header-floating",
+		},
 	});
 
 	const prefetchedInstance = () => {
@@ -461,9 +486,6 @@ export default function InstanceDetails(
 			}
 		},
 		{ initialValue: prefetchedInstance() },
-	);
-	const headerIconPreview = createAnimatedIconPreview(
-		() => instance()?.iconPath || DEFAULT_ICONS[0],
 	);
 
 	const slug = createMemo(() => {
@@ -592,7 +614,12 @@ export default function InstanceDetails(
 		platform: string | null | undefined,
 		id: string | null | undefined,
 	) => {
-		if ((platform !== "modrinth" && platform !== "curseforge") || !id) {
+		if (
+			(platform !== "modrinth" &&
+				platform !== "curseforge" &&
+				platform !== "smithed") ||
+			!id
+		) {
 			return;
 		}
 		const key = `${platform}:${id}`;
@@ -641,6 +668,11 @@ export default function InstanceDetails(
 	>({});
 	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
 		createSignal(false);
+	const [worldUpdate, setWorldUpdate] = createSignal<{
+		project: ResourceProject;
+		version: ResourceVersion;
+		resourceId: number;
+	} | null>(null);
 
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
@@ -1022,7 +1054,8 @@ export default function InstanceDetails(
 	const [busy, setBusy] = createSignal(false);
 
 	const [activeAccount] = createResource<any, boolean>(
-		() => activeTab() === "versioning" || undefined,
+		() =>
+			activeTab() === "versioning" || activeTab() === "settings" || undefined,
 		async () => {
 			try {
 				return await getActiveAccount();
@@ -1258,12 +1291,21 @@ export default function InstanceDetails(
 
 		setBusy(true);
 		try {
+			let worldScopedSkipped = 0;
 			for (const id of toUpdate) {
 				const res = (installedResources() || []).find((r) => r.id === id);
 				const update = updates()[id];
 				if (res && update) {
-					await handleUpdate(res, update);
+					const started = await handleUpdate(res, update, false);
+					if (!started) worldScopedSkipped += 1;
 				}
+			}
+			if (worldScopedSkipped > 0) {
+				showToast({
+					title: "World selection required",
+					description: `${worldScopedSkipped} datapack update${worldScopedSkipped === 1 ? "" : "s"} must be updated individually so you can confirm the target world.`,
+					severity: "info",
+				});
 			}
 			resources.clearSelection();
 		} catch (e) {
@@ -1286,6 +1328,7 @@ export default function InstanceDetails(
 		{},
 	);
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
+	const [updatesKnown, setUpdatesKnown] = createSignal(false);
 	const [rescanningResourceIds, setRescanningResourceIds] = createSignal<
 		Set<number>
 	>(new Set());
@@ -1373,6 +1416,7 @@ export default function InstanceDetails(
 			newUpdates[update.resourceId] = update.version;
 		}
 		setUpdates(newUpdates);
+		setUpdatesKnown(true);
 
 		if (result.modpackVersions.length > 0) {
 			mutateModpackVersions(result.modpackVersions);
@@ -1382,6 +1426,7 @@ export default function InstanceDetails(
 	createEffect(() => {
 		const inst = instance();
 		setUpdates({});
+		setUpdatesKnown(false);
 		setCheckedPerResource(new Set<number>());
 		if (!inst) return;
 		const snapshot = resourceOverview.latest?.updateSnapshot;
@@ -2008,6 +2053,7 @@ export default function InstanceDetails(
 	const handleUpdate = async (
 		resource: InstalledResource,
 		version: ResourceVersion,
+		allowWorldPrompt = true,
 	) => {
 		const inst = instance();
 		if (!inst) return;
@@ -2017,15 +2063,48 @@ export default function InstanceDetails(
 				resource.platform as any,
 				resource.remote_id,
 			);
-			await resources.install(project, version, inst.id);
+			if (requiresWorldTarget(project, version)) {
+				if (!allowWorldPrompt) return false;
+				setWorldUpdate({ project, version, resourceId: resource.id });
+				return true;
+			}
+			await resources.install(project, version, {
+				kind: "instance",
+				instanceId: inst.id,
+			});
 
 			setUpdates((prev) => {
 				const next = { ...prev };
 				delete next[resource.id];
 				return next;
 			});
+			return true;
 		} catch (e) {
 			console.error("Update failed:", e);
+			return false;
+		}
+	};
+
+	const handleWorldUpdate = async (world: WorldRef) => {
+		const context = worldUpdate();
+		if (!context) return;
+		setWorldUpdate(null);
+		try {
+			await resources.install(context.project, context.version, {
+				kind: "world",
+				world,
+			});
+			setUpdates((previous) => {
+				const next = { ...previous };
+				delete next[context.resourceId];
+				return next;
+			});
+		} catch (error) {
+			showToast({
+				title: "Update failed",
+				description: String(error),
+				severity: "error",
+			});
 		}
 	};
 
@@ -2307,6 +2386,7 @@ export default function InstanceDetails(
 			: installedResources() || [];
 		const search = resourceSearch().toLowerCase();
 		return data.filter((res) => {
+			if (res.resource_type.toLowerCase() === "datapack") return false;
 			const matchesType =
 				resourceTypeFilter() === "All" ||
 				res.resource_type.toLowerCase() === resourceTypeFilter().toLowerCase();
@@ -2465,36 +2545,20 @@ export default function InstanceDetails(
 		);
 	});
 
-	const playButtonText = createMemo(() => {
+	const primaryAction = createMemo(() => {
 		const inst = instance();
-		if (!inst) return "Play Now";
-
-		if (isRunningGlobal()) return "Kill Instance";
-		if (isLaunchingGlobal()) return "Warming up...";
-		if (isInstalling()) return `${getInstanceOperationLabel(inst)}...`;
-
-		if (isInterrupted()) {
-			if (isUpdateRecovery()) return "Resume Recovery";
-
-			const op = inst.lastOperation;
-			const opName =
-				op === "hard-reset"
-					? "Reset"
-					: op === "repair"
-						? "Repair"
-						: op === "update"
-							? "Update"
-							: "Installation";
-			return `Resume ${opName}`;
-		}
-
-		if (needsInstallation()) {
-			return isFailed() ? "Retry Install" : "Install Now";
-		}
-
-		if (currentCrash()) return "Crash Details";
-
-		return "Play Now";
+		return getInstancePrimaryAction({
+			running: isRunningGlobal(),
+			launching: isLaunchingGlobal(),
+			operationInProgress: isInstalling(),
+			operationLabel: inst ? getInstanceOperationLabel(inst) : undefined,
+			interrupted: isInterrupted(),
+			lastOperation: inst?.lastOperation,
+			needsInstallation: needsInstallation(),
+			installationFailed: isFailed(),
+			updateRecovery: isUpdateRecovery(),
+			hasCrash: Boolean(currentCrash()),
+		});
 	});
 
 	const handlePlay = async () => {
@@ -2606,15 +2670,15 @@ export default function InstanceDetails(
 	// Handle tab changes - use updateQuery for stable state preservation
 	const instanceTabs = createMemo(() => {
 		const tabs: PageSidebarTab[] = [
-			{ value: "home", label: "Home" },
+			{ value: "home", label: "Overview" },
 			{ value: "resources", label: "Resources" },
+			{ value: "worlds", label: "Worlds" },
 			{ value: "console", label: "Console" },
 		];
 		if (currentCrash()) {
 			tabs.push({ value: "crash", label: "Crash", variant: "error" as const });
 		}
 		tabs.push(
-			{ value: "screenshots", label: "Screenshots" },
 			{ value: "versioning", label: "Version" },
 			{ value: "settings", label: "Settings" },
 		);
@@ -2646,6 +2710,14 @@ export default function InstanceDetails(
 				void loadInstanceResourceOverview(instanceId);
 			}
 		}
+		if (tab === "worlds") {
+			const instanceId = instance()?.id;
+			if (instanceId) {
+				void import("@stores/worlds").then(({ listInstanceWorlds }) =>
+					listInstanceWorlds(instanceId),
+				);
+			}
+		}
 	};
 
 	createEffect(() => {
@@ -2668,6 +2740,7 @@ export default function InstanceDetails(
 				onTabIntent={(v) => handleTabIntent(v as TabType)}
 			>
 				<div
+					ref={headerCollapse.setPageRoot}
 					class={styles["content-wrapper"]}
 					classList={{
 						[styles["content-wrapper--console"]]: activeTab() === "console",
@@ -2703,193 +2776,20 @@ export default function InstanceDetails(
 					>
 						{(inst) => (
 							<>
-								<header
-									class={styles["instance-details-header"]}
-									classList={{ [styles.shrunk]: activeTab() !== "home" }}
-									onMouseEnter={headerIconPreview.activate}
-									onMouseLeave={headerIconPreview.deactivate}
-									onFocusIn={headerIconPreview.activate}
-									onFocusOut={headerIconPreview.deactivate}
-								>
-									<div
-										class={styles["header-background"]}
-										style={{
-											"background-image": (
-												headerIconPreview.displaySource() || ""
-											).startsWith("linear-gradient")
-												? headerIconPreview.displaySource() || ""
-												: `url('${headerIconPreview.displaySource() || resolveResourceUrl(inst().iconPath || DEFAULT_ICONS[0])}')`,
-										}}
-									/>
-									<div class={styles["header-content"]}>
-										<div class={styles["header-main-info"]}>
-											<ResourceAvatar
-												name={inst().name}
-												icon={inst().iconPath || DEFAULT_ICONS[0]}
-												size={activeTab() === "home" ? 120 : 48}
-												class={styles["header-icon"]}
-											/>
-											<div class={styles["header-text"]}>
-												<h1>{inst().name}</h1>
-												<p class={styles["header-meta"]}>
-													{inst().minecraftVersion} •{" "}
-													{inst().modloader || "Vanilla"}
-													<Show when={inst().modpackId}>
-														<Tooltip placement="top">
-															<TooltipTrigger>
-																<svg
-																	class={styles["linked-icon"]}
-																	xmlns="http://www.w3.org/2000/svg"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	onClick={() => handleTabChange("versioning")}
-																>
-																	<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-																	<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-																</svg>
-															</TooltipTrigger>
-															<TooltipContent>
-																Linked to a{" "}
-																{inst().modpackPlatform?.toLowerCase()} modpack
-															</TooltipContent>
-														</Tooltip>
-													</Show>
-												</p>
-											</div>
-										</div>
-										<div class={styles["header-actions"]}>
-											<Button
-												variant="ghost"
-												size="md"
-												onClick={openInstanceFolder}
-												title="Open Folder"
-												aria-label="Open Folder"
-												class={styles["header-square-button"]}
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="18"
-													height="18"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-												>
-													<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-												</svg>
-											</Button>
-
-											<Button
-												variant="ghost"
-												size="md"
-												onClick={handlePin}
-												title={
-													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
-												}
-												aria-label={
-													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
-												}
-												class={styles["header-square-button"]}
-											>
-												<Show
-													when={isPinned()}
-													fallback={<PinIcon width="18" height="18" />}
-												>
-													<PinOffIcon width="18" height="18" />
-												</Show>
-											</Button>
-
-											<Button
-												onClick={isRunningGlobal() ? handleKill : handlePlay}
-												disabled={
-													busy() || isInstalling() || isLaunchingGlobal()
-												}
-												color={
-													isRunningGlobal() || currentCrash()
-														? "destructive"
-														: "primary"
-												}
-												data-color={
-													isRunningGlobal() ||
-													currentCrash() ||
-													isUpdateRecovery()
-														? "destructive"
-														: "primary"
-												}
-												variant="solid"
-												size="lg"
-												title={playButtonText()}
-												aria-label={playButtonText()}
-												class={styles["details-play-button"]}
-											>
-												<Show
-													when={busy() || isInstalling() || isLaunchingGlobal()}
-													fallback={
-														<span class={styles["details-play-button-icon"]}>
-															<Show
-																when={isRunningGlobal()}
-																fallback={
-																	<Show
-																		when={currentCrash() || isUpdateRecovery()}
-																		fallback={
-																			<PlayIcon width="16" height="16" />
-																		}
-																	>
-																		<ErrorIcon width="16" height="16" />
-																	</Show>
-																}
-															>
-																<KillIcon width="14" height="14" />
-															</Show>
-														</span>
-													}
-												>
-													<span class={styles["btn-spinner"]} />
-												</Show>
-												<span class={styles["details-play-button-label"]}>
-													{playButtonText()}
-												</span>
-											</Button>
-										</div>
-									</div>
-								</header>
-
-								<Show when={installationFailureReason()}>
-									{(reason) => (
-										<div
-											class={styles["installation-failure-banner"]}
-											role="alert"
-										>
-											<ErrorIcon width="16" height="16" />
-											<div>
-												<strong>Installation failed</strong>
-												<span>{reason()}</span>
-											</div>
-										</div>
-									)}
-								</Show>
-
-								<Show when={isUpdateRecovery()}>
-									<div
-										class={styles["installation-failure-banner"]}
-										role="alert"
-									>
-										<ErrorIcon width="16" height="16" />
-										<div>
-											<strong>Update recovery required</strong>
-											<span>
-												The previous version could not be fully restored. Resume
-												recovery before launching this instance.
-											</span>
-										</div>
-									</div>
-								</Show>
+								<InstanceHeader
+									instance={inst()}
+									compact={activeTab() !== "home" || !isDesktopHeader()}
+									action={primaryAction()}
+									busy={busy() || isInstalling() || isLaunchingGlobal()}
+									isPinned={isPinned()}
+									failureReason={installationFailureReason()}
+									updateRecovery={isUpdateRecovery()}
+									onPrimaryAction={isRunningGlobal() ? handleKill : handlePlay}
+									onOpenFolder={openInstanceFolder}
+									onTogglePin={handlePin}
+									onOpenVersion={() => handleTabChange("versioning")}
+									setRef={headerCollapse.setHeaderEl}
+								/>
 
 								<div class={styles["instance-tab-content"]}>
 									<TabsContent value="home">
@@ -2902,10 +2802,22 @@ export default function InstanceDetails(
 												</div>
 											</Show>
 											<Show when={instance.latest}>
-												<HomeTab
+												<OverviewTab
 													instance={inst()}
+													instanceSlug={slug()}
 													installedResources={installedResources() || []}
-													isRunning={isRunningGlobal()}
+													knownUpdateCount={
+														updatesKnown()
+															? Object.keys(updates()).length
+															: undefined
+													}
+													onManageResources={() => handleTabChange("resources")}
+													onAddResources={() => {
+														resources.setInstance(inst().id);
+														resources.setGameVersion(inst().minecraftVersion);
+														resources.setLoader(inst().modloader);
+														activeRouter()?.navigate("/resources");
+													}}
 												/>
 											</Show>
 										</Show>
@@ -2977,6 +2889,46 @@ export default function InstanceDetails(
 										</Show>
 									</TabsContent>
 
+									<TabsContent value="worlds">
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("worlds") &&
+												instance.latest
+											}
+										>
+											<Suspense
+												fallback={<InstanceTabLoading label="worlds" />}
+											>
+												<WorldsTab
+													instance={inst()}
+													selectedWorldDirectory={selectedWorldDirectory()}
+													onSelectedWorldChange={(
+														directoryName: string | null,
+													) =>
+														activeRouter()?.updateQuery(
+															"world",
+															directoryName,
+															true,
+														)
+													}
+													onAddDatapack={(world: WorldSummary) => {
+														openWorldDatapackBrowser(world, activeRouter());
+													}}
+													onOpenDatapackDetails={(
+														world: WorldSummary,
+														entry: WorldDatapackSummary,
+													) =>
+														openWorldDatapackDetails(
+															world,
+															entry,
+															activeRouter(),
+														)
+													}
+												/>
+											</Suspense>
+										</Show>
+									</TabsContent>
+
 									<TabsContent value="crash">
 										<Show
 											when={
@@ -3002,21 +2954,6 @@ export default function InstanceDetails(
 													router={activeRouter()}
 													onCleared={() => void handleRefetch()}
 												/>
-											</Suspense>
-										</Show>
-									</TabsContent>
-
-									<TabsContent value="screenshots">
-										<Show
-											when={
-												instanceTabLoader.visitedTabs().has("screenshots") &&
-												instance.latest
-											}
-										>
-											<Suspense
-												fallback={<InstanceTabLoading label="screenshots" />}
-											>
-												<ScreenshotsTab instanceIdSlug={slug()} />
 											</Suspense>
 										</Show>
 									</TabsContent>
@@ -3067,24 +3004,6 @@ export default function InstanceDetails(
 													}
 													searchableLoaderVersions={searchableLoaderVersions}
 													handleStandardUpdate={handleStandardUpdate}
-													setShowExportDialog={setShowExportDialog}
-													handleDuplicate={async () => {
-														const n = await dialogStore.prompt(
-															"Duplicate Instance",
-															"Enter name for the copy:",
-															{
-																defaultValue: `${inst().name} (Copy)`,
-															},
-														);
-														if (n) duplicateInstance(inst().id, n);
-													}}
-													handleHardReset={() => handleHardReset(inst())}
-													handleUninstall={() =>
-														handleUninstall(inst(), () =>
-															activeRouter()?.navigate("/"),
-														)
-													}
-													repairInstance={repairInstance}
 													mcVersions={mcVersions}
 												/>
 											</Suspense>
@@ -3174,6 +3093,28 @@ export default function InstanceDetails(
 														setIsLaunchActionDirty={setIsLaunchActionDirty}
 														invoke={invoke}
 														showToast={showToast}
+														isGuest={isGuest()}
+														busy={busy()}
+														setShowExportDialog={setShowExportDialog}
+														handleDuplicate={async () => {
+															const duplicateName = await dialogStore.prompt(
+																"Duplicate Instance",
+																"Enter name for the copy:",
+																{ defaultValue: `${inst().name} (Copy)` },
+															);
+															if (duplicateName)
+																await duplicateInstance(
+																	inst().id,
+																	duplicateName,
+																);
+														}}
+														handleHardReset={() => handleHardReset(inst())}
+														handleUninstall={() =>
+															handleUninstall(inst(), () =>
+																activeRouter()?.navigate("/"),
+															)
+														}
+														repairInstance={repairInstance}
 													/>
 												</Suspense>
 											</Show>
@@ -3241,6 +3182,13 @@ export default function InstanceDetails(
 					instanceName={instance()?.name || ""}
 				/>
 			</Show>
+			<WorldSelectionDialog
+				isOpen={Boolean(worldUpdate())}
+				initialInstanceId={instance()?.id}
+				projectName={worldUpdate()?.project.name}
+				onClose={() => setWorldUpdate(null)}
+				onSelect={handleWorldUpdate}
+			/>
 		</div>
 	);
 }

@@ -3,7 +3,7 @@ import {
 	computeHeaderCollapseProgress,
 	deriveHeaderCompactState,
 	HEADER_COLLAPSE_RANGE_PX,
-} from "./resource-details-header-progress";
+} from "./collapsing-header-progress";
 
 describe("computeHeaderCollapseProgress", () => {
 	it("returns zero when offset is zero", () => {

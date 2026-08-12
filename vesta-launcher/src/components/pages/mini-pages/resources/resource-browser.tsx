@@ -1,7 +1,14 @@
+import { getSourceDescriptor } from "@resources/source-catalog";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { type Instance, instancesState } from "@stores/instances";
-import { resources } from "@stores/resources";
+import {
+	type ResourceProject,
+	type ResourceVersion,
+	resources,
+} from "@stores/resources";
+import type { WorldSummary } from "@stores/worlds";
 import {
 	Pagination,
 	PaginationEllipsis,
@@ -18,8 +25,15 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
+import { confirmDatapackWorldCompatibility } from "@utils/datapack-compatibility-confirm";
+import { openExternal } from "@utils/external-link";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
-import { findBestVersionForInstance } from "@utils/resource-install-intent";
+import {
+	findBestExactDatapackVersion,
+	hasDownloadableArtifact,
+	requiresWorldTarget,
+	resolveInstanceInstallDecision,
+} from "@utils/resource-install-intent";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
@@ -33,32 +47,14 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
-import InstanceSelectionDialog from "./instance-selection-dialog";
 import styles from "./resource-browser.module.css";
 import ResourceCard from "./resource-card";
+import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import { ResourceSkeletonGrid } from "./resource-skeleton";
 import { ResourceToolbar } from "./resource-toolbar";
 
-const SORT_OPTIONS = {
-	modrinth: [
-		{ label: "Relevance", value: "relevance" },
-		{ label: "Downloads", value: "downloads" },
-		{ label: "Followers", value: "follows" },
-		{ label: "Newest", value: "newest" },
-		{ label: "Updated", value: "updated" },
-	],
-	curseforge: [
-		{ label: "Featured", value: "featured" },
-		{ label: "Popularity", value: "popularity" },
-		{ label: "Last Updated", value: "updated" },
-		{ label: "Newest", value: "newest" },
-		{ label: "Rating", value: "rating" },
-		{ label: "Name", value: "name" },
-		{ label: "Author", value: "author" },
-		{ label: "Total Downloads", value: "total_downloads" },
-	],
-};
-
+const projectKey = (project: Pick<ResourceProject, "id" | "source">) =>
+	`${project.source}:${project.id}`;
 const ResourceBrowser: Component<{
 	setRefetch?: (fn: () => Promise<void>) => void;
 	query?: string;
@@ -80,24 +76,49 @@ const ResourceBrowser: Component<{
 	const activeRouter = createMemo(() => props.router || router());
 	let debounceTimer: number | undefined;
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
+	const [worldInstall, setWorldInstall] = createSignal<{
+		project: ResourceProject;
+		versions: ResourceVersion[];
+		version?: ResourceVersion;
+		installType: ResourceProject["resource_type"];
+		instanceId: number;
+	} | null>(null);
 	let isInitializedFromProps = false;
+	const activeSelectionProjectKey = createMemo(() => {
+		const project =
+			worldInstall()?.project ??
+			(isInstanceDialogOpen() ? resources.state.installRequest?.project : undefined);
+		return project ? projectKey(project) : null;
+	});
 
 	const currentSortOptions = createMemo(
-		() =>
-			SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] ||
-			[],
+		() => getSourceDescriptor(resources.state.activeSource)?.sortOptions ?? [],
 	);
 
 	createEffect(() => {
-		if (resources.state.installRequest) {
-			setIsInstanceDialogOpen(true);
+		const request = resources.state.installRequest;
+		if (!request) return;
+		if (
+			request.preferredInstanceId != null &&
+			requiresWorldTarget(request.project, request.version, request.installType)
+		) {
+			setWorldInstall({
+				project: request.project,
+				versions: request.versions,
+				version: request.version,
+				installType: request.installType,
+				instanceId: request.preferredInstanceId,
+			});
+			resources.setInstallRequest(null);
+			return;
 		}
+		setIsInstanceDialogOpen(true);
 	});
 
 	const handleSelectInstance = async (instance: Instance) => {
 		const request = resources.state.installRequest;
 		if (!request) return;
-		const { project, versions } = request;
+		const { project, versions, installType } = request;
 
 		setIsInstanceDialogOpen(false);
 		resources.setInstallRequest(null);
@@ -107,14 +128,47 @@ const ResourceBrowser: Component<{
 				versions.length > 0
 					? versions
 					: await resources.getVersions(project.source, project.id);
-			const bestVersion = findBestVersionForInstance(
+			const decision = resolveInstanceInstallDecision(
 				project,
 				finalVersions,
 				instance,
+				installType,
+				request.version,
 			);
+			if (
+				decision.kind !== "unavailable" &&
+				decision.version &&
+				!hasDownloadableArtifact(decision.version)
+			) {
+				showToast({
+					title: "Third-party download required",
+					description: `Opening ${project.name} on the provider website.`,
+					severity: "info",
+				});
+				await openExternal(project.web_url);
+				return;
+			}
+			if (decision.kind === "world") {
+				setWorldInstall({
+					project,
+					versions: finalVersions,
+					version: decision.version,
+					installType,
+					instanceId: instance.id,
+				});
+				return;
+			}
 
-			if (bestVersion) {
-				await resources.install(project, bestVersion, instance.id);
+			if (decision.kind === "instance") {
+				await resources.install(
+					project,
+					decision.version,
+					{
+						kind: "instance",
+						instanceId: instance.id,
+					},
+					{ installType },
+				);
 			} else {
 				showToast({
 					title: "No compatible version",
@@ -131,16 +185,112 @@ const ResourceBrowser: Component<{
 		}
 	};
 
+	const handleSelectWorld = async (world: WorldSummary) => {
+		const context = worldInstall();
+		if (!context) return;
+		let selectedVersion = context.version;
+		if (!selectedVersion) {
+			selectedVersion =
+				findBestExactDatapackVersion(
+					context.versions,
+					world.gameVersion,
+					context.project.source,
+				) ?? undefined;
+			if (!selectedVersion) {
+				resources.setInstallRequest(null);
+				setWorldInstall(null);
+				activeRouter()?.navigate(
+					"/resource-details",
+					{
+						projectId: context.project.id,
+						platform: context.project.source,
+						resourceType: context.installType,
+						activeTab: "versions",
+					},
+					{ project: context.project },
+				);
+				showToast({
+					title: "Choose a datapack version",
+					description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version manually; Vesta will ask for the destination world when you install it.`,
+					severity: "warning",
+				});
+				return;
+			}
+		}
+		if (!hasDownloadableArtifact(selectedVersion)) {
+			setWorldInstall(null);
+			showToast({
+				title: "Third-party download required",
+				description: `Opening ${context.project.name} on the provider website.`,
+				severity: "info",
+			});
+			await openExternal(context.project.web_url);
+			return;
+		}
+
+		const { compatibility, acknowledged } =
+			await confirmDatapackWorldCompatibility({
+				projectName: context.project.name,
+				version: selectedVersion,
+				world,
+			});
+		if (!acknowledged) {
+			setWorldInstall(null);
+			activeRouter()?.navigate(
+				"/resource-details",
+				{
+					projectId: context.project.id,
+					platform: context.project.source,
+					resourceType: context.installType,
+					activeTab: "versions",
+				},
+				{ project: context.project },
+			);
+			showToast({
+				title: "Choose a datapack version",
+				description: `Choose another ${context.project.name} release. Vesta will ask for the destination world again when you install it.`,
+				severity: "warning",
+			});
+			return;
+		}
+		setWorldInstall(null);
+		try {
+			await resources.install(
+				context.project,
+				selectedVersion,
+				{
+					kind: "world",
+					world: world.ref,
+				},
+				{
+					installType: context.installType,
+					compatibilityAcknowledged: compatibility !== "exact",
+				},
+			);
+			showToast({
+				title: "Installation started",
+				description: `${context.project.name} will be installed into the selected world.`,
+				severity: "success",
+			});
+		} catch (err) {
+			showToast({
+				title: "Installation failed",
+				description: String(err),
+				severity: "error",
+			});
+		}
+	};
+
 	const handleCreateNew = () => {
 		const request = resources.state.installRequest;
 		if (!request) return;
-		const { project, versions } = request;
+		const { project, versions, installType } = request;
 
 		setIsInstanceDialogOpen(false);
 		resources.setInstallRequest(null);
 
 		const prefilledModpackInfo =
-			project.resource_type === "modpack"
+			installType === "modpack"
 				? buildBrowseModpackInfo(project, versions[0], {
 						minecraftVersion: resources.state.gameVersion,
 						loader: resources.state.loader,
@@ -152,8 +302,8 @@ const ResourceBrowser: Component<{
 			{
 				projectId: project.id,
 				platform: project.source,
-				isModpack: project.resource_type === "modpack",
-				resourceType: project.resource_type,
+				isModpack: installType === "modpack",
+				resourceType: installType,
 				projectName: project.name,
 				projectIcon: project.icon_url || undefined,
 				projectAuthor: project.author,
@@ -162,7 +312,7 @@ const ResourceBrowser: Component<{
 				initialMinecraftVersion: resources.state.gameVersion || undefined,
 				initialModloader: resources.state.loader || undefined,
 				modpackUrl:
-					project.resource_type === "modpack"
+					installType === "modpack"
 						? versions[0]?.download_url || undefined
 						: undefined,
 			},
@@ -173,7 +323,7 @@ const ResourceBrowser: Component<{
 							versions.length > 0 ? versions : undefined,
 					}
 				: {
-						pendingResource: { project, version: versions[0] },
+						pendingResource: { project, version: versions[0], installType },
 					},
 		);
 	};
@@ -185,6 +335,7 @@ const ResourceBrowser: Component<{
 				projectId: parsed.id,
 				platform: parsed.platform,
 				activeTab: parsed.activeTab,
+				resourceType: resources.state.resourceType,
 			});
 			resources.setQuery("");
 			return;
@@ -366,7 +517,6 @@ const ResourceBrowser: Component<{
 				onSearchInput={handleSearchInput}
 				searchValue={resources.state.query}
 			/>
-
 			<div class={styles["resource-results-info"]}>
 				<div class={styles["results-stats"]}>
 					<Show when={resources.state.totalHits > 0}>
@@ -591,10 +741,14 @@ const ResourceBrowser: Component<{
 								<For each={resources.state.results}>
 									{(project) => (
 										<ResourceCard
-											project={project}
-											viewMode={resources.state.viewMode}
-											router={activeRouter()}
-										/>
+										project={project}
+										viewMode={resources.state.viewMode}
+										router={activeRouter()}
+										installSelectionActive={
+											activeSelectionProjectKey() ===
+											projectKey(project)
+										}
+									/>
 									)}
 								</For>
 							</div>
@@ -635,7 +789,7 @@ const ResourceBrowser: Component<{
 				</Show>
 			</div>
 
-			<InstanceSelectionDialog
+			<ResourceInstanceSelectionDialog
 				isOpen={isInstanceDialogOpen()}
 				onClose={() => {
 					setIsInstanceDialogOpen(false);
@@ -645,6 +799,14 @@ const ResourceBrowser: Component<{
 				onCreateNew={handleCreateNew}
 				project={resources.state.installRequest?.project}
 				versions={resources.state.installRequest?.versions ?? []}
+				installType={resources.state.installRequest?.installType}
+			/>
+			<WorldSelectionDialog
+				isOpen={Boolean(worldInstall())}
+				initialInstanceId={worldInstall()?.instanceId}
+				projectName={worldInstall()?.project.name}
+				onClose={() => setWorldInstall(null)}
+				onSelectWorld={handleSelectWorld}
 			/>
 		</div>
 	);

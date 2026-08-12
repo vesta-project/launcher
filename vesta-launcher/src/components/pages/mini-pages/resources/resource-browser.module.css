@@ -620,10 +620,19 @@
 }
 
 .card-image-banner img {
+	position: absolute;
+	inset: 0;
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
-	transition: transform 0.4s ease;
+	opacity: 0;
+	transition:
+		opacity 0.2s ease,
+		transform 0.4s ease;
+}
+
+.card-image-banner img.card-image-visible {
+	opacity: 1;
 }
 
 .card-image-fallback {
@@ -644,12 +653,13 @@
 	height: 20px;
 	background: linear-gradient(to top, var(--surface-base), transparent);
 	pointer-events: none;
+	z-index: 1;
 }
 
 /* Fallback banner — dot-grid pattern tinted by icon hue, theme-aware */
 .card-image-fallback {
-	height: 150px;
-	position: relative;
+	position: absolute;
+	inset: 0;
 	overflow: hidden;
 	background-color: color-mix(
 		in srgb,

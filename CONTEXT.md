@@ -169,12 +169,91 @@ identity, file metadata, provenance fields, row cleanup, and local presence
 lookup. Resource discovery, remote metadata lookup, manifest matching, and
 workflow notifications remain outside the Ledger.
 
+Datapack rows remain Ledger-owned file facts, but their management scope is the
+exact World derived from the row's normalized path. They are intentionally
+absent from Instance Resource overviews, matching, batch actions, and update
+snapshots. The same remote datapack may therefore have independent rows in
+several Worlds.
+
+When a managed datapack bundle includes a companion resource pack, the World
+Manifest is the portable ownership link and the Ledger remains the file fact.
+Removing one datapack removes its companion only when no other bundle in the
+same World or any other discovered World may reference that exact relative
+path. Unreadable/corrupt metadata and hash mismatches retain the companion.
+Generic Instance Resource actions cannot remove or disable a linked companion.
+
 Primary modules:
 
 - `vesta-launcher/src-tauri/src/resources/ledger.rs`
 - `vesta-launcher/src-tauri/src/resources/update_policy.rs`
 - `vesta-launcher/src-tauri/src/resources/watcher.rs`
 - `vesta-launcher/src-tauri/src/tasks/resource_download.rs`
+
+### World
+
+A Java Edition folder world discovered as an immediate child of an Instance's
+`saves` directory. The filesystem is authoritative: a stable root `level.dat`
+or recovery `level.dat_old` establishes the world boundary, while all internal
+region, player, dimension, datapack, conversion, and future-version layouts are
+opaque to Vesta and preserved verbatim. Listing a World is read-only and does
+not create Vesta metadata.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/worlds/level_dat.rs`
+- `vesta-launcher/src-tauri/src/worlds/mod.rs`
+- `vesta-launcher/src/stores/worlds.ts`
+- `vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx`
+
+### World Manifest
+
+The optional portable `<world>/.vesta/world.json` document that stores only a
+Vesta world identity, source provenance, and managed component links. It never
+stores absolute paths, database identifiers, or derived presentation facts.
+The manifest is created only by a Vesta management action. Move preserves world
+and bundle identities; copy and duplicate regenerate them.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/worlds/manifest.rs`
+- `vesta-launcher/src-tauri/src/resources/ledger.rs`
+- `docs/adr/0009-filesystem-owned-worlds-and-portable-world-manifests.md`
+
+### World Management
+
+The provider-neutral workflow for installing archive-contained Java worlds,
+selecting a World as a datapack target, and moving, copying, or duplicating a
+World between Instances. The World Module owns archive safety, discovery,
+metadata, transfer verification, and publication. The Installed Resource Ledger
+owns installed datapack and companion resource-pack files. Resource source
+Adapters describe artifacts but do not choose filesystem destinations.
+The dedicated World Datapack Interface lists direct ZIP/JAR and directory-form
+packs for one validated WorldRef, exposes no absolute paths, and validates the
+exact World again before file mutations. Directory-form packs are visible but
+read-only. Instance Resource commands reject datapack rows.
+World transfers do not infer file availability from Instance process state;
+actual filesystem reads, copies, verification, and publication are authoritative,
+and inaccessible files surface as Task failures.
+
+World mutations participate in Task Manager conflict coordination. Logical
+keys cover exact Worlds, each Instance's `saves`, and each Instance's
+`resourcepacks`; multi-key reservations publish as one atomic set so waiting
+Tasks do not monopolize unrelated resources. Filesystem watcher bursts reconcile
+their final on-disk state after managed staging rather than racing Ledger rows.
+World archive publication uses no-replace filesystem primitives, and preflight
+enforces portable names, Unicode-aware collision detection, bounded candidate
+counts/expansion, compression-ratio limits, and regular file/directory entries.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/worlds/archive.rs`
+- `vesta-launcher/src-tauri/src/worlds/datapacks.rs`
+- `vesta-launcher/src-tauri/src/worlds/transfer.rs`
+- `vesta-launcher/src-tauri/src/tasks/world_install.rs`
+- `vesta-launcher/src-tauri/src/tasks/world_transfer.rs`
+- `vesta-launcher/src-tauri/src/commands/worlds.rs`
+- `vesta-launcher/src/components/worlds/WorldSelectionDialog.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldDatapacksView.tsx`
 
 ### Resource Reconciliation
 
@@ -205,8 +284,36 @@ Primary modules:
 ### Resource Browse Session
 
 The frontend state around browsing Resources. It includes query text, filters,
-source platform, selected Instance, categories, sort, pagination, router state,
-and search timing.
+source platform, selected Instance, categories, sort, pagination, project
+version lists, session-cached version details, router state, nested version
+focus, and search timing. The selected Instance is the only persistent install
+destination context: Resource browsing and details never retain a preferred
+World. A datapack chooses its World within the active install interaction, and
+the selected World is passed explicitly to the backend for that operation.
+Provider project objects and their cache entries retain the provider's canonical
+classification. A route or World-originated install type is carried beside that
+object and must not mutate cached project metadata. In-flight installation state
+is keyed by provider, project, version, and exact Instance or World target; a
+Ledger refresh clears only the target it proves was published.
+Versioned task failure signals preserve provider and target identity alongside
+encoded remote IDs, so frontend reconciliation clears only the exact failed
+install. The explicit format marker prevents provider names from being confused
+with World-folder text; the matcher retains provider-less legacy task-ID support
+for work interrupted before an upgrade.
+Instance-selection eligibility is built from fresh per-Instance Ledger reads.
+Version and Ledger lookups use latest-request publication, and an Instance stays
+unavailable while its installed state is unknown or could not be verified.
+Provider Adapters normalize changelog format and
+availability so missing release notes do not erase already-available file
+metadata, and distinguish CurseForge client/server environment labels from
+Minecraft versions. Provider switching accepts only peer lookups keyed to the
+current source/project identity, and only the latest project request may publish
+details into the active route. The page viewer supplies visible loading feedback
+while the lazy resource-details route module is fetched. Once mounted, Resource
+details uses the established project-fetch overlay for an uncached project, then
+hydrates the description, version list, sidebar, and focused-version regions
+behind independent loading boundaries; background refreshes do not unmount
+already-available regions.
 
 Primary modules:
 
@@ -214,20 +321,46 @@ Primary modules:
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-browser.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-toolbar.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/filter-popover.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-details.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-details-loading.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-details-loading-state.ts`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-version-focus.tsx`
+- `vesta-launcher/src/utils/resource-install-progress.ts`
+- `vesta-launcher/src/utils/resource-task-id.ts`
+- `vesta-launcher/src-tauri/src/resources/sources/mod.rs`
+- `vesta-launcher/src-tauri/src/resources/manager.rs`
 
 ### Resource Install Intent
 
 The user intent to install, update, remove, or navigate from a Resource into an
-Instance flow. It includes compatibility, installed matching, update availability,
-and action feedback.
+Instance or World flow. It includes an explicit install type, target,
+compatibility, installed matching, update availability, and action feedback.
+The install type is user intent rather than provider project classification.
+Compatible-version selection first constrains a provider's release feed to that
+intent. Provider metadata is not interchangeable: Modrinth's explicit datapack
+loader distinguishes mixed builds, while CurseForge's project class supplies the
+Resource type. Destination scope is decided only after an explicit version has
+been selected, so a combined datapack/resource-pack release cannot accidentally
+use an Instance-only target. Download availability is validated before asking
+for an Instance or World. Datapack quick selection uses the selected World's saved version,
+ignores its Instance loader, and requires an exact provider Minecraft-version
+tag; other tags remain manually installable after a confirmation that identifies
+the selected datapack release, provider-listed Minecraft versions, target World,
+and saved World version. Downloaded
+datapacks remain subject to root `pack.mcmeta` validation before publication.
+Opening a managed datapack from World Management navigates to its provider
+project without preselecting a World target. Immutable source-row context allows
+a later install into that same World to replace the exact managed row; choosing
+another World creates an independent installation.
 
 Primary modules:
 
 - `vesta-launcher/src/utils/resource-install-intent.ts`
+- `vesta-launcher/src/utils/datapack-compatibility-confirm.ts`
 - `vesta-launcher/src/utils/resources.ts`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-card.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-details.tsx`
-- `vesta-launcher/src/components/pages/mini-pages/resources/instance-selection-dialog.tsx`
+- `vesta-launcher/src/components/pages/mini-pages/resources/resource-instance-selection-dialog.tsx`
 
 ### Instance Draft
 

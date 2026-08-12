@@ -1,0 +1,32 @@
+.world-icon {
+	display: block;
+	width: 48px;
+	height: 48px;
+	flex: 0 0 auto;
+	border: 1px solid var(--border-subtle);
+	border-radius: 10px;
+	background: var(--surface-sunken);
+	object-fit: cover;
+}
+
+.world-icon--fallback {
+	display: grid;
+	place-items: center;
+	background:
+		radial-gradient(
+			circle at 70% 20%,
+			color-mix(in srgb, var(--primary) 25%, transparent),
+			transparent 45%
+		),
+		linear-gradient(150deg, var(--surface-medium), var(--surface-sunken));
+}
+
+.world-icon--fallback svg {
+	width: 58%;
+	height: 58%;
+	fill: color-mix(in srgb, var(--primary) 16%, transparent);
+	stroke: color-mix(in srgb, var(--text-secondary) 80%, var(--primary));
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.7;
+}
