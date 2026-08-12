@@ -254,6 +254,14 @@ const world = (overrides: Partial<WorldSummary> = {}): WorldSummary => ({
 	...overrides,
 });
 
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((accept) => {
+		resolve = accept;
+	});
+	return { promise, resolve };
+}
+
 describe("world datapack navigation", () => {
 	beforeEach(() => vi.clearAllMocks());
 
@@ -634,6 +642,78 @@ describe("WorldDatapacksView", () => {
 				replacementResourceId: 11,
 			},
 		);
+	});
+
+	it("keeps each datapack row busy until its own operation finishes", async () => {
+		const firstToggle = deferred<void>();
+		const secondToggle = deferred<void>();
+		mocks.toggleWorldDatapack.mockImplementation(
+			(_worldRef: unknown, resourceId: number) =>
+				resourceId === 11 ? firstToggle.promise : secondToggle.promise,
+		);
+		mocks.worldDatapacksState.byWorld["7:World One"] = {
+			world: world().ref,
+			entries: [
+				{
+					resourceId: 11,
+					fileName: "first.zip",
+					displayName: "First Pack",
+					entryKind: "file",
+					platform: "modrinth",
+					projectId: "first",
+					versionId: "one",
+					versionNumber: "1.0",
+					enabled: true,
+					managed: true,
+					readOnly: false,
+					sizeBytes: 512,
+					modifiedAt: null,
+				},
+				{
+					resourceId: 12,
+					fileName: "second.zip",
+					displayName: "Second Pack",
+					entryKind: "file",
+					platform: "modrinth",
+					projectId: "second",
+					versionId: "two",
+					versionNumber: "1.0",
+					enabled: true,
+					managed: true,
+					readOnly: false,
+					sizeBytes: 512,
+					modifiedAt: null,
+				},
+			],
+		};
+
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
+			/>
+		));
+
+		const firstSwitch = screen.getByRole("switch", {
+			name: "Disable First Pack",
+		}) as HTMLButtonElement;
+		const secondSwitch = screen.getByRole("switch", {
+			name: "Disable Second Pack",
+		}) as HTMLButtonElement;
+		await fireEvent.click(firstSwitch);
+		await fireEvent.click(secondSwitch);
+
+		expect(firstSwitch.disabled).toBe(true);
+		expect(secondSwitch.disabled).toBe(true);
+
+		firstToggle.resolve();
+		await waitFor(() => expect(firstSwitch.disabled).toBe(false));
+		expect(secondSwitch.disabled).toBe(true);
+
+		secondToggle.resolve();
+		await waitFor(() => expect(secondSwitch.disabled).toBe(false));
 	});
 
 	it("explains when a linked resource pack is retained for another world", async () => {

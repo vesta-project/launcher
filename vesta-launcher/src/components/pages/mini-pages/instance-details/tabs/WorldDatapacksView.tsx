@@ -336,7 +336,9 @@ export const WorldDatapacksView: Component<{
 	) => void;
 }> = (props) => {
 	const key = createMemo(() => worldRefKey(props.world.ref));
-	const [busyResourceId, setBusyResourceId] = createSignal<number | null>(null);
+	const [busyResourceIds, setBusyResourceIds] = createSignal<ReadonlySet<number>>(
+		new Set(),
+	);
 	const [projectIcons, setProjectIcons] = createSignal<Record<string, string>>(
 		{},
 	);
@@ -439,6 +441,15 @@ export const WorldDatapacksView: Component<{
 			listWorldDatapacks(props.world.ref, true),
 			checkWorldDatapackUpdates(props.world.ref, true),
 		]).catch(() => undefined);
+	const setResourceBusy = (resourceId: number | null, busy: boolean) => {
+		if (resourceId == null) return;
+		setBusyResourceIds((current) => {
+			const next = new Set(current);
+			if (busy) next.add(resourceId);
+			else next.delete(resourceId);
+			return next;
+		});
+	};
 
 	return (
 		<section
@@ -558,7 +569,10 @@ export const WorldDatapacksView: Component<{
 									<DatapackRow
 										entry={entry}
 										world={props.world}
-										busy={busyResourceId() === entry.resourceId}
+										busy={
+											entry.resourceId != null &&
+											busyResourceIds().has(entry.resourceId)
+										}
 										icon={
 											projectIcons()[
 												projectKey(entry.platform, entry.projectId) ?? ""
@@ -568,7 +582,7 @@ export const WorldDatapacksView: Component<{
 											(update) => update.resourceId === entry.resourceId,
 										)}
 										onBusyChange={(busy) =>
-											setBusyResourceId(busy ? entry.resourceId : null)
+											setResourceBusy(entry.resourceId, busy)
 										}
 										onOpenDetails={() =>
 											props.onOpenDatapackDetails(props.world, entry)
