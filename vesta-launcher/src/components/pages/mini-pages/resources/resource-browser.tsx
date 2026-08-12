@@ -52,6 +52,9 @@ import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialo
 import { ResourceSkeletonGrid } from "./resource-skeleton";
 import { ResourceToolbar } from "./resource-toolbar";
 
+const projectKey = (project: Pick<ResourceProject, "id" | "source">) =>
+	`${project.source}:${project.id}`;
+
 const SORT_OPTIONS = {
 	modrinth: [
 		{ label: "Relevance", value: "relevance" },
@@ -101,6 +104,12 @@ const ResourceBrowser: Component<{
 		instanceId: number;
 	} | null>(null);
 	let isInitializedFromProps = false;
+	const activeSelectionProjectKey = createMemo(() => {
+		const project =
+			worldInstall()?.project ??
+			(isInstanceDialogOpen() ? resources.state.installRequest?.project : undefined);
+		return project ? projectKey(project) : null;
+	});
 
 	const currentSortOptions = createMemo(
 		() =>
@@ -754,10 +763,14 @@ const ResourceBrowser: Component<{
 								<For each={resources.state.results}>
 									{(project) => (
 										<ResourceCard
-											project={project}
-											viewMode={resources.state.viewMode}
-											router={activeRouter()}
-										/>
+										project={project}
+										viewMode={resources.state.viewMode}
+										router={activeRouter()}
+										installSelectionActive={
+											activeSelectionProjectKey() ===
+											projectKey(project)
+										}
+									/>
 									)}
 								</For>
 							</div>

@@ -50,6 +50,7 @@ const ResourceCard: Component<{
 	project: ResourceProject;
 	viewMode: "grid" | "list";
 	router?: MiniRouter;
+	installSelectionActive?: boolean;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
 	const installType = () => resources.state.resourceType;
@@ -87,6 +88,7 @@ const ResourceCard: Component<{
 		createSignal<ResourceVersion | null>(null);
 	const installing = () =>
 		localInstalling() ||
+		Boolean(props.installSelectionActive) ||
 		(installType() !== "datapack" && isInstallingProject());
 
 	const isUpdateAvailable = createMemo(() => {
