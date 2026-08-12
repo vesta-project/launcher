@@ -110,6 +110,12 @@ export type WorldDatapackUpdateCheck = {
 	updates: WorldDatapackUpdateStatus[];
 };
 
+export type WorldDatapackRemoval = {
+	removedCompanionCount: number;
+	retainedCompanionCount: number;
+	cleanupWarning: string | null;
+};
+
 type WorldsState = {
 	byInstance: Record<number, WorldSummary[]>;
 	loading: Record<number, boolean>;
@@ -315,8 +321,8 @@ export async function toggleWorldDatapack(
 export async function deleteWorldDatapack(
 	world: WorldRef,
 	resourceId: number,
-): Promise<void> {
-	await invoke("delete_world_datapack", { worldRef: world, resourceId });
+): Promise<WorldDatapackRemoval> {
+	return invoke("delete_world_datapack", { worldRef: world, resourceId });
 }
 
 export function openWorldDatapacksFolder(world: WorldRef): Promise<void> {

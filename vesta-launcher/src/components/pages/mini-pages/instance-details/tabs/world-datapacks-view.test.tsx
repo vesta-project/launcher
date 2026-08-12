@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
 	checkWorldDatapackUpdates: vi.fn().mockResolvedValue(undefined),
 	openWorldDatapacksFolder: vi.fn().mockResolvedValue(undefined),
 	toggleWorldDatapack: vi.fn().mockResolvedValue(undefined),
-	deleteWorldDatapack: vi.fn().mockResolvedValue(undefined),
+	deleteWorldDatapack: vi.fn().mockResolvedValue({
+		removedCompanionCount: 0,
+		retainedCompanionCount: 0,
+		cleanupWarning: null,
+	}),
 	setType: vi.fn(),
 	setInstance: vi.fn(),
 	setGameVersion: vi.fn(),

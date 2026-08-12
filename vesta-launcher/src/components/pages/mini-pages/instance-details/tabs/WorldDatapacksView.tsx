@@ -119,7 +119,7 @@ const DatapackRow: Component<{
 		if (!canManage() || props.busy) return;
 		const confirmed = await dialogStore.confirm(
 			`Remove ${props.entry.displayName}?`,
-			`This removes the datapack from ${props.world.displayName}. Other worlds are not affected.`,
+			`This removes the datapack from ${props.world.displayName}. A linked resource pack is removed only when no other world still references it.`,
 			{
 				okLabel: "Remove datapack",
 				severity: "warning",
@@ -129,11 +129,22 @@ const DatapackRow: Component<{
 
 		props.onBusyChange(true);
 		try {
-			await deleteWorldDatapack(props.world.ref, props.entry.resourceId!);
+			const removal = await deleteWorldDatapack(
+				props.world.ref,
+				props.entry.resourceId!,
+			);
+			const companionDescription =
+				removal.removedCompanionCount > 0
+					? " Its linked resource pack was also removed."
+					: removal.retainedCompanionCount > 0
+						? " Its linked resource pack is still used by another world and was retained."
+						: "";
 			showToast({
 				title: "Datapack removed",
-				description: `${props.entry.displayName} was removed from ${props.world.displayName}.`,
-				severity: "success",
+				description:
+					removal.cleanupWarning ??
+					`${props.entry.displayName} was removed from ${props.world.displayName}.${companionDescription}`,
+				severity: removal.cleanupWarning ? "warning" : "success",
 			});
 		} catch (error) {
 			showToast({

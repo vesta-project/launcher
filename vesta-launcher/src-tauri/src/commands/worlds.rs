@@ -127,8 +127,8 @@ pub fn delete_world_datapack(
     world_manager: State<'_, WorldManager>,
     world_ref: WorldRef,
     resource_id: i32,
-) -> Result<(), String> {
-    crate::worlds::datapacks::delete_world_datapack(&world_ref, resource_id)?;
+) -> Result<crate::worlds::datapacks::WorldDatapackRemoval, String> {
+    let removal = crate::worlds::datapacks::delete_world_datapack(&world_ref, resource_id)?;
     world_manager.invalidate(world_ref.instance_id);
     let rows_result = crate::resources::reconciliation::emit_rows_changed(
         &app_handle,
@@ -141,7 +141,8 @@ pub fn delete_world_datapack(
         "datapack-deleted",
     );
     world_result?;
-    rows_result.map_err(|error| error.to_string())
+    rows_result.map_err(|error| error.to_string())?;
+    Ok(removal)
 }
 
 #[tauri::command]
