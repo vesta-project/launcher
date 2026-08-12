@@ -6,6 +6,8 @@ import InfoIcon from "@assets/info.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
+import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
+import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-composition/collapsing-header-progress";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
@@ -71,8 +73,6 @@ import {
 } from "solid-js";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import styles from "./resource-details.module.css";
-import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-composition/collapsing-header-progress";
-import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
 	ResourceDescriptionLoading,
 	ResourceDetailsSidebarLoading,
@@ -90,6 +90,7 @@ import {
 } from "./resource-version-focus";
 import {
 	currentPeerProject,
+	focusedResourceVersion,
 	minecraftGameVersions,
 	resourceProjectKey,
 	versionsSupportedByInstance,
@@ -523,13 +524,11 @@ const ResourceDetailsPage: Component<{
 	const focusedVersion = createMemo(() => {
 		const versionId = focusedVersionId();
 		if (!versionId) return null;
-		return (
-			versionDetails.latest?.version ||
-			(optimisticFocusedVersion()?.id === versionId
-				? optimisticFocusedVersion()
-				: null) ||
-			resources.state.versions.find((version) => version.id === versionId) ||
-			null
+		return focusedResourceVersion(
+			versionId,
+			versionDetails.latest?.version,
+			optimisticFocusedVersion(),
+			resources.state.versions,
 		);
 	});
 

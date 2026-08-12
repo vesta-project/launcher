@@ -3,6 +3,7 @@ import type { ResourceProject, ResourceVersion } from "@stores/resources";
 import { describe, expect, it } from "vitest";
 import {
 	currentPeerProject,
+	focusedResourceVersion,
 	minecraftGameVersions,
 	renderVersionChangelog,
 	resourceProjectKey,
@@ -128,6 +129,32 @@ describe("currentPeerProject", () => {
 				peer: modrinthPeer,
 			}),
 		).toBe(modrinthPeer);
+	});
+});
+
+describe("focusedResourceVersion", () => {
+	const stale = version("stale", ["1.21"], ["fabric"]);
+	const focused = version("focused", ["1.21"], ["fabric"]);
+
+	it("rejects details retained from the previously focused version", () => {
+		expect(
+			focusedResourceVersion("focused", stale, focused, [stale, focused]),
+		).toBe(focused);
+	});
+
+	it("prefers matching loaded details over optimistic and listed data", () => {
+		const loaded = { ...focused, version_number: "loaded" };
+		const optimistic = { ...focused, version_number: "optimistic" };
+
+		expect(
+			focusedResourceVersion("focused", loaded, optimistic, [focused]),
+		).toBe(loaded);
+	});
+
+	it("falls back to the matching listed version", () => {
+		expect(focusedResourceVersion("focused", stale, null, [focused])).toBe(
+			focused,
+		);
 	});
 });
 
