@@ -290,6 +290,11 @@ focus, and search timing. The selected Instance is the only persistent install
 destination context: Resource browsing and details never retain a preferred
 World. A datapack chooses its World within the active install interaction, and
 the selected World is passed explicitly to the backend for that operation.
+Provider project objects and their cache entries retain the provider's canonical
+classification. A route or World-originated install type is carried beside that
+object and must not mutate cached project metadata. In-flight installation state
+is keyed by provider, project, version, and exact Instance or World target; a
+Ledger refresh clears only the target it proves was published.
 Provider Adapters normalize changelog format and
 availability so missing release notes do not erase already-available file
 metadata, and distinguish CurseForge client/server environment labels from
@@ -324,7 +329,9 @@ The install type is user intent rather than provider project classification.
 Compatible-version selection first constrains a provider's release feed to that
 intent. Provider metadata is not interchangeable: Modrinth's explicit datapack
 loader distinguishes mixed builds, while CurseForge's project class supplies the
-Resource type. Datapack quick selection uses the selected World's saved version,
+Resource type. Destination scope is decided only after an explicit version has
+been selected, so a combined datapack/resource-pack release cannot accidentally
+use an Instance-only target. Datapack quick selection uses the selected World's saved version,
 ignores its Instance loader, and requires an exact provider Minecraft-version
 tag; other tags remain manually installable after acknowledgement. Downloaded
 datapacks remain subject to root `pack.mcmeta` validation before publication.
