@@ -1295,6 +1295,7 @@ const ResourceDetailsPage: Component<{
 					setError(null);
 					void resources.selectProject(initialProject);
 				} else if (id && platform) {
+					setProjectLoadSettled(false);
 					void fetchFullProject(platform, id);
 				} else {
 					void resources.selectProject(initialProject);
