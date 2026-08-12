@@ -36,6 +36,8 @@ fluent-bundle = "0.16"
 include_dir = "0.7"
 sys-locale = "0.3"
 unic-langid = "0.9"
+unicode-casefold = "0.2"
+unicode-normalization = "0.1"
 
 tauri-plugin-os = "2.3.2"
 tauri-plugin-log = "2.8"
