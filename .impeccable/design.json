@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-09T00:00:00+10:00",
+  "title": "Design System: Vesta Launcher",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Personal Teal",
+        "canonical": "hsl(var(--color__primary-hue) 70% var(--button-lightness))",
+        "tonalRamp": [
+          "hsl(var(--color__primary-hue) 70% 35%)",
+          "hsl(var(--color__primary-hue) 70% 50%)",
+          "hsl(var(--color__primary-hue) 70% 55%)",
+          "hsl(var(--color__primary-hue) 80% 60%)"
+        ]
+      },
+      "surface-base": {
+        "role": "neutral",
+        "displayName": "Base Surface",
+        "canonical": "hsl(var(--color__primary-hue) 10% var(--lightness-surface-base) / var(--effect-opacity))",
+        "tonalRamp": [
+          "var(--surface-sunken)",
+          "var(--surface-base)",
+          "var(--surface-raised)",
+          "var(--surface-overlay)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "System Display",
+        "purpose": "High-emphasis titles and feature names."
+      },
+      "body": {
+        "displayName": "System UI",
+        "purpose": "Readable controls, content, and interface labels."
+      },
+      "mono": {
+        "displayName": "Technical Mono",
+        "purpose": "Technical values, paths, and console-like content."
+      }
+    },
+    "shadows": [
+      {
+        "name": "elevation-soft",
+        "value": "0 2px 10px hsl(0 0% 0% / 0.18)",
+        "purpose": "Resting surface separation."
+      },
+      {
+        "name": "elevation-medium",
+        "value": "0 6px 20px hsl(0 0% 0% / 0.22)",
+        "purpose": "Hoverable cards and raised interactive regions."
+      },
+      {
+        "name": "elevation-strong",
+        "value": "0 12px 32px hsl(0 0% 0% / 0.3)",
+        "purpose": "Dialogs and clearly floating layers."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "180ms ease",
+        "purpose": "Default button and control state transition."
+      },
+      {
+        "name": "theme-transition",
+        "value": "140ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Theme preset transition."
+      },
+      {
+        "name": "dialog-transition",
+        "value": "200ms ease-out",
+        "purpose": "Dialog fade-and-scale entry."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "desktop-minimum",
+        "value": "450px"
+      },
+      {
+        "name": "content-standard",
+        "value": "960px"
+      },
+      {
+        "name": "content-wide",
+        "value": "1200px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Theme-derived primary action with compact desktop spacing.",
+      "html": "<button class=\"ds-btn-primary\">LAUNCH INSTANCE</button>",
+      "css": ".ds-btn-primary { border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--accent-primary); color: var(--text-on-primary); padding: 8px 16px; font: inherit; transition: background-color 180ms ease, transform 180ms ease; } .ds-btn-primary:hover { background: var(--interactive-hover); transform: translateY(-1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }"
+    },
+    {
+      "name": "Liquid Glass Surface",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A configurable raised surface that adapts to glass, frosted, and flat theme modes.",
+      "html": "<section class=\"ds-glass-card\"><h2>Instance settings</h2><p>Configure this instance before launching.</p></section>",
+      "css": ".ds-glass-card { position: relative; overflow: clip; border: var(--border-width-subtle) solid var(--border-subtle); border-radius: 8px; background: var(--liquid-background); box-shadow: var(--liquid-box-shadow); backdrop-filter: var(--liquid-backdrop-filter); padding: 24px; color: var(--text-primary); } .ds-glass-card p { color: var(--text-secondary); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Personal Game Command Center",
+    "overview": "Vesta is a polished, approachable desktop workspace for configuring and launching a personal Minecraft setup. Its default liquid-glass expression is customizable and experimental rather than mandatory.",
+    "keyCharacteristics": [
+      "Theme personalization is structural.",
+      "Hierarchy relies on layered surfaces and selective elevation.",
+      "The default teal balances calm technical clarity, game energy, and customization.",
+      "Native desktop conditions and accessibility preferences override decoration."
+    ],
+    "rules": [
+      {
+        "name": "The Personal Palette Rule",
+        "body": "Derive new visual color from the active theme variables; never hard-code a competing product palette.",
+        "section": "colors"
+      },
+      {
+        "name": "The Depth-With-Purpose Rule",
+        "body": "Elevation signals hierarchy or interaction; it is not a substitute for structure.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use semantic CSS variables so each interface remains coherent under every supported theme.",
+      "Do treat flat mode, light mode, reduced motion, and higher-contrast preferences as complete presentations.",
+      "Do keep desktop controls compact, legible, and recognizable before adding decoration."
+    ],
+    "donts": [
+      "Don't hard-code decorative colors that bypass the theme engine.",
+      "Don't require grain, blur, or a particular window effect for hierarchy or readability.",
+      "Don't let personalization make text contrast, focus visibility, or semantic status ambiguous."
+    ]
+  }
+}
