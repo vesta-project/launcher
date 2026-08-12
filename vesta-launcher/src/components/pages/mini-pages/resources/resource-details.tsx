@@ -523,7 +523,7 @@ const ResourceDetailsPage: Component<{
 		const versionId = focusedVersionId();
 		if (!versionId) return null;
 		return (
-			versionDetails()?.version ||
+			versionDetails.latest?.version ||
 			(optimisticFocusedVersion()?.id === versionId
 				? optimisticFocusedVersion()
 				: null) ||
@@ -588,7 +588,7 @@ const ResourceDetailsPage: Component<{
 	>(() => invoke("get_notification_subscriptions"));
 
 	const isFollowing = createMemo(() => {
-		const subs = subscriptions();
+		const subs = subscriptions.latest;
 		const p = project();
 		if (!subs || !p) return false;
 		return subs.some(
@@ -602,7 +602,7 @@ const ResourceDetailsPage: Component<{
 		if (!p) return;
 
 		if (isFollowing()) {
-			const sub = subscriptions()?.find((s) => {
+			const sub = subscriptions.latest?.find((s) => {
 				return s.provider_type === "resource" && s.target_id === p.id;
 			});
 			if (sub) {
@@ -651,7 +651,7 @@ const ResourceDetailsPage: Component<{
 	);
 
 	const peerProject = createMemo(() =>
-		currentPeerProject(project(), peerProjectLookup()),
+		currentPeerProject(project(), peerProjectLookup.latest),
 	);
 
 	const canSwitchToPlatform = (target: SourcePlatform) => {
@@ -2117,7 +2117,7 @@ const ResourceDetailsPage: Component<{
 				project={currentProject}
 				version={version}
 				installControls={focusedInstallationControls(version)}
-				dependencyProjects={dependencyData() || new Map()}
+				dependencyProjects={dependencyData.latest || new Map()}
 				onOpenProject={openDependencyProject}
 				sections={sections}
 			/>
@@ -2980,7 +2980,7 @@ const ResourceDetailsPage: Component<{
 													{(version) => (
 														<VersionFocusMain
 															version={version()}
-															details={versionDetails()}
+															details={versionDetails.latest}
 															loading={versionDetails.loading}
 															error={
 																versionDetails.error
