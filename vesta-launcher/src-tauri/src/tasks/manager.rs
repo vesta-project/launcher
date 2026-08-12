@@ -721,6 +721,8 @@ impl TaskManager {
     pub fn cancel_instance_tasks(&self, instance_id: i32) {
         let tokens = self.cancellation_tokens.lock().unwrap();
         let install_prefix = format!("install_instance_{}", instance_id);
+        let versioned_download_instance_prefix = format!("download|v2|instance-{}|", instance_id);
+        let versioned_download_world_prefix = format!("download|v2|world-{}-", instance_id);
         let download_instance_prefix = format!("download|instance-{}|", instance_id);
         let download_world_prefix = format!("download|world-{}-", instance_id);
         // Legacy underscore task ids (pre-separator change).
@@ -729,6 +731,8 @@ impl TaskManager {
 
         for (key, tx) in tokens.iter() {
             if key.starts_with(&install_prefix)
+                || key.starts_with(&versioned_download_instance_prefix)
+                || key.starts_with(&versioned_download_world_prefix)
                 || key.starts_with(&download_instance_prefix)
                 || key.starts_with(&download_world_prefix)
                 || key.starts_with(&legacy_download_prefix)

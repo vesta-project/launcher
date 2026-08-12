@@ -9,7 +9,9 @@ const B64URL = /^[A-Za-z0-9_-]+$/;
 
 function decodeBase64Url(value: string): string | null {
 	if (!value || !B64URL.test(value)) return null;
-	const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (value.length % 4)) % 4);
+	const padded =
+		value.replace(/-/g, "+").replace(/_/g, "/") +
+		"=".repeat((4 - (value.length % 4)) % 4);
 	try {
 		if (typeof atob === "function") {
 			const binary = atob(padded);
@@ -23,15 +25,17 @@ function decodeBase64Url(value: string): string | null {
 }
 
 /**
- * Parse `download|{target}|{platform}|{projectB64}|{versionB64}`, the earlier
- * pipe format without a platform, or the legacy underscore format. Parsing
- * from the final separators keeps raw `|` characters in world names intact.
+ * Parse `download|v2|{target}|{platform}|{projectB64}|{versionB64}`, the
+ * earlier pipe format without a platform, or the legacy underscore format.
+ * The explicit v2 marker keeps provider fields distinguishable from raw `|`
+ * characters in world names.
  */
 export function parseDownloadTaskId(
 	taskId: string,
 ): ParsedDownloadTaskId | null {
 	if (taskId.startsWith("download|")) {
-		const prefixLength = "download|".length;
+		const versioned = taskId.startsWith("download|v2|");
+		const prefixLength = versioned ? "download|v2|".length : "download|".length;
 		const versionSeparator = taskId.lastIndexOf("|");
 		const projectSeparator = taskId.lastIndexOf("|", versionSeparator - 1);
 		if (
@@ -48,13 +52,14 @@ export function parseDownloadTaskId(
 
 		let target = taskId.slice(prefixLength, projectSeparator);
 		let platform: string | null = null;
-		const platformSeparator = target.lastIndexOf("|");
-		if (platformSeparator >= 0) {
-			const candidate = target.slice(platformSeparator + 1).toLowerCase();
-			if (["modrinth", "curseforge", "smithed"].includes(candidate)) {
-				platform = candidate;
-				target = target.slice(0, platformSeparator);
+		if (versioned) {
+			const platformSeparator = target.lastIndexOf("|");
+			if (platformSeparator < 0) return null;
+			platform = target.slice(platformSeparator + 1).toLowerCase();
+			if (!["modrinth", "curseforge", "smithed"].includes(platform)) {
+				return null;
 			}
+			target = target.slice(0, platformSeparator);
 		}
 		if (!target) return null;
 		return { target, platform, projectId, versionId };

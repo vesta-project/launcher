@@ -1,10 +1,10 @@
+import { describe, expect, it } from "vitest";
 import {
 	installingIdsFromTargets,
 	installTargetMatchesTaskId,
 	parseInstallTargetKey,
 	reconcileInstalledInstanceTargets,
 } from "./resource-install-progress";
-import { describe, expect, it } from "vitest";
 
 describe("resource install progress", () => {
 	it("parses world directory names containing colons", () => {
@@ -64,19 +64,19 @@ describe("resource install progress", () => {
 		expect(
 			installTargetMatchesTaskId(
 				"smithed:pack:1.0.0:instance:7",
-				"download|instance-7|smithed|cGFjaw|MS4wLjA",
+				"download|v2|instance-7|smithed|cGFjaw|MS4wLjA",
 			),
 		).toBe(true);
 		expect(
 			installTargetMatchesTaskId(
 				"modrinth:pro|ject:v1|extra:world:7:World|Copy",
-				"download|world-7-World|Copy|modrinth|cHJvfGplY3Q|djF8ZXh0cmE",
+				"download|v2|world-7-World|Copy|modrinth|cHJvfGplY3Q|djF8ZXh0cmE",
 			),
 		).toBe(true);
 	});
 
 	it("does not clear a different provider or destination", () => {
-		const taskId = "download|world-7-World One|smithed|cGFjaw|dmVyc2lvbg";
+		const taskId = "download|v2|world-7-World One|smithed|cGFjaw|dmVyc2lvbg";
 		expect(
 			installTargetMatchesTaskId(
 				"modrinth:pack:version:world:7:World One",
@@ -96,6 +96,15 @@ describe("resource install progress", () => {
 			installTargetMatchesTaskId(
 				"modrinth:pack:version:instance:7",
 				"download|instance-7|cGFjaw|dmVyc2lvbg",
+			),
+		).toBe(true);
+	});
+
+	it("matches legacy world names ending in a provider name", () => {
+		expect(
+			installTargetMatchesTaskId(
+				"modrinth:pack:version:world:7:My|smithed",
+				"download|world-7-My|smithed|cGFjaw|dmVyc2lvbg",
 			),
 		).toBe(true);
 	});

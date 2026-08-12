@@ -423,7 +423,7 @@ impl Task for ResourceDownloadTask {
         let project_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&self.project_id);
         let version_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&self.version.id);
         Some(format!(
-            "download|{}|{}|{}|{}",
+            "download|v2|{}|{}|{}|{}",
             target,
             self.platform.as_str(),
             project_id,
@@ -1156,7 +1156,7 @@ mod tests {
 
         assert_eq!(
             task.id().as_deref(),
-            Some("download|world-7-World|Copy|smithed|cHJvfGplY3Q|djF8ZXh0cmE")
+            Some("download|v2|world-7-World|Copy|smithed|cHJvfGplY3Q|djF8ZXh0cmE")
         );
     }
 }

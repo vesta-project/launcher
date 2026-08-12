@@ -295,10 +295,11 @@ classification. A route or World-originated install type is carried beside that
 object and must not mutate cached project metadata. In-flight installation state
 is keyed by provider, project, version, and exact Instance or World target; a
 Ledger refresh clears only the target it proves was published.
-Task failure signals preserve provider and target identity alongside encoded
-remote IDs, so frontend reconciliation clears only the exact failed install;
-the matcher retains legacy task-ID support for work interrupted before an
-upgrade.
+Versioned task failure signals preserve provider and target identity alongside
+encoded remote IDs, so frontend reconciliation clears only the exact failed
+install. The explicit format marker prevents provider names from being confused
+with World-folder text; the matcher retains provider-less legacy task-ID support
+for work interrupted before an upgrade.
 Instance-selection eligibility is built from fresh per-Instance Ledger reads.
 Version and Ledger lookups use latest-request publication, and an Instance stays
 unavailable while its installed state is unknown or could not be verified.
