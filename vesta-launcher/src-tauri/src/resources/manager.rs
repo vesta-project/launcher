@@ -624,7 +624,12 @@ impl ResourceManager {
         {
             let cache = self.project_cache.read().await;
             if let Some(project) = cache.get(&(platform, id.to_string())) {
-                return Ok(project.clone());
+                // Batch dependency lookups may cache summary-only projects. A
+                // details request must hydrate those instead of treating them as
+                // a complete project and leaving the details page unresolved.
+                if project.description.is_some() {
+                    return Ok(project.clone());
+                }
             }
         }
 
