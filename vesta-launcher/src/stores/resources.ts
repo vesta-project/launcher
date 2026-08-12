@@ -1,6 +1,11 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ProgressUpdate } from "@utils/notifications";
+import {
+	installingIdsFromTargets,
+	installTargetMatchesTaskId,
+	reconcileInstalledInstanceTargets,
+} from "@utils/resource-install-progress";
 import type { ResourceInstallRequest } from "@utils/resource-install-intent";
 import { createStore, reconcile } from "solid-js/store";
 import { refreshInstanceResourceRows } from "./instance-resource-overview";
@@ -195,6 +200,27 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 
 const searchCache = new Map<string, CachedSearchResponse>();
 const versionDetailsCache = new Map<string, ResourceVersionDetails>();
+
+function publishInstallingTargets(keys: string[]) {
+	const uniqueKeys = [...new Set(keys)];
+	const ids = installingIdsFromTargets(uniqueKeys);
+	setResourceStore("installingTargetKeys", uniqueKeys);
+	setResourceStore("installingProjectIds", [...ids.projects]);
+	setResourceStore("installingVersionIds", [...ids.versions]);
+}
+
+function reconcileInstanceInstallProgress(
+	instanceId: number,
+	rows: InstalledResource[],
+) {
+	publishInstallingTargets(
+		reconcileInstalledInstanceTargets(
+			resourceStore.installingTargetKeys,
+			instanceId,
+			rows,
+		),
+	);
+}
 
 function normalizedSearchValue(value: string | null | undefined) {
 	const trimmed = value?.trim();
@@ -547,15 +573,12 @@ export const resources = {
 
 		if (!resolvedTarget && !isModpack) return;
 
-		// Immediate UI feedback
-		setResourceStore("installingVersionIds", (ids) => [...ids, version.id]);
-		setResourceStore("installingProjectIds", (ids) => [...ids, project.id]);
 		const targetKey = resolvedTarget
 			? resolvedTarget.kind === "world"
 				? `${project.source}:${project.id}:${version.id}:world:${resolvedTarget.world.instanceId}:${resolvedTarget.world.directoryName}`
 				: `${project.source}:${project.id}:${version.id}:instance:${resolvedTarget.instanceId}`
 			: `${project.source}:${project.id}:${version.id}:modpack`;
-		setResourceStore("installingTargetKeys", (keys) => [...keys, targetKey]);
+		publishInstallingTargets([...resourceStore.installingTargetKeys, targetKey]);
 
 		try {
 			// Cache project metadata for future offline/icon use
@@ -580,15 +603,8 @@ export const resources = {
 
 			return result;
 		} catch (e) {
-			// Remove from installing list ONLY on error
-			setResourceStore("installingVersionIds", (ids) =>
-				ids.filter((id) => id !== version.id),
-			);
-			setResourceStore("installingProjectIds", (ids) =>
-				ids.filter((id) => id !== project.id),
-			);
-			setResourceStore("installingTargetKeys", (keys) =>
-				keys.filter((key) => key !== targetKey),
+			publishInstallingTargets(
+				resourceStore.installingTargetKeys.filter((key) => key !== targetKey),
 			);
 			throw e;
 		}
@@ -607,17 +623,7 @@ export const resources = {
 		);
 		setResourceStore("installedResources", results);
 
-		// Clear any installing IDs that are now in the results.
-		// This is the source of truth for when an installation is "finished".
-		const installedRemoteVersionIds = results.map((r) => r.remote_version_id);
-		const installedRemoteIds = results.map((r) => r.remote_id.toLowerCase());
-
-		setResourceStore("installingVersionIds", (ids) =>
-			ids.filter((id) => !installedRemoteVersionIds.includes(id)),
-		);
-		setResourceStore("installingProjectIds", (ids) =>
-			ids.filter((id) => !installedRemoteIds.includes(id.toLowerCase())),
-		);
+		reconcileInstanceInstallProgress(instanceId, results);
 
 		return results;
 	},
@@ -669,30 +675,11 @@ if (typeof window !== "undefined") {
 				key.endsWith(suffix),
 			);
 			if (completed.length === 0) return;
-			setResourceStore("installingTargetKeys", (keys) =>
-				keys.filter((key) => !key.endsWith(suffix)),
+			publishInstallingTargets(
+				resourceStore.installingTargetKeys.filter(
+					(key) => !key.endsWith(suffix),
+				),
 			);
-			for (const key of completed) {
-				const [, projectId, versionId] = key.split(":");
-				if (
-					!resourceStore.installingTargetKeys.some((candidate) =>
-						candidate.includes(`:${projectId}:`),
-					)
-				) {
-					setResourceStore("installingProjectIds", (ids) =>
-						ids.filter((id) => id !== projectId),
-					);
-				}
-				if (
-					!resourceStore.installingTargetKeys.some((candidate) =>
-						candidate.includes(`:${projectId}:${versionId}:`),
-					)
-				) {
-					setResourceStore("installingVersionIds", (ids) =>
-						ids.filter((id) => id !== versionId),
-					);
-				}
-			}
 		},
 	);
 
@@ -700,31 +687,23 @@ if (typeof window !== "undefined") {
 		"core://instance-resource-rows-changed",
 		(event) => {
 			const instanceId = event.payload.instanceId;
-			if (resourceStore.selectedInstanceId === instanceId) {
-				void refreshInstanceResourceRows(
-					instanceId,
-					event.payload.revision,
-				).then((results) => {
-					setResourceStore("installedResources", results);
-				});
-			}
+			void refreshInstanceResourceRows(instanceId, event.payload.revision).then(
+				(results) => {
+					reconcileInstanceInstallProgress(instanceId, results);
+					if (resourceStore.selectedInstanceId === instanceId) {
+						setResourceStore("installedResources", results);
+					}
+				},
+			);
 		},
 	);
 
 	listen("resource-install-error", (event) => {
 		const taskId = event.payload as string;
-		// Format: download_{instance_id}_{project_id}_{version_id}
-		const parts = taskId.split("_");
-		if (parts.length >= 4 && parts[0] === "download") {
-			const projectId = parts[2];
-			const versionId = parts[3];
-
-			setResourceStore("installingProjectIds", (ids) =>
-				ids.filter((id) => id !== projectId),
-			);
-			setResourceStore("installingVersionIds", (ids) =>
-				ids.filter((id) => id !== versionId),
-			);
-		}
+		publishInstallingTargets(
+			resourceStore.installingTargetKeys.filter(
+				(key) => !installTargetMatchesTaskId(key, taskId),
+			),
+		);
 	});
 }
