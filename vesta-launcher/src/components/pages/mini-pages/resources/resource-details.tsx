@@ -100,6 +100,7 @@ import {
 } from "./resource-version-focus";
 import {
 	currentPeerProject,
+	focusedResourceVersion,
 	minecraftGameVersions,
 	resourceProjectKey,
 	versionsSupportedByInstance,
@@ -574,13 +575,11 @@ const ResourceDetailsPage: Component<{
 	const focusedVersion = createMemo(() => {
 		const versionId = focusedVersionId();
 		if (!versionId) return null;
-		return (
-			versionDetails.latest?.version ||
-			(optimisticFocusedVersion()?.id === versionId
-				? optimisticFocusedVersion()
-				: null) ||
-			resources.state.versions.find((version) => version.id === versionId) ||
-			null
+		return focusedResourceVersion(
+			versionId,
+			versionDetails.latest?.version,
+			optimisticFocusedVersion(),
+			resources.state.versions,
 		);
 	});
 
