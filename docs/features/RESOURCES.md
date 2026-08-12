@@ -23,7 +23,7 @@ Vesta's resource system enables users to discover and install mods, resource pac
 - **Browse types**: Data Packs only (not listed under Resource Pack search)
 - **Artifacts**: A pack version may expose datapack and/or resourcepack downloads (`ResourceVersion.files` with roles); the shared artifact planner installs every recognized artifact as one bundle
 - **Description**: Short `display.description` is the summary; `display.webPage` is often an author-hosted markdown URL which the adapter fetches into `description` (falls back to a markdown link if fetch fails / returns HTML)
-- **Browse banners**: Search includes the first gallery image URL (`/packs/{id}/gallery/{index}`); the frontend warms those through `resolve_image_urls` (Rust in-memory image cache). Full gallery still loads on project details
+- **Browse banners**: Search builds Firebase CDN URLs for `type: "file"` gallery items (`gallery_images/{docId}-{uid}.webp`) so cards can load banners without `/packs/{id}/gallery/{index}` hops. Bucket-type items still use the API gallery URL and are warmed via `resolve_image_urls`. Full gallery still loads on project details
 - **Authors**: Browse uses Typesense `scope=owner` (displayName in the packs hit). Details still resolve `/users/{id}` when needed for contributors
 - **Browse search**: Packs list and `/packs/count` run in parallel (2 requests total; no per-author fan-out)
 - **Download URLs**: Direct file URLs install as-is; Modrinth project/version page links are resolved to CDN files when possible; HTML page downloads are rejected with a clear error

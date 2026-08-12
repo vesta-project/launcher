@@ -243,7 +243,9 @@ async function warmBrowseBannerImages(hits: ResourceProject[]) {
 			hits
 				.map(bannerUrlForProject)
 				.filter((url): url is string => Boolean(url))
-				.filter((url) => !resourceStore.resolvedBrowseImages[url]),
+				.filter((url) => !resourceStore.resolvedBrowseImages[url])
+				// Firebase CDN banners load in the webview; skip Rust warm for them.
+				.filter((url) => !url.includes("firebasestorage.googleapis.com")),
 		),
 	];
 	if (urls.length === 0) return;

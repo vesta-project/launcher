@@ -15,6 +15,9 @@ use tokio::sync::RwLock;
 const API_BASE: &str = "https://api.smithed.dev/v2";
 const WEB_BASE: &str = "https://smithed.dev/packs";
 const MODRINTH_API: &str = "https://api.modrinth.com/v2";
+/// Public Firebase Storage bucket used by Smithed for uploaded gallery files.
+const GALLERY_CDN_BASE: &str =
+    "https://firebasestorage.googleapis.com/v0/b/mc-smithed.appspot.com/o";
 
 const PACK_CATEGORIES: &[&str] = &[
     "Extensive",
@@ -77,10 +80,8 @@ enum SmithedGallery {
 #[derive(Debug, Deserialize, Clone)]
 struct SmithedGalleryItem {
     #[serde(rename = "type")]
-    #[allow(dead_code)]
     item_type: Option<String>,
     content: Option<String>,
-    #[allow(dead_code)]
     uid: Option<String>,
 }
 
@@ -372,7 +373,18 @@ impl SmithedSource {
         })
     }
 
-    fn gallery_urls(pack_id: &str, gallery: Option<&SmithedGallery>) -> Vec<String> {
+    /// Build gallery image URLs without calling `/packs/{id}/gallery/{index}` when possible.
+    ///
+    /// Typesense only returns `{type, uid, caption}` (no Firebase URL). For `type: "file"`,
+    /// Smithed's API would redirect to Firebase Storage as
+    /// `gallery_images/{docId}-{uid}.webp` — construct that CDN URL directly.
+    /// `type: "bucket"` stores opaque blob content that only the API turns into an image,
+    /// so those still use the indexed pack gallery endpoint.
+    fn gallery_urls(
+        pack_id: &str,
+        doc_id: Option<&str>,
+        gallery: Option<&SmithedGallery>,
+    ) -> Vec<String> {
         match gallery {
             Some(SmithedGallery::Urls(urls)) => urls
                 .iter()
@@ -391,11 +403,30 @@ impl SmithedSource {
                     {
                         return Some(content.to_string());
                     }
-                    // Smithed stores gallery media by uid; the public URL is indexed.
-                    if item.uid.as_deref().is_some_and(|uid| !uid.trim().is_empty()) {
-                        Some(format!("{API_BASE}/packs/{pack_id}/gallery/{index}"))
-                    } else {
-                        None
+
+                    let uid = item
+                        .uid
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())?;
+                    let item_type = item
+                        .item_type
+                        .as_deref()
+                        .map(str::trim)
+                        .unwrap_or_default();
+
+                    match item_type {
+                        "file" => {
+                            let doc = doc_id
+                                .map(str::trim)
+                                .filter(|value| !value.is_empty())
+                                .unwrap_or(pack_id);
+                            Some(format!(
+                                "{GALLERY_CDN_BASE}/gallery_images%2F{doc}-{uid}.webp?alt=media"
+                            ))
+                        }
+                        // Bucket blobs need the API to decode/serve an image.
+                        _ => Some(format!("{API_BASE}/packs/{pack_id}/gallery/{index}")),
                     }
                 })
                 .collect(),
@@ -578,7 +609,15 @@ impl SmithedSource {
             .and_then(|stats| stats.downloads.as_ref())
             .and_then(|downloads| downloads.total)
             .unwrap_or(0);
-        let mut gallery = Self::gallery_urls(&raw_id, display.gallery.as_ref());
+        // Typesense hit `id` is the Firebase doc id when `meta.docId` is omitted.
+        let gallery_doc_id = meta
+            .doc_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(hit.id.as_str());
+        let mut gallery =
+            Self::gallery_urls(&raw_id, Some(gallery_doc_id), display.gallery.as_ref());
         let featured_gallery = gallery.first().cloned();
         gallery.truncate(1);
 
@@ -821,7 +860,14 @@ impl SmithedSource {
             .clone()
             .unwrap_or_default();
         let description = self.resolve_description(&pack.display).await;
-        let gallery = Self::gallery_urls(&raw_id, pack.display.gallery.as_ref());
+        let gallery_doc_id = meta
+            .doc_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(id);
+        let gallery =
+            Self::gallery_urls(&raw_id, Some(gallery_doc_id), pack.display.gallery.as_ref());
         let icon_url = pack.display.icon.clone();
         let featured_gallery = gallery.first().cloned();
 
@@ -1326,18 +1372,13 @@ mod tests {
         };
 
         let project = SmithedSource::map_search_hit(hit, ResourceType::DataPack).unwrap();
-        assert_eq!(
-            project.featured_gallery.as_deref(),
-            Some("https://api.smithed.dev/v2/packs/myriad/gallery/0")
-        );
-        assert_eq!(
-            project.gallery,
-            vec!["https://api.smithed.dev/v2/packs/myriad/gallery/0".to_string()]
-        );
+        let expected = "https://firebasestorage.googleapis.com/v0/b/mc-smithed.appspot.com/o/gallery_images%2Fdoc123-abc.webp?alt=media";
+        assert_eq!(project.featured_gallery.as_deref(), Some(expected));
+        assert_eq!(project.gallery, vec![expected.to_string()]);
     }
 
     #[test]
-    fn gallery_items_resolve_to_indexed_pack_urls() {
+    fn gallery_items_resolve_file_cdn_and_bucket_api_urls() {
         let gallery = SmithedGallery::Items(vec![
             SmithedGalleryItem {
                 item_type: Some("file".to_string()),
@@ -1346,16 +1387,22 @@ mod tests {
             },
             SmithedGalleryItem {
                 item_type: Some("bucket".to_string()),
+                content: None,
+                uid: Some("bucket-uid".to_string()),
+            },
+            SmithedGalleryItem {
+                item_type: Some("bucket".to_string()),
                 content: Some("https://example.invalid/custom.png".to_string()),
                 uid: Some("ignored-when-content-present".to_string()),
             },
         ]);
 
-        let urls = SmithedSource::gallery_urls("myriad", Some(&gallery));
+        let urls = SmithedSource::gallery_urls("myriad", Some("doc123"), Some(&gallery));
         assert_eq!(
             urls,
             vec![
-                "https://api.smithed.dev/v2/packs/myriad/gallery/0".to_string(),
+                "https://firebasestorage.googleapis.com/v0/b/mc-smithed.appspot.com/o/gallery_images%2Fdoc123-abc123.webp?alt=media".to_string(),
+                "https://api.smithed.dev/v2/packs/myriad/gallery/1".to_string(),
                 "https://example.invalid/custom.png".to_string(),
             ]
         );

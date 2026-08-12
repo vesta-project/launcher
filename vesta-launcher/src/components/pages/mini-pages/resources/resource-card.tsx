@@ -165,10 +165,20 @@ const ResourceCard: Component<{
 		if (!remote) return null;
 		const resolved = resources.resolvedBrowseImage(remote);
 		if (resolved) return resolved;
-		// Smithed gallery URLs redirect through their API; let search warm them via
-		// resolve_image_urls so we don't double-fetch in the webview.
+		// Remaining Smithed API gallery redirects (e.g. bucket type) still need
+		// resolve_image_urls warm; file-type banners use Firebase CDN directly.
 		if (remote.includes("api.smithed.dev")) return null;
 		return remote;
+	});
+
+	// Keep the dot-grid fallback visible until the banner finishes loading
+	// (covers Modrinth/CurseForge CDN, Smithed Firebase, and warmed data URLs).
+	const [loadedBannerUrl, setLoadedBannerUrl] = createSignal<string | null>(
+		null,
+	);
+	const bannerReady = createMemo(() => {
+		const url = bgImage();
+		return Boolean(url && loadedBannerUrl() === url);
 	});
 
 	const iconHue = createMemo(() => {
@@ -490,20 +500,41 @@ const ResourceCard: Component<{
 			classList={{ [styles.installed]: isInstalled() }}
 		>
 			<Show when={props.viewMode === "grid"}>
-				<Show when={bgImage()}>
-					{(imageUrl) => (
-						<div class={styles["card-image-banner"]}>
-							<img src={imageUrl()} alt="" />
-							<div class={styles["card-image-fade"]} />
-						</div>
-					)}
-				</Show>
-				<Show when={!bgImage()}>
-					<div
-						class={styles["card-image-fallback"]}
-						style={{ "--fallback-hue": String(iconHue()) }}
-					/>
-				</Show>
+				<div class={styles["card-image-banner"]}>
+					<Show when={!bannerReady()}>
+						<div
+							class={styles["card-image-fallback"]}
+							style={{ "--fallback-hue": String(iconHue()) }}
+						/>
+					</Show>
+					<Show when={bgImage()}>
+						{(imageUrl) => {
+							const url = imageUrl();
+							return (
+								<img
+									src={url}
+									alt=""
+									classList={{
+										[styles["card-image-visible"]]: bannerReady(),
+									}}
+									ref={(el) => {
+										// Cached images may already be complete before onLoad binds.
+										if (el.complete && el.naturalWidth > 0) {
+											setLoadedBannerUrl(url);
+										}
+									}}
+									onLoad={() => setLoadedBannerUrl(url)}
+									onError={() => {
+										if (loadedBannerUrl() === url) {
+											setLoadedBannerUrl(null);
+										}
+									}}
+								/>
+							);
+						}}
+					</Show>
+					<div class={styles["card-image-fade"]} />
+				</div>
 				<div class={styles["card-content"]}>
 					<div class={styles["card-row-1"]}>
 						<div class={styles["card-icon"]}>
