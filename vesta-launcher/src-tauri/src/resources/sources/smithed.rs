@@ -36,6 +36,17 @@ struct SmithedSearchHit {
     display_name: Option<String>,
     data: Option<SmithedSearchData>,
     meta: Option<SmithedPackMeta>,
+    /// Denormalized Typesense owner (via `scope=owner` / `owner.displayName`).
+    owner: Option<SmithedSearchOwner>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct SmithedSearchOwner {
+    display_name: Option<String>,
+    clean_name: Option<String>,
+    #[allow(dead_code)]
+    id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -571,6 +582,23 @@ impl SmithedSource {
         let featured_gallery = gallery.first().cloned();
         gallery.truncate(1);
 
+        // Prefer Typesense-denormalized owner names from `scope=owner` so browse
+        // does not need N× /users/{id} round-trips (those payloads embed pfps).
+        let author = hit
+            .owner
+            .as_ref()
+            .and_then(|owner| {
+                owner
+                    .display_name
+                    .as_deref()
+                    .or(owner.clean_name.as_deref())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+            })
+            .or_else(|| meta.owner.clone().filter(|value| !value.is_empty()))
+            .unwrap_or_else(|| "Unknown".to_string());
+
         Some(ResourceProject {
             id: raw_id.clone(),
             source: SourcePlatform::Smithed,
@@ -579,12 +607,12 @@ impl SmithedSource {
             summary,
             description: None,
             icon_url: display.icon,
-            author: meta.owner.clone().unwrap_or_else(|| "Unknown".to_string()),
-            authors: meta
-                .owner
-                .clone()
-                .map(|owner| vec![owner])
-                .unwrap_or_default(),
+            author: author.clone(),
+            authors: if author == "Unknown" {
+                Vec::new()
+            } else {
+                vec![author]
+            },
             download_count: downloads,
             follower_count: 0,
             categories: data.categories.unwrap_or_default(),
@@ -626,25 +654,6 @@ impl SmithedSource {
         let mut cache = self.user_names.write().await;
         cache.insert(owner_id.to_string(), display.clone());
         display
-    }
-
-    async fn resolve_user_names(&self, owner_ids: &[String]) -> HashMap<String, String> {
-        let unique: Vec<String> = owner_ids
-            .iter()
-            .filter(|id| !id.is_empty() && *id != "Unknown")
-            .cloned()
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-        let mut resolved = HashMap::new();
-        let fetches = unique.iter().map(|id| async move {
-            let name = self.fetch_user_display_name(id).await;
-            (id.clone(), name)
-        });
-        for (id, name) in futures::future::join_all(fetches).await {
-            resolved.insert(id, name);
-        }
-        resolved
     }
 
     async fn fetch_pack_data(&self, id: &str) -> Result<(SmithedPackData, SmithedPackMeta)> {
@@ -889,6 +898,9 @@ impl ResourceSource for SmithedSource {
         }
 
         // Pull display + meta fields needed for ResourceProject mapping.
+        // `owner` is Typesense-denormalized (displayName/cleanName/id) — avoids
+        // a /users fan-out on browse. Docs only mention data.*/meta.*, but
+        // include_fields accepts owner.* as well.
         for scope in [
             "data.display.name",
             "data.display.description",
@@ -898,10 +910,10 @@ impl ResourceSource for SmithedSource {
             "data.categories",
             "meta.rawId",
             "meta.docId",
-            "meta.owner",
             "meta.stats.downloads",
             "meta.stats.added",
             "meta.stats.updated",
+            "owner",
         ] {
             url.push_str(&format!("&scope={}", urlencoding::encode(scope)));
         }
@@ -922,7 +934,11 @@ impl ResourceSource for SmithedSource {
             count
         };
 
-        let response = self.client.get(&url).send().await?;
+        let packs_request = self.client.get(&url);
+        let count_request = self.client.get(&count_url);
+        let (packs_result, count_result) = tokio::join!(packs_request.send(), count_request.send());
+
+        let response = packs_result?;
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
@@ -938,7 +954,7 @@ impl ResourceSource for SmithedSource {
             .await
             .map_err(|e| anyhow!("Smithed search JSON decode error: {}. URL: {}", e, url))?;
 
-        let total_hits = match self.client.get(&count_url).send().await {
+        let total_hits = match count_result {
             Ok(count_response) if count_response.status().is_success() => count_response
                 .json::<u64>()
                 .await
@@ -946,19 +962,10 @@ impl ResourceSource for SmithedSource {
             _ => hits_raw.len() as u64,
         };
 
-        let mut hits: Vec<ResourceProject> = hits_raw
+        let hits = hits_raw
             .into_iter()
             .filter_map(|hit| Self::map_search_hit(hit, query.resource_type))
             .collect();
-
-        let owner_ids: Vec<String> = hits.iter().map(|hit| hit.author.clone()).collect();
-        let names = self.resolve_user_names(&owner_ids).await;
-        for hit in &mut hits {
-            if let Some(display) = names.get(&hit.author) {
-                hit.author = display.clone();
-                hit.authors = vec![display.clone()];
-            }
-        }
 
         Ok(SearchResponse { hits, total_hits })
     }
@@ -1223,8 +1230,13 @@ mod tests {
                         past_month: Some(1),
                     }),
                 }),
-                owner: Some("owner".to_string()),
+                owner: Some("uid-should-not-win".to_string()),
                 contributors: None,
+            }),
+            owner: Some(SmithedSearchOwner {
+                display_name: Some("TheNuclearNexus".to_string()),
+                clean_name: Some("thenuclearnexus".to_string()),
+                id: Some("uid-should-not-win".to_string()),
             }),
         };
 
@@ -1232,6 +1244,8 @@ mod tests {
         assert_eq!(project.id, "coc");
         assert_eq!(project.download_count, 429);
         assert_eq!(project.web_url, "https://smithed.dev/packs/coc");
+        assert_eq!(project.author, "TheNuclearNexus");
+        assert_eq!(project.authors, vec!["TheNuclearNexus".to_string()]);
         assert_eq!(project.featured_gallery, None);
         assert!(project.gallery.is_empty());
         assert_eq!(
@@ -1242,6 +1256,36 @@ mod tests {
                 .map(String::as_str),
             Some("doc123")
         );
+    }
+
+    #[test]
+    fn map_search_hit_falls_back_to_meta_owner_uid() {
+        let hit = SmithedSearchHit {
+            id: "doc123".to_string(),
+            display_name: Some("Call of Chaos".to_string()),
+            data: Some(SmithedSearchData {
+                display: Some(SmithedDisplay {
+                    name: Some("Call of Chaos".to_string()),
+                    description: None,
+                    icon: None,
+                    hidden: false,
+                    web_page: None,
+                    gallery: None,
+                }),
+                categories: None,
+            }),
+            meta: Some(SmithedPackMeta {
+                doc_id: None,
+                raw_id: Some("coc".to_string()),
+                stats: None,
+                owner: Some("firebase-uid".to_string()),
+                contributors: None,
+            }),
+            owner: None,
+        };
+
+        let project = SmithedSource::map_search_hit(hit, ResourceType::DataPack).unwrap();
+        assert_eq!(project.author, "firebase-uid");
     }
 
     #[test]
@@ -1278,6 +1322,7 @@ mod tests {
                 owner: Some("owner".to_string()),
                 contributors: None,
             }),
+            owner: None,
         };
 
         let project = SmithedSource::map_search_hit(hit, ResourceType::DataPack).unwrap();
