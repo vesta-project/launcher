@@ -286,7 +286,11 @@ Primary modules:
 The frontend state around browsing Resources. It includes query text, filters,
 source platform, selected Instance, categories, sort, pagination, project
 version lists, session-cached version details, router state, nested version
-focus, and search timing. Provider Adapters normalize changelog format and
+focus, and search timing. The selected Instance is the only persistent install
+destination context: Resource browsing and details never retain a preferred
+World. A datapack chooses its World within the active install interaction, and
+the selected World is passed explicitly to the backend for that operation.
+Provider Adapters normalize changelog format and
 availability so missing release notes do not erase already-available file
 metadata, and distinguish CurseForge client/server environment labels from
 Minecraft versions. Provider switching accepts only peer lookups keyed to the
@@ -324,6 +328,10 @@ Resource type. Datapack quick selection uses the selected World's saved version,
 ignores its Instance loader, and requires an exact provider Minecraft-version
 tag; other tags remain manually installable after acknowledgement. Downloaded
 datapacks remain subject to root `pack.mcmeta` validation before publication.
+Opening a managed datapack from World Management navigates to its provider
+project without preselecting a World target. Immutable source-row context allows
+a later install into that same World to replace the exact managed row; choosing
+another World creates an independent installation.
 
 Primary modules:
 

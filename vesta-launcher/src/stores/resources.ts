@@ -154,7 +154,6 @@ type ResourceStoreState = {
 	showFilters: boolean;
 	reconcilingCategories: boolean;
 	installRequest: ResourceInstallRequest | null;
-	preferredInstallTarget: ResourceInstallTarget | null;
 	installingTargetKeys: string[];
 	selection: Record<string, boolean>;
 	sorting: { id: string; desc: boolean }[];
@@ -189,7 +188,6 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	showFilters: true,
 	reconcilingCategories: false,
 	installRequest: null,
-	preferredInstallTarget: null,
 	installingTargetKeys: [],
 	selection: {},
 	sorting: [{ id: "display_name", desc: false }],
@@ -223,8 +221,6 @@ export const resources = {
 
 	setInstallRequest: (request: ResourceInstallRequest | null) =>
 		setResourceStore("installRequest", request),
-	setPreferredInstallTarget: (target: ResourceInstallTarget | null) =>
-		setResourceStore("preferredInstallTarget", target),
 
 	setQuery: (q: string) => setResourceStore("query", q),
 	setSource: (s: SourcePlatform) => {
@@ -247,10 +243,6 @@ export const resources = {
 		setResourceStore("resourceType", t);
 		setResourceStore("availableCategories", []);
 		setResourceStore("offset", 0);
-		// Changing the global browse category starts a fresh install session.
-		// World Details binds its target explicitly after selecting Datapacks.
-		setResourceStore("preferredInstallTarget", null);
-
 		// Clear loader if not on 'mod' as it doesn't apply to resourcepacks/shaders
 		if (t !== "mod") {
 			setResourceStore("loader", null);
@@ -290,12 +282,6 @@ export const resources = {
 
 	setInstance: (id: number | null) => {
 		setResourceStore("selectedInstanceId", id);
-		if (
-			resourceStore.preferredInstallTarget?.kind === "world" &&
-			resourceStore.preferredInstallTarget.world.instanceId !== id
-		) {
-			setResourceStore("preferredInstallTarget", null);
-		}
 		if (id) {
 			resources.fetchInstalled(id);
 		} else {
@@ -552,7 +538,6 @@ export const resources = {
 		const isModpack = installType === "modpack";
 		const resolvedTarget =
 			target ??
-			resourceStore.preferredInstallTarget ??
 			(resourceStore.selectedInstanceId
 				? {
 						kind: "instance" as const,

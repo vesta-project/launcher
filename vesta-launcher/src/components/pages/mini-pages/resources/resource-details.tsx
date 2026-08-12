@@ -5,22 +5,24 @@ import HeartIcon from "@assets/heart.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
-import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
+import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
+import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-composition/collapsing-header-progress";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { instancesState } from "@stores/instances";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { dialogStore } from "@stores/dialog-store";
+import { instancesState } from "@stores/instances";
 import {
 	type ResourceDependency,
 	type ResourceProject,
+	type ResourceType,
 	type ResourceVersion,
 	type ResourceVersionDetails,
-	type ResourceType,
 	resources,
 	type SourcePlatform,
 } from "@stores/resources";
 import { reducedMotion } from "@stores/settings";
-import { listInstanceWorlds, type WorldSummary } from "@stores/worlds";
+import type { WorldSummary } from "@stores/worlds";
 import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
@@ -56,6 +58,7 @@ import {
 	classifyDatapackVersionCompatibility,
 	findBestExactDatapackVersion,
 	findBestVersionForInstance,
+	replacementResourceIdForWorld,
 	requiresWorldTarget,
 } from "@utils/resource-install-intent";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
@@ -77,16 +80,14 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
-import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import styles from "./resource-details.module.css";
-import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-composition/collapsing-header-progress";
-import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
 	ResourceDescriptionLoading,
 	ResourceDetailsSidebarLoading,
 	ResourceVersionsLoading,
 } from "./resource-details-loading";
 import { getResourceDetailsLoadingState } from "./resource-details-loading-state";
+import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import {
 	VersionActionIcon,
 	type VersionActionKind,
@@ -332,9 +333,30 @@ const ResourceDetailsPage: Component<{
 	});
 	const replacementResourceId = createMemo<number | undefined>(() => {
 		const value = activeRouter()?.currentParams.get().replacementResourceId;
-		if (typeof value !== "string" && typeof value !== "number") return undefined;
+		if (typeof value !== "string" && typeof value !== "number")
+			return undefined;
 		const parsed = Number(value);
 		return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+	});
+	const replacementWorldInstanceId = createMemo<number | undefined>(() => {
+		const value =
+			activeRouter()?.currentParams.get().replacementWorldInstanceId;
+		if (typeof value !== "string" && typeof value !== "number")
+			return undefined;
+		const parsed = Number(value);
+		return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+	});
+	const replacementWorldDirectory = createMemo<string | undefined>(() => {
+		const value = activeRouter()?.currentParams.get().replacementWorldDirectory;
+		return typeof value === "string" && value.length > 0 ? value : undefined;
+	});
+	const managedDatapackReplacement = createMemo(() => {
+		const resourceId = replacementResourceId();
+		const instanceId = replacementWorldInstanceId();
+		const directoryName = replacementWorldDirectory();
+		return resourceId && instanceId && directoryName
+			? { resourceId, world: { instanceId, directoryName } }
+			: null;
 	});
 	const projectIconPreview = createAnimatedIconPreview(
 		() => project()?.icon_url || props.iconUrl,
@@ -487,7 +509,6 @@ const ResourceDetailsPage: Component<{
 
 	onCleanup(() => {
 		activeRouter()?.customName.set(null);
-		resources.setPreferredInstallTarget(null);
 	});
 
 	const bestVersionForCurrent = createMemo(() => {
@@ -765,16 +786,7 @@ const ResourceDetailsPage: Component<{
 	};
 
 	const isVersionInstalling = (versionId: string) => {
-		const target = resources.state.preferredInstallTarget;
-		if (installType() === "datapack" && target?.kind === "world") {
-			return resources.state.installingTargetKeys.some(
-				(key) =>
-					key.includes(`:${project()?.id ?? ""}:${versionId}:`) &&
-					key.endsWith(
-						`:world:${target.world.instanceId}:${target.world.directoryName}`,
-					),
-			);
-		}
+		if (installType() === "datapack") return false;
 		return resources.state.installingVersionIds.includes(versionId);
 	};
 
@@ -848,16 +860,7 @@ const ResourceDetailsPage: Component<{
 	const isProjectInstalling = createMemo(() => {
 		const p = project();
 		if (!p) return false;
-		const target = resources.state.preferredInstallTarget;
-		if (installType() === "datapack" && target?.kind === "world") {
-			return resources.state.installingTargetKeys.some(
-				(key) =>
-					key.includes(`:${p.id}:`) &&
-					key.endsWith(
-						`:world:${target.world.instanceId}:${target.world.directoryName}`,
-					),
-			);
-		}
+		if (installType() === "datapack") return false;
 		return resources.state.installingProjectIds.includes(p.id);
 	});
 
@@ -1262,17 +1265,6 @@ const ResourceDetailsPage: Component<{
 				installType: "datapack",
 				instanceId: instId,
 			});
-			const preferred = resources.state.preferredInstallTarget;
-			if (preferred?.kind === "world") {
-				void listInstanceWorlds(preferred.world.instanceId)
-					.then((worlds) =>
-						worlds.find(
-							(world) =>
-								world.ref.directoryName === preferred.world.directoryName,
-						),
-					)
-					.then((world) => world && handleSelectWorld(world));
-			}
 			return;
 		}
 
@@ -1568,40 +1560,17 @@ const ResourceDetailsPage: Component<{
 		}
 
 		if (p && inst && requiresWorldTarget(p, version, installType())) {
-			const context = {
+			setWorldInstall({
 				project: p,
 				versions: resources.state.versions,
 				version,
 				installType: installType(),
 				instanceId: inst.id,
-			};
-			setWorldInstall(context);
-			const preferred = resources.state.preferredInstallTarget;
-			if (preferred?.kind === "world") {
-				void listInstanceWorlds(preferred.world.instanceId)
-					.then((worlds) =>
-						worlds.find(
-							(world) =>
-								world.ref.directoryName === preferred.world.directoryName,
-						),
-					)
-					.then((world) => {
-						if (!world) throw new Error("The selected world is no longer available.");
-						return handleSelectWorld(world);
-					})
-					.catch((error) => {
-						setWorldInstall(null);
-						showToast({
-							title: "World unavailable",
-							description: String(error),
-							severity: "error",
-						});
-					});
-			}
+			});
 			return;
 		}
 
-		if (!version.download_url && !(version.files?.length)) {
+		if (!version.download_url && !version.files?.length) {
 			showToast({
 				title: "Third-party download required",
 				description:
@@ -1634,10 +1603,15 @@ const ResourceDetailsPage: Component<{
 					}
 				}
 
-				await resources.install(p, version, {
-					kind: "instance",
-					instanceId: inst!.id,
-				}, { installType: installType() });
+				await resources.install(
+					p,
+					version,
+					{
+						kind: "instance",
+						instanceId: inst!.id,
+					},
+					{ installType: installType() },
+				);
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${p.name}.`,
@@ -1664,12 +1638,11 @@ const ResourceDetailsPage: Component<{
 				context.project.source,
 			);
 		if (!selectedVersion) {
-			resources.setPreferredInstallTarget({ kind: "world", world: world.ref });
 			setWorldInstall(null);
 			transitionRouteState({ activeTab: "versions", versionId: null }, true);
 			showToast({
 				title: "Choose a datapack version",
-				description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version to install manually.`,
+				description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version manually; Vesta will ask for the destination world when you install it.`,
 				severity: "warning",
 			});
 			return;
@@ -1688,22 +1661,33 @@ const ResourceDetailsPage: Component<{
 		if (!acknowledged) return;
 		setWorldInstall(null);
 		try {
-			await resources.install(context.project, selectedVersion, {
-				kind: "world",
-				world: world.ref,
-			}, {
-				installType: context.installType,
-				compatibilityAcknowledged: compatibility !== "exact",
-				replacementResourceId: replacementResourceId(),
-			});
-			resources.setPreferredInstallTarget(null);
+			await resources.install(
+				context.project,
+				selectedVersion,
+				{
+					kind: "world",
+					world: world.ref,
+				},
+				{
+					installType: context.installType,
+					compatibilityAcknowledged: compatibility !== "exact",
+					replacementResourceId: replacementResourceIdForWorld(
+						managedDatapackReplacement(),
+						world.ref,
+					),
+				},
+			);
 			showToast({
 				title: "Installation Started",
 				description: `Check notifications for progress on ${context.project.name}.`,
 				severity: "success",
 			});
 		} catch (err) {
-			showToast({ title: "Failed to install", description: String(err), severity: "error" });
+			showToast({
+				title: "Failed to install",
+				description: String(err),
+				severity: "error",
+			});
 		}
 	};
 
@@ -2204,20 +2188,6 @@ const ResourceDetailsPage: Component<{
 					</div>
 				}
 			>
-				<Show
-					when={
-						installType() === "datapack" &&
-						resources.state.preferredInstallTarget?.kind === "world"
-							? resources.state.preferredInstallTarget.world
-							: null
-					}
-				>
-					{(world) => (
-						<div class={styles["modpack-instance-notice"]}>
-							Installing into {world().directoryName}
-						</div>
-					)}
-				</Show>
 				<Select<any>
 					options={[
 						{ id: null, name: "No Instance" },
@@ -2385,20 +2355,6 @@ const ResourceDetailsPage: Component<{
 							</div>
 						}
 					>
-						<Show
-							when={
-								installType() === "datapack" &&
-								resources.state.preferredInstallTarget?.kind === "world"
-									? resources.state.preferredInstallTarget.world
-									: null
-							}
-						>
-							{(world) => (
-								<div class={styles["modpack-instance-notice"]}>
-									Installing into {world().directoryName}
-								</div>
-							)}
-						</Show>
 						<Select<any>
 							options={[
 								{ id: null, name: "No Instance" },

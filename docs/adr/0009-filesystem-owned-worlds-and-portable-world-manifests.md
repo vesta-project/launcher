@@ -49,7 +49,13 @@ version-level `datapack` loader while CurseForge uses its datapack project class
 Quick selection is permitted only for a provider version explicitly tagged for
 the selected World's saved Minecraft version. Other versions remain available
 through manual selection and compatibility acknowledgement; provider version
-tags do not become filesystem validation rules.
+tags do not become filesystem validation rules. Resource browsing persists only
+an Instance destination. It never stores a preferred World: each datapack
+install selects and validates its World within that install interaction, while
+direct row updates pass their exact World target explicitly. Opening provider
+details from a managed row may carry immutable source-row identity for
+replacement, but it does not preselect a World; replacement applies only when
+the user later chooses that same World.
 
 World transfer availability is determined by the filesystem operation itself,
 not by whether Vesta observes a source or destination Instance process. A

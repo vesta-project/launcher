@@ -78,14 +78,6 @@ const ResourceCard: Component<{
 	});
 
 	const isInstallingProject = createMemo(() => {
-		const target = resources.state.preferredInstallTarget;
-		if (installType() === "datapack" && target?.kind === "world") {
-			return resources.state.installingTargetKeys.some((key) =>
-				key.includes(
-					`:${props.project.id}:`,
-				) && key.endsWith(`:world:${target.world.instanceId}:${target.world.directoryName}`),
-			);
-		}
 		return resources.state.installingProjectIds.includes(props.project.id);
 	});
 
@@ -93,7 +85,9 @@ const ResourceCard: Component<{
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
 	const [latestCompatibleVersion, setLatestCompatibleVersion] =
 		createSignal<ResourceVersion | null>(null);
-	const installing = () => localInstalling() || isInstallingProject();
+	const installing = () =>
+		localInstalling() ||
+		(installType() !== "datapack" && isInstallingProject());
 
 	const isUpdateAvailable = createMemo(() => {
 		return isResourceUpdateAvailable(
@@ -280,10 +274,15 @@ const ResourceCard: Component<{
 
 				setLocalInstalling(true);
 				try {
-					await resources.install(props.project, latest, {
-						kind: "instance",
-						instanceId,
-					}, { installType: installType() });
+					await resources.install(
+						props.project,
+						latest,
+						{
+							kind: "instance",
+							instanceId,
+						},
+						{ installType: installType() },
+					);
 					showToast({
 						title: "Update Started",
 						description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
@@ -336,10 +335,6 @@ const ResourceCard: Component<{
 					project: props.project,
 					versions,
 					installType: installType(),
-					preferredWorld:
-						resources.state.preferredInstallTarget?.kind === "world"
-							? resources.state.preferredInstallTarget.world
-							: undefined,
 				});
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
@@ -364,16 +359,11 @@ const ResourceCard: Component<{
 				props.project.id,
 			);
 			if (installType() === "datapack") {
-				const preferredTarget = resources.state.preferredInstallTarget;
 				resources.setInstallRequest({
 					project: props.project,
 					versions,
 					installType: "datapack",
 					preferredInstanceId: instance.id,
-					preferredWorld:
-						preferredTarget?.kind === "world"
-							? preferredTarget.world
-							: undefined,
 				});
 				return;
 			}
@@ -410,10 +400,15 @@ const ResourceCard: Component<{
 					});
 				}
 
-				await resources.install(props.project, best, {
-					kind: "instance",
-					instanceId: instance.id,
-				}, { installType: installType() });
+				await resources.install(
+					props.project,
+					best,
+					{
+						kind: "instance",
+						instanceId: instance.id,
+					},
+					{ installType: installType() },
+				);
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,

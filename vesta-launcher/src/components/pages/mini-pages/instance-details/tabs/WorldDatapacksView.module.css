@@ -94,6 +94,7 @@
 }
 
 .pack {
+	position: relative;
 	display: grid;
 	min-width: 0;
 	min-height: 66px;
@@ -108,9 +109,42 @@
 	border-top: 1px solid var(--border);
 }
 
-.pack:hover,
+.pack[data-interactive] {
+	cursor: pointer;
+}
+
+.pack[data-interactive]:hover,
+.pack:has(.pack-details-target:focus-visible),
 .pack:focus-within {
 	background: var(--surface-raised);
+}
+
+.pack:has(.pack-details-target:focus-visible) {
+	position: relative;
+	z-index: 1;
+	outline: 2px solid var(--border-focus);
+	outline-offset: -2px;
+}
+
+.pack-details-target {
+	position: absolute;
+	z-index: 0;
+	inset: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.pack-details-target:focus-visible {
+	outline: 0;
+}
+
+.pack-avatar,
+.pack-copy {
+	position: relative;
+	z-index: 1;
+	pointer-events: none;
 }
 
 .pack[data-read-only] {
@@ -183,6 +217,8 @@
 }
 
 .pack-controls {
+	position: relative;
+	z-index: 2;
 	display: flex;
 	align-items: center;
 	gap: 7px;
