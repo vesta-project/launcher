@@ -44,6 +44,7 @@ import {
 	createMemo,
 	createSignal,
 	For,
+	on,
 	onCleanup,
 	Show,
 } from "solid-js";
@@ -356,12 +357,13 @@ export const WorldDatapacksView: Component<{
 	});
 	let iconRequestGeneration = 0;
 
-	createEffect(() => {
-		props.world.ref.instanceId;
-		props.world.ref.directoryName;
-		void listWorldDatapacks(props.world.ref).catch(() => undefined);
-		void checkWorldDatapackUpdates(props.world.ref).catch(() => undefined);
-	});
+	createEffect(
+		on(key, () => {
+			const world = props.world.ref;
+			void listWorldDatapacks(world).catch(() => undefined);
+			void checkWorldDatapackUpdates(world).catch(() => undefined);
+		}),
+	);
 
 	createEffect(() => {
 		const worldKey = key();

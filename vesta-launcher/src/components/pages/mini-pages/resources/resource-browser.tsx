@@ -9,7 +9,6 @@ import {
 	resources,
 } from "@stores/resources";
 import type { WorldSummary } from "@stores/worlds";
-import Button from "@ui/button/button";
 import {
 	Pagination,
 	PaginationEllipsis,

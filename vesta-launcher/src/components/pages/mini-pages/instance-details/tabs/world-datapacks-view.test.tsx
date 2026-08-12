@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import type { WorldSummary } from "@stores/worlds";
+import { createSignal } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorldDatapacksView } from "./WorldDatapacksView";
 import { WorldCard } from "./WorldsTab";
@@ -408,6 +409,35 @@ describe("WorldDatapacksView", () => {
 				updates: [],
 			},
 		};
+	});
+
+	it("refreshes datapacks when the selected world changes", async () => {
+		const [selectedWorld, setSelectedWorld] = createSignal(world());
+		render(() => (
+			<WorldDatapacksView
+				world={selectedWorld()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
+			/>
+		));
+
+		await waitFor(() =>
+			expect(mocks.listWorldDatapacks).toHaveBeenCalledWith(world().ref),
+		);
+		setSelectedWorld(
+			world({ ref: { instanceId: 7, directoryName: "Other World" } }),
+		);
+		await waitFor(() =>
+			expect(mocks.listWorldDatapacks).toHaveBeenCalledWith({
+				instanceId: 7,
+				directoryName: "Other World",
+			}),
+		);
+		expect(mocks.checkWorldDatapackUpdates).toHaveBeenLastCalledWith({
+			instanceId: 7,
+			directoryName: "Other World",
+		});
 	});
 
 	it("renders only the selected world's rows and keeps folder packs read-only", () => {
