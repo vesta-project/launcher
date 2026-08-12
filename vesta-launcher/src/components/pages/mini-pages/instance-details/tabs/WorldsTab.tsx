@@ -357,7 +357,7 @@ export const WorldsTab: Component<{
 	selectedWorldDirectory?: string | null;
 	onSelectedWorldChange: (directoryName: string | null) => void;
 	onAddDatapack: (world: WorldSummary) => void;
-	onReviewDatapackVersions: (
+	onOpenDatapackDetails: (
 		world: WorldSummary,
 		entry: import("@stores/worlds").WorldDatapackSummary,
 	) => void;
@@ -596,7 +596,7 @@ export const WorldsTab: Component<{
 					world={world()}
 					onBack={() => props.onSelectedWorldChange(null)}
 					onAddDatapack={props.onAddDatapack}
-					onReviewVersions={props.onReviewDatapackVersions}
+					onOpenDatapackDetails={props.onOpenDatapackDetails}
 				/>
 			)}
 		</Show>

@@ -2,22 +2,21 @@ import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { resources } from "@stores/resources";
 import type { WorldDatapackSummary, WorldSummary } from "@stores/worlds";
 
-function bindWorldDatapackTarget(world: WorldSummary) {
+function bindWorldDatapackBrowseContext(world: WorldSummary) {
 	resources.setType("datapack");
 	resources.setInstance(world.ref.instanceId);
 	resources.setGameVersion(world.gameVersion);
-	resources.setPreferredInstallTarget({ kind: "world", world: world.ref });
 }
 
 /**
- * Opens datapack discovery with an exact world target. The setter order is
- * intentional: changing the browse category clears any stale scoped target.
+ * Opens datapack discovery for the owning Instance. A World is deliberately
+ * chosen only when an installation starts; browsing never retains one.
  */
 export function openWorldDatapackBrowser(
 	world: WorldSummary,
 	activeRouter: MiniRouter | undefined,
 ) {
-	bindWorldDatapackTarget(world);
+	bindWorldDatapackBrowseContext(world);
 	activeRouter?.navigate("/resources", {
 		resourceType: "datapack",
 		selectedInstanceId: String(world.ref.instanceId),
@@ -25,18 +24,25 @@ export function openWorldDatapackBrowser(
 	});
 }
 
-export function openWorldDatapackVersions(
+export function openWorldDatapackDetails(
 	world: WorldSummary,
 	entry: WorldDatapackSummary,
 	activeRouter: MiniRouter | undefined,
 ) {
-	if (!entry.projectId || !entry.platform || entry.resourceId == null) return;
-	bindWorldDatapackTarget(world);
+	if (!entry.projectId || !entry.platform) return;
+	bindWorldDatapackBrowseContext(world);
+	const replacementContext =
+		entry.resourceId == null
+			? {}
+			: {
+					replacementResourceId: String(entry.resourceId),
+					replacementWorldInstanceId: String(world.ref.instanceId),
+					replacementWorldDirectory: world.ref.directoryName,
+				};
 	activeRouter?.navigate("/resource-details", {
 		projectId: entry.projectId,
 		platform: entry.platform,
 		resourceType: "datapack",
-		activeTab: "versions",
-		replacementResourceId: String(entry.resourceId),
+		...replacementContext,
 	});
 }

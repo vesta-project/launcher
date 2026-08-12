@@ -1,5 +1,4 @@
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
-import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
 	PageSidebar,
@@ -7,6 +6,7 @@ import {
 } from "@components/page-sidebar/page-sidebar";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
 import {
@@ -36,12 +36,12 @@ import {
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
+import { useMinecraftVersions } from "@stores/versions";
 import type {
 	WorldDatapackSummary,
 	WorldRef,
 	WorldSummary,
 } from "@stores/worlds";
-import { useMinecraftVersions } from "@stores/versions";
 import {
 	createColumnHelper,
 	createSolidTable,
@@ -95,11 +95,10 @@ import {
 	updateInstance,
 	updateInstanceModpackVersion,
 } from "@utils/instances";
+import { createMediaQuery } from "@utils/media-query";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
 import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
-import { createMediaQuery } from "@utils/media-query";
-import { requiresWorldTarget } from "@utils/resource-install-intent";
 import {
 	afterStablePaint,
 	markPerformance,
@@ -109,6 +108,7 @@ import {
 	createPreloadableLazyComponent,
 	createRetainedTabLoader,
 } from "@utils/preloadable-lazy";
+import { requiresWorldTarget } from "@utils/resource-install-intent";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -133,12 +133,12 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
-import styles from "./instance-details.module.css";
 import { InstanceHeader } from "./InstanceHeader";
+import styles from "./instance-details.module.css";
 import {
 	getInstancePrimaryAction,
-	normalizeInstanceTab,
 	type InstanceTab,
+	normalizeInstanceTab,
 } from "./instance-details-view";
 import type { ModpackVersion } from "./modpack-version-selector";
 // Tabs
@@ -146,7 +146,7 @@ import { OverviewTab } from "./tabs/OverviewTab";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import {
 	openWorldDatapackBrowser,
-	openWorldDatapackVersions,
+	openWorldDatapackDetails,
 } from "./tabs/world-datapack-navigation";
 
 const ConsoleTabModule = createPreloadableLazyComponent(() =>
@@ -2914,11 +2914,11 @@ export default function InstanceDetails(
 													onAddDatapack={(world: WorldSummary) => {
 														openWorldDatapackBrowser(world, activeRouter());
 													}}
-													onReviewDatapackVersions={(
+													onOpenDatapackDetails={(
 														world: WorldSummary,
 														entry: WorldDatapackSummary,
 													) =>
-														openWorldDatapackVersions(
+														openWorldDatapackDetails(
 															world,
 															entry,
 															activeRouter(),

@@ -90,10 +90,12 @@ const DatapackRow: Component<{
 	onBusyChange: (busy: boolean) => void;
 	update?: WorldDatapackUpdateStatus;
 	icon?: string | null;
-	onReviewVersions: () => void;
+	onOpenDetails: () => void;
 }> = (props) => {
 	const canManage = () =>
 		!props.entry.readOnly && props.entry.resourceId != null;
+	const canOpenDetails = () =>
+		Boolean(props.entry.platform && props.entry.projectId);
 
 	const handleToggle = async (enabled: boolean) => {
 		if (!canManage() || props.busy) return;
@@ -169,7 +171,7 @@ const DatapackRow: Component<{
 		)
 			return;
 		if (!["modrinth", "curseforge"].includes(props.entry.platform)) {
-			props.onReviewVersions();
+			props.onOpenDetails();
 			return;
 		}
 
@@ -209,7 +211,16 @@ const DatapackRow: Component<{
 		<article
 			class={styles.pack}
 			data-read-only={props.entry.readOnly || undefined}
+			data-interactive={canOpenDetails() || undefined}
 		>
+			<Show when={canOpenDetails()}>
+				<button
+					type="button"
+					class={styles["pack-details-target"]}
+					aria-label={`View details for ${props.entry.displayName}`}
+					onClick={props.onOpenDetails}
+				/>
+			</Show>
 			<ResourceAvatar
 				name={props.entry.displayName}
 				icon={props.icon}
@@ -253,20 +264,6 @@ const DatapackRow: Component<{
 					>
 						<DownloadIcon />
 						Update
-					</Button>
-				</Show>
-				<Show
-					when={
-						!props.update?.exactVersion && props.update?.manualReviewAvailable
-					}
-				>
-					<Button
-						size="sm"
-						variant="ghost"
-						disabled={props.busy}
-						onClick={props.onReviewVersions}
-					>
-						Review versions
 					</Button>
 				</Show>
 				<Show
@@ -332,7 +329,10 @@ export const WorldDatapacksView: Component<{
 	world: WorldSummary;
 	onBack: () => void;
 	onAddDatapack: (world: WorldSummary) => void;
-	onReviewVersions: (world: WorldSummary, entry: WorldDatapackSummary) => void;
+	onOpenDatapackDetails: (
+		world: WorldSummary,
+		entry: WorldDatapackSummary,
+	) => void;
 }> = (props) => {
 	const key = createMemo(() => worldRefKey(props.world.ref));
 	const [busyResourceId, setBusyResourceId] = createSignal<number | null>(null);
@@ -568,8 +568,8 @@ export const WorldDatapacksView: Component<{
 										onBusyChange={(busy) =>
 											setBusyResourceId(busy ? entry.resourceId : null)
 										}
-										onReviewVersions={() =>
-											props.onReviewVersions(props.world, entry)
+										onOpenDetails={() =>
+											props.onOpenDatapackDetails(props.world, entry)
 										}
 									/>
 								)}

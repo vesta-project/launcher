@@ -7,7 +7,7 @@ import { WorldDatapacksView } from "./WorldDatapacksView";
 import { WorldCard } from "./WorldsTab";
 import {
 	openWorldDatapackBrowser,
-	openWorldDatapackVersions,
+	openWorldDatapackDetails,
 } from "./world-datapack-navigation";
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +25,6 @@ const mocks = vi.hoisted(() => ({
 	setType: vi.fn(),
 	setInstance: vi.fn(),
 	setGameVersion: vi.fn(),
-	setPreferredInstallTarget: vi.fn(),
 	getProject: vi.fn().mockResolvedValue({
 		id: "pack",
 		source: "modrinth",
@@ -136,7 +135,6 @@ vi.mock("@stores/resources", () => ({
 		setType: mocks.setType,
 		setInstance: mocks.setInstance,
 		setGameVersion: mocks.setGameVersion,
-		setPreferredInstallTarget: mocks.setPreferredInstallTarget,
 		getProject: mocks.getProject,
 		install: mocks.install,
 	},
@@ -300,7 +298,7 @@ describe("world datapack navigation", () => {
 		expect(onOpen).not.toHaveBeenCalled();
 	});
 
-	it("binds Add datapack to the exact world before navigating", () => {
+	it("opens datapack browsing with the owning instance, not a sticky world", () => {
 		const targetWorld = world();
 		openWorldDatapackBrowser(targetWorld, {
 			navigate: mocks.navigate,
@@ -309,13 +307,6 @@ describe("world datapack navigation", () => {
 		expect(mocks.setType).toHaveBeenCalledWith("datapack");
 		expect(mocks.setInstance).toHaveBeenCalledWith(7);
 		expect(mocks.setGameVersion).toHaveBeenCalledWith("1.21.5");
-		expect(mocks.setPreferredInstallTarget).toHaveBeenCalledWith({
-			kind: "world",
-			world: targetWorld.ref,
-		});
-		expect(
-			mocks.setPreferredInstallTarget.mock.invocationCallOrder[0],
-		).toBeGreaterThan(mocks.setType.mock.invocationCallOrder[0]!);
 		expect(mocks.navigate).toHaveBeenCalledWith("/resources", {
 			resourceType: "datapack",
 			selectedInstanceId: "7",
@@ -323,9 +314,9 @@ describe("world datapack navigation", () => {
 		});
 	});
 
-	it("opens manual review for the exact installed row and world", () => {
+	it("opens project details with source-row context but no selected target", () => {
 		const targetWorld = world();
-		openWorldDatapackVersions(
+		openWorldDatapackDetails(
 			targetWorld,
 			{
 				resourceId: 11,
@@ -345,16 +336,13 @@ describe("world datapack navigation", () => {
 			{ navigate: mocks.navigate } as any,
 		);
 
-		expect(mocks.setPreferredInstallTarget).toHaveBeenCalledWith({
-			kind: "world",
-			world: targetWorld.ref,
-		});
 		expect(mocks.navigate).toHaveBeenCalledWith("/resource-details", {
 			projectId: "pack",
 			platform: "modrinth",
 			resourceType: "datapack",
-			activeTab: "versions",
 			replacementResourceId: "11",
+			replacementWorldInstanceId: "7",
+			replacementWorldDirectory: "World One",
 		});
 	});
 });
@@ -428,7 +416,7 @@ describe("WorldDatapacksView", () => {
 				world={world()}
 				onBack={vi.fn()}
 				onAddDatapack={vi.fn()}
-				onReviewVersions={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
 			/>
 		));
 
@@ -442,13 +430,37 @@ describe("WorldDatapacksView", () => {
 		).toBeTruthy();
 	});
 
+	it("opens managed project details from the whole row", async () => {
+		const onOpenDatapackDetails = vi.fn();
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={onOpenDatapackDetails}
+			/>
+		));
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "View details for Managed Pack" }),
+		);
+		expect(onOpenDatapackDetails).toHaveBeenCalledWith(
+			world(),
+			expect.objectContaining({ resourceId: 11, projectId: "pack" }),
+		);
+		await fireEvent.click(
+			screen.getByRole("switch", { name: "Disable Managed Pack" }),
+		);
+		expect(onOpenDatapackDetails).toHaveBeenCalledOnce();
+	});
+
 	it("hydrates provider icons once and keeps local packs on the fallback", async () => {
 		render(() => (
 			<WorldDatapacksView
 				world={world()}
 				onBack={vi.fn()}
 				onAddDatapack={vi.fn()}
-				onReviewVersions={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
 			/>
 		));
 
@@ -496,7 +508,7 @@ describe("WorldDatapacksView", () => {
 				world={world()}
 				onBack={vi.fn()}
 				onAddDatapack={vi.fn()}
-				onReviewVersions={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
 			/>
 		));
 
@@ -528,7 +540,7 @@ describe("WorldDatapacksView", () => {
 				world={targetWorld}
 				onBack={vi.fn()}
 				onAddDatapack={onAddDatapack}
-				onReviewVersions={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
 			/>
 		));
 
@@ -567,7 +579,7 @@ describe("WorldDatapacksView", () => {
 				world={targetWorld}
 				onBack={vi.fn()}
 				onAddDatapack={vi.fn()}
-				onReviewVersions={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
 			/>
 		));
 
@@ -595,7 +607,7 @@ describe("WorldDatapacksView", () => {
 				world={world()}
 				onBack={vi.fn()}
 				onAddDatapack={vi.fn()}
-				onReviewVersions={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
 			/>
 		));
 

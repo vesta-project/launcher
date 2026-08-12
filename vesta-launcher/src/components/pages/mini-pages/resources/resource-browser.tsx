@@ -1,11 +1,16 @@
 import { getSourceDescriptor } from "@resources/source-catalog";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { type Instance, instancesState } from "@stores/instances";
-import { dialogStore } from "@stores/dialog-store";
-import { type ResourceProject, type ResourceVersion, resources } from "@stores/resources";
-import { listInstanceWorlds, type WorldSummary } from "@stores/worlds";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
+import { dialogStore } from "@stores/dialog-store";
+import { type Instance, instancesState } from "@stores/instances";
+import {
+	type ResourceProject,
+	type ResourceVersion,
+	resources,
+} from "@stores/resources";
+import type { WorldSummary } from "@stores/worlds";
+import Button from "@ui/button/button";
 import {
 	Pagination,
 	PaginationEllipsis,
@@ -21,7 +26,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
-import Button from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import {
@@ -43,9 +47,9 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
-import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import styles from "./resource-browser.module.css";
 import ResourceCard from "./resource-card";
+import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import { ResourceSkeletonGrid } from "./resource-skeleton";
 import { ResourceToolbar } from "./resource-toolbar";
 
@@ -98,28 +102,6 @@ const ResourceBrowser: Component<{
 				instanceId: request.preferredInstanceId,
 			});
 			resources.setInstallRequest(null);
-			if (request.preferredWorld) {
-				const preferredWorld = request.preferredWorld;
-				void listInstanceWorlds(preferredWorld.instanceId)
-					.then((worlds) =>
-						worlds.find(
-							(world) =>
-								world.ref.directoryName === preferredWorld.directoryName,
-						),
-					)
-					.then((world) => {
-						if (world) return handleSelectWorld(world);
-						throw new Error("The selected world is no longer available.");
-					})
-					.catch((error) => {
-						setWorldInstall(null);
-						showToast({
-							title: "World unavailable",
-							description: String(error),
-							severity: "error",
-						});
-					});
-			}
 			return;
 		}
 		setIsInstanceDialogOpen(true);
@@ -148,13 +130,22 @@ const ResourceBrowser: Component<{
 				});
 				return;
 			}
-			const bestVersion = findBestVersionForInstance(project, finalVersions, instance);
+			const bestVersion = findBestVersionForInstance(
+				project,
+				finalVersions,
+				instance,
+			);
 
 			if (bestVersion) {
-				await resources.install(project, bestVersion, {
-					kind: "instance",
-					instanceId: instance.id,
-				}, { installType });
+				await resources.install(
+					project,
+					bestVersion,
+					{
+						kind: "instance",
+						instanceId: instance.id,
+					},
+					{ installType },
+				);
 			} else {
 				showToast({
 					title: "No compatible version",
@@ -176,13 +167,13 @@ const ResourceBrowser: Component<{
 		if (!context) return;
 		let selectedVersion = context.version;
 		if (!selectedVersion) {
-			selectedVersion = findBestExactDatapackVersion(
-				context.versions,
-				world.gameVersion,
-				context.project.source,
-			) ?? undefined;
+			selectedVersion =
+				findBestExactDatapackVersion(
+					context.versions,
+					world.gameVersion,
+					context.project.source,
+				) ?? undefined;
 			if (!selectedVersion) {
-				resources.setPreferredInstallTarget({ kind: "world", world: world.ref });
 				resources.setInstallRequest(null);
 				setWorldInstall(null);
 				activeRouter()?.navigate(
@@ -197,7 +188,7 @@ const ResourceBrowser: Component<{
 				);
 				showToast({
 					title: "Choose a datapack version",
-					description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version to install manually.`,
+					description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version manually; Vesta will ask for the destination world when you install it.`,
 					severity: "warning",
 				});
 				return;
@@ -218,20 +209,29 @@ const ResourceBrowser: Component<{
 		if (!acknowledged) return;
 		setWorldInstall(null);
 		try {
-			await resources.install(context.project, selectedVersion, {
-				kind: "world",
-				world: world.ref,
-			}, {
-				installType: context.installType,
-				compatibilityAcknowledged: compatibility !== "exact",
-			});
+			await resources.install(
+				context.project,
+				selectedVersion,
+				{
+					kind: "world",
+					world: world.ref,
+				},
+				{
+					installType: context.installType,
+					compatibilityAcknowledged: compatibility !== "exact",
+				},
+			);
 			showToast({
 				title: "Installation started",
 				description: `${context.project.name} will be installed into the selected world.`,
 				severity: "success",
 			});
 		} catch (err) {
-			showToast({ title: "Installation failed", description: String(err), severity: "error" });
+			showToast({
+				title: "Installation failed",
+				description: String(err),
+				severity: "error",
+			});
 		}
 	};
 
@@ -471,30 +471,6 @@ const ResourceBrowser: Component<{
 				onSearchInput={handleSearchInput}
 				searchValue={resources.state.query}
 			/>
-			<Show
-				when={
-					resources.state.resourceType === "datapack" &&
-					resources.state.preferredInstallTarget?.kind === "world"
-						? resources.state.preferredInstallTarget.world
-						: null
-				}
-			>
-				{(world) => (
-					<div class={`${styles["resource-warning"]} ${styles["world-target"]}`}>
-						<span>
-							Installing into <strong>{world().directoryName}</strong>
-						</span>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => resources.setPreferredInstallTarget(null)}
-						>
-							Choose a world each time
-						</Button>
-					</div>
-				)}
-			</Show>
-
 			<div class={styles["resource-results-info"]}>
 				<div class={styles["results-stats"]}>
 					<Show when={resources.state.totalHits > 0}>

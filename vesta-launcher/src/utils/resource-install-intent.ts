@@ -15,13 +15,27 @@ export interface ResourceInstallRequest {
 	/** The destination semantics chosen by the user, independent of provider classification. */
 	installType: ResourceType;
 	preferredInstanceId?: number;
-	preferredWorld?: WorldRef;
 }
 
 export interface PendingResourceInstall {
 	project: ResourceProject;
 	version?: ResourceVersion;
 	installType?: ResourceType;
+}
+
+export interface ManagedDatapackReplacement {
+	resourceId: number;
+	world: WorldRef;
+}
+
+export function replacementResourceIdForWorld(
+	replacement: ManagedDatapackReplacement | null | undefined,
+	target: WorldRef,
+): number | undefined {
+	return replacement?.world.instanceId === target.instanceId &&
+		replacement.world.directoryName === target.directoryName
+		? replacement.resourceId
+		: undefined;
 }
 
 const normalizeArtifactRole = (role: string) =>
@@ -41,8 +55,7 @@ export function requiresWorldTarget(
 	return (version?.files ?? []).some((file) => {
 		const role = normalizeArtifactRole(file.role);
 		return (
-			role === "datapack" ||
-			(role === "primary" && installType === "datapack")
+			role === "datapack" || (role === "primary" && installType === "datapack")
 		);
 	});
 }
@@ -223,7 +236,8 @@ export function findBestVersion(
 				: ["release", "beta", "alpha"];
 
 	const compatible = versions.filter((version) => {
-		if (!versionMatchesResourceType(resourceType, version, source)) return false;
+		if (!versionMatchesResourceType(resourceType, version, source))
+			return false;
 		if (!isGameVersionCompatible(version.game_versions, gameVersion))
 			return false;
 

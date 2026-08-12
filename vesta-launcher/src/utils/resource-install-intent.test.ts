@@ -5,11 +5,12 @@ import type {
 } from "@stores/resources";
 import {
 	classifyDatapackVersionCompatibility,
-	findBestVersion,
 	findBestExactDatapackVersion,
+	findBestVersion,
 	findInstalledResource,
 	isGameVersionCompatible,
 	isResourceUpdateAvailable,
+	replacementResourceIdForWorld,
 	requiresWorldTarget,
 	versionMatchesResourceType,
 } from "@utils/resource-install-intent";
@@ -175,10 +176,20 @@ describe("resource install intent", () => {
 
 	it("only quick-selects datapacks with an exact Minecraft version tag", () => {
 		const versions = [
-			version({ id: "wildcard", loaders: ["datapack"], game_versions: ["1.21.x"] }),
-			version({ id: "same-line", loaders: ["datapack"], game_versions: ["1.21.4"] }),
+			version({
+				id: "wildcard",
+				loaders: ["datapack"],
+				game_versions: ["1.21.x"],
+			}),
+			version({
+				id: "same-line",
+				loaders: ["datapack"],
+				game_versions: ["1.21.4"],
+			}),
 		];
-		expect(findBestExactDatapackVersion(versions, "1.21.1", "modrinth")).toBeNull();
+		expect(
+			findBestExactDatapackVersion(versions, "1.21.1", "modrinth"),
+		).toBeNull();
 		expect(
 			findBestExactDatapackVersion(
 				[...versions, version({ id: "exact", loaders: ["datapack"] })],
@@ -198,6 +209,28 @@ describe("resource install intent", () => {
 		expect(classifyDatapackVersionCompatibility(["1.21.1"], null)).toBe(
 			"unknown",
 		);
+	});
+
+	it("replaces a managed datapack only when the selected world is its source", () => {
+		const replacement = {
+			resourceId: 42,
+			world: { instanceId: 7, directoryName: "World One" },
+		};
+		expect(replacementResourceIdForWorld(replacement, replacement.world)).toBe(
+			42,
+		);
+		expect(
+			replacementResourceIdForWorld(replacement, {
+				instanceId: 7,
+				directoryName: "World Two",
+			}),
+		).toBeUndefined();
+		expect(
+			replacementResourceIdForWorld(replacement, {
+				instanceId: 8,
+				directoryName: "World One",
+			}),
+		).toBeUndefined();
 	});
 
 	it("uses explicit install intent when a Modrinth mod has datapack builds", () => {
