@@ -1,7 +1,6 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
-import { dialogStore } from "@stores/dialog-store";
 import { type Instance, instancesState } from "@stores/instances";
 import {
 	type ResourceProject,
@@ -25,10 +24,10 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
+import { confirmDatapackWorldCompatibility } from "@utils/datapack-compatibility-confirm";
 import { openExternal } from "@utils/external-link";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import {
-	classifyDatapackVersionCompatibility,
 	findBestExactDatapackVersion,
 	hasDownloadableArtifact,
 	requiresWorldTarget,
@@ -242,17 +241,12 @@ const ResourceBrowser: Component<{
 			return;
 		}
 
-		const compatibility = classifyDatapackVersionCompatibility(
-			selectedVersion.game_versions,
-			world.gameVersion,
-		);
-		const acknowledged =
-			compatibility === "exact" ||
-			(await dialogStore.confirm(
-				"Confirm datapack compatibility",
-				`${selectedVersion.version_number} does not explicitly list ${world.gameVersion ?? "this world's saved version"}. Datapacks are often compatible across nearby releases, but Vesta cannot verify this one.`,
-				{ okLabel: "Install anyway", cancelLabel: "Choose another version" },
-			));
+		const { compatibility, acknowledged } =
+			await confirmDatapackWorldCompatibility({
+				projectName: context.project.name,
+				version: selectedVersion,
+				world,
+			});
 		if (!acknowledged) {
 			setWorldInstall(null);
 			activeRouter()?.navigate(

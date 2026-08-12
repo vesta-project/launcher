@@ -10,7 +10,6 @@ import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-compos
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
-import { dialogStore } from "@stores/dialog-store";
 import { instancesState } from "@stores/instances";
 import {
 	type ResourceDependency,
@@ -47,6 +46,7 @@ import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { formatDate } from "@utils/date";
+import { confirmDatapackWorldCompatibility } from "@utils/datapack-compatibility-confirm";
 import { openExternal } from "@utils/external-link";
 import {
 	createAnimatedIconPreview,
@@ -55,7 +55,6 @@ import {
 import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import {
-	classifyDatapackVersionCompatibility,
 	findBestExactDatapackVersion,
 	findBestVersionForInstance,
 	hasDownloadableArtifact,
@@ -1673,17 +1672,12 @@ const ResourceDetailsPage: Component<{
 			await openExternal(context.project.web_url);
 			return;
 		}
-		const compatibility = classifyDatapackVersionCompatibility(
-			selectedVersion.game_versions,
-			world.gameVersion,
-		);
-		const acknowledged =
-			compatibility === "exact" ||
-			(await dialogStore.confirm(
-				"Confirm datapack compatibility",
-				`${selectedVersion.version_number} does not explicitly list ${world.gameVersion ?? "this world's saved version"}. Datapacks are often compatible across nearby releases, but Vesta cannot verify this one.`,
-				{ okLabel: "Install anyway", cancelLabel: "Choose another version" },
-			));
+		const { compatibility, acknowledged } =
+			await confirmDatapackWorldCompatibility({
+				projectName: context.project.name,
+				version: selectedVersion,
+				world,
+			});
 		if (!acknowledged) {
 			setWorldInstall(null);
 			transitionRouteState({ activeTab: "versions", versionId: null }, true);
