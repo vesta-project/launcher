@@ -284,9 +284,15 @@ mod tests {
     #[test]
     fn source_platform_round_trips_stable_ids() {
         for platform in SourcePlatform::ALL {
-            assert_eq!(SourcePlatform::from_str_id(platform.as_str()), Some(platform));
+            assert_eq!(
+                SourcePlatform::from_str_id(platform.as_str()),
+                Some(platform)
+            );
         }
-        assert_eq!(SourcePlatform::from_str_id("Smithed"), Some(SourcePlatform::Smithed));
+        assert_eq!(
+            SourcePlatform::from_str_id("Smithed"),
+            Some(SourcePlatform::Smithed)
+        );
         assert_eq!(SourcePlatform::from_str_id("unknown"), None);
     }
 }

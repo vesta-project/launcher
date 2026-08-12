@@ -493,7 +493,8 @@ impl TaskManager {
 
                         // Notify frontend about failure if it's a resource download
                         if let Some(task_id) = task.id() {
-                            if task_id.starts_with("download_") || task_id.starts_with("download|") {
+                            if task_id.starts_with("download_") || task_id.starts_with("download|")
+                            {
                                 let _ = app.emit("resource-install-error", task_id);
                             }
                         }
@@ -585,7 +586,9 @@ impl TaskManager {
 
                             // Notify frontend about failure if it follows the resource download pattern
                             if let Some(task_id) = task.id() {
-                                if task_id.starts_with("download_") || task_id.starts_with("download|") {
+                                if task_id.starts_with("download_")
+                                    || task_id.starts_with("download|")
+                                {
                                     let _ = app.emit("resource-install-error", task_id);
                                 }
                             }
