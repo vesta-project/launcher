@@ -6,8 +6,9 @@ use std::hash::{Hash, Hasher};
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
-    ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
+    CachedResourceProjectRef, ResourceCategory, ResourceProject, ResourceProjectRecord,
+    ResourceProjectRef, ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use crate::models::resource_update::{
     InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
@@ -698,6 +699,26 @@ pub async fn get_cached_resource_projects(
         .into_iter()
         .map(Into::into)
         .collect())
+}
+
+#[tauri::command]
+pub async fn get_cached_resource_projects_by_provider(
+    resource_manager: State<'_, ResourceManager>,
+    refs: Vec<CachedResourceProjectRef>,
+    hydrate_icons: Option<bool>,
+) -> Result<Vec<ResourceProjectOverviewRecord>> {
+    let records = if hydrate_icons.unwrap_or(false) {
+        resource_manager
+            .hydrate_cached_project_icons(&refs)
+            .await?
+            .into_iter()
+            .map(process_resource_record_icon)
+            .collect::<Vec<_>>()
+    } else {
+        resource_manager.get_cached_project_records(&refs)?
+    };
+
+    Ok(records.into_iter().map(Into::into).collect())
 }
 
 #[tauri::command]

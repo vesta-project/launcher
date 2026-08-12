@@ -54,7 +54,7 @@ import styles from "./WorldsTab.module.css";
 import { getWorldTransferWarnings } from "./world-transfer";
 
 type SortMode = "recency" | "name" | "size";
-type ViewMode = "grid" | "list";
+type ViewMode = "grid" | "compact";
 type PendingTransfer = {
 	world: WorldSummary;
 	mode: Exclude<WorldTransferMode, "duplicate">;
@@ -197,11 +197,17 @@ export const WorldCard: Component<{
 				tabIndex={props.world.levelStatus === "unreadable" ? undefined : 0}
 				aria-disabled={props.world.levelStatus === "unreadable" || undefined}
 				aria-label={`Open ${props.world.displayName}`}
-				onClick={() => {
+				onClick={(event: MouseEvent) => {
+					if (
+						event.target !== event.currentTarget &&
+						(event.target as HTMLElement).closest("button")
+					)
+						return;
 					if (props.world.levelStatus !== "unreadable") props.onOpen();
 				}}
 				onKeyDown={(event: KeyboardEvent) => {
 					if (
+						event.target === event.currentTarget &&
 						props.world.levelStatus !== "unreadable" &&
 						(event.key === "Enter" || event.key === " ")
 					) {
@@ -489,10 +495,10 @@ export const WorldsTab: Component<{
 									<GridIcon />
 								</ToggleGroupItem>
 								<ToggleGroupItem
-									value="list"
+									value="compact"
 									icon_only
-									aria-label="List view"
-									title="List view"
+									aria-label="Compact view"
+									title="Compact view"
 								>
 									<ListIcon />
 								</ToggleGroupItem>

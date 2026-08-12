@@ -7,9 +7,10 @@ use tokio::sync::RwLock;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceMetadataCacheRecord,
-    ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion,
-    ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
+    CachedResourceProjectRef, DependencyType, ReleaseType, ResourceCategory, ResourceDependency,
+    ResourceMetadataCacheRecord, ResourceProject, ResourceProjectRecord, ResourceProjectRef,
+    ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse,
+    SourcePlatform,
 };
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
@@ -1135,6 +1136,20 @@ impl ResourceManager {
         &self,
         refs: &[ResourceProjectRef],
     ) -> Result<Vec<ResourceProjectRecord>> {
+        let refs = refs
+            .iter()
+            .map(|project_ref| CachedResourceProjectRef {
+                platform: project_ref.platform.as_str().to_string(),
+                id: project_ref.id.clone(),
+            })
+            .collect::<Vec<_>>();
+        self.get_cached_project_records(&refs)
+    }
+
+    pub fn get_cached_project_records(
+        &self,
+        refs: &[CachedResourceProjectRef],
+    ) -> Result<Vec<ResourceProjectRecord>> {
         if refs.is_empty() {
             return Ok(Vec::new());
         }
@@ -1143,7 +1158,7 @@ impl ResourceManager {
             .iter()
             .map(|project_ref| {
                 (
-                    format!("{:?}", project_ref.platform).to_lowercase(),
+                    project_ref.platform.trim().to_ascii_lowercase(),
                     project_ref.id.clone(),
                 )
             })
@@ -1163,9 +1178,23 @@ impl ResourceManager {
         &self,
         refs: &[ResourceProjectRef],
     ) -> Result<Vec<ResourceProjectRecord>> {
+        let refs = refs
+            .iter()
+            .map(|project_ref| CachedResourceProjectRef {
+                platform: project_ref.platform.as_str().to_string(),
+                id: project_ref.id.clone(),
+            })
+            .collect::<Vec<_>>();
+        self.hydrate_cached_project_icons(&refs).await
+    }
+
+    pub async fn hydrate_cached_project_icons(
+        &self,
+        refs: &[CachedResourceProjectRef],
+    ) -> Result<Vec<ResourceProjectRecord>> {
         use futures::stream::{self, StreamExt};
 
-        let records = self.get_project_records(refs)?;
+        let records = self.get_cached_project_records(refs)?;
         let downloads = records
             .iter()
             .filter_map(|record| {
@@ -1212,7 +1241,7 @@ impl ResourceManager {
             }
         }
 
-        self.get_project_records(refs)
+        self.get_cached_project_records(refs)
     }
 }
 

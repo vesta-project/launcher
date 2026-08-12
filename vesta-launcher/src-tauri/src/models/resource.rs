@@ -205,6 +205,16 @@ pub struct ResourceProjectRef {
     pub id: String,
 }
 
+/// A provider-neutral reference used for cache-only lookups. Unlike
+/// `ResourceProjectRef`, this does not imply that Vesta can query the provider
+/// over the network in this build.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedResourceProjectRef {
+    pub platform: String,
+    pub id: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct SearchQuery {
     pub text: Option<String>,
