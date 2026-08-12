@@ -104,4 +104,11 @@ describe("resource-artifacts", () => {
 			]),
 		).toBe("datapack · resource pack");
 	});
+
+	it("falls back to resource_type when versions are empty or unrelated", () => {
+		expect(projectTypeLabel({ resource_type: "datapack" }, [])).toBe(
+			"datapack",
+		);
+		expect(projectTypeLabel({ resource_type: "mod" })).toBe("mod");
+	});
 });

@@ -7,6 +7,7 @@ import {
 	getSourceDescriptor,
 } from "@resources/source-catalog";
 import { createStore, reconcile } from "solid-js/store";
+import { parseDownloadTaskId } from "@utils/resource-task-id";
 import { refreshInstanceResourceRows } from "./instance-resource-overview";
 import { Instance } from "./instances";
 import type { ResourceInstallTarget } from "./worlds";
@@ -203,29 +204,59 @@ const searchCache = new Map<string, CachedSearchResponse>();
 const versionDetailsCache = new Map<string, ResourceVersionDetails>();
 
 function clearInstallingMatchedByInstalled(results: InstalledResource[]) {
-	const installedRemoteVersionIds = new Set(
-		results.map((r) => r.remote_version_id),
-	);
-	const installedRemoteIds = new Set(
-		results.map((r) => r.remote_id.toLowerCase()),
+	const installed = new Set(
+		results.map(
+			(resource) =>
+				`${resource.platform.toLowerCase()}:${resource.remote_id.toLowerCase()}:${resource.remote_version_id}`,
+		),
 	);
 
-	setResourceStore("installingVersionIds", (ids) =>
-		ids.filter((id) => !installedRemoteVersionIds.has(id)),
+	setResourceStore("installingTargetKeys", (keys) =>
+		keys.filter((key) => {
+			const [source, projectId, versionId] = key.split(":");
+			if (!source || !projectId || !versionId) return true;
+			return !installed.has(
+				`${source.toLowerCase()}:${projectId.toLowerCase()}:${versionId}`,
+			);
+		}),
 	);
+
+	const remaining = resourceStore.installingTargetKeys;
 	setResourceStore("installingProjectIds", (ids) =>
-		ids.filter((id) => !installedRemoteIds.has(id.toLowerCase())),
+		ids.filter((id) =>
+			remaining.some((key) => {
+				const parts = key.split(":");
+				return parts[1] === id;
+			}),
+		),
+	);
+	setResourceStore("installingVersionIds", (ids) =>
+		ids.filter((id) =>
+			remaining.some((key) => {
+				const parts = key.split(":");
+				return parts[1] && parts[2] === id;
+			}),
+		),
 	);
 }
 
 function clearInstallingFromTaskId(taskId: string) {
-	// Task ids look like: download_{target}_{projectId}_{versionId}
-	// Project/version ids may contain underscores, so match by substring.
+	const parsed = parseDownloadTaskId(taskId);
+	if (!parsed) return;
+
 	setResourceStore("installingProjectIds", (ids) =>
-		ids.filter((id) => !taskId.includes(id)),
+		ids.filter((id) => id !== parsed.projectId),
 	);
 	setResourceStore("installingVersionIds", (ids) =>
-		ids.filter((id) => !taskId.includes(id)),
+		ids.filter((id) => id !== parsed.versionId),
+	);
+	setResourceStore("installingTargetKeys", (keys) =>
+		keys.filter((key) => {
+			const parts = key.split(":");
+			return !(
+				parts[1] === parsed.projectId && parts[2] === parsed.versionId
+			);
+		}),
 	);
 }
 
@@ -234,28 +265,58 @@ function bannerUrlForProject(project: ResourceProject): string | null {
 	return project.featured_gallery ?? null;
 }
 
+const MAX_RESOLVED_BROWSE_IMAGES = 64;
+let browseWarmGeneration = 0;
+
+function pruneResolvedBrowseImages(keepUrls: string[]) {
+	const keep = new Set(keepUrls);
+	const next: Record<string, string> = {};
+	for (const url of keep) {
+		const dataUrl = resourceStore.resolvedBrowseImages[url];
+		if (dataUrl) next[url] = dataUrl;
+	}
+	const keys = Object.keys(next);
+	if (keys.length > MAX_RESOLVED_BROWSE_IMAGES) {
+		for (const extra of keys.slice(
+			0,
+			keys.length - MAX_RESOLVED_BROWSE_IMAGES,
+		)) {
+			delete next[extra];
+		}
+	}
+	setResourceStore("resolvedBrowseImages", reconcile(next));
+}
+
 /** Warm Rust image cache for browse banners; mirrors into `resolvedBrowseImages`. */
 async function warmBrowseBannerImages(hits: ResourceProject[]) {
-	const urls = [
+	const hitUrls = [
 		...new Set(
 			hits
 				.map(bannerUrlForProject)
-				.filter((url): url is string => Boolean(url))
-				.filter((url) => !resourceStore.resolvedBrowseImages[url])
-				// Firebase CDN banners load in the webview; skip Rust warm for them.
-				.filter((url) => !url.includes("firebasestorage.googleapis.com")),
+				.filter((url): url is string => Boolean(url)),
 		),
 	];
+	pruneResolvedBrowseImages(hitUrls);
+
+	const urls = hitUrls.filter(
+		(url) =>
+			!resourceStore.resolvedBrowseImages[url] &&
+			// Firebase CDN banners load in the webview; skip Rust warm for them.
+			!url.includes("firebasestorage.googleapis.com"),
+	);
 	if (urls.length === 0) return;
 
+	const token = ++browseWarmGeneration;
 	try {
 		const resolved = await invoke<string[]>("resolve_image_urls", { urls });
+		if (token !== browseWarmGeneration) return;
 		for (let i = 0; i < urls.length; i++) {
 			const dataUrl = resolved[i];
 			if (dataUrl) {
 				setResourceStore("resolvedBrowseImages", urls[i], dataUrl);
 			}
 		}
+		pruneResolvedBrowseImages(hitUrls);
 	} catch (e) {
 		console.error("Failed to warm browse banner images:", e);
 	}

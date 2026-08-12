@@ -9,7 +9,9 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::net::IpAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 const API_BASE: &str = "https://api.smithed.dev/v2";
@@ -18,6 +20,7 @@ const MODRINTH_API: &str = "https://api.modrinth.com/v2";
 /// Public Firebase Storage bucket used by Smithed for uploaded gallery files.
 const GALLERY_CDN_BASE: &str =
     "https://firebasestorage.googleapis.com/v0/b/mc-smithed.appspot.com/o";
+const MAX_DESCRIPTION_BYTES: usize = 256 * 1024;
 
 const PACK_CATEGORIES: &[&str] = &[
     "Extensive",
@@ -170,6 +173,13 @@ struct ModrinthVersionFile {
 #[derive(Debug, Deserialize)]
 struct ModrinthVersion {
     #[serde(default)]
+    #[allow(dead_code)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    version_number: Option<String>,
+    #[serde(default)]
     game_versions: Vec<String>,
     #[serde(default)]
     files: Vec<ModrinthVersionFile>,
@@ -177,6 +187,7 @@ struct ModrinthVersion {
 
 pub struct SmithedSource {
     client: Client,
+    description_client: Client,
     user_names: Arc<RwLock<HashMap<String, String>>>,
 }
 
@@ -184,8 +195,26 @@ impl SmithedSource {
     pub fn new() -> Self {
         Self {
             client: piston_lib::client::shared_client().clone(),
+            description_client: Self::build_description_client(),
             user_names: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    fn build_description_client() -> Client {
+        Client::builder()
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.previous().len() >= 3 {
+                    return attempt.error("too many description redirects");
+                }
+                if SmithedSource::is_safe_description_url(attempt.url().as_str()) {
+                    attempt.follow()
+                } else {
+                    attempt.error("description redirect to a blocked host")
+                }
+            }))
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_else(|_| piston_lib::client::shared_client().clone())
     }
 
     fn map_sort(sort_by: Option<&str>) -> &'static str {
@@ -238,6 +267,10 @@ impl SmithedSource {
     }
 
     fn modrinth_slug_from_url(url: &str) -> Option<String> {
+        Self::modrinth_project_ref_from_url(url).map(|(slug, _)| slug)
+    }
+
+    fn modrinth_project_ref_from_url(url: &str) -> Option<(String, Option<String>)> {
         let parsed = url::Url::parse(url).ok()?;
         let host = parsed.host_str()?.to_ascii_lowercase();
         if !host.ends_with("modrinth.com") {
@@ -249,7 +282,45 @@ impl SmithedSource {
         if slug.is_empty() {
             return None;
         }
-        Some(slug.to_string())
+        let version_id = match (segments.next(), segments.next()) {
+            (Some("version"), Some(id)) => {
+                let id = id.trim();
+                if id.is_empty() {
+                    None
+                } else {
+                    Some(id.to_string())
+                }
+            }
+            _ => None,
+        };
+        Some((slug.to_string(), version_id))
+    }
+
+    fn normalize_version_label(value: &str) -> String {
+        value
+            .trim()
+            .trim_start_matches(['v', 'V'])
+            .trim()
+            .to_ascii_lowercase()
+    }
+
+    fn score_modrinth_version_name(smithed_version: &str, version_number: &str, name: &str) -> i32 {
+        let wanted = Self::normalize_version_label(smithed_version);
+        if wanted.is_empty() {
+            return 0;
+        }
+        let number = Self::normalize_version_label(version_number);
+        let name = Self::normalize_version_label(name);
+        if number == wanted || name == wanted {
+            return 1000;
+        }
+        if !number.is_empty() && (number.contains(&wanted) || wanted.contains(&number)) {
+            return 400;
+        }
+        if !name.is_empty() && (name.contains(&wanted) || wanted.contains(&name)) {
+            return 200;
+        }
+        0
     }
 
     fn score_modrinth_file(role: &str, file_name: &str) -> i32 {
@@ -290,15 +361,38 @@ impl SmithedSource {
     async fn resolve_modrinth_file(
         &self,
         slug: &str,
+        version_id: Option<&str>,
+        smithed_version: &str,
         role: &str,
         supports: &[String],
     ) -> Option<(String, String)> {
-        let url = format!("{MODRINTH_API}/project/{}/version", urlencoding::encode(slug));
-        let response = self.client.get(&url).send().await.ok()?;
-        if !response.status().is_success() {
-            return None;
-        }
-        let versions: Vec<ModrinthVersion> = response.json().await.ok()?;
+        let versions = if let Some(version_id) = version_id.filter(|id| !id.is_empty()) {
+            let url = format!("{MODRINTH_API}/version/{}", urlencoding::encode(version_id));
+            let response = self.client.get(&url).send().await.ok()?;
+            if !response.status().is_success() {
+                return None;
+            }
+            vec![response.json::<ModrinthVersion>().await.ok()?]
+        } else {
+            let url = format!(
+                "{MODRINTH_API}/project/{}/version",
+                urlencoding::encode(slug)
+            );
+            let response = self.client.get(&url).send().await.ok()?;
+            if !response.status().is_success() {
+                return None;
+            }
+            response.json::<Vec<ModrinthVersion>>().await.ok()?
+        };
+        Self::pick_modrinth_file(&versions, smithed_version, role, supports)
+    }
+
+    fn pick_modrinth_file(
+        versions: &[ModrinthVersion],
+        smithed_version: &str,
+        role: &str,
+        supports: &[String],
+    ) -> Option<(String, String)> {
         let support_set: HashSet<&str> = supports.iter().map(String::as_str).collect();
 
         let mut best: Option<(i32, String, String)> = None;
@@ -311,7 +405,9 @@ impl SmithedSource {
                     .iter()
                     .filter(|gv| {
                         support_set.contains(gv.as_str())
-                            || supports.iter().any(|s| gv.contains(s) || s.contains(gv.as_str()))
+                            || supports
+                                .iter()
+                                .any(|s| gv.contains(s) || s.contains(gv.as_str()))
                     })
                     .count()
             };
@@ -319,15 +415,22 @@ impl SmithedSource {
                 continue;
             }
 
-            for file in version.files {
+            let name_score = Self::score_modrinth_version_name(
+                smithed_version,
+                version.version_number.as_deref().unwrap_or(""),
+                version.name.as_deref().unwrap_or(""),
+            );
+
+            for file in &version.files {
                 let mut score = Self::score_modrinth_file(role, &file.filename);
                 score += (game_overlap as i32) * 10;
+                score += name_score;
                 if file.primary {
                     score += 5;
                 }
                 match &best {
                     Some((best_score, _, _)) if *best_score >= score => {}
-                    _ => best = Some((score, file.url, file.filename)),
+                    _ => best = Some((score, file.url.clone(), file.filename.clone())),
                 }
             }
         }
@@ -340,12 +443,22 @@ impl SmithedSource {
         url: &str,
         role: &str,
         supports: &[String],
+        smithed_version: &str,
     ) -> Option<(String, String)> {
         if Self::looks_like_direct_file_url(url) {
             return Some((url.to_string(), Self::file_name_from_url(url)));
         }
-        if let Some(slug) = Self::modrinth_slug_from_url(url) {
-            if let Some(resolved) = self.resolve_modrinth_file(&slug, role, supports).await {
+        if let Some((slug, version_id)) = Self::modrinth_project_ref_from_url(url) {
+            if let Some(resolved) = self
+                .resolve_modrinth_file(
+                    &slug,
+                    version_id.as_deref(),
+                    smithed_version,
+                    role,
+                    supports,
+                )
+                .await
+            {
                 return Some(resolved);
             }
             log::warn!(
@@ -409,11 +522,7 @@ impl SmithedSource {
                         .as_deref()
                         .map(str::trim)
                         .filter(|value| !value.is_empty())?;
-                    let item_type = item
-                        .item_type
-                        .as_deref()
-                        .map(str::trim)
-                        .unwrap_or_default();
+                    let item_type = item.item_type.as_deref().map(str::trim).unwrap_or_default();
 
                     match item_type {
                         "file" => {
@@ -443,7 +552,9 @@ impl SmithedSource {
     }
 
     fn infer_resource_type(versions: &[SmithedPackVersion]) -> ResourceType {
-        let has_datapack = versions.iter().any(|v| Self::version_has_role(v, "datapack"));
+        let has_datapack = versions
+            .iter()
+            .any(|v| Self::version_has_role(v, "datapack"));
         let has_resourcepack = versions
             .iter()
             .any(|v| Self::version_has_role(v, "resourcepack"));
@@ -518,7 +629,7 @@ impl SmithedSource {
         let mut files = Vec::new();
         if let Some(url) = Self::non_empty(version.downloads.datapack.as_ref()) {
             if let Some((resolved_url, file_name)) = self
-                .resolve_download_url(url, "datapack", &version.supports)
+                .resolve_download_url(url, "datapack", &version.supports, &version.name)
                 .await
             {
                 files.push(ResourceVersionFile {
@@ -532,7 +643,7 @@ impl SmithedSource {
         }
         if let Some(url) = Self::non_empty(version.downloads.resourcepack.as_ref()) {
             if let Some((resolved_url, file_name)) = self
-                .resolve_download_url(url, "resourcepack", &version.supports)
+                .resolve_download_url(url, "resourcepack", &version.supports, &version.name)
                 .await
             {
                 files.push(ResourceVersionFile {
@@ -579,7 +690,10 @@ impl SmithedSource {
         roles
     }
 
-    fn map_search_hit(hit: SmithedSearchHit, resource_type: ResourceType) -> Option<ResourceProject> {
+    fn map_search_hit(
+        hit: SmithedSearchHit,
+        resource_type: ResourceType,
+    ) -> Option<ResourceProject> {
         let meta = hit.meta.unwrap_or(SmithedPackMeta {
             doc_id: None,
             raw_id: None,
@@ -738,7 +852,10 @@ impl SmithedSource {
     }
 
     async fn fetch_text(&self, url: &str) -> Result<String> {
-        let response = self.client.get(url).send().await?;
+        if !Self::is_safe_description_url(url) {
+            return Err(anyhow!("Blocked description URL: {url}"));
+        }
+        let response = self.description_client.get(url).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!(
                 "Failed to fetch description page ({}): {}",
@@ -746,19 +863,34 @@ impl SmithedSource {
                 url
             ));
         }
+        if response
+            .content_length()
+            .is_some_and(|len| len > MAX_DESCRIPTION_BYTES as u64)
+        {
+            return Err(anyhow!("Description page exceeded size limit: {url}"));
+        }
         let content_type = response
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
             .and_then(|value| value.to_str().ok())
             .unwrap_or("")
             .to_ascii_lowercase();
-        let body = response.text().await?;
+        let body = response.bytes().await?;
+        if body.len() > MAX_DESCRIPTION_BYTES {
+            return Err(anyhow!("Description page exceeded size limit: {url}"));
+        }
+        let body = String::from_utf8_lossy(&body).into_owned();
         if content_type.contains("text/html")
-            || body.trim_start().to_ascii_lowercase().starts_with("<!doctype html")
+            || body
+                .trim_start()
+                .to_ascii_lowercase()
+                .starts_with("<!doctype html")
             || body.trim_start().to_ascii_lowercase().starts_with("<html")
         {
             // Author pages are usually raw markdown/README; avoid dumping raw HTML into the viewer.
-            return Err(anyhow!("Description URL returned HTML rather than markdown"));
+            return Err(anyhow!(
+                "Description URL returned HTML rather than markdown"
+            ));
         }
         Ok(body)
     }
@@ -766,6 +898,57 @@ impl SmithedSource {
     fn looks_like_url(value: &str) -> bool {
         let lower = value.trim().to_ascii_lowercase();
         lower.starts_with("https://") || lower.starts_with("http://")
+    }
+
+    fn host_is_blocked(host: &str) -> bool {
+        let host = host
+            .trim()
+            .trim_matches(|c| c == '[' || c == ']')
+            .to_ascii_lowercase();
+        if host == "localhost"
+            || host == "metadata.google.internal"
+            || host.ends_with(".localhost")
+            || host.ends_with(".local")
+        {
+            return true;
+        }
+        host.parse::<IpAddr>().is_ok_and(Self::ip_is_blocked)
+    }
+
+    fn ip_is_blocked(ip: IpAddr) -> bool {
+        match ip {
+            IpAddr::V4(v4) => {
+                v4.is_loopback()
+                    || v4.is_private()
+                    || v4.is_link_local()
+                    || v4.is_unspecified()
+                    || v4.is_broadcast()
+            }
+            IpAddr::V6(v6) => {
+                let first = v6.segments()[0];
+                v6.is_loopback()
+                    || v6.is_unspecified()
+                    || (first & 0xfe00) == 0xfc00
+                    || (first & 0xffc0) == 0xfe80
+                    || v6
+                        .to_ipv4_mapped()
+                        .is_some_and(|mapped| Self::ip_is_blocked(IpAddr::V4(mapped)))
+            }
+        }
+    }
+
+    fn is_safe_description_url(value: &str) -> bool {
+        let Ok(url) = url::Url::parse(value.trim()) else {
+            return false;
+        };
+        if url.scheme() != "https" {
+            return false;
+        }
+        if !url.username().is_empty() || url.password().is_some() {
+            return false;
+        }
+        url.host_str()
+            .is_some_and(|host| !Self::host_is_blocked(host))
     }
 
     async fn resolve_description(&self, display: &SmithedDisplay) -> Option<String> {
@@ -782,7 +965,7 @@ impl SmithedSource {
             .filter(|value| !value.is_empty());
 
         match web_page {
-            Some(url) if Self::looks_like_url(url) => match self.fetch_text(url).await {
+            Some(url) if Self::is_safe_description_url(url) => match self.fetch_text(url).await {
                 Ok(body) => {
                     let body = body.trim();
                     if body.is_empty() {
@@ -805,9 +988,9 @@ impl SmithedSource {
                         err
                     );
                     match summary {
-                        Some(summary) => Some(format!(
-                            "{summary}\n\n[Read full description]({url})"
-                        )),
+                        Some(summary) => {
+                            Some(format!("{summary}\n\n[Read full description]({url})"))
+                        }
                         None => Some(format!("[Read full description]({url})")),
                     }
                 }
@@ -854,11 +1037,7 @@ impl SmithedSource {
             .and_then(|downloads| downloads.total)
             .unwrap_or(0);
 
-        let summary = pack
-            .display
-            .description
-            .clone()
-            .unwrap_or_default();
+        let summary = pack.display.description.clone().unwrap_or_default();
         let description = self.resolve_description(&pack.display).await;
         let gallery_doc_id = meta
             .doc_id
@@ -875,10 +1054,7 @@ impl SmithedSource {
             id: raw_id.clone(),
             source: SourcePlatform::Smithed,
             resource_type,
-            name: pack
-                .display
-                .name
-                .unwrap_or_else(|| raw_id.clone()),
+            name: pack.display.name.unwrap_or_else(|| raw_id.clone()),
             summary,
             description,
             icon_url,
@@ -931,7 +1107,12 @@ impl ResourceSource for SmithedSource {
             Self::map_sort(query.sort_by.as_deref())
         );
 
-        if let Some(text) = query.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        if let Some(text) = query
+            .text
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+        {
             url.push_str(&format!("&search={}", urlencoding::encode(text)));
         }
         if let Some(version) = query.game_version.as_deref() {
@@ -966,7 +1147,12 @@ impl ResourceSource for SmithedSource {
 
         let count_url = {
             let mut count = format!("{}/packs/count?hidden=false", API_BASE);
-            if let Some(text) = query.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+            if let Some(text) = query
+                .text
+                .as_deref()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+            {
                 count.push_str(&format!("&search={}", urlencoding::encode(text)));
             }
             if let Some(version) = query.game_version.as_deref() {
@@ -1049,10 +1235,7 @@ impl ResourceSource for SmithedSource {
 
         let mut versions = Vec::new();
         for version in &pack.versions {
-            if let Some(mapped) = self
-                .map_version_resolved(&raw_id, version, preferred)
-                .await
-            {
+            if let Some(mapped) = self.map_version_resolved(&raw_id, version, preferred).await {
                 versions.push(mapped);
             }
         }
@@ -1414,6 +1597,78 @@ mod tests {
             "https://raw.githubusercontent.com/example/README.md"
         ));
         assert!(!SmithedSource::looks_like_url("Just some markdown text"));
+    }
+
+    #[test]
+    fn description_urls_reject_private_and_insecure_hosts() {
+        assert!(SmithedSource::is_safe_description_url(
+            "https://raw.githubusercontent.com/example/README.md"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "http://raw.githubusercontent.com/example/README.md"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://127.0.0.1/secret"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://10.0.0.5/internal"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://169.254.169.254/latest/meta-data"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://localhost/readme"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://user:pass@example.com/readme"
+        ));
+    }
+
+    #[test]
+    fn pick_modrinth_file_prefers_matching_version_name() {
+        let versions = vec![
+            ModrinthVersion {
+                id: Some("new".to_string()),
+                name: Some("1.3.0".to_string()),
+                version_number: Some("1.3.0".to_string()),
+                game_versions: vec!["1.21".to_string()],
+                files: vec![ModrinthVersionFile {
+                    url: "https://cdn.modrinth.com/new.zip".to_string(),
+                    filename: "pack-datapack.zip".to_string(),
+                    primary: true,
+                }],
+            },
+            ModrinthVersion {
+                id: Some("old".to_string()),
+                name: Some("1.2.0".to_string()),
+                version_number: Some("1.2.0".to_string()),
+                game_versions: vec!["1.21".to_string()],
+                files: vec![ModrinthVersionFile {
+                    url: "https://cdn.modrinth.com/old.zip".to_string(),
+                    filename: "pack-datapack.zip".to_string(),
+                    primary: true,
+                }],
+            },
+        ];
+
+        let resolved = SmithedSource::pick_modrinth_file(
+            &versions,
+            "1.2.0",
+            "datapack",
+            &["1.21".to_string()],
+        )
+        .unwrap();
+        assert_eq!(resolved.0, "https://cdn.modrinth.com/old.zip");
+    }
+
+    #[test]
+    fn modrinth_version_page_urls_extract_version_id() {
+        assert_eq!(
+            SmithedSource::modrinth_project_ref_from_url(
+                "https://modrinth.com/datapack/ancient-artifacts-2/version/1.2.0"
+            ),
+            Some(("ancient-artifacts-2".to_string(), Some("1.2.0".to_string())))
+        );
     }
 
     #[test]

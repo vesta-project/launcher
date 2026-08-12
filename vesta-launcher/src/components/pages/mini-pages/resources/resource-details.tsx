@@ -165,7 +165,10 @@ const HeaderCategoryTags: Component<{
 		}[] = [
 			{
 				key: "__type__",
-				label: projectTypeLabel(p, resources.state.versions),
+				label: projectTypeLabel(
+					p,
+					resources.state.versions.filter((v) => v.project_id === p.id),
+				),
 				onClick: (e) => {
 					e.stopPropagation();
 					props.onBrowseType();
