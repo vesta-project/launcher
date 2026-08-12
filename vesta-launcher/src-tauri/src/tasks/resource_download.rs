@@ -418,11 +418,17 @@ impl Task for ResourceDownloadTask {
                 world.directory_name.replace(['/', '\\'], "_")
             ),
         };
-        // Use pipe separators with base64url field encoding so delimiters in IDs
-        // (e.g. world names containing `|`) cannot corrupt task-id parsing.
+        // Encode untrusted IDs and include the provider so frontend failure
+        // reconciliation clears only the exact target-aware install.
         let project_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&self.project_id);
         let version_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&self.version.id);
-        Some(format!("download|{}|{}|{}", target, project_id, version_id))
+        Some(format!(
+            "download|{}|{}|{}|{}",
+            target,
+            self.platform.as_str(),
+            project_id,
+            version_id
+        ))
     }
 
     fn cancellable(&self) -> bool {
@@ -1126,5 +1132,31 @@ mod tests {
         };
 
         assert_eq!(task.conflict_keys(), vec![saves_conflict_key(9)]);
+    }
+
+    #[test]
+    fn task_id_preserves_provider_and_encodes_remote_ids() {
+        let mut remote_version = version(vec![]);
+        remote_version.id = "v1|extra".to_string();
+        let task = ResourceDownloadTask {
+            target: ResourceInstallTarget::World {
+                world: crate::worlds::WorldRef {
+                    instance_id: 7,
+                    directory_name: "World|Copy".to_string(),
+                },
+            },
+            platform: SourcePlatform::Smithed,
+            project_id: "pro|ject".to_string(),
+            project_name: "Bundle".to_string(),
+            version: remote_version,
+            resource_type: ResourceType::DataPack,
+            dependency_for: None,
+            replacement_resource_id: None,
+        };
+
+        assert_eq!(
+            task.id().as_deref(),
+            Some("download|world-7-World|Copy|smithed|cHJvfGplY3Q|djF8ZXh0cmE")
+        );
     }
 }

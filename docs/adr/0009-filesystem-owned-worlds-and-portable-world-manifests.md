@@ -46,6 +46,12 @@ directory ownership.
 Datapack install type is explicit user intent and is not inferred from a
 provider project's primary classification. Modrinth mixed projects use their
 version-level `datapack` loader while CurseForge uses its datapack project class.
+Provider project objects remain canonical in frontend caches; contextual install
+type travels separately through browse, details, compatibility, version choice,
+and create-Instance handoff. Destination scope is resolved after selecting the
+actual release so combined bundles cannot publish through an Instance-only
+target. In-flight UI state uses the exact provider/project/version/target tuple
+and is reconciled only by matching World events or Ledger rows.
 Quick selection is permitted only for a provider version explicitly tagged for
 the selected World's saved Minecraft version. Other versions remain available
 through manual selection and compatibility acknowledgement; provider version

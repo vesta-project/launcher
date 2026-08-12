@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import type { WorldSummary } from "@stores/worlds";
+import { createSignal } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorldDatapacksView } from "./WorldDatapacksView";
 import { WorldCard } from "./WorldsTab";
@@ -253,6 +254,14 @@ const world = (overrides: Partial<WorldSummary> = {}): WorldSummary => ({
 	...overrides,
 });
 
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((accept) => {
+		resolve = accept;
+	});
+	return { promise, resolve };
+}
+
 describe("world datapack navigation", () => {
 	beforeEach(() => vi.clearAllMocks());
 
@@ -270,13 +279,15 @@ describe("world datapack navigation", () => {
 			/>
 		));
 
-		const card = screen.getByRole("button", { name: "Open Test World" });
+		const card = screen.getByRole("button", {
+			name: "View datapacks in Test World",
+		});
 		await fireEvent.click(card);
 		await fireEvent.keyDown(card, { key: "Enter" });
 		expect(onOpen).toHaveBeenCalledTimes(2);
 	});
 
-	it("does not open the world when a nested card action is used", async () => {
+	it("uses the whole card instead of a separate datapack-count button", async () => {
 		const onOpen = vi.fn();
 		const onManageDatapacks = vi.fn();
 		render(() => (
@@ -291,11 +302,19 @@ describe("world datapack navigation", () => {
 			/>
 		));
 
+		expect(
+			screen.queryByRole("button", {
+				name: "Manage 2 datapacks in Test World",
+			}),
+		).toBeNull();
+		await fireEvent.click(screen.getByLabelText("2 datapacks"));
+		expect(onOpen).toHaveBeenCalledOnce();
+		expect(onManageDatapacks).not.toHaveBeenCalled();
+
 		await fireEvent.click(
-			screen.getByRole("button", { name: "Manage 2 datapacks in Test World" }),
+			screen.getByRole("button", { name: "Actions for Test World" }),
 		);
-		expect(onManageDatapacks).toHaveBeenCalledOnce();
-		expect(onOpen).not.toHaveBeenCalled();
+		expect(onOpen).toHaveBeenCalledOnce();
 	});
 
 	it("opens datapack browsing with the owning instance, not a sticky world", () => {
@@ -350,6 +369,7 @@ describe("world datapack navigation", () => {
 describe("WorldDatapacksView", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mocks.openWorldDatapacksFolder.mockResolvedValue(undefined);
 		mocks.confirm.mockResolvedValue(true);
 		mocks.deleteWorldDatapack.mockResolvedValue({
 			removedCompanionCount: 0,
@@ -408,6 +428,35 @@ describe("WorldDatapacksView", () => {
 				updates: [],
 			},
 		};
+	});
+
+	it("refreshes datapacks when the selected world changes", async () => {
+		const [selectedWorld, setSelectedWorld] = createSignal(world());
+		render(() => (
+			<WorldDatapacksView
+				world={selectedWorld()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
+			/>
+		));
+
+		await waitFor(() =>
+			expect(mocks.listWorldDatapacks).toHaveBeenCalledWith(world().ref),
+		);
+		setSelectedWorld(
+			world({ ref: { instanceId: 7, directoryName: "Other World" } }),
+		);
+		await waitFor(() =>
+			expect(mocks.listWorldDatapacks).toHaveBeenCalledWith({
+				instanceId: 7,
+				directoryName: "Other World",
+			}),
+		);
+		expect(mocks.checkWorldDatapackUpdates).toHaveBeenLastCalledWith({
+			instanceId: 7,
+			directoryName: "Other World",
+		});
 	});
 
 	it("renders only the selected world's rows and keeps folder packs read-only", () => {
@@ -548,6 +597,31 @@ describe("WorldDatapacksView", () => {
 		expect(onAddDatapack).toHaveBeenCalledWith(targetWorld);
 	});
 
+	it("reports an error when the datapacks folder cannot be opened", async () => {
+		mocks.openWorldDatapacksFolder.mockRejectedValue(
+			new Error("Folder is unavailable"),
+		);
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
+			/>
+		));
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Open datapacks folder" }),
+		);
+		await waitFor(() =>
+			expect(mocks.showToast).toHaveBeenCalledWith({
+				title: "Could not open datapacks folder",
+				description: "Error: Folder is unavailable",
+				severity: "error",
+			}),
+		);
+	});
+
 	it("updates the exact world row with its replacement resource ID", async () => {
 		const exactVersion = {
 			id: "new-version",
@@ -594,6 +668,78 @@ describe("WorldDatapacksView", () => {
 				replacementResourceId: 11,
 			},
 		);
+	});
+
+	it("keeps each datapack row busy until its own operation finishes", async () => {
+		const firstToggle = deferred<void>();
+		const secondToggle = deferred<void>();
+		mocks.toggleWorldDatapack.mockImplementation(
+			(_worldRef: unknown, resourceId: number) =>
+				resourceId === 11 ? firstToggle.promise : secondToggle.promise,
+		);
+		mocks.worldDatapacksState.byWorld["7:World One"] = {
+			world: world().ref,
+			entries: [
+				{
+					resourceId: 11,
+					fileName: "first.zip",
+					displayName: "First Pack",
+					entryKind: "file",
+					platform: "modrinth",
+					projectId: "first",
+					versionId: "one",
+					versionNumber: "1.0",
+					enabled: true,
+					managed: true,
+					readOnly: false,
+					sizeBytes: 512,
+					modifiedAt: null,
+				},
+				{
+					resourceId: 12,
+					fileName: "second.zip",
+					displayName: "Second Pack",
+					entryKind: "file",
+					platform: "modrinth",
+					projectId: "second",
+					versionId: "two",
+					versionNumber: "1.0",
+					enabled: true,
+					managed: true,
+					readOnly: false,
+					sizeBytes: 512,
+					modifiedAt: null,
+				},
+			],
+		};
+
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
+			/>
+		));
+
+		const firstSwitch = screen.getByRole("switch", {
+			name: "Disable First Pack",
+		}) as HTMLButtonElement;
+		const secondSwitch = screen.getByRole("switch", {
+			name: "Disable Second Pack",
+		}) as HTMLButtonElement;
+		await fireEvent.click(firstSwitch);
+		await fireEvent.click(secondSwitch);
+
+		expect(firstSwitch.disabled).toBe(true);
+		expect(secondSwitch.disabled).toBe(true);
+
+		firstToggle.resolve();
+		await waitFor(() => expect(firstSwitch.disabled).toBe(false));
+		expect(secondSwitch.disabled).toBe(true);
+
+		secondToggle.resolve();
+		await waitFor(() => expect(secondSwitch.disabled).toBe(false));
 	});
 
 	it("explains when a linked resource pack is retained for another world", async () => {

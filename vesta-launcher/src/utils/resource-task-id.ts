@@ -1,4 +1,6 @@
 export type ParsedDownloadTaskId = {
+	target: string | null;
+	platform: string | null;
 	projectId: string;
 	versionId: string;
 };
@@ -21,28 +23,49 @@ function decodeBase64Url(value: string): string | null {
 }
 
 /**
- * Parse `download|{target}|{projectB64}|{versionB64}` or legacy task id formats.
- * New pipe-format fields are base64url-encoded to avoid delimiter collisions.
+ * Parse `download|{target}|{platform}|{projectB64}|{versionB64}`, the earlier
+ * pipe format without a platform, or the legacy underscore format. Parsing
+ * from the final separators keeps raw `|` characters in world names intact.
  */
 export function parseDownloadTaskId(
 	taskId: string,
 ): ParsedDownloadTaskId | null {
 	if (taskId.startsWith("download|")) {
-		const parts = taskId.split("|");
-		if (parts.length === 4) {
-			const projectId = decodeBase64Url(parts[2]);
-			const versionId = decodeBase64Url(parts[3]);
-			if (projectId && versionId) {
-				return { projectId, versionId };
+		const prefixLength = "download|".length;
+		const versionSeparator = taskId.lastIndexOf("|");
+		const projectSeparator = taskId.lastIndexOf("|", versionSeparator - 1);
+		if (
+			projectSeparator < prefixLength ||
+			versionSeparator <= projectSeparator + 1
+		)
+			return null;
+
+		const projectId = decodeBase64Url(
+			taskId.slice(projectSeparator + 1, versionSeparator),
+		);
+		const versionId = decodeBase64Url(taskId.slice(versionSeparator + 1));
+		if (!projectId || !versionId) return null;
+
+		let target = taskId.slice(prefixLength, projectSeparator);
+		let platform: string | null = null;
+		const platformSeparator = target.lastIndexOf("|");
+		if (platformSeparator >= 0) {
+			const candidate = target.slice(platformSeparator + 1).toLowerCase();
+			if (["modrinth", "curseforge", "smithed"].includes(candidate)) {
+				platform = candidate;
+				target = target.slice(0, platformSeparator);
 			}
 		}
-		return null;
+		if (!target) return null;
+		return { target, platform, projectId, versionId };
 	}
 
 	if (taskId.startsWith("download_")) {
 		const parts = taskId.split("_");
 		if (parts.length >= 4 && parts[2] && parts[3]) {
 			return {
+				target: parts[1] || null,
+				platform: null,
 				projectId: parts[2],
 				versionId: parts[3],
 			};

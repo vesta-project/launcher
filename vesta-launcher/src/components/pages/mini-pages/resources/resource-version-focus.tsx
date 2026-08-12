@@ -1,15 +1,18 @@
 import BackArrowIcon from "@assets/back-arrow.svg";
 import ClipboardIcon from "@assets/clipboard.svg";
 import CubeIcon from "@assets/cube.svg";
+import DependenciesIcon from "@assets/dependencies.svg";
 import DownloadIcon from "@assets/download-compact.svg";
+import EnvironmentIcon from "@assets/environment.svg";
 import FabricIcon from "@assets/fabric-logo.svg";
-import FolderIcon from "@assets/folder.svg";
+import FileIcon from "@assets/file.svg";
 import ForgeIcon from "@assets/forge-logo.svg";
 import HistoryIcon from "@assets/history.svg";
 import NeoForgeIcon from "@assets/neoforge-logo.svg";
 import OpenIcon from "@assets/open.svg";
 import QuiltIcon from "@assets/quilt-logo.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
+import TagIcon from "@assets/tag.svg";
 import TrashIcon from "@assets/trash.svg";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
 import type {
@@ -305,7 +308,7 @@ export const VersionFocusMain: Component<{
 
 			<section class={styles["artifact-card"]} aria-labelledby="artifact-title">
 				<div class={styles["artifact-icon"]} aria-hidden="true">
-					<FolderIcon width={20} height={20} />
+					<FileIcon width={20} height={20} />
 				</div>
 				<div class={styles["artifact-name"]}>
 					<span id="artifact-title">Release file</span>
@@ -501,14 +504,13 @@ export const VersionFocusSidebar: Component<{
 			<Show when={props.sections !== "install"}>
 				<section class={styles["focus-sidebar-section"]}>
 					<div class={styles["focus-sidebar-heading"]}>
-						<CubeIcon width={16} height={16} />
+						<EnvironmentIcon width={16} height={16} />
 						<h3>Supported environment</h3>
 					</div>
 					<div class={styles["environment-list"]}>
 						<For each={visibleGameVersions()}>
 							{(version) => (
 								<div>
-									<CubeIcon width={14} height={14} />
 									<span>{version}</span>
 								</div>
 							)}
@@ -548,7 +550,7 @@ export const VersionFocusSidebar: Component<{
 
 				<section class={styles["focus-sidebar-section"]}>
 					<div class={styles["focus-sidebar-heading"]}>
-						<FolderIcon width={16} height={16} />
+						<DependenciesIcon width={16} height={16} />
 						<h3>Dependencies</h3>
 					</div>
 					<Show
@@ -583,8 +585,8 @@ export const VersionFocusSidebar: Component<{
 
 				<section class={styles["focus-sidebar-section"]}>
 					<div class={styles["focus-sidebar-heading"]}>
-						<HistoryIcon width={16} height={16} />
-						<h3>Release metadata</h3>
+						<TagIcon width={16} height={16} />
+						<h3>Release details</h3>
 					</div>
 					<dl class={styles["release-metadata-list"]}>
 						<Show when={props.version.published_at}>

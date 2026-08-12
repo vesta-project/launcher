@@ -229,25 +229,6 @@
 	stroke-width: 1.8;
 }
 
-.metadata-button {
-	padding: 0;
-	border: 0;
-	background: transparent;
-	color: inherit;
-	font: inherit;
-	cursor: pointer;
-}
-
-.metadata-button:hover,
-.metadata-button:focus-visible {
-	color: var(--text-primary);
-}
-
-.metadata-button:focus-visible {
-	outline: 2px solid var(--primary);
-	outline-offset: 3px;
-}
-
 .menu {
 	min-width: 210px;
 }
@@ -270,14 +251,17 @@
 }
 
 .worlds[data-view="grid"] .card {
+	aspect-ratio: 1;
 	flex-direction: column;
 }
 
 .worlds[data-view="grid"] .media {
-	height: 112px;
+	min-height: 0;
+	flex: 1 1 auto;
 }
 
 .worlds[data-view="grid"] .card-body {
+	flex: 0 0 auto;
 	padding: 11px 12px 13px;
 }
 

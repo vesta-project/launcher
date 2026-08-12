@@ -44,6 +44,7 @@ import {
 	createMemo,
 	createSignal,
 	For,
+	on,
 	onCleanup,
 	Show,
 } from "solid-js";
@@ -77,6 +78,18 @@ const displayVersion = (entry: WorldDatapackSummary) =>
 
 const projectKey = (platform: string | null, projectId: string | null) =>
 	platform && projectId ? `${platform.toLowerCase()}:${projectId}` : null;
+
+const showWorldDatapacksFolder = async (world: WorldSummary) => {
+	try {
+		await openWorldDatapacksFolder(world.ref);
+	} catch (error) {
+		showToast({
+			title: "Could not open datapacks folder",
+			description: String(error),
+			severity: "error",
+		});
+	}
+};
 
 type ProviderProjectRef = {
 	platform: string;
@@ -302,7 +315,7 @@ const DatapackRow: Component<{
 						onCloseAutoFocus={(event) => event.preventDefault()}
 					>
 						<DropdownMenuItem
-							onSelect={() => void openWorldDatapacksFolder(props.world.ref)}
+							onSelect={() => void showWorldDatapacksFolder(props.world)}
 						>
 							<FolderIcon class={styles["menu-icon"]} />
 							Show in folder
@@ -335,7 +348,9 @@ export const WorldDatapacksView: Component<{
 	) => void;
 }> = (props) => {
 	const key = createMemo(() => worldRefKey(props.world.ref));
-	const [busyResourceId, setBusyResourceId] = createSignal<number | null>(null);
+	const [busyResourceIds, setBusyResourceIds] = createSignal<ReadonlySet<number>>(
+		new Set(),
+	);
 	const [projectIcons, setProjectIcons] = createSignal<Record<string, string>>(
 		{},
 	);
@@ -356,12 +371,13 @@ export const WorldDatapacksView: Component<{
 	});
 	let iconRequestGeneration = 0;
 
-	createEffect(() => {
-		props.world.ref.instanceId;
-		props.world.ref.directoryName;
-		void listWorldDatapacks(props.world.ref).catch(() => undefined);
-		void checkWorldDatapackUpdates(props.world.ref).catch(() => undefined);
-	});
+	createEffect(
+		on(key, () => {
+			const world = props.world.ref;
+			void listWorldDatapacks(world).catch(() => undefined);
+			void checkWorldDatapackUpdates(world).catch(() => undefined);
+		}),
+	);
 
 	createEffect(() => {
 		const worldKey = key();
@@ -437,6 +453,15 @@ export const WorldDatapacksView: Component<{
 			listWorldDatapacks(props.world.ref, true),
 			checkWorldDatapackUpdates(props.world.ref, true),
 		]).catch(() => undefined);
+	const setResourceBusy = (resourceId: number | null, busy: boolean) => {
+		if (resourceId == null) return;
+		setBusyResourceIds((current) => {
+			const next = new Set(current);
+			if (busy) next.add(resourceId);
+			else next.delete(resourceId);
+			return next;
+		});
+	};
 
 	return (
 		<section
@@ -481,7 +506,7 @@ export const WorldDatapacksView: Component<{
 						icon_only
 						tooltip_text="Open datapacks folder"
 						aria-label="Open datapacks folder"
-						onClick={() => void openWorldDatapacksFolder(props.world.ref)}
+						onClick={() => void showWorldDatapacksFolder(props.world)}
 					>
 						<FolderIcon />
 					</Button>
@@ -556,7 +581,10 @@ export const WorldDatapacksView: Component<{
 									<DatapackRow
 										entry={entry}
 										world={props.world}
-										busy={busyResourceId() === entry.resourceId}
+										busy={
+											entry.resourceId != null &&
+											busyResourceIds().has(entry.resourceId)
+										}
 										icon={
 											projectIcons()[
 												projectKey(entry.platform, entry.projectId) ?? ""
@@ -566,7 +594,7 @@ export const WorldDatapacksView: Component<{
 											(update) => update.resourceId === entry.resourceId,
 										)}
 										onBusyChange={(busy) =>
-											setBusyResourceId(busy ? entry.resourceId : null)
+											setResourceBusy(entry.resourceId, busy)
 										}
 										onOpenDetails={() =>
 											props.onOpenDatapackDetails(props.world, entry)

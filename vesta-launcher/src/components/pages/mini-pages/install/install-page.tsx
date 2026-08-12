@@ -123,7 +123,10 @@ function InstallPage(props: InstallPageRouteProps) {
 	const effectivePendingResource = createMemo(() => props.pendingResource);
 	const pendingResourceIsNonModpack = createMemo(() => {
 		const resourceType =
-			effectivePendingResource()?.project.resource_type.toLowerCase();
+			(
+				effectivePendingResource()?.installType ??
+				effectivePendingResource()?.project.resource_type
+			)?.toLowerCase();
 		return (
 			!!resourceType &&
 			resourceType !== "modpack" &&
@@ -146,6 +149,7 @@ function InstallPage(props: InstallPageRouteProps) {
 	);
 	const resourceTypeLabel = createMemo(() => {
 		const raw =
+			effectivePendingResource()?.installType ||
 			effectivePendingResource()?.project.resource_type ||
 			effectiveResourceType();
 		if (!raw) return undefined;

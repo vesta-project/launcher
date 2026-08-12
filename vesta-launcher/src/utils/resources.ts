@@ -1,5 +1,9 @@
 import type { Instance } from "@stores/instances";
-import { type ResourceProject, type ResourceVersion } from "@stores/resources";
+import {
+	type ResourceProject,
+	type ResourceType,
+	type ResourceVersion,
+} from "@stores/resources";
 import {
 	isGameVersionCompatible,
 	versionMatchesResourceType,
@@ -13,9 +17,10 @@ export interface CompatibilityResult {
 export const getProjectCompatibilityForInstance = (
 	project: ResourceProject,
 	instance: Instance,
+	installType: ResourceType = project.resource_type,
 ): CompatibilityResult => {
 	const loader = instance.modloader?.toLowerCase() || "";
-	const resourceType = project.resource_type;
+	const resourceType = installType;
 
 	if (loader === "" || loader === "vanilla") {
 		if (resourceType === "mod" || resourceType === "shader") {
@@ -61,9 +66,10 @@ export const getCompatibilityForInstance = (
 	project: ResourceProject | undefined,
 	version: ResourceVersion,
 	instance: Instance,
+	installType?: ResourceType,
 ): CompatibilityResult => {
 	const instLoader = instance.modloader?.toLowerCase() || "";
-	const resType = project?.resource_type;
+	const resType = installType ?? project?.resource_type;
 	if (!versionMatchesResourceType(resType, version, project?.source)) {
 		return {
 			type: "incompatible",

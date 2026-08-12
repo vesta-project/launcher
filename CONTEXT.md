@@ -290,6 +290,18 @@ focus, and search timing. The selected Instance is the only persistent install
 destination context: Resource browsing and details never retain a preferred
 World. A datapack chooses its World within the active install interaction, and
 the selected World is passed explicitly to the backend for that operation.
+Provider project objects and their cache entries retain the provider's canonical
+classification. A route or World-originated install type is carried beside that
+object and must not mutate cached project metadata. In-flight installation state
+is keyed by provider, project, version, and exact Instance or World target; a
+Ledger refresh clears only the target it proves was published.
+Task failure signals preserve provider and target identity alongside encoded
+remote IDs, so frontend reconciliation clears only the exact failed install;
+the matcher retains legacy task-ID support for work interrupted before an
+upgrade.
+Instance-selection eligibility is built from fresh per-Instance Ledger reads.
+Version and Ledger lookups use latest-request publication, and an Instance stays
+unavailable while its installed state is unknown or could not be verified.
 Provider Adapters normalize changelog format and
 availability so missing release notes do not erase already-available file
 metadata, and distinguish CurseForge client/server environment labels from
@@ -312,6 +324,8 @@ Primary modules:
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-details-loading.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-details-loading-state.ts`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-version-focus.tsx`
+- `vesta-launcher/src/utils/resource-install-progress.ts`
+- `vesta-launcher/src/utils/resource-task-id.ts`
 - `vesta-launcher/src-tauri/src/resources/sources/mod.rs`
 - `vesta-launcher/src-tauri/src/resources/manager.rs`
 
@@ -324,9 +338,14 @@ The install type is user intent rather than provider project classification.
 Compatible-version selection first constrains a provider's release feed to that
 intent. Provider metadata is not interchangeable: Modrinth's explicit datapack
 loader distinguishes mixed builds, while CurseForge's project class supplies the
-Resource type. Datapack quick selection uses the selected World's saved version,
+Resource type. Destination scope is decided only after an explicit version has
+been selected, so a combined datapack/resource-pack release cannot accidentally
+use an Instance-only target. Download availability is validated before asking
+for an Instance or World. Datapack quick selection uses the selected World's saved version,
 ignores its Instance loader, and requires an exact provider Minecraft-version
-tag; other tags remain manually installable after acknowledgement. Downloaded
+tag; other tags remain manually installable after a confirmation that identifies
+the selected datapack release, provider-listed Minecraft versions, target World,
+and saved World version. Downloaded
 datapacks remain subject to root `pack.mcmeta` validation before publication.
 Opening a managed datapack from World Management navigates to its provider
 project without preselecting a World target. Immutable source-row context allows
@@ -336,6 +355,7 @@ another World creates an independent installation.
 Primary modules:
 
 - `vesta-launcher/src/utils/resource-install-intent.ts`
+- `vesta-launcher/src/utils/datapack-compatibility-confirm.ts`
 - `vesta-launcher/src/utils/resources.ts`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-card.tsx`
 - `vesta-launcher/src/components/pages/mini-pages/resources/resource-details.tsx`

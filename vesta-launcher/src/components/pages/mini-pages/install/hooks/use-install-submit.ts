@@ -28,18 +28,13 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 		setIsInstalling(true);
 		try {
 			const pending = params.pendingResource?.();
-			if (
-				pending?.project &&
-				requiresWorldTarget(pending.project, pending.version)
-			) {
-				showToast({
-					title: "Create and play a world first",
-					description:
-						"Datapacks belong to a Java world. Finish creating this instance, launch Minecraft, and play a world before installing the datapack.",
-					severity: "warning",
-				});
-				return;
-			}
+			const pendingNeedsWorld =
+				!!pending?.project &&
+				requiresWorldTarget(
+					pending.project,
+					pending.version,
+					pending.installType,
+				);
 			if (
 				params.isModpackMode() &&
 				(params.modpackUrl() || params.modpackPath())
@@ -68,15 +63,26 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 					const pendingResource = params.pendingResource?.();
 					const project = pendingResource?.project;
 					const version = pendingResource?.version;
-					if (project && version) {
-						await resources.install(project, version, {
-							kind: "instance",
-							instanceId: id,
-						});
+					if (project && version && !pendingNeedsWorld) {
+						await resources.install(
+							project,
+							version,
+							{
+								kind: "instance",
+								instanceId: id,
+							},
+							{ installType: pendingResource?.installType },
+						);
 						showToast({
 							title: "Resource Installation Started",
 							description: `${project.name} will be installed into ${data.name || "the new instance"}.`,
 							severity: "success",
+						});
+					} else if (project && pendingNeedsWorld) {
+						showToast({
+							title: "Create and play a world first",
+							description: `${data.name || "Your new instance"} is ready. Launch Minecraft and play a world, then add ${project.name} from that world's datapack view.`,
+							severity: "warning",
 						});
 					}
 				}

@@ -50,6 +50,7 @@ const ResourceCard: Component<{
 	project: ResourceProject;
 	viewMode: "grid" | "list";
 	router?: MiniRouter;
+	installSelectionActive?: boolean;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
 	const installType = () => resources.state.resourceType;
@@ -87,6 +88,7 @@ const ResourceCard: Component<{
 		createSignal<ResourceVersion | null>(null);
 	const installing = () =>
 		localInstalling() ||
+		Boolean(props.installSelectionActive) ||
 		(installType() !== "datapack" && isInstallingProject());
 
 	const isUpdateAvailable = createMemo(() => {
@@ -108,7 +110,13 @@ const ResourceCard: Component<{
 						project.source,
 						project.id,
 					);
-					const best = findBestVersionForInstance(project, versions, inst);
+					const best = findBestVersionForInstance(
+						project,
+						versions,
+						inst,
+						"release",
+						installType(),
+					);
 					setLatestCompatibleVersion(best);
 				} catch (_) {
 					// Silently fail
@@ -126,7 +134,11 @@ const ResourceCard: Component<{
 		const instance = instancesState.instances.find((i) => i.id === instanceId);
 		if (!instance) return { type: "compatible" as const };
 
-		return getProjectCompatibilityForInstance(props.project, instance);
+		return getProjectCompatibilityForInstance(
+			props.project,
+			instance,
+			installType(),
+		);
 	});
 
 	const buttonVariant = createMemo(() => {
@@ -251,8 +263,9 @@ const ResourceCard: Component<{
 
 	const handleQuickInstall = async (e: MouseEvent) => {
 		e.stopPropagation();
+		const requestedInstallType = installType();
 
-		if (installType() === "modpack") {
+		if (requestedInstallType === "modpack") {
 			const prefilledModpackInfo = buildBrowseModpackInfo(props.project, null, {
 				minecraftVersion: resources.state.gameVersion,
 				loader: resources.state.loader,
@@ -280,13 +293,13 @@ const ResourceCard: Component<{
 			if (isUpdateAvailable() && latest) {
 				const instanceId = resources.state.selectedInstanceId;
 				if (!instanceId) return;
-				if (requiresWorldTarget(props.project, latest, installType())) {
+				if (requiresWorldTarget(props.project, latest, requestedInstallType)) {
 					resources.setInstallRequest({
 						project: props.project,
 						versions: [latest],
 						version: latest,
 						preferredInstanceId: instanceId,
-						installType: installType(),
+						installType: requestedInstallType,
 					});
 					return;
 				}
@@ -300,7 +313,7 @@ const ResourceCard: Component<{
 							kind: "instance",
 							instanceId,
 						},
-						{ installType: installType() },
+						{ installType: requestedInstallType },
 					);
 					showToast({
 						title: "Update Started",
@@ -353,14 +366,14 @@ const ResourceCard: Component<{
 				resources.setInstallRequest({
 					project: props.project,
 					versions,
-					installType: installType(),
+					installType: requestedInstallType,
 				});
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
 				resources.setInstallRequest({
 					project: props.project,
 					versions: [],
-					installType: installType(),
+					installType: requestedInstallType,
 				});
 			} finally {
 				setLocalInstalling(false);
@@ -377,7 +390,7 @@ const ResourceCard: Component<{
 				props.project.source,
 				props.project.id,
 			);
-			if (installType() === "datapack") {
+			if (requestedInstallType === "datapack") {
 				resources.setInstallRequest({
 					project: props.project,
 					versions,
@@ -390,15 +403,19 @@ const ResourceCard: Component<{
 				props.project,
 				versions,
 				instance,
+				"release",
+				requestedInstallType,
 			);
 			if (best) {
-				if (requiresWorldTarget(props.project, best, installType())) {
+				if (
+					requiresWorldTarget(props.project, best, requestedInstallType)
+				) {
 					resources.setInstallRequest({
 						project: props.project,
 						versions,
 						version: best,
 						preferredInstanceId: instance.id,
-						installType: installType(),
+						installType: requestedInstallType,
 					});
 					return;
 				}
@@ -426,7 +443,7 @@ const ResourceCard: Component<{
 						kind: "instance",
 						instanceId: instance.id,
 					},
-					{ installType: installType() },
+					{ installType: requestedInstallType },
 				);
 				showToast({
 					title: "Installation Started",
