@@ -124,8 +124,13 @@ pub async fn toggle_world_datapack(
         &world_ref,
         "datapack-toggled",
     );
-    world_result?;
-    rows_result.map_err(|error| error.to_string())
+    if let Err(error) = world_result {
+        log::warn!("Datapack was toggled, but World change notification failed: {error}");
+    }
+    if let Err(error) = rows_result {
+        log::warn!("Datapack was toggled, but Resource change notification failed: {error}");
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -154,8 +159,12 @@ pub async fn delete_world_datapack(
         &world_ref,
         "datapack-deleted",
     );
-    world_result?;
-    rows_result.map_err(|error| error.to_string())?;
+    if let Err(error) = world_result {
+        log::warn!("Datapack was deleted, but World change notification failed: {error}");
+    }
+    if let Err(error) = rows_result {
+        log::warn!("Datapack was deleted, but Resource change notification failed: {error}");
+    }
     Ok(removal)
 }
 

@@ -157,7 +157,10 @@ impl Task for WorldTransferTask {
                 TransferMode::Copy => "copied",
                 TransferMode::Duplicate => "duplicated",
             };
-            for instance_id in [source.id, destination.id] {
+            let mut affected_instances = vec![source.id, destination.id];
+            affected_instances.sort_unstable();
+            affected_instances.dedup();
+            for instance_id in affected_instances {
                 if let Some(world_manager) =
                     ctx.app_handle.try_state::<crate::worlds::WorldManager>()
                 {

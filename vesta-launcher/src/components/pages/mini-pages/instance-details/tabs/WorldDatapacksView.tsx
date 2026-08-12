@@ -5,11 +5,11 @@ import PlusIcon from "@assets/plus.svg";
 import ReloadIcon from "@assets/reload.svg";
 import TrashIcon from "@assets/trash.svg";
 import { WorldIcon } from "@components/worlds/WorldIcon";
+import { dialogStore } from "@stores/dialog-store";
 import type {
 	ResourceProjectOverviewRecord,
 	ResourceProjectRef,
 } from "@stores/instance-resource-overview";
-import { dialogStore } from "@stores/dialog-store";
 import { resources, type SourcePlatform } from "@stores/resources";
 import {
 	checkWorldDatapackUpdates,
@@ -23,6 +23,7 @@ import {
 	worldDatapacksState,
 	worldRefKey,
 } from "@stores/worlds";
+import { invoke } from "@tauri-apps/api/core";
 import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge/badge";
 import Button from "@ui/button/button";
@@ -37,7 +38,6 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { formatDate } from "@utils/date";
 import { formatBytes } from "@utils/format-bytes";
-import { invoke } from "@tauri-apps/api/core";
 import {
 	type Component,
 	createEffect,
@@ -137,13 +137,14 @@ const DatapackRow: Component<{
 				removal.removedCompanionCount > 0
 					? " Its linked resource pack was also removed."
 					: removal.retainedCompanionCount > 0
-						? " Its linked resource pack is still used by another world and was retained."
+						? " Its linked resource pack was retained because Vesta could not prove it was unused."
 						: "";
+			const cleanupDescription = removal.cleanupWarning
+				? ` ${removal.cleanupWarning}`
+				: "";
 			showToast({
 				title: "Datapack removed",
-				description:
-					removal.cleanupWarning ??
-					`${props.entry.displayName} was removed from ${props.world.displayName}.${companionDescription}`,
+				description: `${props.entry.displayName} was removed from ${props.world.displayName}.${companionDescription}${cleanupDescription}`,
 				severity: removal.cleanupWarning ? "warning" : "success",
 			});
 		} catch (error) {

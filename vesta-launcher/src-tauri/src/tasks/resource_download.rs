@@ -232,23 +232,44 @@ fn companion_path_is_shared(
         return true;
     };
     let Ok(worlds) = std::fs::read_dir(instance_path.join("saves")) else {
-        return false;
+        return true;
     };
-    worlds.flatten().any(|entry| {
+    for entry in worlds {
+        let Ok(entry) = entry else {
+            return true;
+        };
         let world = entry.path();
-        if world == current_world {
-            return false;
+        if !entry
+            .file_type()
+            .is_ok_and(|file_type| file_type.is_dir() && !file_type.is_symlink())
+            || !crate::worlds::level_dat::has_level_marker(&world)
+        {
+            continue;
         }
-        crate::worlds::manifest::read_manifest(&world)
-            .manifest
-            .is_some_and(|manifest| {
-                manifest.managed_components.iter().any(|component| {
-                    component.kind
-                        == crate::worlds::manifest::ManagedComponentKind::CompanionResourcepack
-                        && Path::new(&component.relative_path) == relative
-                })
-            })
-    })
+        let read = crate::worlds::manifest::read_manifest(&world);
+        match read.status {
+            crate::worlds::manifest::MetadataStatus::Valid => {
+                let references = read.manifest.map_or(0, |manifest| {
+                    manifest
+                        .managed_components
+                        .iter()
+                        .filter(|component| {
+                            component.kind
+                                == crate::worlds::manifest::ManagedComponentKind::CompanionResourcepack
+                                && Path::new(&component.relative_path) == relative
+                        })
+                        .count()
+                });
+                if references > usize::from(world == current_world) {
+                    return true;
+                }
+            }
+            crate::worlds::manifest::MetadataStatus::Corrupt
+            | crate::worlds::manifest::MetadataStatus::Future => return true,
+            crate::worlds::manifest::MetadataStatus::Absent => {}
+        }
+    }
+    false
 }
 
 async fn download_artifact(

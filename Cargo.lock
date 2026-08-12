@@ -9087,6 +9087,7 @@ dependencies = [
  "image",
  "include_dir",
  "lazy_static",
+ "libc",
  "libsqlite3-sys",
  "log",
  "minecraft-msa-auth",

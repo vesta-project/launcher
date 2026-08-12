@@ -3,15 +3,17 @@ use crate::notifications::models::{
     CreateNotificationInput, NotificationAction, NotificationSeverity, NotificationType,
     ProgressUpdate, PROGRESS_INDETERMINATE,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::{Arc, Weak};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{mpsc, watch, Mutex as AsyncMutex, OwnedMutexGuard, Semaphore};
+use tokio::sync::{mpsc, watch, Notify, Semaphore};
+use unicode_casefold::UnicodeCaseFold;
+use unicode_normalization::UnicodeNormalization;
 
 #[derive(Clone)]
 pub struct TaskContext {
@@ -192,6 +194,7 @@ pub struct QueuedTask {
 }
 
 pub fn world_conflict_key(instance_id: i32, directory_name: &str) -> String {
+    let directory_name: String = directory_name.nfc().case_fold().collect();
     format!("world:{instance_id}:{directory_name}")
 }
 
@@ -219,14 +222,33 @@ where
 }
 
 /// Coordinates mutations that share a logical filesystem or ledger resource.
-/// Locks are acquired in stable key order to prevent multi-resource deadlocks.
+/// A complete key set is reserved atomically, avoiding deadlocks and preventing
+/// a waiting multi-resource task from holding unrelated keys.
 #[derive(Clone, Default)]
 pub struct TaskConflictCoordinator {
-    locks: Arc<AsyncMutex<HashMap<String, Weak<AsyncMutex<()>>>>>,
+    state: Arc<TaskConflictState>,
 }
 
 pub struct TaskConflictGuard {
-    _guards: Vec<OwnedMutexGuard<()>>,
+    state: Arc<TaskConflictState>,
+    keys: Vec<String>,
+}
+
+#[derive(Default)]
+struct TaskConflictState {
+    active: Mutex<HashSet<String>>,
+    changed: Notify,
+}
+
+impl Drop for TaskConflictGuard {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.state.active.lock() {
+            for key in &self.keys {
+                active.remove(key);
+            }
+        }
+        self.state.changed.notify_waiters();
+    }
 }
 
 impl TaskConflictCoordinator {
@@ -236,25 +258,20 @@ impl TaskConflictCoordinator {
         S: Into<String>,
     {
         let keys = normalize_conflict_keys(keys);
-        let mut guards = Vec::with_capacity(keys.len());
-
-        for key in keys {
-            let lock = {
-                let mut locks = self.locks.lock().await;
-                locks.retain(|_, lock| lock.strong_count() > 0);
-                match locks.get(&key).and_then(Weak::upgrade) {
-                    Some(lock) => lock,
-                    None => {
-                        let lock = Arc::new(AsyncMutex::new(()));
-                        locks.insert(key, Arc::downgrade(&lock));
-                        lock
-                    }
+        loop {
+            let changed = self.state.changed.notified();
+            {
+                let mut active = self.state.active.lock().unwrap();
+                if keys.iter().all(|key| !active.contains(key)) {
+                    active.extend(keys.iter().cloned());
+                    return TaskConflictGuard {
+                        state: self.state.clone(),
+                        keys,
+                    };
                 }
-            };
-            guards.push(lock.lock_owned().await);
+            }
+            changed.await;
         }
-
-        TaskConflictGuard { _guards: guards }
     }
 }
 
@@ -1022,6 +1039,18 @@ mod conflict_tests {
         );
     }
 
+    #[test]
+    fn world_keys_normalize_case_and_unicode_equivalents() {
+        assert_eq!(
+            super::world_conflict_key(1, "Straße"),
+            super::world_conflict_key(1, "STRASSE")
+        );
+        assert_eq!(
+            super::world_conflict_key(1, "Café"),
+            super::world_conflict_key(1, "Café")
+        );
+    }
+
     #[tokio::test]
     async fn tasks_sharing_a_conflict_key_are_serialized() {
         let coordinator = TaskConflictCoordinator::default();
@@ -1081,5 +1110,26 @@ mod conflict_tests {
         })
         .await
         .expect("opposite input orders should not deadlock");
+    }
+
+    #[tokio::test]
+    async fn waiting_key_sets_do_not_hold_their_unblocked_keys() {
+        let coordinator = TaskConflictCoordinator::default();
+        let saves = coordinator.acquire(["saves:1"]).await;
+        let waiting = coordinator.clone();
+        let waiter = tokio::spawn(async move {
+            let _guard = waiting.acquire(["resourcepacks:1", "saves:1"]).await;
+        });
+        tokio::task::yield_now().await;
+
+        tokio::time::timeout(
+            Duration::from_millis(100),
+            coordinator.acquire(["resourcepacks:1"]),
+        )
+        .await
+        .expect("a waiting key set must not reserve resourcepacks");
+
+        drop(saves);
+        waiter.await.unwrap();
     }
 }

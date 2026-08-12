@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
 		retainedCompanionCount: 0,
 		cleanupWarning: null,
 	}),
+	confirm: vi.fn().mockResolvedValue(true),
+	showToast: vi.fn(),
 	setType: vi.fn(),
 	setInstance: vi.fn(),
 	setGameVersion: vi.fn(),
@@ -142,9 +144,9 @@ vi.mock("@stores/resources", () => ({
 
 vi.mock("@stores/instances", () => ({ instancesState: { instances: [] } }));
 vi.mock("@stores/dialog-store", () => ({
-	dialogStore: { confirm: vi.fn().mockResolvedValue(true) },
+	dialogStore: { confirm: mocks.confirm },
 }));
-vi.mock("@ui/toast/toast", () => ({ showToast: vi.fn() }));
+vi.mock("@ui/toast/toast", () => ({ showToast: mocks.showToast }));
 vi.mock("@components/instances/InstanceSelectionDialog", () => ({
 	default: () => null,
 }));
@@ -360,6 +362,12 @@ describe("world datapack navigation", () => {
 describe("WorldDatapacksView", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mocks.confirm.mockResolvedValue(true);
+		mocks.deleteWorldDatapack.mockResolvedValue({
+			removedCompanionCount: 0,
+			retainedCompanionCount: 0,
+			cleanupWarning: null,
+		});
 		mocks.worldDatapacksState.loading = {};
 		mocks.worldDatapacksState.errors = {};
 		mocks.worldDatapacksState.updatesLoading = {};
@@ -573,6 +581,42 @@ describe("WorldDatapacksView", () => {
 				compatibilityAcknowledged: false,
 				replacementResourceId: 11,
 			},
+		);
+	});
+
+	it("explains when a linked resource pack is retained for another world", async () => {
+		mocks.deleteWorldDatapack.mockResolvedValue({
+			removedCompanionCount: 0,
+			retainedCompanionCount: 1,
+			cleanupWarning: "Temporary-file cleanup needs attention.",
+		});
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onReviewVersions={vi.fn()}
+			/>
+		));
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Remove from world" }),
+		);
+
+		await waitFor(() =>
+			expect(mocks.deleteWorldDatapack).toHaveBeenCalledWith(world().ref, 11),
+		);
+		expect(mocks.showToast).toHaveBeenCalledWith(
+			expect.objectContaining({
+				title: "Datapack removed",
+				description: expect.stringContaining(
+					"retained because Vesta could not prove it was unused",
+				),
+				severity: "warning",
+			}),
+		);
+		expect(mocks.showToast.mock.calls.at(-1)?.[0].description).toContain(
+			"Temporary-file cleanup needs attention.",
 		);
 	});
 });

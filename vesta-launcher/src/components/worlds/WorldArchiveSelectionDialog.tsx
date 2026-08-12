@@ -14,6 +14,7 @@ import {
 import { formatBytes } from "@utils/format-bytes";
 import {
 	type Component,
+	createEffect,
 	createSignal,
 	For,
 	onCleanup,
@@ -31,6 +32,15 @@ export const WorldArchiveSelectionDialog: Component = () => {
 	const [submitting, setSubmitting] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
 	let unlisten: (() => void) | undefined;
+	let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+
+	const advance = () => {
+		const [next, ...remaining] = queued();
+		setQueued(remaining);
+		setRequest(next ?? null);
+		setSelected([]);
+		setError(null);
+	};
 
 	onMount(async () => {
 		unlisten = await listen<WorldArchiveSelectionRequest>(
@@ -46,7 +56,34 @@ export const WorldArchiveSelectionDialog: Component = () => {
 			},
 		);
 	});
-	onCleanup(() => unlisten?.());
+	onCleanup(() => {
+		unlisten?.();
+		if (expiryTimer) clearTimeout(expiryTimer);
+	});
+
+	createEffect(() => {
+		if (expiryTimer) clearTimeout(expiryTimer);
+		const current = request();
+		if (!current) return;
+		const schedule = () => {
+			const remaining = Date.parse(current.expiresAt) - Date.now();
+			if (remaining > 2_147_483_647) {
+				expiryTimer = setTimeout(schedule, 2_147_483_647);
+				return;
+			}
+			expiryTimer = setTimeout(
+				() => {
+					if (request()?.installId !== current.installId) return;
+					void submitWorldArchiveSelection(current.installId, []).catch(
+						() => undefined,
+					);
+					advance();
+				},
+				Math.max(0, remaining),
+			);
+		};
+		schedule();
+	});
 
 	const toggle = (candidateId: string) => {
 		setSelected((current) =>
@@ -63,10 +100,7 @@ export const WorldArchiveSelectionDialog: Component = () => {
 		setError(null);
 		try {
 			await submitWorldArchiveSelection(current.installId, ids);
-			const [next, ...remaining] = queued();
-			setQueued(remaining);
-			setRequest(next ?? null);
-			setSelected([]);
+			advance();
 		} catch (reason) {
 			setError(String(reason));
 		} finally {
