@@ -2,6 +2,7 @@ import BellIcon from "@assets/bell.svg";
 import CurseForgeIcon from "@assets/curseforge.svg";
 import DownloadIcon from "@assets/download-compact.svg";
 import HeartIcon from "@assets/heart.svg";
+import InfoIcon from "@assets/info.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
@@ -860,7 +861,6 @@ const ResourceDetailsPage: Component<{
 			([id, platform], previous) => {
 				const [previousId, previousPlatform] = previous || [];
 				if (id && (id !== previousId || platform !== previousPlatform)) {
-					setProjectLoadSettled(false);
 					// Only clear the tab if it's currently set, to avoid unnecessary router updates
 					const currentTab = untrack(
 						() => activeRouter()?.currentParams.get().activeTab,
@@ -1275,7 +1275,8 @@ const ResourceDetailsPage: Component<{
 			inputKey &&
 			routedProjectKey === inputKey &&
 			currentProject?.id === id &&
-			currentProject?.source === platform
+			currentProject?.source === platform &&
+			untrack(projectLoadSettled)
 		) {
 			return;
 		}
@@ -1290,6 +1291,8 @@ const ResourceDetailsPage: Component<{
 				setProject(initialProject);
 				if (initialProject.description) {
 					setProjectLoadSettled(true);
+					setLoading(false);
+					setError(null);
 					void resources.selectProject(initialProject);
 				} else if (id && platform) {
 					void fetchFullProject(platform, id);
@@ -1298,6 +1301,8 @@ const ResourceDetailsPage: Component<{
 				}
 			} else if (initialProject.description) {
 				setProjectLoadSettled(true);
+				setLoading(false);
+				setError(null);
 				void resources.selectProject(initialProject);
 			} else if (!currentProject?.description && id && platform) {
 				void fetchFullProject(platform, id);
@@ -1306,11 +1311,7 @@ const ResourceDetailsPage: Component<{
 		}
 
 		// Deep link case (ID only)
-		if (
-			id &&
-			platform &&
-			(currentProject?.id !== id || currentProject?.source !== platform)
-		) {
+		if (id && platform) {
 			void fetchFullProject(platform, id);
 		}
 	};
@@ -2126,7 +2127,7 @@ const ResourceDetailsPage: Component<{
 
 	const sidebarContent = () => (
 		<div class={styles["sidebar-scrollable-area"]}>
-			<div class={styles["sidebar-section"]}>
+			<section class={styles["sidebar-section"]}>
 				<div class={styles["sidebar-instance-picker"]}>
 					<div class={styles["source-toggle"]}>
 						<button
@@ -2289,6 +2290,7 @@ const ResourceDetailsPage: Component<{
 							}
 						>
 							<Show when={isProjectInstalling()}>
+								<VersionActionIcon kind="progress" size={15} />
 								<span>Installing...</span>
 							</Show>
 							<Show when={!isProjectInstalling()}>
@@ -2297,44 +2299,14 @@ const ResourceDetailsPage: Component<{
 										when={isUpdateAvailable()}
 										fallback={
 											<>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													style={{ "margin-right": "8px" }}
-												>
-													<path d="M3 6h18"></path>
-													<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-													<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-												</svg>
+												<VersionActionIcon kind="remove" size={15} />
 												<Show when={confirmUninstall()} fallback="Uninstall">
 													Confirm?
 												</Show>
 											</>
 										}
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											style={{ "margin-right": "8px" }}
-										>
-											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-											<polyline points="7 10 12 15 17 10"></polyline>
-											<line x1="12" y1="15" x2="12" y2="3"></line>
-										</svg>
+										<VersionActionIcon kind="download" size={15} />
 										Update
 									</Show>
 								</Show>
@@ -2343,22 +2315,7 @@ const ResourceDetailsPage: Component<{
 										when={isProjectIncompatible()}
 										fallback={
 											<>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													style={{ "margin-right": "8px" }}
-												>
-													<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-													<polyline points="7 10 12 15 17 10"></polyline>
-													<line x1="12" y1="15" x2="12" y2="3"></line>
-												</svg>
+												<VersionActionIcon kind="download" size={15} />
 												Install
 											</>
 										}
@@ -2375,11 +2332,12 @@ const ResourceDetailsPage: Component<{
 						</Button>
 					</div>
 				</div>
-			</div>
+			</section>
 
-			<div class={styles["sidebar-section"]}>
-				<div class={styles["sidebar-section-header"]}>
-					<h3 class={styles["section-title"]}>Details</h3>
+			<section class={styles["sidebar-section"]}>
+				<div class={styles["sidebar-section-heading"]}>
+					<InfoIcon width={16} height={16} />
+					<h3>Project details</h3>
 				</div>
 				<div class={styles["sidebar-info-list"]}>
 					<Show when={project()?.published_at}>
@@ -2405,18 +2363,19 @@ const ResourceDetailsPage: Component<{
 						</div>
 					</Show>
 				</div>
-			</div>
+			</section>
 
-			<div
+			<section
 				class={`${styles["sidebar-section"]} ${styles["recent-versions-section"]} ${styles["hide-mobile"]}`}
 			>
-				<div class={styles["sidebar-section-header"]}>
-					<h3 class={styles["section-title"]}>Recent Versions</h3>
+				<div class={styles["sidebar-section-heading"]}>
+					<DownloadIcon width={16} height={16} />
+					<h3>Recent versions</h3>
 					<button
 						class={styles["view-all-link"]}
 						onClick={() => selectTab("versions")}
 					>
-						View All
+						View all
 					</button>
 				</div>
 				<div class={styles["sidebar-version-list"]}>
@@ -2440,7 +2399,7 @@ const ResourceDetailsPage: Component<{
 						</For>
 					</Show>
 				</div>
-			</div>
+			</section>
 		</div>
 	);
 
@@ -2673,7 +2632,7 @@ const ResourceDetailsPage: Component<{
 						<Show when={!focusedVersionId()}>
 							<div class={styles["mobile-sidebar-only"]}>
 								<div
-									class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]}`}
+									class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]} ${styles["resource-overview-sidebar-card"]}`}
 									style={{ "margin-bottom": "20px" }}
 								>
 									<Show
@@ -3023,6 +2982,7 @@ const ResourceDetailsPage: Component<{
 					<div
 						class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]} ${styles["desktop-sidebar-only"]}`}
 						classList={{
+							[styles["resource-overview-sidebar-card"]]: !focusedVersionId(),
 							[styles["version-focus-sidebar-card"]]: Boolean(
 								focusedVersionId(),
 							),

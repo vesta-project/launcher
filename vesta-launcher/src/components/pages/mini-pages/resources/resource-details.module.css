@@ -80,13 +80,6 @@
 
 /* ── Shared typography / labels ── */
 
-.section-title {
-	margin: 0;
-	font-size: 14px;
-	font-weight: 700;
-	color: var(--text-primary);
-}
-
 .field-label {
 	font-size: 11px;
 	font-weight: 600;
@@ -367,26 +360,42 @@
 .sidebar-scrollable-area {
 	display: flex;
 	flex-direction: column;
-	gap: 20px;
+	gap: 0;
 	min-width: 0;
 }
 
 .sidebar-section {
-	margin-bottom: 0;
+	padding: 14px 16px;
 }
 
-.sidebar-section-header {
+.sidebar-section + .sidebar-section {
+	border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar-section-heading {
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 12px;
+	gap: 9px;
+	margin-bottom: 10px;
+	color: var(--text-secondary);
+}
+
+.sidebar-section-heading h3 {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.sidebar-section-heading button {
+	margin-left: auto;
 }
 
 .sidebar-instance-picker {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	margin-bottom: 16px;
+	margin-bottom: 0;
 }
 
 .sidebar-action-row {
@@ -400,7 +409,7 @@
 	padding: 2px;
 	gap: 2px;
 	width: 100%;
-	margin-bottom: 16px;
+	margin-bottom: 0;
 }
 
 .source-btn {
@@ -427,7 +436,7 @@
 
 .source-btn.active {
 	background: var(--accent-primary);
-	color: white;
+	color: var(--text-on-accent);
 }
 
 .source-btn.active:disabled {
@@ -476,8 +485,8 @@
 }
 
 .sidebar-info-value {
-	font-size: 13px;
-	font-weight: 700;
+	font-size: 12px;
+	font-weight: 650;
 	color: var(--text-primary);
 	text-align: right;
 	white-space: nowrap;
@@ -507,6 +516,11 @@
 	flex-direction: column;
 	gap: 0;
 	padding-block: 4px;
+}
+
+.resource-overview-sidebar-card {
+	padding: 0;
+	overflow: hidden;
 }
 
 .sidebar-version-item {
@@ -1172,11 +1186,6 @@
 	color: var(--text-secondary);
 }
 
-.focus-section-heading svg path,
-.focus-sidebar-heading svg path {
-	fill: currentColor !important;
-}
-
 .focus-section-heading {
 	padding-bottom: 12px;
 	border-bottom: 1px solid var(--border-subtle);
@@ -1290,13 +1299,13 @@
 
 .instance-select-option-copy small {
 	color: var(--text-muted);
-	font-size: 10px;
+	font-size: 11px;
 }
 
 .focused-compatibility-note {
 	display: block;
 	padding: 2px 1px;
-	font-size: 10px;
+	font-size: 11px;
 	font-weight: 650;
 	line-height: 1.4;
 }
@@ -1313,8 +1322,14 @@
 	margin-bottom: 10px;
 }
 
-.focus-sidebar-heading h3 {
+.focus-sidebar-heading h3,
+.sidebar-section-heading h3 {
 	font-size: 13px;
+}
+
+.focus-sidebar-heading > svg,
+.sidebar-section-heading > svg {
+	flex: 0 0 16px;
 }
 
 .environment-list {
@@ -1326,10 +1341,9 @@
 .environment-list > div {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding: 7px 0;
+	padding: 6px 0;
 	color: var(--text-secondary);
-	font-size: 11px;
+	font-size: 12px;
 	border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -1344,7 +1358,8 @@
 .loader-detail-list {
 	flex-direction: column;
 	align-items: stretch;
-	margin-top: 12px;
+	gap: 6px;
+	margin-top: 10px;
 }
 
 .loader-detail-list > div {
@@ -1361,7 +1376,7 @@
 
 .focus-dependency-group h4 {
 	margin-bottom: 6px;
-	font-size: 10px;
+	font-size: 11px;
 	letter-spacing: 0.05em;
 	text-transform: uppercase;
 }
@@ -1428,7 +1443,7 @@
 .focus-dependency-row small,
 .focus-empty-copy {
 	color: var(--text-muted);
-	font-size: 10px;
+	font-size: 11px;
 }
 
 .focus-empty-copy {
@@ -1452,19 +1467,23 @@
 
 .release-metadata-list dt {
 	color: var(--text-muted);
-	font-size: 11px;
+	font-size: 12px;
 }
 
 .release-metadata-list dd {
 	margin: 0;
 	overflow: hidden;
 	color: var(--text-primary);
-	font-family: var(--font-mono);
-	font-size: 10px;
+	font-size: 12px;
 	font-weight: 650;
 	text-align: right;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.release-metadata-list > div:nth-last-child(-n + 2) dd {
+	font-family: var(--font-mono);
+	font-size: 10px;
 }
 
 .mobile-version-sidebar {
@@ -1642,11 +1661,10 @@
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
-	padding-bottom: 16px;
+	padding: 14px 16px;
 }
 
 .resource-sidebar-loading-section + .resource-sidebar-loading-section {
-	padding-top: 16px;
 	border-top: 1px solid var(--border-subtle);
 }
 
