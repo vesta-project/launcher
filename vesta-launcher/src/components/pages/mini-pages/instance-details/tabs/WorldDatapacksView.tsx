@@ -79,6 +79,18 @@ const displayVersion = (entry: WorldDatapackSummary) =>
 const projectKey = (platform: string | null, projectId: string | null) =>
 	platform && projectId ? `${platform.toLowerCase()}:${projectId}` : null;
 
+const showWorldDatapacksFolder = async (world: WorldSummary) => {
+	try {
+		await openWorldDatapacksFolder(world.ref);
+	} catch (error) {
+		showToast({
+			title: "Could not open datapacks folder",
+			description: String(error),
+			severity: "error",
+		});
+	}
+};
+
 type ProviderProjectRef = {
 	platform: string;
 	id: string;
@@ -303,7 +315,7 @@ const DatapackRow: Component<{
 						onCloseAutoFocus={(event) => event.preventDefault()}
 					>
 						<DropdownMenuItem
-							onSelect={() => void openWorldDatapacksFolder(props.world.ref)}
+							onSelect={() => void showWorldDatapacksFolder(props.world)}
 						>
 							<FolderIcon class={styles["menu-icon"]} />
 							Show in folder
@@ -494,7 +506,7 @@ export const WorldDatapacksView: Component<{
 						icon_only
 						tooltip_text="Open datapacks folder"
 						aria-label="Open datapacks folder"
-						onClick={() => void openWorldDatapacksFolder(props.world.ref)}
+						onClick={() => void showWorldDatapacksFolder(props.world)}
 					>
 						<FolderIcon />
 					</Button>

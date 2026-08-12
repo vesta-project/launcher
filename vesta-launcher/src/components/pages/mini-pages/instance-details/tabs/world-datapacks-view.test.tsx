@@ -369,6 +369,7 @@ describe("world datapack navigation", () => {
 describe("WorldDatapacksView", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mocks.openWorldDatapacksFolder.mockResolvedValue(undefined);
 		mocks.confirm.mockResolvedValue(true);
 		mocks.deleteWorldDatapack.mockResolvedValue({
 			removedCompanionCount: 0,
@@ -594,6 +595,31 @@ describe("WorldDatapacksView", () => {
 
 		await fireEvent.click(screen.getByRole("button", { name: "Add datapack" }));
 		expect(onAddDatapack).toHaveBeenCalledWith(targetWorld);
+	});
+
+	it("reports an error when the datapacks folder cannot be opened", async () => {
+		mocks.openWorldDatapacksFolder.mockRejectedValue(
+			new Error("Folder is unavailable"),
+		);
+		render(() => (
+			<WorldDatapacksView
+				world={world()}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
+			/>
+		));
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Open datapacks folder" }),
+		);
+		await waitFor(() =>
+			expect(mocks.showToast).toHaveBeenCalledWith({
+				title: "Could not open datapacks folder",
+				description: "Error: Folder is unavailable",
+				severity: "error",
+			}),
+		);
 	});
 
 	it("updates the exact world row with its replacement resource ID", async () => {
