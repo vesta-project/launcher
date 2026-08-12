@@ -196,7 +196,7 @@ export const WorldCard: Component<{
 				role="button"
 				tabIndex={props.world.levelStatus === "unreadable" ? undefined : 0}
 				aria-disabled={props.world.levelStatus === "unreadable" || undefined}
-				aria-label={`Open ${props.world.displayName}`}
+				aria-label={`View datapacks in ${props.world.displayName}`}
 				onClick={(event: MouseEvent) => {
 					if (
 						event.target !== event.currentTarget &&
@@ -260,19 +260,14 @@ export const WorldCard: Component<{
 							<StorageIcon />
 							{formatBytes(props.world.sizeBytes)}
 						</span>
-						<button
-							type="button"
-							class={`${styles["metadata-item"]} ${styles["metadata-button"]}`}
-							title={`Manage ${props.world.datapackCount} datapacks`}
-							aria-label={`Manage ${props.world.datapackCount} datapacks in ${props.world.displayName}`}
-							onClick={(event: MouseEvent) => {
-								event.stopPropagation();
-								props.onManageDatapacks();
-							}}
+						<span
+							class={styles["metadata-item"]}
+							title={`${props.world.datapackCount} datapacks`}
+							aria-label={`${props.world.datapackCount} datapacks`}
 						>
 							<DatapackIcon />
 							{props.world.datapackCount}
-						</button>
+						</span>
 					</div>
 				</div>
 				<div class={styles["card-actions"]}>

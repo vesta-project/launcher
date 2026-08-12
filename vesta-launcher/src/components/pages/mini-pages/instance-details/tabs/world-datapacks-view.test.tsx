@@ -271,13 +271,15 @@ describe("world datapack navigation", () => {
 			/>
 		));
 
-		const card = screen.getByRole("button", { name: "Open Test World" });
+		const card = screen.getByRole("button", {
+			name: "View datapacks in Test World",
+		});
 		await fireEvent.click(card);
 		await fireEvent.keyDown(card, { key: "Enter" });
 		expect(onOpen).toHaveBeenCalledTimes(2);
 	});
 
-	it("does not open the world when a nested card action is used", async () => {
+	it("uses the whole card instead of a separate datapack-count button", async () => {
 		const onOpen = vi.fn();
 		const onManageDatapacks = vi.fn();
 		render(() => (
@@ -292,11 +294,19 @@ describe("world datapack navigation", () => {
 			/>
 		));
 
+		expect(
+			screen.queryByRole("button", {
+				name: "Manage 2 datapacks in Test World",
+			}),
+		).toBeNull();
+		await fireEvent.click(screen.getByLabelText("2 datapacks"));
+		expect(onOpen).toHaveBeenCalledOnce();
+		expect(onManageDatapacks).not.toHaveBeenCalled();
+
 		await fireEvent.click(
-			screen.getByRole("button", { name: "Manage 2 datapacks in Test World" }),
+			screen.getByRole("button", { name: "Actions for Test World" }),
 		);
-		expect(onManageDatapacks).toHaveBeenCalledOnce();
-		expect(onOpen).not.toHaveBeenCalled();
+		expect(onOpen).toHaveBeenCalledOnce();
 	});
 
 	it("opens datapack browsing with the owning instance, not a sticky world", () => {
