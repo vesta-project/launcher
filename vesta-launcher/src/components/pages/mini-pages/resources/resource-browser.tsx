@@ -30,8 +30,8 @@ import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import {
 	classifyDatapackVersionCompatibility,
 	findBestExactDatapackVersion,
-	findBestVersionForInstance,
 	requiresWorldTarget,
+	resolveInstanceInstallDecision,
 } from "@utils/resource-install-intent";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
@@ -141,26 +141,28 @@ const ResourceBrowser: Component<{
 				versions.length > 0
 					? versions
 					: await resources.getVersions(project.source, project.id);
-			if (requiresWorldTarget(project, request.version, installType)) {
+			const decision = resolveInstanceInstallDecision(
+				project,
+				finalVersions,
+				instance,
+				installType,
+				request.version,
+			);
+			if (decision.kind === "world") {
 				setWorldInstall({
 					project,
 					versions: finalVersions,
-					version: request.version,
+					version: decision.version,
 					installType,
 					instanceId: instance.id,
 				});
 				return;
 			}
-			const bestVersion = findBestVersionForInstance(
-				project,
-				finalVersions,
-				instance,
-			);
 
-			if (bestVersion) {
+			if (decision.kind === "instance") {
 				await resources.install(
 					project,
-					bestVersion,
+					decision.version,
 					{
 						kind: "instance",
 						instanceId: instance.id,
@@ -259,13 +261,13 @@ const ResourceBrowser: Component<{
 	const handleCreateNew = () => {
 		const request = resources.state.installRequest;
 		if (!request) return;
-		const { project, versions } = request;
+		const { project, versions, installType } = request;
 
 		setIsInstanceDialogOpen(false);
 		resources.setInstallRequest(null);
 
 		const prefilledModpackInfo =
-			project.resource_type === "modpack"
+			installType === "modpack"
 				? buildBrowseModpackInfo(project, versions[0], {
 						minecraftVersion: resources.state.gameVersion,
 						loader: resources.state.loader,
@@ -277,8 +279,8 @@ const ResourceBrowser: Component<{
 			{
 				projectId: project.id,
 				platform: project.source,
-				isModpack: project.resource_type === "modpack",
-				resourceType: project.resource_type,
+				isModpack: installType === "modpack",
+				resourceType: installType,
 				projectName: project.name,
 				projectIcon: project.icon_url || undefined,
 				projectAuthor: project.author,
@@ -287,7 +289,7 @@ const ResourceBrowser: Component<{
 				initialMinecraftVersion: resources.state.gameVersion || undefined,
 				initialModloader: resources.state.loader || undefined,
 				modpackUrl:
-					project.resource_type === "modpack"
+					installType === "modpack"
 						? versions[0]?.download_url || undefined
 						: undefined,
 			},
@@ -298,7 +300,7 @@ const ResourceBrowser: Component<{
 							versions.length > 0 ? versions : undefined,
 					}
 				: {
-						pendingResource: { project, version: versions[0] },
+						pendingResource: { project, version: versions[0], installType },
 					},
 		);
 	};

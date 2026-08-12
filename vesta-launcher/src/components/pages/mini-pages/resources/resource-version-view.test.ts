@@ -11,7 +11,7 @@ import {
 } from "./resource-version-view";
 
 const project = (resourceType: ResourceProject["resource_type"] = "mod") =>
-	({ resource_type: resourceType }) as ResourceProject;
+	({ resource_type: resourceType, source: "modrinth" }) as ResourceProject;
 
 const instance = (minecraftVersion: string, modloader: string) =>
 	({ minecraftVersion, modloader }) as Instance;
@@ -113,6 +113,22 @@ describe("versionsSupportedByInstance", () => {
 				instance("1.21", "fabric"),
 			).map((item) => item.id),
 		).toEqual(["datapack", "older-datapack"]);
+	});
+
+	it("keeps canonical project metadata separate from datapack browse intent", () => {
+		const mixedVersions = [
+			version("fabric", ["1.21"], ["fabric"]),
+			version("datapack", ["1.21"], ["datapack"]),
+		];
+
+		expect(
+			versionsSupportedByInstance(
+				project("mod"),
+				mixedVersions,
+				instance("1.21", "vanilla"),
+				"datapack",
+			).map((item) => item.id),
+		).toEqual(["datapack"]);
 	});
 });
 

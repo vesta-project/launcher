@@ -285,13 +285,51 @@ export function findBestVersionForInstance(
 	versions: readonly ResourceVersion[],
 	instance: Pick<Instance, "minecraftVersion" | "modloader">,
 	releaseType: "release" | "beta" | "alpha" = "release",
+	installType: ResourceType = project.resource_type,
 ): ResourceVersion | null {
 	return findBestVersion(
 		versions,
 		instance.minecraftVersion,
 		instance.modloader,
 		releaseType,
-		project.resource_type,
+		installType,
 		project.source,
 	);
+}
+
+export type InstanceInstallDecision =
+	| { kind: "world"; version?: ResourceVersion }
+	| { kind: "instance"; version: ResourceVersion }
+	| { kind: "unavailable" };
+
+/**
+ * Resolves destination scope only after the actual install variant is known.
+ * A contextual datapack browse remains world-scoped even when the provider
+ * classifies the containing project as a mod.
+ */
+export function resolveInstanceInstallDecision(
+	project: ResourceProject,
+	versions: readonly ResourceVersion[],
+	instance: Pick<Instance, "minecraftVersion" | "modloader">,
+	installType: ResourceType,
+	requestedVersion?: ResourceVersion,
+): InstanceInstallDecision {
+	if (requestedVersion) {
+		return requiresWorldTarget(project, requestedVersion, installType)
+			? { kind: "world", version: requestedVersion }
+			: { kind: "instance", version: requestedVersion };
+	}
+	if (installType === "datapack") return { kind: "world" };
+
+	const version = findBestVersionForInstance(
+		project,
+		versions,
+		instance,
+		"release",
+		installType,
+	);
+	if (!version) return { kind: "unavailable" };
+	return requiresWorldTarget(project, version, installType)
+		? { kind: "world", version }
+		: { kind: "instance", version };
 }

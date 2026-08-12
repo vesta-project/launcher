@@ -148,6 +148,7 @@ marked.setOptions({
 
 const HeaderCategoryTags: Component<{
 	project: ResourceProject;
+	resourceType: ResourceType;
 	onBrowseType: () => void;
 	router?: MiniRouter;
 }> = (props) => {
@@ -162,7 +163,7 @@ const HeaderCategoryTags: Component<{
 		}[] = [
 			{
 				key: "__type__",
-				label: p.resource_type,
+				label: props.resourceType,
 				onClick: (e) => {
 					e.stopPropagation();
 					props.onBrowseType();
@@ -185,7 +186,7 @@ const HeaderCategoryTags: Component<{
 				label: categoryObj?.name || cat,
 				onClick: (e) => {
 					e.stopPropagation();
-					resources.setType(p.resource_type);
+					resources.setType(props.resourceType);
 					resources.setSource(p.source);
 					resources.setQuery("");
 					resources.setCategories([filterId]);
@@ -322,15 +323,16 @@ const ResourceDetailsPage: Component<{
 	const [project, setProject] = createSignal<ResourceProject | undefined>(
 		props.project,
 	);
-	const installType = createMemo<ResourceType>(() => {
+	const explicitInstallType = createMemo<ResourceType | undefined>(() => {
 		const routed = activeRouter()?.currentParams.get().resourceType;
 		return (
 			props.resourceType ||
-			(typeof routed === "string" ? (routed as ResourceType) : undefined) ||
-			project()?.resource_type ||
-			"mod"
+			(typeof routed === "string" ? (routed as ResourceType) : undefined)
 		);
 	});
+	const installType = createMemo<ResourceType>(
+		() => explicitInstallType() ?? project()?.resource_type ?? "mod",
+	);
 	const replacementResourceId = createMemo<number | undefined>(() => {
 		const value = activeRouter()?.currentParams.get().replacementResourceId;
 		if (typeof value !== "string" && typeof value !== "number")
@@ -522,6 +524,8 @@ const ResourceDetailsPage: Component<{
 					currentProject,
 					resources.state.versions,
 					inst,
+					"release",
+					installType(),
 				)
 			: null;
 	});
@@ -672,7 +676,7 @@ const ResourceDetailsPage: Component<{
 		const p = project();
 		if (!p) return;
 
-		resources.setType(p.resource_type);
+		resources.setType(installType());
 		resources.setSource(p.source);
 		resources.setQuery("");
 		activeRouter()?.navigate("/resources");
@@ -790,7 +794,7 @@ const ResourceDetailsPage: Component<{
 		return resources.state.installingVersionIds.includes(versionId);
 	};
 
-	const isModpack = () => project()?.resource_type === "modpack";
+	const isModpack = () => installType() === "modpack";
 
 	const isProjectInstalled = createMemo(() => {
 		if (installType() === "datapack") return false;
@@ -801,7 +805,7 @@ const ResourceDetailsPage: Component<{
 		const peerId = peerProject()?.id.toLowerCase();
 		const extIds = p.external_ids || {};
 		const projectName = p.name.toLowerCase();
-		const resType = p.resource_type;
+		const resType = installType();
 
 		return resources.state.installedResources.some((ir) => {
 			const irRemoteId = ir.remote_id.toLowerCase();
@@ -836,7 +840,7 @@ const ResourceDetailsPage: Component<{
 		const peerId = peerProject()?.id.toLowerCase();
 		const extIds = p.external_ids || {};
 		const projectName = p.name.toLowerCase();
-		const resType = p.resource_type;
+		const resType = installType();
 
 		return resources.state.installedResources.find((ir) => {
 			const irRemoteId = ir.remote_id.toLowerCase();
@@ -959,10 +963,16 @@ const ResourceDetailsPage: Component<{
 			project(),
 			resources.state.versions,
 			selectedInstance(),
+			installType(),
 		);
 	});
 	const projectTypeVersions = createMemo(() =>
-		versionsSupportedByInstance(project(), resources.state.versions, null),
+		versionsSupportedByInstance(
+			project(),
+			resources.state.versions,
+			null,
+			installType(),
+		),
 	);
 
 	const uniqueGameVersions = createMemo(() => {
@@ -1155,7 +1165,12 @@ const ResourceDetailsPage: Component<{
 		const instance = instancesState.instances.find((i) => i.id === instanceId);
 		if (!instance) return { type: "compatible" as const };
 
-		return getCompatibilityForInstance(project(), version, instance);
+		return getCompatibilityForInstance(
+			project(),
+			version,
+			instance,
+			installType(),
+		);
 	};
 
 	const isProjectIncompatible = createMemo(() => {
@@ -1167,7 +1182,7 @@ const ResourceDetailsPage: Component<{
 		if (!inst) return false;
 
 		const instLoader = inst.modloader?.toLowerCase() || "";
-		const resType = project()?.resource_type;
+		const resType = installType();
 
 		// Vanilla restriction
 		if (instLoader === "" || instLoader === "vanilla") {
@@ -1187,7 +1202,12 @@ const ResourceDetailsPage: Component<{
 		if (!inst) return false;
 
 		return resources.state.versions.some((v) => {
-			const comp = getCompatibilityForInstance(project(), v, inst);
+			const comp = getCompatibilityForInstance(
+				project(),
+				v,
+				inst,
+				installType(),
+			);
 			return comp.type !== "incompatible";
 		});
 	});
@@ -1417,7 +1437,6 @@ const ResourceDetailsPage: Component<{
 		options?: { skipCache?: boolean },
 	) {
 		const requestSequence = ++projectRequestSequence;
-		const contextualResourceType = installType();
 		setLoading(true);
 		setError(null);
 
@@ -1448,10 +1467,7 @@ const ResourceDetailsPage: Component<{
 		try {
 			const fetchedProject = await resources.getProject(platform, id);
 			if (requestSequence !== projectRequestSequence) return;
-			const p =
-				fetchedProject && contextualResourceType
-					? { ...fetchedProject, resource_type: contextualResourceType }
-					: fetchedProject;
+			const p = fetchedProject;
 			if (p) setProjectCache(platform, p);
 
 			setProject(p);
@@ -1697,8 +1713,9 @@ const ResourceDetailsPage: Component<{
 		if (p) {
 			const version = installContext()?.version || primaryVersion();
 			setInstallContext(null);
+			const resourceType = installType();
 			const prefilledModpackInfo =
-				p.resource_type === "modpack"
+				resourceType === "modpack"
 					? buildBrowseModpackInfo(p, version)
 					: undefined;
 			activeRouter()?.navigate(
@@ -1706,19 +1723,19 @@ const ResourceDetailsPage: Component<{
 				{
 					projectId: p.id,
 					platform: p.source,
-					isModpack: p.resource_type === "modpack",
+					isModpack: resourceType === "modpack",
 					projectName: p.name,
 					projectIcon: p.icon_url || "",
-					resourceType: p.resource_type,
+					resourceType,
 					initialVersion: version?.id,
 					initialVersionNumber: version?.version_number,
 					initialModloader: version?.loaders[0],
 					initialMinecraftVersion:
-						p.resource_type === "modpack"
+						resourceType === "modpack"
 							? minecraftGameVersions(version?.game_versions || [])[0]
 							: undefined,
 					modpackUrl:
-						p.resource_type === "modpack"
+						resourceType === "modpack"
 							? version?.download_url || undefined
 							: undefined,
 				},
@@ -1733,7 +1750,11 @@ const ResourceDetailsPage: Component<{
 										: undefined,
 						}
 					: {
-							pendingResource: { project: p, version },
+							pendingResource: {
+								project: p,
+								version,
+								installType: resourceType,
+							},
 						},
 			);
 		}
@@ -1762,7 +1783,13 @@ const ResourceDetailsPage: Component<{
 				return;
 			}
 			const best = p
-				? findBestVersionForInstance(p, resources.state.versions, instance)
+				? findBestVersionForInstance(
+						p,
+						resources.state.versions,
+						instance,
+						"release",
+						installType(),
+					)
 				: null;
 			if (best) {
 				handleInstall(best, instance);
@@ -2036,7 +2063,12 @@ const ResourceDetailsPage: Component<{
 		if (!version || !instance || isModpack()) {
 			return { type: "compatible" as const };
 		}
-		return getCompatibilityForInstance(project(), version, instance);
+		return getCompatibilityForInstance(
+			project(),
+			version,
+			instance,
+			installType(),
+		);
 	});
 
 	const versionActionLabel = (
@@ -2755,6 +2787,7 @@ const ResourceDetailsPage: Component<{
 																{(resourceProject) => (
 																	<HeaderCategoryTags
 																		project={resourceProject()}
+																		resourceType={installType()}
 																		onBrowseType={handleBrowseByType}
 																		router={activeRouter()}
 																	/>

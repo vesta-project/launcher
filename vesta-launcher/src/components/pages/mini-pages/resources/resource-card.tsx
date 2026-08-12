@@ -108,7 +108,13 @@ const ResourceCard: Component<{
 						project.source,
 						project.id,
 					);
-					const best = findBestVersionForInstance(project, versions, inst);
+					const best = findBestVersionForInstance(
+						project,
+						versions,
+						inst,
+						"release",
+						installType(),
+					);
 					setLatestCompatibleVersion(best);
 				} catch (_) {
 					// Silently fail
@@ -126,7 +132,11 @@ const ResourceCard: Component<{
 		const instance = instancesState.instances.find((i) => i.id === instanceId);
 		if (!instance) return { type: "compatible" as const };
 
-		return getProjectCompatibilityForInstance(props.project, instance);
+		return getProjectCompatibilityForInstance(
+			props.project,
+			instance,
+			installType(),
+		);
 	});
 
 	const buttonVariant = createMemo(() => {
@@ -371,6 +381,8 @@ const ResourceCard: Component<{
 				props.project,
 				versions,
 				instance,
+				"release",
+				installType(),
 			);
 			if (best) {
 				if (requiresWorldTarget(props.project, best, installType())) {

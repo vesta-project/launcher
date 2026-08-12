@@ -7,11 +7,13 @@ import {
 	classifyDatapackVersionCompatibility,
 	findBestExactDatapackVersion,
 	findBestVersion,
+	findBestVersionForInstance,
 	findInstalledResource,
 	isGameVersionCompatible,
 	isResourceUpdateAvailable,
 	replacementResourceIdForWorld,
 	requiresWorldTarget,
+	resolveInstanceInstallDecision,
 	versionMatchesResourceType,
 } from "@utils/resource-install-intent";
 import { describe, expect, it } from "vitest";
@@ -172,6 +174,48 @@ describe("resource install intent", () => {
 		);
 
 		expect(selected?.id).toBe("datapack");
+	});
+
+	it("uses explicit datapack intent when selecting for a vanilla instance", () => {
+		const selected = findBestVersionForInstance(
+			project(),
+			[
+				version({ id: "mod", loaders: ["fabric"] }),
+				version({ id: "datapack", loaders: ["datapack"] }),
+			],
+			{ minecraftVersion: "1.21.1", modloader: "vanilla" },
+			"release",
+			"datapack",
+		);
+
+		expect(selected?.id).toBe("datapack");
+	});
+
+	it("chooses destination scope after selecting the bundle version", () => {
+		const combined = version({
+			id: "combined",
+			loaders: [],
+			files: [
+				{ url: "", file_name: "resources.zip", role: "primary" },
+				{ url: "", file_name: "data.zip", role: "datapack" },
+			],
+		});
+		expect(
+			resolveInstanceInstallDecision(
+				project({ resource_type: "resourcepack" }),
+				[combined],
+				{ minecraftVersion: "1.21.1", modloader: "vanilla" },
+				"resourcepack",
+			),
+		).toEqual({ kind: "world", version: combined });
+		expect(
+			resolveInstanceInstallDecision(
+				project(),
+				[version({ loaders: ["datapack"] })],
+				{ minecraftVersion: "1.21.1", modloader: "vanilla" },
+				"datapack",
+			),
+		).toEqual({ kind: "world" });
 	});
 
 	it("only quick-selects datapacks with an exact Minecraft version tag", () => {

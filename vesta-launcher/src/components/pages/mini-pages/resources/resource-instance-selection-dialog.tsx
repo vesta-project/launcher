@@ -105,12 +105,18 @@ const ResourceInstanceSelectionDialog: Component<
 			return { type: "compatible" as const };
 		}
 		if (props.version) {
-			return getCompatibilityForInstance(props.project, props.version, instance);
+			return getCompatibilityForInstance(
+				props.project,
+				props.version,
+				instance,
+				props.installType,
+			);
 		}
 
 		const projectCompatibility = getProjectCompatibilityForInstance(
 			props.project,
 			instance,
+			props.installType,
 		);
 		if (projectCompatibility.type !== "compatible") {
 			return projectCompatibility;
@@ -121,6 +127,8 @@ const ResourceInstanceSelectionDialog: Component<
 				props.project,
 				versionsToUse(),
 				instance,
+				"release",
+				props.installType,
 			);
 			return best
 				? { type: "compatible" as const }
@@ -138,8 +146,8 @@ const ResourceInstanceSelectionDialog: Component<
 		}
 
 		if (
-			props.project.resource_type === "mod" ||
-			props.project.resource_type === "shader"
+			props.installType === "mod" ||
+			props.installType === "shader"
 		) {
 			return {
 				type: "incompatible" as const,
@@ -165,6 +173,8 @@ const ResourceInstanceSelectionDialog: Component<
 			props.project,
 			versionsToUse(),
 			instance,
+			"release",
+			props.installType,
 		);
 		return best
 			? isResourceUpdateAvailable(props.project, installed, best)

@@ -1,5 +1,9 @@
 import type { Instance } from "@stores/instances";
-import type { ResourceProject, ResourceVersion } from "@stores/resources";
+import type {
+	ResourceProject,
+	ResourceType,
+	ResourceVersion,
+} from "@stores/resources";
 import { versionMatchesResourceType } from "@utils/resource-install-intent";
 import { getCompatibilityForInstance } from "@utils/resources";
 import { sanitizeHtml } from "@utils/security";
@@ -72,23 +76,24 @@ export function versionsSupportedByInstance(
 	project: ResourceProject | undefined,
 	versions: readonly ResourceVersion[],
 	instance: Instance | null | undefined,
+	installType: ResourceType | undefined = project?.resource_type,
 ): ResourceVersion[] {
 	const matchingProjectType = versions.filter((version) =>
 		versionMatchesResourceType(
-			project?.resource_type,
+			installType,
 			version,
 			project?.source,
 		),
 	);
-	if (!instance || project?.resource_type === "modpack") {
+	if (!instance || installType === "modpack") {
 		return matchingProjectType;
 	}
 	// Datapack version tags are advisory and the selected world's saved version,
 	// not the instance loader, decides whether confirmation is needed at install.
-	if (project?.resource_type === "datapack") return matchingProjectType;
+	if (installType === "datapack") return matchingProjectType;
 	return matchingProjectType.filter(
 		(version) =>
-			getCompatibilityForInstance(project, version, instance).type !==
+			getCompatibilityForInstance(project, version, instance, installType).type !==
 			"incompatible",
 	);
 }
