@@ -1,0 +1,313 @@
+.rescanButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.rescanIcon {
+	width: 14px;
+	height: 14px;
+	flex: 0 0 auto;
+	fill: currentcolor;
+}
+
+.versionStack {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+
+.versionGroup {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.versionHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-width: 0;
+}
+
+.versionIdentity {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.versionMark {
+	display: grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	flex: 0 0 auto;
+	border-radius: 10px;
+	background: var(--surface-sunken);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	color: var(--text-primary);
+	font-size: 0.85rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.02em;
+}
+
+.versionCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.versionTitle {
+	margin: 0;
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: var(--text-primary);
+	line-height: 1.25;
+}
+
+.versionStatus {
+	margin: 0;
+	font-size: 0.78rem;
+	color: var(--text-tertiary);
+	line-height: 1.3;
+}
+
+.runtimeList {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--surface-sunken) 70%, transparent);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+}
+
+.rowShell {
+	display: block;
+	min-width: 0;
+}
+
+.runtimeRow,
+.browseRow {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	min-width: 0;
+	margin: 0;
+	padding: 10px 12px;
+	border: none;
+	border-radius: 9px;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+	cursor: default;
+	transition:
+		background-color 0.16s ease,
+		transform 0.16s ease;
+}
+
+.runtimeRow:hover,
+.browseRow:hover {
+	background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+}
+
+.runtimeRow:focus-visible,
+.browseRow:focus-visible {
+	outline: 2px solid var(--primary-accent);
+	outline-offset: 1px;
+}
+
+.runtimeRowActive {
+	background: color-mix(in srgb, var(--primary-accent) 12%, var(--surface-raised));
+}
+
+.runtimeRowActive:hover {
+	background: color-mix(in srgb, var(--primary-accent) 16%, var(--surface-raised));
+}
+
+.radio {
+	width: 14px;
+	height: 14px;
+	flex: 0 0 auto;
+	border-radius: 999px;
+	border: 1.5px solid var(--border-strong);
+	background: transparent;
+	box-shadow: inset 0 0 0 0 var(--primary-accent);
+	transition:
+		border-color 0.16s ease,
+		box-shadow 0.16s ease,
+		background-color 0.16s ease;
+}
+
+.radioActive {
+	border-color: var(--primary-accent);
+	background: var(--primary-accent);
+	box-shadow: inset 0 0 0 3px
+		color-mix(in srgb, var(--surface-raised) 92%, white 8%);
+}
+
+.rowBody {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	flex: 1;
+	min-width: 0;
+}
+
+.rowHeadline {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.rowTitle {
+	font-size: 0.86rem;
+	font-weight: 600;
+	color: var(--text-primary);
+	line-height: 1.25;
+}
+
+.rowMeta {
+	font-size: 0.75rem;
+	color: var(--text-tertiary);
+	line-height: 1.3;
+}
+
+.rowPath {
+	font-family: var(--font-mono);
+	font-size: 0.72rem;
+	color: var(--text-secondary);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.sourceBadge {
+	display: inline-flex;
+	align-items: center;
+	height: 18px;
+	padding: 0 7px;
+	border-radius: 999px;
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+	background: color-mix(in srgb, var(--surface-overlay) 80%, transparent);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+}
+
+.sourceBadge[data-source="managed"] {
+	color: color-mix(in srgb, var(--primary-accent) 80%, var(--text-primary));
+	border-color: color-mix(in srgb, var(--primary-accent) 30%, var(--border-subtle));
+	background: color-mix(in srgb, var(--primary-accent) 12%, transparent);
+}
+
+.sourceBadge[data-source="system"] {
+	color: var(--text-secondary);
+}
+
+.sourceBadge[data-source="custom"] {
+	color: var(--text-primary);
+}
+
+.activeBadge {
+	height: 18px;
+	padding: 0 7px;
+	font-size: 0.65rem;
+}
+
+.downloadButton {
+	flex: 0 0 auto;
+	font-size: 0.75rem;
+}
+
+.browseRow {
+	border-top: var(--border-width-subtle) solid var(--border-subtle);
+	border-radius: 0 0 9px 9px;
+	margin-top: 2px;
+}
+
+.browseIcon {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	flex: 0 0 auto;
+	border-radius: 8px;
+	background: var(--surface-raised);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	color: var(--text-secondary);
+}
+
+.browseIcon svg {
+	width: 14px;
+	height: 14px;
+	fill: currentcolor;
+}
+
+.browseCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.emptyState {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 40px 20px;
+	text-align: center;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--surface-sunken) 70%, transparent);
+	border: var(--border-width-subtle) dashed var(--border-subtle);
+}
+
+.emptyState p {
+	margin: 0;
+	font-weight: 600;
+	font-size: 0.95rem;
+	color: var(--text-primary);
+}
+
+.emptyState span {
+	max-width: 340px;
+	font-size: 0.82rem;
+	color: var(--text-secondary);
+	line-height: 1.4;
+}
+
+.spinner {
+	width: 22px;
+	height: 22px;
+	border: 2.5px solid var(--border-subtle);
+	border-top-color: var(--primary-accent);
+	border-radius: 50%;
+	animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.runtimeRow,
+	.browseRow,
+	.radio,
+	.spinner {
+		transition: none;
+		animation: none;
+	}
+}

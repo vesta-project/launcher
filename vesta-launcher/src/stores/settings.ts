@@ -441,20 +441,24 @@ export const javaOptions = createMemo(() => {
 		);
 		const current =
 			allForVersion.find((p: any) => p.is_active) ?? allForVersion[0];
-		const managedRow = allForVersion.find(
-			(p: any) => p.is_managed && p.is_active,
-		);
 		const managedVersion = managedJavas.find(
 			(m: any) => m.major_version === req.major_version,
 		);
-		const managedPath = managedVersion?.path || managedRow?.path;
+		const managedPath =
+			managedVersion?.path ||
+			allForVersion.find((p: any) => p.is_managed)?.path;
 
 		options.push({
 			type: "managed",
 			version: req.major_version,
 			title: "Managed Runtime",
 			path: managedPath,
-			isActive: managedRow?.is_active ?? false,
+			isActive: Boolean(
+				current?.is_active &&
+					current?.is_managed &&
+					managedPath &&
+					current.path === managedPath,
+			),
 			onClick: () => {
 				if (managedPath) {
 					handleSetGlobalPath(req.major_version, managedPath, true);
@@ -546,7 +550,7 @@ export async function handleSetGlobalPath(
 			pathStr: path,
 			managed: isManaged,
 		});
-		refetchGlobalPaths();
+		await refetchGlobalPaths();
 	} catch (e) {
 		console.error("Failed to set global java path:", e);
 	}
