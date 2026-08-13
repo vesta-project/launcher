@@ -122,30 +122,28 @@ pub fn extract_modrinth_resource_hints(
     ];
 
     let mut hints = Vec::new();
-    for result in query_results {
-        if let Ok(rows) = result {
-            for row in rows {
-                let Some(project_id) = row.project_id.filter(|s| !s.trim().is_empty()) else {
-                    continue;
-                };
-                let Some(version_id) = row.version_id.filter(|s| !s.trim().is_empty()) else {
-                    continue;
-                };
-                let file_name = row.file_name.and_then(|raw| {
-                    Path::new(&raw)
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .map(|s| s.to_string())
-                });
-                hints.push(ModrinthResourceHint {
-                    project_id,
-                    version_id,
-                    file_name,
-                });
-            }
-            if !hints.is_empty() {
-                break;
-            }
+    for rows in query_results.into_iter().flatten() {
+        for row in rows {
+            let Some(project_id) = row.project_id.filter(|s| !s.trim().is_empty()) else {
+                continue;
+            };
+            let Some(version_id) = row.version_id.filter(|s| !s.trim().is_empty()) else {
+                continue;
+            };
+            let file_name = row.file_name.and_then(|raw| {
+                Path::new(&raw)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            });
+            hints.push(ModrinthResourceHint {
+                project_id,
+                version_id,
+                file_name,
+            });
+        }
+        if !hints.is_empty() {
+            break;
         }
     }
     hints

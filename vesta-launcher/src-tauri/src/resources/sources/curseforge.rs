@@ -183,6 +183,12 @@ struct CFExactMatch {
     file: CFFile,
 }
 
+impl Default for CurseForgeSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CurseForgeSource {
     pub fn new() -> Self {
         let key = get_deobfuscated_key();
@@ -326,7 +332,7 @@ impl CurseForgeSource {
                     // 2. Check if website_url matches exactly
                     let web_url = item.links.website_url.to_lowercase();
                     let normalized_web_url = normalize_url(&web_url);
-                    let url_slug = normalized_web_url.split('/').last().unwrap_or("");
+                    let url_slug = normalized_web_url.split('/').next_back().unwrap_or("");
 
                     if url_slug == slug_lower {
                         log::info!(
@@ -342,7 +348,7 @@ impl CurseForgeSource {
                 for item in &search_res.data {
                     let web_url = item.links.website_url.to_lowercase();
                     let normalized_web_url = normalize_url(&web_url);
-                    let url_slug = normalized_web_url.split('/').last().unwrap_or("");
+                    let url_slug = normalized_web_url.split('/').next_back().unwrap_or("");
 
                     if let Some(pos) = url_slug.find('-') {
                         let potential_id = &url_slug[..pos];

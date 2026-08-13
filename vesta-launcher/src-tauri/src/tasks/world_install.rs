@@ -70,7 +70,11 @@ pub async fn install_world_archive(
                 let percent = if total == 0 {
                     30
                 } else {
-                    30 + ((written.saturating_mul(65) / total).min(65) as i32)
+                    30 + ((written
+                        .saturating_mul(65)
+                        .checked_div(total)
+                        .unwrap_or(0)
+                        .min(65)) as i32)
                 };
                 progress_ctx.update_progress(percent, Some(2), Some(3));
                 Ok(())

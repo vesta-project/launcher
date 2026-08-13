@@ -366,10 +366,7 @@ fn evaluate_rules(
                 if let Some(ref version_expr) = os_rule.version {
                     // Treat version_expr as a regex
                     if let Ok(re) = Regex::new(version_expr) {
-                        let host_version = match sysinfo::System::long_os_version() {
-                            Some(v) => v,
-                            None => String::new(),
-                        };
+                        let host_version = sysinfo::System::long_os_version().unwrap_or_default();
 
                         if !re.is_match(&host_version) {
                             matches = false;
@@ -492,11 +489,11 @@ fn contains_empty_placeholder(text: &str, variables: &HashMap<String, String>) -
 pub(crate) fn split_preserving_quotes(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut buf = String::new();
-    let mut chars = s.chars().peekable();
+    let chars = s.chars().peekable();
     let mut in_double = false;
     let mut in_single = false;
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         match c {
             '"' if !in_single => {
                 in_double = !in_double;
@@ -776,7 +773,7 @@ mod tests {
         );
 
         // library_directory should canonicalize spec.libraries_dir()
-        let expected_lib = canonicalize(&spec.libraries_dir())
+        let expected_lib = canonicalize(spec.libraries_dir())
             .unwrap()
             .to_string_lossy()
             .to_string();
@@ -905,7 +902,7 @@ mod tests {
             features: Some(features2),
         };
         assert!(!evaluate_rules(
-            &[rule2.clone()],
+            std::slice::from_ref(&rule2),
             OsType::current(),
             &demo_spec
         ));

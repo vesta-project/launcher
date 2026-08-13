@@ -107,23 +107,25 @@ pub async fn import_external_instance(
             )
         })?;
 
-    let mut instance = Instance::default();
-    instance.name = request
-        .instance_name_override
-        .unwrap_or_else(|| selected.name.clone());
-    instance.minecraft_version = minecraft_version;
-    instance.modloader = selected.modloader;
-    instance.modloader_version = selected.modloader_version;
-    instance.icon_path = selected.icon_path;
-    instance.modpack_platform = selected.modpack_platform;
-    instance.modpack_id = selected.modpack_id;
-    instance.modpack_version_id = selected.modpack_version_id;
-    instance.last_operation = Some("external-import".to_string());
-    instance.import_source_game_directory = Some(selected.game_directory.clone());
-    instance.import_launcher_kind = Some(launcher_kind_key(&request.launcher).to_string());
-    instance.import_instance_path = Some(selected.instance_path.clone());
     // Defer watcher startup to the import task to avoid blocking enqueue.
-    instance.installation_status = Some("skip-initial-watch".to_string());
+    let instance = Instance {
+        name: request
+            .instance_name_override
+            .unwrap_or_else(|| selected.name.clone()),
+        minecraft_version,
+        modloader: selected.modloader,
+        modloader_version: selected.modloader_version,
+        icon_path: selected.icon_path,
+        modpack_platform: selected.modpack_platform,
+        modpack_id: selected.modpack_id,
+        modpack_version_id: selected.modpack_version_id,
+        last_operation: Some("external-import".to_string()),
+        import_source_game_directory: Some(selected.game_directory.clone()),
+        import_launcher_kind: Some(launcher_kind_key(&request.launcher).to_string()),
+        import_instance_path: Some(selected.instance_path.clone()),
+        installation_status: Some("skip-initial-watch".to_string()),
+        ..Default::default()
+    };
 
     let instance_id =
         crate::commands::instances::create_instance(app_handle.clone(), instance, resource_watcher)

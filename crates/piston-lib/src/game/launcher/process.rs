@@ -298,25 +298,20 @@ pub async fn launch_prepared_game(
     }
 
     // Log the actual command being executed (with or without exit handler wrapper)
-    let full_cmd_str = if spec.exit_handler_jar.is_some() {
+    let full_cmd_str = if let Some(exit_handler_jar) = &spec.exit_handler_jar {
         let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
-        let mut wrapper_cmd: Vec<String> = Vec::new();
-        wrapper_cmd.push(spec.java_path.to_string_lossy().to_string());
-        wrapper_cmd.push("-jar".to_string());
-        wrapper_cmd.push(
-            spec.exit_handler_jar
-                .as_ref()
-                .unwrap()
-                .to_string_lossy()
-                .to_string(),
-        );
-        wrapper_cmd.push("--instance-id".to_string());
-        wrapper_cmd.push(spec.instance_id.clone());
-        wrapper_cmd.push("--exit-file".to_string());
-        wrapper_cmd.push(exit_file.to_string_lossy().to_string());
-        wrapper_cmd.push("--log-file".to_string());
-        wrapper_cmd.push(log_file.to_string_lossy().to_string());
-        wrapper_cmd.push("--".to_string());
+        let mut wrapper_cmd = vec![
+            spec.java_path.to_string_lossy().to_string(),
+            "-jar".to_string(),
+            exit_handler_jar.to_string_lossy().to_string(),
+            "--instance-id".to_string(),
+            spec.instance_id.clone(),
+            "--exit-file".to_string(),
+            exit_file.to_string_lossy().to_string(),
+            "--log-file".to_string(),
+            log_file.to_string_lossy().to_string(),
+            "--".to_string(),
+        ];
         wrapper_cmd.extend(game_base_command.clone());
         wrapper_cmd
             .iter()

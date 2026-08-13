@@ -423,7 +423,7 @@ impl NotificationManager {
 
         let severity = input
             .severity
-            .map(|s| NotificationSeverity::from(s))
+            .map(NotificationSeverity::from)
             .unwrap_or(NotificationSeverity::Info);
 
         let mut notification = Notification {
@@ -550,6 +550,7 @@ impl NotificationManager {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_progress_full(
         &self,
         id_or_key: String,

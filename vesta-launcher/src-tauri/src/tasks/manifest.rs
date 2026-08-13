@@ -83,7 +83,7 @@ impl Task for GenerateManifestTask {
             log::info!("Config directory resolved: {:?}", config_dir);
             let data_dir = config_dir.join("data");
 
-            let _ = ctx.update_full(
+            ctx.update_full(
                 10,
                 if force_refresh {
                     "Clearing cache and fetching fresh metadata...".to_string()
@@ -124,7 +124,7 @@ impl Task for GenerateManifestTask {
                 metadata.last_updated
             );
 
-            let _ = ctx.update_full(100, "Manifest ready".to_string(), Some(5), Some(5));
+            ctx.update_full(100, "Manifest ready".to_string(), Some(5), Some(5));
 
             // Update in-memory cache for fast subsequent access
             if let Some(cache) = app.try_state::<MetadataCache>() {

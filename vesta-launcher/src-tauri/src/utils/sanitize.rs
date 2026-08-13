@@ -12,10 +12,7 @@ pub fn sanitize_instance_name(name: &str) -> String {
     let mut last_was_dash = false;
 
     for ch in n.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch);
-            last_was_dash = false;
-        } else if ch == '-' || ch == '_' {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
             out.push(ch);
             last_was_dash = false;
         } else if ch.is_whitespace() || ch.is_ascii_punctuation() {

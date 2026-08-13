@@ -249,6 +249,7 @@ fn instance_snapshots() -> Result<Vec<StorageInstanceSnapshot>, String> {
     Ok(snapshots)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn category(
     id: &str,
     label: &str,

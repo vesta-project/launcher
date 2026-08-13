@@ -315,6 +315,7 @@ pub fn clear_pending(game_dir: &Path) -> Result<(), String> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn finish(
     app_handle: &tauri::AppHandle,
     ctx: &TaskContext,

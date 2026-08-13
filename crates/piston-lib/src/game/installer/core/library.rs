@@ -24,57 +24,6 @@ pub struct LibraryDownloader<'a> {
     libraries_dir: &'a Path,
     reporter: std::sync::Arc<dyn ProgressReporter>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_resolve_explicit_url_relative() {
-        let resolved = LibraryDownloader::resolve_explicit_url(
-            Some("lib/com/example.jar"),
-            Some("https://repo.example.org/"),
-            "https://libraries.minecraft.net/artifact.jar",
-        );
-        assert_eq!(resolved, "https://repo.example.org/lib/com/example.jar");
-    }
-
-    #[test]
-    fn test_resolve_explicit_url_absolute() {
-        let resolved = LibraryDownloader::resolve_explicit_url(
-            Some("https://cdn.example.org/lib.jar"),
-            None,
-            "https://libraries.minecraft.net/artifact.jar",
-        );
-        assert_eq!(resolved, "https://cdn.example.org/lib.jar");
-    }
-
-    #[test]
-    fn test_resolve_explicit_url_treats_artifact_maven_base_as_final() {
-        let artifact_url = "https://libraries.minecraft.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
-        let resolved = LibraryDownloader::resolve_explicit_url(
-            Some("net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"),
-            Some(artifact_url),
-            "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar",
-        );
-
-        assert_eq!(resolved, artifact_url);
-        assert!(!resolved.contains(".jar/net/minecraftforge/"));
-    }
-
-    #[test]
-    fn test_resolve_library_static_treats_artifact_maven_url_as_final() {
-        let artifact_url = "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
-        let (_path, resolved) = LibraryDownloader::resolve_library_static(
-            "net.minecraftforge:forge:26.1.2-64.0.8:client",
-            Some(artifact_url),
-        )
-        .unwrap();
-
-        assert_eq!(resolved, artifact_url);
-        assert!(!resolved.contains(".jar/net/minecraftforge/"));
-    }
-}
 impl<'a> LibraryDownloader<'a> {
     pub fn new(
         client: &'a Client,
@@ -205,7 +154,7 @@ impl<'a> LibraryDownloader<'a> {
                                     + ((count as f32 / total as f32) * progress_range as f32)
                                         as i32;
                                 let mut last = last_update.lock().await;
-                                if (count % 4 == 0)
+                                if count.is_multiple_of(4)
                                     || last.elapsed() > std::time::Duration::from_millis(250)
                                 {
                                     reporter.set_percent(progress);
@@ -222,7 +171,7 @@ impl<'a> LibraryDownloader<'a> {
                             let progress = progress_base
                                 + ((count as f32 / total as f32) * progress_range as f32) as i32;
                             let mut last = last_update.lock().await;
-                            if (count % 4 == 0)
+                            if count.is_multiple_of(4)
                                 || last.elapsed() > std::time::Duration::from_millis(250)
                             {
                                 reporter.set_percent(progress);
@@ -239,7 +188,7 @@ impl<'a> LibraryDownloader<'a> {
                         let progress = progress_base
                             + ((count as f32 / total as f32) * progress_range as f32) as i32;
                         let mut last = last_update.lock().await;
-                        if (count % 4 == 0)
+                        if count.is_multiple_of(4)
                             || last.elapsed() > std::time::Duration::from_millis(250)
                         {
                             reporter.set_percent(progress);
@@ -354,7 +303,7 @@ impl<'a> LibraryDownloader<'a> {
                         + ((count as f32 / total as f32) * progress_range as f32) as i32;
 
                     let mut last = last_update.lock().await;
-                    if (count % 4 == 0) || last.elapsed() > std::time::Duration::from_millis(250) {
+                    if count.is_multiple_of(4) || last.elapsed() > std::time::Duration::from_millis(250) {
                         reporter.set_percent(progress);
                         reporter.set_step_count(count as u32, Some(total as u32));
                         log::debug!("Libraries: {}/{} -> {}%", count, total, progress);
@@ -485,4 +434,55 @@ fn looks_like_artifact_url(url: &str) -> bool {
         || lower.ends_with(".lzma")
         || lower.ends_with(".json")
         || lower.ends_with(".pom")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_explicit_url_relative() {
+        let resolved = LibraryDownloader::resolve_explicit_url(
+            Some("lib/com/example.jar"),
+            Some("https://repo.example.org/"),
+            "https://libraries.minecraft.net/artifact.jar",
+        );
+        assert_eq!(resolved, "https://repo.example.org/lib/com/example.jar");
+    }
+
+    #[test]
+    fn test_resolve_explicit_url_absolute() {
+        let resolved = LibraryDownloader::resolve_explicit_url(
+            Some("https://cdn.example.org/lib.jar"),
+            None,
+            "https://libraries.minecraft.net/artifact.jar",
+        );
+        assert_eq!(resolved, "https://cdn.example.org/lib.jar");
+    }
+
+    #[test]
+    fn test_resolve_explicit_url_treats_artifact_maven_base_as_final() {
+        let artifact_url = "https://libraries.minecraft.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
+        let resolved = LibraryDownloader::resolve_explicit_url(
+            Some("net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"),
+            Some(artifact_url),
+            "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar",
+        );
+
+        assert_eq!(resolved, artifact_url);
+        assert!(!resolved.contains(".jar/net/minecraftforge/"));
+    }
+
+    #[test]
+    fn test_resolve_library_static_treats_artifact_maven_url_as_final() {
+        let artifact_url = "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
+        let (_path, resolved) = LibraryDownloader::resolve_library_static(
+            "net.minecraftforge:forge:26.1.2-64.0.8:client",
+            Some(artifact_url),
+        )
+        .unwrap();
+
+        assert_eq!(resolved, artifact_url);
+        assert!(!resolved.contains(".jar/net/minecraftforge/"));
+    }
 }

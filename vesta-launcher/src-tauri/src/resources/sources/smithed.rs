@@ -191,6 +191,12 @@ pub struct SmithedSource {
     user_names: Arc<RwLock<HashMap<String, String>>>,
 }
 
+impl Default for SmithedSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SmithedSource {
     pub fn new() -> Self {
         Self {
@@ -224,9 +230,10 @@ impl SmithedSource {
             Some("newest") | Some("updated") | Some("lastupdated") | Some("datecreated") => {
                 "newest"
             }
-            Some("trending") | Some("relevance") | Some("featured") | Some("follows") | _ => {
+            Some("trending") | Some("relevance") | Some("featured") | Some("follows") => {
                 "trending"
             }
+            _ => "trending",
         }
     }
 
@@ -266,6 +273,7 @@ impl SmithedSource {
             || lower.ends_with(".jar")
     }
 
+    #[cfg(test)]
     fn modrinth_slug_from_url(url: &str) -> Option<String> {
         Self::modrinth_project_ref_from_url(url).map(|(slug, _)| slug)
     }
@@ -895,6 +903,7 @@ impl SmithedSource {
         Ok(body)
     }
 
+    #[cfg(test)]
     fn looks_like_url(value: &str) -> bool {
         let lower = value.trim().to_ascii_lowercase();
         lower.starts_with("https://") || lower.starts_with("http://")
@@ -1749,7 +1758,7 @@ mod tests {
             "expected download url on latest version"
         );
         assert!(
-            latest.files.len() >= 1,
+            !latest.files.is_empty(),
             "expected at least one version file"
         );
     }

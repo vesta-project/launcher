@@ -587,7 +587,7 @@ fn companion_resourcepack_may_be_referenced_in_game_root(
         return Ok(false);
     }
     let relative = resourcepack_path
-        .strip_prefix(&game_root)
+        .strip_prefix(game_root)
         .map_err(|_| "Resource pack escaped its Instance".to_string())?;
     let expected = normalize_manifest_path(&relative.to_string_lossy());
     let saves_root = game_root.join("saves");

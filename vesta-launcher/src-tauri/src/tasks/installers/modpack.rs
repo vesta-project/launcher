@@ -111,7 +111,7 @@ impl ModpackResolver for PistonModpackResolver {
                 }
             }
 
-            let pid_str = resolved_pid_str.unwrap_or_else(|| "".to_string());
+            let pid_str = resolved_pid_str.unwrap_or_default();
 
             let version = rm
                 .get_version(SourcePlatform::CurseForge, &pid_str, &file_id.to_string())

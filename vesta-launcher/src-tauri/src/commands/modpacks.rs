@@ -2063,17 +2063,17 @@ async fn prepare_instance(
         }
     }
 
-    if instance_data.modpack_icon_url.is_some() && final_icon_data.is_none() {
-        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(
-            instance_data.modpack_icon_url.as_ref().unwrap(),
-        )
-        .await
-        {
-            log::info!(
-                "[prepare_instance] Successfully downloaded icon for offline use ({} bytes)",
-                bytes.len()
-            );
-            final_icon_data = Some(bytes);
+    if let Some(icon_url) = instance_data.modpack_icon_url.as_ref() {
+        if final_icon_data.is_none() {
+            if let Ok(bytes) =
+                crate::utils::instance_helpers::download_icon_as_bytes(icon_url).await
+            {
+                log::info!(
+                    "[prepare_instance] Successfully downloaded icon for offline use ({} bytes)",
+                    bytes.len()
+                );
+                final_icon_data = Some(bytes);
+            }
         }
     }
 
@@ -2346,6 +2346,7 @@ pub async fn list_export_candidates(instance_id: i32) -> Result<Vec<ExportCandid
 }
 
 #[command]
+#[allow(clippy::too_many_arguments)]
 pub async fn export_instance_to_modpack(
     instance_id: i32,
     output_path: String,

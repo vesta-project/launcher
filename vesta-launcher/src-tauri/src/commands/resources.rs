@@ -907,19 +907,7 @@ pub async fn check_instance_updates_lightweight(
         all_candidates
     };
 
-    if !is_partial {
-        if let (Some(modpack_id), Some(modpack_platform)) =
-            (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
-        {
-            modpack_versions = match source_platform_from_str(modpack_platform) {
-                Some(platform) => resource_manager
-                    .get_versions(platform, modpack_id, force_refresh, None, None)
-                    .await
-                    .unwrap_or_default(),
-                None => Vec::new(),
-            };
-        }
-    } else if force_refresh || modpack_versions.is_empty() {
+    if !is_partial || force_refresh || modpack_versions.is_empty() {
         if let (Some(modpack_id), Some(modpack_platform)) =
             (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
         {
@@ -1347,6 +1335,7 @@ pub async fn backfill_modpack_resource_provenance(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn install_resource(
     app_handle: tauri::AppHandle,
     resource_manager: State<'_, ResourceManager>,
@@ -1443,10 +1432,7 @@ pub async fn install_resource(
         }
     }
     // Check if we are in guest mode
-    let active_account = match crate::auth::get_active_account() {
-        Ok(a) => a,
-        Err(_) => None,
-    };
+    let active_account = crate::auth::get_active_account().unwrap_or_default();
 
     if let Some(acc) = active_account {
         if acc.account_type == ACCOUNT_TYPE_GUEST {

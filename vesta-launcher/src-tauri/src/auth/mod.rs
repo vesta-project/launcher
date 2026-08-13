@@ -378,12 +378,14 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
     // Create Guest Account
-    let mut new_acct = NewAccount::default();
-    new_acct.uuid = guest_uuid.clone();
-    new_acct.username = username_v.to_string();
-    new_acct.display_name = Some("Local Guest".to_string());
-    new_acct.is_active = true;
-    new_acct.account_type = ACCOUNT_TYPE_GUEST.to_string();
+    let new_acct = NewAccount {
+        uuid: guest_uuid.clone(),
+        username: username_v.to_string(),
+        display_name: Some("Local Guest".to_string()),
+        is_active: true,
+        account_type: ACCOUNT_TYPE_GUEST.to_string(),
+        ..Default::default()
+    };
 
     // Deactivate others
     diesel::update(account)
@@ -463,12 +465,14 @@ pub async fn start_demo_session(app_handle: AppHandle) -> Result<(), String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
     // Create Demo Account
-    let mut new_acct = NewAccount::default();
-    new_acct.uuid = demo_uuid_v.clone();
-    new_acct.username = username_v.to_string();
-    new_acct.display_name = Some("Temporal Demo Account".to_string());
-    new_acct.is_active = true;
-    new_acct.account_type = ACCOUNT_TYPE_DEMO.to_string();
+    let mut new_acct = NewAccount {
+        uuid: demo_uuid_v.clone(),
+        username: username_v.to_string(),
+        display_name: Some("Temporal Demo Account".to_string()),
+        is_active: true,
+        account_type: ACCOUNT_TYPE_DEMO.to_string(),
+        ..Default::default()
+    };
 
     // Give the demo account a random default skin
     let default_skins = piston_lib::api::minecraft_skins::get_default_skins();
@@ -696,24 +700,26 @@ async fn process_login_completion(
         // Insert new account
         log::info!("[auth] Inserting new account for uuid: {}", normalized_uuid);
 
-        let mut new_account = NewAccount::default();
-        new_account.uuid = normalized_uuid.clone();
-        new_account.username = profile.name.clone();
-        new_account.display_name = Some(profile.name.clone());
-        new_account.access_token = Some(minecraft_access_token.into_inner());
-        new_account.refresh_token = Some(refresh_token_val);
-        new_account.token_expires_at = Some(token_expires_at_val.to_rfc3339());
-        new_account.is_active = true;
-        new_account.skin_url = skin_url_val;
-        new_account.cape_url = cape_url_val;
-        new_account.skin_variant = skin_variant_val.clone();
-        new_account.created_at = Some(now_str.clone());
-        new_account.updated_at = Some(now_str.clone());
-        new_account.theme_id = Some(current_config.theme_id);
-        new_account.theme_data = Some(resolved_theme_data.clone());
-        new_account.theme_window_effect = current_config.theme_window_effect;
-        new_account.theme_background_opacity = current_config.theme_background_opacity;
-        new_account.account_type = "Microsoft".to_string();
+        let new_account = NewAccount {
+            uuid: normalized_uuid.clone(),
+            username: profile.name.clone(),
+            display_name: Some(profile.name.clone()),
+            access_token: Some(minecraft_access_token.into_inner()),
+            refresh_token: Some(refresh_token_val),
+            token_expires_at: Some(token_expires_at_val.to_rfc3339()),
+            is_active: true,
+            skin_url: skin_url_val,
+            cape_url: cape_url_val,
+            skin_variant: skin_variant_val.clone(),
+            created_at: Some(now_str.clone()),
+            updated_at: Some(now_str.clone()),
+            theme_id: Some(current_config.theme_id),
+            theme_data: Some(resolved_theme_data.clone()),
+            theme_window_effect: current_config.theme_window_effect,
+            theme_background_opacity: current_config.theme_background_opacity,
+            account_type: "Microsoft".to_string(),
+            ..Default::default()
+        };
 
         diesel::insert_into(account)
             .values(&new_account)
@@ -1219,10 +1225,25 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     );
 
     // Sync profile data on account change to ensure skins/capes stay up to date
-    if let Some(task_manager) = app_handle.try_state::<crate::tasks::manager::TaskManager>() {
-        let _ = task_manager.submit(Box::new(
-            crate::tasks::sync_profiles::SyncAccountProfilesTask::new(),
-        ));
+    if app_handle
+        .try_state::<crate::tasks::manager::TaskManager>()
+        .is_some()
+    {
+        let app_handle = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            let task_manager = app_handle.state::<crate::tasks::manager::TaskManager>();
+            if let Err(error) = task_manager
+                .submit(Box::new(
+                    crate::tasks::sync_profiles::SyncAccountProfilesTask::new(),
+                ))
+                .await
+            {
+                log::error!(
+                    "[auth] Failed to submit profile sync after account change: {}",
+                    error
+                );
+            }
+        });
     }
 
     Ok(())

@@ -19,6 +19,7 @@ pub struct ResourceProvenance {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum InstalledResourceFact {
     Discovered {
         instance_id: i32,
@@ -455,7 +456,7 @@ fn record_discovered_with_conn(
     metadata: (i64, i64),
     provenance: Option<ResourceProvenance>,
 ) -> Result<bool> {
-    let path = normalize_path(&path);
+    let path = normalize_path(path);
     let Some(resource_type) = resource_type_for_path(Path::new(&path)) else {
         return Ok(false);
     };
@@ -666,6 +667,7 @@ fn record_manual_with_conn(
     Ok(true)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn record_remote(
     instance_id: i32,
     path: &Path,
@@ -863,6 +865,7 @@ fn record_many_with_conn(
     Ok(LedgerBatchResult { attempted, changed })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn record_download(
     instance_id: i32,
     path: &Path,

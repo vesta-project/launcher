@@ -16,6 +16,12 @@ pub struct ProcessRegistry {
     system: Arc<RwLock<System>>,
 }
 
+impl Default for ProcessRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProcessRegistry {
     /// Create a new process registry
     pub fn new() -> Self {

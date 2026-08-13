@@ -251,9 +251,11 @@ mod tests {
         let source_path = tmp.path().join("my-instance");
         std::fs::create_dir_all(&source_path).expect("create source");
 
-        let mut inst = Instance::default();
-        inst.name = "My Instance".to_string();
-        inst.game_directory = Some(source_path.to_string_lossy().to_string());
+        let inst = Instance {
+            name: "My Instance".to_string(),
+            game_directory: Some(source_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
 
         let instances_root = tmp.path().join("instances");
         let data_dir = tmp.path().join("data");
@@ -269,10 +271,12 @@ mod tests {
         let import_path = tmp.path().join("imported");
         std::fs::create_dir_all(&import_path).expect("create import");
 
-        let mut inst = Instance::default();
-        inst.name = "Imported Pack".to_string();
-        inst.game_directory = Some(tmp.path().join("missing").to_string_lossy().to_string());
-        inst.import_source_game_directory = Some(import_path.to_string_lossy().to_string());
+        let inst = Instance {
+            name: "Imported Pack".to_string(),
+            game_directory: Some(tmp.path().join("missing").to_string_lossy().to_string()),
+            import_source_game_directory: Some(import_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
 
         let instances_root = tmp.path().join("instances");
         let data_dir = tmp.path().join("data");

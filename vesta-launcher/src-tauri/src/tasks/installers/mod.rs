@@ -74,18 +74,18 @@ impl Task for InstallInstanceTask {
     fn starting_description(&self) -> String {
         // Build friendly version string for notification
         let modloader = self.instance.modloader.as_deref().unwrap_or("vanilla");
-        if modloader != "vanilla" && self.instance.modloader_version.is_some() {
-            format!(
-                "Minecraft {} ({} {})",
-                self.instance.minecraft_version,
-                modloader,
-                self.instance.modloader_version.as_ref().unwrap()
-            )
-        } else if modloader != "vanilla" {
-            format!(
-                "Minecraft {} ({})",
-                self.instance.minecraft_version, modloader
-            )
+        if modloader != "vanilla" {
+            if let Some(modloader_version) = self.instance.modloader_version.as_ref() {
+                format!(
+                    "Minecraft {} ({} {})",
+                    self.instance.minecraft_version, modloader, modloader_version
+                )
+            } else {
+                format!(
+                    "Minecraft {} ({})",
+                    self.instance.minecraft_version, modloader
+                )
+            }
         } else {
             format!("Minecraft {}", self.instance.minecraft_version)
         }
@@ -135,7 +135,7 @@ impl Task for InstallInstanceTask {
                 .game_directory
                 .as_ref()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| data_dir.join("instances").join(&instance.slug()));
+                .unwrap_or_else(|| data_dir.join("instances").join(instance.slug()));
 
             log::info!(
                 "[InstallTask] Data dir: {:?}, Game dir: {:?}",
@@ -245,7 +245,7 @@ impl Task for InstallInstanceTask {
                     } else {
                         // Restore the current step description when resuming
                         let step = current_step_for_pause.read().await;
-                        let _ = manager.upsert_description(&pause_notification_id, &*step);
+                        let _ = manager.upsert_description(&pause_notification_id, &step);
                     }
                 }
             });

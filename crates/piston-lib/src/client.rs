@@ -51,7 +51,7 @@ pub fn configured_proxy() -> ProxyConfig {
     SHARED_PROXY_CONFIG
         .get()
         .cloned()
-        .unwrap_or_else(|| ProxyConfig {
+        .unwrap_or(ProxyConfig {
             enabled: false,
             url: None,
         })

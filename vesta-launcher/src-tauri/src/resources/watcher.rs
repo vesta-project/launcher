@@ -531,42 +531,6 @@ fn is_resource_file(path: &Path) -> bool {
         || s.ends_with(".zip.disabled")
 }
 
-#[cfg(test)]
-mod world_datapack_event_tests {
-    use super::world_ref_for_datapack_path;
-    use std::path::Path;
-
-    #[test]
-    fn scopes_datapack_events_to_the_exact_world() {
-        let game = Path::new("/instances/example");
-        let world = world_ref_for_datapack_path(
-            game,
-            42,
-            Path::new("/instances/example/saves/My World/datapacks/pack.zip"),
-        )
-        .unwrap();
-        assert_eq!(world.instance_id, 42);
-        assert_eq!(world.directory_name, "My World");
-    }
-
-    #[test]
-    fn ignores_non_world_datapack_named_directories() {
-        let game = Path::new("/instances/example");
-        assert!(world_ref_for_datapack_path(
-            game,
-            42,
-            Path::new("/instances/example/mods/datapacks/pack.zip"),
-        )
-        .is_none());
-        assert!(world_ref_for_datapack_path(
-            game,
-            42,
-            Path::new("/instances/example/saves/My World/data/foo"),
-        )
-        .is_none());
-    }
-}
-
 pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i32) -> Result<()> {
     use crate::models::resource::SourcePlatform;
     use crate::notifications::manager::NotificationManager;
@@ -707,13 +671,49 @@ async fn version_is_at_least(
 
     let pack_index = versions
         .iter()
-        .position(|version| String::from(&version.id) == pack_version_id);
+        .position(|version| version.id == pack_version_id);
     let custom_index = versions
         .iter()
-        .position(|version| String::from(&version.id) == custom_version_id);
+        .position(|version| version.id == custom_version_id);
 
     match (pack_index, custom_index) {
         (Some(pack), Some(custom)) => pack <= custom,
         _ => true,
+    }
+}
+
+#[cfg(test)]
+mod world_datapack_event_tests {
+    use super::world_ref_for_datapack_path;
+    use std::path::Path;
+
+    #[test]
+    fn scopes_datapack_events_to_the_exact_world() {
+        let game = Path::new("/instances/example");
+        let world = world_ref_for_datapack_path(
+            game,
+            42,
+            Path::new("/instances/example/saves/My World/datapacks/pack.zip"),
+        )
+        .unwrap();
+        assert_eq!(world.instance_id, 42);
+        assert_eq!(world.directory_name, "My World");
+    }
+
+    #[test]
+    fn ignores_non_world_datapack_named_directories() {
+        let game = Path::new("/instances/example");
+        assert!(world_ref_for_datapack_path(
+            game,
+            42,
+            Path::new("/instances/example/mods/datapacks/pack.zip"),
+        )
+        .is_none());
+        assert!(world_ref_for_datapack_path(
+            game,
+            42,
+            Path::new("/instances/example/saves/My World/data/foo"),
+        )
+        .is_none());
     }
 }

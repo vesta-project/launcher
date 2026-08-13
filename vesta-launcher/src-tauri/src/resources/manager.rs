@@ -80,15 +80,26 @@ fn dependency_type_for_pinned_loaders(
     }
 }
 
+type PlatformIdKey = (SourcePlatform, String);
+type CachedHashLookup = (ResourceProject, ResourceVersion);
+type CachedSearchResponse = (SearchResponse, NaiveDateTime);
+type CachedCategories = (Vec<ResourceCategory>, NaiveDateTime);
+
 #[derive(Clone)]
 pub struct ResourceManager {
     sources: Arc<RwLock<Vec<Arc<dyn ResourceSource>>>>,
-    project_cache: Arc<RwLock<HashMap<(SourcePlatform, String), ResourceProject>>>,
-    version_cache: Arc<RwLock<HashMap<(SourcePlatform, String), Vec<ResourceVersion>>>>,
-    hash_cache: Arc<RwLock<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>>,
-    search_cache: Arc<RwLock<HashMap<String, (SearchResponse, NaiveDateTime)>>>,
-    category_cache: Arc<RwLock<HashMap<SourcePlatform, (Vec<ResourceCategory>, NaiveDateTime)>>>,
+    project_cache: Arc<RwLock<HashMap<PlatformIdKey, ResourceProject>>>,
+    version_cache: Arc<RwLock<HashMap<PlatformIdKey, Vec<ResourceVersion>>>>,
+    hash_cache: Arc<RwLock<HashMap<PlatformIdKey, CachedHashLookup>>>,
+    search_cache: Arc<RwLock<HashMap<String, CachedSearchResponse>>>,
+    category_cache: Arc<RwLock<HashMap<SourcePlatform, CachedCategories>>>,
     pub image_cache: Arc<RwLock<HashMap<String, String>>>,
+}
+
+impl Default for ResourceManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ResourceManager {
@@ -274,6 +285,7 @@ impl ResourceManager {
         Err(anyhow!("Source not found for platform {:?}", platform))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn resolve_dependencies(
         &self,
         platform: SourcePlatform,
@@ -339,11 +351,10 @@ impl ResourceManager {
             for dep in &current_level_deps {
                 let is_required = dep.dependency_type == DependencyType::Required;
 
-                if is_required && !visited.contains(&dep.project_id) {
-                    if dep_ids_set.insert(dep.project_id.clone()) {
+                if is_required && !visited.contains(&dep.project_id)
+                    && dep_ids_set.insert(dep.project_id.clone()) {
                         unique_deps_to_process.push(dep.clone());
                     }
-                }
             }
 
             if unique_deps_to_process.is_empty() {
@@ -1302,11 +1313,9 @@ impl ResourceManager {
 }
 
 pub fn normalize_mc_version(v: &str) -> String {
-    if v.ends_with(".0") {
-        v[..v.len() - 2].to_string()
-    } else {
-        v.to_string()
-    }
+    v.strip_suffix(".0")
+        .map(|stripped| stripped.to_string())
+        .unwrap_or_else(|| v.to_string())
 }
 
 pub fn is_game_version_compatible(supported: &[String], target: &str) -> bool {

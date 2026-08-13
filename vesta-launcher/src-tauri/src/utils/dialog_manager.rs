@@ -51,6 +51,12 @@ pub struct DialogManager {
     pending_dialogs: Arc<Mutex<HashMap<Uuid, oneshot::Sender<DialogResponse>>>>,
 }
 
+impl Default for DialogManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DialogManager {
     pub fn new() -> Self {
         Self {

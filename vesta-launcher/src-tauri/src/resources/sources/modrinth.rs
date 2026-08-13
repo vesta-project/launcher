@@ -139,6 +139,12 @@ fn project_type_facet(resource_type: ResourceType) -> &'static str {
     }
 }
 
+impl Default for ModrinthSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModrinthSource {
     pub fn new() -> Self {
         Self {

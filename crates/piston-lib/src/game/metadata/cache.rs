@@ -11,19 +11,19 @@ pub fn metadata_cache_path(data_dir: &Path) -> PathBuf {
 
 /// Load or fetch metadata, delegating to ManifestCache.
 /// ETag revalidation is handled internally by ManifestCache (5-min freshness window).
-pub async fn load_or_fetch_metadata_ext(data_dir: &PathBuf) -> Result<PistonMetadata> {
+pub async fn load_or_fetch_metadata_ext(data_dir: &Path) -> Result<PistonMetadata> {
     let cache = ManifestCache::new(data_dir.join("manifests"));
     cache.build_piston_metadata().await
 }
 
 /// Load or fetch metadata with default settings.
-pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata> {
+pub async fn load_or_fetch_metadata(data_dir: &Path) -> Result<PistonMetadata> {
     load_or_fetch_metadata_ext(data_dir).await
 }
 
 /// Load cached metadata only, without triggering any network fetch.
 /// Uses disk-only reads — no ETag revalidation. Returns `None` if not available.
-pub async fn load_cached_metadata_if_present(data_dir: &PathBuf) -> Result<Option<PistonMetadata>> {
+pub async fn load_cached_metadata_if_present(data_dir: &Path) -> Result<Option<PistonMetadata>> {
     // Check if all manifests are cached on disk
     let all_cached = crate::game::manifest_cache::MANIFEST_SLUGS
         .iter()
@@ -43,7 +43,7 @@ pub async fn load_cached_metadata_if_present(data_dir: &PathBuf) -> Result<Optio
 }
 
 /// Force refresh all metadata from sources.
-pub async fn refresh_metadata(data_dir: &PathBuf) -> Result<PistonMetadata> {
+pub async fn refresh_metadata(data_dir: &Path) -> Result<PistonMetadata> {
     let cache = ManifestCache::new(data_dir.join("manifests"));
     // For a force refresh, skip the source manifest cache and rebuild fresh.
     // Preserve java_info.json: per-version Java requirements are immutable and

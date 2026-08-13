@@ -432,7 +432,7 @@ impl ArtifactCache {
             fs::remove_file(destination)
                 .with_context(|| format!("Remove existing destination {:?}", destination))?;
         }
-        fs::copy(&blob_path, destination)
+        fs::copy(blob_path, destination)
             .with_context(|| format!("Restore artifact {:?} -> {:?}", blob_path, destination))?;
         Ok(true)
     }

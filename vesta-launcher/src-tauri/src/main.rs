@@ -125,13 +125,13 @@ fn main() {
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let _ = crate::utils::windows::ensure_main_window_visible(&app);
+            let _ = crate::utils::windows::ensure_main_window_visible(app);
 
             if args.len() > 1 {
                 crate::utils::launch_intents::ingest_launch_args(&args);
                 let state = app.state::<utils::launch_intents::PendingLaunchIntents>();
                 if state.is_frontend_ready() {
-                    utils::launch_intents::flush_pending_intents(&app);
+                    utils::launch_intents::flush_pending_intents(app);
                 }
             }
         }))
@@ -350,8 +350,8 @@ fn main() {
         ])
         .on_window_event(|window, event| {
             match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    if window.label() == "main" {
+                tauri::WindowEvent::CloseRequested { api, .. }
+                    if window.label() == "main" => {
                         api.prevent_close();
                         match crate::utils::config::get_app_config() {
                             Ok(config) if config.minimize_to_tray => {
@@ -370,7 +370,7 @@ fn main() {
                             }
                             Ok(_) => {
                                 let _ = crate::commands::app::request_guarded_exit(
-                                    &window.app_handle(),
+                                    window.app_handle(),
                                     "window-close",
                                 );
                             }
@@ -380,13 +380,12 @@ fn main() {
                                     e
                                 );
                                 let _ = crate::commands::app::request_guarded_exit(
-                                    &window.app_handle(),
+                                    window.app_handle(),
                                     "window-close-config-error",
                                 );
                             }
                         }
                     }
-                }
                 _ => {}
             }
         })

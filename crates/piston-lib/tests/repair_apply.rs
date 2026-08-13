@@ -4,10 +4,14 @@ use piston_lib::game::installer::types::{
     InstallSpec, RemediationPolicy, RepairScope, VerificationIssueKind,
 };
 use piston_lib::game::installer::verify_instance;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-fn make_spec(data_dir: &PathBuf, game_dir: &PathBuf) -> InstallSpec {
-    let mut spec = InstallSpec::new("1.20.1".to_string(), data_dir.clone(), game_dir.clone());
+fn make_spec(data_dir: &Path, game_dir: &Path) -> InstallSpec {
+    let mut spec = InstallSpec::new(
+        "1.20.1".to_string(),
+        data_dir.to_path_buf(),
+        game_dir.to_path_buf(),
+    );
     spec.remediation_policy = RemediationPolicy::RepairIfNeeded;
     spec.repair_scope = RepairScope::Full;
     spec
