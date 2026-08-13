@@ -112,8 +112,7 @@ impl VerificationResult {
 }
 
 /// Controls whether verification produces a report or triggers remediation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RemediationPolicy {
     /// Only verify and report issues; do not download or modify files.
     VerifyOnly,
@@ -122,10 +121,8 @@ pub enum RemediationPolicy {
     RepairIfNeeded,
 }
 
-
 /// Scope of a repair operation — what categories to check and fix.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RepairScope {
     /// Repair everything: version metadata, libraries, assets, JRE, and modpack resources.
     #[default]
@@ -137,7 +134,6 @@ pub enum RepairScope {
     /// Repair modpack resources (mods, resource packs, shaders, etc.) and overrides only.
     Resources,
 }
-
 
 /// Notification action specification
 #[derive(Debug, Clone, Serialize, Deserialize)]

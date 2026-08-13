@@ -13,6 +13,7 @@ enum BaseKind {
     #[cfg(target_os = "windows")]
     LocalData,
     Home,
+    #[cfg(any(target_os = "macos", test))]
     Absolute(&'static str),
 }
 
@@ -44,6 +45,7 @@ const fn home_preset(relative: &'static [&'static str]) -> PathPreset {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 const fn absolute_preset(path: &'static str) -> PathPreset {
     PathPreset {
         base: BaseKind::Absolute(path),
@@ -95,6 +97,7 @@ fn resolve_base_dir(base: BaseKind) -> Option<PathBuf> {
         #[cfg(target_os = "windows")]
         BaseKind::LocalData => base_dirs.data_local_dir().to_path_buf(),
         BaseKind::Home => base_dirs.home_dir().to_path_buf(),
+        #[cfg(any(target_os = "macos", test))]
         BaseKind::Absolute(path) => PathBuf::from(path),
     })
 }
@@ -220,7 +223,9 @@ fn ftb_presets() -> &'static [PathPreset] {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_paths, dedupe_paths, filter_existing_paths, BaseKind, PathPreset};
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    use super::dedupe_paths;
+    use super::{build_paths, filter_existing_paths, BaseKind, PathPreset};
     use std::fs;
     use std::path::PathBuf;
 

@@ -230,9 +230,7 @@ impl SmithedSource {
             Some("newest") | Some("updated") | Some("lastupdated") | Some("datecreated") => {
                 "newest"
             }
-            Some("trending") | Some("relevance") | Some("featured") | Some("follows") => {
-                "trending"
-            }
+            Some("trending") | Some("relevance") | Some("featured") | Some("follows") => "trending",
             _ => "trending",
         }
     }

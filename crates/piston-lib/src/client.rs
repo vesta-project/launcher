@@ -48,13 +48,10 @@ pub fn configure_proxy(config: ProxyConfig) -> Result<(), String> {
 }
 
 pub fn configured_proxy() -> ProxyConfig {
-    SHARED_PROXY_CONFIG
-        .get()
-        .cloned()
-        .unwrap_or(ProxyConfig {
-            enabled: false,
-            url: None,
-        })
+    SHARED_PROXY_CONFIG.get().cloned().unwrap_or(ProxyConfig {
+        enabled: false,
+        url: None,
+    })
 }
 
 pub(crate) fn configured_proxy_url() -> Option<String> {

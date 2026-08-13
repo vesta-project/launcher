@@ -82,12 +82,12 @@ pub fn get_window_effect_capabilities() -> WindowEffectCapabilities {
 
     #[cfg(target_os = "linux")]
     {
-        return WindowEffectCapabilities {
+        WindowEffectCapabilities {
             os: "linux".to_string(),
             os_version: sysinfo::System::os_version(),
             supported_effects: vec!["none".to_string(), "transparent".to_string()],
             default_effect: "none".to_string(),
-        };
+        }
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]

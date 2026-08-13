@@ -12,7 +12,6 @@ pub enum MinecraftSkinVariant {
     Slim,
 }
 
-
 impl From<&str> for MinecraftSkinVariant {
     fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {

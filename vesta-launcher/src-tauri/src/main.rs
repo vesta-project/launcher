@@ -401,5 +401,9 @@ fn main() {
                     }
                 }
             }
+            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+            {
+                let _ = (app, event);
+            }
         });
 }

@@ -442,24 +442,23 @@ async fn install_instance_inner(
             log::info!("Restored asset index from cache");
         }
 
-        if !asset_index_path.exists()
-            && !asset_index.url.is_empty() {
-                download_to_path(
-                    client,
-                    &asset_index.url,
-                    &asset_index_path,
-                    Some(&asset_index.sha1),
-                    &*reporter,
-                )
-                .await?;
-                track_artifact_from_path(
-                    asset_index_label,
-                    &asset_index_path,
-                    None,
-                    Some(asset_index.url.clone()),
-                )
-                .await?;
-            }
+        if !asset_index_path.exists() && !asset_index.url.is_empty() {
+            download_to_path(
+                client,
+                &asset_index.url,
+                &asset_index_path,
+                Some(&asset_index.sha1),
+                &*reporter,
+            )
+            .await?;
+            track_artifact_from_path(
+                asset_index_label,
+                &asset_index_path,
+                None,
+                Some(asset_index.url.clone()),
+            )
+            .await?;
+        }
 
         // 2c. Download assets
         reporter.start_step("Downloading assets", None);

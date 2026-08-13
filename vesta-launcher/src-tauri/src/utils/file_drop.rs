@@ -69,10 +69,9 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
                     }
                 }
             }
-            tauri::WindowEvent::Focused(focused)
-                if *focused => {
-                    log::debug!("[FileDrop-Rust] Sniffer focused");
-                }
+            tauri::WindowEvent::Focused(focused) if *focused => {
+                log::debug!("[FileDrop-Rust] Sniffer focused");
+            }
             _ => {}
         }
     });

@@ -152,6 +152,7 @@ fn desktop_entry_escape(value: &str) -> String {
         .replace('\r', "")
 }
 
+#[cfg(target_os = "macos")]
 fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
@@ -454,7 +455,10 @@ pub async fn create_desktop_shortcut(
     let mut warnings = processed_icon.warnings;
     #[cfg(not(target_os = "linux"))]
     let warnings = processed_icon.warnings;
+    #[cfg(target_os = "macos")]
     let mut icon_applied = true;
+    #[cfg(not(target_os = "macos"))]
+    let icon_applied = true;
     let shortcut_path: PathBuf;
 
     #[cfg(target_os = "windows")]

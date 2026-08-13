@@ -660,10 +660,9 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
                         return false;
                     }
                 }
-                "has_custom_resolution"
-                    if required_state.unwrap_or(true) => {
-                        return false;
-                    }
+                "has_custom_resolution" if required_state.unwrap_or(true) => {
+                    return false;
+                }
                 _ => {}
             }
         }
@@ -694,8 +693,7 @@ fn name_to_path_with_classifier(name: &str, classifier: &str) -> String {
 }
 
 fn name_to_path(name: &str) -> String {
-    crate::game::launcher::maven_to_path(name)
-        .unwrap_or_else(|_| name.replace(['.', ':'], "/"))
+    crate::game::launcher::maven_to_path(name).unwrap_or_else(|_| name.replace(['.', ':'], "/"))
 }
 
 /// Libraries that Modrinth/Mojang host on libraries.minecraft.net even inside Forge profiles.

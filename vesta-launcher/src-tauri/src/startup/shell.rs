@@ -1,7 +1,9 @@
 use crate::localization::LocalizationManager;
 use crate::utils::config::get_app_config;
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
+use tauri::tray::TrayIconBuilder;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use tauri::tray::{MouseButton, MouseButtonState};
 use tauri::webview::Color;
 use tauri::Manager;
 
@@ -117,6 +119,10 @@ fn create_tray(
             } = event
             {
                 let _ = crate::utils::windows::ensure_main_window_visible(tray.app_handle());
+            }
+            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+            {
+                let _ = (tray, event);
             }
         })
         .build(app)?;

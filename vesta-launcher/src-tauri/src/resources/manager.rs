@@ -351,10 +351,12 @@ impl ResourceManager {
             for dep in &current_level_deps {
                 let is_required = dep.dependency_type == DependencyType::Required;
 
-                if is_required && !visited.contains(&dep.project_id)
-                    && dep_ids_set.insert(dep.project_id.clone()) {
-                        unique_deps_to_process.push(dep.clone());
-                    }
+                if is_required
+                    && !visited.contains(&dep.project_id)
+                    && dep_ids_set.insert(dep.project_id.clone())
+                {
+                    unique_deps_to_process.push(dep.clone());
+                }
             }
 
             if unique_deps_to_process.is_empty() {
