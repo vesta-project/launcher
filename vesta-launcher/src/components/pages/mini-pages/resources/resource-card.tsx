@@ -161,13 +161,16 @@ const ResourceCard: Component<{
 		return "Install";
 	});
 
-	const bgImage = createMemo(() => {
+	// Prefer the first gallery image for browse banners.
+	const remoteBannerUrl = createMemo(() => {
 		const p = props.project;
-		// Prefer the first gallery image for browse banners.
-		const remote =
-			p.gallery.length > 0
-				? p.gallery[0]
-				: (p.featured_gallery ?? null);
+		return p.gallery.length > 0
+			? p.gallery[0]
+			: (p.featured_gallery ?? null);
+	});
+
+	const preferredBannerUrl = createMemo(() => {
+		const remote = remoteBannerUrl();
 		if (!remote) return null;
 		const resolved = resources.resolvedBrowseImage(remote);
 		if (resolved) return resolved;
@@ -177,15 +180,42 @@ const ResourceCard: Component<{
 		return remote;
 	});
 
+	// Once a banner has painted for a remote URL, keep that exact src. Otherwise
+	// resolve_image_urls upgrading CDN → data URL remounts <img> and flashes dots.
+	const [paintedBanner, setPaintedBanner] = createSignal<{
+		remote: string;
+		src: string;
+	} | null>(null);
+
+	createEffect(() => {
+		const remote = remoteBannerUrl();
+		const painted = paintedBanner();
+		if (painted && painted.remote !== remote) {
+			setPaintedBanner(null);
+		}
+	});
+
+	const bgImage = createMemo(() => {
+		const remote = remoteBannerUrl();
+		if (!remote) return null;
+		const painted = paintedBanner();
+		if (painted?.remote === remote) return painted.src;
+		return preferredBannerUrl();
+	});
+
 	// Keep the dot-grid fallback visible until the banner finishes loading
 	// (covers Modrinth/CurseForge CDN, Smithed Firebase, and warmed data URLs).
-	const [loadedBannerUrl, setLoadedBannerUrl] = createSignal<string | null>(
-		null,
-	);
 	const bannerReady = createMemo(() => {
-		const url = bgImage();
-		return Boolean(url && loadedBannerUrl() === url);
+		const remote = remoteBannerUrl();
+		const painted = paintedBanner();
+		return Boolean(remote && painted?.remote === remote);
 	});
+
+	const markBannerPainted = (src: string) => {
+		const remote = remoteBannerUrl();
+		if (!remote || bgImage() !== src) return;
+		setPaintedBanner({ remote, src });
+	};
 
 	const iconHue = createMemo(() => {
 		const url = props.project.icon_url;
@@ -532,13 +562,13 @@ const ResourceCard: Component<{
 									ref={(el) => {
 										// Cached images may already be complete before onLoad binds.
 										if (el.complete && el.naturalWidth > 0) {
-											setLoadedBannerUrl(url);
+											markBannerPainted(url);
 										}
 									}}
-									onLoad={() => setLoadedBannerUrl(url)}
+									onLoad={() => markBannerPainted(url)}
 									onError={() => {
-										if (loadedBannerUrl() === url) {
-											setLoadedBannerUrl(null);
+										if (paintedBanner()?.src === url) {
+											setPaintedBanner(null);
 										}
 									}}
 								/>
