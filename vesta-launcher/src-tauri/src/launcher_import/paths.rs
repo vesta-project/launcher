@@ -45,7 +45,7 @@ const fn home_preset(relative: &'static [&'static str]) -> PathPreset {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 const fn absolute_preset(path: &'static str) -> PathPreset {
     PathPreset {
         base: BaseKind::Absolute(path),
