@@ -264,6 +264,10 @@ export function openWorldFolder(world: WorldRef): Promise<void> {
 	return invoke("open_world_folder", { worldRef: world });
 }
 
+export function deleteWorld(world: WorldRef): Promise<void> {
+	return invoke("delete_world", { worldRef: world });
+}
+
 export function listWorldDatapacks(
 	world: WorldRef,
 	forceRefresh = false,

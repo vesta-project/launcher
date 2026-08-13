@@ -1,9 +1,11 @@
-use crate::tasks::manager::{resourcepacks_conflict_key, world_conflict_key, TaskManager};
+use crate::tasks::manager::{
+    resourcepacks_conflict_key, saves_conflict_key, world_conflict_key, TaskManager,
+};
 use crate::tasks::world_transfer::WorldTransferTask;
 use crate::worlds::install_selection;
 use crate::worlds::transfer::TransferMode;
 use crate::worlds::{datapacks::WorldDatapackOverview, WorldManager, WorldRef, WorldSummary};
-use tauri::State;
+use tauri::{Emitter, State};
 
 #[tauri::command]
 pub async fn list_instance_worlds(
@@ -22,6 +24,43 @@ pub async fn list_instance_worlds(
 pub fn open_world_folder(world_ref: WorldRef) -> Result<(), String> {
     let path = crate::worlds::resolve_world_path(&world_ref)?;
     open::that(path).map_err(|error| format!("Failed to open world folder: {error}"))
+}
+
+#[tauri::command]
+pub async fn delete_world(
+    app_handle: tauri::AppHandle,
+    world_manager: State<'_, WorldManager>,
+    task_manager: State<'_, TaskManager>,
+    world_ref: WorldRef,
+) -> Result<(), String> {
+    let _conflict_guard = task_manager
+        .acquire_conflicts([
+            world_conflict_key(world_ref.instance_id, &world_ref.directory_name),
+            saves_conflict_key(world_ref.instance_id),
+        ])
+        .await;
+    crate::worlds::delete_world(&world_ref)?;
+    world_manager.invalidate(world_ref.instance_id);
+    let rows_result = crate::resources::reconciliation::emit_rows_changed(
+        &app_handle,
+        world_ref.instance_id,
+        "world-deleted",
+    );
+    let worlds_result = app_handle.emit(
+        "core://instance-worlds-changed",
+        serde_json::json!({
+            "instanceId": world_ref.instance_id,
+            "revision": chrono::Utc::now().timestamp_millis(),
+            "reason": "world-deleted",
+        }),
+    );
+    if let Err(error) = worlds_result {
+        log::warn!("World was deleted, but World change notification failed: {error}");
+    }
+    if let Err(error) = rows_result {
+        log::warn!("World was deleted, but Resource change notification failed: {error}");
+    }
+    Ok(())
 }
 
 #[tauri::command]

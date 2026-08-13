@@ -333,6 +333,7 @@ fn main() {
             commands::resources::resolve_image_urls,
             commands::worlds::list_instance_worlds,
             commands::worlds::open_world_folder,
+            commands::worlds::delete_world,
             commands::worlds::list_world_datapacks,
             commands::worlds::check_world_datapack_updates,
             commands::worlds::open_world_datapacks_folder,

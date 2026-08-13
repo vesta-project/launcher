@@ -250,6 +250,10 @@
 	stroke-width: 1.8;
 }
 
+.delete-action {
+	color: var(--destructive) !important;
+}
+
 .worlds[data-view="grid"] .card {
 	aspect-ratio: 1;
 	flex-direction: column;

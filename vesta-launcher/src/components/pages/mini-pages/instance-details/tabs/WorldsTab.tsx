@@ -9,6 +9,7 @@ import DatapackIcon from "@assets/icons/content/layers.svg";
 import MoveIcon from "@assets/icons/actions/move.svg";
 import CopyIcon from "@assets/icons/actions/copy.svg";
 import DuplicateIcon from "@assets/icons/actions/duplicate.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
 import InstanceSelectionDialog, {
 	type InstanceSelectionOption,
 } from "@components/instances/InstanceSelectionDialog";
@@ -16,6 +17,7 @@ import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
 import { type Instance, instancesState } from "@stores/instances";
 import {
+	deleteWorld,
 	listInstanceWorlds,
 	openWorldFolder,
 	transferWorld,
@@ -79,6 +81,7 @@ type WorldAction = {
 	label: string;
 	disabled?: boolean;
 	separatorBefore?: boolean;
+	destructive?: boolean;
 	icon: Component;
 	run: () => void;
 };
@@ -96,6 +99,7 @@ export const WorldCard: Component<{
 	onMove: () => void;
 	onCopy: () => void;
 	onDuplicate: () => void;
+	onDelete: () => void;
 	onManageDatapacks: () => void;
 	onOpen: () => void;
 }> = (props) => {
@@ -128,6 +132,14 @@ export const WorldCard: Component<{
 			icon: DuplicateIcon,
 			disabled: props.busy,
 			run: props.onDuplicate,
+		},
+		{
+			label: "Delete world…",
+			icon: TrashIcon,
+			disabled: props.busy,
+			destructive: true,
+			separatorBefore: true,
+			run: props.onDelete,
 		},
 	];
 	return (
@@ -239,6 +251,11 @@ export const WorldCard: Component<{
 										</Show>
 										<DropdownMenuItem
 											disabled={action.disabled}
+											class={
+												action.destructive
+													? styles["delete-action"]
+													: undefined
+											}
 											onSelect={action.run}
 										>
 											<ActionLabel action={action} />
@@ -257,7 +274,13 @@ export const WorldCard: Component<{
 							<Show when={action.separatorBefore}>
 								<ContextMenuSeparator />
 							</Show>
-							<ContextMenuItem disabled={action.disabled} onSelect={action.run}>
+							<ContextMenuItem
+								disabled={action.disabled}
+								class={
+									action.destructive ? styles["delete-action"] : undefined
+								}
+								onSelect={action.run}
+							>
 								<ActionLabel action={action} />
 							</ContextMenuItem>
 						</>
@@ -378,6 +401,40 @@ export const WorldsTab: Component<{
 		} catch (error) {
 			showToast({
 				title: "World transfer failed",
+				description: String(error),
+				severity: "error",
+			});
+		} finally {
+			setBusyWorld(null);
+		}
+	};
+
+	const performDelete = async (world: WorldSummary) => {
+		const confirmed = await dialogStore.confirm(
+			`Delete ${world.displayName}?`,
+			`This permanently deletes the world folder from ${props.instance.name}. This cannot be undone.`,
+			{
+				okLabel: "Delete world",
+				severity: "warning",
+				isDestructive: true,
+			},
+		);
+		if (!confirmed) return;
+
+		setBusyWorld(world.ref.directoryName);
+		try {
+			await deleteWorld(world.ref);
+			if (props.selectedWorldDirectory === world.ref.directoryName) {
+				props.onSelectedWorldChange(null);
+			}
+			showToast({
+				title: "World deleted",
+				description: `${world.displayName} was removed from ${props.instance.name}.`,
+				severity: "success",
+			});
+		} catch (error) {
+			showToast({
+				title: "Could not delete world",
 				description: String(error),
 				severity: "error",
 			});
@@ -507,6 +564,7 @@ export const WorldsTab: Component<{
 															"duplicate",
 														)
 													}
+													onDelete={() => void performDelete(world)}
 												/>
 											);
 										}}

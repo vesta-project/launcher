@@ -263,6 +263,23 @@ pub fn resolve_world_path_for_instance(
     instance: &Instance,
     world_ref: &WorldRef,
 ) -> Result<PathBuf, String> {
+    resolve_world_path_for_instance_with_options(instance, world_ref, false)
+}
+
+/// Resolve a listed World for destructive actions such as deletion.
+///
+/// Unlike management resolves, unreadable Worlds that still have a level marker
+/// remain eligible so broken saves can be removed from the Instance.
+pub fn resolve_listed_world_path(world_ref: &WorldRef) -> Result<PathBuf, String> {
+    let instance = crate::commands::instances::get_instance(world_ref.instance_id)?;
+    resolve_world_path_for_instance_with_options(&instance, world_ref, true)
+}
+
+fn resolve_world_path_for_instance_with_options(
+    instance: &Instance,
+    world_ref: &WorldRef,
+    allow_unreadable: bool,
+) -> Result<PathBuf, String> {
     if instance.id != world_ref.instance_id {
         return Err("The world does not belong to this instance".to_string());
     }
@@ -278,12 +295,31 @@ pub fn resolve_world_path_for_instance(
     if candidate.parent() != Some(saves.as_path()) || !candidate.starts_with(&saves) {
         return Err("World path escapes the instance saves directory".to_string());
     }
-    if !level_dat::has_level_marker(&candidate)
-        || level_dat::read_world_level(&candidate).status == LevelStatus::Unreadable
+    if !level_dat::has_level_marker(&candidate) {
+        return Err("The selected folder is not a Java world".to_string());
+    }
+    if !allow_unreadable
+        && level_dat::read_world_level(&candidate).status == LevelStatus::Unreadable
     {
         return Err("The selected folder is not a readable Java world".to_string());
     }
     Ok(candidate)
+}
+
+/// Permanently delete a listed World directory and unlink its Ledger subtree.
+pub fn delete_world(world_ref: &WorldRef) -> Result<(), String> {
+    let path = resolve_listed_world_path(world_ref)?;
+    fs::remove_dir_all(&path)
+        .map_err(|error| format!("Failed to delete world {}: {error}", path.display()))?;
+    if let Err(error) =
+        crate::resources::ledger::unlink_subtree(world_ref.instance_id, &path)
+    {
+        log::warn!(
+            "World {} was deleted, but Ledger cleanup failed: {error}",
+            world_ref.directory_name
+        );
+    }
+    Ok(())
 }
 
 pub fn validate_directory_name(name: &str) -> Result<(), String> {

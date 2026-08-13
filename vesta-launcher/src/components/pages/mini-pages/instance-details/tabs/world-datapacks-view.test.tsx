@@ -274,6 +274,7 @@ describe("world datapack navigation", () => {
 				onMove={vi.fn()}
 				onCopy={vi.fn()}
 				onDuplicate={vi.fn()}
+				onDelete={vi.fn()}
 				onManageDatapacks={vi.fn()}
 				onOpen={onOpen}
 			/>
@@ -297,6 +298,7 @@ describe("world datapack navigation", () => {
 				onMove={vi.fn()}
 				onCopy={vi.fn()}
 				onDuplicate={vi.fn()}
+				onDelete={vi.fn()}
 				onManageDatapacks={onManageDatapacks}
 				onOpen={onOpen}
 			/>
