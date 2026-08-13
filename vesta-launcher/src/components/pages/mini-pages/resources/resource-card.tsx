@@ -22,13 +22,134 @@ import {
 import { getProjectCompatibilityForInstance } from "@utils/resources";
 import {
 	type Component,
+	type JSX,
 	createEffect,
 	createMemo,
 	createSignal,
 	For,
+	onCleanup,
+	onMount,
 	Show,
 } from "solid-js";
 import styles from "./resource-browser.module.css";
+
+const TAG_GAP_PX = 4;
+
+function countFittingTags(
+	availableWidth: number,
+	tagWidths: number[],
+	moreWidth: number,
+): number {
+	if (tagWidths.length === 0 || availableWidth <= 0) return 0;
+
+	let total = 0;
+	for (let i = 0; i < tagWidths.length; i++) {
+		total += tagWidths[i] + (i > 0 ? TAG_GAP_PX : 0);
+	}
+	if (total <= availableWidth) return tagWidths.length;
+
+	let used = 0;
+	let count = 0;
+	for (let i = 0; i < tagWidths.length; i++) {
+		const next = used + (count > 0 ? TAG_GAP_PX : 0) + tagWidths[i];
+		const hiddenAfter = tagWidths.length - (i + 1);
+		const reserve = hiddenAfter > 0 ? TAG_GAP_PX + moreWidth : 0;
+		if (next + reserve <= availableWidth) {
+			used = next;
+			count++;
+		} else {
+			break;
+		}
+	}
+	return count;
+}
+
+const CardTagOverflow: Component<{
+	tags: string[];
+	renderTag: (tag: string) => JSX.Element;
+	rowClass: string;
+	tagsClass: string;
+}> = (props) => {
+	const [visibleCount, setVisibleCount] = createSignal(props.tags.length);
+	let rowRef: HTMLDivElement | undefined;
+	let measureRef: HTMLDivElement | undefined;
+	let moreMeasureRef: HTMLSpanElement | undefined;
+
+	const recompute = () => {
+		const row = rowRef;
+		const measure = measureRef;
+		if (!row || !measure) return;
+
+		const tagEls = Array.from(
+			measure.querySelectorAll<HTMLElement>("[data-tag-measure]"),
+		);
+		const widths = tagEls.map((el) => el.getBoundingClientRect().width);
+		const moreWidth =
+			moreMeasureRef?.getBoundingClientRect().width || 36;
+		const available = row.clientWidth;
+		setVisibleCount(countFittingTags(available, widths, moreWidth));
+	};
+
+	createEffect(() => {
+		props.tags;
+		queueMicrotask(recompute);
+	});
+
+	onMount(() => {
+		const row = rowRef;
+		if (!row || typeof ResizeObserver === "undefined") {
+			recompute();
+			return;
+		}
+		const observer = new ResizeObserver(() => recompute());
+		observer.observe(row);
+		recompute();
+		onCleanup(() => observer.disconnect());
+	});
+
+	const hiddenTags = () => props.tags.slice(visibleCount());
+	const hiddenCount = () => Math.max(0, props.tags.length - visibleCount());
+
+	return (
+		<div class={props.rowClass} ref={rowRef}>
+			<div
+				class={styles["card-tags-measure"]}
+				ref={measureRef}
+				aria-hidden="true"
+			>
+				<For each={props.tags}>
+					{(tag) => <span data-tag-measure>{props.renderTag(tag)}</span>}
+				</For>
+				<span
+					ref={moreMeasureRef}
+					class={styles["resource-tag-more"]}
+					data-tag-more-measure
+				>
+					+99
+				</span>
+			</div>
+			<div class={props.tagsClass}>
+				<For each={props.tags.slice(0, visibleCount())}>
+					{(tag) => props.renderTag(tag)}
+				</For>
+			</div>
+			<Show when={hiddenCount() > 0}>
+				<Tooltip>
+					<TooltipTrigger as="span" class={styles["resource-tag-more"]}>
+						+{hiddenCount()}
+					</TooltipTrigger>
+					<TooltipContent onClick={(e: MouseEvent) => e.stopPropagation()}>
+						<div class={styles["tooltip-tags"]}>
+							<For each={hiddenTags()}>
+								{(tag) => props.renderTag(tag)}
+							</For>
+						</div>
+					</TooltipContent>
+				</Tooltip>
+			</Show>
+		</div>
+	);
+};
 
 const ProjectIcon = (props: { iconUrl?: string | null; name: string }) => {
 	const displayChar = () => {
@@ -245,45 +366,6 @@ const ResourceCard: Component<{
 			(c) => !resources.state.loader || !MODLOADER_IDS.has(c.toLowerCase()),
 		),
 	);
-
-	const tagLimit = () => (props.viewMode === "grid" ? 2 : 3);
-	const [effectiveLimit, setEffectiveLimit] = createSignal(tagLimit());
-	let tagsRef: HTMLDivElement | undefined;
-
-	createEffect(() => {
-		const el = tagsRef;
-		if (!el) return;
-
-		// Track viewMode dependency synchronously
-		tagLimit();
-
-		queueMicrotask(() => {
-			const currentEl = tagsRef;
-			if (!currentEl) return;
-
-			const children = Array.from(currentEl.children) as HTMLElement[];
-			const limit = tagLimit();
-			let count = Math.min(limit, children.length);
-
-			if (currentEl.scrollWidth <= currentEl.clientWidth) {
-				setEffectiveLimit(count);
-				return;
-			}
-
-			// Measure cumulatively: find the max count that fits
-			while (count > 1) {
-				let w = 0;
-				for (let i = 0; i < count; i++) {
-					if (i > 0) w += 4;
-					w += children[i].getBoundingClientRect().width;
-				}
-				if (w <= currentEl.clientWidth) break;
-				count--;
-			}
-
-			setEffectiveLimit(Math.max(1, count));
-		});
-	});
 
 	const navigateToDetails = () => {
 		resources.setInstallRequest(null);
@@ -642,37 +724,12 @@ const ResourceCard: Component<{
 					</Show>
 					<div class={styles["card-row-3"]}>
 						<Show when={displayCategories().length > 0}>
-							<div class={styles["card-tags-row"]}>
-								<div class={styles["card-tags"]} ref={tagsRef}>
-									<For
-										each={displayCategories().slice(
-											0,
-											Math.min(effectiveLimit(), displayCategories().length),
-										)}
-									>
-										{(tag) => Tag(tag)}
-									</For>
-								</div>
-								<Show when={displayCategories().length > effectiveLimit()}>
-									<Tooltip>
-										<TooltipTrigger
-											as="span"
-											class={styles["resource-tag-more"]}
-										>
-											+{displayCategories().length - effectiveLimit()}
-										</TooltipTrigger>
-										<TooltipContent
-											onClick={(e: MouseEvent) => e.stopPropagation()}
-										>
-											<div class={styles["tooltip-tags"]}>
-												<For each={displayCategories().slice(effectiveLimit())}>
-													{(tag) => Tag(tag)}
-												</For>
-											</div>
-										</TooltipContent>
-									</Tooltip>
-								</Show>
-							</div>
+							<CardTagOverflow
+								tags={displayCategories()}
+								renderTag={Tag}
+								rowClass={styles["card-tags-row"]}
+								tagsClass={styles["card-tags"]}
+							/>
 						</Show>
 						<div class={styles["resource-card-actions"]}>
 							<Button
@@ -743,34 +800,12 @@ const ResourceCard: Component<{
 						<p class={styles["card-list-desc"]}>{props.project.summary}</p>
 					</Show>
 					<Show when={displayCategories().length > 0}>
-						<div class={styles["card-list-tags-row"]}>
-							<div class={styles["card-list-tags"]}>
-								<For
-									each={displayCategories().slice(
-										0,
-										Math.min(effectiveLimit(), displayCategories().length),
-									)}
-								>
-									{(tag) => Tag(tag)}
-								</For>
-							</div>
-							<Show when={displayCategories().length > effectiveLimit()}>
-								<Tooltip>
-									<TooltipTrigger as="span" class={styles["resource-tag-more"]}>
-										+{displayCategories().length - effectiveLimit()}
-									</TooltipTrigger>
-									<TooltipContent
-										onClick={(e: MouseEvent) => e.stopPropagation()}
-									>
-										<div class={styles["tooltip-tags"]}>
-											<For each={displayCategories().slice(effectiveLimit())}>
-												{(tag) => Tag(tag)}
-											</For>
-										</div>
-									</TooltipContent>
-								</Tooltip>
-							</Show>
-						</div>
+						<CardTagOverflow
+							tags={displayCategories()}
+							renderTag={Tag}
+							rowClass={styles["card-list-tags-row"]}
+							tagsClass={styles["card-list-tags"]}
+						/>
 					</Show>
 				</div>
 			</Show>

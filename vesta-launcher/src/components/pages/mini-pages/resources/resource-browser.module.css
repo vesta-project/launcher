@@ -933,6 +933,7 @@
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
+	position: relative;
 }
 
 .card-tags {
@@ -943,6 +944,19 @@
 	min-width: 0;
 	overflow: hidden;
 	flex-shrink: 1;
+}
+
+.card-tags-measure {
+	position: absolute;
+	left: -9999px;
+	top: 0;
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 4px;
+	align-items: center;
+	width: max-content;
+	pointer-events: none;
+	visibility: hidden;
 }
 
 /* ---- List Card ---- */
@@ -1045,6 +1059,8 @@
 	gap: 4px;
 	min-width: 0;
 	overflow: hidden;
+	position: relative;
+	width: 100%;
 }
 
 .card-list-tags {
