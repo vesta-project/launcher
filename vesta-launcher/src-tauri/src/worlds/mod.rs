@@ -311,9 +311,7 @@ pub fn delete_world(world_ref: &WorldRef) -> Result<(), String> {
     let path = resolve_listed_world_path(world_ref)?;
     fs::remove_dir_all(&path)
         .map_err(|error| format!("Failed to delete world {}: {error}", path.display()))?;
-    if let Err(error) =
-        crate::resources::ledger::unlink_subtree(world_ref.instance_id, &path)
-    {
+    if let Err(error) = crate::resources::ledger::unlink_subtree(world_ref.instance_id, &path) {
         log::warn!(
             "World {} was deleted, but Ledger cleanup failed: {error}",
             world_ref.directory_name
