@@ -325,7 +325,6 @@ const ResourceDetailsPage: Component<{
 	name?: string;
 	iconUrl?: string;
 	resourceType?: ResourceType;
-	setRefetch?: (fn: () => Promise<void>) => void;
 	router?: MiniRouter;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
@@ -504,10 +503,7 @@ const ResourceDetailsPage: Component<{
 			}
 		};
 
-		props.setRefetch?.(handleRefetch);
-		const mountedRouter = activeRouter();
-		mountedRouter?.setRefetch(handleRefetch, "/resource-details");
-		onCleanup(() => mountedRouter?.clearRefetch(handleRefetch));
+		activeRouter()?.registerReload(handleRefetch, "/resource-details");
 	});
 
 	// --- Dynamic Title Support ---

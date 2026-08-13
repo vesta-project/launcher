@@ -72,6 +72,7 @@ export function sanitizeMiniWindowSnapshot(
 			key === "router" ||
 			key === "close" ||
 			key === "setRefetch" ||
+			key === "registerReload" ||
 			typeof candidate === "function" ||
 			typeof candidate === "symbol"
 		) {

@@ -98,7 +98,7 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 		sortOrder: 10,
 		execute: async () => {
 			const activeRouter = router();
-			if (activeRouter?.getRefetch()) {
+			if (activeRouter?.canReload()) {
 				await activeRouter.reload();
 				return;
 			}

@@ -6,10 +6,7 @@ import ForwardsArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import {
-	handleNavigationBack,
-	handleNavigationForward,
-} from "@utils/flat-shell-navigation";
+import { createShellHistoryControls } from "@utils/flat-shell-navigation";
 import {
 	children,
 	createMemo,
@@ -64,20 +61,8 @@ interface UnifiedPageViewerProps {
 }
 
 export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
-	const canGoBack = createMemo(() => {
-		props.router.currentPath.get();
-		return props.router.canGoBackReactive();
-	});
-	const canGoForward = createMemo(() => {
-		props.router.currentPath.get();
-		return props.router.canGoForwardReactive();
-	});
-	const isReloading = createMemo(() => props.router.isReloading());
+	const history = createShellHistoryControls(() => props.router);
 	const isMac = createMemo(() => props.os === "macos");
-
-	const handleBack = async () => {
-		await handleNavigationBack(props.router);
-	};
 
 	const handleClose = async () => {
 		const canExit = props.router.getCanExit();
@@ -111,24 +96,24 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</Show>
 					<div class={styles["page-viewer-navbar-left"]}>
 						<NavbarButton
-							onClick={handleBack}
+							onClick={() => void history.back()}
 							text="Back"
-							disabled={!canGoBack()}
+							disabled={!history.canGoBack()}
 						>
 							<BackArrowIcon />
 						</NavbarButton>
 						<NavbarButton
-							onClick={() => handleNavigationForward(props.router)}
+							onClick={history.forward}
 							text="Forward"
-							disabled={!canGoForward()}
+							disabled={!history.canGoForward()}
 						>
 							<ForwardsArrowIcon />
 						</NavbarButton>
-						<Show when={props.router.getRefetch()}>
+						<Show when={history.canReload()}>
 							<NavbarButton
-								onClick={() => props.router.reload()}
+								onClick={history.reload}
 								text="Reload"
-								loading={isReloading()}
+								loading={history.isReloading()}
 							>
 								<RefreshIcon />
 							</NavbarButton>
@@ -182,7 +167,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 			</Show>
 
 			<main class={styles["page-viewer-content"]} data-page-scroll-container>
-				<Show when={isReloading()}>
+				<Show when={history.isReloading()}>
 					<div class={styles["page-viewer-reload-overlay"]}>
 						<div class={styles["page-viewer-reload-spinner"]} />
 					</div>

@@ -47,7 +47,6 @@ import {
 	createMemo,
 	createSignal,
 	For,
-	onCleanup,
 	onMount,
 	Show,
 	untrack,
@@ -61,7 +60,6 @@ import { ResourceToolbar } from "./resource-toolbar";
 const projectKey = (project: Pick<ResourceProject, "id" | "source">) =>
 	`${project.source}:${project.id}`;
 const ResourceBrowser: Component<{
-	setRefetch?: (fn: () => Promise<void>) => void;
 	query?: string;
 	resourceType?: any;
 	gameVersion?: string;
@@ -477,11 +475,10 @@ const ResourceBrowser: Component<{
 			expandedCategoryGroups: [...resources.state.expandedCategoryGroups],
 		}));
 
-		if (props.setRefetch) {
-			props.setRefetch(async () => {
-				await resources.search();
-			});
-		}
+		const handleRefetch = async () => {
+			await resources.search();
+		};
+		activeRouter()?.registerReload(handleRefetch, "/resources");
 
 		if (resources.state.selectedInstanceId) {
 			resources.fetchInstalled(resources.state.selectedInstanceId);
