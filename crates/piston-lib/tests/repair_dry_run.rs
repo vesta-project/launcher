@@ -4,7 +4,7 @@ use piston_lib::game::installer::types::{
     InstallSpec, RemediationPolicy, RepairScope, SilentProgressReporter, VerificationIssueKind,
 };
 use piston_lib::game::installer::{install_instance, verify_instance};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Helper: create a temporary directory structure with a minimal valid instance.
@@ -72,8 +72,12 @@ fn setup_temp_instance() -> (tempfile::TempDir, PathBuf, PathBuf) {
     (tmp, data_dir, game_dir)
 }
 
-fn make_spec(data_dir: &PathBuf, game_dir: &PathBuf) -> InstallSpec {
-    let mut spec = InstallSpec::new("1.20.1".to_string(), data_dir.clone(), game_dir.clone());
+fn make_spec(data_dir: &Path, game_dir: &Path) -> InstallSpec {
+    let mut spec = InstallSpec::new(
+        "1.20.1".to_string(),
+        data_dir.to_path_buf(),
+        game_dir.to_path_buf(),
+    );
     spec.dry_run = false;
     spec.remediation_policy = RemediationPolicy::RepairIfNeeded;
     spec.repair_scope = RepairScope::Full;

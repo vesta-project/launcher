@@ -1,0 +1,204 @@
+.recordingHelp kbd,
+.capture kbd,
+.conflictDialog kbd {
+	min-width: 24px;
+	padding: 3px 7px;
+	border: 1px solid var(--border-default);
+	border-bottom-color: var(--border-strong);
+	border-radius: 5px;
+	background: var(--surface-raised);
+	box-shadow: 0 1px 0 hsl(0deg 0% 0% / 18%);
+	color: var(--text-primary);
+	font-family: inherit;
+	font-size: var(--font-xsmall);
+	font-weight: 700;
+	text-align: center;
+}
+
+.recordingHelp {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--text-tertiary);
+	font-size: var(--font-xxsmall);
+	white-space: nowrap;
+}
+
+.helpAction {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--text-secondary);
+}
+
+.recordingHelp kbd {
+	min-width: 22px;
+	padding: 2px 6px;
+	font-size: var(--font-xxsmall);
+}
+
+.commands {
+	display: flex;
+	flex-direction: column;
+}
+
+.command {
+	padding: 0 8px;
+	border-radius: 8px;
+	transition:
+		background-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.command + .command {
+	border-top: 1px solid
+		color-mix(in srgb, var(--border-subtle) 45%, transparent);
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}
+
+.recording {
+	background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+}
+
+.controls {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px;
+}
+
+.capture {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 128px;
+	min-height: 34px;
+	padding: 4px 9px;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-base);
+	color: var(--text-secondary);
+	font-size: var(--font-xsmall);
+	cursor: default;
+	transition:
+		background-color 150ms ease,
+		border-color 150ms ease;
+}
+
+.capture:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.capture:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
+}
+
+.recording .capture {
+	border-color: color-mix(in srgb, var(--accent-primary) 60%, var(--border-default));
+	background: color-mix(in srgb, var(--accent-primary) 10%, var(--surface-base));
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 12%, transparent);
+	color: var(--text-primary);
+}
+
+.capture:hover:not(:disabled) {
+	border-color: var(--border-strong);
+	background: var(--surface-raised);
+}
+
+.error {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: 11px 13px;
+	border: 1px solid hsl(var(--hue-warning) 70% 55% / 35%);
+	border-radius: 8px;
+	background: hsl(var(--hue-warning) 70% 50% / 10%);
+	color: var(--text-primary);
+	font-size: var(--font-xsmall);
+}
+
+.error span {
+	color: var(--text-secondary);
+	overflow-wrap: anywhere;
+}
+
+.loading {
+	padding: 20px 0;
+	color: var(--text-secondary);
+	font-size: var(--font-small);
+	text-align: center;
+}
+
+.srStatus {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+.conflictDialog {
+	max-width: 460px;
+}
+
+.conflictDialog strong {
+	color: var(--text-primary);
+}
+
+.dialogActions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.primaryAction,
+.secondaryAction {
+	min-height: 32px;
+	padding: 6px 9px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	font-size: var(--font-xxsmall);
+	font-weight: 650;
+	cursor: default;
+}
+
+.primaryAction {
+	border-color: hsl(var(--color__primary-hue) 70% 65% / 35%);
+	background: var(--accent-primary);
+	color: var(--text-on-accent);
+}
+
+.secondaryAction {
+	border-color: var(--border-subtle);
+	background: var(--surface-base);
+	color: var(--text-secondary);
+}
+
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
+}
+
+.secondaryAction:hover {
+	background: var(--surface-raised);
+	color: var(--text-primary);
+}
+
+@media (width <= 800px) {
+	.controls {
+		width: 100%;
+		flex-wrap: wrap;
+	}
+
+	.capture {
+		flex: 1;
+	}
+}

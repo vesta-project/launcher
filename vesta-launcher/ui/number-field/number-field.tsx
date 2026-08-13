@@ -1,5 +1,7 @@
 import * as NumberFieldPrimitive from "@kobalte/core/number-field";
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
+import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";
+import ChevronUpIcon from "@assets/icons/controls/chevron-up.svg";
 import type { Component, ComponentProps, JSX, ValidComponent } from "solid-js";
 import { Show, splitProps } from "solid-js";
 import styles from "./number-field.module.css";
@@ -71,17 +73,7 @@ const NumberFieldIncrementTrigger = <T extends ValidComponent = "button">(
 			<Show
 				when={local.children}
 				fallback={
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M18 15l-6-6-6 6" />
-					</svg>
+					<ChevronUpIcon stroke-width="2.5" />
 				}
 			>
 				{(children) => children()}
@@ -111,17 +103,7 @@ const NumberFieldDecrementTrigger = <T extends ValidComponent = "button">(
 			<Show
 				when={local.children}
 				fallback={
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M6 9l6 6 6-6" />
-					</svg>
+					<ChevronDownIcon stroke-width="2.5" />
 				}
 			>
 				{(children) => children()}

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -8,13 +9,13 @@ pub enum NotificationType {
     Patient,
 }
 
-impl ToString for NotificationType {
-    fn to_string(&self) -> String {
-        match self {
-            NotificationType::Immediate => "immediate".to_string(),
-            NotificationType::Progress => "progress".to_string(),
-            NotificationType::Patient => "patient".to_string(),
-        }
+impl fmt::Display for NotificationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            NotificationType::Immediate => "immediate",
+            NotificationType::Progress => "progress",
+            NotificationType::Patient => "patient",
+        })
     }
 }
 
@@ -38,14 +39,14 @@ impl From<String> for NotificationSeverity {
     }
 }
 
-impl ToString for NotificationSeverity {
-    fn to_string(&self) -> String {
-        match self {
-            NotificationSeverity::Success => "success".to_string(),
-            NotificationSeverity::Warning => "warning".to_string(),
-            NotificationSeverity::Error => "error".to_string(),
-            NotificationSeverity::Info => "info".to_string(),
-        }
+impl fmt::Display for NotificationSeverity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            NotificationSeverity::Success => "success",
+            NotificationSeverity::Warning => "warning",
+            NotificationSeverity::Error => "error",
+            NotificationSeverity::Info => "info",
+        })
     }
 }
 

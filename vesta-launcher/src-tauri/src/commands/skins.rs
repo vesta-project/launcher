@@ -131,7 +131,7 @@ pub async fn detect_local_skin_variant(file_path: String) -> Result<LocalSkinRes
         "detect_local_skin_variant: file_path='{}' bytes_len={} variant={}",
         file_path,
         bytes.len(),
-        variant.to_string()
+        variant
     );
 
     Ok(LocalSkinResponse {
@@ -527,12 +527,12 @@ pub async fn apply_preset_skin(
         format!(
             "{}: {}",
             cat,
-            texture_url.split('/').last().unwrap_or("preset")
+            texture_url.split('/').next_back().unwrap_or("preset")
         )
     } else {
         texture_url
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or("preset")
             .to_string()
     };
@@ -722,11 +722,10 @@ pub async fn sync_current_skin_history(
     // 1. Fetch current Mojang profile to get the active skin metadata
     let profile = get_account_profile(normalized_uuid.clone())
         .await
-        .map_err(|e| {
-            if is_mojang_rate_limited(&e) {
+        .inspect_err(|e| {
+            if is_mojang_rate_limited(e) {
                 notify_mojang_rate_limit(&app, &normalized_uuid, "Syncing current skin");
             }
-            e
         })?;
     let active_skin =
         pick_active_skin(&profile).ok_or_else(|| "No active skin found for account".to_string())?;

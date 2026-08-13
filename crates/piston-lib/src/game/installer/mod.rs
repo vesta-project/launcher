@@ -30,12 +30,14 @@ struct InstallScope {
     max_bytes: u64,
 }
 
-pub(crate) fn install_scope_handles() -> Option<(
+type InstallScopeHandles = (
     Arc<Mutex<ArtifactCache>>,
     Arc<Mutex<Vec<InstallArtifactRef>>>,
     bool,
     u64,
-)> {
+);
+
+pub(crate) fn install_scope_handles() -> Option<InstallScopeHandles> {
     INSTALL_SCOPE
         .try_with(|scope| {
             (
@@ -344,7 +346,7 @@ async fn install_instance_inner(
             "https://launcher-meta.modrinth.com/minecraft/v0/versions/{}.json",
             spec.version_id
         );
-        download_to_path(&client, &version_url, &version_json_path, None, &*reporter)
+        download_to_path(client, &version_url, &version_json_path, None, &*reporter)
             .await
             .with_context(|| format!("Failed to download version info for {}", spec.version_id))?;
 
@@ -379,7 +381,7 @@ async fn install_instance_inner(
                 crate::game::installer::modloaders::resolve_loader_profile(
                     &spec,
                     reporter.clone(),
-                    &client,
+                    client,
                 )
                 .await?,
             )
@@ -411,7 +413,7 @@ async fn install_instance_inner(
         if let Some(client_download) = &runtime_plan.client_download {
             if let Some(client_url) = client_download.url.as_deref() {
                 download_to_path(
-                    &client,
+                    client,
                     client_url,
                     &client_jar_path,
                     client_download.sha1.as_deref(),
@@ -440,10 +442,10 @@ async fn install_instance_inner(
             log::info!("Restored asset index from cache");
         }
 
-        if !asset_index_path.exists() {
-            if !asset_index.url.is_empty() {
+        if !asset_index_path.exists()
+            && !asset_index.url.is_empty() {
                 download_to_path(
-                    &client,
+                    client,
                     &asset_index.url,
                     &asset_index_path,
                     Some(&asset_index.sha1),
@@ -458,7 +460,6 @@ async fn install_instance_inner(
                 )
                 .await?;
             }
-        }
 
         // 2c. Download assets
         reporter.start_step("Downloading assets", None);
@@ -530,7 +531,7 @@ async fn install_instance_inner(
                         reporter.clone(),
                         processors,
                         data,
-                        &client,
+                        client,
                     )
                     .await?;
                 }

@@ -6,6 +6,7 @@ mod commands;
 pub mod discord;
 mod instance;
 mod launcher_import;
+mod localization;
 mod logging;
 mod metadata_cache;
 pub mod models;
@@ -19,6 +20,7 @@ mod startup;
 mod sync;
 mod tasks;
 pub mod utils;
+pub mod worlds;
 
 use tauri::Manager;
 #[allow(unused_imports)]
@@ -123,13 +125,13 @@ fn main() {
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let _ = crate::utils::windows::ensure_main_window_visible(&app);
+            let _ = crate::utils::windows::ensure_main_window_visible(app);
 
             if args.len() > 1 {
                 crate::utils::launch_intents::ingest_launch_args(&args);
                 let state = app.state::<utils::launch_intents::PendingLaunchIntents>();
                 if state.is_frontend_ready() {
-                    utils::launch_intents::flush_pending_intents(&app);
+                    utils::launch_intents::flush_pending_intents(app);
                 }
             }
         }))
@@ -143,6 +145,12 @@ fn main() {
             set_config,
             update_config_field,
             update_config_fields,
+            localization::set_language,
+            commands::keybindings::reconcile_keybinding_catalog,
+            commands::keybindings::list_keybinding_commands,
+            commands::keybindings::set_keybinding,
+            commands::keybindings::clear_keybinding,
+            commands::keybindings::reset_keybinding,
             commands::app::open_app_config_dir,
             commands::app::open_app_runtime_storage_dir,
             commands::app::clear_cache,
@@ -296,6 +304,7 @@ fn main() {
             commands::onboarding::set_setup_step,
             commands::onboarding::download_managed_java,
             commands::resources::get_resource_categories,
+            commands::resources::list_resource_sources,
             commands::resources::search_resources,
             commands::resources::get_resource_project,
             commands::resources::cache_resource_metadata,
@@ -303,8 +312,10 @@ fn main() {
             commands::resources::get_cached_resource_projects,
             commands::resources::hydrate_resource_project_icons,
             commands::resources::get_or_hydrate_resource_projects,
+            commands::resources::get_cached_resource_projects_by_provider,
             commands::resources::get_resource_projects,
             commands::resources::get_resource_versions,
+            commands::resources::get_resource_version_details,
             commands::resources::find_peer_resource,
             commands::resources::install_resource,
             commands::resources::delete_resource,
@@ -320,6 +331,16 @@ fn main() {
             commands::resources::check_resource_updates,
             commands::resources::resolve_image_url,
             commands::resources::resolve_image_urls,
+            commands::worlds::list_instance_worlds,
+            commands::worlds::open_world_folder,
+            commands::worlds::delete_world,
+            commands::worlds::list_world_datapacks,
+            commands::worlds::check_world_datapack_updates,
+            commands::worlds::open_world_datapacks_folder,
+            commands::worlds::toggle_world_datapack,
+            commands::worlds::delete_world_datapack,
+            commands::worlds::transfer_world,
+            commands::worlds::submit_world_archive_selection,
             commands::sync::check_modpack_update,
             commands::sync::start_modpack_update,
             commands::launcher_imports::detect_external_launchers,
@@ -329,8 +350,8 @@ fn main() {
         ])
         .on_window_event(|window, event| {
             match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    if window.label() == "main" {
+                tauri::WindowEvent::CloseRequested { api, .. }
+                    if window.label() == "main" => {
                         api.prevent_close();
                         match crate::utils::config::get_app_config() {
                             Ok(config) if config.minimize_to_tray => {
@@ -349,7 +370,7 @@ fn main() {
                             }
                             Ok(_) => {
                                 let _ = crate::commands::app::request_guarded_exit(
-                                    &window.app_handle(),
+                                    window.app_handle(),
                                     "window-close",
                                 );
                             }
@@ -359,13 +380,12 @@ fn main() {
                                     e
                                 );
                                 let _ = crate::commands::app::request_guarded_exit(
-                                    &window.app_handle(),
+                                    window.app_handle(),
                                     "window-close-config-error",
                                 );
                             }
                         }
                     }
-                }
                 _ => {}
             }
         })

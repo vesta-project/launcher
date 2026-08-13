@@ -155,6 +155,9 @@ mod tests {
             hash: String::new(),
             dependencies: vec![],
             published_at: None,
+            download_count: None,
+            file_size: None,
+            files: Vec::new(),
         }
     }
 
@@ -188,7 +191,7 @@ mod tests {
     fn vanilla_rejects_mod_updates_but_accepts_resource_packs() {
         let candidate = version("next", "1.21.1", "fabric", ReleaseType::Release);
         assert!(find_best_update(
-            &[candidate.clone()],
+            std::slice::from_ref(&candidate),
             &installed("mod", "release"),
             "1.21.1",
             "vanilla"

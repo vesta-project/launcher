@@ -1,4 +1,4 @@
-import { Tabs } from "@ui/tabs/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@ui/tabs/tabs";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./page-sidebar.module.css";
 
@@ -50,7 +50,10 @@ export function PageSidebar(props: PageSidebarProps) {
 	return (
 		<Tabs
 			value={props.activeTab}
-			onChange={(v) => props.onTabChange(v as string)}
+			onChange={(v) => {
+				props.onTabChange(v as string);
+				setMobileOpen(false);
+			}}
 			orientation="vertical"
 			class={styles.root}
 		>
@@ -59,10 +62,10 @@ export function PageSidebar(props: PageSidebarProps) {
 					class={styles.sidebar}
 					classList={{ [styles.mobileOpen]: isMobile() && mobileOpen() }}
 				>
-					<nav class={styles.nav}>
+					<TabsList class={styles.nav} aria-label="Page sections">
 						{props.tabs.map((tab) => (
-							<button
-								type="button"
+							<TabsTrigger
+								value={tab.value}
 								class={styles.button}
 								classList={{
 									[styles.active]: tab.value === props.activeTab,
@@ -71,15 +74,11 @@ export function PageSidebar(props: PageSidebarProps) {
 								disabled={tab.disabled}
 								onPointerEnter={() => props.onTabIntent?.(tab.value)}
 								onFocus={() => props.onTabIntent?.(tab.value)}
-								onClick={() => {
-									props.onTabChange(tab.value);
-									setMobileOpen(false);
-								}}
 							>
 								{tab.label}
-							</button>
+							</TabsTrigger>
 						))}
-					</nav>
+					</TabsList>
 				</aside>
 
 				<Show when={isMobile() && mobileOpen()}>
@@ -96,21 +95,7 @@ export function PageSidebar(props: PageSidebarProps) {
 								onClick={() => setMobileOpen((o) => !o)}
 								aria-label="Toggle sidebar"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<line x1="3" y1="6" x2="21" y2="6" />
-									<line x1="3" y1="12" x2="21" y2="12" />
-									<line x1="3" y1="18" x2="21" y2="18" />
-								</svg>
+								<MenuIcon width="18" height="18" />
 							</button>
 						}
 					>
@@ -121,6 +106,7 @@ export function PageSidebar(props: PageSidebarProps) {
 				<main
 					ref={(element) => setContentElement(element)}
 					class={styles.content}
+					data-page-scroll-container
 				>
 					{props.children}
 				</main>
@@ -128,3 +114,4 @@ export function PageSidebar(props: PageSidebarProps) {
 		</Tabs>
 	);
 }
+import MenuIcon from "@assets/icons/controls/menu.svg";

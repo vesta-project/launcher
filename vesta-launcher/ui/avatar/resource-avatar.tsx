@@ -1,7 +1,10 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { resolveResourceUrl } from "@utils/assets";
-import { createAnimatedIconPreview } from "@utils/icon-animation";
+import {
+	createAnimatedIconPreview,
+	iconBackgroundStyle,
+} from "@utils/icon-animation";
 import {
 	type Component,
 	createEffect,
@@ -129,6 +132,9 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 		}
 		return {};
 	});
+	const playerHeadStyle = createMemo(() =>
+		iconBackgroundStyle(playerHeadPath()),
+	);
 
 	const sizeStyle = createMemo(() => {
 		if (!props.size) return {};
@@ -151,6 +157,7 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 			style={{
 				...sizeStyle(),
 				...backgroundStyle(),
+				...playerHeadStyle(),
 			}}
 			onMouseEnter={animatedPreview.activate}
 			onMouseLeave={animatedPreview.deactivate}
@@ -158,9 +165,9 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 			onFocusOut={animatedPreview.deactivate}
 		>
 			<Show
-				when={animatedPreview.displaySource()}
+				when={!playerHeadPath() && animatedPreview.displaySource()}
 				fallback={
-					<Show when={!backgroundStyle().background}>
+					<Show when={!backgroundStyle().background && !playerHeadPath()}>
 						<span class={styles["resource-avatar-fallback"]}>
 							{displayChar()}
 						</span>

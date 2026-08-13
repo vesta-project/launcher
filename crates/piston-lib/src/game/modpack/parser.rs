@@ -153,7 +153,7 @@ fn metadata_from_curseforge(manifest: CurseForgeManifest) -> ModpackMetadata {
     }
 
     let mods_count = manifest.files.len();
-    let recommended_ram = manifest.minecraft.recommended_ram.or_else(|| {
+    let recommended_ram = manifest.minecraft.recommended_ram.or({
         if mods_count > 200 {
             Some(8192)
         } else if mods_count > 100 {
@@ -197,146 +197,6 @@ fn metadata_from_curseforge(manifest: CurseForgeManifest) -> ModpackMetadata {
         format: ModpackFormat::CurseForge,
         mods,
         root_prefix: None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-    use zip::write::FileOptions;
-
-    fn write_zip(entries: &[(&str, &str)]) -> NamedTempFile {
-        let file = NamedTempFile::new().expect("create temp zip");
-        {
-            let writer = std::fs::File::create(file.path()).expect("open temp zip");
-            let mut zip = zip::ZipWriter::new(writer);
-            for (name, content) in entries {
-                zip.start_file::<&str, ()>(*name, FileOptions::default())
-                    .expect("start zip file");
-                zip.write_all(content.as_bytes()).expect("write zip file");
-            }
-            zip.finish().expect("finish zip");
-        }
-        file
-    }
-
-    #[test]
-    fn parses_root_modrinth_pack() {
-        let zip = write_zip(&[(
-            "modrinth.index.json",
-            r#"{
-                "formatVersion": 1,
-                "game": "minecraft",
-                "versionId": "1.0.0",
-                "name": "Root MR Pack",
-                "files": [],
-                "dependencies": {
-                    "minecraft": "1.20.1",
-                    "fabric-loader": "0.15.0"
-                }
-            }"#,
-        )]);
-
-        let metadata = get_modpack_metadata(zip.path()).expect("parse root mrpack");
-
-        assert_eq!(metadata.name, "Root MR Pack");
-        assert_eq!(metadata.format, ModpackFormat::Modrinth);
-        assert_eq!(metadata.minecraft_version, "1.20.1");
-        assert_eq!(metadata.modloader_type, "fabric");
-        assert_eq!(metadata.root_prefix, None);
-    }
-
-    #[test]
-    fn parses_root_curseforge_pack() {
-        let zip = write_zip(&[(
-            "manifest.json",
-            r#"{
-                "minecraft": {
-                    "version": "1.20.1",
-                    "modLoaders": [{ "id": "forge-47.2.0", "primary": true }]
-                },
-                "manifestType": "minecraftModpack",
-                "manifestVersion": 1,
-                "name": "Root CF Pack",
-                "version": "2.0.0",
-                "author": "Vesta",
-                "image": "https://media.forgecdn.net/avatars/example.gif",
-                "files": [],
-                "overrides": "overrides"
-            }"#,
-        )]);
-
-        let metadata = get_modpack_metadata(zip.path()).expect("parse root curseforge pack");
-
-        assert_eq!(metadata.name, "Root CF Pack");
-        assert_eq!(metadata.format, ModpackFormat::CurseForge);
-        assert_eq!(metadata.minecraft_version, "1.20.1");
-        assert_eq!(metadata.modloader_type, "forge");
-        assert_eq!(metadata.modloader_version.as_deref(), Some("47.2.0"));
-        assert_eq!(
-            metadata.icon_url.as_deref(),
-            Some("https://media.forgecdn.net/avatars/example.gif")
-        );
-        assert_eq!(metadata.root_prefix, None);
-    }
-
-    #[test]
-    fn parses_curseforge_pack_without_version() {
-        let zip = write_zip(&[(
-            "manifest.json",
-            r#"{
-                "minecraft": {
-                    "version": "1.20.1",
-                    "modLoaders": [{ "id": "forge-47.4.20", "primary": true }],
-                    "recommendedRam": 10000
-                },
-                "manifestType": "minecraftModpack",
-                "manifestVersion": 1,
-                "name": "Bountiful Wilds 3.0.2",
-                "author": "",
-                "files": [{
-                    "projectID": 351725,
-                    "fileID": 7627954,
-                    "required": true,
-                    "isLocked": false
-                }],
-                "overrides": "overrides"
-            }"#,
-        )]);
-
-        let metadata = get_modpack_metadata(zip.path())
-            .expect("CurseForge packs with no declared version should still parse");
-
-        assert_eq!(metadata.name, "Bountiful Wilds 3.0.2");
-        assert_eq!(metadata.version, "Unknown");
-        assert_eq!(metadata.minecraft_version, "1.20.1");
-        assert_eq!(metadata.modloader_type, "forge");
-        assert_eq!(metadata.modloader_version.as_deref(), Some("47.4.20"));
-        assert_eq!(metadata.recommended_ram_mb, Some(10000));
-        assert_eq!(metadata.mods.len(), 1);
-    }
-
-    #[test]
-    fn rejects_nested_only_manifest_without_scanning_for_compatibility() {
-        let zip = write_zip(&[(
-            "wrapped/modrinth.index.json",
-            r#"{
-                "formatVersion": 1,
-                "game": "minecraft",
-                "versionId": "1.0.0",
-                "name": "Nested MR Pack",
-                "files": [],
-                "dependencies": { "minecraft": "1.20.1" }
-            }"#,
-        )]);
-
-        let err = get_modpack_metadata(zip.path()).expect_err("nested manifest should fail");
-        assert!(
-            err.to_string().contains("No root modpack metadata found"),
-            "unexpected error: {err}"
-        );
     }
 }
 
@@ -652,4 +512,144 @@ fn list_folder_entries<R: Read + std::io::Seek>(
     }
 
     Ok(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+    use zip::write::FileOptions;
+
+    fn write_zip(entries: &[(&str, &str)]) -> NamedTempFile {
+        let file = NamedTempFile::new().expect("create temp zip");
+        {
+            let writer = std::fs::File::create(file.path()).expect("open temp zip");
+            let mut zip = zip::ZipWriter::new(writer);
+            for (name, content) in entries {
+                zip.start_file::<&str, ()>(*name, FileOptions::default())
+                    .expect("start zip file");
+                zip.write_all(content.as_bytes()).expect("write zip file");
+            }
+            zip.finish().expect("finish zip");
+        }
+        file
+    }
+
+    #[test]
+    fn parses_root_modrinth_pack() {
+        let zip = write_zip(&[(
+            "modrinth.index.json",
+            r#"{
+                "formatVersion": 1,
+                "game": "minecraft",
+                "versionId": "1.0.0",
+                "name": "Root MR Pack",
+                "files": [],
+                "dependencies": {
+                    "minecraft": "1.20.1",
+                    "fabric-loader": "0.15.0"
+                }
+            }"#,
+        )]);
+
+        let metadata = get_modpack_metadata(zip.path()).expect("parse root mrpack");
+
+        assert_eq!(metadata.name, "Root MR Pack");
+        assert_eq!(metadata.format, ModpackFormat::Modrinth);
+        assert_eq!(metadata.minecraft_version, "1.20.1");
+        assert_eq!(metadata.modloader_type, "fabric");
+        assert_eq!(metadata.root_prefix, None);
+    }
+
+    #[test]
+    fn parses_root_curseforge_pack() {
+        let zip = write_zip(&[(
+            "manifest.json",
+            r#"{
+                "minecraft": {
+                    "version": "1.20.1",
+                    "modLoaders": [{ "id": "forge-47.2.0", "primary": true }]
+                },
+                "manifestType": "minecraftModpack",
+                "manifestVersion": 1,
+                "name": "Root CF Pack",
+                "version": "2.0.0",
+                "author": "Vesta",
+                "image": "https://media.forgecdn.net/avatars/example.gif",
+                "files": [],
+                "overrides": "overrides"
+            }"#,
+        )]);
+
+        let metadata = get_modpack_metadata(zip.path()).expect("parse root curseforge pack");
+
+        assert_eq!(metadata.name, "Root CF Pack");
+        assert_eq!(metadata.format, ModpackFormat::CurseForge);
+        assert_eq!(metadata.minecraft_version, "1.20.1");
+        assert_eq!(metadata.modloader_type, "forge");
+        assert_eq!(metadata.modloader_version.as_deref(), Some("47.2.0"));
+        assert_eq!(
+            metadata.icon_url.as_deref(),
+            Some("https://media.forgecdn.net/avatars/example.gif")
+        );
+        assert_eq!(metadata.root_prefix, None);
+    }
+
+    #[test]
+    fn parses_curseforge_pack_without_version() {
+        let zip = write_zip(&[(
+            "manifest.json",
+            r#"{
+                "minecraft": {
+                    "version": "1.20.1",
+                    "modLoaders": [{ "id": "forge-47.4.20", "primary": true }],
+                    "recommendedRam": 10000
+                },
+                "manifestType": "minecraftModpack",
+                "manifestVersion": 1,
+                "name": "Bountiful Wilds 3.0.2",
+                "author": "",
+                "files": [{
+                    "projectID": 351725,
+                    "fileID": 7627954,
+                    "required": true,
+                    "isLocked": false
+                }],
+                "overrides": "overrides"
+            }"#,
+        )]);
+
+        let metadata = get_modpack_metadata(zip.path())
+            .expect("CurseForge packs with no declared version should still parse");
+
+        assert_eq!(metadata.name, "Bountiful Wilds 3.0.2");
+        assert_eq!(metadata.version, "Unknown");
+        assert_eq!(metadata.minecraft_version, "1.20.1");
+        assert_eq!(metadata.modloader_type, "forge");
+        assert_eq!(metadata.modloader_version.as_deref(), Some("47.4.20"));
+        assert_eq!(metadata.recommended_ram_mb, Some(10000));
+        assert_eq!(metadata.mods.len(), 1);
+    }
+
+    #[test]
+    fn rejects_nested_only_manifest_without_scanning_for_compatibility() {
+        let zip = write_zip(&[(
+            "wrapped/modrinth.index.json",
+            r#"{
+                "formatVersion": 1,
+                "game": "minecraft",
+                "versionId": "1.0.0",
+                "name": "Nested MR Pack",
+                "files": [],
+                "dependencies": { "minecraft": "1.20.1" }
+            }"#,
+        )]);
+
+        let err = get_modpack_metadata(zip.path()).expect_err("nested manifest should fail");
+        assert!(
+            err.to_string().contains("No root modpack metadata found"),
+            "unexpected error: {err}"
+        );
+    }
 }

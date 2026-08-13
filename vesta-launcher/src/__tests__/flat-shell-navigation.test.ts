@@ -10,7 +10,7 @@ import {
 	LIBRARY_PATH,
 	routeParamsMatch,
 } from "@utils/flat-shell-navigation";
-import { createSignal } from "solid-js";
+import { createEffect, createRoot, createSignal } from "solid-js";
 import { describe, expect, it } from "vitest";
 
 function createTestRouter() {
@@ -368,23 +368,58 @@ describe("resetLibrarySlot", () => {
 });
 
 describe("route-scoped reload", () => {
-	it("only exposes the refetch handler on the route that registered it", async () => {
+	it("only exposes the reload handler on the route that registered it", async () => {
 		const { router } = createTestRouter();
 		let reloads = 0;
 
 		router.navigate("/instance", { id: 1 });
-		router.setRefetch(async () => {
+		router.registerReload(async () => {
 			reloads += 1;
 		}, "/instance");
 
+		expect(router.canReload()).toBe(true);
 		await router.reload();
 		expect(reloads).toBe(1);
 
 		router.navigate("/config");
-		expect(router.getRefetch()).toBeUndefined();
+		expect(router.canReload()).toBe(false);
 
 		await router.reload();
 		expect(reloads).toBe(1);
+	});
+
+	it("notifies reactive consumers when a page registers reload after paint", () => {
+		const { router } = createTestRouter();
+		router.navigate("/instance", { id: 1 });
+
+		const { canReload, dispose } = createRoot((dispose) => {
+			const [canReload, setCanReload] = createSignal(false);
+			createEffect(() => {
+				setCanReload(router.canReload());
+			});
+			return { canReload, dispose };
+		});
+
+		expect(canReload()).toBe(false);
+
+		router.registerReload(async () => {}, "/instance");
+		expect(canReload()).toBe(true);
+
+		router.navigate("/config");
+		expect(canReload()).toBe(false);
+
+		dispose();
+	});
+
+	it("clears registration when the returned disposer runs", () => {
+		const { router } = createTestRouter();
+		router.navigate("/instance", { id: 1 });
+
+		const dispose = router.registerReload(async () => {}, "/instance");
+		expect(router.canReload()).toBe(true);
+
+		dispose();
+		expect(router.canReload()).toBe(false);
 	});
 
 	it("ignores overlapping reload requests", async () => {
@@ -393,7 +428,7 @@ describe("route-scoped reload", () => {
 		let finishReload: (() => void) | undefined;
 
 		router.navigate("/instance", { id: 1 });
-		router.setRefetch(
+		router.registerReload(
 			() =>
 				new Promise<void>((resolve) => {
 					reloads += 1;

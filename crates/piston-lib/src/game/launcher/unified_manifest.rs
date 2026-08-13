@@ -98,7 +98,7 @@ impl UnifiedManifest {
 
         // Add vanilla libraries
         for lib in &vanilla.libraries {
-            for unified in UnifiedLibrary::from_library(&lib, None, os) {
+            for unified in UnifiedLibrary::from_library(lib, None, os) {
                 libraries.push(unified);
             }
         }
@@ -660,11 +660,10 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
                         return false;
                     }
                 }
-                "has_custom_resolution" => {
-                    if required_state.unwrap_or(true) {
+                "has_custom_resolution"
+                    if required_state.unwrap_or(true) => {
                         return false;
                     }
-                }
                 _ => {}
             }
         }
@@ -696,7 +695,7 @@ fn name_to_path_with_classifier(name: &str, classifier: &str) -> String {
 
 fn name_to_path(name: &str) -> String {
     crate::game::launcher::maven_to_path(name)
-        .unwrap_or_else(|_| name.replace('.', "/").replace(':', "/"))
+        .unwrap_or_else(|_| name.replace(['.', ':'], "/"))
 }
 
 /// Libraries that Modrinth/Mojang host on libraries.minecraft.net even inside Forge profiles.
@@ -872,7 +871,7 @@ fn filter_native_libraries_by_arch_policy(
         let base = maven_group_artifact(&lib.name)
             .unwrap_or(lib.name.as_str())
             .to_string();
-        base_to_libs.entry(base).or_insert_with(Vec::new).push(lib);
+        base_to_libs.entry(base).or_default().push(lib);
     }
 
     // Filter: for each group, skip generic natives when an arch-specific sibling exists.

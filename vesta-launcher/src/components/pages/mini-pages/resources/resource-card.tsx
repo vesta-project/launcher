@@ -1,5 +1,5 @@
-import DownloadIcon from "@assets/download-compact.svg";
-import HeartIcon from "@assets/heart.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import HeartIcon from "@assets/icons/content/heart.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
@@ -17,17 +17,139 @@ import {
 	findBestVersionForInstance,
 	findInstalledResource,
 	isResourceUpdateAvailable,
+	requiresWorldTarget,
 } from "@utils/resource-install-intent";
 import { getProjectCompatibilityForInstance } from "@utils/resources";
 import {
 	type Component,
+	type JSX,
 	createEffect,
 	createMemo,
 	createSignal,
 	For,
+	onCleanup,
+	onMount,
 	Show,
 } from "solid-js";
 import styles from "./resource-browser.module.css";
+
+const TAG_GAP_PX = 4;
+
+function countFittingTags(
+	availableWidth: number,
+	tagWidths: number[],
+	moreWidth: number,
+): number {
+	if (tagWidths.length === 0 || availableWidth <= 0) return 0;
+
+	let total = 0;
+	for (let i = 0; i < tagWidths.length; i++) {
+		total += tagWidths[i] + (i > 0 ? TAG_GAP_PX : 0);
+	}
+	if (total <= availableWidth) return tagWidths.length;
+
+	let used = 0;
+	let count = 0;
+	for (let i = 0; i < tagWidths.length; i++) {
+		const next = used + (count > 0 ? TAG_GAP_PX : 0) + tagWidths[i];
+		const hiddenAfter = tagWidths.length - (i + 1);
+		const reserve = hiddenAfter > 0 ? TAG_GAP_PX + moreWidth : 0;
+		if (next + reserve <= availableWidth) {
+			used = next;
+			count++;
+		} else {
+			break;
+		}
+	}
+	return count;
+}
+
+const CardTagOverflow: Component<{
+	tags: string[];
+	renderTag: (tag: string) => JSX.Element;
+	rowClass: string;
+	tagsClass: string;
+}> = (props) => {
+	const [visibleCount, setVisibleCount] = createSignal(props.tags.length);
+	let rowRef: HTMLDivElement | undefined;
+	let measureRef: HTMLDivElement | undefined;
+	let moreMeasureRef: HTMLSpanElement | undefined;
+
+	const recompute = () => {
+		const row = rowRef;
+		const measure = measureRef;
+		if (!row || !measure) return;
+
+		const tagEls = Array.from(
+			measure.querySelectorAll<HTMLElement>("[data-tag-measure]"),
+		);
+		const widths = tagEls.map((el) => el.getBoundingClientRect().width);
+		const moreWidth =
+			moreMeasureRef?.getBoundingClientRect().width || 36;
+		const available = row.clientWidth;
+		setVisibleCount(countFittingTags(available, widths, moreWidth));
+	};
+
+	createEffect(() => {
+		props.tags;
+		queueMicrotask(recompute);
+	});
+
+	onMount(() => {
+		const row = rowRef;
+		if (!row || typeof ResizeObserver === "undefined") {
+			recompute();
+			return;
+		}
+		const observer = new ResizeObserver(() => recompute());
+		observer.observe(row);
+		recompute();
+		onCleanup(() => observer.disconnect());
+	});
+
+	const hiddenTags = () => props.tags.slice(visibleCount());
+	const hiddenCount = () => Math.max(0, props.tags.length - visibleCount());
+
+	return (
+		<div class={props.rowClass} ref={rowRef}>
+			<div
+				class={styles["card-tags-measure"]}
+				ref={measureRef}
+				aria-hidden="true"
+			>
+				<For each={props.tags}>
+					{(tag) => <span data-tag-measure>{props.renderTag(tag)}</span>}
+				</For>
+				<span
+					ref={moreMeasureRef}
+					class={styles["resource-tag-more"]}
+					data-tag-more-measure
+				>
+					+99
+				</span>
+			</div>
+			<div class={props.tagsClass}>
+				<For each={props.tags.slice(0, visibleCount())}>
+					{(tag) => props.renderTag(tag)}
+				</For>
+			</div>
+			<Show when={hiddenCount() > 0}>
+				<Tooltip>
+					<TooltipTrigger as="span" class={styles["resource-tag-more"]}>
+						+{hiddenCount()}
+					</TooltipTrigger>
+					<TooltipContent onClick={(e: MouseEvent) => e.stopPropagation()}>
+						<div class={styles["tooltip-tags"]}>
+							<For each={hiddenTags()}>
+								{(tag) => props.renderTag(tag)}
+							</For>
+						</div>
+					</TooltipContent>
+				</Tooltip>
+			</Show>
+		</div>
+	);
+};
 
 const ProjectIcon = (props: { iconUrl?: string | null; name: string }) => {
 	const displayChar = () => {
@@ -49,9 +171,12 @@ const ResourceCard: Component<{
 	project: ResourceProject;
 	viewMode: "grid" | "list";
 	router?: MiniRouter;
+	installSelectionActive?: boolean;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
+	const installType = () => resources.state.resourceType;
 	const isInstalled = createMemo(() => {
+		if (installType() === "datapack") return false;
 		const instanceId = resources.state.selectedInstanceId;
 		return !!findInstalledResource(
 			props.project,
@@ -63,6 +188,7 @@ const ResourceCard: Component<{
 	});
 
 	const installedResource = createMemo(() => {
+		if (installType() === "datapack") return undefined;
 		const instanceId = resources.state.selectedInstanceId;
 		return findInstalledResource(
 			props.project,
@@ -81,7 +207,10 @@ const ResourceCard: Component<{
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
 	const [latestCompatibleVersion, setLatestCompatibleVersion] =
 		createSignal<ResourceVersion | null>(null);
-	const installing = () => localInstalling() || isInstallingProject();
+	const installing = () =>
+		localInstalling() ||
+		Boolean(props.installSelectionActive) ||
+		(installType() !== "datapack" && isInstallingProject());
 
 	const isUpdateAvailable = createMemo(() => {
 		return isResourceUpdateAvailable(
@@ -102,7 +231,13 @@ const ResourceCard: Component<{
 						project.source,
 						project.id,
 					);
-					const best = findBestVersionForInstance(project, versions, inst);
+					const best = findBestVersionForInstance(
+						project,
+						versions,
+						inst,
+						"release",
+						installType(),
+					);
 					setLatestCompatibleVersion(best);
 				} catch (_) {
 					// Silently fail
@@ -120,7 +255,11 @@ const ResourceCard: Component<{
 		const instance = instancesState.instances.find((i) => i.id === instanceId);
 		if (!instance) return { type: "compatible" as const };
 
-		return getProjectCompatibilityForInstance(props.project, instance);
+		return getProjectCompatibilityForInstance(
+			props.project,
+			instance,
+			installType(),
+		);
 	});
 
 	const buttonVariant = createMemo(() => {
@@ -143,12 +282,61 @@ const ResourceCard: Component<{
 		return "Install";
 	});
 
-	const bgImage = createMemo(() => {
+	// Prefer the first gallery image for browse banners.
+	const remoteBannerUrl = createMemo(() => {
 		const p = props.project;
-		if (p.featured_gallery) return p.featured_gallery;
-		if (p.gallery.length > 0) return p.gallery[0];
-		return null;
+		return p.gallery.length > 0
+			? p.gallery[0]
+			: (p.featured_gallery ?? null);
 	});
+
+	const preferredBannerUrl = createMemo(() => {
+		const remote = remoteBannerUrl();
+		if (!remote) return null;
+		const resolved = resources.resolvedBrowseImage(remote);
+		if (resolved) return resolved;
+		// Remaining Smithed API gallery redirects (e.g. bucket type) still need
+		// resolve_image_urls warm; file-type banners use Firebase CDN directly.
+		if (remote.includes("api.smithed.dev")) return null;
+		return remote;
+	});
+
+	// Once a banner has painted for a remote URL, keep that exact src. Otherwise
+	// resolve_image_urls upgrading CDN → data URL remounts <img> and flashes dots.
+	const [paintedBanner, setPaintedBanner] = createSignal<{
+		remote: string;
+		src: string;
+	} | null>(null);
+
+	createEffect(() => {
+		const remote = remoteBannerUrl();
+		const painted = paintedBanner();
+		if (painted && painted.remote !== remote) {
+			setPaintedBanner(null);
+		}
+	});
+
+	const bgImage = createMemo(() => {
+		const remote = remoteBannerUrl();
+		if (!remote) return null;
+		const painted = paintedBanner();
+		if (painted?.remote === remote) return painted.src;
+		return preferredBannerUrl();
+	});
+
+	// Keep the dot-grid fallback visible until the banner finishes loading
+	// (covers Modrinth/CurseForge CDN, Smithed Firebase, and warmed data URLs).
+	const bannerReady = createMemo(() => {
+		const remote = remoteBannerUrl();
+		const painted = paintedBanner();
+		return Boolean(remote && painted?.remote === remote);
+	});
+
+	const markBannerPainted = (src: string) => {
+		const remote = remoteBannerUrl();
+		if (!remote || bgImage() !== src) return;
+		setPaintedBanner({ remote, src });
+	};
 
 	const iconHue = createMemo(() => {
 		const url = props.project.icon_url;
@@ -162,50 +350,22 @@ const ResourceCard: Component<{
 
 	const MODLOADER_IDS = new Set(["fabric", "forge", "quilt", "neoforge"]);
 
+	const formatLoaderLabel = (loader: string) => {
+		const labels: Record<string, string> = {
+			fabric: "Fabric",
+			forge: "Forge",
+			quilt: "Quilt",
+			neoforge: "NeoForge",
+		};
+		const lower = loader.toLowerCase();
+		return labels[lower] || loader.charAt(0).toUpperCase() + loader.slice(1);
+	};
+
 	const displayCategories = createMemo(() =>
 		props.project.categories.filter(
 			(c) => !resources.state.loader || !MODLOADER_IDS.has(c.toLowerCase()),
 		),
 	);
-
-	const tagLimit = () => (props.viewMode === "grid" ? 2 : 3);
-	const [effectiveLimit, setEffectiveLimit] = createSignal(tagLimit());
-	let tagsRef: HTMLDivElement | undefined;
-
-	createEffect(() => {
-		const el = tagsRef;
-		if (!el) return;
-
-		// Track viewMode dependency synchronously
-		tagLimit();
-
-		queueMicrotask(() => {
-			const currentEl = tagsRef;
-			if (!currentEl) return;
-
-			const children = Array.from(currentEl.children) as HTMLElement[];
-			const limit = tagLimit();
-			let count = Math.min(limit, children.length);
-
-			if (currentEl.scrollWidth <= currentEl.clientWidth) {
-				setEffectiveLimit(count);
-				return;
-			}
-
-			// Measure cumulatively: find the max count that fits
-			while (count > 1) {
-				let w = 0;
-				for (let i = 0; i < count; i++) {
-					if (i > 0) w += 4;
-					w += children[i].getBoundingClientRect().width;
-				}
-				if (w <= currentEl.clientWidth) break;
-				count--;
-			}
-
-			setEffectiveLimit(Math.max(1, count));
-		});
-	});
 
 	const navigateToDetails = () => {
 		resources.setInstallRequest(null);
@@ -216,6 +376,7 @@ const ResourceCard: Component<{
 				platform: props.project.source,
 				name: props.project.name,
 				iconUrl: props.project.icon_url,
+				resourceType: installType(),
 			},
 			{
 				project: props.project,
@@ -225,8 +386,9 @@ const ResourceCard: Component<{
 
 	const handleQuickInstall = async (e: MouseEvent) => {
 		e.stopPropagation();
+		const requestedInstallType = installType();
 
-		if (props.project.resource_type === "modpack") {
+		if (requestedInstallType === "modpack") {
 			const prefilledModpackInfo = buildBrowseModpackInfo(props.project, null, {
 				minecraftVersion: resources.state.gameVersion,
 				loader: resources.state.loader,
@@ -254,10 +416,28 @@ const ResourceCard: Component<{
 			if (isUpdateAvailable() && latest) {
 				const instanceId = resources.state.selectedInstanceId;
 				if (!instanceId) return;
+				if (requiresWorldTarget(props.project, latest, requestedInstallType)) {
+					resources.setInstallRequest({
+						project: props.project,
+						versions: [latest],
+						version: latest,
+						preferredInstanceId: instanceId,
+						installType: requestedInstallType,
+					});
+					return;
+				}
 
 				setLocalInstalling(true);
 				try {
-					await resources.install(props.project, latest);
+					await resources.install(
+						props.project,
+						latest,
+						{
+							kind: "instance",
+							instanceId,
+						},
+						{ installType: requestedInstallType },
+					);
 					showToast({
 						title: "Update Started",
 						description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
@@ -306,10 +486,18 @@ const ResourceCard: Component<{
 					props.project.source,
 					props.project.id,
 				);
-				resources.setInstallRequest({ project: props.project, versions });
+				resources.setInstallRequest({
+					project: props.project,
+					versions,
+					installType: requestedInstallType,
+				});
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
-				resources.setInstallRequest({ project: props.project, versions: [] });
+				resources.setInstallRequest({
+					project: props.project,
+					versions: [],
+					installType: requestedInstallType,
+				});
 			} finally {
 				setLocalInstalling(false);
 			}
@@ -325,12 +513,35 @@ const ResourceCard: Component<{
 				props.project.source,
 				props.project.id,
 			);
+			if (requestedInstallType === "datapack") {
+				resources.setInstallRequest({
+					project: props.project,
+					versions,
+					installType: "datapack",
+					preferredInstanceId: instance.id,
+				});
+				return;
+			}
 			const best = findBestVersionForInstance(
 				props.project,
 				versions,
 				instance,
+				"release",
+				requestedInstallType,
 			);
 			if (best) {
+				if (
+					requiresWorldTarget(props.project, best, requestedInstallType)
+				) {
+					resources.setInstallRequest({
+						project: props.project,
+						versions,
+						version: best,
+						preferredInstanceId: instance.id,
+						installType: requestedInstallType,
+					});
+					return;
+				}
 				const instLoader = instance.modloader?.toLowerCase() || "";
 				const hasDirectLoader = best.loaders.some(
 					(l) => l.toLowerCase() === instLoader,
@@ -348,7 +559,15 @@ const ResourceCard: Component<{
 					});
 				}
 
-				await resources.install(props.project, best);
+				await resources.install(
+					props.project,
+					best,
+					{
+						kind: "instance",
+						instanceId: instance.id,
+					},
+					{ installType: requestedInstallType },
+				);
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
@@ -373,7 +592,8 @@ const ResourceCard: Component<{
 	};
 
 	const Tag = (tag: string) => {
-		const tagLower = tag.toLowerCase();
+		const tagLower = String(tag).toLowerCase();
+		const isModloaderTag = MODLOADER_IDS.has(tagLower);
 
 		const categoryObj = () =>
 			resources.state.availableCategories.length > 0
@@ -384,27 +604,43 @@ const ResourceCard: Component<{
 					)
 				: null;
 
-		const isActive = () =>
-			resources.state.availableCategories.length > 0
-				? resources.state.categories.includes(
-						(categoryObj()?.id || tag).toLowerCase(),
-					)
-				: false;
+		const isActive = () => {
+			if (isModloaderTag) {
+				return resources.state.loader?.toLowerCase() === tagLower;
+			}
+			return resources.state.categories.some(
+				(c) => c.toLowerCase() === (categoryObj()?.id || tag).toLowerCase(),
+			);
+		};
 
 		return (
 			<Badge
 				variant="theme"
-				round
+				clickable
 				class={styles["resource-tag"]}
 				active={isActive()}
 				onClick={(e) => {
+					e.preventDefault();
 					e.stopPropagation();
+					if (isModloaderTag) {
+						const next =
+							resources.state.loader?.toLowerCase() === tagLower
+								? null
+								: tagLower;
+						resources.setLoader(next);
+						activeRouter()?.updateQuery("loader", next);
+						return;
+					}
 					const filterId = categoryObj()?.id || tag;
-					resources.toggleCategory(filterId.toLowerCase());
-					resources.setOffset(0);
+					resources.toggleCategory(filterId);
+					activeRouter()?.updateQuery(
+						"categories",
+						resources.state.categories,
+					);
+					activeRouter()?.updateQuery("loader", resources.state.loader);
 				}}
 			>
-				{categoryObj()?.name || tag}
+				{isModloaderTag ? formatLoaderLabel(tagLower) : categoryObj()?.name || tag}
 			</Badge>
 		);
 	};
@@ -416,20 +652,41 @@ const ResourceCard: Component<{
 			classList={{ [styles.installed]: isInstalled() }}
 		>
 			<Show when={props.viewMode === "grid"}>
-				<Show when={bgImage()}>
-					{(imageUrl) => (
-						<div class={styles["card-image-banner"]}>
-							<img src={imageUrl()} alt="" />
-							<div class={styles["card-image-fade"]} />
-						</div>
-					)}
-				</Show>
-				<Show when={!bgImage()}>
-					<div
-						class={styles["card-image-fallback"]}
-						style={{ "--fallback-hue": String(iconHue()) }}
-					/>
-				</Show>
+				<div class={styles["card-image-banner"]}>
+					<Show when={!bannerReady()}>
+						<div
+							class={styles["card-image-fallback"]}
+							style={{ "--fallback-hue": String(iconHue()) }}
+						/>
+					</Show>
+					<Show when={bgImage()}>
+						{(imageUrl) => {
+							const url = imageUrl();
+							return (
+								<img
+									src={url}
+									alt=""
+									classList={{
+										[styles["card-image-visible"]]: bannerReady(),
+									}}
+									ref={(el) => {
+										// Cached images may already be complete before onLoad binds.
+										if (el.complete && el.naturalWidth > 0) {
+											markBannerPainted(url);
+										}
+									}}
+									onLoad={() => markBannerPainted(url)}
+									onError={() => {
+										if (paintedBanner()?.src === url) {
+											setPaintedBanner(null);
+										}
+									}}
+								/>
+							);
+						}}
+					</Show>
+					<div class={styles["card-image-fade"]} />
+				</div>
 				<div class={styles["card-content"]}>
 					<div class={styles["card-row-1"]}>
 						<div class={styles["card-icon"]}>
@@ -467,37 +724,12 @@ const ResourceCard: Component<{
 					</Show>
 					<div class={styles["card-row-3"]}>
 						<Show when={displayCategories().length > 0}>
-							<div class={styles["card-tags-row"]}>
-								<div class={styles["card-tags"]} ref={tagsRef}>
-									<For
-										each={displayCategories().slice(
-											0,
-											Math.min(effectiveLimit(), displayCategories().length),
-										)}
-									>
-										{Tag}
-									</For>
-								</div>
-								<Show when={displayCategories().length > effectiveLimit()}>
-									<Tooltip>
-										<TooltipTrigger
-											as="span"
-											class={styles["resource-tag-more"]}
-										>
-											+{displayCategories().length - effectiveLimit()}
-										</TooltipTrigger>
-										<TooltipContent
-											onClick={(e: MouseEvent) => e.stopPropagation()}
-										>
-											<div class={styles["tooltip-tags"]}>
-												<For each={displayCategories().slice(effectiveLimit())}>
-													{Tag}
-												</For>
-											</div>
-										</TooltipContent>
-									</Tooltip>
-								</Show>
-							</div>
+							<CardTagOverflow
+								tags={displayCategories()}
+								renderTag={Tag}
+								rowClass={styles["card-tags-row"]}
+								tagsClass={styles["card-tags"]}
+							/>
 						</Show>
 						<div class={styles["resource-card-actions"]}>
 							<Button
@@ -568,34 +800,12 @@ const ResourceCard: Component<{
 						<p class={styles["card-list-desc"]}>{props.project.summary}</p>
 					</Show>
 					<Show when={displayCategories().length > 0}>
-						<div class={styles["card-list-tags-row"]}>
-							<div class={styles["card-list-tags"]}>
-								<For
-									each={displayCategories().slice(
-										0,
-										Math.min(effectiveLimit(), displayCategories().length),
-									)}
-								>
-									{Tag}
-								</For>
-							</div>
-							<Show when={displayCategories().length > effectiveLimit()}>
-								<Tooltip>
-									<TooltipTrigger as="span" class={styles["resource-tag-more"]}>
-										+{displayCategories().length - effectiveLimit()}
-									</TooltipTrigger>
-									<TooltipContent
-										onClick={(e: MouseEvent) => e.stopPropagation()}
-									>
-										<div class={styles["tooltip-tags"]}>
-											<For each={displayCategories().slice(effectiveLimit())}>
-												{Tag}
-											</For>
-										</div>
-									</TooltipContent>
-								</Tooltip>
-							</Show>
-						</div>
+						<CardTagOverflow
+							tags={displayCategories()}
+							renderTag={Tag}
+							rowClass={styles["card-list-tags-row"]}
+							tagsClass={styles["card-list-tags"]}
+						/>
 					</Show>
 				</div>
 			</Show>

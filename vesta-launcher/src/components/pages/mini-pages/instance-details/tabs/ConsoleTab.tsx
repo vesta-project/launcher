@@ -1,11 +1,18 @@
-import FolderIcon from "@assets/folder.svg";
-import HistoryIcon from "@assets/history.svg";
-import RefreshIcon from "@assets/refresh.svg";
-import SearchIcon from "@assets/search.svg";
-import TrashIcon from "@assets/trash.svg";
-import { consoleStore, type LogLevel } from "@stores/console";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import HistoryIcon from "@assets/icons/content/history.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";
+import ChevronUpIcon from "@assets/icons/controls/chevron-up.svg";
+import LiveIcon from "@assets/icons/status/live.svg";
+import TerminalIcon from "@assets/icons/content/terminal.svg";
+import {
+	CONSOLE_FILTER_LEVELS,
+	consoleStore,
+	type LogFileInfo,
+	type LogLevel,
+} from "@stores/console";
 import { instancesState } from "@stores/instances";
-import { createVirtualizer } from "@tanstack/solid-virtual";
 import Button from "@ui/button/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { TextField } from "@ui/text-field/text-field";
@@ -21,40 +28,10 @@ import {
 	Show,
 } from "solid-js";
 import styles from "../instance-details.module.css";
-
-const ArrowUpIcon = (props: { class?: string }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="16"
-		height="16"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		class={props.class}
-	>
-		<polyline points="18 15 12 9 6 15" />
-	</svg>
-);
-
-const ArrowDownIcon = (props: { class?: string }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="16"
-		height="16"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		class={props.class}
-	>
-		<polyline points="6 9 12 15 18 9" />
-	</svg>
-);
+import {
+	formatLogFileMetadata,
+	getConsoleLogDisplay,
+} from "../console-log-display";
 
 interface ConsoleTabProps {
 	instanceSlug: string;
@@ -71,8 +48,17 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	const [atBottom, setAtBottom] = createSignal(true);
 	const [isSearchExpanded, setIsSearchExpanded] = createSignal(false);
 	const hasFilters = () =>
-		consoleStore.state.filterLevels.length < 4 ||
-		consoleStore.state.searchQuery.length > 0;
+		CONSOLE_FILTER_LEVELS.some(
+			(level) => !consoleStore.state.filterLevels.includes(level),
+		) || consoleStore.state.searchQuery.length > 0;
+	const logDisplay = createMemo(() =>
+		getConsoleLogDisplay({
+			isLive: consoleStore.state.isLive,
+			currentLogPath: consoleStore.state.currentLogPath,
+			history: consoleStore.state.history as LogFileInfo[],
+			instanceSlug: props.instanceSlug,
+		}),
+	);
 
 	onMount(async () => {
 		const cleanup = await consoleStore.init(props.instanceSlug);
@@ -108,7 +94,12 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 		const filtered = consoleStore.state.lines.filter((line) => {
 			const matchesQuery = !query || line.raw.toLowerCase().includes(query);
-			const matchesLevel = levels.includes(line.level);
+			// Unclassified lines are still real console output (stack traces,
+			// crash reports, native-loader diagnostics). FATAL shares the
+			// visible ERROR category because there is no separate FATAL control.
+			const matchesLevel =
+				line.level === "UNKNOWN" ||
+				levels.includes(line.level === "FATAL" ? "ERROR" : line.level);
 			return matchesQuery && matchesLevel;
 		});
 
@@ -117,38 +108,14 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 		return filtered;
 	});
 
-	const lineVirtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-		get count() {
-			return filteredLines().length;
-		},
-		getScrollElement: () => outputElement() ?? null,
-		estimateSize: () => 30,
-		overscan: 20,
-		getItemKey: (index) => filteredLines()[index]?.id ?? index,
-	});
-	const virtualLines = createMemo(() => {
-		const measured = lineVirtualizer.getVirtualItems();
-		if (measured.length > 0) return measured;
-		return Array.from(
-			{ length: Math.min(60, filteredLines().length) },
-			(_, index) => ({
-				key: filteredLines()[index]?.id ?? index,
-				index,
-				start: index * 30,
-				end: (index + 1) * 30,
-				size: 30,
-				lane: 0,
-			}),
-		);
-	});
-
 	// Handle autoscroll
 	createEffect(() => {
 		const count = filteredLines().length;
 		const output = outputElement();
 		if (consoleStore.state.autoScroll && output && count > 0) {
 			requestAnimationFrame(() => {
-				lineVirtualizer.scrollToIndex(count - 1, { align: "end" });
+				output.scrollTop = output.scrollHeight;
+				checkScroll();
 			});
 		}
 	});
@@ -185,33 +152,21 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 			<div class={styles["console-header"]}>
 				<div class={styles["console-toolbar"]}>
 					<div class={styles["console-toolbar-left"]}>
-						<span class={styles["console-title"]}>
-							{consoleStore.state.isLive
-								? "Viewing Session Logs"
-								: consoleStore.state.currentLogPath
-									? `Viewing Historical Log: ${consoleStore.state.currentLogPath.split(/[/\\]/).pop()}`
-									: "Viewing Historical Logs"}
-						</span>
-						<Show
-							when={
-								!consoleStore.state.isLive &&
-								instancesState.runningIds[props.instanceSlug]
-							}
-						>
-							<Tooltip placement="top">
-								<TooltipTrigger>
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => consoleStore.goLive(props.instanceSlug)}
-										class={styles["console-back-live"]}
-									>
-										<RefreshIcon /> Switch to Live
-									</Button>
-								</TooltipTrigger>
-								<TooltipContent>Switch back to live logs</TooltipContent>
-							</Tooltip>
-						</Show>
+						<div class={styles["console-file-context"]}>
+							<div>
+								<span class={styles["console-title"]}>
+									{logDisplay().title}
+								</span>
+								<Show when={logDisplay().live}>
+									<span class={styles["console-live-indicator"]}>LIVE</span>
+								</Show>
+							</div>
+							<Show when={logDisplay().metadata}>
+								{(metadata) => (
+									<span class={styles["console-file-meta"]}>{metadata()}</span>
+								)}
+							</Show>
+						</div>
 					</div>
 
 					<div class={styles["console-toolbar-buttons"]}>
@@ -266,6 +221,25 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							<TooltipContent>Open logs folder</TooltipContent>
 						</Tooltip>
 
+						<Show
+							when={
+								!consoleStore.state.isLive &&
+								instancesState.runningIds[props.instanceSlug]
+							}
+						>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => consoleStore.goLive(props.instanceSlug)}
+								class={styles["console-back-live"]}
+								aria-label="Follow live output"
+								tooltip_text="Return to the live console output"
+							>
+								<LiveIcon />
+								<span>Follow live</span>
+							</Button>
+						</Show>
+
 						<Popover open={historyOpen()} onOpenChange={setHistoryOpen}>
 							<Tooltip placement="top">
 								<TooltipTrigger>
@@ -303,7 +277,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 											>
 												<span class={styles["history-name"]}>{file.name}</span>
 												<span class={styles["history-meta"]}>
-													{(file.size / 1024).toFixed(1)} KB
+													{formatLogFileMetadata(file)}
 												</span>
 											</button>
 										)}
@@ -331,7 +305,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 				</div>
 
 				<div class={styles["console-filters"]}>
-					<For each={["INFO", "WARN", "ERROR", "DEBUG"] as LogLevel[]}>
+					<For each={CONSOLE_FILTER_LEVELS}>
 						{(level) => (
 							<button
 								onClick={() => consoleStore.toggleFilterLevel(level)}
@@ -360,18 +334,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 					when={filteredLines().length > 0 || consoleStore.state.isCatchingUp}
 					fallback={
 						<div class={styles["console-empty"]}>
-							<svg
-								class={styles["empty-icon"]}
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<polyline points="4 17 10 11 4 5" />
-								<line x1="12" y1="19" x2="20" y2="19" />
-							</svg>
+							<TerminalIcon class={styles["empty-icon"]} />
 							<Show
 								when={
 									hasFilters() &&
@@ -392,11 +355,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									<Button
 										variant="slate"
 										size="sm"
-										onClick={() => {
-											["INFO", "WARN", "ERROR", "DEBUG"].forEach((l) =>
-												consoleStore.toggleFilterLevel(l as LogLevel),
-											);
-										}}
+										onClick={() => consoleStore.resetFilters()}
 									>
 										Reset Filters
 									</Button>
@@ -434,63 +393,29 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 						</div>
 					}
 				>
-					<div
-						class={styles["console-virtual-container"]}
-						style={{
-							height: `${lineVirtualizer.getTotalSize()}px`,
-							position: "relative",
-							width: "100%",
-						}}
-					>
-						<For each={virtualLines()}>
-							{(virtualLine) => {
-								const line = () => filteredLines()[virtualLine.index];
-								return (
-									<Show when={line()}>
-										{(visibleLine) => (
-											<div
-												ref={(element) =>
-													lineVirtualizer.measureElement(element)
-												}
-												data-index={virtualLine.index}
-												class={styles["console-line-wrapper"]}
-												style={{
-													position: "absolute",
-													top: "0",
-													left: "0",
-													transform: `translateY(${virtualLine.start}px)`,
-												}}
+					<div class={styles["console-lines"]}>
+						<For each={filteredLines()}>
+							{(line) => (
+								<div class={styles["console-line-wrapper"]}>
+									<div class={styles["console-gutter"]}>{line.id}</div>
+									<div class={styles["console-line-content"]}>
+										<Show when={line.timestamp}>
+											<span class={styles["log-time"]}>[{line.timestamp}]</span>
+										</Show>
+										<Show when={line.level !== "UNKNOWN"}>
+											<span
+												class={clsx(
+													styles["log-level"],
+													styles[`log-level--${line.level.toLowerCase()}`],
+												)}
 											>
-												<div class={styles["console-gutter"]}>
-													{visibleLine().id}
-												</div>
-												<div class={styles["console-line-content"]}>
-													<Show when={visibleLine().timestamp}>
-														<span class={styles["log-time"]}>
-															[{visibleLine().timestamp}]
-														</span>
-													</Show>
-													<Show when={visibleLine().level !== "UNKNOWN"}>
-														<span
-															class={clsx(
-																styles["log-level"],
-																styles[
-																	`log-level--${visibleLine().level.toLowerCase()}`
-																],
-															)}
-														>
-															[{visibleLine().thread}/{visibleLine().level}]:
-														</span>
-													</Show>
-													<span class={styles["log-message"]}>
-														{visibleLine().message}
-													</span>
-												</div>
-											</div>
-										)}
-									</Show>
-								);
-							}}
+												[{line.thread}/{line.level}]:
+											</span>
+										</Show>
+										<span class={styles["log-message"]}>{line.message}</span>
+									</div>
+								</div>
+							)}
 						</For>
 					</div>
 				</Show>
@@ -506,8 +431,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								onClick={toggleScroll}
 								class={styles["scroll-btn-round"]}
 							>
-								<Show when={atBottom()} fallback={<ArrowDownIcon />}>
-									<ArrowUpIcon />
+									<Show when={atBottom()} fallback={<ChevronDownIcon />}>
+										<ChevronUpIcon />
 								</Show>
 							</Button>
 						</TooltipTrigger>

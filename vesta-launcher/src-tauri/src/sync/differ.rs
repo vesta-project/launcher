@@ -103,6 +103,7 @@ impl ThreeWayDiffer {
         tree
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_binary(
         tree: &mut ActionTree,
         display_path: &str,
@@ -165,7 +166,7 @@ impl ThreeWayDiffer {
                         // Only remove if user hasn't modified it
                         old_hash
                             .as_ref()
-                            .map_or(true, |oh| ch.to_lowercase() == oh.to_lowercase())
+                            .is_none_or(|oh| ch.to_lowercase() == oh.to_lowercase())
                     }
                     None => true, // File doesn't exist on disk, nothing to remove
                 };
@@ -199,7 +200,7 @@ impl ThreeWayDiffer {
             let should_remove = match cur_hash {
                 Some(ch) => old_hash
                     .as_ref()
-                    .map_or(true, |oh| ch.to_lowercase() == oh.to_lowercase()),
+                    .is_none_or(|oh| ch.to_lowercase() == oh.to_lowercase()),
                 None => true,
             };
             if should_remove {
@@ -227,6 +228,7 @@ impl ThreeWayDiffer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_text(
         tree: &mut ActionTree,
         display_path: &str,
@@ -597,7 +599,7 @@ mod tests {
             .iter()
             .filter(|a| matches!(a, SyncAction::Skip { .. }))
             .collect();
-        assert!(skips.len() >= 1, "Should normalize case");
+        assert!(!skips.is_empty(), "Should normalize case");
         let updates: Vec<_> = tree
             .actions
             .iter()

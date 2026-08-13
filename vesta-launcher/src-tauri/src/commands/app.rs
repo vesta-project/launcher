@@ -771,7 +771,6 @@ fn is_allowed_navigate_path(path: &str) -> bool {
         "/config"
             | "/changelog"
             | "/install"
-            | "/install/source"
             | "/install/import"
             | "/modding-guide"
             | "/resources"
@@ -861,7 +860,7 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
 
     if was_coerced {
         notify_unsupported_window_effect(
-            &app_handle,
+            app_handle,
             effect.as_str(),
             active_effect.as_str(),
             capabilities.os.as_str(),

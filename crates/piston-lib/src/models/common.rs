@@ -5,16 +5,13 @@ use std::sync::Arc;
 /// Represents a Minecraft skin model variant.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum MinecraftSkinVariant {
+    #[default]
     Classic,
     Slim,
 }
 
-impl Default for MinecraftSkinVariant {
-    fn default() -> Self {
-        Self::Classic
-    }
-}
 
 impl From<&str> for MinecraftSkinVariant {
     fn from(s: &str) -> Self {

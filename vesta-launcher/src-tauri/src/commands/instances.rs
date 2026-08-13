@@ -715,10 +715,7 @@ pub async fn install_instance(
     }
 
     // Check if we are in guest mode
-    let active_account = match crate::auth::get_active_account() {
-        Ok(a) => a,
-        Err(_) => None,
-    };
+    let active_account = crate::auth::get_active_account().unwrap_or_default();
 
     if let Some(acc) = active_account {
         if acc.account_type == ACCOUNT_TYPE_GUEST || acc.account_type == ACCOUNT_TYPE_DEMO {
@@ -960,17 +957,17 @@ pub async fn create_instance(
     }
 
     // If we have a modpack icon URL but no bytes, try to download them now
-    if inst.modpack_icon_url.is_some() && inst.icon_data.is_none() {
-        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(
-            inst.modpack_icon_url.as_ref().unwrap(),
-        )
-        .await
-        {
-            log::info!(
-                "[create_instance] Successfully downloaded icon for offline use ({} bytes)",
-                bytes.len()
-            );
-            inst.icon_data = Some(bytes);
+    if let Some(icon_url) = inst.modpack_icon_url.as_ref() {
+        if inst.icon_data.is_none() {
+            if let Ok(bytes) =
+                crate::utils::instance_helpers::download_icon_as_bytes(icon_url).await
+            {
+                log::info!(
+                    "[create_instance] Successfully downloaded icon for offline use ({} bytes)",
+                    bytes.len()
+                );
+                inst.icon_data = Some(bytes);
+            }
         }
     }
 
@@ -1182,20 +1179,19 @@ pub async fn update_instance(
         })
         .unwrap_or(false);
 
-    if !is_using_custom_preset
-        && final_instance.modpack_icon_url.is_some()
-        && final_instance.icon_data.is_none()
-    {
-        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(
-            final_instance.modpack_icon_url.as_ref().unwrap(),
-        )
-        .await
-        {
-            log::info!(
-                "[update_instance] Successfully downloaded icon for offline use ({} bytes)",
-                bytes.len()
-            );
-            final_instance.icon_data = Some(bytes);
+    if !is_using_custom_preset {
+        if let Some(icon_url) = final_instance.modpack_icon_url.as_ref() {
+            if final_instance.icon_data.is_none() {
+                if let Ok(bytes) =
+                    crate::utils::instance_helpers::download_icon_as_bytes(icon_url).await
+                {
+                    log::info!(
+                        "[update_instance] Successfully downloaded icon for offline use ({} bytes)",
+                        bytes.len()
+                    );
+                    final_instance.icon_data = Some(bytes);
+                }
+            }
         }
     }
 
@@ -1509,7 +1505,10 @@ pub async fn launch_instance(
         }
     }
 
-    if instance_data.installation_status.as_deref() == Some("installing") {
+    if matches!(
+        instance_data.installation_status.as_deref(),
+        Some("installing") | Some("interrupted")
+    ) {
         let op = instance_data
             .last_operation
             .as_deref()
@@ -1884,7 +1883,7 @@ pub async fn read_instance_log(
             .map_err(|e| format!("Failed to open log file: {}", e))?;
         let reader = std::io::BufReader::new(file);
 
-        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+        let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
         if let Some(n) = last_lines {
             if lines.len() > n {
                 return Ok(lines[lines.len() - n..].to_vec());
@@ -1966,7 +1965,7 @@ pub fn get_instance_log_history(instance_id_slug: String) -> Result<Vec<LogFileI
     }
 
     // Sort by last modified descending
-    logs.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+    logs.sort_by_key(|log| std::cmp::Reverse(log.last_modified));
 
     Ok(logs)
 }
@@ -1989,16 +1988,11 @@ pub async fn read_specific_log_file(path: String) -> Result<Vec<String>, String>
             use flate2::read::GzDecoder;
             let decoder = GzDecoder::new(file);
             let reader = BufReader::new(decoder);
-            let mut lines = Vec::new();
-            for line in reader.lines() {
-                if let Ok(l) = line {
-                    lines.push(l);
-                }
-            }
+            let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
             Ok(lines)
         } else {
             let reader = BufReader::new(file);
-            let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+            let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
             Ok(lines)
         }
     })
@@ -2129,30 +2123,59 @@ pub async fn resume_instance_operation(
                 .game_directory
                 .as_ref()
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
+                .unwrap_or_else(|| data_dir.join("instances").join(inst.slug()));
 
-            let version_id = crate::modpack::update::pending_target(&game_dir)
-                .ok_or_else(|| {
-                    "Cannot resume modpack update: no pending version recorded. Open the instance Version tab to retry."
-                        .to_string()
-                })?;
+            if !crate::modpack::update::has_pending_recovery(&game_dir) {
+                return Err(
+                    "Cannot resume update recovery: no pending recovery was found. Start the update again from the Version tab."
+                        .to_string(),
+                );
+            }
 
-            crate::commands::instances::update_instance_operation(
+            match crate::modpack::update::recover_previous_instance(
                 &app_handle,
                 instance_id,
-                "update",
-            )?;
-            crate::commands::instances::update_installation_status(
-                &app_handle,
-                instance_id,
-                "installing",
-            )?;
-
-            let task =
-                crate::tasks::update_modpack::UpdateModpackTask::new(instance_id, version_id);
-            task_manager.submit(Box::new(task)).await
+                &game_dir,
+            ) {
+                Ok(crate::modpack::update::UpdateRecoveryOutcome::Restored) => {
+                    crate::modpack::update::publish_recovery_complete_notification(
+                        &app_handle,
+                        instance_id,
+                        false,
+                    );
+                    Ok(())
+                }
+                Ok(crate::modpack::update::UpdateRecoveryOutcome::Committed) => {
+                    crate::modpack::update::publish_recovery_complete_notification(
+                        &app_handle,
+                        instance_id,
+                        true,
+                    );
+                    Ok(())
+                }
+                Ok(crate::modpack::update::UpdateRecoveryOutcome::None) => {
+                    Err("No pending update recovery was found.".to_string())
+                }
+                Err(error) => {
+                    if let Err(status_error) =
+                        crate::modpack::update::mark_recovery_interrupted(&app_handle, instance_id)
+                    {
+                        log::error!(
+                            "Failed to preserve update recovery state for instance {}: {}",
+                            instance_id,
+                            status_error
+                        );
+                    }
+                    crate::modpack::update::publish_recovery_required_notification(
+                        &app_handle,
+                        instance_id,
+                        &error,
+                    );
+                    Err(format!("Update recovery is still incomplete: {}", error))
+                }
+            }
         }
-        "install" | _ => install_instance(app_handle, task_manager, inst, None).await,
+        _ => install_instance(app_handle, task_manager, inst, None).await,
     }
 }
 

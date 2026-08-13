@@ -1,11 +1,11 @@
-import ATLauncherIcon from "@assets/at-launcher.svg";
-import CurseForgeIcon from "@assets/curseforge.svg";
-import FTBIcon from "@assets/feed-the-beast.svg";
-import GDLauncherIcon from "@assets/gd-launcher.svg";
-import ModrinthIcon from "@assets/modrinth.svg";
-import MultiMCIcon from "@assets/multimc.svg";
-import PrismLauncherIcon from "@assets/prism-launcher.svg";
-import TechnicLauncherIcon from "@assets/technic-launcher.svg";
+import ATLauncherIcon from "@assets/branding/launchers/at-launcher.svg";
+import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
+import FTBIcon from "@assets/branding/launchers/feed-the-beast.svg";
+import GDLauncherIcon from "@assets/branding/launchers/gd-launcher.svg";
+import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
+import MultiMCIcon from "@assets/branding/launchers/multimc.svg";
+import PrismLauncherIcon from "@assets/branding/launchers/prism-launcher.svg";
+import TechnicLauncherIcon from "@assets/branding/launchers/technic-launcher.svg";
 import type { LauncherKind } from "@utils/launcher-imports";
 import type { LauncherOption } from "../types";
 

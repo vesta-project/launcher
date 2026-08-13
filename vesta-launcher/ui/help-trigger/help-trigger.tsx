@@ -1,4 +1,4 @@
-import HelpIcon from "@assets/help.svg";
+import HelpIcon from "@assets/icons/content/help.svg";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { HELP_CONTENT } from "@utils/help-content";

@@ -23,6 +23,7 @@ pub struct InstallInstanceTask {
     instance: Instance,
     dry_run: bool,
     update_notification_title: bool,
+    manage_instance_lifecycle: bool,
 }
 
 impl InstallInstanceTask {
@@ -31,6 +32,7 @@ impl InstallInstanceTask {
             instance,
             dry_run: false,
             update_notification_title: true,
+            manage_instance_lifecycle: true,
         }
     }
 
@@ -40,6 +42,10 @@ impl InstallInstanceTask {
 
     pub fn set_update_notification_title(&mut self, update_notification_title: bool) {
         self.update_notification_title = update_notification_title;
+    }
+
+    pub fn set_manage_instance_lifecycle(&mut self, manage_instance_lifecycle: bool) {
+        self.manage_instance_lifecycle = manage_instance_lifecycle;
     }
 }
 
@@ -68,18 +74,18 @@ impl Task for InstallInstanceTask {
     fn starting_description(&self) -> String {
         // Build friendly version string for notification
         let modloader = self.instance.modloader.as_deref().unwrap_or("vanilla");
-        if modloader != "vanilla" && self.instance.modloader_version.is_some() {
-            format!(
-                "Minecraft {} ({} {})",
-                self.instance.minecraft_version,
-                modloader,
-                self.instance.modloader_version.as_ref().unwrap()
-            )
-        } else if modloader != "vanilla" {
-            format!(
-                "Minecraft {} ({})",
-                self.instance.minecraft_version, modloader
-            )
+        if modloader != "vanilla" {
+            if let Some(modloader_version) = self.instance.modloader_version.as_ref() {
+                format!(
+                    "Minecraft {} ({} {})",
+                    self.instance.minecraft_version, modloader, modloader_version
+                )
+            } else {
+                format!(
+                    "Minecraft {} ({})",
+                    self.instance.minecraft_version, modloader
+                )
+            }
         } else {
             format!("Minecraft {}", self.instance.minecraft_version)
         }
@@ -97,6 +103,7 @@ impl Task for InstallInstanceTask {
         let instance = self.instance.clone();
         let dry_run = self.dry_run;
         let update_notification_title = self.update_notification_title;
+        let manage_instance_lifecycle = self.manage_instance_lifecycle;
         let app_handle = ctx.app_handle.clone();
         let notification_id = ctx.notification_id.clone();
         let pause_rx = ctx.pause_rx.clone();
@@ -128,7 +135,7 @@ impl Task for InstallInstanceTask {
                 .game_directory
                 .as_ref()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| data_dir.join("instances").join(&instance.slug()));
+                .unwrap_or_else(|| data_dir.join("instances").join(instance.slug()));
 
             log::info!(
                 "[InstallTask] Data dir: {:?}, Game dir: {:?}",
@@ -238,7 +245,7 @@ impl Task for InstallInstanceTask {
                     } else {
                         // Restore the current step description when resuming
                         let step = current_step_for_pause.read().await;
-                        let _ = manager.upsert_description(&pause_notification_id, &*step);
+                        let _ = manager.upsert_description(&pause_notification_id, &step);
                     }
                 }
             });
@@ -268,7 +275,7 @@ impl Task for InstallInstanceTask {
                     );
 
                     // Update database status to 'installed'
-                    if instance.id > 0 {
+                    if manage_instance_lifecycle && instance.id > 0 {
                         if let Err(e) = crate::commands::instances::update_installation_status(
                             &app_handle,
                             instance.id,
@@ -279,24 +286,27 @@ impl Task for InstallInstanceTask {
                     }
 
                     // Emit installed event for frontend with a full instance payload.
-                    use tauri::Emitter;
-                    match crate::commands::instances::get_instance(instance.id) {
-                        Ok(updated_instance) => {
-                            let _ = app_handle.emit("core://instance-installed", updated_instance);
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "[InstallTask] Failed to fetch full installed instance payload (id={}): {}",
-                                instance.id,
-                                e
-                            );
-                            let _ = app_handle.emit(
-                                "core://instance-installed",
-                                serde_json::json!({
-                                    "name": instance.name,
-                                    "instance_id": instance.slug()
-                                }),
-                            );
+                    if manage_instance_lifecycle {
+                        use tauri::Emitter;
+                        match crate::commands::instances::get_instance(instance.id) {
+                            Ok(updated_instance) => {
+                                let _ =
+                                    app_handle.emit("core://instance-installed", updated_instance);
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "[InstallTask] Failed to fetch full installed instance payload (id={}): {}",
+                                    instance.id,
+                                    e
+                                );
+                                let _ = app_handle.emit(
+                                    "core://instance-installed",
+                                    serde_json::json!({
+                                        "name": instance.name,
+                                        "instance_id": instance.slug()
+                                    }),
+                                );
+                            }
                         }
                     }
 
@@ -306,7 +316,7 @@ impl Task for InstallInstanceTask {
                     log::error!("[InstallTask] Installation failed: {}", e);
 
                     // Update database status to 'failed' with reason
-                    if instance.id > 0 {
+                    if manage_instance_lifecycle && instance.id > 0 {
                         let status_val = format!("failed:{}", e);
                         if let Err(status_err) =
                             crate::commands::instances::update_installation_status(

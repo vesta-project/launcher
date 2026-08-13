@@ -10,6 +10,7 @@ import { initTheme } from "@components/theming";
 import { initializeInstances } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import { getStartupConfig } from "@utils/startup-state";
+import { initializeLocalization } from "~/localization";
 
 export type StartupTarget = "home" | "init";
 export type StartupAtmosphereState = "active" | "fading" | "off";
@@ -169,6 +170,8 @@ export async function bootstrapStartup(): Promise<StartupBootstrapResult> {
 		} catch (error) {
 			console.error("Failed to load startup config:", error);
 		}
+
+		initializeLocalization(config.language);
 
 		let account: Record<string, any> | null = null;
 		try {

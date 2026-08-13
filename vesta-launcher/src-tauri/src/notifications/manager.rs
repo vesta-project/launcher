@@ -15,6 +15,10 @@ pub trait ActionHandler: Send + Sync {
         client_key: Option<String>,
         payload: Option<serde_json::Value>,
     ) -> Result<()>;
+
+    fn auto_dismiss(&self, _app_handle: &AppHandle, _client_key: Option<&str>) -> bool {
+        true
+    }
 }
 
 /// Handler that opens a URL in the default browser
@@ -391,14 +395,19 @@ impl NotificationManager {
                 (None, None)
             };
 
+            let auto_dismiss = handler.auto_dismiss(&self.app_handle, target_client_key.as_deref());
             handler.handle(&self.app_handle, target_client_key.clone(), action_payload)?;
 
             // Auto-dismiss the notification after action (unless it's a progress notification)
-            if let Some(key) = target_client_key {
-                if let Ok(Some(notif)) = NotificationStore::get_by_client_key(&key) {
-                    if notif.notification_type != NotificationType::Progress && notif.dismissible {
-                        if let Err(e) = self.delete(key.clone()) {
-                            log::error!("Failed to auto-dismiss notification after action invocation (key: {}): {}", key, e);
+            if auto_dismiss {
+                if let Some(key) = target_client_key {
+                    if let Ok(Some(notif)) = NotificationStore::get_by_client_key(&key) {
+                        if notif.notification_type != NotificationType::Progress
+                            && notif.dismissible
+                        {
+                            if let Err(e) = self.delete(key.clone()) {
+                                log::error!("Failed to auto-dismiss notification after action invocation (key: {}): {}", key, e);
+                            }
                         }
                     }
                 }
@@ -414,7 +423,7 @@ impl NotificationManager {
 
         let severity = input
             .severity
-            .map(|s| NotificationSeverity::from(s))
+            .map(NotificationSeverity::from)
             .unwrap_or(NotificationSeverity::Info);
 
         let mut notification = Notification {
@@ -541,6 +550,7 @@ impl NotificationManager {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_progress_full(
         &self,
         id_or_key: String,

@@ -5,7 +5,7 @@ use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
 use piston_lib::game::installer::types::{InstallSpec, ModloaderType, SilentProgressReporter};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 pub struct ImportResourceResyncTask {
@@ -401,7 +401,7 @@ struct LocalHint {
     file_name: Option<String>,
 }
 
-fn collect_launcher_hints(launcher_kind: &str, source_root: &PathBuf) -> Vec<LocalHint> {
+fn collect_launcher_hints(launcher_kind: &str, source_root: &Path) -> Vec<LocalHint> {
     match launcher_kind {
         "curseforgeFlame" | "prism" | "multimc" => {
             crate::launcher_import::providers::flame_metadata::extract_flame_resource_hints(
@@ -477,12 +477,12 @@ fn collect_launcher_hints(launcher_kind: &str, source_root: &PathBuf) -> Vec<Loc
     }
 }
 
-fn resolve_modrinth_launcher_root(source_root: &PathBuf) -> PathBuf {
+fn resolve_modrinth_launcher_root(source_root: &Path) -> PathBuf {
     if source_root.ends_with("profiles") {
         return source_root
             .parent()
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| source_root.clone());
+            .unwrap_or_else(|| source_root.to_path_buf());
     }
     if source_root
         .parent()
@@ -495,17 +495,17 @@ fn resolve_modrinth_launcher_root(source_root: &PathBuf) -> PathBuf {
             .parent()
             .and_then(|p| p.parent())
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| source_root.clone());
+            .unwrap_or_else(|| source_root.to_path_buf());
     }
-    source_root.clone()
+    source_root.to_path_buf()
 }
 
-fn resolve_gdlauncher_root(source_root: &PathBuf) -> PathBuf {
+fn resolve_gdlauncher_root(source_root: &Path) -> PathBuf {
     if source_root.ends_with("instances") {
         return source_root
             .parent()
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| source_root.clone());
+            .unwrap_or_else(|| source_root.to_path_buf());
     }
     if source_root
         .parent()
@@ -518,9 +518,9 @@ fn resolve_gdlauncher_root(source_root: &PathBuf) -> PathBuf {
             .parent()
             .and_then(|p| p.parent())
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| source_root.clone());
+            .unwrap_or_else(|| source_root.to_path_buf());
     }
-    source_root.clone()
+    source_root.to_path_buf()
 }
 
 async fn apply_launcher_hints(

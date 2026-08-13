@@ -55,7 +55,7 @@ pub async fn check_modpack_update(
         .game_directory
         .as_ref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
+        .unwrap_or_else(|| data_dir.join("instances").join(inst.slug()));
     // Ensure $O$ exists (bootstrap from linked version when missing, e.g. launcher import)
     if let Err(e) =
         manifest_bootstrap::ensure_old_manifest(&app_handle, &inst, &game_dir, None).await
@@ -137,11 +137,11 @@ pub async fn start_modpack_update(
         .game_directory
         .as_ref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
+        .unwrap_or_else(|| data_dir.join("instances").join(inst.slug()));
 
-    crate::modpack::update::begin(&app_handle, instance_id, &game_dir, &new_version_id)?;
+    crate::modpack::update::begin(&app_handle, &inst, &game_dir, &new_version_id)?;
 
-    let task = UpdateModpackTask::new(instance_id, new_version_id);
+    let task = UpdateModpackTask::new(instance_id, new_version_id, game_dir.clone());
     if let Err(e) = task_manager.submit(Box::new(task)).await {
         crate::modpack::update::rollback_start(&app_handle, instance_id, &game_dir);
         return Err(e.to_string());

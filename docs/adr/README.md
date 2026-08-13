@@ -25,6 +25,8 @@ not worth doing today.
 - [ADR-0004: Put Installed Resource Facts In The Tauri Resource Ledger](0004-installed-resource-ledger.md)
 - [ADR-0005: Separate Authentication Rejection From Service Availability](0005-authentication-availability-offline-fallback.md)
 - [ADR-0006: Batch Resource Reconciliation And Scope Instance Events](0006-batched-resource-reconciliation-and-scoped-instance-events.md)
+- [ADR-0007: Keep Localization Catalogs With The Launcher](0007-keep-localization-catalogs-with-launcher.md)
+- [ADR-0008: Keep Command Execution In Frontend And Persist Keybindings In SQLite](0008-keyboard-command-catalog.md)
 
 Use `0000-template.md` for the first decision and number accepted records as
 `0001-short-title.md`, `0002-short-title.md`, and so on.

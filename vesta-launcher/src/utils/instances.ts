@@ -1,13 +1,13 @@
-import PlaceholderImage1 from "@assets/placeholder-images/placeholder-image1.png";
-import PlaceholderImage2 from "@assets/placeholder-images/placeholder-image2.png";
-import PlaceholderImage3 from "@assets/placeholder-images/placeholder-image3.png";
-import PlaceholderImage4 from "@assets/placeholder-images/placeholder-image4.png";
-import PlaceholderImage5 from "@assets/placeholder-images/placeholder-image5.png";
-import PlaceholderImage6 from "@assets/placeholder-images/placeholder-image6.png";
-import PlaceholderImage7 from "@assets/placeholder-images/placeholder-image7.png";
-import PlaceholderImage8 from "@assets/placeholder-images/placeholder-image8.png";
-import PlaceholderImage9 from "@assets/placeholder-images/placeholder-image9.png";
-import PlaceholderImage10 from "@assets/placeholder-images/placeholder-image10.png";
+import PlaceholderImage1 from "@assets/images/placeholders/placeholder-image1.png";
+import PlaceholderImage2 from "@assets/images/placeholders/placeholder-image2.png";
+import PlaceholderImage3 from "@assets/images/placeholders/placeholder-image3.png";
+import PlaceholderImage4 from "@assets/images/placeholders/placeholder-image4.png";
+import PlaceholderImage5 from "@assets/images/placeholders/placeholder-image5.png";
+import PlaceholderImage6 from "@assets/images/placeholders/placeholder-image6.png";
+import PlaceholderImage7 from "@assets/images/placeholders/placeholder-image7.png";
+import PlaceholderImage8 from "@assets/images/placeholders/placeholder-image8.png";
+import PlaceholderImage9 from "@assets/images/placeholders/placeholder-image9.png";
+import PlaceholderImage10 from "@assets/images/placeholders/placeholder-image10.png";
 import {
 	clearRunning,
 	instancesState,
@@ -111,14 +111,9 @@ export interface Instance {
 	totalPlaytimeMinutes: number;
 	createdAt: string | null;
 	updatedAt: string | null;
-	// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
-	installationStatus?:
-		| "pending"
-		| "installing"
-		| "installed"
-		| "failed"
-		| "interrupted"
-		| null;
+	// The backend appends the failure reason (`failed:<reason>`), so this must
+	// remain a string rather than a closed union of the base status names.
+	installationStatus?: string | null;
 	crashed?: boolean;
 	crashDetails?: string | null;
 	modpackId: string | null;
@@ -440,6 +435,33 @@ export async function resumeInstanceOperation(
 /** True while install/repair/update/hard-reset is in progress (blocks launch). */
 export function isInstanceOperationInProgress(instance: Instance): boolean {
 	return instance.installationStatus === "installing";
+}
+
+export function isInstanceInstallationFailed(instance: Instance): boolean {
+	const status = instance.installationStatus;
+	return status === "failed" || status?.startsWith("failed:") === true;
+}
+
+export function isInstanceUpdateRecovery(instance: Instance): boolean {
+	return (
+		instance.installationStatus === "interrupted" &&
+		instance.lastOperation === "update"
+	);
+}
+
+export function getInstanceInstallationFailureReason(
+	instance: Instance,
+): string | null {
+	if (!isInstanceInstallationFailed(instance)) return null;
+	const status = instance.installationStatus;
+	if (!status?.startsWith("failed:")) return "Installation failed";
+
+	const reason = status.slice("failed:".length).trim();
+	return reason || "Installation failed";
+}
+
+export function needsInstanceInstallation(instance: Instance): boolean {
+	return !instance.installationStatus || isInstanceInstallationFailed(instance);
 }
 
 export function getInstanceOperationLabel(

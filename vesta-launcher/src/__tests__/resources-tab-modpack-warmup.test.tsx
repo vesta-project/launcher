@@ -5,19 +5,23 @@ import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@assets/reload.svg", () => ({
+vi.mock("@assets/icons/actions/reload.svg", () => ({
 	default: (props: any) => <svg data-testid="reload-icon" {...props} />,
 }));
 
-vi.mock("@assets/right-arrow.svg", () => ({
+vi.mock("@assets/icons/actions/add.svg", () => ({
+	default: (props: any) => <svg data-testid="plus-icon" {...props} />,
+}));
+
+vi.mock("@assets/icons/navigation/arrow-forward.svg", () => ({
 	default: (props: any) => <svg data-testid="right-arrow-icon" {...props} />,
 }));
 
-vi.mock("@assets/search.svg", () => ({
+vi.mock("@assets/icons/content/search.svg", () => ({
 	default: (props: any) => <svg data-testid="search-icon" {...props} />,
 }));
 
-vi.mock("@assets/trash.svg", () => ({
+vi.mock("@assets/icons/actions/delete.svg", () => ({
 	default: (props: any) => <svg data-testid="trash-icon" {...props} />,
 }));
 

@@ -8,6 +8,7 @@ import {
 } from "@utils/instances";
 import { installModpackFromUrl, installModpackFromZip } from "@utils/modpacks";
 import type { PendingResourceInstall } from "@utils/resource-install-intent";
+import { requiresWorldTarget } from "@utils/resource-install-intent";
 import { type Accessor, createSignal } from "solid-js";
 
 interface UseInstallSubmitParams {
@@ -26,6 +27,14 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 	const handleInstall = async (data: Partial<Instance>) => {
 		setIsInstalling(true);
 		try {
+			const pending = params.pendingResource?.();
+			const pendingNeedsWorld =
+				!!pending?.project &&
+				requiresWorldTarget(
+					pending.project,
+					pending.version,
+					pending.installType,
+				);
 			if (
 				params.isModpackMode() &&
 				(params.modpackUrl() || params.modpackPath())
@@ -54,12 +63,26 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 					const pendingResource = params.pendingResource?.();
 					const project = pendingResource?.project;
 					const version = pendingResource?.version;
-					if (project && version) {
-						await resources.install(project, version, id);
+					if (project && version && !pendingNeedsWorld) {
+						await resources.install(
+							project,
+							version,
+							{
+								kind: "instance",
+								instanceId: id,
+							},
+							{ installType: pendingResource?.installType },
+						);
 						showToast({
 							title: "Resource Installation Started",
 							description: `${project.name} will be installed into ${data.name || "the new instance"}.`,
 							severity: "success",
+						});
+					} else if (project && pendingNeedsWorld) {
+						showToast({
+							title: "Create and play a world first",
+							description: `${data.name || "Your new instance"} is ready. Launch Minecraft and play a world, then add ${project.name} from that world's datapack view.`,
+							severity: "warning",
 						});
 					}
 				}

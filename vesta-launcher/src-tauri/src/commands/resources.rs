@@ -6,8 +6,9 @@ use std::hash::{Hash, Hasher};
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
-    ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    CachedResourceProjectRef, ResourceCategory, ResourceProject, ResourceProjectRecord,
+    ResourceProjectRef, ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use crate::models::resource_update::{
     InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
@@ -18,8 +19,11 @@ use crate::resources::update_cache::{
     load_instance_update_snapshot, save_instance_update_snapshot, snapshot_to_result,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
-use crate::tasks::manager::TaskManager;
-use crate::tasks::resource_download::ResourceDownloadTask;
+use crate::tasks::manager::{resourcepacks_conflict_key, TaskManager};
+use crate::tasks::resource_download::{
+    plan_artifacts, requires_world_target, ResourceDownloadTask,
+};
+use crate::worlds::ResourceInstallTarget;
 use anyhow_tauri::TAResult as Result;
 use std::sync::{Mutex, OnceLock};
 use tauri::{ipc::Channel, Manager, State};
@@ -336,7 +340,10 @@ pub async fn get_installed_resources(
     let resources = ir_dsl::installed_resource
         .filter(ir_dsl::instance_id.eq(instance_id))
         .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        .into_iter()
+        .filter(|resource| !resource.resource_type.eq_ignore_ascii_case("datapack"))
+        .collect();
 
     Ok(resources)
 }
@@ -361,26 +368,25 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
         let mut conn = get_vesta_conn()?;
         let resources = ir_dsl::installed_resource
             .filter(ir_dsl::instance_id.eq(instance_id))
-            .load::<InstalledResource>(&mut conn)?;
+            .load::<InstalledResource>(&mut conn)?
+            .into_iter()
+            .filter(|resource| !resource.resource_type.eq_ignore_ascii_case("datapack"))
+            .collect::<Vec<_>>();
 
         let mut refs = Vec::new();
         let mut seen_refs = HashSet::new();
         for resource in &resources {
-            let platform = match resource.platform.as_str() {
-                "modrinth" => Some(SourcePlatform::Modrinth),
-                "curseforge" => Some(SourcePlatform::CurseForge),
-                _ => None,
+            let Some(platform) = SourcePlatform::from_str_id(resource.platform.as_str()) else {
+                continue;
             };
             if resource.remote_id.is_empty() {
                 continue;
             }
-            if let Some(platform) = platform {
-                if seen_refs.insert((platform, resource.remote_id.clone())) {
-                    refs.push(ResourceProjectRef {
-                        platform,
-                        id: resource.remote_id.clone(),
-                    });
-                }
+            if seen_refs.insert((platform, resource.remote_id.clone())) {
+                refs.push(ResourceProjectRef {
+                    platform,
+                    id: resource.remote_id.clone(),
+                });
             }
         }
 
@@ -440,7 +446,10 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
 
         let has_unresolved_rows = resources.iter().any(|resource| {
             resource.remote_id.is_empty()
-                || !matches!(resource.platform.as_str(), "modrinth" | "curseforge")
+                || !matches!(
+                    resource.platform.as_str(),
+                    "modrinth" | "curseforge" | "smithed"
+                )
         });
         Ok(InstanceResourceOverview {
             instance_id,
@@ -692,6 +701,26 @@ pub async fn get_cached_resource_projects(
 }
 
 #[tauri::command]
+pub async fn get_cached_resource_projects_by_provider(
+    resource_manager: State<'_, ResourceManager>,
+    refs: Vec<CachedResourceProjectRef>,
+    hydrate_icons: Option<bool>,
+) -> Result<Vec<ResourceProjectOverviewRecord>> {
+    let records = if hydrate_icons.unwrap_or(false) {
+        resource_manager
+            .hydrate_cached_project_icons(&refs)
+            .await?
+            .into_iter()
+            .map(process_resource_record_icon)
+            .collect::<Vec<_>>()
+    } else {
+        resource_manager.get_cached_project_records(&refs)?
+    };
+
+    Ok(records.into_iter().map(Into::into).collect())
+}
+
+#[tauri::command]
 pub async fn hydrate_resource_project_icons(
     resource_manager: State<'_, ResourceManager>,
     refs: Vec<ResourceProjectRef>,
@@ -748,6 +777,18 @@ pub async fn get_resource_versions(
             None,
             None,
         )
+        .await?)
+}
+
+#[tauri::command]
+pub async fn get_resource_version_details(
+    resource_manager: State<'_, ResourceManager>,
+    platform: SourcePlatform,
+    project_id: String,
+    version_id: String,
+) -> Result<ResourceVersionDetails> {
+    Ok(resource_manager
+        .get_version_details(platform, &project_id, &version_id)
         .await?)
 }
 
@@ -850,7 +891,8 @@ pub async fn check_instance_updates_lightweight(
     let all_candidates: Vec<InstalledResource> = resources
         .into_iter()
         .filter(|res| {
-            res.source_kind != "modpack"
+            !res.resource_type.eq_ignore_ascii_case("datapack")
+                && res.source_kind != "modpack"
                 && res.platform != "manual"
                 && source_platform_from_str(&res.platform).is_some()
         })
@@ -865,19 +907,7 @@ pub async fn check_instance_updates_lightweight(
         all_candidates
     };
 
-    if !is_partial {
-        if let (Some(modpack_id), Some(modpack_platform)) =
-            (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
-        {
-            modpack_versions = match source_platform_from_str(modpack_platform) {
-                Some(platform) => resource_manager
-                    .get_versions(platform, modpack_id, force_refresh, None, None)
-                    .await
-                    .unwrap_or_default(),
-                None => Vec::new(),
-            };
-        }
-    } else if force_refresh || modpack_versions.is_empty() {
+    if !is_partial || force_refresh || modpack_versions.is_empty() {
         if let (Some(modpack_id), Some(modpack_platform)) =
             (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
         {
@@ -959,11 +989,14 @@ pub async fn check_instance_updates_lightweight(
 }
 
 fn source_platform_from_str(platform: &str) -> Option<SourcePlatform> {
-    match platform {
-        "modrinth" => Some(SourcePlatform::Modrinth),
-        "curseforge" => Some(SourcePlatform::CurseForge),
-        _ => None,
-    }
+    SourcePlatform::from_str_id(platform)
+}
+
+#[tauri::command]
+pub async fn list_resource_sources(
+    resource_manager: State<'_, ResourceManager>,
+) -> Result<Vec<crate::resources::sources::SourceCapabilities>> {
+    Ok(resource_manager.list_source_capabilities().await)
 }
 
 #[tauri::command]
@@ -977,11 +1010,71 @@ pub async fn find_peer_resource(
 #[tauri::command]
 pub async fn delete_resource(
     app_handle: tauri::AppHandle,
+    task_manager: State<'_, TaskManager>,
     instance_id: i32,
     resource_id: i32,
 ) -> Result<()> {
-    crate::resources::ledger::remove_resource(instance_id, resource_id)
+    let mut resource = crate::resources::ledger::get_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if resource.resource_type.eq_ignore_ascii_case("datapack") {
+        return Err(
+            anyhow!("Datapacks are managed from their world; use delete_world_datapack").into(),
+        );
+    }
+    let _resourcepack_guard = if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
+        let guard = task_manager
+            .acquire_conflicts([resourcepacks_conflict_key(instance_id)])
+            .await;
+        resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        if crate::worlds::datapacks::companion_resourcepack_may_be_referenced(
+            instance_id,
+            std::path::Path::new(&resource.local_path),
+        )
+        .map_err(anyhow::Error::msg)?
+        {
+            return Err(anyhow!(
+                "This Resource pack is linked to a managed World datapack and cannot be removed here"
+            )
+            .into());
+        }
+        Some(guard)
+    } else {
+        None
+    };
+    let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
+        .map_err(anyhow::Error::msg)?;
+    let mut backup = None;
+    if let Some((world, mut manifest, component_index)) = managed.as_ref().cloned() {
+        let previous = manifest.clone();
+        manifest.managed_components.remove(component_index);
+        manifest.updated_at = chrono::Utc::now();
+        crate::worlds::manifest::write_manifest(&world, &manifest).map_err(anyhow::Error::msg)?;
+
+        let original = std::path::PathBuf::from(&resource.local_path);
+        if original.exists() {
+            let backup_path = world
+                .join(".vesta")
+                .join(format!(".delete-{}", uuid::Uuid::new_v4()));
+            if let Err(error) = std::fs::rename(&original, &backup_path) {
+                let _ = crate::worlds::manifest::write_manifest(&world, &previous);
+                return Err(anyhow!("Failed to stage datapack deletion: {error}").into());
+            }
+            backup = Some((original, backup_path, world, previous));
+        }
+    }
+    if let Err(error) = crate::resources::ledger::remove_resource(instance_id, resource_id) {
+        if let Some((original, backup_path, world, previous)) = &backup {
+            let _ = std::fs::rename(backup_path, original);
+            let _ = crate::worlds::manifest::write_manifest(world, previous);
+        } else if let Some((world, previous, _)) = managed {
+            let _ = crate::worlds::manifest::write_manifest(&world, &previous);
+        }
+        return Err(anyhow!(error.to_string()).into());
+    }
+    if let Some((_, backup_path, _, _)) = backup {
+        let _ = std::fs::remove_file(backup_path);
+    }
 
     if let Err(e) = invalidate_instance_update_snapshot(instance_id) {
         log::warn!(
@@ -991,28 +1084,86 @@ pub async fn delete_resource(
         );
     }
 
-    crate::resources::reconciliation::emit_rows_changed(
+    if let Err(error) = crate::resources::reconciliation::emit_rows_changed(
         &app_handle,
         instance_id,
         "resource-deleted",
-    )?;
+    ) {
+        log::warn!("Resource was deleted, but change notification failed: {error}");
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn toggle_resource(
     app_handle: tauri::AppHandle,
+    task_manager: State<'_, TaskManager>,
     instance_id: i32,
     resource_id: i32,
     enabled: bool,
 ) -> Result<()> {
-    crate::resources::ledger::set_enabled(resource_id, enabled)
+    let mut resource = crate::resources::ledger::get_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    crate::resources::reconciliation::emit_rows_changed(
+    if resource.resource_type.eq_ignore_ascii_case("datapack") {
+        return Err(
+            anyhow!("Datapacks are managed from their world; use toggle_world_datapack").into(),
+        );
+    }
+    let _resourcepack_guard = if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
+        let guard = task_manager
+            .acquire_conflicts([resourcepacks_conflict_key(instance_id)])
+            .await;
+        resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        if crate::worlds::datapacks::companion_resourcepack_may_be_referenced(
+            instance_id,
+            std::path::Path::new(&resource.local_path),
+        )
+        .map_err(anyhow::Error::msg)?
+        {
+            return Err(anyhow!(
+                "This Resource pack is linked to a managed World datapack and cannot be disabled here"
+            )
+            .into());
+        }
+        Some(guard)
+    } else {
+        None
+    };
+    let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
+        .map_err(anyhow::Error::msg)?;
+    let current_path = std::path::PathBuf::from(&resource.local_path);
+    let new_path = crate::resources::ledger::toggled_path(&current_path, enabled);
+    if let Some((world, mut manifest, component_index)) = managed.as_ref().cloned() {
+        let previous = manifest.clone();
+        let relative = new_path
+            .strip_prefix(&world)
+            .map_err(|_| anyhow!("Managed datapack escaped its world"))?
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        manifest.managed_components[component_index].relative_path = relative;
+        manifest.updated_at = chrono::Utc::now();
+        crate::worlds::manifest::write_manifest(&world, &manifest).map_err(anyhow::Error::msg)?;
+        if let Err(error) = crate::resources::ledger::set_enabled(resource_id, enabled) {
+            if new_path.exists() && !current_path.exists() {
+                let _ = std::fs::rename(&new_path, &current_path);
+            }
+            let _ = crate::worlds::manifest::write_manifest(&world, &previous);
+            return Err(anyhow!(error.to_string()).into());
+        }
+    } else {
+        crate::resources::ledger::set_enabled(resource_id, enabled)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    }
+    if let Err(error) = crate::resources::reconciliation::emit_rows_changed(
         &app_handle,
         instance_id,
         "resource-toggled",
-    )?;
+    ) {
+        log::warn!("Resource was toggled, but change notification failed: {error}");
+    }
     Ok(())
 }
 
@@ -1184,22 +1335,104 @@ pub async fn backfill_modpack_resource_provenance(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn install_resource(
     app_handle: tauri::AppHandle,
     resource_manager: State<'_, ResourceManager>,
     task_manager: State<'_, TaskManager>,
-    instance_id: i32,
+    target: ResourceInstallTarget,
     platform: SourcePlatform,
     project_id: String,
     project_name: String,
     version: ResourceVersion,
-    resource_type: ResourceType,
+    install_type: ResourceType,
+    compatibility_acknowledged: Option<bool>,
+    replacement_resource_id: Option<i32>,
 ) -> Result<String> {
-    // Check if we are in guest mode
-    let active_account = match crate::auth::get_active_account() {
-        Ok(a) => a,
-        Err(_) => None,
+    let instance_id = match &target {
+        ResourceInstallTarget::Instance { instance_id } => *instance_id,
+        ResourceInstallTarget::World { world } => world.instance_id,
     };
+    let planned = plan_artifacts(&version, install_type).map_err(anyhow::Error::msg)?;
+    let world_artifact_count = planned
+        .iter()
+        .filter(|artifact| artifact.resource_type == ResourceType::World)
+        .count();
+    if world_artifact_count > 1 {
+        return Err(anyhow!("A resource version may contain only one world archive").into());
+    }
+    if world_artifact_count > 0 && planned.len() != world_artifact_count {
+        return Err(anyhow!("World archives cannot be combined with file artifacts").into());
+    }
+    if planned
+        .iter()
+        .any(|artifact| artifact.resource_type == ResourceType::DataPack)
+        && !matches!(&target, ResourceInstallTarget::World { .. })
+    {
+        return Err(anyhow!("Datapack installation requires a world target").into());
+    }
+    if let Some(resource_id) = replacement_resource_id {
+        let ResourceInstallTarget::World { world } = &target else {
+            return Err(anyhow!("A datapack replacement requires a world target").into());
+        };
+        crate::worlds::datapacks::replacement_path(world, resource_id)
+            .map_err(anyhow::Error::msg)?;
+        let replacement = crate::resources::ledger::get_resource(world.instance_id, resource_id)
+            .map_err(|error| anyhow!(error.to_string()))?;
+        if !replacement.platform.eq_ignore_ascii_case(platform.as_str())
+            || replacement.remote_id != project_id
+        {
+            return Err(
+                anyhow!("The selected datapack replacement belongs to another project").into(),
+            );
+        }
+        if planned
+            .iter()
+            .filter(|artifact| artifact.resource_type == ResourceType::DataPack)
+            .count()
+            != 1
+        {
+            return Err(anyhow!(
+                "A world datapack replacement requires exactly one datapack artifact"
+            )
+            .into());
+        }
+    }
+    if world_artifact_count > 0 && !matches!(&target, ResourceInstallTarget::Instance { .. }) {
+        return Err(anyhow!("World archives install into an instance, not another world").into());
+    }
+
+    if planned
+        .iter()
+        .any(|artifact| artifact.resource_type == ResourceType::DataPack)
+    {
+        let ResourceInstallTarget::World { world } = &target else {
+            return Err(anyhow!("Datapack installation requires a world target").into());
+        };
+        let world_path = crate::worlds::resolve_world_path(world).map_err(anyhow::Error::msg)?;
+        let saved_version = crate::worlds::level_dat::read_world_level(&world_path).version_name;
+        let exact_match = saved_version.as_deref().is_some_and(|saved| {
+            let normalize = |value: &str| {
+                value
+                    .trim()
+                    .strip_suffix(".0")
+                    .unwrap_or(value.trim())
+                    .to_string()
+            };
+            version
+                .game_versions
+                .iter()
+                .any(|listed| normalize(listed) == normalize(saved))
+        });
+        if !exact_match && !compatibility_acknowledged.unwrap_or(false) {
+            return Err(anyhow!(
+                "This datapack does not explicitly list the selected world's saved Minecraft version. Choose the version manually and confirm compatibility."
+            )
+            .into());
+        }
+    }
+    // Check if we are in guest mode
+    let active_account = crate::auth::get_active_account().unwrap_or_default();
 
     if let Some(acc) = active_account {
         if acc.account_type == ACCOUNT_TYPE_GUEST {
@@ -1253,13 +1486,26 @@ pub async fn install_resource(
 
     // 2. Resolve dependencies
     let loader = instance.modloader.as_deref().unwrap_or("vanilla");
+    let dependency_mc_version = if install_type == ResourceType::DataPack {
+        match &target {
+            ResourceInstallTarget::World { world } => crate::worlds::resolve_world_path(world)
+                .ok()
+                .and_then(|path| crate::worlds::level_dat::read_world_level(&path).version_name)
+                .unwrap_or_else(|| instance.minecraft_version.clone()),
+            ResourceInstallTarget::Instance { .. } => instance.minecraft_version.clone(),
+        }
+    } else {
+        instance.minecraft_version.clone()
+    };
     let mut dependencies = resource_manager
         .resolve_dependencies(
             platform,
-            resource_type,
+            install_type,
             &version,
+            &dependency_mc_version,
             &instance.minecraft_version,
             loader,
+            compatibility_acknowledged.unwrap_or(false),
         )
         .await?;
 
@@ -1268,7 +1514,7 @@ pub async fn install_resource(
         // If auto-install is off, we only keep "synthetic" dependencies (like Iris/Oculus)
         // that are injected for Shaders to ensure they work.
         // For other mods, we clear the list.
-        if resource_type != ResourceType::Shader {
+        if install_type != ResourceType::Shader {
             dependencies.clear();
         } else {
             // Keep only the shader engines (Iris/Oculus)
@@ -1289,6 +1535,18 @@ pub async fn install_resource(
         }
     }
 
+    if !matches!(&target, ResourceInstallTarget::World { .. })
+        && dependencies.iter().any(|(project, dependency_version)| {
+            plan_artifacts(dependency_version, project.resource_type).is_ok_and(|artifacts| {
+                artifacts
+                    .iter()
+                    .any(|artifact| artifact.resource_type == ResourceType::DataPack)
+            })
+        })
+    {
+        return Err(anyhow!("A datapack dependency requires a world target").into());
+    }
+
     // 4. Get currently installed resources to skip duplicates
     let installed = ir_dsl::installed_resource
         .filter(ir_dsl::instance_id.eq(instance_id))
@@ -1306,13 +1564,14 @@ pub async fn install_resource(
     }
 
     let main_task = ResourceDownloadTask {
-        instance_id,
+        target: target.clone(),
         platform,
         project_id,
         project_name: project_name.clone(),
         version,
-        resource_type,
+        resource_type: install_type,
         dependency_for: None,
+        replacement_resource_id,
     };
     task_manager
         .submit(Box::new(main_task))
@@ -1326,11 +1585,15 @@ pub async fn install_resource(
             .cache_project_metadata(dep_project.source, &dep_project)
             .await;
 
-        // Check if already installed (by ID or Peer ID)
+        let dependency_requires_world =
+            requires_world_target(&dep_version, dep_project.resource_type);
+
+        // World-scoped dependencies must be resolved by their exact destination
+        // in the download task. A copy in another world is not a duplicate.
         let mut is_installed = false;
         let dep_platform_str = format!("{:?}", dep_project.source).to_lowercase();
 
-        for ins in &installed {
+        for ins in installed.iter().filter(|_| !dependency_requires_world) {
             // Direct ID match
             if ins.platform == dep_platform_str && ins.remote_id == dep_project.id {
                 is_installed = true;
@@ -1363,13 +1626,18 @@ pub async fn install_resource(
         }
 
         let dep_task = ResourceDownloadTask {
-            instance_id,
+            target: if dependency_requires_world {
+                target.clone()
+            } else {
+                ResourceInstallTarget::Instance { instance_id }
+            },
             platform: dep_project.source,
             project_id: dep_project.id.clone(),
             project_name: dep_project.name,
             version: dep_version,
-            resource_type: ResourceType::Mod,
+            resource_type: dep_project.resource_type,
             dependency_for: Some(project_name.clone()),
+            replacement_resource_id: None,
         };
 
         task_manager

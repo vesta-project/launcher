@@ -48,13 +48,18 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         log::error!("Failed to normalize startup memory config state: {}", e);
     }
 
+    let config = crate::utils::config::get_app_config()?;
+    app.manage(crate::localization::LocalizationManager::new(
+        &config.language,
+    )?);
+
     crate::startup::updates::initialize_version_tracking();
 
     log::info!("✓ Database initialization complete");
 
     crate::startup::accounts::cleanup_temporary_accounts();
 
-    let interrupted_instances = crate::startup::recovery::recover_interrupted_operations()
+    let recovery_notices = crate::startup::recovery::recover_interrupted_operations(app.handle())
         .unwrap_or_else(|error| {
             log::error!("Failed to recover interrupted installations: {}", error);
             Vec::new()
@@ -69,7 +74,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     crate::startup::recovery::publish_interrupted_notifications(
         notification_manager.clone(),
-        interrupted_instances,
+        recovery_notices,
     );
 
     // Initialize DiscordManager
@@ -110,6 +115,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)
     app.manage(crate::resources::ResourceManager::new());
+    app.manage(crate::worlds::WorldManager::default());
     app.manage(crate::launcher_import::ImportManager::new());
 
     crate::startup::updates::notify_current_version(app.handle().clone());

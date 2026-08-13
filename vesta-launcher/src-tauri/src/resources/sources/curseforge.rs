@@ -1,6 +1,7 @@
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceProject,
-    ResourceType, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceCategory, ResourceChangelogFormat,
+    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceType, ResourceVersion,
+    ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use crate::utils::url::normalize_url;
@@ -132,6 +133,10 @@ struct CFFile {
     game_versions: Vec<String>,
     hashes: Vec<CFHash>,
     file_date: String,
+    #[serde(default)]
+    file_length: Option<u64>,
+    #[serde(default)]
+    download_count: Option<u64>,
     download_url: Option<String>,
     dependencies: Vec<CFDependency>,
     #[serde(default)]
@@ -178,6 +183,12 @@ struct CFExactMatch {
     file: CFFile,
 }
 
+impl Default for CurseForgeSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CurseForgeSource {
     pub fn new() -> Self {
         let key = get_deobfuscated_key();
@@ -201,6 +212,25 @@ impl CurseForgeSource {
             .post(url)
             .header("x-api-key", &self.api_key)
             .header("Accept", "application/json")
+    }
+
+    fn split_game_versions(values: &[String]) -> (Vec<String>, Vec<String>) {
+        let mut loaders = Vec::new();
+        let mut game_versions = Vec::new();
+
+        for value in values {
+            match value.trim().to_lowercase().as_str() {
+                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => {
+                    loaders.push(value.clone())
+                }
+                // CurseForge includes side/environment labels in the same field as
+                // Minecraft versions. They are not valid version choices.
+                "client" | "server" => {}
+                _ => game_versions.push(value.clone()),
+            }
+        }
+
+        (game_versions, loaders)
     }
 
     pub fn map_class_id_to_type(class_id: i64) -> ResourceType {
@@ -302,7 +332,7 @@ impl CurseForgeSource {
                     // 2. Check if website_url matches exactly
                     let web_url = item.links.website_url.to_lowercase();
                     let normalized_web_url = normalize_url(&web_url);
-                    let url_slug = normalized_web_url.split('/').last().unwrap_or("");
+                    let url_slug = normalized_web_url.split('/').next_back().unwrap_or("");
 
                     if url_slug == slug_lower {
                         log::info!(
@@ -318,7 +348,7 @@ impl CurseForgeSource {
                 for item in &search_res.data {
                     let web_url = item.links.website_url.to_lowercase();
                     let normalized_web_url = normalize_url(&web_url);
-                    let url_slug = normalized_web_url.split('/').last().unwrap_or("");
+                    let url_slug = normalized_web_url.split('/').next_back().unwrap_or("");
 
                     if let Some(pos) = url_slug.find('-') {
                         let potential_id = &url_slug[..pos];
@@ -345,16 +375,7 @@ impl CurseForgeSource {
             .find(|hash| hash.algo == 1)
             .map(|hash| hash.value.clone())
             .unwrap_or_default();
-        let mut loaders = Vec::new();
-        let mut game_versions = Vec::new();
-        for version in &file.game_versions {
-            match version.to_lowercase().as_str() {
-                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => {
-                    loaders.push(version.clone())
-                }
-                _ => game_versions.push(version.clone()),
-            }
-        }
+        let (game_versions, loaders) = Self::split_game_versions(&file.game_versions);
         let fallback_id = file.id;
         let fallback_name = file.file_name.clone();
 
@@ -395,7 +416,23 @@ impl CurseForgeSource {
                     },
                 })
                 .collect(),
+            download_count: file.download_count,
+            file_size: file.file_length,
             published_at: Some(file.file_date),
+            files: Vec::new(),
+        }
+    }
+
+    fn map_version_details(
+        version: ResourceVersion,
+        changelog: Option<String>,
+        changelog_status: ResourceChangelogStatus,
+    ) -> ResourceVersionDetails {
+        ResourceVersionDetails {
+            version,
+            changelog,
+            changelog_format: ResourceChangelogFormat::Html,
+            changelog_status,
         }
     }
 }
@@ -846,17 +883,7 @@ impl ResourceSource for CurseForgeSource {
                     .unwrap_or_default();
 
                 // Extract loaders from gameVersions
-                let mut loaders = Vec::new();
-                let mut game_versions = Vec::new();
-
-                for v in &file.game_versions {
-                    match v.to_lowercase().as_str() {
-                        "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => {
-                            loaders.push(v.clone())
-                        }
-                        _ => game_versions.push(v.clone()),
-                    }
-                }
+                let (game_versions, loaders) = Self::split_game_versions(&file.game_versions);
 
                 ResourceVersion {
                     id: file.id.to_string(),
@@ -897,7 +924,10 @@ impl ResourceSource for CurseForgeSource {
                             },
                         })
                         .collect(),
+                    download_count: file.download_count,
+                    file_size: file.file_length,
                     published_at: Some(file.file_date),
+                    files: Vec::new(),
                 }
             })
             .collect())
@@ -942,16 +972,7 @@ impl ResourceSource for CurseForgeSource {
             .map(|h| h.value.clone())
             .unwrap_or_default();
 
-        let mut loaders = Vec::new();
-        let mut game_versions = Vec::new();
-        for v in &file.game_versions {
-            match v.to_lowercase().as_str() {
-                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => {
-                    loaders.push(v.clone())
-                }
-                _ => game_versions.push(v.clone()),
-            }
-        }
+        let (game_versions, loaders) = Self::split_game_versions(&file.game_versions);
 
         let resolved_project_id = if project_id.is_empty() {
             file.mod_id.to_string()
@@ -997,8 +1018,80 @@ impl ResourceSource for CurseForgeSource {
                     },
                 })
                 .collect(),
+            download_count: file.download_count,
+            file_size: file.file_length,
             published_at: Some(file.file_date),
+            files: Vec::new(),
         })
+    }
+
+    async fn get_version_details(
+        &self,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<ResourceVersionDetails> {
+        let version = self.get_version(project_id, version_id).await?;
+        let numeric_id = if project_id.chars().all(|c| c.is_ascii_digit()) {
+            project_id.to_string()
+        } else {
+            self.resolve_slug_to_id(project_id).await?
+        };
+        let url = format!(
+            "https://api.curseforge.com/v1/mods/{}/files/{}/changelog",
+            numeric_id, version_id
+        );
+
+        let (changelog, changelog_status) = match self.http_get(&url).send().await {
+            Ok(response) if response.status().is_success() => {
+                match response.json::<CFDescriptionResponse>().await {
+                    Ok(payload) => {
+                        let changelog = Some(payload.data).filter(|value| !value.trim().is_empty());
+                        let status = if changelog.is_some() {
+                            ResourceChangelogStatus::Available
+                        } else {
+                            ResourceChangelogStatus::Empty
+                        };
+                        (changelog, status)
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "[CurseForge] Failed to decode changelog for {}/{}: {}",
+                            numeric_id,
+                            version_id,
+                            error
+                        );
+                        (None, ResourceChangelogStatus::Unavailable)
+                    }
+                }
+            }
+            Ok(response) if response.status().as_u16() == 404 => {
+                (None, ResourceChangelogStatus::Empty)
+            }
+            Ok(response) => {
+                log::warn!(
+                    "[CurseForge] Changelog unavailable for {}/{}: {}",
+                    numeric_id,
+                    version_id,
+                    response.status()
+                );
+                (None, ResourceChangelogStatus::Unavailable)
+            }
+            Err(error) => {
+                log::warn!(
+                    "[CurseForge] Changelog request failed for {}/{}: {}",
+                    numeric_id,
+                    version_id,
+                    error
+                );
+                (None, ResourceChangelogStatus::Unavailable)
+            }
+        };
+
+        Ok(Self::map_version_details(
+            version,
+            changelog,
+            changelog_status,
+        ))
     }
 
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {
@@ -1047,16 +1140,7 @@ impl ResourceSource for CurseForgeSource {
             .find(|h| h.algo == 1)
             .map(|h| h.value.clone())
             .unwrap_or_default();
-        let mut loaders = Vec::new();
-        let mut game_versions = Vec::new();
-        for v in &file.game_versions {
-            match v.to_lowercase().as_str() {
-                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => {
-                    loaders.push(v.clone())
-                }
-                _ => game_versions.push(v.clone()),
-            }
-        }
+        let (game_versions, loaders) = Self::split_game_versions(&file.game_versions);
 
         let version = ResourceVersion {
             id: file.id.to_string(),
@@ -1097,7 +1181,10 @@ impl ResourceSource for CurseForgeSource {
                     },
                 })
                 .collect(),
+            download_count: file.download_count,
+            file_size: file.file_length,
             published_at: Some(file.file_date.clone()),
+            files: Vec::new(),
         };
 
         Ok((project, version))
@@ -1172,5 +1259,69 @@ impl ResourceSource for CurseForgeSource {
 
     fn platform(&self) -> SourcePlatform {
         SourcePlatform::CurseForge
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CFFile, CurseForgeSource};
+    use crate::models::resource::{
+        DependencyType, ResourceChangelogFormat, ResourceChangelogStatus,
+    };
+
+    fn file_fixture() -> CFFile {
+        serde_json::from_value(serde_json::json!({
+            "id": 123,
+            "modId": 456,
+            "displayName": "Release 1.2.3",
+            "fileName": "release.jar",
+            "releaseType": 1,
+            "gameVersions": ["1.21.1", "Fabric", "Client", "Server"],
+            "hashes": [{ "value": "abc123", "algo": 1 }],
+            "fileDate": "2026-08-01T00:00:00Z",
+            "fileLength": 8192,
+            "downloadCount": 84,
+            "downloadUrl": "https://example.invalid/release.jar",
+            "dependencies": [{ "modId": 789, "relationType": 3 }],
+            "fileFingerprint": 12345
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn maps_file_statistics_and_dependencies() {
+        let version = CurseForgeSource::map_file(file_fixture(), "fallback".into());
+
+        assert_eq!(
+            version.published_at.as_deref(),
+            Some("2026-08-01T00:00:00Z")
+        );
+        assert_eq!(version.download_count, Some(84));
+        assert_eq!(version.file_size, Some(8192));
+        assert_eq!(version.loaders, vec!["Fabric"]);
+        assert_eq!(version.game_versions, vec!["1.21.1"]);
+        assert_eq!(
+            version.dependencies[0].dependency_type,
+            DependencyType::Required
+        );
+    }
+
+    #[test]
+    fn unavailable_changelog_preserves_file_metadata() {
+        let version = CurseForgeSource::map_file(file_fixture(), "fallback".into());
+        let details = CurseForgeSource::map_version_details(
+            version,
+            None,
+            ResourceChangelogStatus::Unavailable,
+        );
+
+        assert_eq!(details.version.file_size, Some(8192));
+        assert_eq!(details.version.download_count, Some(84));
+        assert_eq!(details.changelog, None);
+        assert_eq!(details.changelog_format, ResourceChangelogFormat::Html);
+        assert_eq!(
+            details.changelog_status,
+            ResourceChangelogStatus::Unavailable
+        );
     }
 }

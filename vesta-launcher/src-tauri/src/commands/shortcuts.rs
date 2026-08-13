@@ -515,7 +515,7 @@ pub async fn create_desktop_shortcut(
 
         let bundle_id = format!(
             "com.vesta.launcher.shortcut.{}",
-            hash_values(&[&rendered_target.deep_link]).to_string()
+            hash_values(&[&rendered_target.deep_link])
         );
         fs::write(
             contents_dir.join("Info.plist"),

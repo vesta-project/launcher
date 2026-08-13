@@ -1,4 +1,6 @@
 import { createSignal, For, type JSX, Show } from "solid-js";
+import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";
+import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
 import styles from "../init.module.css";
 
 interface LearnStepProps {
@@ -410,18 +412,7 @@ function LearnStep(props: LearnStepProps) {
 					disabled={currentSlide() === 0}
 					aria-label="Previous slide"
 				>
-					<svg
-						width="20"
-						height="20"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<polyline points="15 18 9 12 15 6" />
-					</svg>
+					<ChevronLeftIcon width="20" height="20" stroke-width="2.5" />
 				</button>
 
 				<div class={styles["learn-dots"]}>
@@ -450,18 +441,7 @@ function LearnStep(props: LearnStepProps) {
 							onClick={() => void props.goNext()}
 							aria-label="Continue"
 						>
-							<svg
-								width="20"
-								height="20"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<polyline points="9 18 15 12 9 6" />
-							</svg>
+							<ChevronRightIcon width="20" height="20" stroke-width="2.5" />
 						</button>
 					}
 				>
@@ -470,18 +450,7 @@ function LearnStep(props: LearnStepProps) {
 						onClick={goForward}
 						aria-label="Next slide"
 					>
-						<svg
-							width="20"
-							height="20"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<polyline points="9 18 15 12 9 6" />
-						</svg>
+						<ChevronRightIcon width="20" height="20" stroke-width="2.5" />
 					</button>
 				</Show>
 			</div>

@@ -1,4 +1,5 @@
 import type { Accessor } from "solid-js";
+import { createMemo } from "solid-js";
 
 export const LIBRARY_PATH = "__library__";
 
@@ -20,6 +21,73 @@ export interface FlatNavigationRouter {
 	getCanExit(): (() => Promise<boolean>) | null;
 	backwards(): void;
 	forwards(): void;
+}
+
+/** Subset of MiniRouter used by shell history chrome (back / forward / reload). */
+export interface ShellHistoryRouter extends FlatNavigationRouter {
+	canGoBackReactive: Accessor<boolean>;
+	canGoForwardReactive: Accessor<boolean>;
+	canReload: Accessor<boolean>;
+	isReloading: Accessor<boolean>;
+	reload: () => Promise<void>;
+	currentPath: { get: Accessor<string> };
+}
+
+/**
+ * Shared reactive state + actions for shell history chrome. Both the embedded
+ * flat controls and the page-viewer navbar read from this Interface.
+ */
+export function createShellHistoryControls(
+	getRouter: Accessor<ShellHistoryRouter | undefined | null>,
+	options?: { track?: () => void },
+) {
+	const track = options?.track;
+
+	const canGoBack = createMemo(() => {
+		track?.();
+		const r = getRouter();
+		if (!r) return false;
+		r.currentPath.get();
+		return r.canGoBackReactive();
+	});
+
+	const canGoForward = createMemo(() => {
+		track?.();
+		const r = getRouter();
+		if (!r) return false;
+		r.currentPath.get();
+		return r.canGoForwardReactive();
+	});
+
+	const canReload = createMemo(() => {
+		track?.();
+		return getRouter()?.canReload() ?? false;
+	});
+
+	const isReloading = createMemo(() => {
+		track?.();
+		return getRouter()?.isReloading() ?? false;
+	});
+
+	return {
+		canGoBack,
+		canGoForward,
+		canReload,
+		isReloading,
+		back: async () => {
+			const r = getRouter();
+			if (!r) return;
+			await handleNavigationBack(r);
+		},
+		forward: () => {
+			const r = getRouter();
+			if (!r) return;
+			handleNavigationForward(r);
+		},
+		reload: () => {
+			void getRouter()?.reload();
+		},
+	};
 }
 
 export function createLibraryEntry(): HistoryEntry {

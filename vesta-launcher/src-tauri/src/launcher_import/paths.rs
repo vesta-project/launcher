@@ -1,7 +1,7 @@
 // TODO: Verify the paths are correct on Windows and Linux.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use directories::BaseDirs;
 
@@ -117,7 +117,7 @@ fn dedupe_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     out
 }
 
-fn normalize_path_for_dedup(path: &PathBuf) -> String {
+fn normalize_path_for_dedup(path: &Path) -> String {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         path.to_string_lossy().to_lowercase()

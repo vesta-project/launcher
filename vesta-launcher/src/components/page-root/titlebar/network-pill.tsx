@@ -1,4 +1,5 @@
-import ConnectionLostSvg from "@assets/connection-lost.svg";
+import ConnectionLostSvg from "@assets/icons/status/connection-lost.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
 import networkStore from "@stores/network";
 import { Badge } from "@ui/badge";
 import { createMemo, Show } from "solid-js";
@@ -39,16 +40,7 @@ function NetworkPill() {
 			>
 				<div class={styles["network-pill__icon"]}>
 					<Show when={isRefreshing()}>
-						<svg
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-						</svg>
+						<ReloadIcon />
 					</Show>
 					<Show when={!isRefreshing()}>
 						<ConnectionLostSvg />

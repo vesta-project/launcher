@@ -8,7 +8,10 @@
 	padding: 1px 6px;
 	font-size: 0.7rem;
 	font-weight: 800;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition:
+		background-color 0.12s ease,
+		border-color 0.12s ease,
+		color 0.12s ease;
 	white-space: nowrap;
 	line-height: normal;
 	height: fit-content;
@@ -43,11 +46,6 @@
 	background-color: var(--surface-raised);
 	border-color: var(--accent-primary);
 	color: var(--text-primary);
-	transform: translateY(-1px);
-}
-
-.badge--clickable:active {
-	transform: translateY(0);
 }
 
 /* State */
@@ -57,7 +55,6 @@
 	background-color: var(--accent-primary) !important;
 	color: var(--text-on-accent) !important;
 	border-color: transparent !important;
-	box-shadow: 0 4px 12px hsl(var(--color__primary-hue) 70% 30% / 0.3);
 }
 
 /* Variants */
@@ -116,20 +113,30 @@
 
 .badge--variant-theme {
 	background-color: var(--surface-medium);
-	border-color: var(--border-subtle);
+	border-color: var(--border-strong);
 	color: var(--text-secondary);
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 500;
 	text-transform: none;
 	letter-spacing: normal;
-	border-radius: 6px;
-	padding: 4px 10px;
+	border-radius: 5px;
+	padding: 2px 8px;
+	height: 24px;
+	box-sizing: border-box;
 }
 
 .badge--variant-theme.badge--clickable:hover:not(.badge--active) {
 	background-color: var(--surface-high);
 	border-color: var(--accent-primary);
 	color: var(--text-primary);
+}
+
+.badge--variant-theme.badge--active,
+.badge--variant-theme.badge[data-pressed],
+.badge--variant-theme.badge[data-selected] {
+	background-color: var(--surface-high) !important;
+	border-color: var(--accent-primary) !important;
+	color: var(--text-primary) !important;
 }
 
 /* Elements inside badges */

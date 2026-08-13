@@ -153,8 +153,7 @@ pub async fn process_and_download_libraries(
             .collect::<Vec<_>>()
             .await
             .into_iter()
-            .collect::<Result<Vec<_>>>()
-            .map_err(|e| e)?;
+            .collect::<Result<Vec<_>>>()?;
     }
 
     Ok(unified)
@@ -170,36 +169,6 @@ fn library_specs_from_regular_libraries(libraries: &[&UnifiedLibrary]) -> Vec<Li
             sha1: lib.sha1.clone(),
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn final_download_url_is_not_reused_as_maven_base() {
-        let library = UnifiedLibrary {
-            name: "net.minecraftforge:forge:26.1.2-64.0.8:client".to_string(),
-            path: "net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
-                .to_string(),
-            download_url: Some(
-                "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
-                    .to_string(),
-            ),
-            sha1: Some("abc123".to_string()),
-            size: None,
-            is_native: false,
-            classifier: Some("client".to_string()),
-            extract_rules: None,
-            include_in_classpath: true,
-        };
-
-        let specs = library_specs_from_regular_libraries(&[&library]);
-
-        assert_eq!(specs.len(), 1);
-        assert_eq!(specs[0].maven_url, None);
-        assert_eq!(specs[0].explicit_url, library.download_url);
-    }
 }
 
 /// Extract a native JAR (ZIP) into the natives directory.
@@ -264,5 +233,35 @@ fn remove_quarantine(path: &std::path::Path) {
         .output()
     {
         log::warn!("Failed to remove quarantine from {:?}: {}", path, e);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn final_download_url_is_not_reused_as_maven_base() {
+        let library = UnifiedLibrary {
+            name: "net.minecraftforge:forge:26.1.2-64.0.8:client".to_string(),
+            path: "net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
+                .to_string(),
+            download_url: Some(
+                "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
+                    .to_string(),
+            ),
+            sha1: Some("abc123".to_string()),
+            size: None,
+            is_native: false,
+            classifier: Some("client".to_string()),
+            extract_rules: None,
+            include_in_classpath: true,
+        };
+
+        let specs = library_specs_from_regular_libraries(&[&library]);
+
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].maven_url, None);
+        assert_eq!(specs[0].explicit_url, library.download_url);
     }
 }

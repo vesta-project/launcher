@@ -1,7 +1,18 @@
+import { getSourceDescriptor } from "@resources/source-catalog";
+import ErrorIcon from "@assets/icons/status/error.svg";
+import GridIcon from "@assets/icons/content/grid.svg";
+import ListIcon from "@assets/icons/content/list.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { type Instance, instancesState } from "@stores/instances";
-import { resources } from "@stores/resources";
+import {
+	type ResourceProject,
+	type ResourceVersion,
+	resources,
+} from "@stores/resources";
+import type { WorldSummary } from "@stores/worlds";
 import {
 	Pagination,
 	PaginationEllipsis,
@@ -18,8 +29,16 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
+import { confirmDatapackWorldCompatibility } from "@utils/datapack-compatibility-confirm";
+import { openExternal } from "@utils/external-link";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
-import { findBestVersionForInstance } from "@utils/resource-install-intent";
+import {
+	findBestExactDatapackVersion,
+	hasDownloadableArtifact,
+	requiresWorldTarget,
+	resolveInstanceInstallDecision,
+} from "@utils/resource-install-intent";
+import { parseSearchFilterOperators } from "@utils/resource-search-operators";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
@@ -28,39 +47,19 @@ import {
 	createMemo,
 	createSignal,
 	For,
-	onCleanup,
 	onMount,
 	Show,
 	untrack,
 } from "solid-js";
-import InstanceSelectionDialog from "./instance-selection-dialog";
 import styles from "./resource-browser.module.css";
 import ResourceCard from "./resource-card";
+import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
 import { ResourceSkeletonGrid } from "./resource-skeleton";
 import { ResourceToolbar } from "./resource-toolbar";
 
-const SORT_OPTIONS = {
-	modrinth: [
-		{ label: "Relevance", value: "relevance" },
-		{ label: "Downloads", value: "downloads" },
-		{ label: "Followers", value: "follows" },
-		{ label: "Newest", value: "newest" },
-		{ label: "Updated", value: "updated" },
-	],
-	curseforge: [
-		{ label: "Featured", value: "featured" },
-		{ label: "Popularity", value: "popularity" },
-		{ label: "Last Updated", value: "updated" },
-		{ label: "Newest", value: "newest" },
-		{ label: "Rating", value: "rating" },
-		{ label: "Name", value: "name" },
-		{ label: "Author", value: "author" },
-		{ label: "Total Downloads", value: "total_downloads" },
-	],
-};
-
+const projectKey = (project: Pick<ResourceProject, "id" | "source">) =>
+	`${project.source}:${project.id}`;
 const ResourceBrowser: Component<{
-	setRefetch?: (fn: () => Promise<void>) => void;
 	query?: string;
 	resourceType?: any;
 	gameVersion?: string;
@@ -80,24 +79,49 @@ const ResourceBrowser: Component<{
 	const activeRouter = createMemo(() => props.router || router());
 	let debounceTimer: number | undefined;
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
+	const [worldInstall, setWorldInstall] = createSignal<{
+		project: ResourceProject;
+		versions: ResourceVersion[];
+		version?: ResourceVersion;
+		installType: ResourceProject["resource_type"];
+		instanceId: number;
+	} | null>(null);
 	let isInitializedFromProps = false;
+	const activeSelectionProjectKey = createMemo(() => {
+		const project =
+			worldInstall()?.project ??
+			(isInstanceDialogOpen() ? resources.state.installRequest?.project : undefined);
+		return project ? projectKey(project) : null;
+	});
 
 	const currentSortOptions = createMemo(
-		() =>
-			SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] ||
-			[],
+		() => getSourceDescriptor(resources.state.activeSource)?.sortOptions ?? [],
 	);
 
 	createEffect(() => {
-		if (resources.state.installRequest) {
-			setIsInstanceDialogOpen(true);
+		const request = resources.state.installRequest;
+		if (!request) return;
+		if (
+			request.preferredInstanceId != null &&
+			requiresWorldTarget(request.project, request.version, request.installType)
+		) {
+			setWorldInstall({
+				project: request.project,
+				versions: request.versions,
+				version: request.version,
+				installType: request.installType,
+				instanceId: request.preferredInstanceId,
+			});
+			resources.setInstallRequest(null);
+			return;
 		}
+		setIsInstanceDialogOpen(true);
 	});
 
 	const handleSelectInstance = async (instance: Instance) => {
 		const request = resources.state.installRequest;
 		if (!request) return;
-		const { project, versions } = request;
+		const { project, versions, installType } = request;
 
 		setIsInstanceDialogOpen(false);
 		resources.setInstallRequest(null);
@@ -107,14 +131,47 @@ const ResourceBrowser: Component<{
 				versions.length > 0
 					? versions
 					: await resources.getVersions(project.source, project.id);
-			const bestVersion = findBestVersionForInstance(
+			const decision = resolveInstanceInstallDecision(
 				project,
 				finalVersions,
 				instance,
+				installType,
+				request.version,
 			);
+			if (
+				decision.kind !== "unavailable" &&
+				decision.version &&
+				!hasDownloadableArtifact(decision.version)
+			) {
+				showToast({
+					title: "Third-party download required",
+					description: `Opening ${project.name} on the provider website.`,
+					severity: "info",
+				});
+				await openExternal(project.web_url);
+				return;
+			}
+			if (decision.kind === "world") {
+				setWorldInstall({
+					project,
+					versions: finalVersions,
+					version: decision.version,
+					installType,
+					instanceId: instance.id,
+				});
+				return;
+			}
 
-			if (bestVersion) {
-				await resources.install(project, bestVersion, instance.id);
+			if (decision.kind === "instance") {
+				await resources.install(
+					project,
+					decision.version,
+					{
+						kind: "instance",
+						instanceId: instance.id,
+					},
+					{ installType },
+				);
 			} else {
 				showToast({
 					title: "No compatible version",
@@ -131,16 +188,112 @@ const ResourceBrowser: Component<{
 		}
 	};
 
+	const handleSelectWorld = async (world: WorldSummary) => {
+		const context = worldInstall();
+		if (!context) return;
+		let selectedVersion = context.version;
+		if (!selectedVersion) {
+			selectedVersion =
+				findBestExactDatapackVersion(
+					context.versions,
+					world.gameVersion,
+					context.project.source,
+				) ?? undefined;
+			if (!selectedVersion) {
+				resources.setInstallRequest(null);
+				setWorldInstall(null);
+				activeRouter()?.navigate(
+					"/resource-details",
+					{
+						projectId: context.project.id,
+						platform: context.project.source,
+						resourceType: context.installType,
+						activeTab: "versions",
+					},
+					{ project: context.project },
+				);
+				showToast({
+					title: "Choose a datapack version",
+					description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version manually; Vesta will ask for the destination world when you install it.`,
+					severity: "warning",
+				});
+				return;
+			}
+		}
+		if (!hasDownloadableArtifact(selectedVersion)) {
+			setWorldInstall(null);
+			showToast({
+				title: "Third-party download required",
+				description: `Opening ${context.project.name} on the provider website.`,
+				severity: "info",
+			});
+			await openExternal(context.project.web_url);
+			return;
+		}
+
+		const { compatibility, acknowledged } =
+			await confirmDatapackWorldCompatibility({
+				projectName: context.project.name,
+				version: selectedVersion,
+				world,
+			});
+		if (!acknowledged) {
+			setWorldInstall(null);
+			activeRouter()?.navigate(
+				"/resource-details",
+				{
+					projectId: context.project.id,
+					platform: context.project.source,
+					resourceType: context.installType,
+					activeTab: "versions",
+				},
+				{ project: context.project },
+			);
+			showToast({
+				title: "Choose a datapack version",
+				description: `Choose another ${context.project.name} release. Vesta will ask for the destination world again when you install it.`,
+				severity: "warning",
+			});
+			return;
+		}
+		setWorldInstall(null);
+		try {
+			await resources.install(
+				context.project,
+				selectedVersion,
+				{
+					kind: "world",
+					world: world.ref,
+				},
+				{
+					installType: context.installType,
+					compatibilityAcknowledged: compatibility !== "exact",
+				},
+			);
+			showToast({
+				title: "Installation started",
+				description: `${context.project.name} will be installed into the selected world.`,
+				severity: "success",
+			});
+		} catch (err) {
+			showToast({
+				title: "Installation failed",
+				description: String(err),
+				severity: "error",
+			});
+		}
+	};
+
 	const handleCreateNew = () => {
 		const request = resources.state.installRequest;
 		if (!request) return;
-		const { project, versions } = request;
+		const { project, versions, installType } = request;
 
 		setIsInstanceDialogOpen(false);
 		resources.setInstallRequest(null);
 
 		const prefilledModpackInfo =
-			project.resource_type === "modpack"
+			installType === "modpack"
 				? buildBrowseModpackInfo(project, versions[0], {
 						minecraftVersion: resources.state.gameVersion,
 						loader: resources.state.loader,
@@ -152,8 +305,8 @@ const ResourceBrowser: Component<{
 			{
 				projectId: project.id,
 				platform: project.source,
-				isModpack: project.resource_type === "modpack",
-				resourceType: project.resource_type,
+				isModpack: installType === "modpack",
+				resourceType: installType,
 				projectName: project.name,
 				projectIcon: project.icon_url || undefined,
 				projectAuthor: project.author,
@@ -162,7 +315,7 @@ const ResourceBrowser: Component<{
 				initialMinecraftVersion: resources.state.gameVersion || undefined,
 				initialModloader: resources.state.loader || undefined,
 				modpackUrl:
-					project.resource_type === "modpack"
+					installType === "modpack"
 						? versions[0]?.download_url || undefined
 						: undefined,
 			},
@@ -173,24 +326,42 @@ const ResourceBrowser: Component<{
 							versions.length > 0 ? versions : undefined,
 					}
 				: {
-						pendingResource: { project, version: versions[0] },
+						pendingResource: { project, version: versions[0], installType },
 					},
 		);
 	};
 
-	const handleSearchInput = (value: string) => {
+	const applySearchValue = (value: string, commitTrailing: boolean) => {
 		const parsed = parseResourceUrl(value);
 		if (parsed) {
 			activeRouter()?.navigate("/resource-details", {
 				projectId: parsed.id,
 				platform: parsed.platform,
 				activeTab: parsed.activeTab,
+				resourceType: resources.state.resourceType,
 			});
 			resources.setQuery("");
 			return;
 		}
 
-		resources.setQuery(value);
+		const extracted = parseSearchFilterOperators(value, { commitTrailing });
+		const queryText = extracted.didExtract ? extracted.remainder : value;
+
+		batch(() => {
+			if (extracted.filters.gameVersion !== undefined) {
+				resources.setGameVersion(extracted.filters.gameVersion);
+				activeRouter()?.updateQuery(
+					"gameVersion",
+					extracted.filters.gameVersion,
+				);
+			}
+			if (extracted.filters.loader !== undefined) {
+				resources.setLoader(extracted.filters.loader);
+				activeRouter()?.updateQuery("loader", extracted.filters.loader);
+			}
+			resources.setQuery(queryText);
+		});
+
 		if (debounceTimer) clearTimeout(debounceTimer);
 		debounceTimer = window.setTimeout(async () => {
 			resources.setOffset(0);
@@ -198,11 +369,22 @@ const ResourceBrowser: Component<{
 
 			untrack(() => {
 				const currentRouterQuery = activeRouter()?.currentParams.get().query;
-				if (resources.state.query === value && currentRouterQuery !== value) {
-					activeRouter()?.updateQuery("query", value);
+				if (
+					resources.state.query === queryText &&
+					currentRouterQuery !== queryText
+				) {
+					activeRouter()?.updateQuery("query", queryText);
 				}
 			});
-		}, 500);
+		}, commitTrailing ? 0 : 500);
+	};
+
+	const handleSearchInput = (value: string) => {
+		applySearchValue(value, false);
+	};
+
+	const handleSearchCommit = (value: string) => {
+		applySearchValue(value, true);
 	};
 
 	onMount(() => {
@@ -293,11 +475,10 @@ const ResourceBrowser: Component<{
 			expandedCategoryGroups: [...resources.state.expandedCategoryGroups],
 		}));
 
-		if (props.setRefetch) {
-			props.setRefetch(async () => {
-				await resources.search();
-			});
-		}
+		const handleRefetch = async () => {
+			await resources.search();
+		};
+		activeRouter()?.registerReload(handleRefetch, "/resources");
 
 		if (resources.state.selectedInstanceId) {
 			resources.fetchInstalled(resources.state.selectedInstanceId);
@@ -364,9 +545,9 @@ const ResourceBrowser: Component<{
 			<ResourceToolbar
 				router={activeRouter()}
 				onSearchInput={handleSearchInput}
+				onSearchCommit={handleSearchCommit}
 				searchValue={resources.state.query}
 			/>
-
 			<div class={styles["resource-results-info"]}>
 				<div class={styles["results-stats"]}>
 					<Show when={resources.state.totalHits > 0}>
@@ -447,24 +628,7 @@ const ResourceBrowser: Component<{
 							onClick={() => resources.setViewMode("list")}
 							title="List View"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<line x1="8" y1="6" x2="21" y2="6" />
-								<line x1="8" y1="12" x2="21" y2="12" />
-								<line x1="8" y1="18" x2="21" y2="18" />
-								<line x1="3" y1="6" x2="3.01" y2="6" />
-								<line x1="3" y1="12" x2="3.01" y2="12" />
-								<line x1="3" y1="18" x2="3.01" y2="18" />
-							</svg>
+							<ListIcon width="16" height="16" />
 						</button>
 						<button
 							class={styles["view-btn"]}
@@ -474,22 +638,7 @@ const ResourceBrowser: Component<{
 							onClick={() => resources.setViewMode("grid")}
 							title="Grid View"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<rect x="3" y="3" width="7" height="7" />
-								<rect x="14" y="3" width="7" height="7" />
-								<rect x="14" y="14" width="7" height="7" />
-								<rect x="3" y="14" width="7" height="7" />
-							</svg>
+							<GridIcon width="16" height="16" />
 						</button>
 					</div>
 				</div>
@@ -515,21 +664,7 @@ const ResourceBrowser: Component<{
 						when={!resources.state.searchError}
 						fallback={
 							<div class={styles["error-state"]}>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="32"
-									height="32"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<circle cx="12" cy="12" r="10" />
-									<line x1="12" y1="8" x2="12" y2="12" />
-									<line x1="12" y1="16" x2="12.01" y2="16" />
-								</svg>
+								<ErrorIcon width="32" height="32" />
 								<h3>Search failed</h3>
 								<p>{resources.state.searchError}</p>
 								<button
@@ -545,20 +680,7 @@ const ResourceBrowser: Component<{
 							when={resources.state.results.length > 0}
 							fallback={
 								<div class={styles["empty-state"]}>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="32"
-										height="32"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<circle cx="11" cy="11" r="8" />
-										<line x1="21" y1="21" x2="16.65" y2="16.65" />
-									</svg>
+									<SearchIcon width="32" height="32" />
 									<h3>No resources found</h3>
 									<p>Try adjusting your search query or filters.</p>
 									<Show
@@ -566,13 +688,22 @@ const ResourceBrowser: Component<{
 											resources.state.query ||
 											resources.state.categories.length > 0 ||
 											resources.state.gameVersion ||
-											resources.state.loader
+											resources.state.loader ||
+											resources.state.selectedInstanceId
 										}
 									>
 										<button
 											class={styles["empty-state-action"]}
 											onClick={() => {
 												resources.resetFilters();
+												activeRouter()?.updateQuery(
+													"selectedInstanceId",
+													null,
+												);
+												activeRouter()?.updateQuery("gameVersion", null);
+												activeRouter()?.updateQuery("loader", null);
+												activeRouter()?.updateQuery("categories", []);
+												activeRouter()?.updateQuery("query", "");
 											}}
 										>
 											Clear all filters
@@ -591,10 +722,14 @@ const ResourceBrowser: Component<{
 								<For each={resources.state.results}>
 									{(project) => (
 										<ResourceCard
-											project={project}
-											viewMode={resources.state.viewMode}
-											router={activeRouter()}
-										/>
+										project={project}
+										viewMode={resources.state.viewMode}
+										router={activeRouter()}
+										installSelectionActive={
+											activeSelectionProjectKey() ===
+											projectKey(project)
+										}
+									/>
 									)}
 								</For>
 							</div>
@@ -635,7 +770,7 @@ const ResourceBrowser: Component<{
 				</Show>
 			</div>
 
-			<InstanceSelectionDialog
+			<ResourceInstanceSelectionDialog
 				isOpen={isInstanceDialogOpen()}
 				onClose={() => {
 					setIsInstanceDialogOpen(false);
@@ -645,6 +780,14 @@ const ResourceBrowser: Component<{
 				onCreateNew={handleCreateNew}
 				project={resources.state.installRequest?.project}
 				versions={resources.state.installRequest?.versions ?? []}
+				installType={resources.state.installRequest?.installType}
+			/>
+			<WorldSelectionDialog
+				isOpen={Boolean(worldInstall())}
+				initialInstanceId={worldInstall()?.instanceId}
+				projectName={worldInstall()?.project.name}
+				onClose={() => setWorldInstall(null)}
+				onSelectWorld={handleSelectWorld}
 			/>
 		</div>
 	);

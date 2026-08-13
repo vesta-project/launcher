@@ -1,5 +1,6 @@
 import type { PolymorphicProps } from "@kobalte/core";
 import * as ComboboxPrimitive from "@kobalte/core/combobox";
+import CheckIcon from "@assets/icons/controls/check.svg";
 import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { Component, splitProps, type ValidComponent } from "solid-js";
@@ -45,18 +46,7 @@ function ComboboxItemIndicator<T extends ValidComponent = "div">(
 	return (
 		<ComboboxPrimitive.ItemIndicator {...rest}>
 			{props.children ?? (
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class={styles["size-4"]}
-				>
-					<path d="M5 12l5 5l10 -10" />
-				</svg>
+				<CheckIcon class={styles["size-4"]} />
 			)}
 		</ComboboxPrimitive.ItemIndicator>
 	);

@@ -207,9 +207,9 @@ pub fn create_classpath_jar(paths: &[String], temp_dir: &Path) -> Result<PathBuf
     // For safety, we'll just write it as a long string. Most JVMs handle it.
     // If strict wrapping is needed, we'd need a proper manifest writer.
     // But for now, let's try the simple approach.
-    write!(zip, "Manifest-Version: 1.0\n")?;
-    write!(zip, "Class-Path: {}\n", class_path)?;
-    write!(zip, "Main-Class: \n")?; // Some JVMs expect this even if empty
+    writeln!(zip, "Manifest-Version: 1.0")?;
+    writeln!(zip, "Class-Path: {}", class_path)?;
+    writeln!(zip, "Main-Class: ")?; // Some JVMs expect this even if empty
 
     zip.finish()?;
 

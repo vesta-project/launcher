@@ -1,5 +1,6 @@
 import type { PolymorphicProps } from "@kobalte/core";
 import * as DialogPrimitive from "@kobalte/core/dialog";
+import CloseIcon from "@assets/icons/actions/close.svg";
 import type { ClassProp } from "@ui/props";
 import clsx from "clsx";
 import {
@@ -64,18 +65,7 @@ const DialogContent = <T extends ValidComponent = "div">(
 				{local.children}
 				<Show when={!local.hideCloseButton}>
 					<DialogPrimitive.CloseButton class={styles["dialog__close-btn"]}>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M18 6l-12 12" />
-							<path d="M6 6l12 12" />
-						</svg>
+						<CloseIcon />
 						<span
 							class="sr-only"
 							style={{

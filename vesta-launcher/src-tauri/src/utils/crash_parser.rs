@@ -710,6 +710,7 @@ fn find_latest_crash_report(
     latest_file.map(|(path, _)| path.to_string_lossy().to_string())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_crash(
     crash_type: &str,
     category: &str,

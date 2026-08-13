@@ -214,7 +214,7 @@ impl ModpackInstaller {
 
             if !curseforge_jobs.is_empty() {
                 if let Some(resolver) = &resolver {
-                    let resolved = stream::iter(curseforge_jobs.into_iter())
+                    let resolved = stream::iter(curseforge_jobs)
                         .map(|(project_id, file_id, hash)| {
                             let resolver = resolver.clone();
                             async move {
@@ -526,7 +526,7 @@ impl ModpackInstaller {
             // Resolve CurseForge mods via the resolver
             if !curseforge_jobs.is_empty() {
                 if let Some(resolver) = &resolver {
-                    let resolved = stream::iter(curseforge_jobs.into_iter())
+                    let resolved = stream::iter(curseforge_jobs)
                         .map(|(project_id, file_id, hash)| {
                             let resolver = resolver.clone();
                             async move {
@@ -692,7 +692,7 @@ pub async fn enrich_platform_mod_hashes(
                 version_id,
                 ref mut url,
             } => {
-                let needs_hash = !m.sha1.as_ref().is_some_and(|h| !h.is_empty());
+                let needs_hash = m.sha1.as_ref().is_none_or(|h| h.is_empty());
                 let needs_url = url.is_empty();
                 if !needs_hash && !needs_url {
                     continue;
@@ -722,7 +722,7 @@ pub async fn enrich_platform_mod_hashes(
                 file_id,
                 ref mut url,
             } => {
-                let needs_hash = !m.sha1.as_ref().is_some_and(|h| !h.is_empty());
+                let needs_hash = m.sha1.as_ref().is_none_or(|h| h.is_empty());
                 let needs_url = url.is_empty();
                 let needs_path = m.path == format!("mods/{}.jar", file_id);
                 if !needs_hash && !needs_url && !needs_path {

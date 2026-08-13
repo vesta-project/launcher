@@ -46,7 +46,7 @@ impl SubscriptionManager {
                             if !self.is_seen(&sub.id, &item.id)? {
                                 // If this is a new subscription, don't spam notifications for old items
                                 if !is_first_run {
-                                    if let Ok(_) = self.create_notification(&sub, &item) {
+                                    if self.create_notification(&sub, &item).is_ok() {
                                         if let Err(e) = self.mark_seen(&sub.id, &item.id) {
                                             log::error!(
                                                 "Failed to mark item seen {}: {}",

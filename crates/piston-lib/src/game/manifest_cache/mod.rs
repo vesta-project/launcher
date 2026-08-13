@@ -213,7 +213,7 @@ impl ManifestCache {
                                         .await;
                                         // Also persist to disk with new headers
                                         let disk_cached = CachedManifest {
-                                            etag: etag,
+                                            etag,
                                             last_modified: lm,
                                             fetched_at: Utc::now(),
                                             data: (*data).clone(),
@@ -479,7 +479,7 @@ impl ManifestCache {
         }
 
         // Sort: latest first
-        game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
+        game_versions.sort_by_key(|b| std::cmp::Reverse(b.release_time));
 
         // Java data: from cache when offline, from network otherwise.
         let (required_java_major_versions, java_major_version_by_game_version) = if self.offline {
@@ -549,6 +549,19 @@ impl ManifestCache {
             required_java_major_versions,
             java_major_version_by_game_version,
         })
+    }
+}
+
+fn manifest_url(slug: &str) -> String {
+    match slug {
+        "minecraft" => {
+            "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json".to_string()
+        }
+        "fabric" => "https://launcher-meta.modrinth.com/fabric/v0/manifest.json".to_string(),
+        "quilt" => "https://launcher-meta.modrinth.com/quilt/v0/manifest.json".to_string(),
+        "forge" => "https://launcher-meta.modrinth.com/forge/v0/manifest.json".to_string(),
+        "neo" => "https://launcher-meta.modrinth.com/neo/v0/manifest.json".to_string(),
+        _ => format!("https://launcher-meta.modrinth.com/{slug}/v0/manifest.json"),
     }
 }
 
@@ -640,18 +653,5 @@ mod tests {
                 .unwrap(),
             21
         );
-    }
-}
-
-fn manifest_url(slug: &str) -> String {
-    match slug {
-        "minecraft" => {
-            "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json".to_string()
-        }
-        "fabric" => "https://launcher-meta.modrinth.com/fabric/v0/manifest.json".to_string(),
-        "quilt" => "https://launcher-meta.modrinth.com/quilt/v0/manifest.json".to_string(),
-        "forge" => "https://launcher-meta.modrinth.com/forge/v0/manifest.json".to_string(),
-        "neo" => "https://launcher-meta.modrinth.com/neo/v0/manifest.json".to_string(),
-        _ => format!("https://launcher-meta.modrinth.com/{slug}/v0/manifest.json"),
     }
 }

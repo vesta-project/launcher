@@ -147,7 +147,7 @@ pub(crate) async fn prepare_instance_launch(
 
     let install_spec = InstallSpec {
         version_id: instance_data.minecraft_version.clone(),
-        modloader: modloader_type.clone(),
+        modloader: modloader_type,
         modloader_version: instance_data.modloader_version.clone(),
         data_dir: spec_data_dir.clone(),
         game_dir: game_dir.clone(),
@@ -668,10 +668,12 @@ mod tests {
 
     #[test]
     fn game_proxy_args_include_http_and_https_properties() {
-        let mut config = crate::utils::config::AppConfig::default();
-        config.proxy_enabled = true;
-        config.proxy_apply_to_games = true;
-        config.proxy_url = Some("http://127.0.0.1:8080".to_string());
+        let config = crate::utils::config::AppConfig {
+            proxy_enabled: true,
+            proxy_apply_to_games: true,
+            proxy_url: Some("http://127.0.0.1:8080".to_string()),
+            ..Default::default()
+        };
 
         assert_eq!(
             game_proxy_jvm_args(&config),
@@ -686,10 +688,12 @@ mod tests {
 
     #[test]
     fn game_proxy_args_include_socks_properties_without_credentials() {
-        let mut config = crate::utils::config::AppConfig::default();
-        config.proxy_enabled = true;
-        config.proxy_apply_to_games = true;
-        config.proxy_url = Some("socks5h://user:pass@example.test:1081".to_string());
+        let config = crate::utils::config::AppConfig {
+            proxy_enabled: true,
+            proxy_apply_to_games: true,
+            proxy_url: Some("socks5h://user:pass@example.test:1081".to_string()),
+            ..Default::default()
+        };
 
         assert_eq!(
             game_proxy_jvm_args(&config),
@@ -723,10 +727,12 @@ mod tests {
 
     #[test]
     fn appends_game_proxy_args_after_user_jvm_args() {
-        let mut config = crate::utils::config::AppConfig::default();
-        config.proxy_enabled = true;
-        config.proxy_apply_to_games = true;
-        config.proxy_url = Some("http://127.0.0.1:8080".to_string());
+        let config = crate::utils::config::AppConfig {
+            proxy_enabled: true,
+            proxy_apply_to_games: true,
+            proxy_url: Some("http://127.0.0.1:8080".to_string()),
+            ..Default::default()
+        };
 
         let mut args = parse_user_jvm_args(Some("-Xmx2G".to_string())).unwrap();
         args.extend(game_proxy_jvm_args(&config));

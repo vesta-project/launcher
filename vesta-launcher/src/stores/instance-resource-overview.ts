@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { markPerformance, measurePerformance } from "@utils/performance-trace";
 
 export interface ResourceProjectRef {
-	platform: "modrinth" | "curseforge";
+	platform: "modrinth" | "curseforge" | "smithed";
 	id: string;
 }
 
@@ -55,6 +55,12 @@ const rowsInFlight = new Map<number, Promise<InstalledResource[]>>();
 const rowsTrailing = new Set<number>();
 const rowsRevision = new Map<number, string>();
 
+export function instanceOwnedResources(resources: InstalledResource[]) {
+	return resources.filter(
+		(resource) => resource.resource_type?.toLowerCase() !== "datapack",
+	);
+}
+
 function evictCachedInstance(instanceId: number) {
 	overviewCache.delete(instanceId);
 	rowsCache.delete(instanceId);
@@ -63,7 +69,11 @@ function evictCachedInstance(instanceId: number) {
 }
 
 function retain(instanceId: number, value: InstanceResourceOverview) {
-	rowsCache.set(instanceId, value.resources);
+	const resources = instanceOwnedResources(value.resources);
+	if (resources.length !== value.resources.length) {
+		value = { ...value, resources };
+	}
+	rowsCache.set(instanceId, resources);
 	overviewCache.delete(instanceId);
 	overviewCache.set(instanceId, { value, updatedAt: Date.now() });
 	while (overviewCache.size > MAX_CACHED_INSTANCES) {
@@ -71,6 +81,7 @@ function retain(instanceId: number, value: InstanceResourceOverview) {
 		if (oldest === undefined) break;
 		evictCachedInstance(oldest);
 	}
+	return value;
 }
 
 export function getCachedInstanceResourceOverview(instanceId: number) {
@@ -97,7 +108,7 @@ export async function loadInstanceResourceOverview(
 		{ instanceId },
 	)
 		.then((overview) => {
-			retain(instanceId, overview);
+			overview = retain(instanceId, overview);
 			markPerformance(endMark, {
 				instanceId,
 				resources: overview.resources.length,
@@ -120,6 +131,7 @@ export function updateCachedInstanceResources(
 	instanceId: number,
 	resources: InstalledResource[],
 ) {
+	resources = instanceOwnedResources(resources);
 	rowsCache.set(instanceId, resources);
 	const cached = overviewCache.get(instanceId);
 	if (!cached) return;
@@ -152,9 +164,9 @@ export function refreshInstanceResourceRows(
 		let rows: InstalledResource[] = [];
 		do {
 			rowsTrailing.delete(instanceId);
-			rows = await invoke<InstalledResource[]>("get_installed_resources", {
+			rows = instanceOwnedResources(await invoke<InstalledResource[]>("get_installed_resources", {
 				instanceId,
-			});
+			}));
 			updateCachedInstanceResources(instanceId, rows);
 		} while (rowsTrailing.delete(instanceId));
 		return rows;

@@ -7,13 +7,15 @@ use tokio::sync::RwLock;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceMetadataCacheRecord,
-    ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion,
-    SearchQuery, SearchResponse, SourcePlatform,
+    CachedResourceProjectRef, DependencyType, ReleaseType, ResourceCategory, ResourceDependency,
+    ResourceMetadataCacheRecord, ResourceProject, ResourceProjectRecord, ResourceProjectRef,
+    ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse,
+    SourcePlatform,
 };
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
-use crate::resources::sources::ResourceSource;
+use crate::resources::sources::smithed::SmithedSource;
+use crate::resources::sources::{ResourceSource, SourceCapabilities};
 use crate::resources::update_cache::{now_datetime_str, VERSION_CACHE_TTL_MINUTES};
 use crate::schema::vesta::installed_resource::dsl as ir_dsl;
 use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
@@ -43,15 +45,61 @@ async fn download_icon_with_timeout(url: &str) -> Result<Vec<u8>> {
     Ok(bytes.to_vec())
 }
 
+fn dependency_version_filters<'a>(
+    platform: SourcePlatform,
+    dependency_type: ResourceType,
+    datapack_mc_version: &'a str,
+    instance_mc_version: &'a str,
+    loader: &'a str,
+    allow_inexact_datapacks: bool,
+) -> (Option<&'a str>, Option<&'a str>) {
+    if dependency_type == ResourceType::DataPack {
+        let minecraft_version = (!allow_inexact_datapacks).then_some(datapack_mc_version);
+        let loader = (platform != SourcePlatform::CurseForge).then_some("datapack");
+        (minecraft_version, loader)
+    } else {
+        (Some(instance_mc_version), Some(loader))
+    }
+}
+
+fn dependency_type_for_pinned_loaders(
+    platform: SourcePlatform,
+    dependency_type: ResourceType,
+    pinned_loaders: Option<&[String]>,
+) -> ResourceType {
+    if platform == SourcePlatform::Modrinth
+        && pinned_loaders.is_some_and(|loaders| {
+            loaders
+                .iter()
+                .any(|loader| loader.eq_ignore_ascii_case("datapack"))
+        })
+    {
+        ResourceType::DataPack
+    } else {
+        dependency_type
+    }
+}
+
+type PlatformIdKey = (SourcePlatform, String);
+type CachedHashLookup = (ResourceProject, ResourceVersion);
+type CachedSearchResponse = (SearchResponse, NaiveDateTime);
+type CachedCategories = (Vec<ResourceCategory>, NaiveDateTime);
+
 #[derive(Clone)]
 pub struct ResourceManager {
     sources: Arc<RwLock<Vec<Arc<dyn ResourceSource>>>>,
-    project_cache: Arc<RwLock<HashMap<(SourcePlatform, String), ResourceProject>>>,
-    version_cache: Arc<RwLock<HashMap<(SourcePlatform, String), Vec<ResourceVersion>>>>,
-    hash_cache: Arc<RwLock<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>>,
-    search_cache: Arc<RwLock<HashMap<String, (SearchResponse, NaiveDateTime)>>>,
-    category_cache: Arc<RwLock<HashMap<SourcePlatform, (Vec<ResourceCategory>, NaiveDateTime)>>>,
+    project_cache: Arc<RwLock<HashMap<PlatformIdKey, ResourceProject>>>,
+    version_cache: Arc<RwLock<HashMap<PlatformIdKey, Vec<ResourceVersion>>>>,
+    hash_cache: Arc<RwLock<HashMap<PlatformIdKey, CachedHashLookup>>>,
+    search_cache: Arc<RwLock<HashMap<String, CachedSearchResponse>>>,
+    category_cache: Arc<RwLock<HashMap<SourcePlatform, CachedCategories>>>,
     pub image_cache: Arc<RwLock<HashMap<String, String>>>,
+}
+
+impl Default for ResourceManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ResourceManager {
@@ -59,6 +107,7 @@ impl ResourceManager {
         let sources: Vec<Arc<dyn ResourceSource>> = vec![
             Arc::new(ModrinthSource::new()),
             Arc::new(CurseForgeSource::new()),
+            Arc::new(SmithedSource::new()),
         ];
 
         Self {
@@ -100,10 +149,12 @@ impl ResourceManager {
     }
 
     fn platform_to_source_str(platform: SourcePlatform) -> &'static str {
-        match platform {
-            SourcePlatform::Modrinth => "modrinth",
-            SourcePlatform::CurseForge => "curseforge",
-        }
+        platform.as_str()
+    }
+
+    pub async fn list_source_capabilities(&self) -> Vec<SourceCapabilities> {
+        let sources = self.sources.read().await;
+        sources.iter().map(|source| source.capabilities()).collect()
     }
 
     fn parse_cache_datetime(value: &str) -> Option<NaiveDateTime> {
@@ -234,13 +285,16 @@ impl ResourceManager {
         Err(anyhow!("Source not found for platform {:?}", platform))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn resolve_dependencies(
         &self,
         platform: SourcePlatform,
         resource_type: ResourceType,
         version: &ResourceVersion,
-        mc_version: &str,
+        datapack_mc_version: &str,
+        instance_mc_version: &str,
         loader: &str,
+        allow_inexact_datapacks: bool,
     ) -> Result<Vec<(ResourceProject, ResourceVersion)>> {
         let mut resolved = Vec::new();
         let mut visited = HashSet::new();
@@ -297,11 +351,10 @@ impl ResourceManager {
             for dep in &current_level_deps {
                 let is_required = dep.dependency_type == DependencyType::Required;
 
-                if is_required && !visited.contains(&dep.project_id) {
-                    if dep_ids_set.insert(dep.project_id.clone()) {
+                if is_required && !visited.contains(&dep.project_id)
+                    && dep_ids_set.insert(dep.project_id.clone()) {
                         unique_deps_to_process.push(dep.clone());
                     }
-                }
             }
 
             if unique_deps_to_process.is_empty() {
@@ -336,7 +389,7 @@ impl ResourceManager {
                     }
                 };
 
-                let project = match project {
+                let mut project = match project {
                     Some(p) => p,
                     None => {
                         log::warn!("[DependencyResolution] Could not find project metadata for {} in fetched results", dep.project_id);
@@ -345,14 +398,17 @@ impl ResourceManager {
                 };
 
                 // 2. Find best version for environment
-                let versions = match self
-                    .get_versions(
-                        platform,
-                        &dep.project_id,
-                        false,
-                        Some(mc_version),
-                        Some(loader),
-                    )
+                let mut dependency_type = project.resource_type;
+                let (version_mc, version_loader) = dependency_version_filters(
+                    platform,
+                    dependency_type,
+                    datapack_mc_version,
+                    instance_mc_version,
+                    loader,
+                    allow_inexact_datapacks,
+                );
+                let mut versions = match self
+                    .get_versions(platform, &dep.project_id, false, version_mc, version_loader)
                     .await
                 {
                     Ok(v) => v,
@@ -365,18 +421,104 @@ impl ResourceManager {
                         continue;
                     }
                 };
+                if let Some(version_id) = &dep.version_id {
+                    if !versions.iter().any(|version| &version.id == version_id) {
+                        if let Ok(pinned) = self
+                            .get_version(platform, &dep.project_id, version_id)
+                            .await
+                        {
+                            versions.push(pinned);
+                        }
+                    }
+                }
+
+                // A pinned Modrinth dependency can point at a datapack release
+                // even when the provider classifies the project itself as a mod.
+                let refined_dependency_type = dep
+                    .version_id
+                    .as_ref()
+                    .and_then(|version_id| versions.iter().find(|v| &v.id == version_id))
+                    .map(|version| version.loaders.as_slice());
+                let refined_dependency_type = dependency_type_for_pinned_loaders(
+                    platform,
+                    dependency_type,
+                    refined_dependency_type,
+                );
+                if refined_dependency_type != dependency_type {
+                    dependency_type = refined_dependency_type;
+                    let (version_mc, version_loader) = dependency_version_filters(
+                        platform,
+                        dependency_type,
+                        datapack_mc_version,
+                        instance_mc_version,
+                        loader,
+                        allow_inexact_datapacks,
+                    );
+                    match self
+                        .get_versions(platform, &dep.project_id, false, version_mc, version_loader)
+                        .await
+                    {
+                        Ok(mut datapack_versions) => {
+                            if let Some(version_id) = &dep.version_id {
+                                if !datapack_versions.iter().any(|v| &v.id == version_id) {
+                                    if let Some(pinned) =
+                                        versions.iter().find(|v| &v.id == version_id)
+                                    {
+                                        datapack_versions.push(pinned.clone());
+                                    }
+                                }
+                            }
+                            versions = datapack_versions;
+                        }
+                        Err(error) => {
+                            log::warn!(
+                                "Failed to re-fetch datapack versions for dependency {}: {}",
+                                dep.project_id,
+                                error
+                            );
+                        }
+                    }
+                }
+                if dependency_type == ResourceType::DataPack {
+                    project.resource_type = ResourceType::DataPack;
+                }
+                let dependency_mc_version = if dependency_type == ResourceType::DataPack {
+                    datapack_mc_version
+                } else {
+                    instance_mc_version
+                };
 
                 // 3. Find compatible version
                 let mut best_version = None;
                 if let Some(vid) = &dep.version_id {
                     if let Some(v) = versions.iter().find(|v| &v.id == vid) {
-                        if is_game_version_compatible(&v.game_versions, mc_version)
-                            && is_loader_compatible(&v.loaders, loader)
-                        {
+                        let game_matches = if dependency_type == ResourceType::DataPack {
+                            let exact = v.game_versions.iter().any(|listed| {
+                                normalize_mc_version(listed)
+                                    == normalize_mc_version(dependency_mc_version)
+                            });
+                            exact
+                                || (allow_inexact_datapacks
+                                    && is_game_version_compatible(
+                                        &v.game_versions,
+                                        dependency_mc_version,
+                                    ))
+                        } else {
+                            is_game_version_compatible(&v.game_versions, dependency_mc_version)
+                        };
+                        let loader_matches = if dependency_type == ResourceType::DataPack {
+                            platform == SourcePlatform::CurseForge
+                                || v.loaders
+                                    .iter()
+                                    .any(|candidate| candidate.eq_ignore_ascii_case("datapack"))
+                        } else {
+                            is_loader_compatible(&v.loaders, loader)
+                        };
+                        if game_matches && loader_matches {
                             best_version = Some(v.clone());
                         } else {
                             log::info!("Pinned version {} for {} is incompatible with current environment ({}, {}). Finding better alternative...",
-                                vid, dep.project_id, mc_version, loader);
+                                vid, dep.project_id, dependency_mc_version, loader);
                         }
                     }
                 }
@@ -386,13 +528,34 @@ impl ResourceManager {
                     let mut compatible: Vec<ResourceVersion> = versions
                         .into_iter()
                         .filter(|v| {
-                            is_game_version_compatible(&v.game_versions, mc_version)
-                                && is_loader_compatible(&v.loaders, loader)
+                            let game_matches = if dependency_type == ResourceType::DataPack {
+                                let exact = v.game_versions.iter().any(|listed| {
+                                    normalize_mc_version(listed)
+                                        == normalize_mc_version(dependency_mc_version)
+                                });
+                                exact
+                                    || (allow_inexact_datapacks
+                                        && is_game_version_compatible(
+                                            &v.game_versions,
+                                            dependency_mc_version,
+                                        ))
+                            } else {
+                                is_game_version_compatible(&v.game_versions, dependency_mc_version)
+                            };
+                            let loader_matches = if dependency_type == ResourceType::DataPack {
+                                platform == SourcePlatform::CurseForge
+                                    || v.loaders
+                                        .iter()
+                                        .any(|candidate| candidate.eq_ignore_ascii_case("datapack"))
+                            } else {
+                                is_loader_compatible(&v.loaders, loader)
+                            };
+                            game_matches && loader_matches
                         })
                         .collect();
 
                     compatible.sort_by(|a, b| {
-                        let target_norm = normalize_mc_version(mc_version);
+                        let target_norm = normalize_mc_version(dependency_mc_version);
                         let a_exact = a
                             .game_versions
                             .iter()
@@ -435,8 +598,15 @@ impl ResourceManager {
                     next_level_deps.extend(v.dependencies.clone());
                     resolved.push((project, v));
                 } else {
+                    if dependency_type == ResourceType::DataPack && !allow_inexact_datapacks {
+                        return Err(anyhow!(
+                            "Required datapack dependency {} has no exact release for Minecraft {}. Its compatibility must be acknowledged before installation.",
+                            project.name,
+                            dependency_mc_version
+                        ));
+                    }
                     log::warn!("[DependencyResolution] Could not find compatible version for dependency {} (MC: {}, Loader: {})",
-                        dep.project_id, mc_version, loader);
+                        dep.project_id, dependency_mc_version, loader);
                 }
             }
 
@@ -520,7 +690,12 @@ impl ResourceManager {
         {
             let cache = self.project_cache.read().await;
             if let Some(project) = cache.get(&(platform, id.to_string())) {
-                return Ok(project.clone());
+                // Batch dependency lookups may cache summary-only projects. A
+                // details request must hydrate those instead of treating them as
+                // a complete project and leaving the details page unresolved.
+                if project.description.is_some() {
+                    return Ok(project.clone());
+                }
             }
         }
 
@@ -589,89 +764,87 @@ impl ResourceManager {
         &self,
         current: &ResourceProject,
     ) -> Result<Option<ResourceProject>> {
-        let other_platform = match current.source {
-            SourcePlatform::Modrinth => SourcePlatform::CurseForge,
-            SourcePlatform::CurseForge => SourcePlatform::Modrinth,
-        };
-
-        if let Some((platform, project_id)) =
-            crate::resources::reconciliation::find_persisted_peer(current.source, &current.id)?
-        {
-            if platform == other_platform {
-                if let Ok(project) = self.get_project(platform, &project_id).await {
-                    return Ok(Some(project));
-                }
-            }
+        let peer_platforms = SourceCapabilities::for_platform(current.source).peer_platforms;
+        if peer_platforms.is_empty() {
+            return Ok(None);
         }
 
-        if let Some(ref external_ids) = current.external_ids {
-            let key = match other_platform {
-                SourcePlatform::Modrinth => "modrinth",
-                SourcePlatform::CurseForge => "curseforge",
-            };
-            if let Some(id) = external_ids.get(key) {
-                if let Ok(p) = self.get_project(other_platform, id).await {
-                    return Ok(Some(p));
+        for &other_platform in &peer_platforms {
+            if let Some((platform, project_id)) =
+                crate::resources::reconciliation::find_persisted_peer(current.source, &current.id)?
+            {
+                if platform == other_platform {
+                    if let Ok(project) = self.get_project(platform, &project_id).await {
+                        return Ok(Some(project));
+                    }
                 }
             }
-        }
 
-        if current.source == SourcePlatform::CurseForge
-            && other_platform == SourcePlatform::Modrinth
-        {
-            let facet_query = SearchQuery {
-                facets: Some(vec![format!("curseforge_id:{}", current.id)]),
+            if let Some(ref external_ids) = current.external_ids {
+                if let Some(id) = external_ids.get(other_platform.as_str()) {
+                    if let Ok(p) = self.get_project(other_platform, id).await {
+                        return Ok(Some(p));
+                    }
+                }
+            }
+
+            if current.source == SourcePlatform::CurseForge
+                && other_platform == SourcePlatform::Modrinth
+            {
+                let facet_query = SearchQuery {
+                    facets: Some(vec![format!("curseforge_id:{}", current.id)]),
+                    resource_type: current.resource_type,
+                    limit: 1,
+                    ..Default::default()
+                };
+
+                if let Ok(results) = self.search(other_platform, facet_query).await {
+                    if let Some(hit) = results.hits.into_iter().next() {
+                        return Ok(Some(hit));
+                    }
+                }
+            }
+
+            let query = SearchQuery {
+                text: Some(current.name.clone()),
                 resource_type: current.resource_type,
-                limit: 1,
+                limit: 10,
                 ..Default::default()
             };
 
-            if let Ok(results) = self.search(other_platform, facet_query).await {
-                if let Some(hit) = results.hits.into_iter().next() {
-                    return Ok(Some(hit));
+            if let Ok(results) = self.search(other_platform, query).await {
+                let c_name = current.name.to_lowercase();
+                let c_author = current.author.to_lowercase();
+
+                for hit in results.hits {
+                    let h_name = hit.name.to_lowercase();
+                    let h_author = hit.author.to_lowercase();
+
+                    let name_match =
+                        h_name == c_name || h_name.contains(&c_name) || c_name.contains(&h_name);
+                    let exact_name = h_name == c_name;
+                    let author_match = h_author.contains(&c_author)
+                        || c_author.contains(&h_author)
+                        || (c_author.starts_with("yung") && h_author.starts_with("yung"));
+
+                    if exact_name || (name_match && author_match) {
+                        return Ok(Some(hit));
+                    }
                 }
             }
-        }
 
-        let query = SearchQuery {
-            text: Some(current.name.clone()),
-            resource_type: current.resource_type,
-            limit: 10,
-            ..Default::default()
-        };
-
-        if let Ok(results) = self.search(other_platform, query).await {
-            let c_name = current.name.to_lowercase();
-            let c_author = current.author.to_lowercase();
-
-            for hit in results.hits {
-                let h_name = hit.name.to_lowercase();
-                let h_author = hit.author.to_lowercase();
-
-                let name_match =
-                    h_name == c_name || h_name.contains(&c_name) || c_name.contains(&h_name);
-                let exact_name = h_name == c_name;
-                let author_match = h_author.contains(&c_author)
-                    || c_author.contains(&h_author)
-                    || (c_author.starts_with("yung") && h_author.starts_with("yung"));
-
-                if exact_name || (name_match && author_match) {
-                    return Ok(Some(hit));
-                }
-            }
-        }
-
-        if other_platform == SourcePlatform::Modrinth {
-            if let Ok(versions) = self
-                .get_versions(current.source, &current.id, false, None, None)
-                .await
-            {
-                for v in versions.iter().take(3) {
-                    if v.hash.len() == 40 {
-                        if let Ok((project, _)) =
-                            self.get_by_hash(SourcePlatform::Modrinth, &v.hash).await
-                        {
-                            return Ok(Some(project));
+            if other_platform == SourcePlatform::Modrinth {
+                if let Ok(versions) = self
+                    .get_versions(current.source, &current.id, false, None, None)
+                    .await
+                {
+                    for v in versions.iter().take(3) {
+                        if v.hash.len() == 40 {
+                            if let Ok((project, _)) =
+                                self.get_by_hash(SourcePlatform::Modrinth, &v.hash).await
+                            {
+                                return Ok(Some(project));
+                            }
                         }
                     }
                 }
@@ -689,6 +862,16 @@ impl ResourceManager {
     ) -> Result<ResourceVersion> {
         let source = self.get_source(platform).await?;
         source.get_version(project_id, version_id).await
+    }
+
+    pub async fn get_version_details(
+        &self,
+        platform: SourcePlatform,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<ResourceVersionDetails> {
+        let source = self.get_source(platform).await?;
+        source.get_version_details(project_id, version_id).await
     }
 
     pub async fn get_by_hash(
@@ -887,10 +1070,8 @@ impl ResourceManager {
                 continue;
             }
 
-            let platform = match res.platform.as_str() {
-                "curseforge" => SourcePlatform::CurseForge,
-                "modrinth" => SourcePlatform::Modrinth,
-                _ => continue,
+            let Some(platform) = SourcePlatform::from_str_id(&res.platform) else {
+                continue;
             };
 
             let _ = self.get_project(platform, &res.remote_id).await;
@@ -930,7 +1111,7 @@ impl ResourceManager {
         }
         let mut conn = get_vesta_conn()?;
         let now = chrono::Utc::now().to_rfc3339();
-        let platform_str = format!("{:?}", platform).to_lowercase();
+        let platform_str = platform.as_str().to_string();
         let ids = projects
             .iter()
             .map(|project| &project.id)
@@ -1022,6 +1203,20 @@ impl ResourceManager {
         &self,
         refs: &[ResourceProjectRef],
     ) -> Result<Vec<ResourceProjectRecord>> {
+        let refs = refs
+            .iter()
+            .map(|project_ref| CachedResourceProjectRef {
+                platform: project_ref.platform.as_str().to_string(),
+                id: project_ref.id.clone(),
+            })
+            .collect::<Vec<_>>();
+        self.get_cached_project_records(&refs)
+    }
+
+    pub fn get_cached_project_records(
+        &self,
+        refs: &[CachedResourceProjectRef],
+    ) -> Result<Vec<ResourceProjectRecord>> {
         if refs.is_empty() {
             return Ok(Vec::new());
         }
@@ -1030,7 +1225,7 @@ impl ResourceManager {
             .iter()
             .map(|project_ref| {
                 (
-                    format!("{:?}", project_ref.platform).to_lowercase(),
+                    project_ref.platform.trim().to_ascii_lowercase(),
                     project_ref.id.clone(),
                 )
             })
@@ -1050,9 +1245,23 @@ impl ResourceManager {
         &self,
         refs: &[ResourceProjectRef],
     ) -> Result<Vec<ResourceProjectRecord>> {
+        let refs = refs
+            .iter()
+            .map(|project_ref| CachedResourceProjectRef {
+                platform: project_ref.platform.as_str().to_string(),
+                id: project_ref.id.clone(),
+            })
+            .collect::<Vec<_>>();
+        self.hydrate_cached_project_icons(&refs).await
+    }
+
+    pub async fn hydrate_cached_project_icons(
+        &self,
+        refs: &[CachedResourceProjectRef],
+    ) -> Result<Vec<ResourceProjectRecord>> {
         use futures::stream::{self, StreamExt};
 
-        let records = self.get_project_records(refs)?;
+        let records = self.get_cached_project_records(refs)?;
         let downloads = records
             .iter()
             .filter_map(|record| {
@@ -1099,16 +1308,14 @@ impl ResourceManager {
             }
         }
 
-        self.get_project_records(refs)
+        self.get_cached_project_records(refs)
     }
 }
 
 pub fn normalize_mc_version(v: &str) -> String {
-    if v.ends_with(".0") {
-        v[..v.len() - 2].to_string()
-    } else {
-        v.to_string()
-    }
+    v.strip_suffix(".0")
+        .map(|stripped| stripped.to_string())
+        .unwrap_or_else(|| v.to_string())
 }
 
 pub fn is_game_version_compatible(supported: &[String], target: &str) -> bool {
@@ -1156,5 +1363,66 @@ pub fn is_loader_compatible(supported: &[String], target: &str) -> bool {
         })
     } else {
         supported.iter().any(|l| l.to_lowercase() == t)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dependency_type_for_pinned_loaders, dependency_version_filters};
+    use crate::models::resource::{ResourceType, SourcePlatform};
+
+    #[test]
+    fn pinned_modrinth_datapack_refines_a_mixed_project_dependency() {
+        let loaders = vec!["datapack".to_string()];
+
+        assert_eq!(
+            dependency_type_for_pinned_loaders(
+                SourcePlatform::Modrinth,
+                ResourceType::Mod,
+                Some(&loaders),
+            ),
+            ResourceType::DataPack
+        );
+    }
+
+    #[test]
+    fn refined_datapack_query_uses_the_world_version_and_datapack_loader() {
+        assert_eq!(
+            dependency_version_filters(
+                SourcePlatform::Modrinth,
+                ResourceType::DataPack,
+                "1.21.5",
+                "1.20.1",
+                "fabric",
+                false,
+            ),
+            (Some("1.21.5"), Some("datapack"))
+        );
+        assert_eq!(
+            dependency_version_filters(
+                SourcePlatform::Modrinth,
+                ResourceType::DataPack,
+                "1.21.5",
+                "1.20.1",
+                "fabric",
+                true,
+            ),
+            (None, Some("datapack"))
+        );
+    }
+
+    #[test]
+    fn curseforge_datapack_query_does_not_send_a_loader_filter() {
+        assert_eq!(
+            dependency_version_filters(
+                SourcePlatform::CurseForge,
+                ResourceType::DataPack,
+                "1.21.5",
+                "1.20.1",
+                "neoforge",
+                false,
+            ),
+            (Some("1.21.5"), None)
+        );
     }
 }

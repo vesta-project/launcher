@@ -1,5 +1,6 @@
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SelectPrimitive from "@kobalte/core/select";
+import CheckIcon from "@assets/icons/controls/check.svg";
 import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import type { JSX, ValidComponent } from "solid-js";
@@ -85,18 +86,7 @@ const SelectItem = <T extends ValidComponent = "li">(
 		>
 			<SelectPrimitive.ItemLabel>{local.children}</SelectPrimitive.ItemLabel>
 			<SelectPrimitive.ItemIndicator class={styles["select__item-indicator"]}>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="size-4"
-				>
-					<path d="M5 12l5 5l10 -10" />
-				</svg>
+				<CheckIcon class="size-4" />
 			</SelectPrimitive.ItemIndicator>
 		</SelectPrimitive.Item>
 	);

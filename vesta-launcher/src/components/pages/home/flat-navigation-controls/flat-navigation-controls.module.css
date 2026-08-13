@@ -50,3 +50,16 @@
 	display: block;
 	fill: currentColor;
 }
+
+.flat-navigation-controls__button--loading svg {
+	animation: flat-nav-rotate 1s linear infinite;
+}
+
+@keyframes flat-nav-rotate {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}

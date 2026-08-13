@@ -1,5 +1,8 @@
 import * as PaginationPrimitive from "@kobalte/core/pagination";
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
+import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";
+import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
+import EllipsisHorizontalIcon from "@assets/icons/controls/ellipsis-horizontal.svg";
 import { cn } from "@utils/ui";
 import type { JSX, ValidComponent } from "solid-js";
 import { Show, splitProps } from "solid-js";
@@ -59,20 +62,7 @@ export const PaginationEllipsis = <T extends ValidComponent = "div">(
 			class={cn(styles["pagination-ellipsis"], local.class)}
 			{...others}
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class={styles["size-4"]}
-			>
-				<circle cx="12" cy="12" r="1" />
-				<circle cx="19" cy="12" r="1" />
-				<circle cx="5" cy="12" r="1" />
-			</svg>
+			<EllipsisHorizontalIcon class={styles["size-4"]} />
 			<span class={styles["sr-only"]}>More pages</span>
 		</PaginationPrimitive.Ellipsis>
 	);
@@ -105,18 +95,7 @@ export const PaginationPrevious = <T extends ValidComponent = "button">(
 				when={local.children}
 				fallback={
 					<>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							class={styles["size-4"]}
-						>
-							<path d="M15 6l-6 6l6 6" />
-						</svg>
+						<ChevronLeftIcon class={styles["size-4"]} />
 						<span>Previous</span>
 					</>
 				}
@@ -155,18 +134,7 @@ export const PaginationNext = <T extends ValidComponent = "button">(
 				fallback={
 					<>
 						<span>Next</span>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							class={styles["size-4"]}
-						>
-							<path d="M9 6l6 6l-6 6" />
-						</svg>
+						<ChevronRightIcon class={styles["size-4"]} />
 					</>
 				}
 			>

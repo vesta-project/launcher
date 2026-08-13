@@ -1,4 +1,4 @@
-import LogoIcon from "@assets/logo.svg";
+import LogoIcon from "@assets/branding/vesta-mark.svg";
 import networkStore from "@stores/network";
 import Button from "@ui/button/button";
 import { Show } from "solid-js";

@@ -1,9 +1,10 @@
 import * as path from "node:path";
 import solidPlugin from "vite-plugin-solid";
+import solidSvg from "vite-plugin-solid-svg";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-	plugins: [solidPlugin({ hot: false })],
+	plugins: [solidPlugin({ hot: false }), solidSvg()],
 	test: {
 		environment: "jsdom",
 		globals: true,
@@ -27,6 +28,10 @@ export default defineConfig({
 			{
 				find: "@stores",
 				replacement: path.resolve(__dirname, "src/stores"),
+			},
+			{
+				find: "@resources",
+				replacement: path.resolve(__dirname, "src/resources"),
 			},
 			{
 				find: "~",

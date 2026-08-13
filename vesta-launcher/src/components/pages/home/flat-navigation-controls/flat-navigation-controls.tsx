@@ -1,49 +1,14 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
-import ForwardsArrowIcon from "@assets/right-arrow.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import ForwardsArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import { pageViewerOpen, router } from "@components/page-viewer/page-viewer";
-import {
-	handleNavigationBack,
-	handleNavigationForward,
-	handleNavigationKeyDown,
-} from "@utils/flat-shell-navigation";
-import { createMemo, onCleanup, onMount } from "solid-js";
+import { createShellHistoryControls } from "@utils/flat-shell-navigation";
+import { Show } from "solid-js";
 import styles from "./flat-navigation-controls.module.css";
 
 function FlatNavigationControls() {
-	const canGoBack = createMemo(() => {
-		pageViewerOpen();
-		const r = router();
-		if (!r) return false;
-		r.currentPath.get();
-		return r.canGoBackReactive();
-	});
-
-	const canGoForward = createMemo(() => {
-		pageViewerOpen();
-		const r = router();
-		if (!r) return false;
-		r.currentPath.get();
-		return r.canGoForwardReactive();
-	});
-
-	const handleBackClick = async () => {
-		const r = router();
-		if (!r) return;
-		await handleNavigationBack(r);
-	};
-
-	const handleForwardClick = () => {
-		const r = router();
-		if (!r) return;
-		handleNavigationForward(r);
-	};
-
-	onMount(() => {
-		const onKeyDown = (event: KeyboardEvent) => {
-			void handleNavigationKeyDown(event, router());
-		};
-		window.addEventListener("keydown", onKeyDown);
-		onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+	const history = createShellHistoryControls(router, {
+		track: pageViewerOpen,
 	});
 
 	return (
@@ -51,8 +16,8 @@ function FlatNavigationControls() {
 			<button
 				type="button"
 				class={styles["flat-navigation-controls__button"]}
-				onClick={handleBackClick}
-				disabled={!canGoBack()}
+				onClick={() => void history.back()}
+				disabled={!history.canGoBack()}
 				aria-label="Back"
 				title="Back"
 			>
@@ -61,13 +26,25 @@ function FlatNavigationControls() {
 			<button
 				type="button"
 				class={styles["flat-navigation-controls__button"]}
-				onClick={handleForwardClick}
-				disabled={!canGoForward()}
+				onClick={history.forward}
+				disabled={!history.canGoForward()}
 				aria-label="Forward"
 				title="Forward"
 			>
 				<ForwardsArrowIcon />
 			</button>
+			<Show when={history.canReload()}>
+				<button
+					type="button"
+					class={`${styles["flat-navigation-controls__button"]} ${history.isReloading() ? styles["flat-navigation-controls__button--loading"] : ""}`}
+					onClick={history.reload}
+					disabled={history.isReloading()}
+					aria-label="Reload"
+					title="Reload"
+				>
+					<RefreshIcon />
+				</button>
+			</Show>
 		</div>
 	);
 }

@@ -1,6 +1,7 @@
 pub mod app;
 pub mod github;
 pub mod instances;
+pub mod keybindings;
 pub mod launcher_imports;
 pub mod modpacks;
 pub mod notifications;
@@ -13,3 +14,4 @@ pub mod skins;
 pub mod sync;
 pub mod tasks;
 pub mod themes;
+pub mod worlds;

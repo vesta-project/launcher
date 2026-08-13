@@ -2,6 +2,7 @@ import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 import { DialogRoot } from "@components/dialog/dialog-root";
 import { openMiniPage, router } from "@components/page-viewer/page-viewer";
 import { FatalPage } from "@components/pages/fatal/fatal-page";
+import { WorldArchiveSelectionDialog } from "@components/worlds/WorldArchiveSelectionDialog";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
@@ -40,6 +41,7 @@ import {
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { onCleanup, onMount } from "solid-js";
+import { applyLanguagePreference } from "~/localization";
 
 export interface ExitCheckResponse {
 	can_exit: boolean;
@@ -402,7 +404,12 @@ function Root(props: ChildrenProp) {
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()
 				.then(() => {
-					onConfigUpdate(applyCommonConfigUpdates);
+					onConfigUpdate((field, value) => {
+						applyCommonConfigUpdates(field, value);
+						if (field === "language" && typeof value === "string") {
+							applyLanguagePreference(value);
+						}
+					});
 				})
 				.catch((error) => {
 					console.error("Failed to initialize config sync:", error);
@@ -450,6 +457,7 @@ function Root(props: ChildrenProp) {
 			<SessionExpiredDialog />
 			<DialogRoot />
 			<GlobalModpackInstallDialog />
+			<WorldArchiveSelectionDialog />
 		</>
 	);
 }

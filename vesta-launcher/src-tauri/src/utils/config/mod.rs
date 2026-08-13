@@ -310,7 +310,7 @@ impl Default for AppConfig {
             id: 1,
             background_hue: 180,
             theme: "dark".to_string(),
-            language: "en".to_string(),
+            language: crate::localization::SYSTEM_LANGUAGE.to_string(),
             max_download_threads: 4,
             default_max_memory: 4096,
             java_path: None,
@@ -989,10 +989,10 @@ fn sync_theme_to_account(
     let account_uuid = account_uuid.replace("-", "");
 
     // Only sync theme fields that are persisted on the account model
-    let is_theme_field = match field {
-        "theme_id" | "theme_data" | "theme_window_effect" | "theme_background_opacity" => true,
-        _ => false,
-    };
+    let is_theme_field = matches!(
+        field,
+        "theme_id" | "theme_data" | "theme_window_effect" | "theme_background_opacity"
+    );
 
     if !is_theme_field {
         return Ok(());
@@ -1157,7 +1157,7 @@ pub fn update_config_fields(
 
     // If an account is active, sync theme changes to its profile
     if let Some(ref account_uuid) = updated_config.active_account_uuid {
-        for (field, _value) in &updates {
+        for field in updates.keys() {
             let emitted_value = config_field_value(&updated_config, field);
             let _ = sync_theme_to_account(field, &emitted_value, account_uuid);
         }
@@ -1194,14 +1194,10 @@ mod tests {
     // and mark tests as todo.
 
     #[test]
-    fn test_config_initialization() {
-        // TODO: Rewrite test for Diesel
-        assert!(true);
-    }
+    #[ignore = "TODO: Rewrite test for Diesel"]
+    fn test_config_initialization() {}
 
     #[test]
-    fn test_config_update() {
-        // TODO: Rewrite test for Diesel
-        assert!(true);
-    }
+    #[ignore = "TODO: Rewrite test for Diesel"]
+    fn test_config_update() {}
 }

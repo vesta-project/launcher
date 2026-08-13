@@ -17,19 +17,7 @@ function CompleteStep(props: CompleteStepProps) {
 	return (
 		<div class={styles["complete-step"]}>
 			<div class={`${styles["complete-icon"]} ${styles["scale-in--enter"]}`}>
-				<svg
-					width="64"
-					height="64"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="var(--accent-primary)"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-					<polyline points="22 4 12 14.01 9 11.01" />
-				</svg>
+				<SuccessIcon width="64" height="64" />
 			</div>
 
 			<h2
@@ -55,3 +43,4 @@ function CompleteStep(props: CompleteStepProps) {
 }
 
 export default CompleteStep;
+import SuccessIcon from "@assets/icons/controls/success.svg";

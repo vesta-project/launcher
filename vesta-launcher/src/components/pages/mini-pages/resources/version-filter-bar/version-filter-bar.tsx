@@ -1,4 +1,7 @@
 import clsx from "clsx";
+import CheckIcon from "@assets/icons/controls/check.svg";
+import CloseIcon from "@assets/icons/actions/close.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import styles from "./version-filter-bar.module.css";
 
@@ -149,21 +152,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 		<div class={styles["filter-bar"]}>
 			<div class={styles["search-row"]}>
 				<div class={styles["search-wrapper"]}>
-					<svg
-						class={styles["search-icon"]}
-						xmlns="http://www.w3.org/2000/svg"
-						width="14"
-						height="14"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<circle cx="11" cy="11" r="8"></circle>
-						<path d="m21 21-4.3-4.3"></path>
-					</svg>
+					<SearchIcon class={styles["search-icon"]} width="14" height="14" />
 					<input
 						ref={inputRef}
 						type="text"
@@ -186,20 +175,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 							}}
 							type="button"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<path d="M18 6 6 18"></path>
-								<path d="m6 6 12 12"></path>
-							</svg>
+							<CloseIcon width="14" height="14" />
 						</button>
 					</Show>
 
@@ -350,19 +326,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 														{version}
 													</span>
 													<Show when={isSelected}>
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															width="14"
-															height="14"
-															viewBox="0 0 24 24"
-															fill="none"
-															stroke="currentColor"
-															stroke-width="2"
-															stroke-linecap="round"
-															stroke-linejoin="round"
-														>
-															<path d="M20 6 9 17l-5-5"></path>
-														</svg>
+														<CheckIcon width="14" height="14" />
 													</Show>
 												</button>
 											);
@@ -374,8 +338,8 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 					</Show>
 				</div>
 
-				<span class={styles["filter-count"]}>
-					{props.filteredCount} / {props.totalCount} versions
+        <span class={styles["filter-count"]}>
+          {props.filteredCount} / {props.totalCount}
 				</span>
 			</div>
 
@@ -394,21 +358,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 								type="button"
 							>
 								{versionChipLabel(chip)}
-								<svg
-									class={styles["chip-x"]}
-									xmlns="http://www.w3.org/2000/svg"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M18 6 6 18"></path>
-									<path d="m6 6 12 12"></path>
-								</svg>
+								<CloseIcon class={styles["chip-x"]} width="12" height="12" />
 							</button>
 						)}
 					</For>

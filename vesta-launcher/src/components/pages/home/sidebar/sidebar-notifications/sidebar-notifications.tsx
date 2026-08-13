@@ -1,4 +1,4 @@
-import CloseIcon from "@assets/close.svg";
+import CloseIcon from "@assets/icons/actions/close.svg";
 import { SidebarActionButton } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { dialogStore } from "@stores/dialog-store";
 import { invoke } from "@tauri-apps/api/core";
@@ -90,6 +90,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 
 	return (
 		<div
+			id="sidebar-notifications-panel"
 			classList={{
 				[styles["sidebar__notifications-root"]]: true,
 				[styles["sidebar__notifications-root--open"]]: props.open,

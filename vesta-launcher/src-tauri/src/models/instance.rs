@@ -307,8 +307,10 @@ mod tests {
 
     #[test]
     fn slug_generated_from_name() {
-        let mut inst = NewInstance::default();
-        inst.name = "My Cool Instance".to_string();
+        let inst = NewInstance {
+            name: "My Cool Instance".to_string(),
+            ..Default::default()
+        };
 
         // Can't call slug on NewInstance, need to insert first
         // This test will need update

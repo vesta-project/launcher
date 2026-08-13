@@ -1,22 +1,16 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
-import CloseIcon from "@assets/close.svg";
-import OpenIcon from "@assets/open.svg";
-import RefreshIcon from "@assets/refresh.svg";
-import ForwardsArrowIcon from "@assets/right-arrow.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import CloseIcon from "@assets/icons/actions/close.svg";
+import OpenIcon from "@assets/icons/actions/external-link.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import ForwardsArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import {
-	handleNavigationBack,
-	handleNavigationForward,
-	handleNavigationKeyDown,
-} from "@utils/flat-shell-navigation";
+import { createShellHistoryControls } from "@utils/flat-shell-navigation";
 import {
 	children,
 	createMemo,
 	type JSX,
-	onCleanup,
-	onMount,
 	Show,
 } from "solid-js";
 import styles from "./unified-page-viewer.module.css";
@@ -67,20 +61,8 @@ interface UnifiedPageViewerProps {
 }
 
 export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
-	const canGoBack = createMemo(() => {
-		props.router.currentPath.get();
-		return props.router.canGoBackReactive();
-	});
-	const canGoForward = createMemo(() => {
-		props.router.currentPath.get();
-		return props.router.canGoForwardReactive();
-	});
-	const isReloading = createMemo(() => props.router.isReloading());
+	const history = createShellHistoryControls(() => props.router);
 	const isMac = createMemo(() => props.os === "macos");
-
-	const handleBack = async () => {
-		await handleNavigationBack(props.router);
-	};
 
 	const handleClose = async () => {
 		const canExit = props.router.getCanExit();
@@ -92,30 +74,6 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 		}
 		if (props.onClose) props.onClose();
 	};
-
-	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.ctrlKey || event.metaKey) {
-			if (event.key === "r") {
-				event.preventDefault();
-				props.router.reload();
-			}
-			if (event.key === "w" && props.onClose) {
-				event.preventDefault();
-				handleClose();
-			}
-		}
-		if (!props.hideNavbar && event.altKey) {
-			void handleNavigationKeyDown(event, props.router);
-		}
-	};
-
-	onMount(() => {
-		window.addEventListener("keydown", handleKeyDown);
-	});
-
-	onCleanup(() => {
-		window.removeEventListener("keydown", handleKeyDown);
-	});
 
 	return (
 		<div class={styles["unified-page-viewer-root"]} data-os={props.os}>
@@ -138,24 +96,24 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</Show>
 					<div class={styles["page-viewer-navbar-left"]}>
 						<NavbarButton
-							onClick={handleBack}
+							onClick={() => void history.back()}
 							text="Back"
-							disabled={!canGoBack()}
+							disabled={!history.canGoBack()}
 						>
 							<BackArrowIcon />
 						</NavbarButton>
 						<NavbarButton
-							onClick={() => handleNavigationForward(props.router)}
+							onClick={history.forward}
 							text="Forward"
-							disabled={!canGoForward()}
+							disabled={!history.canGoForward()}
 						>
 							<ForwardsArrowIcon />
 						</NavbarButton>
-						<Show when={props.router.getRefetch()}>
+						<Show when={history.canReload()}>
 							<NavbarButton
-								onClick={() => props.router.reload()}
+								onClick={history.reload}
 								text="Reload"
-								loading={isReloading()}
+								loading={history.isReloading()}
 							>
 								<RefreshIcon />
 							</NavbarButton>
@@ -209,7 +167,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 			</Show>
 
 			<main class={styles["page-viewer-content"]} data-page-scroll-container>
-				<Show when={isReloading()}>
+				<Show when={history.isReloading()}>
 					<div class={styles["page-viewer-reload-overlay"]}>
 						<div class={styles["page-viewer-reload-spinner"]} />
 					</div>

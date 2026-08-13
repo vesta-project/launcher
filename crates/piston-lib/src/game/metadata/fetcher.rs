@@ -121,7 +121,7 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
     // Sort game versions by release date (latest first)
     metadata
         .game_versions
-        .sort_by(|a, b| b.release_time.cmp(&a.release_time));
+        .sort_by_key(|b| std::cmp::Reverse(b.release_time));
 
     log::info!(
         "PistonMetadata fetched successfully: {} game versions, {} total loader combinations",

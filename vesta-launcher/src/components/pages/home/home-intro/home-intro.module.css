@@ -355,7 +355,7 @@
 		),
 		var(
 			--instance-bg-image,
-			url("@assets/placeholder-images/placeholder-image1.jpg")
+			url("@assets/images/placeholders/placeholder-image1.jpg")
 		);
 	background-repeat: no-repeat;
 	background-position: center center;

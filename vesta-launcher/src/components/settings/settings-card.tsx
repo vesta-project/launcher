@@ -5,6 +5,7 @@ import styles from "./settings.module.css";
 export interface SettingsCardProps {
 	header?: string;
 	subHeader?: string;
+	headerRight?: JSX.Element;
 	destructive?: boolean;
 	helpTopic?: string;
 	variant?: "default" | "compact" | "transparent" | "bordered";
@@ -33,6 +34,11 @@ export const SettingsCard: Component<SettingsCardProps> = (props) => {
 						<h2 class={styles["settings-card-title"]}>{props.header}</h2>
 						<Show when={props.helpTopic}>
 							{(helpTopic) => <HelpTrigger topic={helpTopic()} />}
+						</Show>
+						<Show when={props.headerRight}>
+							<div class={styles["settings-card-header-right"]}>
+								{props.headerRight}
+							</div>
 						</Show>
 					</div>
 					<Show when={props.subHeader}>

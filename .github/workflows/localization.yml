@@ -1,0 +1,87 @@
+name: Localization
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/localization.yml"
+      - "crowdin.yml"
+      - "vesta-launcher/locales/**"
+      - "vesta-launcher/scripts/validate-locales.ts"
+      - "vesta-launcher/src/localization/**"
+      - "vesta-launcher/src/components/pages/mini-pages/settings/general/GeneralTab.tsx"
+      - "vesta-launcher/src/components/pages/mini-pages/settings/settings-page.tsx"
+      - "vesta-launcher/src/app.tsx"
+      - "vesta-launcher/src/utils/startup-bootstrap.ts"
+      - "vesta-launcher/index.html"
+      - "vesta-launcher/src-tauri/src/localization/**"
+      - "vesta-launcher/src-tauri/src/main.rs"
+      - "vesta-launcher/src-tauri/src/setup.rs"
+      - "vesta-launcher/src-tauri/src/startup/shell.rs"
+      - "vesta-launcher/src-tauri/src/utils/config/mod.rs"
+      - "vesta-launcher/src-tauri/migrations/config/**"
+      - "vesta-launcher/src-tauri/Cargo.toml"
+      - "Cargo.lock"
+      - "vesta-launcher/package.json"
+      - "vesta-launcher/bun.lock"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/localization.yml"
+      - "crowdin.yml"
+      - "vesta-launcher/locales/**"
+      - "vesta-launcher/scripts/validate-locales.ts"
+      - "vesta-launcher/src/localization/**"
+      - "vesta-launcher/src/components/pages/mini-pages/settings/general/GeneralTab.tsx"
+      - "vesta-launcher/src/components/pages/mini-pages/settings/settings-page.tsx"
+      - "vesta-launcher/src/app.tsx"
+      - "vesta-launcher/src/utils/startup-bootstrap.ts"
+      - "vesta-launcher/index.html"
+      - "vesta-launcher/src-tauri/src/localization/**"
+      - "vesta-launcher/src-tauri/src/main.rs"
+      - "vesta-launcher/src-tauri/src/setup.rs"
+      - "vesta-launcher/src-tauri/src/startup/shell.rs"
+      - "vesta-launcher/src-tauri/src/utils/config/mod.rs"
+      - "vesta-launcher/src-tauri/migrations/config/**"
+      - "vesta-launcher/src-tauri/Cargo.toml"
+      - "Cargo.lock"
+      - "vesta-launcher/package.json"
+      - "vesta-launcher/bun.lock"
+
+concurrency:
+  group: "localization-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vesta-launcher
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - run: bun run i18n:check
+      - run: bun run test --run src/localization/index.test.ts scripts/validate-locales.test.ts
+      - run: bun run build
+
+  native:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v4"
+          shared-key: "vesta-localization-macos"
+          workspaces: |
+            . -> target
+            vesta-launcher/src-tauri -> target
+            crates/piston-lib -> target
+      - run: cargo test -p vesta-launcher localization::tests

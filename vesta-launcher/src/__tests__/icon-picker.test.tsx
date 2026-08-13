@@ -5,7 +5,7 @@ import { IconPicker } from "@ui/icon-picker/icon-picker";
 import { DEFAULT_ICONS } from "@utils/instances";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@assets/cube.svg", () => ({
+vi.mock("@assets/icons/content/cube.svg", () => ({
 	default: (props: any) => <svg data-testid="modpack-badge" {...props} />,
 }));
 

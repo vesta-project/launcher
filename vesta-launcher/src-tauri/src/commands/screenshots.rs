@@ -2,6 +2,7 @@ use crate::schema::instance::dsl::*;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -74,7 +75,7 @@ pub fn get_screenshots(instance_id_slug: String) -> Result<Vec<Screenshot>, Stri
     }
 
     // Sort by date descending by default
-    screenshots.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    screenshots.sort_by_key(|screenshot| Reverse(screenshot.created_at));
 
     Ok(screenshots)
 }

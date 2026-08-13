@@ -40,37 +40,35 @@ pub fn extract_gdlauncher_resource_hints(
     ];
 
     let mut out = Vec::new();
-    for result in query_results {
-        if let Ok(rows) = result {
-            for row in rows {
-                let Some(project_id) = row.project_id.filter(|s| !s.trim().is_empty()) else {
-                    continue;
-                };
-                let Some(version_id) = row.version_id.filter(|s| !s.trim().is_empty()) else {
-                    continue;
-                };
-                let platform = row.platform.unwrap_or_default().to_ascii_lowercase();
-                let platform = match platform.as_str() {
-                    "curseforge" | "cf" => "curseforge",
-                    "modrinth" | "mr" => "modrinth",
-                    _ => continue,
-                };
-                let file_name = row.file_name.and_then(|raw| {
-                    Path::new(&raw)
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .map(|s| s.to_string())
-                });
-                out.push(GDResourceHint {
-                    project_id,
-                    version_id,
-                    platform: platform.to_string(),
-                    file_name,
-                });
-            }
-            if !out.is_empty() {
-                break;
-            }
+    for rows in query_results.into_iter().flatten() {
+        for row in rows {
+            let Some(project_id) = row.project_id.filter(|s| !s.trim().is_empty()) else {
+                continue;
+            };
+            let Some(version_id) = row.version_id.filter(|s| !s.trim().is_empty()) else {
+                continue;
+            };
+            let platform = row.platform.unwrap_or_default().to_ascii_lowercase();
+            let platform = match platform.as_str() {
+                "curseforge" | "cf" => "curseforge",
+                "modrinth" | "mr" => "modrinth",
+                _ => continue,
+            };
+            let file_name = row.file_name.and_then(|raw| {
+                Path::new(&raw)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            });
+            out.push(GDResourceHint {
+                project_id,
+                version_id,
+                platform: platform.to_string(),
+                file_name,
+            });
+        }
+        if !out.is_empty() {
+            break;
         }
     }
     out

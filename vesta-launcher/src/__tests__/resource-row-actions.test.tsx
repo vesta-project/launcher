@@ -4,11 +4,11 @@ import { ResourceRowActions } from "@components/pages/mini-pages/instance-detail
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@assets/download-compact.svg", () => ({
+vi.mock("@assets/icons/actions/download.svg", () => ({
 	default: () => <svg data-testid="download-icon" />,
 }));
 
-vi.mock("@assets/trash.svg", () => ({
+vi.mock("@assets/icons/actions/delete.svg", () => ({
 	default: () => <svg data-testid="trash-icon" />,
 }));
 

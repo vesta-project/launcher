@@ -1,8 +1,9 @@
-import DesktopAddIcon from "@assets/desktop-add.svg";
-import EllipsisVIcon from "@assets/ellipsis-v.svg";
-import LinkIcon from "@assets/link.svg";
-import PinIcon from "@assets/pin.svg";
-import PinOffIcon from "@assets/pin-off.svg";
+import DesktopAddIcon from "@assets/icons/actions/desktop-add.svg";
+import EllipsisVIcon from "@assets/icons/content/ellipsis-v.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
+import PinIcon from "@assets/icons/actions/pin.svg";
+import PinOffIcon from "@assets/icons/actions/unpin.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
@@ -151,6 +152,24 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		}
 	};
 
+	const handleOpenInstanceFolder = async () => {
+		const info = pageInfo();
+		if (!info || info.type !== "instance") return;
+
+		setIsOpen(false);
+
+		try {
+			await invoke("open_instance_folder", { instanceIdSlug: info.id });
+		} catch (e) {
+			console.error("Failed to open instance folder:", e);
+			showToast({
+				title: "Open folder failed",
+				description: String(e),
+				severity: "error",
+			});
+		}
+	};
+
 	const copyUrl = async () => {
 		const url = activeRouter()?.generateUrl();
 		if (!url) return;
@@ -191,6 +210,14 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 
 						<Show when={pageInfo()?.type !== "settings"}>
 							<Show when={pageInfo()?.type === "instance"}>
+								<button
+									class={styles["menu-item"]}
+									onClick={handleOpenInstanceFolder}
+								>
+									<FolderIcon />
+									<span>Open Folder</span>
+								</button>
+
 								<button
 									class={styles["menu-item"]}
 									onClick={() => handleCreateShortcut(true)}

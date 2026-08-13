@@ -1,8 +1,11 @@
-import CopyIcon from "@assets/clipboard.svg";
-import CloseIcon from "@assets/close.svg";
-import FolderIcon from "@assets/folder.svg";
-import DownloadIcon from "@assets/open.svg";
-import TrashIcon from "@assets/trash.svg";
+import CopyIcon from "@assets/icons/actions/copy.svg";
+import CloseIcon from "@assets/icons/actions/close.svg";
+import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";
+import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import InfoIcon from "@assets/icons/status/info.svg";
+import DownloadIcon from "@assets/icons/actions/external-link.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import useEmblaCarousel from "embla-carousel-solid";
@@ -535,21 +538,7 @@ export function ImageViewer(props: ImageViewerProps) {
 												when={!hasError() || currentIndex() !== index()}
 												fallback={
 													<div class={styles.errorContainer}>
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															width="48"
-															height="48"
-															viewBox="0 0 24 24"
-															fill="none"
-															stroke="currentColor"
-															stroke-width="2"
-															stroke-linecap="round"
-															stroke-linejoin="round"
-														>
-															<circle cx="12" cy="12" r="10" />
-															<line x1="12" y1="8" x2="12" y2="12" />
-															<line x1="12" y1="16" x2="12.01" y2="16" />
-														</svg>
+														<InfoIcon width="48" height="48" />
 														<p>Failed to load image</p>
 														<span class={styles.errorPath}>{image.src}</span>
 													</div>
@@ -636,17 +625,7 @@ export function ImageViewer(props: ImageViewerProps) {
 									api()?.scrollPrev();
 								}}
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M15 18l-6-6 6-6" />
-								</svg>
+								<ChevronLeftIcon />
 							</button>
 							<button
 								type="button"
@@ -662,17 +641,7 @@ export function ImageViewer(props: ImageViewerProps) {
 									api()?.scrollNext();
 								}}
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M9 18l6-6-6-6" />
-								</svg>
+								<ChevronRightIcon />
 							</button>
 						</Show>
 					</div>

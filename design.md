@@ -1,305 +1,199 @@
-# Vesta Launcher — Design System
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | SolidJS 1.9 |
-| Meta-framework | Vite 7 |
-| Desktop | Tauri 2 (Rust) |
-| Routing | @solidjs/router |
-| UI Primitives | @kobalte/core |
-| Styling | CSS Modules + CSS Custom Properties |
-| Color Utils | chroma-js |
-| 3D Rendering | skinview3d + three.js |
-| Testing | vitest + @solidjs/testing-library |
-
+---
+name: Vesta Launcher
+description: A customizable desktop Minecraft launcher for players and modpack creators.
+colors:
+  primary-hue: "180"
+  primary: "hsl(var(--color__primary-hue) 70% var(--button-lightness))"
+  primary-hover: "hsl(var(--color__primary-hue) 70% 55%)"
+  secondary: "hsl(var(--hue-secondary) 60% 50%)"
+  surface-base: "hsl(var(--color__primary-hue) 10% var(--lightness-surface-base) / var(--effect-opacity))"
+  surface-raised: "hsl(var(--color__primary-hue) 15% var(--lightness-surface-raised) / var(--effect-opacity))"
+  surface-overlay: "hsl(var(--color__primary-hue) 20% var(--lightness-surface-overlay) / var(--effect-opacity))"
+  surface-sunken: "hsl(var(--color__primary-hue) 5% var(--lightness-surface-sunken) / 0.98)"
+  text-primary: "hsl(var(--color__primary-hue) 5% var(--lightness-text-primary))"
+  text-secondary: "hsl(var(--color__primary-hue) 5% var(--lightness-text-secondary))"
+  border-subtle: "hsl(var(--color__primary-hue) 10% var(--lightness-border) / 0.4)"
+  success: "hsl(140 60% 50%)"
+  warning: "hsl(45 90% 50%)"
+  error: "hsl(0 70% 50%)"
+  info: "hsl(210 70% 50%)"
+typography:
+  body:
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Inter, Avenir, Helvetica, sans-serif"
+    fontSize: "0.95rem"
+    fontWeight: 400
+  label:
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Inter, Avenir, Helvetica, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 600
+  display:
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Inter, Avenir, Helvetica, sans-serif"
+    fontSize: "2rem"
+    fontWeight: 700
+  mono:
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+rounded:
+  control: "6px"
+  container: "8px"
+  window: "12px"
+  hero: "16px"
+  pill: "9999px"
+spacing:
+  xs: "4px"
+  sm: "8px"
+  md: "12px"
+  lg: "16px"
+  xl: "24px"
+  xxl: "32px"
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.control}"
+    padding: "8px 16px"
+  button-primary-hover:
+    backgroundColor: "{colors.primary-hover}"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.control}"
+  button-outline:
+    backgroundColor: "transparent"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.control}"
+    padding: "8px 16px"
+  card:
+    backgroundColor: "{colors.surface-raised}"
+    rounded: "{rounded.container}"
+    padding: "40px"
 ---
 
-## Theming Architecture
+# Design System: Vesta Launcher
 
-Dynamic CSS variable engine. Theme config → `themeToCSSVars()` → inline styles on `<html>` → CSS modules consume `var(--token)`.
+## Overview
 
-**Built-in presets:** Vesta (teal), Solar (warm orange), Neon (electric pink), Classic (clean), Forest (green), Sunset (purple-orange), Midnight (ultra-dark), Old School, Custom.
+**Creative North Star: "The Personal Game Command Center"**
 
-**User customization:** Primary hue, style mode, opacity, grain, gradient rotation & harmony, border thickness, window effect, custom CSS injection.
+Vesta is a polished, approachable desktop workspace for configuring and launching a personal Minecraft setup. Its interface organizes complex player and modpack work into clear, familiar controls while leaving meaningful room for the user to make the app their own.
 
----
+The default expression is dark-first liquid glass: layered, hue-tinted surfaces over a configurable gradient, with restrained grain adding material texture. Glass and grain are an experimental default, not an inflexible brand rule; the system also supports frosted and fully flat modes, and must remain effective when an operating system makes texture or translucency less appropriate.
 
-## Style Modes
+**Key Characteristics:**
 
-| Mode | Opacity | Backdrop | Use case |
-|---|---|---|---|
-| `glass` | 0.5–1.0 | `blur(16px) saturate(1.45)` | Default — vibrant frosted glass |
-| `frosted` | 0.64–0.88 | `blur(22px) saturate(1.09)` | Softer, more obscured |
-| `flat` | 1.0 | none | Solid opaque, max contrast |
+- Personalization is structural: hue, gradient harmony, material mode, opacity, grain, borders, and window effects are theme inputs.
+- Hierarchy comes from surface layering, subtle borders, and selective elevation rather than visual noise.
+- The default teal is a balance of calm technical clarity, vibrant game energy, and personal customization.
+- Native desktop conditions and accessibility preferences take precedence over decorative effects.
 
----
+## Colors
 
-## Color Palette (Dark Mode Default)
+Vesta uses a user-selected primary hue—teal (`180`) by default—to generate a coherent interface palette; the secondary hue is derived from the chosen gradient harmony.
 
-All colors derive from a configurable `--color__primary-hue` (default **180 / teal**). Secondary hue calculated via gradient harmony (default: complementary = +180).
+### Primary
 
-### Surfaces (semi-transparent)
-| Token | Value |
-|---|---|
-| `--surface-base` | `hsl(hue 10% 12% / 0.8)` |
-| `--surface-raised` | `hsl(hue 15% 18% / 0.8)` |
-| `--surface-overlay` | `hsl(hue 20% 20% / 0.8)` |
-| `--surface-sunken` | `hsl(hue 5% 8% / 0.98)` |
+- **Personal Teal** (`hsl(var(--color__primary-hue) 70% var(--button-lightness))`): Primary actions and configurable accent treatment. Its default hue is teal, but it is intentionally user-adjustable.
+- **Active Teal** (`hsl(var(--color__primary-hue) 70% 55%)`): Hover treatment for primary controls.
 
-### Text
-| Token | Value |
-|---|---|
-| `--text-primary` | `hsl(hue 5% 90%)` |
-| `--text-secondary` | `hsl(hue 5% 70%)` |
-| `--text-tertiary` | `hsl(hue 5% 50%)` |
-| `--text-inverse` | `hsl(hue 5% 10%)` |
+### Secondary
 
-### Interactive / Accent
-| Token | Value |
-|---|---|
-| `--accent-primary` | `hsl(--color__primary-hue 70% 35%)` |
-| `--interactive-base` | `hsl(hue 60% 50%)` |
-| `--interactive-hover` | `hsl(hue 70% 55%)` |
-| `--interactive-active` | `hsl(hue 80% 60%)` |
+- **Harmony Accent** (`hsl(var(--hue-secondary) 60% 50%)`): A secondary color generated from the selected harmony; use it in background gradients and supporting accent moments, not as an unrelated fixed brand color.
+
+### Neutral
+
+- **Base Surface** (`hsl(var(--color__primary-hue) 10% var(--lightness-surface-base) / var(--effect-opacity))`): Main translucent workspace layer.
+- **Raised Surface** (`hsl(var(--color__primary-hue) 15% var(--lightness-surface-raised) / var(--effect-opacity))`): Cards and elevated regions.
+- **Overlay Surface** (`hsl(var(--color__primary-hue) 20% var(--lightness-surface-overlay) / var(--effect-opacity))`): Dialogs and active overlays.
+- **Primary Text** (`hsl(var(--color__primary-hue) 5% var(--lightness-text-primary))`): Main readable content.
+- **Secondary Text** (`hsl(var(--color__primary-hue) 5% var(--lightness-text-secondary))`): Supporting labels and metadata.
 
 ### Semantic
-| Token | Hue |
-|---|---|
-| Success | 140 (green) |
-| Warning | 45 (amber) |
-| Error | 0 (red) |
-| Info | 210 (blue) |
 
-### Borders
-| Token | Value |
-|---|---|
-| `--border-subtle` | `hsl(hue 10% 30% / 0.4)` |
-| `--border-strong` | `hsl(hue 20% 30% / 0.7)` |
-| `--border-focus` | `hsl(hue 70% 50% / 0.8)` |
+- **Success** (`hsl(140 60% 50%)`), **Warning** (`hsl(45 90% 50%)`), **Error** (`hsl(0 70% 50%)`), and **Info** (`hsl(210 70% 50%)`): Fixed hues reserved for status and feedback.
 
-### Shadows
-| Token | Value |
-|---|---|
-| `--elevation-soft` | `0 2px 10px hsl(0 0% 0% / 0.18)` |
-| `--elevation-medium` | `0 6px 20px hsl(0 0% 0% / 0.22)` |
-| `--elevation-strong` | `0 12px 32px hsl(0 0% 0% / 0.3)` |
-
-### Icons
-| Token | Value |
-|---|---|
-| `--icon-primary` | `hsl(hue 5% 90%)` |
-| `--icon-secondary` | `hsl(hue 5% 70%)` |
-| `--icon-muted` | `hsl(hue 5% 50%)` |
-
----
+**The Personal Palette Rule.** Derive new visual color from the active theme variables. Do not hard-code a competing product palette into a component.
 
 ## Typography
 
-**Font stack:** `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", Inter, Avenir, Helvetica, sans-serif`
+**Display Font:** System UI stack, up to `2rem` at `700` weight.
 
-**Mono:** `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`
+**Body Font:** System UI stack, `0.95rem` for standard controls and body copy.
 
-### Sizing
-| Token | Size | Usage |
-|---|---|---|
-| `--font-xxsmall` | 0.75rem | Labels, timestamps |
-| `--font-xsmall` | 0.9rem | Secondary text, dropdown items |
-| `--font-small` | 0.95rem | Body, card titles |
-| `--font-medium` | 1.15rem | Section headings |
-| `--font-large` | 1.5rem | Large headings |
-| `--font-xlarge` | 2rem | Hero/display text |
+**Label/Mono Font:** System UI at `0.75rem` for compact labels; `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` for technical values.
 
-### Weights
-- **400–500:** Body, tab labels
-- **600:** Dialog titles, section headers
-- **700–800:** Brand, card names, badge text
+**Character:** Familiar operating-system typography keeps a customizable interface approachable and readable. Type is functional and compact, with stronger weights reserved for names, headings, and clear actions.
 
-### Rendering
-```css
-font-synthesis: none;
-text-rendering: optimizeLegibility;
--webkit-font-smoothing: antialiased;
--moz-osx-font-smoothing: grayscale;
-```
+### Hierarchy
 
----
+- **Display** (`700`, `2rem`): High-emphasis page or feature titles.
+- **Heading** (`600–700`, `1.5rem`): Section and dialog titles.
+- **Body** (`400–500`, `0.95rem`): Main UI text, controls, and explanatory copy.
+- **Supporting text** (`400–500`, `0.9rem`): Secondary controls and metadata.
+- **Label** (`600`, `0.75rem`): Dense supporting UI; uppercase and tracking are used selectively for group labels and badges.
 
-## Spacing
+## Layout
 
-Consistent `rem` rhythm: 0.25 / 0.5 / 0.75 / 1 / 1.5 / 2 (4–32px).
+The launcher shell uses a compact desktop grid: a `64px` sidebar beside the main workspace, with a `32px` title bar above it. Content pages use a `24px` horizontal and bottom gutter, with `960px` and `1200px` maximum content widths for standard and wide layouts.
 
-| Context | Gap |
-|---|---|
-| Instance grid | 20px |
-| Button padding (md) | 8px 16px |
-| Dialog padding | 24px |
-| Dropdown items | 0 12px, height 32px |
-| Select trigger | min-height 40px, padding 0 12px |
-| Card padding | 40px |
+Spacing follows a `4 / 8 / 12 / 16 / 24 / 32px` rhythm. Keep workflows dense enough to operate quickly without collapsing important labels or state. The app has a `450px` minimum width; responsive work must preserve the desktop operating context rather than simulate a mobile website.
 
----
+## Elevation & Depth
 
-## Border Radius
+Vesta is softly layered by default, using translucent tonal surfaces, a fine glass border, backdrop blur, and modest shadows. A small set of elements—dialogs, popovers, floating controls, and hoverable cards—may clearly float when that separation helps a user act or recover context.
 
-| Radius | Used for |
-|---|---|
-| 9999px / 50% | Switches, pills, badges, avatars |
-| 12px | Window corners (macOS), Driver.js popovers |
-| 8px | Instance cards, dropdown menus, context menus |
-| 6px | Buttons, selects, text fields, checkboxes, tabs, badges |
-| 4px | Dropdown items, select items |
-| 3px | Scrollbar thumb |
+### Shadow Vocabulary
 
----
+- **Soft** (`0 2px 10px hsl(0 0% 0% / 0.18)`): Gentle separation for resting surfaces.
+- **Medium** (`0 6px 20px hsl(0 0% 0% / 0.22)`): Hovered cards and raised interactive regions.
+- **Strong** (`0 12px 32px hsl(0 0% 0% / 0.3)`): Dialogs and clearly floating layers.
 
-## Border Widths (themed)
+**The Depth-With-Purpose Rule.** Elevation signals hierarchy or interaction; it is not a substitute for structure. In flat mode, preserve the same hierarchy through opaque tonal surfaces and borders.
 
-| Token | Default |
-|---|---|
-| `--border-width-subtle` | 1px |
-| `--border-width-strong` | `min(6, borderWidth + 1)px` |
-| `--button-border-width` | `max(1, borderWidth)px` |
+## Shapes
 
-Configurable 0–6px.
+Controls use `6px` corners, cards and menus generally use `8px`, and macOS window surfaces use `12px`. Hero regions can use `16px`; toggles, badges, and compact status indicators use pill or circular forms. Borders are theme-controlled (`0–6px` inputs, typically `1px`) and stay low-contrast until an active or focused state requires clarity.
 
----
+## Components
 
-## Transitions & Animation
+### Buttons
 
-| Element | Duration | Easing |
-|---|---|---|
-| Buttons (bg, border, color, transform) | 180ms | ease |
-| Cards (shadow, transform) | 150–180ms | cubic-bezier(0.4, 1, 0.7, 1) |
-| Dialogs (fade + scale) | 200ms | ease-out |
-| Dropdowns / selects / tooltips | 200ms | ease |
-| Switches (thumb slide) | 180ms | ease-in-out |
-| Checkboxes (bg, border, color) | 150ms | ease |
-| Tabs (active indicator) | 200ms | cubic-bezier(0.4, 0, 0.2, 1) |
-| Theme transitions (preset switch) | 140ms | — |
+Polished and direct action controls with a compact, reliable desktop footprint.
 
-**Reduced motion:** Supported via `prefers-reduced-motion` and `[data-reduced-motion="true"]`.
+- **Shape:** `6px` radius; `sm`, `md`, `lg`, `xl`, and icon sizes.
+- **Primary:** Theme-derived color with `8px 16px` medium padding.
+- **Variants:** Solid, outline, ghost, shadow, and slate use the same semantic color inputs.
+- **Hover / Focus:** Hover lifts by `1px`; transitions last `180ms`; keyboard focus uses a `2px` focus outline offset by `2px`.
+- **Disabled:** `0.5` opacity, grayscale, and a not-allowed cursor.
 
----
+### Cards / Containers
 
-## Focus Styles
+Cards use raised theme surfaces, subtle borders, and typically `8px` corners; larger settings cards use generous internal padding. Hoverable cards use medium elevation only when the interaction benefits from a stronger affordance.
 
-```css
-:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
-}
-```
-Inputs get a `3px` ring via `box-shadow` + border color shift.
+### Inputs / Fields
 
----
+Fields inherit the system type stack and control radius. Their focused state must use the theme focus color and a clearly visible ring or border shift; error and disabled states use the shared semantic and disabled tokens.
 
-## Liquid Glass System
+### Navigation
 
-Distinctive visual effect composed of:
-- **Backdrop blur** — variable blur + saturation
-- **Grain texture** — SVG `<feTurbulence>` fractal noise overlay
-- **Inner shadow** — subtle inset glow via `color-mix` with `--primary-low`
-- **Glass border** — `1px` `var(--border-glass)`
-- **Utility classes:** `.liquid-glass`, `.grain-overlay`
+The primary desktop shell places navigation in a narrow `64px` sidebar. Active and hover states move through base, raised, and overlay surface tokens rather than introducing a disconnected navigation color system.
 
----
+### Dialogs and Overlays
 
-## Background System
+Dialogs use the overlay surface, subtle border, rounded container form, and a dark translucent backdrop. They are a clear floating layer with short fade-and-scale entry motion; dialogs should respect the reduced-motion setting.
 
-| Feature | Description |
-|---|---|
-| Solid bg | `--app-background-tint-with-opacity` overlay |
-| Linear gradient (default) | 3 stops (hue, primary, secondary) at configurable rotation |
-| Radial gradient | `[data-gradient-type="radial"]` farthest-corner |
-| Window effects | Mica (Win11), Acrylic (Win10), Vibrancy (macOS), Blur, Transparent |
-| Gradient harmonies | none, analogous (±30), complementary (+180), triadic (+120, +240) |
+### Theme Controls
 
----
+Theme controls expose the product's personalization system: primary hue, gradient type and harmony, glass/frosted/flat material, opacity, grain, border width, and supported window effects. These are not superficial presets; components must continue to consume their semantic variables after a theme change.
 
-## Z-Index Hierarchy
+## Do's and Don'ts
 
-| Token | Value |
-|---|---|
-| `--z-sidebar` | 200 |
-| `--z-floating-action` | 190 |
-| `--z-modal` | 2000 |
-| `--z-toast` | 9999 |
-| `--z-loader` | 9999 |
-| `--z-popover` | 10000 |
-| `--z-select-dropdown` | 10001 |
+### Do:
 
----
+- **Do** use semantic CSS variables so each interface remains coherent under every supported theme.
+- **Do** give a surface only the depth it needs: softly layered by default, clearly floating when it is a modal, popover, or important active control.
+- **Do** treat flat mode, light mode, reduced motion, and higher-contrast preferences as complete presentations, not degraded fallbacks.
+- **Do** keep desktop controls compact, legible, and recognizable before adding decoration.
 
-## Layout Grid (Home)
+### Don't:
 
-```
-grid-template-columns: 64px 1fr
-grid-template-rows: 32px 1fr
-```
-
-- **Column 1:** Sidebar (64px)
-- **Column 2:** Main content
-- **Row 1:** Titlebar (32px)
-- **Row 2:** Content area
-
----
-
-## Component Patterns
-
-### Button
-- Props: `color` (none/primary/secondary/destructive/warning), `variant` (solid/outline/ghost/shadow/slate), `size` (sm/md/lg/xl/icon)
-- Hover: `translateY(-1px)`
-- Disabled: `opacity: 0.5`, `cursor: not-allowed`, `filter: grayscale(50%)`
-
-### Dialog
-- Overlay: `hsl(0 0% 0% / 0.6)` + backdrop blur
-- Content: centered, `max-width: 32rem`, glass bg, `border-radius: 0.5rem`
-- Enter: fade-in + `scale(0.96 → 1)`
-
-### Switch
-- Track: 44×24px, `border-radius: 9999px`
-- Thumb: 18×18px pill
-
-### Select
-- Trigger: `min-height: 40px`, `border-radius: 6px`
-- Dropdown: glass, `box-shadow: 0 4px 12px rgba(0,0,0,0.4)`
-
-### Tabs
-- List: `--surface-base` bg, `border-radius: 8px`, `gap: 4px`
-- Active: `--surface-overlay` bg + elevation shadow
-- Sliding indicator: animated 200ms
-
-### Dropdown Menu
-- Glass backdrop
-- Items: 32px height, `border-radius: 4px`
-- Highlighted: `--accent-primary` bg
-- Group labels: uppercase, 0.75rem, 600 weight, 0.05em letter-spacing
-
-### Toast
-- Fixed bottom-left, 400px wide
-- Animated slide-in from left
-- Severity-based coloring (error/warning/success/info)
-
-### Badge
-- Tiny variant: 0.7rem, 800 weight, uppercase, 0.05em letter-spacing
-- Pill variant: `border-radius: 99px`, normal case
-- Variants: default, secondary, outline, success, warning, error, info, accent, surface, theme
-
----
-
-## Accessibility
-
-- `:focus-visible` outlines on all interactive elements
-- Dynamic text-on-primary contrast check via chroma-js (min 4.5:1)
-- Reduced motion: `prefers-reduced-motion` + `[data-reduced-motion="true"]`
-- High contrast: `prefers-contrast: more` adjusts text lightness and border opacity
-- Screen reader: hidden native inputs, `aria-label` on icon buttons, `aria-busy`, `aria-pressed`
-- `user-select: none` globally with opt-in `.selectable` class
-
----
-
-## Aesthetic Summary
-
-**"Modern Liquid Glass"** — Sleek, translucent glass-morphism with hue-based personalization. Dark-first with complete light mode. Grain texture adds tactile richness. Three material modes (glass/frosted/flat) shift from vibrant translucency to solid flat. OS-native window integration (Vibrancy on macOS, Mica on Windows 11).
+- **Don't** hard-code decorative colors that bypass the theme engine.
+- **Don't** require grain, blur, or a particular window effect for hierarchy or readability.
+- **Don't** add elevation, gradients, or animation merely to make an otherwise unclear control feel interactive.
+- **Don't** let personalization make text contrast, focus visibility, or semantic status ambiguous.

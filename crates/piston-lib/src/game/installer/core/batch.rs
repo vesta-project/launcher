@@ -183,7 +183,7 @@ impl BatchDownloader {
                     reporter.set_percent(progress);
                     reporter.set_step_count(count as u32, Some(total as u32));
 
-                    if count % 10 == 0 || count == total {
+                    if count.is_multiple_of(10) || count == total {
                         log::info!(
                             "Batch download progress: {}/{} ({}%)",
                             count,

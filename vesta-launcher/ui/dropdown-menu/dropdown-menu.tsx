@@ -1,5 +1,7 @@
 import type { PolymorphicProps } from "@kobalte/core";
 import * as DropdownMenuPrimitive from "@kobalte/core/dropdown-menu";
+import CheckIcon from "@assets/icons/controls/check.svg";
+import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
 import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { type ComponentProps, splitProps, type ValidComponent } from "solid-js";
@@ -149,18 +151,7 @@ function DropdownMenuSubTrigger<T extends ValidComponent = "div">(
 			{...rest}
 		>
 			{local.children}
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				style={{ width: "16px" }}
-			>
-				<path d="M9 6l6 6l-6 6" />
-			</svg>
+			<ChevronRightIcon style={{ width: "16px" }} />
 		</DropdownMenuPrimitive.SubTrigger>
 	);
 }
@@ -211,18 +202,7 @@ function DropdownMenuCheckboxItem<T extends ValidComponent = "div">(
 		>
 			<span class={styles["dropdown-menu__select-indicator"]}>
 				<DropdownMenuPrimitive.ItemIndicator>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						style={{ width: "12px" }}
-					>
-						<path d="M5 12l5 5l10 -10" />
-					</svg>
+					<CheckIcon style={{ width: "12px" }} />
 				</DropdownMenuPrimitive.ItemIndicator>
 			</span>
 			{local.children}

@@ -1,3 +1,4 @@
+import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { generateVestaDeepLink } from "@utils/deep-links";
 
 import {
@@ -12,8 +13,10 @@ import {
 	batch,
 	createMemo,
 	createSignal,
-	Suspense,
+	getOwner,
 	type JSXElement,
+	onCleanup,
+	Suspense,
 	type ValidComponent,
 } from "solid-js";
 import { Dynamic } from "solid-js/web";
@@ -94,9 +97,14 @@ class MiniRouter {
 	getSnapshot: () => Record<string, unknown>;
 	forwards: () => void;
 	backwards: () => void;
-	getRefetch: () => (() => Promise<void>) | undefined;
-	setRefetch: (fn: (() => Promise<void>) | undefined, path?: string) => void;
-	clearRefetch: (fn?: () => Promise<void>) => void;
+	/**
+	 * Register the current page's reload handler. Path-scoped: chrome only
+	 * exposes reload while this route is active. When called under a Solid
+	 * owner (component setup / onMount), cleanup clears the registration.
+	 */
+	registerReload: (fn: () => Promise<void>, path?: string) => () => void;
+	/** Reactive: true when the active route has a reload handler. */
+	canReload: Accessor<boolean>;
 	canGoBack: () => boolean;
 	canGoForward: () => boolean;
 	/** Reactive history past stack for Solid memos (tracks signal reads). */
@@ -114,15 +122,12 @@ class MiniRouter {
 	exportSnapshot: () => MiniRouterSnapshot;
 	restoreSnapshot: (snapshot: MiniRouterSnapshot) => void;
 	skipNextExitCheck: boolean = false;
-	private refetchFn: (() => Promise<void>) | undefined;
-	private refetchPath: string | undefined;
 	private canExitBlock: (() => Promise<boolean>) | null = null;
 	private shellNavigation: ShellNavigationDelegate | null = null;
 
 	constructor(props: MiniRouterProps) {
 		this.paths = props.paths;
-		this.sessionId =
-			props.sessionId ?? globalThis.crypto.randomUUID();
+		this.sessionId = props.sessionId ?? globalThis.crypto.randomUUID();
 
 		this.paths["404"] = { element: props.invalid ?? (() => <div />) };
 
@@ -220,25 +225,36 @@ class MiniRouter {
 			},
 		};
 
-		this.setRefetch = (
-			fn: (() => Promise<void>) | undefined,
-			path = this.currentPath.get(),
-		) => {
-			this.refetchFn = fn;
-			this.refetchPath = fn ? path : undefined;
+		// Page reload capability: one path-scoped handler, reactive for chrome.
+		const [getReloadRegistration, setReloadRegistration] = createSignal<
+			{ fn: () => Promise<void>; path: string } | undefined
+		>();
+
+		const clearReloadRegistration = (fn?: () => Promise<void>) => {
+			const current = getReloadRegistration();
+			if (!current) return;
+			if (fn && current.fn !== fn) return;
+			setReloadRegistration(undefined);
 		};
 
-		this.clearRefetch = (fn?: () => Promise<void>) => {
-			if (fn && this.refetchFn !== fn) return;
-			this.refetchFn = undefined;
-			this.refetchPath = undefined;
+		this.registerReload = (fn, path = this.currentPath.get()) => {
+			setReloadRegistration({ fn, path });
+			const dispose = () => clearReloadRegistration(fn);
+			if (getOwner()) onCleanup(dispose);
+			return dispose;
 		};
 
-		this.getRefetch = () => {
-			if (!this.refetchFn) return undefined;
-			if (this.refetchPath && this.refetchPath !== this.currentPath.get())
-				return undefined;
-			return this.refetchFn;
+		this.canReload = createMemo(() => {
+			const registration = getReloadRegistration();
+			if (!registration) return false;
+			return registration.path === this.currentPath.get();
+		});
+
+		const getActiveReload = () => {
+			const registration = getReloadRegistration();
+			if (!registration) return undefined;
+			if (registration.path !== this.currentPath.get()) return undefined;
+			return registration.fn;
 		};
 
 		this.setShellNavigation = (delegate) => {
@@ -260,7 +276,9 @@ class MiniRouter {
 
 		this.restoreSnapshot = (snapshot) => {
 			if (snapshot.version !== 1) {
-				throw new Error(`Unsupported mini-router snapshot: ${snapshot.version}`);
+				throw new Error(
+					`Unsupported mini-router snapshot: ${snapshot.version}`,
+				);
 			}
 			batch(() => {
 				setHistoryPast([...snapshot.past]);
@@ -396,7 +414,7 @@ class MiniRouter {
 		};
 
 		this.reload = async () => {
-			const refetch = this.getRefetch();
+			const refetch = getActiveReload();
 			if (!refetch || this.isReloading()) return;
 
 			this.setIsReloading(true);
@@ -495,8 +513,28 @@ class MiniRouter {
 	}
 
 	getRouterView(additionalProps?: Record<string, unknown>) {
+		const loadingTitle = () =>
+			this.currentPath.get() === "/resource-details"
+				? "Fetching project details..."
+				: `Loading ${this.currentElement().name || "page"}...`;
+		const loadingMessage = () => {
+			if (this.currentPath.get() !== "/resource-details") return undefined;
+			const name = this.currentParams.get().name;
+			return typeof name === "string" ? name : undefined;
+		};
+
 		return (
-			<Suspense fallback={<div data-mini-route-loading />}>
+			<Suspense
+				fallback={
+					<div data-mini-route-loading>
+						<FetchingOverlay
+							isVisible
+							title={loadingTitle()}
+							message={loadingMessage()}
+						/>
+					</div>
+				}
+			>
 				<div
 					data-mini-route-ready={this.currentPath.get()}
 					style={{ display: "contents" }}

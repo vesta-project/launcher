@@ -72,12 +72,12 @@ pub fn get_window_effect_capabilities() -> WindowEffectCapabilities {
             effects.push("liquid_glass".to_string());
         }
 
-        return WindowEffectCapabilities {
+        WindowEffectCapabilities {
             os: "macos".to_string(),
             os_version: raw_version,
             supported_effects: effects,
             default_effect: "vibrancy".to_string(),
-        };
+        }
     }
 
     #[cfg(target_os = "linux")]

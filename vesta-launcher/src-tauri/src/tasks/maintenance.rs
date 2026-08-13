@@ -524,7 +524,7 @@ impl Task for RepairInstanceTask {
                 .game_directory
                 .as_ref()
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
+                .unwrap_or_else(|| data_dir.join("instances").join(inst.slug()));
 
             if let Ok(modpack_manifest) =
                 piston_lib::game::modpack::manifest::ModpackManifest::load(&game_dir)

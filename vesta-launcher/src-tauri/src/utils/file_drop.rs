@@ -69,11 +69,10 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
                     }
                 }
             }
-            tauri::WindowEvent::Focused(focused) => {
-                if *focused {
+            tauri::WindowEvent::Focused(focused)
+                if *focused => {
                     log::debug!("[FileDrop-Rust] Sniffer focused");
                 }
-            }
             _ => {}
         }
     });
@@ -81,7 +80,7 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
     Ok(())
 }
 
-fn emit_paths(handle: &AppHandle, paths: &Vec<std::path::PathBuf>) {
+fn emit_paths(handle: &AppHandle, paths: &[std::path::PathBuf]) {
     if paths.is_empty() {
         return;
     }

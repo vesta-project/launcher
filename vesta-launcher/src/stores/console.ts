@@ -27,6 +27,14 @@ export interface LogFileInfo {
 	last_modified: number;
 }
 
+export const CONSOLE_FILTER_LEVELS: LogLevel[] = [
+	"INFO",
+	"WARN",
+	"ERROR",
+	"DEBUG",
+];
+export const MAX_CONSOLE_LINES = 5000;
+
 interface ConsoleState {
 	lines: LogLine[];
 	history: LogFileInfo[];
@@ -45,7 +53,7 @@ const [state, setState] = createStore<ConsoleState>({
 	currentLogPath: null,
 	isLive: true,
 	searchQuery: "",
-	filterLevels: ["INFO", "WARN", "ERROR", "FATAL", "DEBUG"],
+	filterLevels: [...CONSOLE_FILTER_LEVELS],
 	autoScroll: true,
 	isCatchingUp: false,
 	lastCatchupTime: null,
@@ -207,7 +215,7 @@ export const consoleStore = {
 
 			const caughtUpLines = await invoke<string[]>("read_instance_log", {
 				instanceIdSlug: instanceSlug,
-				lastLines: state.lines.length === 0 ? 1000 : undefined,
+				lastLines: state.lines.length === 0 ? MAX_CONSOLE_LINES : undefined,
 				since: since,
 			});
 			if (activeInstanceSlug !== instanceSlug) return;
@@ -232,8 +240,7 @@ export const consoleStore = {
 		const parsed = rawLines.map(parseLine);
 		setState("lines", (prev) => {
 			const newLines = [...prev, ...parsed];
-			// Keep a reasonable buffer for performance, e.g., 5000 lines
-			return newLines.slice(-5000);
+			return newLines.slice(-MAX_CONSOLE_LINES);
 		});
 		retainCurrentSession();
 	},
@@ -275,6 +282,10 @@ export const consoleStore = {
 			}
 			return [...prev, level];
 		});
+	},
+
+	resetFilters() {
+		setState("filterLevels", [...CONSOLE_FILTER_LEVELS]);
 	},
 
 	clear() {

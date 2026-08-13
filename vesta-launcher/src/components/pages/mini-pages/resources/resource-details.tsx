@@ -1,22 +1,31 @@
-import BellIcon from "@assets/bell.svg";
-import CurseForgeIcon from "@assets/curseforge.svg";
-import DownloadIcon from "@assets/download-compact.svg";
-import HeartIcon from "@assets/heart.svg";
-import ModrinthIcon from "@assets/modrinth.svg";
-import RightArrowIcon from "@assets/right-arrow.svg";
+import BellIcon from "@assets/icons/status/bell.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import ExternalLinkIcon from "@assets/icons/actions/external-link.svg";
+import HeartIcon from "@assets/icons/content/heart.svg";
+import InfoIcon from "@assets/icons/status/info.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
+import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
+import { COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX } from "@components/page-composition/collapsing-header-progress";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
+import {
+	getSourceDescriptor,
+	RESOURCE_SOURCES,
+} from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
 import {
 	type ResourceDependency,
 	type ResourceProject,
+	type ResourceType,
 	type ResourceVersion,
+	type ResourceVersionDetails,
 	resources,
 	type SourcePlatform,
 } from "@stores/resources";
 import { reducedMotion } from "@stores/settings";
+import type { WorldSummary } from "@stores/worlds";
 import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
@@ -36,10 +45,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { formatDate } from "@utils/date";
+import { confirmDatapackWorldCompatibility } from "@utils/datapack-compatibility-confirm";
 import { openExternal } from "@utils/external-link";
 import {
 	createAnimatedIconPreview,
@@ -47,9 +58,19 @@ import {
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
-import { findBestVersionForInstance } from "@utils/resource-install-intent";
+import { projectTypeLabel } from "@utils/resource-artifacts";
+import {
+	findBestExactDatapackVersion,
+	findBestVersionForInstance,
+	hasDownloadableArtifact,
+	replacementResourceIdForWorld,
+	requiresWorldTarget,
+} from "@utils/resource-install-intent";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
-import { getCompatibilityForInstance } from "@utils/resources";
+import {
+	type CompatibilityResult,
+	getCompatibilityForInstance,
+} from "@utils/resources";
 import { marked } from "marked";
 import {
 	type Component,
@@ -64,10 +85,30 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
-import InstanceSelectionDialog from "./instance-selection-dialog";
 import styles from "./resource-details.module.css";
-import { RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX } from "./resource-details-header-progress";
-import { createHeaderCollapseController } from "./resource-details-header-scroll";
+import {
+	ResourceDescriptionLoading,
+	ResourceDetailsSidebarLoading,
+	ResourceVersionsLoading,
+} from "./resource-details-loading";
+import { getResourceDetailsLoadingState } from "./resource-details-loading-state";
+import ResourceInstanceSelectionDialog from "./resource-instance-selection-dialog";
+import {
+	VersionActionIcon,
+	type VersionActionKind,
+	VersionFocusMain,
+	VersionFocusMainLoading,
+	VersionFocusSidebar,
+	VersionFocusSidebarLoading,
+	VersionSummaryRow,
+} from "./resource-version-focus";
+import {
+	currentPeerProject,
+	focusedResourceVersion,
+	minecraftGameVersions,
+	resourceProjectKey,
+	versionsSupportedByInstance,
+} from "./resource-version-view";
 import { VersionFilterBar } from "./version-filter-bar/version-filter-bar";
 
 /// Frontend cache for ResourceProject data to avoid re-fetching from the backend API
@@ -113,6 +154,7 @@ marked.setOptions({
 
 const HeaderCategoryTags: Component<{
 	project: ResourceProject;
+	resourceType: ResourceType;
 	onBrowseType: () => void;
 	router?: MiniRouter;
 }> = (props) => {
@@ -127,7 +169,10 @@ const HeaderCategoryTags: Component<{
 		}[] = [
 			{
 				key: "__type__",
-				label: p.resource_type,
+				label: projectTypeLabel(
+					p,
+					resources.state.versions.filter((v) => v.project_id === p.id),
+				),
 				onClick: (e) => {
 					e.stopPropagation();
 					props.onBrowseType();
@@ -150,7 +195,7 @@ const HeaderCategoryTags: Component<{
 				label: categoryObj?.name || cat,
 				onClick: (e) => {
 					e.stopPropagation();
-					resources.setType(p.resource_type);
+					resources.setType(props.resourceType);
 					resources.setSource(p.source);
 					resources.setQuery("");
 					resources.setCategories([filterId]);
@@ -273,169 +318,89 @@ const HeaderCategoryTags: Component<{
 	);
 };
 
-const VersionTags = (props: { versions: string[] }) => {
-	const limit = 2;
-	const items = () => props.versions.slice(0, limit);
-	const hasMore = () => props.versions.length > limit;
-	const remainingCount = () => props.versions.length - limit;
-	const remainingItems = () => props.versions.slice(limit);
-
-	// Try to detect version range
-	const displayVersions = () => {
-		if (props.versions.length <= 3) return items();
-
-		const sorted = [...props.versions].sort((a, b) => {
-			// Very basic version sorting
-			return a.localeCompare(b, undefined, {
-				numeric: true,
-				sensitivity: "base",
-			});
-		});
-		return [sorted[0], "...", sorted[sorted.length - 1]];
-	};
-
-	return (
-		<div class={styles["version-meta"]}>
-			<For each={displayVersions()}>
-				{(v) => (
-					<Badge variant="surface" round>
-						{v}
-					</Badge>
-				)}
-			</For>
-			<Show when={hasMore() && displayVersions().length === limit}>
-				<Tooltip>
-					<TooltipTrigger>
-						<Badge variant="surface" round class={styles.more}>
-							+{remainingCount()} more
-						</Badge>
-					</TooltipTrigger>
-					<TooltipContent>
-						<div class={styles["version-tooltip-list"]}>
-							<For each={remainingItems()}>
-								{(v) => <div class={styles["tooltip-version-item"]}>{v}</div>}
-							</For>
-						</div>
-					</TooltipContent>
-				</Tooltip>
-			</Show>
-		</div>
-	);
-};
-
-const DependencyItem = (props: {
-	dependency: ResourceDependency;
-	platform: SourcePlatform;
-	project?: ResourceProject;
-	router?: MiniRouter;
-}) => {
-	const activeRouter = createMemo(() => props.router || router());
-	const [data] = createResource(
-		() => {
-			if (props.project) return null; // already have data
-			return props.dependency.project_id;
-		},
-		async (id: string) => {
-			return await resources.getProject(props.platform, id);
-		},
-	);
-
-	const displayData = () => props.project || data();
-	const iconPreview = createAnimatedIconPreview(
-		() => displayData()?.icon_url || "/default-pack.png",
-	);
-
-	return (
-		<Show
-			when={displayData()}
-			fallback={
-				<div class={`${styles["dependency-item"]} ${styles.skeleton}`} />
-			}
-		>
-			<div
-				class={styles["dependency-item"]}
-				onClick={() => {
-					const p = displayData();
-					if (p) {
-						activeRouter()?.navigate(
-							"/resource-details",
-							{
-								projectId: p.id,
-								platform: p.source,
-								name: p.name,
-								iconUrl: p.icon_url,
-							},
-							{
-								project: p,
-							},
-						);
-					}
-				}}
-			>
-				<img
-					src={iconPreview.displaySource() || "/default-pack.png"}
-					alt={displayData()?.name}
-					class={styles["dep-icon"]}
-					onMouseEnter={iconPreview.activate}
-					onMouseLeave={iconPreview.deactivate}
-					onFocusIn={iconPreview.activate}
-					onFocusOut={iconPreview.deactivate}
-				/>
-				<div class={styles["dep-info"]}>
-					<div class={styles["dep-header"]}>
-						<span class={styles["dep-name"]}>{displayData()?.name}</span>
-						<Badge
-							variant={
-								props.dependency.dependency_type.toLowerCase() === "required"
-									? "default"
-									: "secondary"
-							}
-						>
-							{props.dependency.dependency_type}
-						</Badge>
-					</div>
-					<div class={styles["dep-meta"]}>
-						<span class={styles["dep-author"]}>by {displayData()?.author}</span>
-						<Show when={props.dependency.file_name}>
-							<span class={styles["dep-version-tag"]}>
-								{" "}
-								• {props.dependency.file_name}
-							</span>
-						</Show>
-					</div>
-				</div>
-				<div class={styles["dep-action"]}>
-					<RightArrowIcon width={16} height={16} />
-				</div>
-			</div>
-		</Show>
-	);
-};
-
 const ResourceDetailsPage: Component<{
 	project?: ResourceProject;
 	projectId?: string;
 	platform?: SourcePlatform;
 	name?: string;
 	iconUrl?: string;
-	setRefetch?: (fn: () => Promise<void>) => void;
+	resourceType?: ResourceType;
 	router?: MiniRouter;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
 	const [project, setProject] = createSignal<ResourceProject | undefined>(
 		props.project,
 	);
-	const projectIconPreview = createAnimatedIconPreview(
-		() => project()?.icon_url,
+	const explicitInstallType = createMemo<ResourceType | undefined>(() => {
+		const routed = activeRouter()?.currentParams.get().resourceType;
+		return (
+			props.resourceType ||
+			(typeof routed === "string" ? (routed as ResourceType) : undefined)
+		);
+	});
+	const installType = createMemo<ResourceType>(
+		() => explicitInstallType() ?? project()?.resource_type ?? "mod",
 	);
-	const [loading, setLoading] = createSignal(false);
+	const replacementResourceId = createMemo<number | undefined>(() => {
+		const value = activeRouter()?.currentParams.get().replacementResourceId;
+		if (typeof value !== "string" && typeof value !== "number")
+			return undefined;
+		const parsed = Number(value);
+		return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+	});
+	const replacementWorldInstanceId = createMemo<number | undefined>(() => {
+		const value =
+			activeRouter()?.currentParams.get().replacementWorldInstanceId;
+		if (typeof value !== "string" && typeof value !== "number")
+			return undefined;
+		const parsed = Number(value);
+		return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+	});
+	const replacementWorldDirectory = createMemo<string | undefined>(() => {
+		const value = activeRouter()?.currentParams.get().replacementWorldDirectory;
+		return typeof value === "string" && value.length > 0 ? value : undefined;
+	});
+	const managedDatapackReplacement = createMemo(() => {
+		const resourceId = replacementResourceId();
+		const instanceId = replacementWorldInstanceId();
+		const directoryName = replacementWorldDirectory();
+		return resourceId && instanceId && directoryName
+			? { resourceId, world: { instanceId, directoryName } }
+			: null;
+	});
+	const projectIconPreview = createAnimatedIconPreview(
+		() => project()?.icon_url || props.iconUrl,
+	);
+	const [loading, setLoading] = createSignal(
+		!props.project && Boolean(props.projectId && props.platform),
+	);
+	const [projectLoadSettled, setProjectLoadSettled] = createSignal(
+		Boolean(props.project?.description),
+	);
 	const [error, setError] = createSignal<string | null>(null);
+	let projectRequestSequence = 0;
+	let routedProjectKey: string | null = null;
 
-	const showPage = createMemo(() => !!project() && !error() && !loading());
-	const showError = createMemo(() => !!error() && !loading());
-	const showNotFound = createMemo(() => !loading() && !project() && !error());
-	const showOverlay = createMemo(
-		() => loading() || showError() || showNotFound(),
+	const loadingState = createMemo(() =>
+		getResourceDetailsLoadingState({
+			hasProject: !!project(),
+			hasRouteIdentity: Boolean(props.projectId),
+			loading: loading(),
+			hasError: !!error(),
+		}),
+	);
+	const showPage = () => loadingState().showPage;
+	const showError = () => loadingState().showError;
+	const showNotFound = () => loadingState().showNotFound;
+	const showOverlay = () => loadingState().showOverlay;
+	const shellName = createMemo(
+		() => project()?.name || props.name || "Resource",
+	);
+	const shellIcon = createMemo(
+		() => projectIconPreview.displaySource() || props.iconUrl || null,
+	);
+	const projectContentReady = createMemo(
+		() => !!project() && projectLoadSettled(),
 	);
 	const overlayTitle = createMemo(() => {
 		if (showError()) return "Unable to load project";
@@ -450,14 +415,46 @@ const ResourceDetailsPage: Component<{
 	// Derived from router query params for persistence and history
 	const activeTab = createMemo(() => {
 		const params = activeRouter()?.currentParams.get();
-		return (
-			(params?.activeTab as
-				| "description"
-				| "versions"
-				| "gallery"
-				| "dependencies") || "description"
-		);
+		const tab = params?.activeTab;
+		if (tab === "versions" || tab === "gallery") return tab;
+		if (tab === "dependencies") return "versions";
+		return "description";
 	});
+	const rawActiveTab = createMemo(
+		() => activeRouter()?.currentParams.get().activeTab,
+	);
+	const focusedVersionId = createMemo(() => {
+		if (activeTab() !== "versions") return null;
+		const value = activeRouter()?.currentParams.get().versionId;
+		return typeof value === "string" && value.length > 0 ? value : null;
+	});
+
+	const transitionRouteState = (
+		patch: Record<string, unknown>,
+		push = true,
+	) => {
+		const currentRouter = activeRouter();
+		if (!currentRouter) return;
+		const nextParams = { ...currentRouter.currentParams.get() };
+		for (const [key, value] of Object.entries(patch)) {
+			if (value === undefined || value === null) delete nextParams[key];
+			else nextParams[key] = value;
+		}
+		if (push) {
+			currentRouter.navigate(
+				currentRouter.currentPath.get(),
+				nextParams,
+				currentRouter.getSnapshot(),
+			);
+		} else {
+			currentRouter.currentParams.set(nextParams);
+		}
+	};
+
+	const selectTab = (tab: "description" | "versions" | "gallery") => {
+		if (tab === activeTab() && !focusedVersionId()) return;
+		transitionRouteState({ activeTab: tab, versionId: null }, true);
+	};
 
 	const [versionFilter, setVersionFilter] = createSignal("");
 	const [versionReleaseTypes, setVersionReleaseTypes] = createSignal(
@@ -473,6 +470,8 @@ const ResourceDetailsPage: Component<{
 	const [manualVersionId, setManualVersionId] = createSignal<string | null>(
 		null,
 	);
+	const [optimisticFocusedVersion, setOptimisticFocusedVersion] =
+		createSignal<ResourceVersion | null>(null);
 	const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
 	const [isDesktopHeaderAnimation, setIsDesktopHeaderAnimation] =
 		createSignal(true);
@@ -480,7 +479,7 @@ const ResourceDetailsPage: Component<{
 		HTMLElement | undefined
 	>();
 
-	const headerCollapse = createHeaderCollapseController({
+	const headerCollapse = createCollapsingHeaderController({
 		isDesktop: isDesktopHeaderAnimation,
 		prefersReducedMotion: reducedMotion,
 		classNames: {
@@ -504,10 +503,7 @@ const ResourceDetailsPage: Component<{
 			}
 		};
 
-		props.setRefetch?.(handleRefetch);
-		const mountedRouter = activeRouter();
-		mountedRouter?.setRefetch(handleRefetch, "/resource-details");
-		onCleanup(() => mountedRouter?.clearRefetch(handleRefetch));
+		activeRouter()?.registerReload(handleRefetch, "/resource-details");
 	});
 
 	// --- Dynamic Title Support ---
@@ -533,6 +529,8 @@ const ResourceDetailsPage: Component<{
 					currentProject,
 					resources.state.versions,
 					inst,
+					"release",
+					installType(),
 				)
 			: null;
 	});
@@ -547,12 +545,104 @@ const ResourceDetailsPage: Component<{
 		return resources.state.versions[0] || null;
 	});
 
+	const [versionDetailsRefresh, setVersionDetailsRefresh] = createSignal(0);
+	const [versionDetails] = createResource<
+		ResourceVersionDetails,
+		{
+			platform: SourcePlatform;
+			projectId: string;
+			versionId: string;
+			refresh: number;
+		}
+	>(
+		() => {
+			const currentProject = project();
+			const versionId = focusedVersionId();
+			if (!currentProject || !versionId) return undefined;
+			return {
+				platform: currentProject.source,
+				projectId: currentProject.id,
+				versionId,
+				refresh: versionDetailsRefresh(),
+			};
+		},
+		async (key) =>
+			resources.getVersionDetails(
+				key.platform,
+				key.projectId,
+				key.versionId,
+				key.refresh > 0,
+			),
+	);
+
+	const focusedVersion = createMemo(() => {
+		const versionId = focusedVersionId();
+		if (!versionId) return null;
+		return focusedResourceVersion(
+			versionId,
+			versionDetails.latest?.version,
+			optimisticFocusedVersion(),
+			resources.state.versions,
+		);
+	});
+
+	const versionDetailPrefetches = new Map<string, Promise<void>>();
+	const prefetchVersionDetails = (version: ResourceVersion) => {
+		const currentProject = project();
+		if (!currentProject || versionDetailPrefetches.has(version.id)) return;
+		const request = resources
+			.getVersionDetails(currentProject.source, currentProject.id, version.id)
+			.then(() => undefined)
+			.catch(() => undefined)
+			.finally(() => versionDetailPrefetches.delete(version.id));
+		versionDetailPrefetches.set(version.id, request);
+	};
+
+	const selectVersion = (version: ResourceVersion) => {
+		setOptimisticFocusedVersion(version);
+		prefetchVersionDetails(version);
+		transitionRouteState(
+			{ activeTab: "versions", versionId: version.id },
+			true,
+		);
+	};
+
+	createEffect(() => {
+		if (!focusedVersionId()) setOptimisticFocusedVersion(null);
+	});
+
+	const showAllVersions = () => {
+		const currentRouter = activeRouter();
+		if (!currentRouter) return;
+		const previous = currentRouter.history.past.at(-1);
+		const currentProjectId = currentRouter.currentParams.get().projectId;
+		if (
+			previous?.path === currentRouter.currentPath.get() &&
+			previous.params.projectId === currentProjectId &&
+			previous.params.activeTab === "versions" &&
+			!previous.params.versionId
+		) {
+			currentRouter.backwards();
+			return;
+		}
+		transitionRouteState({ activeTab: "versions", versionId: null }, false);
+	};
+
+	createEffect(() => {
+		if (rawActiveTab() !== "dependencies") return;
+		const version = primaryVersion();
+		transitionRouteState(
+			{ activeTab: "versions", versionId: version?.id || null },
+			false,
+		);
+	});
+
 	const [subscriptions, { refetch: refetchSubscriptions }] = createResource<
 		any[]
 	>(() => invoke("get_notification_subscriptions"));
 
 	const isFollowing = createMemo(() => {
-		const subs = subscriptions();
+		const subs = subscriptions.latest;
 		const p = project();
 		if (!subs || !p) return false;
 		return subs.some(
@@ -566,7 +656,7 @@ const ResourceDetailsPage: Component<{
 		if (!p) return;
 
 		if (isFollowing()) {
-			const sub = subscriptions()?.find((s) => {
+			const sub = subscriptions.latest?.find((s) => {
 				return s.provider_type === "resource" && s.target_id === p.id;
 			});
 			if (sub) {
@@ -589,22 +679,45 @@ const ResourceDetailsPage: Component<{
 		const p = project();
 		if (!p) return;
 
-		resources.setType(p.resource_type);
+		resources.setType(installType());
 		resources.setSource(p.source);
 		resources.setQuery("");
 		activeRouter()?.navigate("/resources");
 	};
 
-	const [peerProject] = createResource(project, async (p: ResourceProject) => {
-		if (!p) return null;
-		try {
-			return await invoke<ResourceProject | null>("find_peer_resource", {
-				project: p,
-			});
-		} catch (e) {
-			console.error("Failed to find peer project:", e);
-			return null;
+	const [peerProjectLookup] = createResource(
+		project,
+		async (p: ResourceProject) => {
+			const ownerKey = resourceProjectKey(p);
+			try {
+				const peer = await invoke<ResourceProject | null>(
+					"find_peer_resource",
+					{
+						project: p,
+					},
+				);
+				return { ownerKey, peer };
+			} catch (e) {
+				console.error("Failed to find peer project:", e);
+				return { ownerKey, peer: null };
+			}
+		},
+	);
+
+	const peerProject = createMemo(() =>
+		currentPeerProject(project(), peerProjectLookup.latest),
+	);
+
+	const platformSwitcherSources = createMemo(() => {
+		const current = project()?.source;
+		if (!current) return [];
+		const ids = new Set<SourcePlatform>([current]);
+		for (const peer of getSourceDescriptor(current)?.peerPlatforms ?? []) {
+			ids.add(peer);
 		}
+		const peer = peerProject();
+		if (peer) ids.add(peer.source);
+		return RESOURCE_SOURCES.filter((source) => ids.has(source.id));
 	});
 
 	const canSwitchToPlatform = (target: SourcePlatform) => {
@@ -627,10 +740,34 @@ const ResourceDetailsPage: Component<{
 		}
 	};
 
+	const renderPlatformSwitcher = () => (
+		<div class={styles["source-toggle"]}>
+			<For each={platformSwitcherSources()}>
+				{(source) => (
+					<button
+						type="button"
+						class={styles["source-btn"]}
+						classList={{ [styles.active]: project()?.source === source.id }}
+						disabled={!canSwitchToPlatform(source.id)}
+						title={
+							canSwitchToPlatform(source.id)
+								? source.label
+								: `Not available on ${source.label}`
+						}
+						onClick={() => navigateToPlatform(source.id)}
+					>
+						<source.Icon width="14" height="14" />
+						<span>{source.label}</span>
+					</button>
+				)}
+			</For>
+		</div>
+	);
+
 	const [dependencyData] = createResource(
 		() => ({
 			platform: project()?.source,
-			deps: primaryVersion()?.dependencies || [],
+			deps: focusedVersion()?.dependencies || [],
 		}),
 		async ({
 			platform,
@@ -685,18 +822,21 @@ const ResourceDetailsPage: Component<{
 	};
 
 	const isVersionInstalled = (versionId: string, hash?: string) => {
+		if (installType() === "datapack") return false;
 		return resources.state.installedResources.some(
 			(ir) => ir.remote_version_id === versionId || (hash && ir.hash === hash),
 		);
 	};
 
 	const isVersionInstalling = (versionId: string) => {
+		if (installType() === "datapack") return false;
 		return resources.state.installingVersionIds.includes(versionId);
 	};
 
-	const isModpack = () => project()?.resource_type === "modpack";
+	const isModpack = () => installType() === "modpack";
 
 	const isProjectInstalled = createMemo(() => {
+		if (installType() === "datapack") return false;
 		const p = project();
 		if (!p) return false;
 
@@ -704,7 +844,7 @@ const ResourceDetailsPage: Component<{
 		const peerId = peerProject()?.id.toLowerCase();
 		const extIds = p.external_ids || {};
 		const projectName = p.name.toLowerCase();
-		const resType = p.resource_type;
+		const resType = installType();
 
 		return resources.state.installedResources.some((ir) => {
 			const irRemoteId = ir.remote_id.toLowerCase();
@@ -731,6 +871,7 @@ const ResourceDetailsPage: Component<{
 	});
 
 	const installedResource = createMemo(() => {
+		if (installType() === "datapack") return null;
 		const p = project();
 		if (!p) return null;
 
@@ -738,7 +879,7 @@ const ResourceDetailsPage: Component<{
 		const peerId = peerProject()?.id.toLowerCase();
 		const extIds = p.external_ids || {};
 		const projectName = p.name.toLowerCase();
-		const resType = p.resource_type;
+		const resType = installType();
 
 		return resources.state.installedResources.find((ir) => {
 			const irRemoteId = ir.remote_id.toLowerCase();
@@ -762,6 +903,7 @@ const ResourceDetailsPage: Component<{
 	const isProjectInstalling = createMemo(() => {
 		const p = project();
 		if (!p) return false;
+		if (installType() === "datapack") return false;
 		return resources.state.installingProjectIds.includes(p.id);
 	});
 
@@ -809,9 +951,10 @@ const ResourceDetailsPage: Component<{
 	// Reset state when navigating to a different project
 	createEffect(
 		on(
-			() => props.projectId,
-			(id, prevId) => {
-				if (id && id !== prevId) {
+			() => [props.projectId, props.platform] as const,
+			([id, platform], previous) => {
+				const [previousId, previousPlatform] = previous || [];
+				if (id && (id !== previousId || platform !== previousPlatform)) {
 					// Only clear the tab if it's currently set, to avoid unnecessary router updates
 					const currentTab = untrack(
 						() => activeRouter()?.currentParams.get().activeTab,
@@ -819,11 +962,13 @@ const ResourceDetailsPage: Component<{
 					if (currentTab) {
 						activeRouter()?.removeQuery("activeTab");
 					}
+					activeRouter()?.removeQuery("versionId");
 					setVersionFilter("");
 					setVersionReleaseTypes(new Set<string>());
 					setVersionLoaders(new Set<string>());
 					setGameVersionChips([]);
 					setVersionPage(1);
+					setVersionDetailsRefresh(0);
 					setSelectedGalleryItem(null);
 				}
 			},
@@ -852,23 +997,26 @@ const ResourceDetailsPage: Component<{
 	};
 
 	const compatibilityFilteredVersions = createMemo(() => {
-		const inst = selectedInstance();
-		if (!inst || isModpack()) return resources.state.versions;
-
-		return resources.state.versions.filter((version) => {
-			const compatibility = getCompatibilityForInstance(
-				project(),
-				version,
-				inst,
-			);
-			return compatibility.type !== "incompatible";
-		});
+		return versionsSupportedByInstance(
+			project(),
+			resources.state.versions,
+			selectedInstance(),
+			installType(),
+		);
 	});
+	const projectTypeVersions = createMemo(() =>
+		versionsSupportedByInstance(
+			project(),
+			resources.state.versions,
+			null,
+			installType(),
+		),
+	);
 
 	const uniqueGameVersions = createMemo(() => {
 		const seen = new Set<string>();
-		for (const v of resources.state.versions) {
-			for (const gv of v.game_versions) {
+		for (const v of projectTypeVersions()) {
+			for (const gv of minecraftGameVersions(v.game_versions)) {
 				seen.add(gv);
 			}
 		}
@@ -886,7 +1034,7 @@ const ResourceDetailsPage: Component<{
 
 	const uniqueLoaders = createMemo(() => {
 		const seen = new Set<string>();
-		for (const v of resources.state.versions) {
+		for (const v of projectTypeVersions()) {
 			for (const l of v.loaders) {
 				const lower = l.toLowerCase();
 				if (lower && lower !== "vanilla") {
@@ -1036,6 +1184,13 @@ const ResourceDetailsPage: Component<{
 	const [installContext, setInstallContext] = createSignal<{
 		version: ResourceVersion;
 	} | null>(null);
+	const [worldInstall, setWorldInstall] = createSignal<{
+		project: ResourceProject;
+		versions: ResourceVersion[];
+		version?: ResourceVersion;
+		installType: ResourceType;
+		instanceId: number;
+	} | null>(null);
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
 	const [confirmVersionId, setConfirmVersionId] = createSignal<string | null>(
 		null,
@@ -1048,10 +1203,16 @@ const ResourceDetailsPage: Component<{
 		const instance = instancesState.instances.find((i) => i.id === instanceId);
 		if (!instance) return { type: "compatible" as const };
 
-		return getCompatibilityForInstance(project(), version, instance);
+		return getCompatibilityForInstance(
+			project(),
+			version,
+			instance,
+			installType(),
+		);
 	};
 
 	const isProjectIncompatible = createMemo(() => {
+		if (installType() === "datapack") return false;
 		const instId = resources.state.selectedInstanceId;
 		if (!instId || isModpack()) return false;
 
@@ -1059,7 +1220,7 @@ const ResourceDetailsPage: Component<{
 		if (!inst) return false;
 
 		const instLoader = inst.modloader?.toLowerCase() || "";
-		const resType = project()?.resource_type;
+		const resType = installType();
 
 		// Vanilla restriction
 		if (instLoader === "" || instLoader === "vanilla") {
@@ -1079,7 +1240,12 @@ const ResourceDetailsPage: Component<{
 		if (!inst) return false;
 
 		return resources.state.versions.some((v) => {
-			const comp = getCompatibilityForInstance(project(), v, inst);
+			const comp = getCompatibilityForInstance(
+				project(),
+				v,
+				inst,
+				installType(),
+			);
 			return comp.type !== "incompatible";
 		});
 	});
@@ -1138,6 +1304,28 @@ const ResourceDetailsPage: Component<{
 			return;
 		}
 
+		if (installType() === "datapack") {
+			const p = project();
+			if (!p) return;
+			const instId = resources.state.selectedInstanceId;
+			if (!instId) {
+				resources.setInstallRequest({
+					project: p,
+					versions: resources.state.versions,
+					installType: "datapack",
+				});
+				setIsInstanceDialogOpen(true);
+				return;
+			}
+			setWorldInstall({
+				project: p,
+				versions: resources.state.versions,
+				installType: "datapack",
+				instanceId: instId,
+			});
+			return;
+		}
+
 		const instId = resources.state.selectedInstanceId;
 		if (!instId) {
 			// Logic similar to card quick install when no instance selected
@@ -1146,6 +1334,7 @@ const ResourceDetailsPage: Component<{
 				resources.setInstallRequest({
 					project: p,
 					versions: resources.state.versions,
+					installType: installType(),
 				});
 				setIsInstanceDialogOpen(true);
 			}
@@ -1173,7 +1362,7 @@ const ResourceDetailsPage: Component<{
 			const parsed = parseResourceUrl(url);
 
 			if (parsed) {
-				const { platform, id, activeTab } = parsed;
+				const { platform, id, activeTab, versionId } = parsed;
 				console.log(
 					`[ResourceDetails] Intercepted link to ${platform} resource: ${id}${
 						activeTab ? ` (Tab: ${activeTab})` : ""
@@ -1183,9 +1372,11 @@ const ResourceDetailsPage: Component<{
 				// If we're already on this project, just update the tab
 				const current = project();
 				if (current && current.id === id && current.source === platform) {
-					activeRouter()?.updateQuery(
-						"activeTab",
-						activeTab || "description",
+					transitionRouteState(
+						{
+							activeTab: activeTab || "description",
+							versionId: versionId || null,
+						},
 						true,
 					);
 					return;
@@ -1195,6 +1386,7 @@ const ResourceDetailsPage: Component<{
 					projectId: id,
 					platform,
 					activeTab,
+					versionId,
 				});
 				return;
 			}
@@ -1222,17 +1414,41 @@ const ResourceDetailsPage: Component<{
 		initialProject?: ResourceProject,
 	) => {
 		const currentProject = untrack(project);
+		const inputKey = id && platform ? `${platform}:${id}` : null;
+		if (
+			inputKey &&
+			routedProjectKey === inputKey &&
+			currentProject?.id === id &&
+			currentProject?.source === platform &&
+			untrack(projectLoadSettled)
+		) {
+			return;
+		}
+		routedProjectKey = inputKey;
 
 		if (initialProject) {
-			if (currentProject?.id !== initialProject.id) {
+			if (
+				currentProject?.id !== initialProject.id ||
+				currentProject?.source !== initialProject.source
+			) {
+				projectRequestSequence += 1;
 				setProject(initialProject);
 				if (initialProject.description) {
-					resources.selectProject(initialProject);
+					setProjectLoadSettled(true);
+					setLoading(false);
+					setError(null);
+					void resources.selectProject(initialProject);
 				} else if (id && platform) {
+					setProjectLoadSettled(false);
 					void fetchFullProject(platform, id);
 				} else {
-					resources.selectProject(initialProject);
+					void resources.selectProject(initialProject);
 				}
+			} else if (initialProject.description) {
+				setProjectLoadSettled(true);
+				setLoading(false);
+				setError(null);
+				void resources.selectProject(initialProject);
 			} else if (!currentProject?.description && id && platform) {
 				void fetchFullProject(platform, id);
 			}
@@ -1240,7 +1456,7 @@ const ResourceDetailsPage: Component<{
 		}
 
 		// Deep link case (ID only)
-		if (id && platform && currentProject?.id !== id) {
+		if (id && platform) {
 			void fetchFullProject(platform, id);
 		}
 	};
@@ -1260,21 +1476,25 @@ const ResourceDetailsPage: Component<{
 		id: string,
 		options?: { skipCache?: boolean },
 	) {
+		const requestSequence = ++projectRequestSequence;
 		setLoading(true);
 		setError(null);
 
 		if (!options?.skipCache) {
 			const cachedProject = getProjectFromCache(platform, id);
 			if (cachedProject) {
+				if (requestSequence !== projectRequestSequence) return;
 				setProject(cachedProject);
+				setProjectLoadSettled(true);
 				await resources.selectProject(cachedProject);
-				setLoading(false);
+				if (requestSequence === projectRequestSequence) setLoading(false);
 				return;
 			}
 		}
 
-		if (project()?.id !== id) {
+		if (project()?.id !== id || project()?.source !== platform) {
 			setProject(undefined);
+			setProjectLoadSettled(false);
 			setVersionFilter("");
 			setVersionReleaseTypes(new Set<string>());
 			setVersionLoaders(new Set<string>());
@@ -1285,16 +1505,20 @@ const ResourceDetailsPage: Component<{
 		}
 
 		try {
-			const p = await resources.getProject(platform, id);
+			const fetchedProject = await resources.getProject(platform, id);
+			if (requestSequence !== projectRequestSequence) return;
+			const p = fetchedProject;
 			if (p) setProjectCache(platform, p);
 
 			setProject(p);
+			setProjectLoadSettled(true);
 			await resources.selectProject(p);
 
 			if (p && p.id !== id) {
 				activeRouter()?.updateQuery("projectId", p.id, false);
 			}
 		} catch (e: unknown) {
+			if (requestSequence !== projectRequestSequence) return;
 			console.error("Failed to load project details:", e);
 			const errorMsg = e instanceof Error ? e.message : String(e);
 
@@ -1303,6 +1527,7 @@ const ResourceDetailsPage: Component<{
 					platform,
 					id,
 				});
+				if (requestSequence !== projectRequestSequence) return;
 				if (cached) {
 					const fallback: ResourceProject = {
 						id: cached.id,
@@ -1324,6 +1549,7 @@ const ResourceDetailsPage: Component<{
 						updated_at: null,
 					};
 					setProject(fallback);
+					setProjectLoadSettled(true);
 					await resources.selectProject(fallback);
 					showToast({
 						title: "Offline Mode",
@@ -1338,7 +1564,7 @@ const ResourceDetailsPage: Component<{
 				setError(errorMsg);
 			}
 		} finally {
-			setLoading(false);
+			if (requestSequence === projectRequestSequence) setLoading(false);
 		}
 	}
 
@@ -1348,7 +1574,7 @@ const ResourceDetailsPage: Component<{
 	) => {
 		const p = project();
 
-		if (p?.resource_type === "modpack") {
+		if (installType() === "modpack" && p) {
 			const prefilledModpackInfo = buildBrowseModpackInfo(p, version);
 			activeRouter()?.navigate(
 				"/install",
@@ -1363,7 +1589,9 @@ const ResourceDetailsPage: Component<{
 					initialVersion: version.id,
 					initialVersionNumber: version.version_number,
 					initialModloader: version.loaders[0],
-					initialMinecraftVersion: version.game_versions[0],
+					initialMinecraftVersion: minecraftGameVersions(
+						version.game_versions,
+					)[0],
 					modpackUrl: version.download_url || undefined,
 				},
 				{
@@ -1377,6 +1605,16 @@ const ResourceDetailsPage: Component<{
 			return;
 		}
 
+		if (!hasDownloadableArtifact(version)) {
+			showToast({
+				title: "Third-party download required",
+				description: `Opening ${p?.name ?? "this resource"} on the provider website.`,
+				severity: "info",
+			});
+			await openExternal(p?.web_url || "");
+			return;
+		}
+
 		const instId = targetInstance?.id || resources.state.selectedInstanceId;
 		const inst =
 			targetInstance || instancesState.instances.find((i) => i.id === instId);
@@ -1387,14 +1625,14 @@ const ResourceDetailsPage: Component<{
 			return;
 		}
 
-		if (!version.download_url) {
-			showToast({
-				title: "Third-party download required",
-				description:
-					"CurseForge requires this mod to be downloaded through their website. Opening link...",
-				severity: "info",
+		if (p && inst && requiresWorldTarget(p, version, installType())) {
+			setWorldInstall({
+				project: p,
+				versions: resources.state.versions,
+				version,
+				installType: installType(),
+				instanceId: inst.id,
 			});
-			await openExternal(p?.web_url || "");
 			return;
 		}
 
@@ -1420,7 +1658,15 @@ const ResourceDetailsPage: Component<{
 					}
 				}
 
-				await resources.install(p, version, inst?.id);
+				await resources.install(
+					p,
+					version,
+					{
+						kind: "instance",
+						instanceId: inst!.id,
+					},
+					{ installType: installType() },
+				);
 				showToast({
 					title: "Installation Started",
 					description: `Check the notifications in the sidebar for progress on ${p.name}.`,
@@ -1436,13 +1682,93 @@ const ResourceDetailsPage: Component<{
 		}
 	};
 
+	const handleSelectWorld = async (world: WorldSummary) => {
+		const context = worldInstall();
+		if (!context) return;
+		const selectedVersion =
+			context.version ??
+			findBestExactDatapackVersion(
+				context.versions,
+				world.gameVersion,
+				context.project.source,
+			);
+		if (!selectedVersion) {
+			setWorldInstall(null);
+			transitionRouteState({ activeTab: "versions", versionId: null }, true);
+			showToast({
+				title: "Choose a datapack version",
+				description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version manually; Vesta will ask for the destination world when you install it.`,
+				severity: "warning",
+			});
+			return;
+		}
+		if (!hasDownloadableArtifact(selectedVersion)) {
+			setWorldInstall(null);
+			showToast({
+				title: "Third-party download required",
+				description: `Opening ${context.project.name} on the provider website.`,
+				severity: "info",
+			});
+			await openExternal(context.project.web_url);
+			return;
+		}
+		const { compatibility, acknowledged } =
+			await confirmDatapackWorldCompatibility({
+				projectName: context.project.name,
+				version: selectedVersion,
+				world,
+			});
+		if (!acknowledged) {
+			setWorldInstall(null);
+			transitionRouteState({ activeTab: "versions", versionId: null }, true);
+			showToast({
+				title: "Choose a datapack version",
+				description: `Choose another ${context.project.name} release. Vesta will ask for the destination world again when you install it.`,
+				severity: "warning",
+			});
+			return;
+		}
+		setWorldInstall(null);
+		try {
+			await resources.install(
+				context.project,
+				selectedVersion,
+				{
+					kind: "world",
+					world: world.ref,
+				},
+				{
+					installType: context.installType,
+					compatibilityAcknowledged: compatibility !== "exact",
+					replacementResourceId: replacementResourceIdForWorld(
+						managedDatapackReplacement(),
+						world.ref,
+					),
+				},
+			);
+			showToast({
+				title: "Installation Started",
+				description: `Check notifications for progress on ${context.project.name}.`,
+				severity: "success",
+			});
+		} catch (err) {
+			showToast({
+				title: "Failed to install",
+				description: String(err),
+				severity: "error",
+			});
+		}
+	};
+
 	const handleCreateNew = () => {
 		setIsInstanceDialogOpen(false);
 		const p = project();
 		if (p) {
-			const version = primaryVersion();
+			const version = installContext()?.version || primaryVersion();
+			setInstallContext(null);
+			const resourceType = installType();
 			const prefilledModpackInfo =
-				p.resource_type === "modpack"
+				resourceType === "modpack"
 					? buildBrowseModpackInfo(p, version)
 					: undefined;
 			activeRouter()?.navigate(
@@ -1450,19 +1776,19 @@ const ResourceDetailsPage: Component<{
 				{
 					projectId: p.id,
 					platform: p.source,
-					isModpack: p.resource_type === "modpack",
+					isModpack: resourceType === "modpack",
 					projectName: p.name,
 					projectIcon: p.icon_url || "",
-					resourceType: p.resource_type,
+					resourceType,
 					initialVersion: version?.id,
 					initialVersionNumber: version?.version_number,
 					initialModloader: version?.loaders[0],
 					initialMinecraftVersion:
-						p.resource_type === "modpack"
-							? version?.game_versions[0]
+						resourceType === "modpack"
+							? minecraftGameVersions(version?.game_versions || [])[0]
 							: undefined,
 					modpackUrl:
-						p.resource_type === "modpack"
+						resourceType === "modpack"
 							? version?.download_url || undefined
 							: undefined,
 				},
@@ -1477,7 +1803,11 @@ const ResourceDetailsPage: Component<{
 										: undefined,
 						}
 					: {
-							pendingResource: { project: p, version },
+							pendingResource: {
+								project: p,
+								version,
+								installType: resourceType,
+							},
 						},
 			);
 		}
@@ -1496,8 +1826,23 @@ const ResourceDetailsPage: Component<{
 		} else {
 			// This was a quick install from the header button
 			const p = project();
+			if (p && installType() === "datapack") {
+				setWorldInstall({
+					project: p,
+					versions: resources.state.versions,
+					installType: "datapack",
+					instanceId: instance.id,
+				});
+				return;
+			}
 			const best = p
-				? findBestVersionForInstance(p, resources.state.versions, instance)
+				? findBestVersionForInstance(
+						p,
+						resources.state.versions,
+						instance,
+						"release",
+						installType(),
+					)
 				: null;
 			if (best) {
 				handleInstall(best, instance);
@@ -1692,7 +2037,7 @@ const ResourceDetailsPage: Component<{
 		if (typeof window === "undefined") return;
 
 		const mq = window.matchMedia(
-			`(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`,
+			`(max-width: ${COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX}px)`,
 		);
 
 		const applyLayoutMode = () => {
@@ -1732,7 +2077,7 @@ const ResourceDetailsPage: Component<{
 		if (
 			typeof window !== "undefined" &&
 			window.matchMedia(
-				`(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`,
+				`(max-width: ${COLLAPSING_HEADER_DESKTOP_BREAKPOINT_PX}px)`,
 			).matches
 		) {
 			spacer.style.height = "";
@@ -1765,46 +2110,262 @@ const ResourceDetailsPage: Component<{
 		onCleanup(() => ro.disconnect());
 	});
 
+	const focusedCompatibility = createMemo<CompatibilityResult>(() => {
+		const version = focusedVersion();
+		const instance = selectedInstance();
+		if (!version || !instance || isModpack()) {
+			return { type: "compatible" as const };
+		}
+		return getCompatibilityForInstance(
+			project(),
+			version,
+			instance,
+			installType(),
+		);
+	});
+
+	const versionActionLabel = (
+		version: ResourceVersion,
+		includeVersionNumber = false,
+	) => {
+		if (isVersionInstalled(version.id, version.hash)) {
+			return confirmVersionId() === version.id
+				? "Confirm removal"
+				: includeVersionNumber
+					? `Uninstall ${version.version_number}`
+					: "Uninstall";
+		}
+		if (isVersionInstalling(version.id)) return "Installing…";
+		if (isModpack()) return "Create instance";
+		if (!selectedInstance()) return "Select instance";
+		if (!version.download_url) return "Open provider";
+		return includeVersionNumber
+			? `Install ${version.version_number}`
+			: "Install";
+	};
+
+	const versionActionKind = (version: ResourceVersion): VersionActionKind => {
+		if (isVersionInstalled(version.id, version.hash)) return "remove";
+		if (isVersionInstalling(version.id)) return "progress";
+		if (!version.download_url && !isModpack()) return "external";
+		return "download";
+	};
+
+	const compactVersionActionLabel = (version: ResourceVersion) => {
+		const label = versionActionLabel(version);
+		if (label === "Select instance") return "Select";
+		if (label === "Open provider") return "Open";
+		if (label === "Create instance") return "Create";
+		return label;
+	};
+
+	const versionActionDisabled = (
+		version: ResourceVersion,
+		allowRemoval = false,
+	) =>
+		isVersionInstalling(version.id) ||
+		(!allowRemoval &&
+			isVersionInstalled(version.id, version.hash) &&
+			confirmVersionId() !== version.id) ||
+		(!isVersionInstalled(version.id, version.hash) &&
+			getCompatibility(version).type === "incompatible");
+
+	const focusedActionLabel = createMemo(() => {
+		const version = focusedVersion();
+		return version ? versionActionLabel(version, true) : "Install";
+	});
+	const focusedActionKind = createMemo<VersionActionKind>(() => {
+		const version = focusedVersion();
+		return version ? versionActionKind(version) : "download";
+	});
+
+	const focusedActionDisabled = createMemo(() => {
+		const version = focusedVersion();
+		return !version || versionActionDisabled(version, true);
+	});
+
+	const handleVersionAction = (version: ResourceVersion) => {
+		if (isVersionInstalled(version.id, version.hash)) {
+			if (confirmVersionId() !== version.id) {
+				setConfirmVersionId(version.id);
+				setTimeout(() => setConfirmVersionId(null), 3000);
+				return;
+			}
+			void handleUninstall();
+			setConfirmVersionId(null);
+			return;
+		}
+		void handleInstall(version);
+	};
+
+	const handleFocusedAction = () => {
+		const version = focusedVersion();
+		if (version) handleVersionAction(version);
+	};
+
+	const openDependencyProject = (dependencyProject: ResourceProject) => {
+		activeRouter()?.navigate(
+			"/resource-details",
+			{
+				projectId: dependencyProject.id,
+				platform: dependencyProject.source,
+				name: dependencyProject.name,
+				iconUrl: dependencyProject.icon_url,
+			},
+			{ project: dependencyProject },
+		);
+	};
+
+	const copyFocusedHash = async () => {
+		const hash = focusedVersion()?.hash;
+		if (!hash) return;
+		try {
+			await navigator.clipboard.writeText(hash);
+			showToast({ title: "Hash copied", severity: "success" });
+		} catch (copyError) {
+			showToast({
+				title: "Could not copy hash",
+				description: String(copyError),
+				severity: "error",
+			});
+		}
+	};
+
+	const focusedInstallationControls = (version: ResourceVersion) => (
+		<div class={styles["sidebar-instance-picker"]}>
+			{renderPlatformSwitcher()}
+			<Show
+				when={!isModpack()}
+				fallback={
+					<div class={styles["modpack-instance-notice"]}>
+						<span>Modpacks will create a new instance when installed</span>
+					</div>
+				}
+			>
+				<Select<any>
+					options={[
+						{ id: null, name: "No Instance" },
+						...instancesState.instances,
+					]}
+					value={
+						instancesState.instances.find(
+							(instance) => instance.id === resources.state.selectedInstanceId,
+						) || { id: null, name: "No Instance" }
+					}
+					onChange={(value) => {
+						const id = (value as any)?.id ?? null;
+						resources.setInstance(id);
+						if (!id) return;
+						const instance = instancesState.instances.find(
+							(candidate) => candidate.id === id,
+						);
+						if (instance) {
+							resources.setGameVersion(instance.minecraftVersion);
+							resources.setLoader(instance.modloader);
+						}
+					}}
+					optionValue="id"
+					optionTextValue="name"
+					placeholder="Select instance..."
+					itemComponent={(selectProps) => (
+						<SelectItem item={selectProps.item}>
+							<div class={styles["instance-select-option"]}>
+								<InstanceIcon instance={selectProps.item.rawValue} />
+								<div class={styles["instance-select-option-copy"]}>
+									<span>{selectProps.item.rawValue.name}</span>
+									<Show when={selectProps.item.rawValue.id !== null}>
+										<small>
+											{selectProps.item.rawValue.minecraftVersion}
+											{selectProps.item.rawValue.modloader
+												? ` · ${selectProps.item.rawValue.modloader}`
+												: ""}
+										</small>
+									</Show>
+								</div>
+							</div>
+						</SelectItem>
+					)}
+				>
+					<SelectTrigger class={styles["instance-select-sidebar"]}>
+						<SelectValue<any>>
+							{(selectState) => {
+								const instance = selectState.selectedOption();
+								return (
+									<div class={styles["instance-select-option"]}>
+										<InstanceIcon instance={instance} />
+										<span>{instance?.name || "Select instance..."}</span>
+									</div>
+								);
+							}}
+						</SelectValue>
+					</SelectTrigger>
+					<SelectContent />
+				</Select>
+			</Show>
+			<Show
+				when={
+					focusedCompatibility().type !== "compatible" &&
+					focusedCompatibility().reason
+				}
+			>
+				<small
+					class={`${styles["focused-compatibility-note"]} ${styles[`focused-compatibility-note--${focusedCompatibility().type}`]}`}
+				>
+					{focusedCompatibility().reason}
+				</small>
+			</Show>
+			<div class={styles["sidebar-action-row"]}>
+				<Button
+					size="sm"
+					class={
+						focusedActionKind() === "remove"
+							? styles["focused-version-action--remove"]
+							: undefined
+					}
+					style={{ width: "100%" }}
+					color={
+						isVersionInstalled(version.id, version.hash)
+							? "destructive"
+							: focusedCompatibility().type === "warning"
+								? "warning"
+								: "primary"
+					}
+					variant={
+						isVersionInstalled(version.id, version.hash) ? "outline" : "solid"
+					}
+					disabled={focusedActionDisabled()}
+					onClick={handleFocusedAction}
+				>
+					<VersionActionIcon kind={focusedActionKind()} size={15} />
+					{focusedActionLabel()}
+				</Button>
+			</div>
+		</div>
+	);
+
+	const focusedSidebarContent = (
+		sections: "all" | "install" | "metadata" = "all",
+	) => {
+		const currentProject = project();
+		const version = focusedVersion();
+		if (!currentProject || !version) return null;
+		return (
+			<VersionFocusSidebar
+				project={currentProject}
+				version={version}
+				installControls={focusedInstallationControls(version)}
+				dependencyProjects={dependencyData.latest || new Map()}
+				onOpenProject={openDependencyProject}
+				sections={sections}
+			/>
+		);
+	};
+
 	const sidebarContent = () => (
 		<div class={styles["sidebar-scrollable-area"]}>
-			<div class={styles["sidebar-section"]}>
+			<section class={styles["sidebar-section"]}>
 				<div class={styles["sidebar-instance-picker"]}>
-					<div class={styles["source-toggle"]}>
-						<button
-							type="button"
-							class={styles["source-btn"]}
-							classList={{
-								[styles.active]: project()?.source === "modrinth",
-							}}
-							disabled={!canSwitchToPlatform("modrinth")}
-							title={
-								canSwitchToPlatform("modrinth")
-									? "Modrinth"
-									: "Not available on Modrinth"
-							}
-							onClick={() => navigateToPlatform("modrinth")}
-						>
-							<ModrinthIcon width="14" height="14" />
-							<span>Modrinth</span>
-						</button>
-						<button
-							type="button"
-							class={styles["source-btn"]}
-							classList={{
-								[styles.active]: project()?.source === "curseforge",
-							}}
-							disabled={!canSwitchToPlatform("curseforge")}
-							title={
-								canSwitchToPlatform("curseforge")
-									? "CurseForge"
-									: "Not available on CurseForge"
-							}
-							onClick={() => navigateToPlatform("curseforge")}
-						>
-							<CurseForgeIcon width="14" height="14" />
-							<span>CurseForge</span>
-						</button>
-					</div>
+					{renderPlatformSwitcher()}
 					<Show
 						when={!isModpack()}
 						fallback={
@@ -1930,6 +2491,7 @@ const ResourceDetailsPage: Component<{
 							}
 						>
 							<Show when={isProjectInstalling()}>
+								<VersionActionIcon kind="progress" size={15} />
 								<span>Installing...</span>
 							</Show>
 							<Show when={!isProjectInstalling()}>
@@ -1938,44 +2500,14 @@ const ResourceDetailsPage: Component<{
 										when={isUpdateAvailable()}
 										fallback={
 											<>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													style={{ "margin-right": "8px" }}
-												>
-													<path d="M3 6h18"></path>
-													<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-													<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-												</svg>
+												<VersionActionIcon kind="remove" size={15} />
 												<Show when={confirmUninstall()} fallback="Uninstall">
 													Confirm?
 												</Show>
 											</>
 										}
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											style={{ "margin-right": "8px" }}
-										>
-											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-											<polyline points="7 10 12 15 17 10"></polyline>
-											<line x1="12" y1="15" x2="12" y2="3"></line>
-										</svg>
+										<VersionActionIcon kind="download" size={15} />
 										Update
 									</Show>
 								</Show>
@@ -1984,22 +2516,7 @@ const ResourceDetailsPage: Component<{
 										when={isProjectIncompatible()}
 										fallback={
 											<>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													style={{ "margin-right": "8px" }}
-												>
-													<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-													<polyline points="7 10 12 15 17 10"></polyline>
-													<line x1="12" y1="15" x2="12" y2="3"></line>
-												</svg>
+												<VersionActionIcon kind="download" size={15} />
 												Install
 											</>
 										}
@@ -2016,11 +2533,12 @@ const ResourceDetailsPage: Component<{
 						</Button>
 					</div>
 				</div>
-			</div>
+			</section>
 
-			<div class={styles["sidebar-section"]}>
-				<div class={styles["sidebar-section-header"]}>
-					<h3 class={styles["section-title"]}>Details</h3>
+			<section class={styles["sidebar-section"]}>
+				<div class={styles["sidebar-section-heading"]}>
+					<InfoIcon width={16} height={16} />
+					<h3>Project details</h3>
 				</div>
 				<div class={styles["sidebar-info-list"]}>
 					<Show when={project()?.published_at}>
@@ -2046,20 +2564,19 @@ const ResourceDetailsPage: Component<{
 						</div>
 					</Show>
 				</div>
-			</div>
+			</section>
 
-			<div
+			<section
 				class={`${styles["sidebar-section"]} ${styles["recent-versions-section"]} ${styles["hide-mobile"]}`}
 			>
-				<div class={styles["sidebar-section-header"]}>
-					<h3 class={styles["section-title"]}>Recent Versions</h3>
+				<div class={styles["sidebar-section-heading"]}>
+					<DownloadIcon width={16} height={16} />
+					<h3>Recent versions</h3>
 					<button
 						class={styles["view-all-link"]}
-						onClick={() =>
-							activeRouter()?.updateQuery("activeTab", "versions", true)
-						}
+						onClick={() => selectTab("versions")}
 					>
-						View All
+						View all
 					</button>
 				</div>
 				<div class={styles["sidebar-version-list"]}>
@@ -2067,160 +2584,23 @@ const ResourceDetailsPage: Component<{
 						when={!resources.state.versionsLoading}
 						fallback={<InlineLoadingRow message="Loading versions..." />}
 					>
-						<For each={resources.state.versions.slice(0, 5)}>
+						<For each={compatibilityFilteredVersions().slice(0, 5)}>
 							{(version) => (
-								<div class={styles["sidebar-version-item"]}>
-									<div class={styles["sidebar-version-top"]}>
-										<span
-											class={styles["version-name"]}
-											title={version.version_number}
-										>
-											{version.version_number}
-										</span>
-										<div class={styles["version-tags-mini"]}>
-											<Badge
-												variant={
-													version.release_type === "release"
-														? "success"
-														: version.release_type === "beta"
-															? "warning"
-															: "error"
-												}
-												round
-											>
-												{version.release_type.charAt(0).toUpperCase()}
-											</Badge>
-											<For each={version.loaders.slice(0, 1)}>
-												{(l) => (
-													<Badge variant="info" round>
-														{l}
-													</Badge>
-												)}
-											</For>
-										</div>
-									</div>
-									<div class={styles["sidebar-version-meta"]}>
-										<VersionTags versions={version.game_versions} />
-									</div>
-									<Button
-										size="sm"
-										disabled={
-											isVersionInstalling(version.id) ||
-											(!!resources.state.selectedInstanceId &&
-												!isVersionInstalled(version.id, version.hash) &&
-												getCompatibility(version).type === "incompatible")
-										}
-										color={(() => {
-											if (isVersionInstalled(version.id, version.hash))
-												return "destructive";
-											const comp = getCompatibility(version);
-											if (comp.type === "warning") return "warning";
-											if (comp.type === "incompatible") return "none";
-											return undefined;
-										})()}
-										tooltip_text={(() => {
-											const instId = resources.state.selectedInstanceId;
-											const comp = getCompatibility(version);
-											if (
-												instId &&
-												!isVersionInstalled(version.id, version.hash) &&
-												comp.type !== "compatible"
-											) {
-												return comp.reason;
-											}
-											if (isVersionInstalling(version.id))
-												return "Installation in progress";
-											if (isVersionInstalled(version.id, version.hash))
-												return "Already installed - Click to remove";
-											if (!isModpack() && !instId)
-												return "Select an instance to install";
-											return version.download_url
-												? "Click to install"
-												: "External download required";
-										})()}
-										onClick={() => {
-											if (isVersionInstalled(version.id, version.hash)) {
-												if (confirmVersionId() !== version.id) {
-													setConfirmVersionId(version.id);
-													setTimeout(() => setConfirmVersionId(null), 3000);
-													return;
-												}
-												handleUninstall();
-												setConfirmVersionId(null);
-											} else {
-												handleInstall(version);
-											}
-										}}
-										style={{ width: "100%", "margin-top": "8px" }}
-										variant={
-											isVersionInstalled(version.id, version.hash)
-												? "outline"
-												: version.download_url
-													? "solid"
-													: "outline"
-										}
-									>
-										<Show when={isVersionInstalling(version.id)}>
-											Installing...
-										</Show>
-										<Show when={!isVersionInstalling(version.id)}>
-											<Show when={isVersionInstalled(version.id, version.hash)}>
-												<Show
-													when={confirmVersionId() === version.id}
-													fallback="Uninstall"
-												>
-													Confirm?
-												</Show>
-											</Show>
-											<Show
-												when={!isVersionInstalled(version.id, version.hash)}
-											>
-												<Show
-													when={
-														!isModpack() && !resources.state.selectedInstanceId
-													}
-												>
-													Select Instance
-												</Show>
-												<Show
-													when={
-														isModpack() || resources.state.selectedInstanceId
-													}
-												>
-													<Show
-														when={
-															getCompatibility(version).type === "incompatible"
-														}
-														fallback={
-															version.download_url ? "Install" : "External"
-														}
-													>
-														{(() => {
-															const instId = resources.state.selectedInstanceId;
-															const inst = instancesState.instances.find(
-																(i) => i.id === instId,
-															);
-															if (
-																(inst?.modloader?.toLowerCase() === "vanilla" ||
-																	!inst?.modloader) &&
-																(project()?.resource_type === "mod" ||
-																	project()?.resource_type === "shader")
-															) {
-																return "Unsupported";
-															}
-															return "Incompatible";
-														})()}
-													</Show>
-												</Show>
-											</Show>
-										</Show>
-									</Button>
-								</div>
+								<VersionSummaryRow
+									version={version}
+									compact
+									onSelect={selectVersion}
+									actionLabel={compactVersionActionLabel(version)}
+									actionKind={versionActionKind(version)}
+									actionDisabled={versionActionDisabled(version, true)}
+									onAction={handleVersionAction}
+									onPrefetch={prefetchVersionDetails}
+								/>
 							)}
 						</For>
 					</Show>
 				</div>
-			</div>
+			</section>
 		</div>
 	);
 
@@ -2263,246 +2643,296 @@ const ResourceDetailsPage: Component<{
 								onFocusIn={projectIconPreview.activate}
 								onFocusOut={projectIconPreview.deactivate}
 							>
-								<div class={styles["project-header-info"]}>
-									<Show when={project()?.icon_url}>
-										<img
-											src={projectIconPreview.displaySource() ?? ""}
-											alt={project()?.name}
-											class={styles["project-icon"]}
-										/>
-									</Show>
-									<div class={styles["project-header-text"]}>
-										<div class={styles["project-title-line"]}>
-											<h1 class={styles["project-title"]}>{project()?.name}</h1>
-											<Show when={isProjectInstalling()}>
-												<Badge variant="success">Installing...</Badge>
-											</Show>
-										</div>
-										<div class={styles["project-meta-row"]}>
-											<div class={styles["meta-stats"]}>
-												<span class={styles["meta-item"]}>
-													By{" "}
-													{project()?.authors &&
-													(project()?.authors?.length ?? 0) > 0
-														? project()?.authors?.[0]
-														: project()?.author}
-												</span>
-												<Show when={(project()?.download_count ?? 0) > 0}>
-													<span class={styles["meta-item"]}>
-														<DownloadIcon width="14" height="14" />
-														{(project()?.download_count ?? 0).toLocaleString()}
-													</span>
-												</Show>
-												<Show
-													when={
-														project()?.follower_count !== undefined &&
-														project()?.source !== "curseforge"
-													}
+								<Show
+									when={focusedVersion()}
+									fallback={
+										<Show
+											when={!focusedVersionId()}
+											fallback={
+												<div
+													class={styles["version-header-info"]}
+													aria-busy="true"
+													aria-label="Loading version"
 												>
-													<span class={styles["meta-item"]}>
-														<HeartIcon width="14" height="14" />
-														{project()?.follower_count.toLocaleString()}
-													</span>
-												</Show>
-											</div>
-											<Show when={project()}>
-												{(resourceProject) => (
-													<HeaderCategoryTags
-														project={resourceProject()}
-														onBrowseType={handleBrowseByType}
-														router={activeRouter()}
+													<Show when={shellIcon()}>
+														<img
+															src={shellIcon() ?? ""}
+															alt={shellName()}
+															class={styles["project-icon"]}
+														/>
+													</Show>
+													<div class={styles["version-header-copy"]}>
+														<div
+															class={`${styles["focus-skeleton"]} ${styles["focus-skeleton--header-title"]}`}
+														/>
+														<div
+															class={`${styles["focus-skeleton"]} ${styles["focus-skeleton--header-meta"]}`}
+														/>
+													</div>
+												</div>
+											}
+										>
+											<div class={styles["project-header-info"]}>
+												<Show when={shellIcon()}>
+													<img
+														src={shellIcon() ?? ""}
+														alt={shellName()}
+														class={styles["project-icon"]}
 													/>
-												)}
-											</Show>
-										</div>
-									</div>
-								</div>
-								<div class={styles["header-link-group"]}>
-									<Button
-										variant="slate"
-										size="icon"
-										onClick={() => openExternal(project()?.web_url ?? "")}
-										class={styles["header-action-btn"]}
-										tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
-										tooltip_placement="left"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										>
-											<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-											<polyline points="15 3 21 3 21 9"></polyline>
-											<line x1="10" y1="14" x2="21" y2="3"></line>
-										</svg>
-									</Button>
-									<Button
-										variant="slate"
-										size="icon"
-										onClick={handleFollowToggle}
-										class={`${styles["header-action-btn"]} ${styles["header-action-btn--notify"]}`}
-										tooltip_text={
-											isFollowing()
-												? "Disable update notifications"
-												: "Receive notifications for updates"
-										}
-										tooltip_placement="left"
-									>
-										<BellIcon
-											width="16"
-											height="16"
-											style={{
-												fill: isFollowing() ? "currentColor" : "none",
-												stroke: "currentColor",
-											}}
-										/>
-									</Button>
-								</div>
-							</div>
-						</div>
-
-						<div class={styles["mobile-sidebar-only"]}>
-							<div
-								class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]}`}
-								style={{ "margin-bottom": "20px" }}
-							>
-								{sidebarContent()}
-							</div>
-						</div>
-
-						<div class={styles["resource-details-layout"]}>
-							<div
-								class={`${styles["resource-details-main"]} ${styles["theme-card"]}`}
-							>
-								<div class={styles["details-tabs"]}>
-									<button
-										class={styles["tab-btn"]}
-										classList={{
-											[styles.active]: activeTab() === "description",
-										}}
-										onClick={() =>
-											activeRouter()?.updateQuery(
-												"activeTab",
-												"description",
-												true,
-											)
-										}
-									>
-										Description
-									</button>
-									<button
-										class={styles["tab-btn"]}
-										classList={{
-											[styles.active]: activeTab() === "versions",
-										}}
-										onClick={() =>
-											activeRouter()?.updateQuery("activeTab", "versions", true)
-										}
-									>
-										Versions ({resources.state.versions.length})
-									</button>
-									<Show when={!isModpack()}>
-										<button
-											class={styles["tab-btn"]}
-											classList={{
-												[styles.active]: activeTab() === "dependencies",
-											}}
-											onClick={() =>
-												activeRouter()?.updateQuery(
-													"activeTab",
-													"dependencies",
-													true,
-												)
-											}
-										>
-											Dependencies (
-											{primaryVersion()?.dependencies?.length || 0})
-										</button>
-									</Show>
-									<Show when={(project()?.gallery?.length ?? 0) > 0}>
-										<button
-											class={styles["tab-btn"]}
-											classList={{
-												[styles.active]: activeTab() === "gallery",
-											}}
-											onClick={() =>
-												activeRouter()?.updateQuery(
-													"activeTab",
-													"gallery",
-													true,
-												)
-											}
-										>
-											Gallery ({project()?.gallery?.length})
-										</button>
-									</Show>
-								</div>
-								<div class={styles["main-scrollable-area"]}>
-									<div class={styles["tab-content"]}>
-										<Show when={activeTab() === "description"}>
-											<div
-												class={styles.description}
-												innerHTML={renderedDescription() as string}
-												onMouseOver={(e) => {
-													const target = e.target as HTMLElement;
-													const anchor = target.closest("a");
-													if (anchor) {
-														setHoveredLink(anchor.href);
-													}
-												}}
-												onMouseOut={(e) => {
-													const target = e.target as HTMLElement;
-													const anchor = target.closest("a");
-													if (anchor) {
-														setHoveredLink(null);
-													}
-												}}
-												onClick={(e) => {
-													const target = e.target as HTMLElement;
-													const anchor = target.closest("a");
-													if (anchor) {
-														e.preventDefault();
-														e.stopPropagation();
-														handleDescriptionLink(anchor.href);
-														return;
-													}
-
-													const spoiler = target.closest(".spoiler");
-													if (spoiler instanceof HTMLElement) {
-														const isVisible =
-															spoiler.classList.contains("is-visible");
-														const header = target.closest(".spoiler-header");
-
-														// Behavior:
-														// - If the spoiler is closed, clicking anywhere inside it opens it.
-														// - If the spoiler is open, only clicks on the header toggle (close/open).
-														if (!isVisible) {
-															spoiler.classList.add("is-visible");
-														} else if (header) {
-															spoiler.classList.toggle("is-visible");
+												</Show>
+												<div class={styles["project-header-text"]}>
+													<div class={styles["project-title-line"]}>
+														<h1 class={styles["project-title"]}>
+															{shellName()}
+														</h1>
+														<Show when={isProjectInstalling()}>
+															<Badge variant="success">Installing...</Badge>
+														</Show>
+													</div>
+													<Show
+														when={project()}
+														fallback={
+															<div
+																class={`${styles["focus-skeleton"]} ${styles["focus-skeleton--header-meta"]}`}
+															/>
 														}
-													}
-												}}
-												onAuxClick={(e) => {
-													const target = e.target as HTMLElement;
-													const anchor = target.closest("a");
-													if (anchor && e.button === 1) {
-														// Middle click
-														e.preventDefault();
-														e.stopPropagation();
-														handleDescriptionLink(anchor.href);
-													}
+													>
+														<div class={styles["project-meta-row"]}>
+															<div class={styles["meta-stats"]}>
+																<span class={styles["meta-item"]}>
+																	By{" "}
+																	{project()?.authors &&
+																	(project()?.authors?.length ?? 0) > 0
+																		? project()?.authors?.[0]
+																		: project()?.author}
+																</span>
+																<Show
+																	when={(project()?.download_count ?? 0) > 0}
+																>
+																	<span class={styles["meta-item"]}>
+																		<DownloadIcon width="14" height="14" />
+																		{(
+																			project()?.download_count ?? 0
+																		).toLocaleString()}
+																	</span>
+																</Show>
+																<Show
+																	when={
+																		project()?.follower_count !== undefined &&
+																		project()?.source !== "curseforge"
+																	}
+																>
+																	<span class={styles["meta-item"]}>
+																		<HeartIcon width="14" height="14" />
+																		{project()?.follower_count.toLocaleString()}
+																	</span>
+																</Show>
+															</div>
+															<Show when={project()}>
+																{(resourceProject) => (
+																	<HeaderCategoryTags
+																		project={resourceProject()}
+																		resourceType={installType()}
+																		onBrowseType={handleBrowseByType}
+																		router={activeRouter()}
+																	/>
+																)}
+															</Show>
+														</div>
+													</Show>
+												</div>
+											</div>
+										</Show>
+									}
+								>
+									{(version) => (
+										<div class={styles["version-header-info"]}>
+											<Show when={shellIcon()}>
+												<img
+													src={shellIcon() ?? ""}
+													alt={shellName()}
+													class={styles["project-icon"]}
+												/>
+											</Show>
+											<div class={styles["version-header-copy"]}>
+												<div class={styles["project-title-line"]}>
+													<h1 class={styles["project-title"]}>
+														{version().version_number}
+													</h1>
+													<span
+														class={`${styles.capitalize} ${styles["release-label"]} ${styles[`release-label--${version().release_type}`]}`}
+													>
+														{version().release_type}
+													</span>
+												</div>
+												<div class={styles["version-header-meta"]}>
+													<span class={styles["version-resource-name"]}>
+														{shellName()}
+													</span>
+													<Show when={version().published_at}>
+														<span>
+															{formatDate(version().published_at || "")}
+														</span>
+													</Show>
+												</div>
+											</div>
+										</div>
+									)}
+								</Show>
+								<Show when={project()}>
+									<div class={styles["header-link-group"]}>
+										<Button
+											variant="slate"
+											size="icon"
+											onClick={() => openExternal(project()?.web_url ?? "")}
+											class={styles["header-action-btn"]}
+											tooltip_text={`View on ${getSourceDescriptor(project()?.source ?? "modrinth")?.label ?? "provider"}`}
+											tooltip_placement="left"
+										>
+											<ExternalLinkIcon width="16" height="16" />
+										</Button>
+										<Button
+											variant="slate"
+											size="icon"
+											onClick={handleFollowToggle}
+											class={`${styles["header-action-btn"]} ${styles["header-action-btn--notify"]}`}
+											tooltip_text={
+												isFollowing()
+													? "Disable update notifications"
+													: "Receive notifications for updates"
+											}
+											tooltip_placement="left"
+										>
+											<BellIcon
+												width="16"
+												height="16"
+												style={{
+													fill: isFollowing() ? "currentColor" : "none",
+													stroke: "currentColor",
 												}}
 											/>
-										</Show>
+										</Button>
+									</div>
+								</Show>
+							</div>
+						</div>
 
-										<Show when={activeTab() === "gallery"}>
+						<Show when={!focusedVersionId()}>
+							<div class={styles["mobile-sidebar-only"]}>
+								<div
+									class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]} ${styles["resource-overview-sidebar-card"]}`}
+									style={{ "margin-bottom": "20px" }}
+								>
+									<Show
+										when={projectContentReady()}
+										fallback={<ResourceDetailsSidebarLoading />}
+									>
+										{sidebarContent()}
+									</Show>
+								</div>
+							</div>
+						</Show>
+						<Show when={focusedVersionId()}>
+							<div
+								class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]} ${styles["version-focus-sidebar-card"]} ${styles["mobile-sidebar-only"]}`}
+							>
+								<Show
+									when={focusedVersion()}
+									fallback={<VersionFocusSidebarLoading sections="install" />}
+								>
+									{focusedSidebarContent("install")}
+								</Show>
+							</div>
+						</Show>
+
+						<div class={styles["resource-details-layout"]}>
+							<Tabs
+								value={activeTab()}
+								onChange={(value) =>
+									selectTab(value as "description" | "versions" | "gallery")
+								}
+								class={styles["resource-details-main"]}
+							>
+								<TabsList class={styles["details-tabs"]}>
+									<TabsTrigger value="description" class={styles["tab-btn"]}>
+										<span>Description</span>
+									</TabsTrigger>
+									<TabsTrigger value="versions" class={styles["tab-btn"]}>
+										<span>Versions</span>
+									</TabsTrigger>
+									<Show when={(project()?.gallery?.length ?? 0) > 0}>
+										<TabsTrigger value="gallery" class={styles["tab-btn"]}>
+											<span>Gallery</span>
+										</TabsTrigger>
+									</Show>
+								</TabsList>
+								<div
+									class={`${styles["main-scrollable-area"]} ${styles["theme-card"]} ${styles["details-content-surface"]}`}
+								>
+									<div class={styles["tab-content"]}>
+										<TabsContent value="description">
+											<Show
+												when={projectContentReady()}
+												fallback={<ResourceDescriptionLoading />}
+											>
+												<div
+													class={styles.description}
+													innerHTML={renderedDescription() as string}
+													onMouseOver={(e) => {
+														const target = e.target as HTMLElement;
+														const anchor = target.closest("a");
+														if (anchor) {
+															setHoveredLink(anchor.href);
+														}
+													}}
+													onMouseOut={(e) => {
+														const target = e.target as HTMLElement;
+														const anchor = target.closest("a");
+														if (anchor) {
+															setHoveredLink(null);
+														}
+													}}
+													onClick={(e) => {
+														const target = e.target as HTMLElement;
+														const anchor = target.closest("a");
+														if (anchor) {
+															e.preventDefault();
+															e.stopPropagation();
+															handleDescriptionLink(anchor.href);
+															return;
+														}
+
+														const spoiler = target.closest(".spoiler");
+														if (spoiler instanceof HTMLElement) {
+															const isVisible =
+																spoiler.classList.contains("is-visible");
+															const header = target.closest(".spoiler-header");
+
+															// Behavior:
+															// - If the spoiler is closed, clicking anywhere inside it opens it.
+															// - If the spoiler is open, only clicks on the header toggle (close/open).
+															if (!isVisible) {
+																spoiler.classList.add("is-visible");
+															} else if (header) {
+																spoiler.classList.toggle("is-visible");
+															}
+														}
+													}}
+													onAuxClick={(e) => {
+														const target = e.target as HTMLElement;
+														const anchor = target.closest("a");
+														if (anchor && e.button === 1) {
+															// Middle click
+															e.preventDefault();
+															e.stopPropagation();
+															handleDescriptionLink(anchor.href);
+														}
+													}}
+												/>
+											</Show>
+										</TabsContent>
+
+										<TabsContent value="gallery">
 											<div class={styles["gallery-grid"]}>
 												<For each={project()?.gallery}>
 													{(item) => (
@@ -2515,536 +2945,255 @@ const ResourceDetailsPage: Component<{
 													)}
 												</For>
 											</div>
-										</Show>
+										</TabsContent>
 
-										<Show when={activeTab() === "dependencies"}>
-											<div class={styles["dependencies-tab"]}>
-												<div class={styles["dependency-info-notice"]}>
-													<span>Showing dependencies for version:</span>
-													<Select<ResourceVersion>
-														options={resources.state.versions}
-														value={primaryVersion() || undefined}
-														onChange={(v) => v && setManualVersionId(v.id)}
-														optionValue="id"
-														optionTextValue="version_number"
-														placeholder="Select version..."
-														itemComponent={(props) => (
-															<SelectItem item={props.item}>
-																<div class={styles["version-select-item"]}>
-																	<span class={styles["version-name"]}>
-																		{props.item.rawValue.version_number}
-																	</span>
-																	<div class={styles["version-badges"]}>
-																		<Badge
-																			variant={
-																				props.item.rawValue.release_type ===
-																				"release"
-																					? "success"
-																					: props.item.rawValue.release_type ===
-																							"beta"
-																						? "warning"
-																						: "error"
-																			}
-																		>
-																			{props.item.rawValue.release_type}
-																		</Badge>
-																		<For
-																			each={props.item.rawValue.loaders.slice(
-																				0,
-																				2,
-																			)}
-																		>
-																			{(loader) => (
-																				<Badge variant="info">{loader}</Badge>
-																			)}
-																		</For>
-																	</div>
-																</div>
-															</SelectItem>
-														)}
-													>
-														<SelectTrigger
-															class={styles["version-select-trigger"]}
-														>
-															<SelectValue<ResourceVersion>>
-																{(s) =>
-																	s.selectedOption()?.version_number ||
-																	"Select version..."
-																}
-															</SelectValue>
-														</SelectTrigger>
-														<SelectContent />
-													</Select>
-												</div>
-
+										<TabsContent value="versions">
+											<Show when={!focusedVersionId()}>
 												<Show
 													when={
-														(primaryVersion()?.dependencies?.length ?? 0) > 0
+														projectContentReady() &&
+														!resources.state.versionsLoading
 													}
-													fallback={
-														<div class={styles["empty-state"]}>
-															No dependencies listed for this version.
-														</div>
-													}
+													fallback={<ResourceVersionsLoading />}
 												>
-													<div class={styles["dependency-groups"]}>
-														{(() => {
-															const deps = primaryVersion()?.dependencies || [];
-															const required = deps.filter(
-																(d) => d.dependency_type === "required",
-															);
-															const optional = deps.filter(
-																(d) =>
-																	d.dependency_type === "optional" ||
-																	d.dependency_type === "embedded",
-															);
-															const incompatible = deps.filter(
-																(d) => d.dependency_type === "incompatible",
-															);
+													<div class={styles["version-page"]}>
+														<VersionFilterBar
+															searchText={versionFilter()}
+															onSearchTextChange={(text) => {
+																setVersionFilter(text);
+															}}
+															selectedVersions={gameVersionChips()}
+															onSelectedVersionsChange={setGameVersionChips}
+															availableVersions={uniqueGameVersions()}
+															releaseTypes={versionReleaseTypes()}
+															onReleaseTypesChange={(types) => {
+																setVersionReleaseTypes(new Set(types));
+															}}
+															loaders={versionLoaders()}
+															onLoadersChange={(loaders) => {
+																setVersionLoaders(new Set(loaders));
+															}}
+															availableLoaders={uniqueLoaders()}
+															totalCount={resources.state.versions.length}
+															filteredCount={filteredVersions().length}
+														/>
 
-															const currentProject = project();
-															if (!currentProject) return null;
-
-															return (
-																<>
-																	<Show when={required.length > 0}>
-																		<div class={styles["dependency-group"]}>
-																			<h3
-																				class={`${styles["group-title"]} ${styles.required}`}
-																			>
-																				Required
-																			</h3>
-																			<div class={styles["dependency-list"]}>
-																				<For each={required}>
-																					{(dep) => (
-																						<DependencyItem
-																							router={activeRouter()}
-																							dependency={dep}
-																							platform={currentProject.source}
-																							project={dependencyData()?.get(
-																								dep.project_id,
-																							)}
-																						/>
-																					)}
-																				</For>
-																			</div>
-																		</div>
-																	</Show>
-
-																	<Show when={optional.length > 0}>
-																		<div class={styles["dependency-group"]}>
-																			<h3
-																				class={`${styles["group-title"]} ${styles.optional}`}
-																			>
-																				Optional / Embedded
-																			</h3>
-																			<div class={styles["dependency-list"]}>
-																				<For each={optional}>
-																					{(dep) => (
-																						<DependencyItem
-																							router={activeRouter()}
-																							dependency={dep}
-																							platform={currentProject.source}
-																							project={dependencyData()?.get(
-																								dep.project_id,
-																							)}
-																						/>
-																					)}
-																				</For>
-																			</div>
-																		</div>
-																	</Show>
-
-																	<Show when={incompatible.length > 0}>
-																		<div class={styles["dependency-group"]}>
-																			<h3
-																				class={`${styles["group-title"]} ${styles.incompatible}`}
-																			>
-																				Incompatible
-																			</h3>
-																			<div class={styles["dependency-list"]}>
-																				<For each={incompatible}>
-																					{(dep) => (
-																						<DependencyItem
-																							router={activeRouter()}
-																							dependency={dep}
-																							platform={currentProject.source}
-																							project={dependencyData()?.get(
-																								dep.project_id,
-																							)}
-																						/>
-																					)}
-																				</For>
-																			</div>
-																		</div>
-																	</Show>
-																</>
-															);
-														})()}
-													</div>
-												</Show>
-											</div>
-										</Show>
-
-										<Show when={activeTab() === "versions"}>
-											<div class={styles["version-page"]}>
-												<VersionFilterBar
-													searchText={versionFilter()}
-													onSearchTextChange={(text) => {
-														setVersionFilter(text);
-													}}
-													selectedVersions={gameVersionChips()}
-													onSelectedVersionsChange={setGameVersionChips}
-													availableVersions={uniqueGameVersions()}
-													releaseTypes={versionReleaseTypes()}
-													onReleaseTypesChange={(types) => {
-														setVersionReleaseTypes(new Set(types));
-													}}
-													loaders={versionLoaders()}
-													onLoadersChange={(loaders) => {
-														setVersionLoaders(new Set(loaders));
-													}}
-													availableLoaders={uniqueLoaders()}
-													totalCount={resources.state.versions.length}
-													filteredCount={filteredVersions().length}
-												/>
-
-												<Show when={selectedInstance() && !isModpack()}>
-													<div
-														class={styles["version-compatibility-notice"]}
-														classList={{
-															[styles["version-compatibility-notice--warning"]]:
-																compatibleVersionCount() === 0,
-														}}
-													>
-														<div class={styles["version-compatibility-title"]}>
-															<Show
-																when={compatibleVersionCount() > 0}
-																fallback="No compatible versions for selected instance"
+														<Show when={selectedInstance() && !isModpack()}>
+															<div
+																class={styles["version-compatibility-notice"]}
+																classList={{
+																	[styles[
+																		"version-compatibility-notice--warning"
+																	]]: compatibleVersionCount() === 0,
+																}}
 															>
-																Showing {compatibleVersionCount()} compatible
-																version
-																{compatibleVersionCount() === 1 ? "" : "s"}
+																<div
+																	class={styles["version-compatibility-title"]}
+																>
+																	<Show
+																		when={compatibleVersionCount() > 0}
+																		fallback="No compatible versions for selected instance"
+																	>
+																		Showing {compatibleVersionCount()}{" "}
+																		compatible version
+																		{compatibleVersionCount() === 1 ? "" : "s"}
+																	</Show>
+																</div>
+																<div
+																	class={
+																		styles["version-compatibility-description"]
+																	}
+																>
+																	Target: {selectedInstance()?.name} · Minecraft{" "}
+																	{selectedInstance()?.minecraftVersion} ·{" "}
+																	{formatLoaderName(
+																		selectedInstance()?.modloader,
+																	)}
+																</div>
+															</div>
+														</Show>
+
+														<div
+															class={`${styles["version-list"]} ${styles["full-width"]}`}
+														>
+															<Show
+																when={filteredVersions().length > 0}
+																fallback={
+																	<div class={styles["version-empty-state"]}>
+																		<div
+																			class={
+																				styles["version-empty-state__title"]
+																			}
+																		>
+																			{versionEmptyState().title}
+																		</div>
+																		<div
+																			class={
+																				styles[
+																					"version-empty-state__description"
+																				]
+																			}
+																		>
+																			{versionEmptyState().description}
+																		</div>
+																	</div>
+																}
+															>
+																<For each={paginatedVersions()}>
+																	{(version) => (
+																		<VersionSummaryRow
+																			version={version}
+																			onSelect={selectVersion}
+																			actionLabel={versionActionLabel(version)}
+																			actionKind={versionActionKind(version)}
+																			actionDisabled={versionActionDisabled(
+																				version,
+																				true,
+																			)}
+																			onAction={handleVersionAction}
+																			onPrefetch={prefetchVersionDetails}
+																		/>
+																	)}
+																</For>
+
+																<Show when={totalPages() > 1}>
+																	<div class={styles["version-pagination"]}>
+																		<Pagination
+																			count={totalPages()}
+																			page={versionPage()}
+																			onPageChange={setVersionPage}
+																			itemComponent={(props) => (
+																				<PaginationItem page={props.page}>
+																					{props.page}
+																				</PaginationItem>
+																			)}
+																			ellipsisComponent={() => (
+																				<PaginationEllipsis />
+																			)}
+																		>
+																			<PaginationPrevious />
+																			<PaginationItems />
+																			<PaginationNext />
+																		</Pagination>
+																	</div>
+																</Show>
 															</Show>
 														</div>
-														<div
-															class={
-																styles["version-compatibility-description"]
-															}
-														>
-															Target: {selectedInstance()?.name} · Minecraft{" "}
-															{selectedInstance()?.minecraftVersion} ·{" "}
-															{formatLoaderName(selectedInstance()?.modloader)}
-														</div>
 													</div>
 												</Show>
-
-												<div
-													class={`${styles["version-list"]} ${styles["full-width"]}`}
-												>
-													<Show
-														when={!resources.state.versionsLoading}
-														fallback={
-															<InlineLoadingRow message="Loading versions..." />
-														}
-													>
+											</Show>
+											<Show when={focusedVersionId()}>
+												<Show
+													when={focusedVersion()}
+													fallback={
 														<Show
-															when={filteredVersions().length > 0}
+															when={!versionDetails.error}
 															fallback={
-																<div class={styles["version-empty-state"]}>
-																	<div
-																		class={styles["version-empty-state__title"]}
-																	>
-																		{versionEmptyState().title}
-																	</div>
+																<div class={styles["version-focus-loading"]}>
+																	<strong>Version details unavailable</strong>
+																	<span>{String(versionDetails.error)}</span>
 																	<div
 																		class={
-																			styles["version-empty-state__description"]
+																			styles["version-focus-error-actions"]
 																		}
 																	>
-																		{versionEmptyState().description}
+																		<Button
+																			size="sm"
+																			onClick={() =>
+																				setVersionDetailsRefresh(
+																					(value) => value + 1,
+																				)
+																			}
+																		>
+																			Retry
+																		</Button>
+																		<Button
+																			size="sm"
+																			variant="outline"
+																			onClick={showAllVersions}
+																		>
+																			All versions
+																		</Button>
 																	</div>
 																</div>
 															}
 														>
-															<For each={paginatedVersions()}>
-																{(version) => (
-																	<div class={styles["version-item"]}>
-																		<div class={styles["version-main-info"]}>
-																			<span class={styles["version-name"]}>
-																				{version.version_number}
-																			</span>
-																			<span class={styles["version-filename"]}>
-																				{version.file_name}
-																			</span>
-																		</div>
-
-																		<div class={styles["version-loaders-row"]}>
-																			<div class={styles["meta-group"]}>
-																				<span class={styles["field-label"]}>
-																					Versions
-																				</span>
-																				<VersionTags
-																					versions={version.game_versions}
-																				/>
-																			</div>
-																			<div class={styles["meta-group"]}>
-																				<span class={styles["field-label"]}>
-																					Loaders
-																				</span>
-																				<div class={styles["version-meta"]}>
-																					<For each={version.loaders}>
-																						{(l) => (
-																							<Badge variant="info" round>
-																								{l}
-																							</Badge>
-																						)}
-																					</For>
-																				</div>
-																			</div>
-																		</div>
-
-																		<div class={styles["version-actions"]}>
-																			<Badge
-																				variant={
-																					version.release_type === "release"
-																						? "success"
-																						: version.release_type === "beta"
-																							? "warning"
-																							: "error"
-																				}
-																				round
-																			>
-																				{version.release_type}
-																			</Badge>
-																			<Button
-																				size="sm"
-																				disabled={
-																					isVersionInstalling(version.id) ||
-																					(!!resources.state
-																						.selectedInstanceId &&
-																						!isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						) &&
-																						getCompatibility(version).type ===
-																							"incompatible")
-																				}
-																				tooltip_text={(() => {
-																					const instId =
-																						resources.state.selectedInstanceId;
-																					const comp =
-																						getCompatibility(version);
-
-																					if (
-																						instId &&
-																						!isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						) &&
-																						comp.type !== "compatible"
-																					) {
-																						return comp.reason;
-																					}
-																					if (isVersionInstalling(version.id))
-																						return "Installation in progress";
-																					if (
-																						isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)
-																					)
-																						return "Already installed - Click to remove";
-																					if (!isModpack() && !instId)
-																						return "Select an instance to install";
-																					return version.download_url
-																						? "Click to install"
-																						: "External download required";
-																				})()}
-																				onClick={() => {
-																					if (
-																						isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)
-																					) {
-																						if (
-																							confirmVersionId() !== version.id
-																						) {
-																							setConfirmVersionId(version.id);
-																							setTimeout(
-																								() => setConfirmVersionId(null),
-																								3000,
-																							);
-																							return;
-																						}
-																						handleUninstall();
-																						setConfirmVersionId(null);
-																					} else if (
-																						getCompatibility(version).type !==
-																						"incompatible"
-																					) {
-																						handleInstall(version);
-																					}
-																				}}
-																				style={{ width: "100%" }}
-																				variant={
-																					isVersionInstalled(
-																						version.id,
-																						version.hash,
-																					)
-																						? "outline"
-																						: version.download_url
-																							? "solid"
-																							: "outline"
-																				}
-																				color={(() => {
-																					if (
-																						isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)
-																					)
-																						return "destructive";
-																					const comp =
-																						getCompatibility(version);
-																					if (comp.type === "warning")
-																						return "warning";
-																					if (comp.type === "incompatible")
-																						return "none"; // Subdued
-																					return undefined;
-																				})()}
-																			>
-																				<Show
-																					when={isVersionInstalling(version.id)}
-																				>
-																					Installing...
-																				</Show>
-																				<Show
-																					when={
-																						!isVersionInstalling(version.id)
-																					}
-																				>
-																					<Show
-																						when={isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)}
-																					>
-																						<Show
-																							when={
-																								confirmVersionId() ===
-																								version.id
-																							}
-																							fallback="Uninstall"
-																						>
-																							Confirm?
-																						</Show>
-																					</Show>
-																					<Show
-																						when={
-																							!isVersionInstalled(
-																								version.id,
-																								version.hash,
-																							)
-																						}
-																					>
-																						<Show
-																							when={
-																								!isModpack() &&
-																								!resources.state
-																									.selectedInstanceId
-																							}
-																						>
-																							Select Instance
-																						</Show>
-																						<Show
-																							when={
-																								isModpack() ||
-																								resources.state
-																									.selectedInstanceId
-																							}
-																						>
-																							<Show
-																								when={
-																									getCompatibility(version)
-																										.type === "incompatible"
-																								}
-																								fallback={
-																									version.download_url
-																										? "Install"
-																										: "External"
-																								}
-																							>
-																								{(() => {
-																									const instId =
-																										resources.state
-																											.selectedInstanceId;
-																									const inst =
-																										instancesState.instances.find(
-																											(i) => i.id === instId,
-																										);
-																									if (
-																										(inst?.modloader?.toLowerCase() ===
-																											"vanilla" ||
-																											!inst?.modloader) &&
-																										(project()
-																											?.resource_type ===
-																											"mod" ||
-																											project()
-																												?.resource_type ===
-																												"shader")
-																									) {
-																										return "Unsupported";
-																									}
-																									return "Incompatible";
-																								})()}
-																							</Show>
-																						</Show>
-																					</Show>
-																				</Show>
-																			</Button>
-																		</div>
-																	</div>
-																)}
-															</For>
-
-															<Show when={totalPages() > 1}>
-																<div class={styles["version-pagination"]}>
-																	<Pagination
-																		count={totalPages()}
-																		page={versionPage()}
-																		onPageChange={setVersionPage}
-																		itemComponent={(props) => (
-																			<PaginationItem page={props.page}>
-																				{props.page}
-																			</PaginationItem>
-																		)}
-																		ellipsisComponent={() => (
-																			<PaginationEllipsis />
-																		)}
-																	>
-																		<PaginationPrevious />
-																		<PaginationItems />
-																		<PaginationNext />
-																	</Pagination>
-																</div>
-															</Show>
+															<VersionFocusMainLoading
+																onBack={showAllVersions}
+															/>
 														</Show>
-													</Show>
-												</div>
-											</div>
-										</Show>
+													}
+												>
+													{(version) => (
+														<VersionFocusMain
+															version={version()}
+															details={versionDetails.latest}
+															loading={versionDetails.loading}
+															error={
+																versionDetails.error
+																	? String(versionDetails.error)
+																	: undefined
+															}
+															onBack={showAllVersions}
+															onRetry={() =>
+																setVersionDetailsRefresh((value) => value + 1)
+															}
+															onCopyHash={() => void copyFocusedHash()}
+															onContentLink={(url) =>
+																void handleDescriptionLink(url)
+															}
+														/>
+													)}
+												</Show>
+											</Show>
+										</TabsContent>
 									</div>
 								</div>
-							</div>
+							</Tabs>
+							<Show when={focusedVersionId()}>
+								<div
+									class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]} ${styles["version-focus-sidebar-card"]} ${styles["mobile-version-sidebar"]}`}
+								>
+									<Show
+										when={focusedVersion()}
+										fallback={
+											<VersionFocusSidebarLoading sections="metadata" />
+										}
+									>
+										{focusedSidebarContent("metadata")}
+									</Show>
+								</div>
+							</Show>
 						</div>
 					</div>
 
 					<div
 						class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]} ${styles["desktop-sidebar-only"]}`}
+						classList={{
+							[styles["resource-overview-sidebar-card"]]: !focusedVersionId(),
+							[styles["version-focus-sidebar-card"]]: Boolean(
+								focusedVersionId(),
+							),
+						}}
 					>
-						{sidebarContent()}
+						<Show
+							when={focusedVersionId()}
+							fallback={
+								<Show
+									when={projectContentReady()}
+									fallback={<ResourceDetailsSidebarLoading />}
+								>
+									{sidebarContent()}
+								</Show>
+							}
+						>
+							<Show
+								when={focusedVersion()}
+								fallback={<VersionFocusSidebarLoading />}
+							>
+								{focusedSidebarContent()}
+							</Show>
+						</Show>
 					</div>
 
 					<ImageViewer
@@ -3063,10 +3212,11 @@ const ResourceDetailsPage: Component<{
 						<div class={styles["link-preview-statusBar"]}>{hoveredLink()}</div>
 					</Show>
 
-					<InstanceSelectionDialog
+					<ResourceInstanceSelectionDialog
 						isOpen={isInstanceDialogOpen()}
 						onClose={() => {
 							setIsInstanceDialogOpen(false);
+							setInstallContext(null);
 							resources.setInstallRequest(null);
 						}}
 						onSelect={handleSelectInstance}
@@ -3074,6 +3224,14 @@ const ResourceDetailsPage: Component<{
 						project={project()}
 						version={installContext()?.version}
 						versions={resources.state.versions}
+						installType={installType()}
+					/>
+					<WorldSelectionDialog
+						isOpen={Boolean(worldInstall())}
+						initialInstanceId={worldInstall()?.instanceId}
+						projectName={worldInstall()?.project.name}
+						onClose={() => setWorldInstall(null)}
+						onSelectWorld={handleSelectWorld}
 					/>
 				</div>
 			</Show>
