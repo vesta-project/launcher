@@ -1,3 +1,5 @@
+import ArrowBackIcon from "@assets/icons/navigation/arrow-back.svg";
+import ArrowForwardIcon from "@assets/icons/navigation/arrow-forward.svg";
 import Button, { type ButtonProps } from "@ui/button/button";
 import { cn } from "@utils/ui";
 import type { CreateEmblaCarouselType } from "embla-carousel-solid";
@@ -218,20 +220,7 @@ const CarouselPrevious: Component<CarouselButtonProps> = (rawProps) => {
 			onClick={scrollPrev}
 			{...others}
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class={styles["carousel-control-icon"]}
-			>
-				<path d="M5 12l14 0" />
-				<path d="M5 12l6 6" />
-				<path d="M5 12l6 -6" />
-			</svg>
+			<ArrowBackIcon class={styles["carousel-control-icon"]} />
 			<span class={styles["sr-only"]}>Previous slide</span>
 		</Button>
 	);
@@ -260,20 +249,7 @@ const CarouselNext: Component<CarouselButtonProps> = (rawProps) => {
 			onClick={scrollNext}
 			{...others}
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class={styles["carousel-control-icon"]}
-			>
-				<path d="M5 12l14 0" />
-				<path d="M13 18l6 -6" />
-				<path d="M13 6l6 6" />
-			</svg>
+			<ArrowForwardIcon class={styles["carousel-control-icon"]} />
 			<span class={styles["sr-only"]}>Next slide</span>
 		</Button>
 	);

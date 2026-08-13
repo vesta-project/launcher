@@ -1,4 +1,4 @@
-import PlusIcon from "@assets/plus.svg";
+import PlusIcon from "@assets/icons/actions/add.svg";
 import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
 import {

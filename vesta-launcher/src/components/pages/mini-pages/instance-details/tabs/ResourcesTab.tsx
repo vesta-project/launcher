@@ -1,8 +1,11 @@
-import ReloadIcon from "@assets/reload.svg";
-import PlusIcon from "@assets/plus.svg";
-import RightArrowIcon from "@assets/right-arrow.svg";
-import SearchIcon from "@assets/search.svg";
-import TrashIcon from "@assets/trash.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
+import PlusIcon from "@assets/icons/actions/add.svg";
+import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import CloseIcon from "@assets/icons/actions/close.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
 import { flexRender } from "@tanstack/solid-table";
 import { createVirtualizer } from "@tanstack/solid-virtual";
 import { ResourceAvatar } from "@ui/avatar";
@@ -249,17 +252,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									class={styles["row-actions-trigger-button"]}
 									onClick={(event: MouseEvent) => event.stopPropagation()}
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="currentColor"
-									>
-										<circle cx="12" cy="5" r="1.5" />
-										<circle cx="12" cy="12" r="1.5" />
-										<circle cx="12" cy="19" r="1.5" />
-									</svg>
+									<MoreIcon width="16" height="16" />
 								</DropdownMenuTrigger>
 								<DropdownMenuContent>
 									<DropdownMenuItem
@@ -543,20 +536,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								onClick={() => props.resourcesStore.clearSelection()}
 								title="Clear Selection"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="16"
-									height="16"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<line x1="18" y1="6" x2="6" y2="18" />
-									<line x1="6" y1="6" x2="18" y2="18" />
-								</svg>
+								<CloseIcon width="16" height="16" />
 							</button>
 							<span class={styles["selection-count"]}>
 								{selectionCount()} resources selected
@@ -574,21 +554,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										: undefined
 								}
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-									<polyline points="7 10 12 15 17 10" />
-									<line x1="12" y1="15" x2="12" y2="3" />
-								</svg>
+								<DownloadIcon width="14" height="14" />
 								<Show
 									when={!isCompactTable()}
 									fallback={<span>({props.selectedToUpdateCount})</span>}

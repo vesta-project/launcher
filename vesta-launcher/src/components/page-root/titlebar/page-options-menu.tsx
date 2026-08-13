@@ -1,9 +1,9 @@
-import DesktopAddIcon from "@assets/desktop-add.svg";
-import EllipsisVIcon from "@assets/ellipsis-v.svg";
-import FolderIcon from "@assets/folder.svg";
-import LinkIcon from "@assets/link.svg";
-import PinIcon from "@assets/pin.svg";
-import PinOffIcon from "@assets/pin-off.svg";
+import DesktopAddIcon from "@assets/icons/actions/desktop-add.svg";
+import EllipsisVIcon from "@assets/icons/content/ellipsis-v.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
+import PinIcon from "@assets/icons/actions/pin.svg";
+import PinOffIcon from "@assets/icons/actions/unpin.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";

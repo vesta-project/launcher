@@ -1,5 +1,6 @@
-import FilterIcon from "@assets/filter.svg";
-import SearchIcon from "@assets/search.svg";
+import FilterIcon from "@assets/icons/content/filter.svg";
+import DesktopAddIcon from "@assets/icons/actions/desktop-add.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { sourcesForResourceType } from "@resources/source-catalog";
@@ -270,28 +271,7 @@ export function ResourceToolbar(props: {
 								fallback={
 									<div class={styles["instance-trigger-content"]}>
 										<div class={styles["instance-icon-placeholder"]}>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-											>
-												<rect
-													x="2"
-													y="3"
-													width="20"
-													height="14"
-													rx="2"
-													ry="2"
-												/>
-												<line x1="8" y1="21" x2="16" y2="21" />
-												<line x1="12" y1="17" x2="12" y2="21" />
-											</svg>
+											<DesktopAddIcon width="16" height="16" />
 										</div>
 										<span class={styles["instance-trigger-name"]}>
 											Select an instance

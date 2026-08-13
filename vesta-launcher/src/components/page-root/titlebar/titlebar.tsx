@@ -1,4 +1,4 @@
-import HelpIcon from "@assets/help.svg";
+import HelpIcon from "@assets/icons/content/help.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { getVersion } from "@tauri-apps/api/app";
 import { WindowControls } from "@tauri-controls-v2/solid";

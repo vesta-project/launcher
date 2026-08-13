@@ -1,6 +1,6 @@
-import CurseForgeIcon from "@assets/curseforge.svg";
-import ModrinthIcon from "@assets/modrinth.svg";
-import SmithedIcon from "@assets/smithed.svg";
+import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
+import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
+import SmithedIcon from "@assets/branding/sources/smithed.svg";
 import type { Component } from "solid-js";
 import type { ResourceType, SourcePlatform } from "@stores/resources";
 

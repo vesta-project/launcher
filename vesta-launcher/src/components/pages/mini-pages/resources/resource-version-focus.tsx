@@ -1,19 +1,19 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
-import ClipboardIcon from "@assets/clipboard.svg";
-import CubeIcon from "@assets/cube.svg";
-import DependenciesIcon from "@assets/dependencies.svg";
-import DownloadIcon from "@assets/download-compact.svg";
-import EnvironmentIcon from "@assets/environment.svg";
-import FabricIcon from "@assets/fabric-logo.svg";
-import FileIcon from "@assets/file.svg";
-import ForgeIcon from "@assets/forge-logo.svg";
-import HistoryIcon from "@assets/history.svg";
-import NeoForgeIcon from "@assets/neoforge-logo.svg";
-import OpenIcon from "@assets/open.svg";
-import QuiltIcon from "@assets/quilt-logo.svg";
-import RightArrowIcon from "@assets/right-arrow.svg";
-import TagIcon from "@assets/tag.svg";
-import TrashIcon from "@assets/trash.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import ClipboardIcon from "@assets/icons/actions/copy.svg";
+import CubeIcon from "@assets/icons/content/cube.svg";
+import DependenciesIcon from "@assets/icons/content/dependencies.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import EnvironmentIcon from "@assets/icons/content/environment.svg";
+import FabricIcon from "@assets/branding/modloaders/fabric-logo.svg";
+import FileIcon from "@assets/icons/content/file.svg";
+import ForgeIcon from "@assets/branding/modloaders/forge-logo.svg";
+import HistoryIcon from "@assets/icons/content/history.svg";
+import NeoForgeIcon from "@assets/branding/modloaders/neoforge-logo.svg";
+import OpenIcon from "@assets/icons/actions/external-link.svg";
+import QuiltIcon from "@assets/branding/modloaders/quilt-logo.svg";
+import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
+import TagIcon from "@assets/icons/content/tag.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
 import type {
 	ResourceDependency,

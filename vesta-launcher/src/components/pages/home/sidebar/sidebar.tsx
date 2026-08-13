@@ -1,8 +1,8 @@
-import BellIcon from "@assets/bell.svg";
-import LibraryIcon from "@assets/cube.svg";
-import GearIcon from "@assets/gear.svg";
-import PlusIcon from "@assets/plus.svg";
-import SearchIcon from "@assets/search.svg";
+import BellIcon from "@assets/icons/status/bell.svg";
+import LibraryIcon from "@assets/icons/content/cube.svg";
+import GearIcon from "@assets/icons/content/gear.svg";
+import PlusIcon from "@assets/icons/actions/add.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import {
 	dismissToLibrary,
 	openMiniPage,

@@ -1,9 +1,11 @@
-import BackIcon from "@assets/back-arrow.svg";
-import DownloadIcon from "@assets/download-compact.svg";
-import FolderIcon from "@assets/folder.svg";
-import PlusIcon from "@assets/plus.svg";
-import ReloadIcon from "@assets/reload.svg";
-import TrashIcon from "@assets/trash.svg";
+import BackIcon from "@assets/icons/navigation/arrow-back.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import PlusIcon from "@assets/icons/actions/add.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
+import PackIcon from "@assets/icons/content/layers.svg";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
 import type {
@@ -49,21 +51,6 @@ import {
 	Show,
 } from "solid-js";
 import styles from "./WorldDatapacksView.module.css";
-
-const MoreIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<circle cx="12" cy="5" r="1.5" />
-		<circle cx="12" cy="12" r="1.5" />
-		<circle cx="12" cy="19" r="1.5" />
-	</svg>
-);
-
-const PackIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<path d="m12 3 9 5-9 5-9-5 9-5Z" />
-		<path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
-	</svg>
-);
 
 const providerName = (platform: string | null) => {
 	if (!platform || platform === "manual" || platform === "local")

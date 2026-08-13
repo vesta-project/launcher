@@ -1,7 +1,9 @@
-import FolderIcon from "@assets/folder.svg";
-import CopyIcon from "@assets/link.svg";
-import RefreshIcon from "@assets/refresh.svg";
-import TrashIcon from "@assets/trash.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import CopyIcon from "@assets/icons/content/link.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import GridIcon from "@assets/icons/content/grid.svg";
+import ListIcon from "@assets/icons/content/list.svg";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import {
@@ -143,24 +145,7 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 									title="List View"
 									aria-label="List View"
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<line x1="8" y1="6" x2="21" y2="6" />
-										<line x1="8" y1="12" x2="21" y2="12" />
-										<line x1="8" y1="18" x2="21" y2="18" />
-										<line x1="3" y1="6" x2="3.01" y2="6" />
-										<line x1="3" y1="12" x2="3.01" y2="12" />
-										<line x1="3" y1="18" x2="3.01" y2="18" />
-									</svg>
+									<ListIcon width="14" height="14" />
 								</ToggleGroupItem>
 								<ToggleGroupItem
 									value="grid"
@@ -168,22 +153,7 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 									title="Grid View"
 									aria-label="Grid View"
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<rect x="3" y="3" width="7" height="7" />
-										<rect x="14" y="3" width="7" height="7" />
-										<rect x="14" y="14" width="7" height="7" />
-										<rect x="3" y="14" width="7" height="7" />
-									</svg>
+									<GridIcon width="14" height="14" />
 								</ToggleGroupItem>
 							</ToggleGroup>
 						</div>

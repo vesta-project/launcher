@@ -1,9 +1,10 @@
-﻿import CapeIcon from "@assets/cape-icon.svg";
-import PlusIcon from "@assets/plus.svg";
+﻿import CapeIcon from "@assets/icons/content/cape-icon.svg";
+import CheckIcon from "@assets/icons/controls/check.svg";
+import PlusIcon from "@assets/icons/actions/add.svg";
 // Assets
-import RefreshIcon from "@assets/refresh.svg";
-import ViewIcon from "@assets/search.svg";
-import SkinIcon from "@assets/skin-icon.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import ViewIcon from "@assets/icons/content/search.svg";
+import SkinIcon from "@assets/icons/content/skin-icon.svg";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -1011,9 +1012,7 @@ export function AccountSettingsTab() {
 												</Tooltip>
 												<Show when={isSelected()}>
 													<span class={styles.selectedBadge}>
-														<svg viewBox="0 0 24 24">
-															<polyline points="20 6 9 17 4 12" />
-														</svg>
+														<CheckIcon />
 													</span>
 												</Show>
 											</div>
@@ -1260,9 +1259,7 @@ export function AccountSettingsTab() {
 													<span class={styles.noneLabel}>NONE</span>
 													<Show when={!previewCapeId()}>
 														<span class={styles.selectedBadge}>
-															<svg viewBox="0 0 24 24">
-																<polyline points="20 6 9 17 4 12" />
-															</svg>
+															<CheckIcon />
 														</span>
 													</Show>
 												</button>
@@ -1288,9 +1285,7 @@ export function AccountSettingsTab() {
 																>
 																	<Show when={isSelected()}>
 																		<span class={styles.selectedBadge}>
-																			<svg viewBox="0 0 24 24">
-																				<polyline points="20 6 9 17 4 12" />
-																			</svg>
+																			<CheckIcon />
 																		</span>
 																	</Show>
 																</TooltipTrigger>

@@ -389,59 +389,21 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 			id: "browse" as const,
 			title: "Browse Modpacks",
 			description: "Discover curated packs from Modrinth and CurseForge",
-			icon: (
-				<svg
-					width="32"
-					height="32"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-				>
-					<circle cx="11" cy="11" r="8" />
-					<line x1="21" y1="21" x2="16.65" y2="16.65" />
-				</svg>
-			),
+			icon: <SearchIcon width="32" height="32" stroke-width="1.5" />,
 			action: () => handleOpenModpackPicker(),
 		},
 		{
 			id: "import" as const,
 			title: "Import from Launcher",
 			description: "Bring in instances from CurseForge, Prism, and others",
-			icon: (
-				<svg
-					width="32"
-					height="32"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-				>
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-					<polyline points="17 8 12 3 7 8" />
-					<line x1="12" y1="3" x2="12" y2="15" />
-				</svg>
-			),
+			icon: <UploadIcon width="32" height="32" stroke-width="1.5" />,
 			action: () => setMode("import"),
 		},
 		{
 			id: "blank" as const,
 			title: "Blank Instance",
 			description: "Start from scratch with any version and modloader",
-			icon: (
-				<svg
-					width="32"
-					height="32"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-				>
-					<rect x="3" y="3" width="18" height="18" rx="2" />
-					<line x1="12" y1="8" x2="12" y2="16" />
-					<line x1="8" y1="12" x2="16" y2="12" />
-				</svg>
-			),
+			icon: <AddIcon width="32" height="32" stroke-width="1.5" />,
 			action: () => setMode("blank"),
 		},
 	];
@@ -495,16 +457,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							class={styles["first-instance-back"]}
 							onClick={() => setMode("menu")}
 						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.5"
-							>
-								<polyline points="15 18 9 12 15 6" />
-							</svg>
+							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
 							Back
 						</button>
 						<h3 class={styles["modpack-picker-title"]}>Popular Modpacks</h3>
@@ -537,17 +490,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 											when={modpack.iconUrl}
 											fallback={
 												<div class={styles["modpack-card-icon-placeholder"]}>
-													<svg
-														width="28"
-														height="28"
-														viewBox="0 0 24 24"
-														fill="none"
-														stroke="currentColor"
-														stroke-width="1.5"
-													>
-														<rect x="3" y="3" width="18" height="18" rx="2" />
-														<path d="M3 9h18" />
-													</svg>
+													<ModpackIcon width="28" height="28" />
 												</div>
 											}
 										>
@@ -577,16 +520,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							class={styles["first-instance-back"]}
 							onClick={() => setMode("modpack-picker")}
 						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.5"
-							>
-								<polyline points="15 18 9 12 15 6" />
-							</svg>
+							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
 							Back
 						</button>
 
@@ -596,17 +530,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 									when={modpack.iconUrl}
 									fallback={
 										<div class={styles["modpack-card-icon-placeholder"]}>
-											<svg
-												width="40"
-												height="40"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="1.5"
-											>
-												<rect x="3" y="3" width="18" height="18" rx="2" />
-												<path d="M3 9h18" />
-											</svg>
+											<ModpackIcon width="40" height="40" />
 										</div>
 									}
 								>
@@ -623,18 +547,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 						<div class={styles["modpack-detail-meta"]}>
 							<span>
-								<svg
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-								>
-									<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-									<polyline points="7 10 12 15 17 10" />
-									<line x1="12" y1="15" x2="12" y2="3" />
-								</svg>
+								<DownloadIcon width="14" height="14" />
 								{formatDownloads(modpack.downloadCount)} downloads
 							</span>
 						</div>
@@ -684,16 +597,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 								}
 							}}
 						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.5"
-							>
-								<polyline points="15 18 9 12 15 6" />
-							</svg>
+							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
 							Back
 						</button>
 						<h3 class={styles["first-instance-form-title"]}>
@@ -748,16 +652,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							class={styles["first-instance-back"]}
 							onClick={() => setMode("menu")}
 						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.5"
-							>
-								<polyline points="15 18 9 12 15 6" />
-							</svg>
+							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
 							Back
 						</button>
 						<h3 class={styles["first-instance-form-title"]}>Blank Instance</h3>
@@ -820,3 +715,9 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 }
 
 export default FirstInstanceStep;
+import AddIcon from "@assets/icons/actions/add.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import UploadIcon from "@assets/icons/actions/upload.svg";
+import ModpackIcon from "@assets/icons/content/modpack.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
+import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";

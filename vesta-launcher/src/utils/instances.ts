@@ -1,13 +1,13 @@
-import PlaceholderImage1 from "@assets/placeholder-images/placeholder-image1.png";
-import PlaceholderImage2 from "@assets/placeholder-images/placeholder-image2.png";
-import PlaceholderImage3 from "@assets/placeholder-images/placeholder-image3.png";
-import PlaceholderImage4 from "@assets/placeholder-images/placeholder-image4.png";
-import PlaceholderImage5 from "@assets/placeholder-images/placeholder-image5.png";
-import PlaceholderImage6 from "@assets/placeholder-images/placeholder-image6.png";
-import PlaceholderImage7 from "@assets/placeholder-images/placeholder-image7.png";
-import PlaceholderImage8 from "@assets/placeholder-images/placeholder-image8.png";
-import PlaceholderImage9 from "@assets/placeholder-images/placeholder-image9.png";
-import PlaceholderImage10 from "@assets/placeholder-images/placeholder-image10.png";
+import PlaceholderImage1 from "@assets/images/placeholders/placeholder-image1.png";
+import PlaceholderImage2 from "@assets/images/placeholders/placeholder-image2.png";
+import PlaceholderImage3 from "@assets/images/placeholders/placeholder-image3.png";
+import PlaceholderImage4 from "@assets/images/placeholders/placeholder-image4.png";
+import PlaceholderImage5 from "@assets/images/placeholders/placeholder-image5.png";
+import PlaceholderImage6 from "@assets/images/placeholders/placeholder-image6.png";
+import PlaceholderImage7 from "@assets/images/placeholders/placeholder-image7.png";
+import PlaceholderImage8 from "@assets/images/placeholders/placeholder-image8.png";
+import PlaceholderImage9 from "@assets/images/placeholders/placeholder-image9.png";
+import PlaceholderImage10 from "@assets/images/placeholders/placeholder-image10.png";
 import {
 	clearRunning,
 	instancesState,

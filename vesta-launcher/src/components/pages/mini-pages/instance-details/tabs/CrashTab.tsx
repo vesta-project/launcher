@@ -1,5 +1,5 @@
-import CopyIcon from "@assets/clipboard.svg";
-import LinkIcon from "@assets/link.svg";
+import CopyIcon from "@assets/icons/actions/copy.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import type { InstalledResource } from "@stores/resources";

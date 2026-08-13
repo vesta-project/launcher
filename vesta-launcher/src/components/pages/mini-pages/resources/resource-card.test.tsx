@@ -52,10 +52,10 @@ vi.mock("@utils/resources", () => ({
 	getProjectCompatibilityForInstance: () => ({ type: "compatible" }),
 }));
 vi.mock("@ui/toast/toast", () => ({ showToast: mocks.showToast }));
-vi.mock("@assets/download-compact.svg", () => ({
+vi.mock("@assets/icons/actions/download.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
-vi.mock("@assets/heart.svg", () => ({
+vi.mock("@assets/icons/content/heart.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
 vi.mock("@ui/badge", () => ({

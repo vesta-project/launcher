@@ -68,21 +68,7 @@ export function ActiveFilterChips(props: { router?: any }) {
 						type="button"
 					>
 						<span class={styles["filter-chip-label"]}>{chip.label}</span>
-						<svg
-							class={styles["filter-chip-x"]}
-							xmlns="http://www.w3.org/2000/svg"
-							width="12"
-							height="12"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M18 6 6 18" />
-							<path d="m6 6 12 12" />
-						</svg>
+						<CloseIcon class={styles["filter-chip-x"]} width="12" height="12" />
 					</button>
 				)}
 			</For>
@@ -96,3 +82,4 @@ export function ActiveFilterChips(props: { router?: any }) {
 		</Show>
 	);
 }
+import CloseIcon from "@assets/icons/actions/close.svg";

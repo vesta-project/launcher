@@ -1,7 +1,8 @@
-import BellIcon from "@assets/bell.svg";
-import DownloadIcon from "@assets/download-compact.svg";
-import HeartIcon from "@assets/heart.svg";
-import InfoIcon from "@assets/info.svg";
+import BellIcon from "@assets/icons/status/bell.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import ExternalLinkIcon from "@assets/icons/actions/external-link.svg";
+import HeartIcon from "@assets/icons/content/heart.svg";
+import InfoIcon from "@assets/icons/status/info.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
 import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
@@ -2792,21 +2793,7 @@ const ResourceDetailsPage: Component<{
 											tooltip_text={`View on ${getSourceDescriptor(project()?.source ?? "modrinth")?.label ?? "provider"}`}
 											tooltip_placement="left"
 										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-											>
-												<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-												<polyline points="15 3 21 3 21 9"></polyline>
-												<line x1="10" y1="14" x2="21" y2="3"></line>
-											</svg>
+											<ExternalLinkIcon width="16" height="16" />
 										</Button>
 										<Button
 											variant="slate"

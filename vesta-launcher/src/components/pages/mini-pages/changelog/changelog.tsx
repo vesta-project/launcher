@@ -1,4 +1,4 @@
-import ExternalLinkIcon from "@assets/open.svg";
+import ExternalLinkIcon from "@assets/icons/actions/external-link.svg";
 import { changelog, type GithubRelease } from "@stores/changelog";
 import { openExternal } from "@utils/external-link";
 import { sanitizeHtml } from "@utils/security";

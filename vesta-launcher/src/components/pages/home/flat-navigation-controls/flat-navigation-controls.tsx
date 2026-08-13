@@ -1,5 +1,5 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
-import ForwardsArrowIcon from "@assets/right-arrow.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import ForwardsArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { pageViewerOpen, router } from "@components/page-viewer/page-viewer";
 import {
 	handleNavigationBack,

@@ -1,5 +1,7 @@
 import * as CheckboxPrimitive from "@kobalte/core/checkbox";
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
+import CheckIcon from "@assets/icons/controls/check.svg";
+import MinusIcon from "@assets/icons/controls/minus.svg";
 import clsx from "clsx";
 import { Match, Switch, splitProps, type ValidComponent } from "solid-js";
 import styles from "./checkbox.module.css";
@@ -25,27 +27,10 @@ export function Checkbox<T extends ValidComponent = "div">(
 				<CheckboxPrimitive.Indicator>
 					<Switch>
 						<Match when={others.indeterminate}>
-							<svg
-								viewBox="0 0 24 24"
-								class={styles["checkbox__icon"]}
-								aria-hidden="true"
-							>
-								<path d="M5 12h14" stroke="currentColor" stroke-width="2" />
-							</svg>
+							<MinusIcon class={styles["checkbox__icon"]} aria-hidden="true" />
 						</Match>
 						<Match when={others.checked}>
-							<svg
-								viewBox="0 0 24 24"
-								class={styles["checkbox__icon"]}
-								aria-hidden="true"
-							>
-								<polyline
-									points="5 12 10 17 19 7"
-									stroke="currentColor"
-									stroke-width="2"
-									fill="none"
-								/>
-							</svg>
+							<CheckIcon class={styles["checkbox__icon"]} aria-hidden="true" />
 						</Match>
 					</Switch>
 				</CheckboxPrimitive.Indicator>

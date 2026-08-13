@@ -1,5 +1,5 @@
-import BackIcon from "@assets/back-arrow.svg";
-import RightArrowIcon from "@assets/right-arrow.svg";
+import BackIcon from "@assets/icons/navigation/arrow-back.svg";
+import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { invoke } from "@tauri-apps/api/core";
 import { downloadDir, join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";

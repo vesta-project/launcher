@@ -78,7 +78,7 @@
 		),
 		var(
 			--instance-bg-image,
-			url("@assets/placeholder-images/placeholder-image1.jpg")
+			url("@assets/images/placeholders/placeholder-image1.jpg")
 		);
 	background-repeat: no-repeat;
 	background-position: center center;
@@ -638,7 +638,7 @@
 		),
 		var(
 			--instance-bg-image,
-			url("@assets/placeholder-images/placeholder-image1.jpg")
+			url("@assets/images/placeholders/placeholder-image1.jpg")
 		);
 }
 
@@ -657,7 +657,7 @@
 		),
 		var(
 			--instance-bg-image,
-			url("@assets/placeholder-images/placeholder-image1.jpg")
+			url("@assets/images/placeholders/placeholder-image1.jpg")
 		);
 }
 
@@ -676,7 +676,7 @@
 		),
 		var(
 			--instance-bg-image,
-			url("@assets/placeholder-images/placeholder-image1.jpg")
+			url("@assets/images/placeholders/placeholder-image1.jpg")
 		);
 }
 
@@ -691,7 +691,7 @@
 		),
 		var(
 			--instance-bg-image,
-			url("@assets/placeholder-images/placeholder-image1.jpg")
+			url("@assets/images/placeholders/placeholder-image1.jpg")
 		);
 	border-color: hsl(0 100% 50% / 0.3);
 }
@@ -707,7 +707,7 @@
 		),
 		var(
 			--instance-bg-image,
-			url("@assets/placeholder-images/placeholder-image1.jpg")
+			url("@assets/images/placeholders/placeholder-image1.jpg")
 		);
 	border-color: hsl(45 100% 50% / 0.3);
 }

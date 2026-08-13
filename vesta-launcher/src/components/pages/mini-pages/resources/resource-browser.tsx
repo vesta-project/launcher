@@ -1,4 +1,8 @@
 import { getSourceDescriptor } from "@resources/source-catalog";
+import ErrorIcon from "@assets/icons/status/error.svg";
+import GridIcon from "@assets/icons/content/grid.svg";
+import ListIcon from "@assets/icons/content/list.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
@@ -597,24 +601,7 @@ const ResourceBrowser: Component<{
 							onClick={() => resources.setViewMode("list")}
 							title="List View"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<line x1="8" y1="6" x2="21" y2="6" />
-								<line x1="8" y1="12" x2="21" y2="12" />
-								<line x1="8" y1="18" x2="21" y2="18" />
-								<line x1="3" y1="6" x2="3.01" y2="6" />
-								<line x1="3" y1="12" x2="3.01" y2="12" />
-								<line x1="3" y1="18" x2="3.01" y2="18" />
-							</svg>
+							<ListIcon width="16" height="16" />
 						</button>
 						<button
 							class={styles["view-btn"]}
@@ -624,22 +611,7 @@ const ResourceBrowser: Component<{
 							onClick={() => resources.setViewMode("grid")}
 							title="Grid View"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<rect x="3" y="3" width="7" height="7" />
-								<rect x="14" y="3" width="7" height="7" />
-								<rect x="14" y="14" width="7" height="7" />
-								<rect x="3" y="14" width="7" height="7" />
-							</svg>
+							<GridIcon width="16" height="16" />
 						</button>
 					</div>
 				</div>
@@ -665,21 +637,7 @@ const ResourceBrowser: Component<{
 						when={!resources.state.searchError}
 						fallback={
 							<div class={styles["error-state"]}>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="32"
-									height="32"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<circle cx="12" cy="12" r="10" />
-									<line x1="12" y1="8" x2="12" y2="12" />
-									<line x1="12" y1="16" x2="12.01" y2="16" />
-								</svg>
+								<ErrorIcon width="32" height="32" />
 								<h3>Search failed</h3>
 								<p>{resources.state.searchError}</p>
 								<button
@@ -695,20 +653,7 @@ const ResourceBrowser: Component<{
 							when={resources.state.results.length > 0}
 							fallback={
 								<div class={styles["empty-state"]}>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="32"
-										height="32"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<circle cx="11" cy="11" r="8" />
-										<line x1="21" y1="21" x2="16.65" y2="16.65" />
-									</svg>
+									<SearchIcon width="32" height="32" />
 									<h3>No resources found</h3>
 									<p>Try adjusting your search query or filters.</p>
 									<Show

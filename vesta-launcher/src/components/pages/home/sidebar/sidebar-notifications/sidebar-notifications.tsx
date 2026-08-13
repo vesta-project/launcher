@@ -1,4 +1,4 @@
-import CloseIcon from "@assets/close.svg";
+import CloseIcon from "@assets/icons/actions/close.svg";
 import { SidebarActionButton } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { dialogStore } from "@stores/dialog-store";
 import { invoke } from "@tauri-apps/api/core";

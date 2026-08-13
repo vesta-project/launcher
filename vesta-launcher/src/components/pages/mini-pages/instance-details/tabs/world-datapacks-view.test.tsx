@@ -94,25 +94,25 @@ vi.mock("@tauri-apps/api/core", () => ({
 	},
 }));
 
-vi.mock("@assets/back-arrow.svg", () => ({
+vi.mock("@assets/icons/navigation/arrow-back.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
-vi.mock("@assets/folder.svg", () => ({
+vi.mock("@assets/icons/content/folder.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
-vi.mock("@assets/download-compact.svg", () => ({
+vi.mock("@assets/icons/actions/download.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
-vi.mock("@assets/plus.svg", () => ({
+vi.mock("@assets/icons/actions/add.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
-vi.mock("@assets/reload.svg", () => ({
+vi.mock("@assets/icons/actions/reload.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
-vi.mock("@assets/timer.svg", () => ({
+vi.mock("@assets/icons/content/timer.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
-vi.mock("@assets/trash.svg", () => ({
+vi.mock("@assets/icons/actions/delete.svg", () => ({
 	default: () => <svg aria-hidden="true" />,
 }));
 

@@ -4,15 +4,15 @@ import { render, screen } from "@solidjs/testing-library";
 import { NotificationItem } from "@ui/notification/notification-item";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@assets/bell.svg", () => ({
+vi.mock("@assets/icons/status/bell.svg", () => ({
 	default: (props: any) => <svg data-testid="info-icon" {...props} />,
 }));
 
-vi.mock("@assets/close.svg", () => ({
+vi.mock("@assets/icons/actions/close.svg", () => ({
 	default: (props: any) => <svg data-testid="close-icon" {...props} />,
 }));
 
-vi.mock("@assets/error.svg", () => ({
+vi.mock("@assets/icons/status/error.svg", () => ({
 	default: (props: any) => <svg data-testid="error-icon" {...props} />,
 }));
 

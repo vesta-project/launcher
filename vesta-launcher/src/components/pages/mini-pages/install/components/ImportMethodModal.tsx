@@ -1,9 +1,9 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
-import CubeIcon from "@assets/cube.svg";
-import CurseForgeIcon from "@assets/curseforge.svg";
-import LinkIcon from "@assets/link.svg";
-import PrismLauncherIcon from "@assets/prism-launcher.svg";
-import SearchIcon from "@assets/search.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import CubeIcon from "@assets/icons/content/cube.svg";
+import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
+import PrismLauncherIcon from "@assets/branding/launchers/prism-launcher.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import LauncherButton from "@ui/button/button";
 import {
 	Dialog,

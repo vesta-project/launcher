@@ -1,5 +1,5 @@
-import DownloadIcon from "@assets/download-compact.svg";
-import HeartIcon from "@assets/heart.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import HeartIcon from "@assets/icons/content/heart.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";

@@ -1,0 +1,470 @@
+{
+  "version": 2,
+  "migratedAt": "2026-08-12T14:32:10.852Z",
+  "annotations": {
+    "vesta-launcher/ui/carousel/carousel.tsx:90cfdfbec086:0": {
+      "note": "Left arrow i think existing",
+      "updatedAt": "2026-08-12T14:03:11.162Z",
+      "status": "duplicate"
+    },
+    "vesta-launcher/ui/carousel/carousel.tsx:f08a37e09eac:1": {
+      "note": "Right arrow i think existing",
+      "updatedAt": "2026-08-12T14:03:14.645Z",
+      "status": "duplicate"
+    },
+    "vesta-launcher/ui/combobox/combobox.tsx:a3a1b5909b2f:0": {
+      "note": "Arrow up and an arrow down. probs keep inline used to expand the combobox",
+      "updatedAt": "2026-08-12T14:02:49.244Z",
+      "status": "keep"
+    },
+    "vesta-launcher/ui/context-menu/context-menu.tsx:6e82168efba5:0": {
+      "note": "Right chevron. duplicate",
+      "updatedAt": "2026-08-12T14:03:00.491Z",
+      "status": "duplicate"
+    },
+    "vesta-launcher/ui/context-menu/context-menu.tsx:94c0323d8ec4:1": {
+      "note": "Checkmark",
+      "updatedAt": "2026-08-12T14:03:47.689Z",
+      "status": "duplicate"
+    },
+    "vesta-launcher/ui/context-menu/context-menu.tsx:59bde54a6957:2": {
+      "note": "Some dot... I believe its used as toggle for the context menu",
+      "updatedAt": "2026-08-12T14:03:44.991Z",
+      "status": "keep"
+    },
+    "vesta-launcher/ui/dropdown-menu/dropdown-menu.tsx:f466edafa255:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:03:55.078Z",
+      "note": "Right Chevron"
+    },
+    "vesta-launcher/ui/dropdown-menu/dropdown-menu.tsx:090ef73c8fed:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:03:59.421Z",
+      "note": "Checkmark"
+    },
+    "vesta-launcher/ui/dropdown-menu/dropdown-menu.tsx:79ad6d357bc6:2": {
+      "status": "keep",
+      "updatedAt": "2026-08-12T14:04:12.679Z",
+      "note": "Another bullet dot???"
+    },
+    "vesta-launcher/ui/icon-picker/icon-picker.tsx:f1b38904b57c:0": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:04:27.346Z",
+      "note": "Edit icon. Its a square with a pen"
+    },
+    "vesta-launcher/ui/icon-picker/icon-picker.tsx:2b6d10f68669:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:05:22.013Z",
+      "note": "Plus Icon but thick. should have a single plus icon"
+    },
+    "vesta-launcher/ui/icon-picker/icon-picker.tsx:4d4c290183af:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:05:10.263Z",
+      "note": "Plus Icon but not as thick"
+    },
+    "vesta-launcher/ui/icon-picker/icon-picker.tsx:ce5d1bd00728:3": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:05:37.196Z",
+      "note": "Checkmark but white and thick. use a signle checkmark icon i think"
+    },
+    "vesta-launcher/ui/image-viewer/image-viewer.tsx:018f41e02d8f:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:06:04.780Z",
+      "note": "Alert. \"!\" surrounded by a circle."
+    },
+    "vesta-launcher/ui/image-viewer/image-viewer.tsx:ee5fd0299581:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:06:09.414Z",
+      "note": "Left Chevron"
+    },
+    "vesta-launcher/ui/image-viewer/image-viewer.tsx:d9eabb657190:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:06:14.081Z",
+      "note": "Right Chevron"
+    },
+    "vesta-launcher/ui/pagination/pagination.tsx:06c9e10943ee:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:06:20.498Z",
+      "note": "Three dots horizontal"
+    },
+    "vesta-launcher/ui/pagination/pagination.tsx:532c680daaf6:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:06:24.965Z",
+      "note": "Left Chevron"
+    },
+    "vesta-launcher/ui/pagination/pagination.tsx:adcb7abffe47:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:06:29.348Z",
+      "note": "Right Chevron"
+    },
+    "vesta-launcher/src/components/page-root/titlebar/network-pill.tsx:8389f4138a72:0": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:07:00.998Z",
+      "note": "Looks like a loading svg. extract to an svg if we dont have a basic loader already."
+    },
+    "vesta-launcher/src/components/page-sidebar/page-sidebar.tsx:c6b9078868d9:0": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:07:09.292Z",
+      "note": "Burger menu"
+    },
+    "vesta-launcher/src/components/auth/session-expired-dialog.tsx:22288bf9258c:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:07:23.682Z",
+      "note": "Triangle with \"!\""
+    },
+    "vesta-launcher/src/components/instances/InstanceSelectionDialog.tsx:d7f103ac84d0:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:07:28.849Z",
+      "note": "Plus Icon"
+    },
+    "vesta-launcher/src/components/worlds/WorldIcon.tsx:60a092235f02:0": {
+      "note": "This is supposed to be a world icon... its not.... its supposed to be a mc cube icon. but its really just a hexagon or something. Find a better implementation. what is it used for?",
+      "updatedAt": "2026-08-12T14:09:24.750Z",
+      "status": "remove"
+    },
+    "vesta-launcher/src/components/pages/init/steps/auth-step.tsx:1144e334f71d:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:09:40.247Z",
+      "note": "No connection svg. we already have one."
+    },
+    "vesta-launcher/src/components/pages/init/steps/auth-step.tsx:1f34346b1726:1": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:09:54.884Z",
+      "note": "Microsoft Logo icon."
+    },
+    "vesta-launcher/src/components/pages/init/steps/complete-step.tsx:5afdc96e30fb:0": {
+      "note": "Accent primary shouldnt be used in the extraction... but its a checkmark svg",
+      "updatedAt": "2026-08-12T14:10:46.728Z",
+      "status": "extract"
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:041b24d84065:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:10:51.202Z",
+      "note": "Search svg"
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:f1d9d325031f:1": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:11:22.236Z",
+      "note": "This may exist. Its like a plate with an arrow coming out... meant for like an upload sort of thing."
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:af56865cc268:2": {
+      "note": "This is a plus icon with a rounded square... no point... should try to unify the design language.",
+      "updatedAt": "2026-08-12T14:12:19.387Z",
+      "status": "remove"
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:f43289b83fe9:3": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:12:24.620Z",
+      "note": "Left chevron"
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:790c85a654e7:4": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:12:46.237Z",
+      "note": "Used for expanding a top menu or something... but im confused... this shouldnt be here."
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:f43289b83fe9:5": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:12:55.605Z",
+      "note": "Left Chevron"
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:1260e532dfcc:6": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:13:17.985Z",
+      "note": "Same thing....?????\n\nUsed for expanding a top menu or something... but im confused... this shouldnt be here.\n\nWhy are we doing this?? What is the point."
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:884e9806ab3f:7": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:13:44.437Z",
+      "note": "Plate with the arrow pointing down... why do we have this svg too??? Whats the point? "
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:f43289b83fe9:8": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:13:50.388Z",
+      "note": "Left Chevron"
+    },
+    "vesta-launcher/src/components/pages/init/steps/first-instance-step.tsx:f43289b83fe9:9": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:13:55.989Z",
+      "note": "Left Chevron"
+    },
+    "vesta-launcher/src/components/pages/init/steps/learn-step.tsx:8f0273e9b7bd:0": {
+      "status": "keep",
+      "updatedAt": "2026-08-12T14:14:18.261Z"
+    },
+    "vesta-launcher/src/components/pages/init/steps/learn-step.tsx:624166a3df5c:1": {
+      "status": "keep",
+      "updatedAt": "2026-08-12T14:14:20.002Z"
+    },
+    "vesta-launcher/src/components/pages/init/steps/learn-step.tsx:2d20c75e36ba:2": {
+      "status": "keep",
+      "updatedAt": "2026-08-12T14:14:21.370Z"
+    },
+    "vesta-launcher/src/components/pages/init/steps/learn-step.tsx:de38a7e259ae:3": {
+      "status": "keep",
+      "updatedAt": "2026-08-12T14:14:27.053Z"
+    },
+    "vesta-launcher/src/components/pages/init/steps/learn-step.tsx:8dc396678096:4": {
+      "status": "keep",
+      "updatedAt": "2026-08-12T14:14:29.534Z"
+    },
+    "vesta-launcher/src/components/pages/home/home-intro/home-intro-modal.tsx:04120d3e022a:0": {
+      "note": "Another checkmark icon... we have one above mentioned too",
+      "updatedAt": "2026-08-12T14:16:31.595Z",
+      "status": "extract"
+    },
+    "vesta-launcher/src/components/pages/home/home-intro/home-intro-modal.tsx:fbf417c4c294:1": {
+      "note": "House svg i think we already have this... if not make one.",
+      "updatedAt": "2026-08-12T14:16:58.646Z",
+      "status": "duplicate"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/file-drop/file-drop-page.tsx:2304d0586f0a:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:17:19.564Z",
+      "note": "Plate with arrow going out. used for exporting... mentioned about. confirm."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/file-drop/file-drop-page.tsx:72406c63469c:1": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:17:26.847Z",
+      "note": "File with a +. "
+    },
+    "vesta-launcher/src/components/pages/mini-pages/file-drop/file-drop-page.tsx:f1eade77ac7c:2": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:17:39.281Z",
+      "note": "This is a much better folder than what we currently have."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/InstanceHeader.tsx:493aca583bc4:0": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:18:45.216Z",
+      "note": "Same folder icon but smaller??? Should have one folder icon."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/InstanceHeader.tsx:7da78f2f0feb:1": {
+      "status": "remove",
+      "updatedAt": "2026-08-12T14:18:01.932Z",
+      "note": "Crappy reload svg. replace"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/InstanceHeader.tsx:249667191666:2": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:18:16.524Z",
+      "note": "This is a link svg but rotated 45 degrees..."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ConsoleTab.tsx:6cee4590edc8:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:18:22.482Z",
+      "note": "Chevron up"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ConsoleTab.tsx:fb717d28c9b6:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:18:27.296Z",
+      "note": "Chevron down"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ConsoleTab.tsx:4c839d447215:2": {
+      "note": "Really bad live status svg. should be replaced with something better",
+      "updatedAt": "2026-08-12T14:19:00.950Z",
+      "status": "extract"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ConsoleTab.tsx:54694070a7e6:3": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:19:05.033Z",
+      "note": "Terminal svg"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ResourceRowActions.tsx:4b6d0514402f:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:19:10.601Z",
+      "note": "Three dots vertical"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ResourceRowActions.tsx:bbe0a82962f5:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:19:14.884Z",
+      "note": "Reload svg"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ResourceRowActions.tsx:e6f5f4ba87e5:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:19:20.934Z",
+      "note": "Plate svg pointing down"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ResourceRowActions.tsx:93516f9a5cd9:3": {
+      "note": "Some weird checking svg...?? Some duplicate svg thing??? Replace with a better implementation",
+      "updatedAt": "2026-08-12T14:20:06.919Z",
+      "status": "duplicate"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ResourcesTab.tsx:3363a8ef25c6:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:20:12.902Z",
+      "note": "Three dots vertical"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ResourcesTab.tsx:2f246d7d63fc:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:20:15.817Z",
+      "note": "X icon"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ResourcesTab.tsx:60671c61afb9:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:20:51.954Z",
+      "note": "Plate with a down arrow same as above"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ScreenshotGallery.tsx:cfbf6febe759:0": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:21:07.921Z",
+      "note": "used for square to rows switching. this is rows."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/ScreenshotGallery.tsx:a40b77c2678f:1": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:21:19.621Z",
+      "note": "4 squares... represents grid"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldDatapacksView.tsx:786a781b23d7:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:21:32.838Z",
+      "note": "Three dots vertical but black..."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldDatapacksView.tsx:86f60865d94b:1": {
+      "status": "remove",
+      "updatedAt": "2026-08-12T14:22:04.973Z",
+      "note": "Replace with something better. this is supposed to be like 3 layers? But it isnt and is filled by default"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:a62394408cd8:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:22:14.440Z",
+      "note": "folder svg but crap. replace"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:7e18060a10d5:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:22:24.057Z",
+      "note": "right chevron replace"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:0a7b9eb31a5e:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:22:40.953Z",
+      "note": "Should be a copy svg but it isnt done right. "
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:e6894890d321:3": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:22:48.758Z",
+      "note": "Same copy svg as above"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:786a781b23d7:4": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:23:03.274Z",
+      "note": "Three dot menu but black. really bad implementation"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:4dcf36651beb:5": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:23:14.558Z",
+      "note": "4 squares for grids. use the above one."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:6083bb026230:6": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:23:55.893Z",
+      "note": "Hamburger menu but sucks"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:b46354cb5f77:7": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:24:17.193Z",
+      "note": "sucky svg supposed to be a cylinder representing a database"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/instance-details/tabs/WorldsTab.tsx:d90242ee2d82:8": {
+      "status": "remove",
+      "updatedAt": "2026-08-12T14:24:34.561Z",
+      "note": "Really ugly 3 layers thing. same as before"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/modding-guide/guide.tsx:212049f645d5:0": {
+      "note": "",
+      "updatedAt": "2026-08-12T14:24:45.493Z",
+      "status": "keep"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/modding-guide/guide.tsx:4794d70c3fc4:1": {
+      "status": "keep",
+      "updatedAt": "2026-08-12T14:24:46.924Z"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/active-filter-chips.tsx:21d869e725db:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:24:55.211Z",
+      "note": "X icon"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/filter-popover.tsx:544ce384ec3e:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:25:01.229Z",
+      "note": "Down chevron"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/resource-browser.tsx:96f51caaceaf:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:25:15.062Z",
+      "note": "Three lines used for rows to grid switching."
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/resource-browser.tsx:85274731a6d3:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:25:30.579Z",
+      "note": "4 squares used for grid"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/resource-browser.tsx:2ab6bb821f8f:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:25:42.330Z",
+      "note": "\"!\" surrounded by a circle"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/resource-browser.tsx:ae439020b108:3": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:25:45.563Z",
+      "note": "Search"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/resource-details.tsx:39efa2ccb67f:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:25:57.897Z",
+      "note": "Open svg. arrow pointing out from square"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/resource-toolbar.tsx:46bab4bd7269:0": {
+      "status": "extract",
+      "updatedAt": "2026-08-12T14:26:07.047Z",
+      "note": "TV/MONITOR"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/version-filter-bar/version-filter-bar.tsx:921ecc4a4c35:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:26:10.697Z",
+      "note": "Search"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/version-filter-bar/version-filter-bar.tsx:72f5fb88dd2e:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:26:14.914Z",
+      "note": "X icon"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/version-filter-bar/version-filter-bar.tsx:8873cd447229:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:26:20.598Z",
+      "note": "Checkmark"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/resources/version-filter-bar/version-filter-bar.tsx:40b1f18b6249:3": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:26:24.432Z",
+      "note": "X Icon"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/settings/account/AccountTab.tsx:afd6a84b4b47:0": {
+      "status": "remove",
+      "updatedAt": "2026-08-12T14:26:37.898Z",
+      "note": "Nah what is this crap"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/settings/account/AccountTab.tsx:19c38e411a4c:1": {
+      "status": "remove",
+      "updatedAt": "2026-08-12T14:26:38.615Z",
+      "note": "Nah what is this crap"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/settings/account/AccountTab.tsx:998c17675e63:2": {
+      "status": "remove",
+      "updatedAt": "2026-08-12T14:26:39.815Z",
+      "note": "Nah what is this crap"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/settings/appearance/AppearanceTab.tsx:f846504404aa:0": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:26:44.382Z",
+      "note": "Search"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/settings/appearance/AppearanceTab.tsx:936aa4c13e55:1": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:26:49.632Z",
+      "note": "Rows"
+    },
+    "vesta-launcher/src/components/pages/mini-pages/settings/appearance/AppearanceTab.tsx:30c65a26855a:2": {
+      "status": "duplicate",
+      "updatedAt": "2026-08-12T14:26:55.216Z",
+      "note": "4 squares"
+    }
+  }
+}

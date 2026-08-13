@@ -1,7 +1,11 @@
-import FolderIcon from "@assets/folder.svg";
-import HistoryIcon from "@assets/history.svg";
-import SearchIcon from "@assets/search.svg";
-import TrashIcon from "@assets/trash.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import HistoryIcon from "@assets/icons/content/history.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";
+import ChevronUpIcon from "@assets/icons/controls/chevron-up.svg";
+import LiveIcon from "@assets/icons/status/live.svg";
+import TerminalIcon from "@assets/icons/content/terminal.svg";
 import {
 	CONSOLE_FILTER_LEVELS,
 	consoleStore,
@@ -28,40 +32,6 @@ import {
 	formatLogFileMetadata,
 	getConsoleLogDisplay,
 } from "../console-log-display";
-
-const ArrowUpIcon = (props: { class?: string }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="16"
-		height="16"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		class={props.class}
-	>
-		<polyline points="18 15 12 9 6 15" />
-	</svg>
-);
-
-const ArrowDownIcon = (props: { class?: string }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="16"
-		height="16"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		class={props.class}
-	>
-		<polyline points="6 9 12 15 18 9" />
-	</svg>
-);
 
 interface ConsoleTabProps {
 	instanceSlug: string;
@@ -265,16 +235,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								aria-label="Follow live output"
 								tooltip_text="Return to the live console output"
 							>
-								<svg
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-								>
-									<circle cx="12" cy="12" r="2" fill="currentColor" />
-									<path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7" />
-								</svg>
+								<LiveIcon />
 								<span>Follow live</span>
 							</Button>
 						</Show>
@@ -373,18 +334,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 					when={filteredLines().length > 0 || consoleStore.state.isCatchingUp}
 					fallback={
 						<div class={styles["console-empty"]}>
-							<svg
-								class={styles["empty-icon"]}
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<polyline points="4 17 10 11 4 5" />
-								<line x1="12" y1="19" x2="20" y2="19" />
-							</svg>
+							<TerminalIcon class={styles["empty-icon"]} />
 							<Show
 								when={
 									hasFilters() &&
@@ -481,8 +431,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								onClick={toggleScroll}
 								class={styles["scroll-btn-round"]}
 							>
-								<Show when={atBottom()} fallback={<ArrowDownIcon />}>
-									<ArrowUpIcon />
+									<Show when={atBottom()} fallback={<ChevronDownIcon />}>
+										<ChevronUpIcon />
 								</Show>
 							</Button>
 						</TooltipTrigger>

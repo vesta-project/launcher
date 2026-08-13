@@ -1,8 +1,8 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
-import CloseIcon from "@assets/close.svg";
-import OpenIcon from "@assets/open.svg";
-import RefreshIcon from "@assets/refresh.svg";
-import ForwardsArrowIcon from "@assets/right-arrow.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import CloseIcon from "@assets/icons/actions/close.svg";
+import OpenIcon from "@assets/icons/actions/external-link.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import ForwardsArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";

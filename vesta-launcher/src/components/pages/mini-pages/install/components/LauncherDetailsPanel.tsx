@@ -1,6 +1,6 @@
-import CurseForgeIcon from "@assets/curseforge.svg";
-import FolderIcon from "@assets/folder.svg";
-import ModrinthIcon from "@assets/modrinth.svg";
+import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
 import { open } from "@tauri-apps/plugin-shell";
 import LauncherButton from "@ui/button/button";
 import {

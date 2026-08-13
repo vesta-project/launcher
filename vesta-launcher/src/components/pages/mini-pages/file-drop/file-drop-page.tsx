@@ -1,3 +1,6 @@
+import FileAddIcon from "@assets/icons/content/file-add.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import UploadIcon from "@assets/icons/actions/upload.svg";
 import { DropZone } from "@ui/drop-zone/drop-zone";
 import { createSignal, For } from "solid-js";
 import styles from "./file-drop-page.module.css";
@@ -66,18 +69,7 @@ function FileDropPage() {
 						<div
 							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--single"]}`}
 						>
-							<svg
-								class={styles["file-drop-page__icon"]}
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-								<polyline points="17 8 12 3 7 8" />
-								<line x1="12" y1="3" x2="12" y2="15" />
-							</svg>
+							<UploadIcon class={styles["file-drop-page__icon"]} />
 							<p>Drop a single file here</p>
 							<p class={styles["file-drop-page__hint"]}>
 								Files only (no folders)
@@ -112,19 +104,7 @@ function FileDropPage() {
 						<div
 							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--multiple"]}`}
 						>
-							<svg
-								class={styles["file-drop-page__icon"]}
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-								<polyline points="14 2 14 8 20 8" />
-								<line x1="12" y1="18" x2="12" y2="12" />
-								<line x1="9" y1="15" x2="15" y2="15" />
-							</svg>
+							<FileAddIcon class={styles["file-drop-page__icon"]} />
 							<p>Drop multiple files here</p>
 							<p class={styles["file-drop-page__hint"]}>
 								Files only (no folders)
@@ -165,16 +145,7 @@ function FileDropPage() {
 						<div
 							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--folder"]}`}
 						>
-							<svg
-								class={styles["file-drop-page__icon"]}
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-							</svg>
+							<FolderIcon class={styles["file-drop-page__icon"]} />
 							<p>Drop a folder here</p>
 							<p class={styles["file-drop-page__hint"]}>
 								Folders only (no files)

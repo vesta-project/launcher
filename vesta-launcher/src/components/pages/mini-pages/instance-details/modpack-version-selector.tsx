@@ -1,5 +1,5 @@
-import RightArrowIcon from "@assets/right-arrow.svg";
-import SearchIcon from "@assets/search.svg";
+import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { Skeleton } from "@ui/skeleton/skeleton";

@@ -1,8 +1,11 @@
-import ErrorIcon from "@assets/error.svg";
-import PinIcon from "@assets/pin.svg";
-import PinOffIcon from "@assets/pin-off.svg";
-import PlayIcon from "@assets/play.svg";
-import KillIcon from "@assets/rounded-square.svg";
+import ErrorIcon from "@assets/icons/status/error.svg";
+import PinIcon from "@assets/icons/actions/pin.svg";
+import PinOffIcon from "@assets/icons/actions/unpin.svg";
+import PlayIcon from "@assets/icons/actions/play.svg";
+import KillIcon from "@assets/icons/actions/stop.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
+import RecoveryIcon from "@assets/icons/actions/reload.svg";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { formatRelativeTime } from "@utils/date";
@@ -26,32 +29,6 @@ interface InstanceHeaderProps {
 	setRef: (element: HTMLElement) => void;
 }
 
-const FolderIcon = () => (
-	<svg
-		viewBox="0 0 24 24"
-		width="18"
-		height="18"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-	>
-		<path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-	</svg>
-);
-
-const RecoveryIcon = () => (
-	<svg
-		viewBox="0 0 24 24"
-		width="16"
-		height="16"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-	>
-		<path d="M3 12a9 9 0 1 0 3-6.7" />
-		<path d="M3 4v6h6" />
-	</svg>
-);
 
 export function InstanceHeader(props: InstanceHeaderProps) {
 	const icon = () =>
@@ -114,17 +91,7 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 									title="Manage linked modpack"
 									aria-label="Manage linked modpack"
 								>
-									<svg
-										viewBox="0 0 24 24"
-										width="14"
-										height="14"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
-										<path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
-									</svg>
+									<LinkIcon width="14" height="14" />
 								</button>
 							</Show>
 						</div>
@@ -144,7 +111,7 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 									title="Open instance folder"
 									aria-label="Open instance folder"
 								>
-									<FolderIcon />
+									<FolderIcon width="18" height="18" />
 								</Button>
 								<Button
 									variant="ghost"
@@ -195,7 +162,7 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 											<ErrorIcon />
 										</Show>
 										<Show when={props.action.icon === "recovery"}>
-											<RecoveryIcon />
+											<RecoveryIcon width="16" height="16" />
 										</Show>
 									</span>
 									<span class={styles.actionLabel}>{props.action.label}</span>

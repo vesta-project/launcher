@@ -1,5 +1,5 @@
-import PlayIcon from "@assets/play.svg";
-import StopIcon from "@assets/rounded-square.svg";
+import PlayIcon from "@assets/icons/actions/play.svg";
+import StopIcon from "@assets/icons/actions/stop.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import * as HoverCard from "@kobalte/core/hover-card";
 import { clearRunning, instancesState, setLaunching } from "@stores/instances";

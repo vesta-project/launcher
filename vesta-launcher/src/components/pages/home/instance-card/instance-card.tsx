@@ -1,13 +1,13 @@
 // Instance Card component with play/kill button and toast notifications
 
-import ErrorIcon from "@assets/error.svg";
-import FabricLogo from "@assets/fabric-logo.svg";
-import ForgeLogo from "@assets/forge-logo.svg";
-import NeoForgeLogo from "@assets/neoforge-logo.svg";
-import PlayIcon from "@assets/play.svg";
-import QuiltLogo from "@assets/quilt-logo.svg";
-import ReloadIcon from "@assets/reload.svg";
-import KillIcon from "@assets/rounded-square.svg";
+import ErrorIcon from "@assets/icons/status/error.svg";
+import FabricLogo from "@assets/branding/modloaders/fabric-logo.svg";
+import ForgeLogo from "@assets/branding/modloaders/forge-logo.svg";
+import NeoForgeLogo from "@assets/branding/modloaders/neoforge-logo.svg";
+import PlayIcon from "@assets/icons/actions/play.svg";
+import QuiltLogo from "@assets/branding/modloaders/quilt-logo.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
+import KillIcon from "@assets/icons/actions/stop.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import {
 	openStandaloneMiniPage,

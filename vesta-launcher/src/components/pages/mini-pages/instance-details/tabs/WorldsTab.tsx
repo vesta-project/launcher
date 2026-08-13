@@ -1,5 +1,14 @@
-import ReloadIcon from "@assets/reload.svg";
-import TimerIcon from "@assets/timer.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
+import TimerIcon from "@assets/icons/content/timer.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
+import GridIcon from "@assets/icons/content/grid.svg";
+import ListIcon from "@assets/icons/content/list.svg";
+import StorageIcon from "@assets/icons/content/storage.svg";
+import DatapackIcon from "@assets/icons/content/layers.svg";
+import MoveIcon from "@assets/icons/actions/move.svg";
+import CopyIcon from "@assets/icons/actions/copy.svg";
+import DuplicateIcon from "@assets/icons/actions/duplicate.svg";
 import InstanceSelectionDialog, {
 	type InstanceSelectionOption,
 } from "@components/instances/InstanceSelectionDialog";
@@ -73,69 +82,6 @@ type WorldAction = {
 	icon: Component;
 	run: () => void;
 };
-
-const FolderIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<path d="M3 6.5h6l2 2h10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11Z" />
-	</svg>
-);
-
-const MoveIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<path d="M4 12h16m-5-5 5 5-5 5" />
-	</svg>
-);
-
-const CopyIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<rect x="8" y="8" width="11" height="11" rx="2" />
-		<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-	</svg>
-);
-
-const DuplicateIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<rect x="5" y="5" width="12" height="12" rx="2" />
-		<path d="M9 17v2h8a2 2 0 0 0 2-2V9h-2M11 8v6m-3-3h6" />
-	</svg>
-);
-
-const MoreIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<circle cx="12" cy="5" r="1.5" />
-		<circle cx="12" cy="12" r="1.5" />
-		<circle cx="12" cy="19" r="1.5" />
-	</svg>
-);
-
-const GridIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<rect x="3" y="3" width="7" height="7" />
-		<rect x="14" y="3" width="7" height="7" />
-		<rect x="14" y="14" width="7" height="7" />
-		<rect x="3" y="14" width="7" height="7" />
-	</svg>
-);
-
-const ListIcon: Component = () => (
-	<svg viewBox="0 0 24 24" aria-hidden="true">
-		<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
-	</svg>
-);
-
-const StorageIcon: Component = () => (
-	<svg class={styles["outline-icon"]} viewBox="0 0 24 24" aria-hidden="true">
-		<ellipse cx="12" cy="5" rx="8" ry="3" />
-		<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
-	</svg>
-);
-
-const DatapackIcon: Component = () => (
-	<svg class={styles["outline-icon"]} viewBox="0 0 24 24" aria-hidden="true">
-		<path d="m12 3 9 5-9 5-9-5 9-5Z" />
-		<path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
-	</svg>
-);
 
 const ActionLabel: Component<{ action: WorldAction }> = (props) => (
 	<span class={styles["menu-action"]}>
@@ -257,7 +203,7 @@ export const WorldCard: Component<{
 							title={`World size ${formatBytes(props.world.sizeBytes)}`}
 							aria-label={`World size ${formatBytes(props.world.sizeBytes)}`}
 						>
-							<StorageIcon />
+							<StorageIcon class={styles["outline-icon"]} />
 							{formatBytes(props.world.sizeBytes)}
 						</span>
 						<span
@@ -265,7 +211,7 @@ export const WorldCard: Component<{
 							title={`${props.world.datapackCount} datapacks`}
 							aria-label={`${props.world.datapackCount} datapacks`}
 						>
-							<DatapackIcon />
+							<DatapackIcon class={styles["outline-icon"]} />
 							{props.world.datapackCount}
 						</span>
 					</div>

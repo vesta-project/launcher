@@ -1,4 +1,4 @@
-import PlayIcon from "@assets/play.svg";
+import PlayIcon from "@assets/icons/actions/play.svg";
 import { For } from "solid-js";
 import styles from "./home-intro.module.css";
 
