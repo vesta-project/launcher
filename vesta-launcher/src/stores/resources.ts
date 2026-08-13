@@ -408,19 +408,52 @@ export const resources = {
 		setResourceStore("offset", 0);
 	},
 	setLoader: (l: string | null) => {
-		setResourceStore("loader", l);
+		const normalized = l?.toLowerCase() ?? null;
+		setResourceStore("loader", normalized);
 		setResourceStore("offset", 0);
 	},
 	setCategories: (c: string[]) => {
-		setResourceStore("categories", c);
+		const loaders = new Set(["fabric", "forge", "quilt", "neoforge"]);
+		const nextCats: string[] = [];
+		let loaderFromCats: string | null = null;
+		for (const cat of c) {
+			const lower = cat.toLowerCase();
+			if (loaders.has(lower)) {
+				loaderFromCats = lower;
+				continue;
+			}
+			nextCats.push(cat);
+		}
+		setResourceStore("categories", nextCats);
+		if (loaderFromCats) {
+			setResourceStore("loader", loaderFromCats);
+		}
 		setResourceStore("offset", 0);
 	},
 	toggleCategory: (c: string) => {
-		const current = resourceStore.categories;
-		if (current.includes(c)) {
+		const lower = c.toLowerCase();
+		// Modrinth puts loaders in project.categories; those are loader filters, not facets.
+		if (
+			lower === "fabric" ||
+			lower === "forge" ||
+			lower === "quilt" ||
+			lower === "neoforge"
+		) {
+			const next = resourceStore.loader?.toLowerCase() === lower ? null : lower;
+			setResourceStore("loader", next);
 			setResourceStore(
 				"categories",
-				current.filter((cat) => cat !== c),
+				resourceStore.categories.filter((cat) => cat.toLowerCase() !== lower),
+			);
+			setResourceStore("offset", 0);
+			return;
+		}
+
+		const current = resourceStore.categories;
+		if (current.includes(c) || current.some((cat) => cat.toLowerCase() === lower)) {
+			setResourceStore(
+				"categories",
+				current.filter((cat) => cat.toLowerCase() !== lower),
 			);
 		} else {
 			setResourceStore("categories", [...current, c]);
@@ -486,6 +519,8 @@ export const resources = {
 			categories: [],
 			gameVersion: null,
 			loader: null,
+			selectedInstanceId: null,
+			installedResources: [],
 			offset: 0,
 			sortBy:
 				getSourceDescriptor(resourceStore.activeSource)?.defaultSort ??
@@ -520,6 +555,20 @@ export const resources = {
 	},
 
 	search: async () => {
+		const loaderNames = new Set(["fabric", "forge", "quilt", "neoforge"]);
+		const leakedLoaders = resourceStore.categories.filter((c) =>
+			loaderNames.has(c.toLowerCase()),
+		);
+		if (leakedLoaders.length > 0) {
+			const migrated = leakedLoaders[leakedLoaders.length - 1].toLowerCase();
+			setResourceStore({
+				categories: resourceStore.categories.filter(
+					(c) => !loaderNames.has(c.toLowerCase()),
+				),
+				loader: resourceStore.loader || migrated,
+			});
+		}
+
 		const cacheKey = currentSearchCacheKey();
 		const cached = searchCache.get(cacheKey);
 		if (cached) {

@@ -38,6 +38,7 @@ import {
 	requiresWorldTarget,
 	resolveInstanceInstallDecision,
 } from "@utils/resource-install-intent";
+import { parseSearchFilterOperators } from "@utils/resource-search-operators";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
@@ -332,7 +333,7 @@ const ResourceBrowser: Component<{
 		);
 	};
 
-	const handleSearchInput = (value: string) => {
+	const applySearchValue = (value: string, commitTrailing: boolean) => {
 		const parsed = parseResourceUrl(value);
 		if (parsed) {
 			activeRouter()?.navigate("/resource-details", {
@@ -345,7 +346,24 @@ const ResourceBrowser: Component<{
 			return;
 		}
 
-		resources.setQuery(value);
+		const extracted = parseSearchFilterOperators(value, { commitTrailing });
+		const queryText = extracted.didExtract ? extracted.remainder : value;
+
+		batch(() => {
+			if (extracted.filters.gameVersion !== undefined) {
+				resources.setGameVersion(extracted.filters.gameVersion);
+				activeRouter()?.updateQuery(
+					"gameVersion",
+					extracted.filters.gameVersion,
+				);
+			}
+			if (extracted.filters.loader !== undefined) {
+				resources.setLoader(extracted.filters.loader);
+				activeRouter()?.updateQuery("loader", extracted.filters.loader);
+			}
+			resources.setQuery(queryText);
+		});
+
 		if (debounceTimer) clearTimeout(debounceTimer);
 		debounceTimer = window.setTimeout(async () => {
 			resources.setOffset(0);
@@ -353,11 +371,22 @@ const ResourceBrowser: Component<{
 
 			untrack(() => {
 				const currentRouterQuery = activeRouter()?.currentParams.get().query;
-				if (resources.state.query === value && currentRouterQuery !== value) {
-					activeRouter()?.updateQuery("query", value);
+				if (
+					resources.state.query === queryText &&
+					currentRouterQuery !== queryText
+				) {
+					activeRouter()?.updateQuery("query", queryText);
 				}
 			});
-		}, 500);
+		}, commitTrailing ? 0 : 500);
+	};
+
+	const handleSearchInput = (value: string) => {
+		applySearchValue(value, false);
+	};
+
+	const handleSearchCommit = (value: string) => {
+		applySearchValue(value, true);
 	};
 
 	onMount(() => {
@@ -519,6 +548,7 @@ const ResourceBrowser: Component<{
 			<ResourceToolbar
 				router={activeRouter()}
 				onSearchInput={handleSearchInput}
+				onSearchCommit={handleSearchCommit}
 				searchValue={resources.state.query}
 			/>
 			<div class={styles["resource-results-info"]}>
@@ -661,13 +691,22 @@ const ResourceBrowser: Component<{
 											resources.state.query ||
 											resources.state.categories.length > 0 ||
 											resources.state.gameVersion ||
-											resources.state.loader
+											resources.state.loader ||
+											resources.state.selectedInstanceId
 										}
 									>
 										<button
 											class={styles["empty-state-action"]}
 											onClick={() => {
 												resources.resetFilters();
+												activeRouter()?.updateQuery(
+													"selectedInstanceId",
+													null,
+												);
+												activeRouter()?.updateQuery("gameVersion", null);
+												activeRouter()?.updateQuery("loader", null);
+												activeRouter()?.updateQuery("categories", []);
+												activeRouter()?.updateQuery("query", "");
 											}}
 										>
 											Clear all filters

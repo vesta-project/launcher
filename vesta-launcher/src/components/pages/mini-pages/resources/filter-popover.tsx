@@ -1,5 +1,6 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
 import { useMinecraftVersions } from "@stores/versions";
 import { Badge } from "@ui/badge";
@@ -18,8 +19,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
+import { resolveResourceUrl } from "@utils/assets";
+import {
+	createAnimatedIconPreview,
+	iconBackgroundStyle,
+} from "@utils/icon-animation";
+import { DEFAULT_ICONS } from "@utils/instances";
 import { sanitizeSvg } from "@utils/security";
-import { For, Show } from "solid-js";
+import { batch, For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
 
 const LOADERS = ["Forge", "Fabric", "Quilt", "NeoForge"];
@@ -37,6 +44,35 @@ const VERSION_OPTIONS = [
 	"1.8.9",
 	"1.7.10",
 ];
+
+function InstanceOptionIcon(props: {
+	instance: any;
+	placeholderClass: string;
+}) {
+	const iconPath = () => props.instance?.iconPath || DEFAULT_ICONS[0];
+	const iconPreview = createAnimatedIconPreview(iconPath);
+	const displayChar = () => {
+		const name = props.instance?.name || "?";
+		const match = name.match(/[a-zA-Z]/);
+		return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+	};
+
+	return (
+		<Show
+			when={iconPreview.displaySource()}
+			fallback={<div class={props.placeholderClass}>{displayChar()}</div>}
+		>
+			<div
+				class={styles["instance-item-icon"]}
+				style={iconBackgroundStyle(iconPreview.displaySource())}
+				onMouseEnter={iconPreview.activate}
+				onMouseLeave={iconPreview.deactivate}
+				onFocusIn={iconPreview.activate}
+				onFocusOut={iconPreview.deactivate}
+			/>
+		</Show>
+	);
+}
 
 export function FilterPopover(props: { router?: MiniRouter }) {
 	const activeRouter = () => props.router || router();
@@ -176,6 +212,60 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 		resources.state.resourceType === "mod" ||
 		resources.state.resourceType === "modpack";
 
+	const isModpack = () => resources.state.resourceType === "modpack";
+
+	const selectedInstance = () => {
+		if (!resources.state.selectedInstanceId) return null;
+		return (
+			instancesState.instances.find(
+				(i) => i.id === resources.state.selectedInstanceId,
+			) || null
+		);
+	};
+
+	const selectedIconPreview = createAnimatedIconPreview(
+		() => selectedInstance()?.iconPath || DEFAULT_ICONS[0],
+	);
+
+	const instanceIconUrl = () => {
+		const inst = selectedInstance();
+		if (!inst) return null;
+		return resolveResourceUrl(inst.iconPath || DEFAULT_ICONS[0]);
+	};
+
+	const instanceDisplayChar = () => {
+		const inst = selectedInstance();
+		if (!inst) return "?";
+		const match = inst.name.match(/[a-zA-Z]/);
+		return match ? match[0].toUpperCase() : inst.name.charAt(0).toUpperCase();
+	};
+
+	const applyInstance = (instance: any) => {
+		batch(() => {
+			const id = instance?.id === "none" ? null : (instance?.id ?? null);
+			resources.setInstance(id);
+			if (id && instance) {
+				resources.setGameVersion(instance.minecraftVersion);
+				if (resources.state.resourceType === "mod") {
+					const loader = instance.modloader?.toLowerCase();
+					if (loader && loader !== "vanilla") {
+						resources.setLoader(instance.modloader);
+					} else {
+						resources.setLoader(null);
+					}
+				} else {
+					resources.setLoader(null);
+				}
+			} else {
+				resources.setGameVersion(null);
+				resources.setLoader(null);
+			}
+			activeRouter()?.updateQuery("selectedInstanceId", id);
+			activeRouter()?.updateQuery("gameVersion", resources.state.gameVersion);
+			activeRouter()?.updateQuery("loader", resources.state.loader);
+		});
+	};
+
 	const toggleGroupExpand = (groupId: string, e: MouseEvent) => {
 		e.stopPropagation();
 		resources.toggleCategoryGroup(groupId);
@@ -184,6 +274,98 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 	return (
 		<div class={styles["filter-popover-scrollable"]}>
 			<div class={styles["filter-popover-content"]}>
+				<div
+					class={styles["filter-popover-section"]}
+					classList={{ [styles.disabled]: isModpack() }}
+					title={
+						isModpack()
+							? "Instance selection is disabled for modpacks"
+							: undefined
+					}
+				>
+					<label class={styles["filter-label"]}>Instance</label>
+					<Select<any>
+						disabled={isModpack()}
+						options={[
+							{ id: "none", name: "No Instance" } as any,
+							...instancesState.instances,
+						]}
+						value={
+							resources.state.selectedInstanceId
+								? instancesState.instances.find(
+										(i) => i.id === resources.state.selectedInstanceId,
+									) || ({ id: "none", name: "No Instance" } as any)
+								: ({ id: "none", name: "No Instance" } as any)
+						}
+						onChange={applyInstance}
+						optionValue="id"
+						optionTextValue="name"
+						itemComponent={(p) => (
+							<SelectItem item={p.item} class={styles["instance-select-item"]}>
+								<div class={styles["instance-item-content"]}>
+									<Show when={p.item.rawValue && p.item.rawValue.id !== null}>
+										<InstanceOptionIcon
+											instance={p.item.rawValue}
+											placeholderClass={
+												styles["instance-item-icon-placeholder"]
+											}
+										/>
+									</Show>
+									<span class={styles["instance-item-name"]}>
+										{p.item.rawValue?.name || "No Instance"}
+									</span>
+									<span class={styles["instance-item-meta"]}>
+										{p.item.rawValue?.minecraftVersion || ""}
+										{p.item.rawValue?.modloader
+											? ` · ${p.item.rawValue.modloader}`
+											: ""}
+									</span>
+								</div>
+							</SelectItem>
+						)}
+					>
+						<SelectTrigger class={styles["filter-select"]}>
+							<Show
+								when={selectedInstance()}
+								fallback={
+									<span class={styles["instance-trigger-name"]}>
+										No Instance
+									</span>
+								}
+							>
+								<div class={styles["instance-trigger-content"]}>
+									<Show
+										when={
+											selectedIconPreview.displaySource() || instanceIconUrl()
+										}
+										fallback={
+											<div class={styles["instance-icon-placeholder"]}>
+												{instanceDisplayChar()}
+											</div>
+										}
+									>
+										<div
+											class={styles["instance-item-icon"]}
+											style={iconBackgroundStyle(
+												selectedIconPreview.displaySource() ||
+													instanceIconUrl(),
+											)}
+											onMouseEnter={selectedIconPreview.activate}
+											onMouseLeave={selectedIconPreview.deactivate}
+											onFocusIn={selectedIconPreview.activate}
+											onFocusOut={selectedIconPreview.deactivate}
+										/>
+									</Show>
+									<span class={styles["instance-trigger-name"]}>
+										{selectedInstance()?.name}
+									</span>
+								</div>
+							</Show>
+						</SelectTrigger>
+						<SelectContent />
+					</Select>
+				</div>
+
 				<div class={styles["filter-popover-section"]}>
 					<label class={styles["filter-label"]}>Minecraft Version</label>
 					<Combobox
@@ -380,6 +562,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 						class={styles["filter-popover-reset"]}
 						onClick={() => {
 							resources.resetFilters();
+							activeRouter()?.updateQuery("selectedInstanceId", null);
+							activeRouter()?.updateQuery("gameVersion", null);
+							activeRouter()?.updateQuery("loader", null);
+							activeRouter()?.updateQuery("categories", []);
+							activeRouter()?.updateQuery("query", "");
 						}}
 						type="button"
 					>

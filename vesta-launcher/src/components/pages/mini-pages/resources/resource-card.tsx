@@ -229,6 +229,17 @@ const ResourceCard: Component<{
 
 	const MODLOADER_IDS = new Set(["fabric", "forge", "quilt", "neoforge"]);
 
+	const formatLoaderLabel = (loader: string) => {
+		const labels: Record<string, string> = {
+			fabric: "Fabric",
+			forge: "Forge",
+			quilt: "Quilt",
+			neoforge: "NeoForge",
+		};
+		const lower = loader.toLowerCase();
+		return labels[lower] || loader.charAt(0).toUpperCase() + loader.slice(1);
+	};
+
 	const displayCategories = createMemo(() =>
 		props.project.categories.filter(
 			(c) => !resources.state.loader || !MODLOADER_IDS.has(c.toLowerCase()),
@@ -499,7 +510,8 @@ const ResourceCard: Component<{
 	};
 
 	const Tag = (tag: string) => {
-		const tagLower = tag.toLowerCase();
+		const tagLower = String(tag).toLowerCase();
+		const isModloaderTag = MODLOADER_IDS.has(tagLower);
 
 		const categoryObj = () =>
 			resources.state.availableCategories.length > 0
@@ -510,27 +522,43 @@ const ResourceCard: Component<{
 					)
 				: null;
 
-		const isActive = () =>
-			resources.state.availableCategories.length > 0
-				? resources.state.categories.includes(
-						(categoryObj()?.id || tag).toLowerCase(),
-					)
-				: false;
+		const isActive = () => {
+			if (isModloaderTag) {
+				return resources.state.loader?.toLowerCase() === tagLower;
+			}
+			return resources.state.categories.some(
+				(c) => c.toLowerCase() === (categoryObj()?.id || tag).toLowerCase(),
+			);
+		};
 
 		return (
 			<Badge
 				variant="theme"
-				round
+				clickable
 				class={styles["resource-tag"]}
 				active={isActive()}
 				onClick={(e) => {
+					e.preventDefault();
 					e.stopPropagation();
+					if (isModloaderTag) {
+						const next =
+							resources.state.loader?.toLowerCase() === tagLower
+								? null
+								: tagLower;
+						resources.setLoader(next);
+						activeRouter()?.updateQuery("loader", next);
+						return;
+					}
 					const filterId = categoryObj()?.id || tag;
-					resources.toggleCategory(filterId.toLowerCase());
-					resources.setOffset(0);
+					resources.toggleCategory(filterId);
+					activeRouter()?.updateQuery(
+						"categories",
+						resources.state.categories,
+					);
+					activeRouter()?.updateQuery("loader", resources.state.loader);
 				}}
 			>
-				{categoryObj()?.name || tag}
+				{isModloaderTag ? formatLoaderLabel(tagLower) : categoryObj()?.name || tag}
 			</Badge>
 		);
 	};
@@ -622,7 +650,7 @@ const ResourceCard: Component<{
 											Math.min(effectiveLimit(), displayCategories().length),
 										)}
 									>
-										{Tag}
+										{(tag) => Tag(tag)}
 									</For>
 								</div>
 								<Show when={displayCategories().length > effectiveLimit()}>
@@ -638,7 +666,7 @@ const ResourceCard: Component<{
 										>
 											<div class={styles["tooltip-tags"]}>
 												<For each={displayCategories().slice(effectiveLimit())}>
-													{Tag}
+													{(tag) => Tag(tag)}
 												</For>
 											</div>
 										</TooltipContent>
@@ -723,7 +751,7 @@ const ResourceCard: Component<{
 										Math.min(effectiveLimit(), displayCategories().length),
 									)}
 								>
-									{Tag}
+									{(tag) => Tag(tag)}
 								</For>
 							</div>
 							<Show when={displayCategories().length > effectiveLimit()}>
@@ -736,7 +764,7 @@ const ResourceCard: Component<{
 									>
 										<div class={styles["tooltip-tags"]}>
 											<For each={displayCategories().slice(effectiveLimit())}>
-												{Tag}
+												{(tag) => Tag(tag)}
 											</For>
 										</div>
 									</TooltipContent>

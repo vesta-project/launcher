@@ -88,6 +88,7 @@ export type TextFieldProps = TextFieldPrimitive.TextFieldRootProps & {
 	onInput?: (e: any) => void;
 	onFocus?: (e: any) => void;
 	onBlur?: (e: any) => void;
+	onKeyDown?: (e: any) => void;
 	class?: string;
 };
 
@@ -98,6 +99,7 @@ export function TextField(props: TextFieldProps) {
 		"class",
 		"onFocus",
 		"onBlur",
+		"onKeyDown",
 	]);
 	return (
 		<TextFieldRoot class={clsx(styles["text-field"], local.class)} {...rest}>
@@ -106,6 +108,7 @@ export function TextField(props: TextFieldProps) {
 				onInput={local.onInput}
 				onFocus={local.onFocus}
 				onBlur={local.onBlur}
+				onKeyDown={local.onKeyDown}
 			/>
 		</TextFieldRoot>
 	);

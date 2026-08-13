@@ -1,10 +1,8 @@
 import FilterIcon from "@assets/icons/content/filter.svg";
-import DesktopAddIcon from "@assets/icons/actions/desktop-add.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { sourcesForResourceType } from "@resources/source-catalog";
-import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import {
@@ -15,14 +13,12 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { TextField } from "@ui/text-field/text-field";
-import { resolveResourceUrl } from "@utils/assets";
-import {
-	createAnimatedIconPreview,
-	iconBackgroundStyle,
-} from "@utils/icon-animation";
-import { DEFAULT_ICONS } from "@utils/instances";
 import { batch, createMemo, For, Show } from "solid-js";
-import { ActiveFilterChips } from "./active-filter-chips";
+import {
+	activeBrowseFilterCount,
+	ActiveFilterChips,
+	hasActiveBrowseFilters,
+} from "./active-filter-chips";
 import { FilterPopover } from "./filter-popover";
 import styles from "./resource-browser.module.css";
 
@@ -35,80 +31,18 @@ const RESOURCE_TYPES = [
 	{ value: "world", label: "Worlds" },
 ] as const;
 
-function InstanceOptionIcon(props: {
-	instance: any;
-	placeholderClass: string;
-}) {
-	const iconPath = () => props.instance?.iconPath || DEFAULT_ICONS[0];
-	const iconPreview = createAnimatedIconPreview(iconPath);
-	const displayChar = () => {
-		const name = props.instance?.name || "?";
-		const match = name.match(/[a-zA-Z]/);
-		return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
-	};
-
-	return (
-		<Show
-			when={iconPreview.displaySource()}
-			fallback={<div class={props.placeholderClass}>{displayChar()}</div>}
-		>
-			<div
-				class={styles["instance-item-icon"]}
-				style={iconBackgroundStyle(iconPreview.displaySource())}
-				onMouseEnter={iconPreview.activate}
-				onMouseLeave={iconPreview.deactivate}
-				onFocusIn={iconPreview.activate}
-				onFocusOut={iconPreview.deactivate}
-			/>
-		</Show>
-	);
-}
-
 export function ResourceToolbar(props: {
 	router?: MiniRouter;
 	onSearchInput: (value: string) => void;
+	onSearchCommit?: (value: string) => void;
 	searchValue: string;
 }) {
 	const activeRouter = () => props.router || router();
-	const isModpack = () => resources.state.resourceType === "modpack";
-
-	const selectedInstance = () => {
-		if (!resources.state.selectedInstanceId) return null;
-		return (
-			instancesState.instances.find(
-				(i) => i.id === resources.state.selectedInstanceId,
-			) || null
-		);
-	};
-
-	const instanceIconUrl = () => {
-		const inst = selectedInstance();
-		if (!inst) return null;
-		return resolveResourceUrl(inst.iconPath || DEFAULT_ICONS[0]);
-	};
-	const selectedIconPreview = createAnimatedIconPreview(
-		() => selectedInstance()?.iconPath || DEFAULT_ICONS[0],
-	);
-
-	const instanceDisplayChar = () => {
-		const inst = selectedInstance();
-		if (!inst) return "?";
-		const match = inst.name.match(/[a-zA-Z]/);
-		return match ? match[0].toUpperCase() : inst.name.charAt(0).toUpperCase();
-	};
-
-	const activeFilterCount = createMemo(() => {
-		let count = 0;
-		if (resources.state.gameVersion) count++;
-		if (resources.state.loader) count++;
-		count += resources.state.categories.length;
-		return count;
-	});
+	const filterCount = createMemo(() => activeBrowseFilterCount());
 
 	return (
 		<div class={styles["toolbar"]}>
-			{/* Row 1: Search, Source, View */}
-			<div class={styles["toolbar-row-top"]}>
+			<div class={styles["toolbar-row"]}>
 				<Select<string>
 					options={RESOURCE_TYPES.map((t) => t.value)}
 					value={resources.state.resourceType}
@@ -146,22 +80,48 @@ export function ResourceToolbar(props: {
 					<SelectContent />
 				</Select>
 
-				<div class={styles["search-container"]} data-keybinding-search>
-					<SearchIcon class={styles["search-svg"]} />
-					<TextField
-						placeholder="Search resources..."
-						value={props.searchValue}
-						onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) =>
-							props.onSearchInput(e.currentTarget.value)
-						}
-						class={styles["toolbar-search-field"]}
-					/>
+				<div class={styles["search-group"]} data-keybinding-search>
+					<div class={styles["search-container"]}>
+						<SearchIcon class={styles["search-svg"]} />
+						<TextField
+							placeholder="Search… or mc:1.21.1 loader:neo"
+							value={props.searchValue}
+							onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) =>
+								props.onSearchInput(e.currentTarget.value)
+							}
+							onKeyDown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
+								if (e.key === "Enter") {
+									e.preventDefault();
+									props.onSearchCommit?.(e.currentTarget.value);
+								}
+							}}
+							class={styles["toolbar-search-field"]}
+						/>
+					</div>
+					<Popover>
+						<PopoverTrigger
+							class={styles["search-filter-trigger"]}
+							classList={{ [styles["has-filters"]]: filterCount() > 0 }}
+							aria-label="Filters"
+							title="Filters"
+						>
+							<FilterIcon width="16" height="16" />
+							<Show when={filterCount() > 0}>
+								<span class={styles["filter-count-badge"]}>
+									<span class={styles["filter-count-badge-text"]}>
+										{filterCount()}
+									</span>
+								</span>
+							</Show>
+						</PopoverTrigger>
+						<PopoverContent class={styles["filter-popover"]}>
+							<FilterPopover router={activeRouter()} />
+						</PopoverContent>
+					</Popover>
 				</div>
 
 				<div class={styles["source-toggle"]}>
-					<For
-						each={sourcesForResourceType(resources.state.resourceType)}
-					>
+					<For each={sourcesForResourceType(resources.state.resourceType)}>
 						{(source) => (
 							<button
 								class={styles["source-btn"]}
@@ -185,156 +145,12 @@ export function ResourceToolbar(props: {
 				</div>
 			</div>
 
-			{/* Row 2: Instance picker, Filter button, Active chips */}
-			<div class={styles["toolbar-row-controls"]}>
-				{/* Compact instance icon button */}
-				<div
-					class={styles["instance-selector-wrapper"]}
-					classList={{ [styles.disabled]: isModpack() }}
-					title={
-						isModpack()
-							? "Instance selection is disabled for modpacks"
-							: undefined
-					}
-				>
-					<Select<any>
-						disabled={isModpack()}
-						options={[
-							{ id: "none", name: "No Instance" } as any,
-							...instancesState.instances,
-						]}
-						value={
-							resources.state.selectedInstanceId
-								? instancesState.instances.find(
-										(i) => i.id === resources.state.selectedInstanceId,
-									) || ({ id: "none", name: "No Instance" } as any)
-								: ({ id: "none", name: "No Instance" } as any)
-						}
-						onChange={(instance: any) => {
-							batch(() => {
-								const id =
-									instance?.id === "none" ? null : (instance?.id ?? null);
-								resources.setInstance(id);
-								if (id && instance) {
-									resources.setGameVersion(instance.minecraftVersion);
-									if (resources.state.resourceType === "mod") {
-										const loader = instance.modloader?.toLowerCase();
-										if (loader && loader !== "vanilla") {
-											resources.setLoader(instance.modloader);
-										} else {
-											resources.setLoader(null);
-										}
-									} else {
-										resources.setLoader(null);
-									}
-								} else {
-									resources.setGameVersion(null);
-									resources.setLoader(null);
-								}
-								activeRouter()?.updateQuery("selectedInstanceId", id);
-								activeRouter()?.updateQuery(
-									"gameVersion",
-									resources.state.gameVersion,
-								);
-								activeRouter()?.updateQuery("loader", resources.state.loader);
-							});
-						}}
-						optionValue="id"
-						optionTextValue="name"
-						itemComponent={(p) => (
-							<SelectItem item={p.item} class={styles["instance-select-item"]}>
-								<div class={styles["instance-item-content"]}>
-									<Show when={p.item.rawValue && p.item.rawValue.id !== null}>
-										<InstanceOptionIcon
-											instance={p.item.rawValue}
-											placeholderClass={
-												styles["instance-item-icon-placeholder"]
-											}
-										/>
-									</Show>
-									<span class={styles["instance-item-name"]}>
-										{p.item.rawValue?.name || "No Instance"}
-									</span>
-									<span class={styles["instance-item-meta"]}>
-										{p.item.rawValue?.minecraftVersion || ""}
-										{p.item.rawValue?.modloader
-											? ` · ${p.item.rawValue.modloader}`
-											: ""}
-									</span>
-								</div>
-							</SelectItem>
-						)}
-					>
-						<SelectTrigger class={styles["instance-icon-trigger"]}>
-							<Show
-								when={selectedInstance()}
-								fallback={
-									<div class={styles["instance-trigger-content"]}>
-										<div class={styles["instance-icon-placeholder"]}>
-											<DesktopAddIcon width="16" height="16" />
-										</div>
-										<span class={styles["instance-trigger-name"]}>
-											Select an instance
-										</span>
-									</div>
-								}
-							>
-								<div class={styles["instance-trigger-content"]}>
-									<Show
-										when={
-											selectedIconPreview.displaySource() || instanceIconUrl()
-										}
-										fallback={
-											<div class={styles["instance-icon-placeholder"]}>
-												{instanceDisplayChar()}
-											</div>
-										}
-									>
-										<div
-											class={styles["instance-item-icon"]}
-											style={iconBackgroundStyle(
-												selectedIconPreview.displaySource() ||
-													instanceIconUrl(),
-											)}
-											onMouseEnter={selectedIconPreview.activate}
-											onMouseLeave={selectedIconPreview.deactivate}
-											onFocusIn={selectedIconPreview.activate}
-											onFocusOut={selectedIconPreview.deactivate}
-										/>
-									</Show>
-									<span class={styles["instance-trigger-name"]}>
-										{selectedInstance()?.name}
-									</span>
-								</div>
-							</Show>
-						</SelectTrigger>
-						<SelectContent />
-					</Select>
-				</div>
-
-				<Popover>
-					<PopoverTrigger
-						class={styles["filter-popover-trigger"]}
-						classList={{ [styles["has-filters"]]: activeFilterCount() > 0 }}
-					>
-						<FilterIcon width="16" height="16" />
-						<span>Filters</span>
-						<Show when={activeFilterCount() > 0}>
-							<span class={styles["filter-count-badge"]}>
-								{activeFilterCount()}
-							</span>
-						</Show>
-					</PopoverTrigger>
-					<PopoverContent class={styles["filter-popover"]}>
-						<FilterPopover router={activeRouter()} />
-					</PopoverContent>
-				</Popover>
-
-				<Show when={activeFilterCount() > 0}>
-					<div class={styles["filter-divider"]} />
-				</Show>
-
-				<div class={styles["active-filters-inline"]}>
+			<div
+				class={styles["active-filters-strip"]}
+				classList={{ [styles["is-open"]]: hasActiveBrowseFilters() }}
+				aria-hidden={!hasActiveBrowseFilters()}
+			>
+				<div class={styles["active-filters-strip-collapse"]}>
 					<ActiveFilterChips router={activeRouter()} />
 				</div>
 			</div>
