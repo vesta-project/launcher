@@ -86,18 +86,33 @@
 	}
 }
 
-/* Light mode adjustments */
-@media (prefers-color-scheme: light) {
-	.tabs__list {
+/* Explicit theme mode takes precedence; OS preference is only the fallback. */
+:root[data-theme="light"] .tabs__list {
 		background: var(--surface-raised);
 	}
 
-	.tabs__trigger[data-selected] {
+
+:root[data-theme="light"] .tabs__trigger[data-selected] {
 		background: var(--surface-overlay);
 		color: var(--text-primary);
 	}
 
-	.tabs__indicator {
+
+:root[data-theme="light"] .tabs__indicator {
+		background: var(--surface-overlay);
+	}
+
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme="dark"]) .tabs__list {
+		background: var(--surface-raised);
+	}
+
+	:root:not([data-theme="dark"]) .tabs__trigger[data-selected] {
+		background: var(--surface-overlay);
+		color: var(--text-primary);
+	}
+
+	:root:not([data-theme="dark"]) .tabs__indicator {
 		background: var(--surface-overlay);
 	}
 }

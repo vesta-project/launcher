@@ -5,7 +5,7 @@ vi.mock("./transitionManager", () => ({
 	startThemeTransition: vi.fn(),
 }));
 
-import { applyTheme } from "./applier";
+import { applyTheme, setColorModePreference } from "./applier";
 
 function createTheme(overrides: Partial<ThemeConfig> = {}): ThemeConfig {
 	return {
@@ -26,6 +26,7 @@ function createTheme(overrides: Partial<ThemeConfig> = {}): ThemeConfig {
 
 describe("applyTheme background and effect behavior", () => {
 	beforeEach(() => {
+		setColorModePreference("system");
 		const root = document.documentElement;
 		root.style.cssText = "";
 		root.removeAttribute("data-theme-id");
@@ -37,6 +38,17 @@ describe("applyTheme background and effect behavior", () => {
 		root.removeAttribute("data-startup-fallback-active");
 		root.setAttribute("data-os", "windows");
 		document.getElementById("theme-custom-css")?.remove();
+	});
+
+	it("keeps the app color mode independent from theme presets", () => {
+		const root = document.documentElement;
+		setColorModePreference("light");
+
+		applyTheme(createTheme({ colorScheme: "dark" }));
+		expect(root.getAttribute("data-theme")).toBe("light");
+
+		applyTheme(createTheme({ id: "another-theme", colorScheme: "dark" }));
+		expect(root.getAttribute("data-theme")).toBe("light");
 	});
 
 	it("keeps opacity-controlled solid overlay when effect is enabled and gradient is disabled", () => {

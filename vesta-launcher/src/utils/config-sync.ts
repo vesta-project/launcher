@@ -7,12 +7,15 @@ import { createStore } from "solid-js/store";
 import {
 	type AppThemeConfig,
 	applyTheme,
+	type ColorModePreference,
 	configToTheme,
 	getThemeById,
+	normalizeColorModePreference,
 	normalizeStyleMode,
 	PRESET_THEMES,
 	parseThemeData,
 	serializeThemeData,
+	setColorModePreference,
 	type ThemeVariableValue,
 } from "../themes/presets";
 
@@ -173,6 +176,8 @@ export const [currentThemeConfig, setCurrentThemeConfig] = createStore<
 
 export const [uiChromeModeEnabled, _setUiChromeModeEnabled] =
 	createSignal(true);
+export const [colorMode, _setColorMode] =
+	createSignal<ColorModePreference>("system");
 
 function syncUiChromeAttribute(enabled: boolean): void {
 	document.documentElement.dataset.uiChromeEnabled = enabled ? "true" : "false";
@@ -181,6 +186,12 @@ function syncUiChromeAttribute(enabled: boolean): void {
 export function setUiChromeModeEnabled(enabled: boolean): void {
 	_setUiChromeModeEnabled(enabled);
 	syncUiChromeAttribute(enabled);
+}
+
+export function setColorMode(value: unknown): void {
+	const normalized = normalizeColorModePreference(value);
+	_setColorMode(normalized);
+	setColorModePreference(normalized);
 }
 
 /**
@@ -224,6 +235,9 @@ export function applyCommonConfigUpdates(field: string, value: any): void {
 	}
 	if (field === "ui_chrome_mode_enabled" && typeof value === "boolean") {
 		setUiChromeModeEnabled(value);
+	}
+	if (field === "theme") {
+		setColorMode(value);
 	}
 	// Add more common handlers here as needed
 }
@@ -477,6 +491,7 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 
 	batch(() => {
 		setCurrentThemeConfig(snapshot);
+		setColorMode(config.theme);
 	});
 
 	applyTheme(configToTheme(snapshot));

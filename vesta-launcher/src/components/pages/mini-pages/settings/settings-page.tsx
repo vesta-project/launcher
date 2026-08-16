@@ -1,7 +1,7 @@
 import { PageSidebar } from "@components/page-sidebar/page-sidebar";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { cleanupSettings, initSettings, loading } from "@stores/settings";
+import { initSettings, loading } from "@stores/settings";
 import { prefetchSettingsData } from "@stores/settings-cache";
 import { TabsContent } from "@ui/tabs/tabs";
 import {
@@ -15,7 +15,6 @@ import {
 	ErrorBoundary,
 	For,
 	type JSXElement,
-	onCleanup,
 	onMount,
 	Show,
 	Suspense,
@@ -187,10 +186,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		activeRouter()?.registerStateProvider("/config", () => ({
 			activeTab: selectedTab(),
 		}));
-	});
-
-	onCleanup(() => {
-		cleanupSettings();
 	});
 
 	const settingsTabs = createMemo(() =>

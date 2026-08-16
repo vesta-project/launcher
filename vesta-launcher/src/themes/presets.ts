@@ -135,6 +135,9 @@ export function getThemeById(id: string): ThemeConfig | undefined {
 
 export {
 	applyTheme,
+	type ColorModePreference,
+	normalizeColorModePreference,
+	setColorModePreference,
 	type ThemeApplyOptions,
 	type ThemeApplyTransition,
 } from "./engine/applier";

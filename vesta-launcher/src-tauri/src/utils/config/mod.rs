@@ -102,6 +102,7 @@ use tauri::Emitter;
 pub struct AppConfig {
     pub id: i32, // Always 1 - we only have one config row
     pub background_hue: i32,
+    // Legacy column retained as the app-level "system" / "light" / "dark" preference.
     pub theme: String,
     pub language: String,
     pub max_download_threads: i32,

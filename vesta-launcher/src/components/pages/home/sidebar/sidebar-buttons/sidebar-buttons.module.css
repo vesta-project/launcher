@@ -80,6 +80,7 @@
 
 .sidebar-action-button {
 	padding: 10px;
+	color: var(--icon-primary);
 	background: linear-gradient(
 		to bottom,
 		hsl(0deg 0% 71% / 1%),
@@ -93,14 +94,10 @@
 		transition-property: fill;
 		transition-duration: 20ms;
 		transition-timing-function: linear;
-		fill: var(--icon-secondary);
+		fill: currentColor;
 	}
 
 	&:hover {
-		& svg path {
-			fill: var(--icon-primary);
-		}
-
 		background: linear-gradient(
 			-45deg,
 			hsl(0deg 0% 71% / 9%),

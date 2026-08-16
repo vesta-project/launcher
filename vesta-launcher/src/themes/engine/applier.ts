@@ -16,6 +16,30 @@ const STARTUP_FALLBACK_ATTR = "data-startup-fallback-active";
 const CUSTOM_CSS_TAG_ID = "theme-custom-css";
 const CUSTOM_CSS_OWNER_ATTR = "data-theme-custom-css-owner";
 
+export type ColorModePreference = "system" | "light" | "dark";
+
+let colorModePreference: ColorModePreference = "system";
+
+export function normalizeColorModePreference(
+	value: unknown,
+): ColorModePreference {
+	return value === "light" || value === "dark" ? value : "system";
+}
+
+function applyColorModePreference(root = document.documentElement): void {
+	if (colorModePreference === "system") {
+		root.removeAttribute("data-theme");
+	} else {
+		root.dataset.theme = colorModePreference;
+	}
+}
+
+export function setColorModePreference(value: unknown): ColorModePreference {
+	colorModePreference = normalizeColorModePreference(value);
+	applyColorModePreference();
+	return colorModePreference;
+}
+
 function clearStartupFallbackIfActive(
 	root: HTMLElement,
 	style: CSSStyleDeclaration,
@@ -201,6 +225,7 @@ export function applyTheme(
 
 		if (!anyVarChanged && !hasRemovedThemeVars && !customCssChanged) {
 			applyCustomCss(theme);
+			applyColorModePreference(root);
 			return;
 		}
 	}
@@ -238,12 +263,8 @@ export function applyTheme(
 	root.setAttribute("data-style", styleMode);
 	root.setAttribute("data-gradient-type", theme.gradientType || "linear");
 
-	// Apply color scheme attribute (forces dark/light mode regardless of system)
-	if (theme.colorScheme) {
-		root.setAttribute("data-theme", theme.colorScheme);
-	} else {
-		root.removeAttribute("data-theme");
-	}
+	// Color mode is an app preference and intentionally independent of presets.
+	applyColorModePreference(root);
 
 	root.removeAttribute("data-bordered");
 	root.removeAttribute("data-solid");

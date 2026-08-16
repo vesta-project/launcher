@@ -128,6 +128,7 @@ body {
 	--text-inverse: hsl(var(--color__primary-hue) 5% 10%);
 	--text-on-primary: hsl(var(--color__primary-hue) 5% 95%);
 	--text-on-accent: hsl(var(--color__primary-hue) 5% 95%);
+	--text-link: hsl(var(--color__primary-hue) 80% 68%);
 
 	--primary-low: hsl(var(--color__primary-hue) 70% 50% / 0.15);
 	--primary-accent: hsl(var(--color__primary-hue) 80% 60%);
@@ -435,8 +436,8 @@ body {
 	--lightness-surface-overlay: 95%;
 	--lightness-surface-sunken: 80%;
 	--lightness-text-primary: 15%;
-	--lightness-text-secondary: 35%;
-	--lightness-text-tertiary: 55%;
+	--lightness-text-secondary: 30%;
+	--lightness-text-tertiary: 40%;
 	--lightness-border: 60%;
 
 	/* Make background gradient more visible in light mode (relying on global settings) */
@@ -474,6 +475,7 @@ body {
 	--text-on-primary: hsl(var(--color__primary-hue) 5% 12%);
 	--text-on-secondary: hsl(var(--color__primary-hue) 5% 12%);
 	--text-on-accent: hsl(var(--color__primary-hue) 5% 12%);
+	--text-link: hsl(var(--color__primary-hue) 75% 30%);
 
 	/* Header and navigation colors for light mode (DARK text/icons) */
 	--page-viewer-nav-color: hsl(var(--color__primary-hue) 30% 25%);
@@ -523,8 +525,8 @@ body {
 		--lightness-surface-overlay: 95%;
 		--lightness-surface-sunken: 80%;
 		--lightness-text-primary: 15%;
-		--lightness-text-secondary: 35%;
-		--lightness-text-tertiary: 55%;
+		--lightness-text-secondary: 30%;
+		--lightness-text-tertiary: 40%;
 		--lightness-border: 60%;
 
 		/* Make background gradient more visible in light mode (relying on global settings) */
@@ -562,6 +564,7 @@ body {
 		--text-on-primary: hsl(var(--color__primary-hue) 5% 12%);
 		--text-on-secondary: hsl(var(--color__primary-hue) 5% 12%);
 		--text-on-accent: hsl(var(--color__primary-hue) 5% 12%);
+		--text-link: hsl(var(--color__primary-hue) 75% 30%);
 
 		/* Header and navigation colors for light mode (DARK text/icons) */
 		--page-viewer-nav-color: hsl(var(--color__primary-hue) 30% 25%);
@@ -630,7 +633,7 @@ body {
 
 /* High contrast mode support */
 @media (prefers-contrast: more) {
-	:root {
+	:root[data-theme="light"] {
 		--lightness-text-primary: 5%;
 		font-weight: 500;
 		--border-strong: hsl(
@@ -638,6 +641,22 @@ body {
 			0.9
 		);
 	}
+
+	:root:not([data-theme="light"]) {
+		--lightness-text-primary: 98%;
+		font-weight: 500;
+		--border-strong: hsl(
+			var(--color__primary-hue) 30% var(--lightness-border) /
+			0.9
+		);
+	}
+
+	@media (prefers-color-scheme: light) {
+		:root:not([data-theme="dark"]) {
+			--lightness-text-primary: 5%;
+		}
+	}
+
 	.sidebar__notification {
 		border-width: 1.5px;
 	}

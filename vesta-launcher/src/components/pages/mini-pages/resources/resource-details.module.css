@@ -364,6 +364,10 @@
 	min-width: 0;
 }
 
+.resource-details-sidebar.theme-card {
+	background: transparent;
+}
+
 .sidebar-section {
 	padding: 14px 16px;
 }
@@ -501,7 +505,7 @@
 .view-all-link {
 	background: none;
 	border: none;
-	color: var(--primary);
+	color: var(--text-link);
 	font-size: 12px;
 	cursor: default;
 	padding: 0;
@@ -599,7 +603,7 @@
 }
 
 .tab-btn[data-selected] {
-	color: var(--primary);
+	color: var(--text-link);
 	background: color-mix(in srgb, var(--primary) 9%, var(--surface-raised));
 	border-color: color-mix(in srgb, var(--primary) 25%, var(--border-subtle));
 	box-shadow: none;
@@ -1030,7 +1034,7 @@
 	min-height: 30px;
 	min-width: 30px;
 	padding: 5px 8px;
-	color: var(--primary);
+	color: var(--text-link);
 	background: color-mix(in srgb, var(--primary) 8%, transparent);
 	border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border-subtle));
 	border-radius: 5px;
@@ -1113,7 +1117,7 @@
 
 .all-versions-link:hover,
 .show-all-link:hover {
-	color: var(--primary);
+	color: var(--text-link);
 }
 
 .artifact-card {
@@ -1133,7 +1137,7 @@
 	justify-content: center;
 	width: 38px;
 	height: 38px;
-	color: var(--primary);
+	color: var(--text-link);
 	background: var(--surface-raised);
 	border: 1px solid var(--border-subtle);
 	border-radius: 8px;
@@ -2111,7 +2115,7 @@
 }
 
 .description a {
-	color: var(--primary);
+	color: var(--text-link);
 	text-decoration: none;
 }
 

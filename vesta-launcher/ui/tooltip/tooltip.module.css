@@ -16,9 +16,14 @@
 .tooltip__content[data-expanded] {
 	animation: contentShow 50ms ease-out;
 }
-/* Light mode tooltip override */
+/* Explicit theme mode takes precedence; OS preference is only the fallback. */
+:root[data-theme="light"] .tooltip__content {
+	background-color: var(--surface-overlay);
+	border: var(--border-width-strong) solid var(--border-strong);
+}
+
 @media (prefers-color-scheme: light) {
-	.tooltip__content {
+	:root:not([data-theme="dark"]) .tooltip__content {
 		background-color: var(--surface-overlay);
 		border: var(--border-width-strong) solid var(--border-strong);
 	}

@@ -12,7 +12,7 @@
 .sidebar {
 	width: 160px;
 	min-width: 160px;
-	background: hsl(var(--liquid-tint-color) / 0.3);
+	background: transparent;
 	backdrop-filter: var(--liquid-backdrop-filter);
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	display: flex;
@@ -36,7 +36,8 @@
 	overflow: visible;
 	border: 0;
 	border-radius: 0;
-	background: transparent;
+	background: transparent !important;
+	border-color: transparent;
 }
 
 .button {

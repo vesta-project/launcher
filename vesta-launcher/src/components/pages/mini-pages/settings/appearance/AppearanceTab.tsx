@@ -11,6 +11,7 @@ import {
 	canChangeBorder,
 	canChangeHue,
 	canChangeStyle,
+	colorMode,
 	filteredThemeCatalog,
 	getThemeSource,
 	gradientEnabled,
@@ -19,6 +20,7 @@ import {
 	grainStrength,
 	handleBackgroundOpacityChange,
 	handleBorderThicknessChange,
+	handleColorModeChange,
 	handleDeleteImportedTheme,
 	handleExportTheme,
 	handleGradientHarmonyChange,
@@ -62,6 +64,7 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import {
+	type ColorModePreference,
 	type GradientHarmony,
 	getThemeById,
 	isBuiltinThemeId,
@@ -76,7 +79,6 @@ import { UiChromeModeControl } from "./UiChromeModeControl";
 
 type ThemeFilterMode = "all" | "builtin" | "imported";
 type ThemeViewMode = "grid" | "list";
-
 export function AppearanceSettingsTab() {
 	const [isSearchExpanded, setIsSearchExpanded] = createSignal(
 		themeSearchQuery().trim().length > 0,
@@ -268,6 +270,32 @@ export function AppearanceSettingsTab() {
 					value={uiChromeMode()}
 					onChange={handleUiChromeModeChange}
 				/>
+
+				<SettingsCard
+					header="Color Mode"
+					subHeader="Choose how Vesta renders light and dark surfaces. This preference applies across themes and app restarts."
+				>
+					<SettingsField
+						label="Color Mode"
+						description="Follow the system appearance or keep Vesta in light or dark mode."
+						headerRight={
+							<ToggleGroup
+								value={colorMode()}
+								onChange={(mode) => {
+									if (mode) {
+										void handleColorModeChange(
+											mode as ColorModePreference,
+										);
+									}
+								}}
+							>
+								<ToggleGroupItem value="system">System</ToggleGroupItem>
+								<ToggleGroupItem value="light">Light</ToggleGroupItem>
+								<ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+							</ToggleGroup>
+						}
+					/>
+				</SettingsCard>
 
 				<Show when={canChangeHue()}>
 					<SettingsCard

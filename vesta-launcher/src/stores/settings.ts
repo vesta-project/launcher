@@ -25,9 +25,11 @@ import { showToast } from "@ui/toast/toast";
 import { getActiveAccount } from "@utils/auth";
 import {
 	currentThemeConfig,
+	colorMode,
 	onConfigUpdate,
 	saveThemeUpdate as persistThemeUpdate,
 	setUiChromeModeEnabled,
+	setColorMode,
 	uiChromeModeEnabled,
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
@@ -45,6 +47,7 @@ import { createStore, reconcile } from "solid-js/store";
 import {
 	applyTheme,
 	type GradientHarmony,
+	type ColorModePreference,
 	getAllThemes,
 	getSupportedWindowEffects,
 	getThemeById,
@@ -67,6 +70,7 @@ import {
 export interface AppConfig {
 	id: number;
 	background_hue: number;
+	/** Legacy config column now used for the app-level color mode preference. */
 	theme: string;
 	language: string;
 	max_download_threads: number;
@@ -144,19 +148,6 @@ interface ThemeImportResponse {
 
 type ThemeFilterMode = "all" | "builtin" | "imported";
 type ThemeViewMode = "grid" | "list";
-
-function createDebounce<T extends (...args: any[]) => any>(
-	fn: T,
-	delay: number,
-): { (...args: Parameters<T>): void; cancel: () => void } {
-	let timer: any;
-	const debounced = (...args: Parameters<T>) => {
-		clearTimeout(timer);
-		timer = setTimeout(() => fn(...args), delay);
-	};
-	debounced.cancel = () => clearTimeout(timer);
-	return debounced;
-}
 
 const initialThemeData = parseThemeData(currentThemeConfig.theme_data);
 const initialTheme = getThemeById(currentThemeConfig.theme_id || "vesta");
@@ -238,6 +229,7 @@ export const [backgroundOpacity, setBackgroundOpacity] = createSignal(
 export const uiChromeMode = createMemo<UiChromeMode>(() =>
 	uiChromeModeEnabled() ? "windowed" : "flat",
 );
+export { colorMode };
 export const [windowEffect, setWindowEffect] = createSignal(
 	normalizeWindowEffectForCurrentOS(
 		currentThemeConfig.theme_window_effect || "none",
@@ -515,14 +507,6 @@ export const javaOptions = createMemo(() => {
 	return options;
 });
 
-const debouncedPersistence = createDebounce(async (overrides: any) => {
-	await persistThemeUpdate(overrides);
-}, 100);
-
-export function cancelDebouncedPersistence() {
-	debouncedPersistence.cancel();
-}
-
 export async function refreshJavas() {
 	if (!hasTauriRuntime()) return;
 	try {
@@ -723,7 +707,7 @@ export function saveThemeUpdate(
 	);
 
 	if (!live) {
-		debouncedPersistence(persistenceData);
+		void persistThemeUpdate(persistenceData);
 	}
 }
 
@@ -867,6 +851,23 @@ export async function handleUiChromeModeChange(mode: UiChromeMode) {
 		});
 	} catch (error) {
 		console.error("Failed to persist UI chrome mode:", error);
+	}
+}
+
+export async function handleColorModeChange(mode: ColorModePreference) {
+	const previous = colorMode();
+	setColorMode(mode);
+
+	if (!hasTauriRuntime()) return;
+
+	try {
+		await invoke("update_config_field", {
+			field: "theme",
+			value: mode,
+		});
+	} catch (error) {
+		console.error("Failed to persist color mode:", error);
+		setColorMode(previous);
 	}
 }
 
@@ -1594,6 +1595,7 @@ async function initializeSettings() {
 				(await invoke<AppConfig>("get_config"));
 			batch(() => {
 				setDebugLogging(config.debug_logging);
+				setColorMode(config.theme);
 				setReducedMotion(config.reduced_motion ?? false);
 				setAutoUpdateEnabled(config.auto_update_enabled ?? true);
 				setStartupCheckUpdates(config.startup_check_updates ?? true);
@@ -1866,8 +1868,4 @@ async function initializeSettings() {
 			setInstanceDefaults((prev) => ({ ...prev, [field]: value }));
 		}
 	});
-}
-
-export function cleanupSettings() {
-	cancelDebouncedPersistence();
 }
