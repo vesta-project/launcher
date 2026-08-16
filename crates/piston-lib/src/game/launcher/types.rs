@@ -81,6 +81,14 @@ pub struct LaunchSpec {
 
     /// Post-exit hook command (optional)
     pub post_exit_hook: Option<String>,
+
+    /// Optional argv prefix that applies OS sandbox confinement (e.g. sandbox-exec).
+    /// Game-agnostic; produced by the host from `vesta-sandbox` prepare output.
+    pub sandbox_prefix: Option<Vec<String>>,
+
+    /// When true, `sandbox_prefix` wraps the entire command including any user wrapper.
+    /// When false, the user wrapper stays outermost and the prefix is inserted before Java.
+    pub sandbox_wraps_entire_command: bool,
 }
 
 impl LaunchSpec {
@@ -250,6 +258,8 @@ mod tests {
             wrapper_command: None,
             pre_launch_hook: None,
             post_exit_hook: None,
+            sandbox_prefix: None,
+            sandbox_wraps_entire_command: true,
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -283,6 +293,8 @@ mod tests {
             wrapper_command: None,
             pre_launch_hook: None,
             post_exit_hook: None,
+            sandbox_prefix: None,
+            sandbox_wraps_entire_command: true,
         };
 
         assert_eq!(spec.installed_version_id(), "forge-loader-47.2.0-1.20.1");

@@ -191,17 +191,39 @@ pub(crate) async fn reconcile_finished_process(
             "No exit status file for {}, using log file mtime as fallback",
             run_state.instance_id
         );
-        if let Err(error) = update_instance_playtime(
-            app_handle,
-            &run_state.instance_id,
-            &run_state.started_at,
-            &exited_at,
-        ) {
-            log::error!(
-                "Failed to update playtime for {} (fallback): {}",
-                run_state.instance_id,
-                error
-            );
+
+        // Exit handler never reported status — treat as an abnormal exit unless
+        // the user requested stop. Sandbox/profile failures often die before the
+        // exit handler can write exit_status.json.
+        if !stop_requested {
+            crashed = detect_store_and_emit_crash(app_handle, &run_state).unwrap_or(false);
+            if !crashed {
+                crashed = store_and_emit_abnormal_exit(app_handle, &run_state).unwrap_or(false);
+            }
+        }
+
+        if !crashed {
+            if let Err(error) = update_instance_playtime(
+                app_handle,
+                &run_state.instance_id,
+                &run_state.started_at,
+                &exited_at,
+            ) {
+                log::error!(
+                    "Failed to update playtime for {} (fallback): {}",
+                    run_state.instance_id,
+                    error
+                );
+            }
+        }
+    } else if !stop_requested {
+        log::warn!(
+            "No exit status file or usable log mtime for {}; treating as abnormal exit",
+            run_state.instance_id
+        );
+        crashed = detect_store_and_emit_crash(app_handle, &run_state).unwrap_or(false);
+        if !crashed {
+            crashed = store_and_emit_abnormal_exit(app_handle, &run_state).unwrap_or(false);
         }
     }
 
@@ -525,6 +547,50 @@ fn detect_store_and_emit_crash(
         return Ok(true);
     }
     Ok(false)
+}
+
+fn store_and_emit_abnormal_exit(
+    app_handle: &tauri::AppHandle,
+    run_state: &InstanceRunState,
+) -> Result<bool, String> {
+    let crash_info = crate::utils::crash_parser::CrashDetails {
+        crash_id: uuid::Uuid::new_v4().to_string(),
+        crash_type: "launch_other".to_string(),
+        category: "abnormal_exit".to_string(),
+        title: "Launch ended unexpectedly".to_string(),
+        message: "The game process exited before reporting a normal exit status. This often means the process was killed early (for example by an OS sandbox profile, a wrapper, or a native crash before logging)."
+            .to_string(),
+        evidence: Some(
+            "Missing exit_status.json from the exit handler after the process disappeared."
+                .to_string(),
+        ),
+        suspected_resources: Vec::new(),
+        suspects: Vec::new(),
+        suggested_fixes: vec![
+            "If sandbox is enabled, try Trusted (no sandbox) to confirm the profile is the cause."
+                .to_string(),
+            "Check the instance log for sandbox or JVM errors.".to_string(),
+            "Re-launch once; if it keeps failing, repair the instance.".to_string(),
+        ],
+        affected_mod_count: None,
+        report_path: None,
+        log_path: Some(run_state.log_file.to_string_lossy().to_string()),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        confidence: 0.7,
+        mclogs_url: None,
+        analysis: None,
+    };
+
+    log::error!(
+        "Abnormal exit detected for {}: missing exit status file",
+        run_state.instance_id
+    );
+    store_crash_details(&run_state.instance_id, &crash_info)?;
+    let _ = app_handle.emit(
+        "core://instance-crashed",
+        crash_event_payload(&run_state.instance_id, &crash_info),
+    );
+    Ok(true)
 }
 
 pub(crate) fn crash_event_payload(

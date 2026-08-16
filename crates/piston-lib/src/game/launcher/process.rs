@@ -188,6 +188,11 @@ pub async fn launch_prepared_game(
     game_base_command.extend(game_args.clone());
 
     // Resolve what the actual executable and its initial args are
+    let has_user_wrapper = spec
+        .wrapper_command
+        .as_ref()
+        .map(|w| !w.trim().is_empty())
+        .unwrap_or(false);
     let (executable, initial_args) = if let Some(ref wrapper) = spec.wrapper_command {
         let parts = shlex::split(wrapper)
             .unwrap_or_else(|| wrapper.split_whitespace().map(|s| s.to_string()).collect());
@@ -199,6 +204,14 @@ pub async fn launch_prepared_game(
     } else {
         (spec.java_path.to_string_lossy().to_string(), Vec::new())
     };
+
+    let (executable, initial_args) = apply_sandbox_prefix(
+        executable,
+        initial_args,
+        has_user_wrapper,
+        &spec.sandbox_prefix,
+        spec.sandbox_wraps_entire_command,
+    );
 
     if let Some(ref exit_handler_jar) = spec.exit_handler_jar {
         // Wrap with exit handler JAR
@@ -213,11 +226,10 @@ pub async fn launch_prepared_game(
         // If we have a wrapper, the executable is the wrapper, and its FIRST argument after its own args
         // should be the java path to run the exit handler.
         // Wait, if executable is Java (no wrapper), this works too.
-        command = tokio::process::Command::new(executable);
-        command.args(initial_args);
+        command = tokio::process::Command::new(&executable);
+        command.args(&initial_args);
 
-        // If there WAS a wrapper, we need to push Java path as the next arg
-        if spec.wrapper_command.is_some() {
+        if has_user_wrapper {
             command.arg(&spec.java_path);
         }
 
@@ -246,11 +258,10 @@ pub async fn launch_prepared_game(
         command.args(&game_base_command);
     } else {
         // No exit handler, just wrapper + game
-        command = tokio::process::Command::new(executable);
-        command.args(initial_args);
+        command = tokio::process::Command::new(&executable);
+        command.args(&initial_args);
 
-        // If there WAS a wrapper, we need to push Java path as the next arg
-        if spec.wrapper_command.is_some() {
+        if has_user_wrapper {
             command.arg(&spec.java_path);
         }
 
@@ -297,11 +308,15 @@ pub async fn launch_prepared_game(
         crate::game::launcher::process::quote_arg_internal(s)
     }
 
-    // Log the actual command being executed (with or without exit handler wrapper)
-    let full_cmd_str = if let Some(exit_handler_jar) = &spec.exit_handler_jar {
+    // Log the actual command being executed (sandbox + wrapper + exit handler).
+    let mut logged_cmd = vec![executable.clone()];
+    logged_cmd.extend(initial_args.iter().cloned());
+    if let Some(ref exit_handler_jar) = spec.exit_handler_jar {
+        if has_user_wrapper {
+            logged_cmd.push(spec.java_path.to_string_lossy().to_string());
+        }
         let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
-        let mut wrapper_cmd = vec![
-            spec.java_path.to_string_lossy().to_string(),
+        logged_cmd.extend([
             "-jar".to_string(),
             exit_handler_jar.to_string_lossy().to_string(),
             "--instance-id".to_string(),
@@ -310,23 +325,35 @@ pub async fn launch_prepared_game(
             exit_file.to_string_lossy().to_string(),
             "--log-file".to_string(),
             log_file.to_string_lossy().to_string(),
-            "--".to_string(),
-        ];
-        wrapper_cmd.extend(game_base_command.clone());
-        wrapper_cmd
-            .iter()
-            .map(|a| quote_arg(a))
-            .collect::<Vec<_>>()
-            .join(" ")
+        ]);
+        if let Some(ref pre_hook) = spec.pre_launch_hook {
+            logged_cmd.push("--pre-launch-hook".to_string());
+            logged_cmd.push(pre_hook.clone());
+        }
+        if let Some(ref post_hook) = spec.post_exit_hook {
+            logged_cmd.push("--post-exit-hook".to_string());
+            logged_cmd.push(post_hook.clone());
+        }
+        logged_cmd.push("--".to_string());
+        logged_cmd.extend(game_base_command.iter().cloned());
     } else {
-        game_base_command
-            .iter()
-            .map(|a| quote_arg(a))
-            .collect::<Vec<_>>()
-            .join(" ")
-    };
+        if has_user_wrapper {
+            logged_cmd.push(spec.java_path.to_string_lossy().to_string());
+        }
+        logged_cmd.extend(jvm_args.iter().cloned());
+        logged_cmd.push(main_class.clone());
+        logged_cmd.extend(game_args.iter().cloned());
+    }
+    let full_cmd_str = logged_cmd
+        .iter()
+        .map(|a| quote_arg(a))
+        .collect::<Vec<_>>()
+        .join(" ");
 
     log::info!("Exec command: {}", full_cmd_str);
+    if let Some(ref prefix) = spec.sandbox_prefix {
+        log::info!("Sandbox prefix: {:?}", prefix);
+    }
     log::debug!("Java: {:?}", spec.java_path);
     log::debug!("Main class: {}", main_class);
     log::debug!("Working directory: {:?}", spec.game_dir);
@@ -490,6 +517,38 @@ pub async fn launch_prepared_game(
         log_file,
         handle,
     })
+}
+
+/// Apply an optional OS sandbox argv prefix around the resolved executable.
+///
+/// - `wraps_entire_command`: sandbox becomes the new executable and wraps the
+///   previous executable (including a user wrapper).
+/// - otherwise (wrapper-outside): keep the user wrapper as executable and append
+///   the sandbox prefix before Java is pushed by the caller.
+fn apply_sandbox_prefix(
+    executable: String,
+    initial_args: Vec<String>,
+    has_user_wrapper: bool,
+    sandbox_prefix: &Option<Vec<String>>,
+    wraps_entire_command: bool,
+) -> (String, Vec<String>) {
+    let Some(prefix) = sandbox_prefix.as_ref() else {
+        return (executable, initial_args);
+    };
+    if prefix.is_empty() {
+        return (executable, initial_args);
+    }
+
+    if wraps_entire_command || !has_user_wrapper {
+        let mut args = prefix[1..].to_vec();
+        args.push(executable);
+        args.extend(initial_args);
+        (prefix[0].clone(), args)
+    } else {
+        let mut args = initial_args;
+        args.extend(prefix.iter().cloned());
+        (executable, args)
+    }
 }
 
 /// Internal quoting helper used for logs / shell-copy; kept separate so it can be

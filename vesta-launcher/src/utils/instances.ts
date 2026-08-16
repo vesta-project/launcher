@@ -143,6 +143,11 @@ export interface Instance {
 	postExitHook: string | null;
 	wrapperCommand: string | null;
 
+	useGlobalSandbox: boolean;
+	sandboxPreset: string | null;
+	sandboxWrapperNesting: string | null;
+	sandboxExtraPaths: string;
+
 	/**
 	 * Identifier of the last lifecycle operation performed on this instance.
 	 *
@@ -247,6 +252,10 @@ export function createDemoInstance(): Instance {
 		preLaunchHook: null,
 		postExitHook: null,
 		wrapperCommand: null,
+		useGlobalSandbox: true,
+		sandboxPreset: null,
+		sandboxWrapperNesting: null,
+		sandboxExtraPaths: "[]",
 	};
 }
 
@@ -296,6 +305,10 @@ export async function createInstance(
 		preLaunchHook: null,
 		postExitHook: null,
 		wrapperCommand: null,
+		useGlobalSandbox: true,
+		sandboxPreset: null,
+		sandboxWrapperNesting: null,
+		sandboxExtraPaths: "[]",
 	};
 
 	console.log(

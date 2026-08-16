@@ -16,6 +16,7 @@ dotenvy = "0.15"
 
 [dependencies]
 piston-lib = { path = "../../crates/piston-lib" }
+vesta-sandbox = { path = "../../crates/vesta-sandbox" }
 
 # Database - Diesel ORM
 diesel = { version = "2.3.9", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }

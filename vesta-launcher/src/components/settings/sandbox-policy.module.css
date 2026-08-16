@@ -1,0 +1,53 @@
+.presetOption {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-width: 0;
+}
+
+.presetLabel {
+	font-size: 13px;
+	font-weight: 600;
+	flex-shrink: 0;
+}
+
+.capabilityRow {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: auto;
+}
+
+.capabilityChip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 5px;
+	border: 1px solid var(--border-subtle);
+	background: color-mix(in srgb, var(--surface-overlay) 70%, transparent);
+	color: currentColor;
+	opacity: 0.85;
+}
+
+.capabilityChip svg {
+	width: 13px;
+	height: 13px;
+}
+
+.capabilityChipOff {
+	opacity: 0.35;
+}
+
+.capabilityChipDenied {
+	opacity: 0.55;
+	color: color-mix(in srgb, var(--destructive) 70%, currentColor);
+}
+
+.fieldStack {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}

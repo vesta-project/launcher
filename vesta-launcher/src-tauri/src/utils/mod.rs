@@ -20,6 +20,7 @@ pub mod instance_runtime;
 pub mod launch_intents;
 pub mod process_state;
 pub mod sanitize;
+pub mod sandbox_policy;
 pub mod storage;
 pub mod texture;
 pub mod url;

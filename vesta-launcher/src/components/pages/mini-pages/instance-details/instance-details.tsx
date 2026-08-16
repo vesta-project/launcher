@@ -17,6 +17,7 @@ import {
 	type ResourceProjectRef,
 	refreshInstanceResourceRows,
 } from "@stores/instance-resource-overview";
+import { instanceDefaults } from "@stores/settings";
 import {
 	clearRunning,
 	instancesState,
@@ -62,6 +63,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import { getCrashDetails, parseCrashDetails } from "@utils/crash-handler";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
+import {
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	parseSandboxExtraPaths,
+	type SandboxPresetValue,
+	type SandboxWrapperNestingValue,
+} from "@components/settings/sandbox-policy-ui";
 import {
 	applyInstanceEditDraft,
 	type InstanceEditDirty,
@@ -243,6 +251,10 @@ interface InstanceDetailsProps {
 	initialPostExitHook?: string;
 	initialWrapperCommand?: string;
 	initialEnvironmentVariables?: string;
+	initialUseGlobalSandbox?: boolean;
+	initialSandboxPreset?: string;
+	initialSandboxWrapperNesting?: string;
+	initialSandboxExtraPaths?: string[];
 	_dirty?: Record<string, boolean>;
 }
 
@@ -735,6 +747,23 @@ export default function InstanceDetails(
 	const [environmentVariables, setEnvironmentVariables] = createSignal(
 		props.initialEnvironmentVariables || "",
 	);
+	const [useGlobalSandbox, setUseGlobalSandbox] = createSignal(
+		props.initialUseGlobalSandbox ?? true,
+	);
+	const [sandboxPreset, setSandboxPreset] = createSignal<SandboxPresetValue>(
+		normalizeSandboxPreset(props.initialSandboxPreset),
+	);
+	const [sandboxWrapperNesting, setSandboxWrapperNesting] =
+		createSignal<SandboxWrapperNestingValue>(
+			normalizeSandboxWrapperNesting(props.initialSandboxWrapperNesting),
+		);
+	const [sandboxExtraPaths, setSandboxExtraPaths] = createSignal<string[]>(
+		props.initialSandboxExtraPaths ??
+			parseSandboxExtraPaths(props.initialData?.sandboxExtraPaths),
+	);
+	const inheritedSandboxExtraPaths = createMemo(
+		() => instanceDefaults().default_sandbox_extra_paths ?? [],
+	);
 
 	// Dirty flags for settings
 	const [isNameDirty, setIsNameDirty] = createSignal(
@@ -762,6 +791,9 @@ export default function InstanceDetails(
 	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
 	const [isLaunchActionDirty, setIsLaunchActionDirty] = createSignal(
 		props._dirty?.launchAction || false,
+	);
+	const [isSandboxDirty, setIsSandboxDirty] = createSignal(
+		props._dirty?.sandbox || false,
 	);
 
 	const [saving, setSaving] = createSignal(false);
@@ -798,6 +830,10 @@ export default function InstanceDetails(
 		postExitHook: postExitHook(),
 		wrapperCommand: wrapperCommand(),
 		environmentVariables: environmentVariables(),
+		useGlobalSandbox: useGlobalSandbox(),
+		sandboxPreset: sandboxPreset(),
+		sandboxWrapperNesting: sandboxWrapperNesting(),
+		sandboxExtraPaths: sandboxExtraPaths(),
 	});
 	const currentEditDirty = (): InstanceEditDirty => ({
 		name: isNameDirty(),
@@ -810,6 +846,7 @@ export default function InstanceDetails(
 		hooks: isHooksDirty(),
 		env: isEnvDirty(),
 		launchAction: isLaunchActionDirty(),
+		sandbox: isSandboxDirty(),
 	});
 
 	const isDirty = createMemo(() => isInstanceEditDirty(currentEditDirty()));
@@ -1690,6 +1727,22 @@ export default function InstanceDetails(
 				if (!isLaunchActionDirty()) {
 					setUseGlobalLauncherAction(inst.useGlobalLauncherAction);
 					setLauncherActionOnLaunch(inst.launcherActionOnLaunch || "stay-open");
+				}
+				if (!isSandboxDirty()) {
+					setUseGlobalSandbox(inst.useGlobalSandbox ?? true);
+					setSandboxPreset(
+						normalizeSandboxPreset(
+							inst.sandboxPreset ??
+								instanceDefaults().default_sandbox_preset,
+						),
+					);
+					setSandboxWrapperNesting(
+						normalizeSandboxWrapperNesting(
+							inst.sandboxWrapperNesting ??
+								instanceDefaults().default_sandbox_wrapper_nesting,
+						),
+					);
+					setSandboxExtraPaths(parseSandboxExtraPaths(inst.sandboxExtraPaths));
 				}
 			});
 		}
@@ -2638,6 +2691,7 @@ export default function InstanceDetails(
 				setIsHooksDirty(false);
 				setIsEnvDirty(false);
 				setIsLaunchActionDirty(false);
+				setIsSandboxDirty(false);
 			});
 			await refetch();
 		} catch (e) {
@@ -3088,6 +3142,18 @@ export default function InstanceDetails(
 															setLauncherActionOnLaunch
 														}
 														setIsLaunchActionDirty={setIsLaunchActionDirty}
+														useGlobalSandbox={useGlobalSandbox()}
+														setUseGlobalSandbox={setUseGlobalSandbox}
+														sandboxPreset={sandboxPreset()}
+														setSandboxPreset={setSandboxPreset}
+														sandboxWrapperNesting={sandboxWrapperNesting()}
+														setSandboxWrapperNesting={setSandboxWrapperNesting}
+														sandboxExtraPaths={sandboxExtraPaths()}
+														setSandboxExtraPaths={setSandboxExtraPaths}
+														inheritedSandboxExtraPaths={
+															inheritedSandboxExtraPaths()
+														}
+														setIsSandboxDirty={setIsSandboxDirty}
 														invoke={invoke}
 														showToast={showToast}
 														isGuest={isGuest()}
@@ -3155,6 +3221,19 @@ export default function InstanceDetails(
 						setUseGlobalEnvironmentVariables(i.useGlobalEnvironmentVariables);
 						setUseGlobalLauncherAction(i.useGlobalLauncherAction);
 						setLauncherActionOnLaunch(i.launcherActionOnLaunch || "stay-open");
+						setUseGlobalSandbox(i.useGlobalSandbox ?? true);
+						setSandboxPreset(
+							normalizeSandboxPreset(
+								i.sandboxPreset ?? instanceDefaults().default_sandbox_preset,
+							),
+						);
+						setSandboxWrapperNesting(
+							normalizeSandboxWrapperNesting(
+								i.sandboxWrapperNesting ??
+									instanceDefaults().default_sandbox_wrapper_nesting,
+							),
+						);
+						setSandboxExtraPaths(parseSandboxExtraPaths(i.sandboxExtraPaths));
 						setIsNameDirty(false);
 						setIsIconDirty(false);
 						setIsMinMemDirty(false);
@@ -3165,6 +3244,7 @@ export default function InstanceDetails(
 						setIsHooksDirty(false);
 						setIsEnvDirty(false);
 						setIsLaunchActionDirty(false);
+						setIsSandboxDirty(false);
 					});
 				}}
 				cancelText="Reset"

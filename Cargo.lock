@@ -9134,12 +9134,22 @@ dependencies = [
  "urlencoding",
  "uuid 1.23.2",
  "version-compare",
+ "vesta-sandbox",
  "walkdir",
  "which",
  "window-vibrancy 0.7.1",
  "windows-sys 0.61.2",
  "winver",
  "zip 8.2.0",
+]
+
+[[package]]
+name = "vesta-sandbox"
+version = "0.1.0-alpha.29"
+dependencies = [
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

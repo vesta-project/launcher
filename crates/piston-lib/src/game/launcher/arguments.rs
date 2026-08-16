@@ -677,6 +677,8 @@ mod tests {
             wrapper_command: None,
             pre_launch_hook: None,
             post_exit_hook: None,
+            sandbox_prefix: None,
+            sandbox_wraps_entire_command: true,
         }
     }
 

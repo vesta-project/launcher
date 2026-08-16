@@ -61,6 +61,42 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/tasks/update_modpack.rs`
 - `vesta-launcher/src-tauri/src/tasks/installers/external_import_resync.rs`
 
+### Sandbox Policy
+
+The user-facing confinement settings for JVMs Vesta starts for an Instance
+(Play and install/repair processors). Presets are Trusted (default, no
+sandbox), Modded (filesystem and exec allowlists; network and mic on), and
+Paranoid (same filesystem/exec/USB as Modded; network and mic off). Global app
+defaults and per-instance overrides follow the existing `use_global_*` pattern.
+Allowlisted roots are the Vesta data directory and the Instance game directory
+(both read-write), plus optional global and instance extra paths.
+Canonicalized paths deny symlink escapes. Session logs stay under Vesta data
+`logs/`. Wrapper nesting (sandbox-outside vs wrapper-outside) is configurable.
+The Vesta app process itself is not sandboxed; it continues to observe PID,
+exit sidecars, playtime, kill, and crash handling from outside.
+
+Primary modules:
+
+- `crates/vesta-sandbox`
+- `vesta-launcher/src-tauri/src/utils/sandbox_policy.rs`
+- `vesta-launcher/src-tauri/src/instance/launch_preparation.rs`
+- `docs/adr/0010-instance-os-sandbox-vesta-sandbox-crate.md`
+
+### Sandbox Adapter
+
+The OS-specific Implementation inside `vesta-sandbox` that turns a portable
+`RunPlan` and resolved `SandboxPolicy` into a confined spawn (Seatbelt,
+Landlock/`bwrap`, Windows job/AppContainer, or equivalent). Adapters report
+what was actually enforced. If a control required by the policy cannot be
+enforced, launch fails closed. Ship order is policy/UI and crate first, then
+macOS, Linux, and Windows adapters.
+
+Primary modules:
+
+- `crates/vesta-sandbox`
+- `crates/piston-lib/src/game/launcher/process.rs` (thin `sandbox_prefix` spawn hook)
+- `docs/adr/0010-instance-os-sandbox-vesta-sandbox-crate.md`
+
 ### Authentication Session and Availability
 
 The boundary between persisted Microsoft/Minecraft account state and the

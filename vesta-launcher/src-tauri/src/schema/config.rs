@@ -57,6 +57,9 @@ diesel::table! {
         proxy_url -> Nullable<Text>,
         proxy_apply_to_games -> Bool,
         artifact_cache_max_bytes -> BigInt,
+        default_sandbox_preset -> Text,
+        default_sandbox_wrapper_nesting -> Text,
+        default_sandbox_extra_paths -> Text,
     }
 }
 

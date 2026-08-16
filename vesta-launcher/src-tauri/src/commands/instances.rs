@@ -1057,6 +1057,10 @@ pub async fn create_instance(
         pre_launch_hook: inst.pre_launch_hook,
         wrapper_command: inst.wrapper_command,
         post_exit_hook: inst.post_exit_hook,
+        use_global_sandbox: inst.use_global_sandbox,
+        sandbox_preset: inst.sandbox_preset,
+        sandbox_wrapper_nesting: inst.sandbox_wrapper_nesting,
+        sandbox_extra_paths: inst.sandbox_extra_paths,
     };
 
     diesel::insert_into(instance)
@@ -1397,6 +1401,10 @@ pub async fn update_instance(
             pre_launch_hook.eq(&final_instance.pre_launch_hook),
             wrapper_command.eq(&final_instance.wrapper_command),
             post_exit_hook.eq(&final_instance.post_exit_hook),
+            use_global_sandbox.eq(final_instance.use_global_sandbox),
+            sandbox_preset.eq(&final_instance.sandbox_preset),
+            sandbox_wrapper_nesting.eq(&final_instance.sandbox_wrapper_nesting),
+            sandbox_extra_paths.eq(&final_instance.sandbox_extra_paths),
             updated_at.eq(&now),
         ))
         .execute(&mut conn)
@@ -1494,14 +1502,25 @@ pub async fn launch_instance(
     app_handle: tauri::AppHandle,
     instance_data: Instance,
 ) -> Result<(), String> {
-    // macOS: Ensure microphone permissions are granted before launch
-    // to allow voice chat mods in Minecraft to function.
+    // macOS: Request microphone permission when the resolved sandbox policy allows
+    // mic access (Trusted/Modded), so voice-chat mods can work. Skip the prompt when
+    // Paranoid denies mic — Seatbelt also denies device-microphone for that preset.
     #[cfg(target_os = "macos")]
     {
-        if !tauri_plugin_macos_permissions::check_microphone_permission().await {
-            log::info!("[macOS Permissions] Requesting microphone permission...");
-            // We don't block the launch if permission is denied, but we try to request it.
-            let _ = tauri_plugin_macos_permissions::request_microphone_permission().await;
+        let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+        let sandbox =
+            crate::utils::sandbox_policy::resolve_sandbox_settings(&instance_data, &app_config)?;
+        let mic_allowed = vesta_sandbox::resolve_preset(sandbox.preset).mic_allowed;
+        if mic_allowed {
+            if !tauri_plugin_macos_permissions::check_microphone_permission().await {
+                log::info!("[macOS Permissions] Requesting microphone permission...");
+                // We don't block the launch if permission is denied, but we try to request it.
+                let _ = tauri_plugin_macos_permissions::request_microphone_permission().await;
+            }
+        } else {
+            log::info!(
+                "[macOS Permissions] Skipping microphone permission request (sandbox preset denies mic)"
+            );
         }
     }
 

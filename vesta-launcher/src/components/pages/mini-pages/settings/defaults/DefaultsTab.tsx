@@ -1,6 +1,13 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
+	PathListEditor,
+	SandboxPresetSelect,
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	type SandboxPresetValue,
+} from "@components/settings";
+import {
 	getTotalRam,
 	instanceDefaults,
 	updateDefaultField,
@@ -27,6 +34,7 @@ import {
 	SliderThumb,
 	SliderTrack,
 } from "@ui/slider/slider";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import {
 	TextFieldInput,
 	TextFieldRoot,
@@ -39,6 +47,7 @@ import {
 	MAX_GENERATED_MEMORY_MB,
 } from "@utils/memory-policy";
 import styles from "../settings-page.module.css";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 
 export function InstanceDefaultsTab() {
 	const handleMemoryChange = (val: number[]) => {
@@ -257,6 +266,65 @@ export function InstanceDefaultsTab() {
 							}}
 						/>
 					</TextFieldRoot>
+				</SettingsCard>
+
+				<SettingsCard
+					header="Sandbox"
+					subHeader="Default OS sandbox policy for new instances."
+				>
+					<div class={sandboxStyles.fieldStack}>
+						<SettingsField
+							label="Preset"
+							description="Capability profile applied at launch."
+							body={
+								<SandboxPresetSelect
+									value={normalizeSandboxPreset(
+										instanceDefaults().default_sandbox_preset,
+									)}
+									onChange={(value: SandboxPresetValue) =>
+										updateDefaultField("default_sandbox_preset", value)
+									}
+								/>
+							}
+						/>
+						<SettingsField
+							label="Include wrapper in the sandbox"
+							description="When a wrapper command is set, run it under the same OS sandbox as the game. Turn this off only if the wrapper needs access the sandbox would block."
+							headerRight={
+								<Switch
+									checked={
+										normalizeSandboxWrapperNesting(
+											instanceDefaults().default_sandbox_wrapper_nesting,
+										) === "sandbox-outside"
+									}
+									onCheckedChange={(checked: boolean) =>
+										updateDefaultField(
+											"default_sandbox_wrapper_nesting",
+											checked ? "sandbox-outside" : "wrapper-outside",
+										)
+									}
+								>
+									<SwitchControl>
+										<SwitchThumb />
+									</SwitchControl>
+								</Switch>
+							}
+						/>
+						<SettingsField
+							label="Path exclusions"
+							description="Extra folders the sandbox may access."
+							body={
+								<PathListEditor
+									paths={instanceDefaults().default_sandbox_extra_paths ?? []}
+									onChange={(paths) =>
+										updateDefaultField("default_sandbox_extra_paths", paths)
+									}
+									addLabel="Add path exclusion…"
+									emptyLabel="No path exclusions."
+								/>
+							}
+						/>
+					</div>
 				</SettingsCard>
 
 				<SettingsCard

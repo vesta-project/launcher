@@ -350,6 +350,10 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 				preLaunchHook: null,
 				postExitHook: null,
 				wrapperCommand: null,
+				useGlobalSandbox: true,
+				sandboxPreset: null,
+				sandboxWrapperNesting: null,
+				sandboxExtraPaths: "[]",
 			};
 
 			// Start installation in background, continue onboarding immediately

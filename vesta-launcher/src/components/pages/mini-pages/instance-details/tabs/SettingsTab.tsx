@@ -1,5 +1,15 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
+import {
+	PathListEditor,
+	SandboxPresetOptionLabel,
+	SandboxPresetSelect,
+	normalizeSandboxPreset,
+	type SandboxPresetValue,
+	type SandboxWrapperNestingValue,
+} from "@components/settings";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
+import { instanceDefaults } from "@stores/settings";
 import Button from "@ui/button/button";
 import {
 	ContextMenu,
@@ -100,6 +110,17 @@ interface SettingsTabProps {
 	launcherActionOnLaunch: string;
 	setLauncherActionOnLaunch: (v: string) => void;
 	setIsLaunchActionDirty: (v: boolean) => void;
+
+	useGlobalSandbox: boolean;
+	setUseGlobalSandbox: (v: boolean) => void;
+	sandboxPreset: SandboxPresetValue;
+	setSandboxPreset: (v: SandboxPresetValue) => void;
+	sandboxWrapperNesting: SandboxWrapperNestingValue;
+	setSandboxWrapperNesting: (v: SandboxWrapperNestingValue) => void;
+	sandboxExtraPaths: string[];
+	setSandboxExtraPaths: (v: string[]) => void;
+	inheritedSandboxExtraPaths: string[];
+	setIsSandboxDirty: (v: boolean) => void;
 
 	handleSave: () => void;
 	saving: () => boolean;
@@ -798,6 +819,95 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							}
 						/>
 					</Show>
+				</SettingsCard>
+
+				<SettingsCard header="Sandbox">
+					<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 4px;">
+						<div style="display: flex; flex-direction: column; gap: 2px;">
+							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
+								Use Global Preset
+							</span>
+							<span style="font-size: 11px; opacity: 0.6;">
+								Link preset and wrapper inclusion only. Path exclusions stay
+								instance-editable.
+							</span>
+						</div>
+						<Switch
+							checked={p.useGlobalSandbox}
+							onCheckedChange={(val: boolean) => {
+								batch(() => {
+									p.setUseGlobalSandbox(val);
+									p.setIsSandboxDirty(true);
+								});
+							}}
+						>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					</div>
+
+					<div class={sandboxStyles.fieldStack}>
+						<Show
+							when={!p.useGlobalSandbox}
+							fallback={
+								<div style="padding: 12px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.75; margin-bottom: 4px;">
+									<SandboxPresetOptionLabel
+										preset={normalizeSandboxPreset(
+											instanceDefaults().default_sandbox_preset,
+										)}
+									/>
+								</div>
+							}
+						>
+							<SettingsField
+								label="Preset"
+								body={
+									<SandboxPresetSelect
+										value={p.sandboxPreset}
+										onChange={(value) => {
+											p.setSandboxPreset(value);
+											p.setIsSandboxDirty(true);
+										}}
+									/>
+								}
+							/>
+							<SettingsField
+								label="Include wrapper in the sandbox"
+								description="When a wrapper command is set, run it under the same OS sandbox as the game. Turn this off only if the wrapper needs access the sandbox would block."
+								headerRight={
+									<Switch
+										checked={p.sandboxWrapperNesting === "sandbox-outside"}
+										onCheckedChange={(checked: boolean) => {
+											p.setSandboxWrapperNesting(
+												checked ? "sandbox-outside" : "wrapper-outside",
+											);
+											p.setIsSandboxDirty(true);
+										}}
+									>
+										<SwitchControl>
+											<SwitchThumb />
+										</SwitchControl>
+									</Switch>
+								}
+							/>
+						</Show>
+						<SettingsField
+							label="Path exclusions"
+							body={
+								<PathListEditor
+									paths={p.sandboxExtraPaths}
+									inheritedPaths={p.inheritedSandboxExtraPaths}
+									onChange={(paths) => {
+										p.setSandboxExtraPaths(paths);
+										p.setIsSandboxDirty(true);
+									}}
+									addLabel="Add instance-only exclusion…"
+									emptyLabel="No instance-only exclusions."
+								/>
+							}
+						/>
+					</div>
 				</SettingsCard>
 
 				<SettingsCard header="Maintenance">

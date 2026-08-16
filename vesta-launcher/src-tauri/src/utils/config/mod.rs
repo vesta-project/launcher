@@ -168,6 +168,9 @@ pub struct AppConfig {
     pub proxy_url: Option<String>,
     pub proxy_apply_to_games: bool,
     pub artifact_cache_max_bytes: i64,
+    pub default_sandbox_preset: String,
+    pub default_sandbox_wrapper_nesting: String,
+    pub default_sandbox_extra_paths: String,
 }
 
 impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite>
@@ -231,6 +234,9 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         Option<String>, // proxy_url
         bool,           // proxy_apply_to_games
         i64,            // artifact_cache_max_bytes
+        String,         // default_sandbox_preset
+        String,         // default_sandbox_wrapper_nesting
+        String,         // default_sandbox_extra_paths
     );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
@@ -301,6 +307,9 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             proxy_url: row.52,
             proxy_apply_to_games: row.53,
             artifact_cache_max_bytes: row.54,
+            default_sandbox_preset: row.55,
+            default_sandbox_wrapper_nesting: row.56,
+            default_sandbox_extra_paths: row.57,
         })
     }
 }
@@ -367,6 +376,9 @@ impl Default for AppConfig {
             default_post_exit_hook: None,
             default_min_memory: 2048,
             default_launcher_action_on_launch: "stay-open".to_string(),
+            default_sandbox_preset: "trusted".to_string(),
+            default_sandbox_wrapper_nesting: "sandbox-outside".to_string(),
+            default_sandbox_extra_paths: "[]".to_string(),
         }
     }
 }

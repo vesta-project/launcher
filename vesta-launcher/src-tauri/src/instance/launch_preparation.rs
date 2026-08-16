@@ -245,6 +245,54 @@ pub(crate) async fn prepare_instance_launch(
                 .filter(|p| p.exists())
         });
 
+    let resolved_sandbox = crate::utils::sandbox_policy::resolve_sandbox_settings(
+        instance_data,
+        &app_config,
+    )?;
+    let sandbox_policy = crate::utils::sandbox_policy::build_sandbox_policy_for_roots(
+        &resolved_sandbox,
+        &spec_data_dir,
+        &game_dir,
+        Path::new(&java_path_str),
+        exit_handler_jar.as_deref(),
+    )?;
+    let sandbox_run_plan = vesta_sandbox::RunPlan::new(
+        PathBuf::from(&java_path_str),
+        Vec::new(),
+        game_dir.clone(),
+        env_vars.clone(),
+    );
+    let (sandbox_spawn, sandbox_report) =
+        vesta_sandbox::prepare(&sandbox_run_plan, &sandbox_policy).map_err(|e| {
+            format!(
+                "Sandbox policy could not be applied ({}): {e}",
+                resolved_sandbox.preset
+            )
+        })?;
+    for note in &sandbox_report.notes {
+        log::info!("[launch_instance] sandbox: {note}");
+    }
+    let (sandbox_prefix, sandbox_wraps_entire_command) = match sandbox_spawn {
+        vesta_sandbox::SandboxedSpawn::Passthrough => (None, true),
+        vesta_sandbox::SandboxedSpawn::Prepared {
+            program,
+            args,
+            pre_exec_notes,
+            ..
+        } => {
+            for note in pre_exec_notes {
+                log::info!("[launch_instance] sandbox spawn: {note}");
+            }
+            let mut prefix = vec![program.to_string_lossy().to_string()];
+            prefix.extend(args);
+            (
+                Some(prefix),
+                resolved_sandbox.wrapper_nesting
+                    == vesta_sandbox::WrapperNesting::SandboxOutside,
+            )
+        }
+    };
+
     let log_file = spec_data_dir
         .join("logs")
         .join(format!("{}.log", instance_id));
@@ -315,6 +363,8 @@ pub(crate) async fn prepare_instance_launch(
         wrapper_command: res_wrapper_command,
         pre_launch_hook: res_pre_launch_hook,
         post_exit_hook: res_post_exit_hook,
+        sandbox_prefix,
+        sandbox_wraps_entire_command,
     };
 
     Ok(PreparedInstanceLaunch {
