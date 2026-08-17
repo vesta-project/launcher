@@ -13,8 +13,7 @@ pub(crate) fn prepare_stub_report(
     let mut notes = vec![
         format!("{platform_label} sandbox adapter is not implemented yet."),
         format!("Planned enforcement mechanism: {future_adapter}."),
-        "Modded and Paranoid presets fail closed until real enforcement ships."
-            .to_string(),
+        "Modded and Paranoid presets fail closed until real enforcement ships.".to_string(),
     ];
 
     if policy.wrapper_nesting == WrapperNesting::WrapperOutside {
@@ -30,6 +29,7 @@ pub(crate) fn prepare_stub_report(
         env: run_plan.env.clone(),
         cwd: run_plan.cwd.clone(),
         pre_exec_notes: notes.clone(),
+        cleanup_paths: Vec::new(),
     };
 
     let report = EnforcementReport {

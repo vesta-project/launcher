@@ -20,5 +20,7 @@ pub enum SandboxError {
     RequiredControlUnsupported { control: ControlKind },
 
     #[error("sandbox preset {preset} cannot be enforced on this platform")]
-    PresetUnsupported { preset: crate::policy::SandboxPreset },
+    PresetUnsupported {
+        preset: crate::policy::SandboxPreset,
+    },
 }

@@ -66,17 +66,6 @@ pub(crate) async fn prepare_instance_launch(
 
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-    let java_path_str = crate::utils::java::ensure_java_for_instance(
-        app_handle,
-        instance_data,
-        None,
-        Some(format!(
-            "repair_managed_java_launch_{}",
-            instance_data.slug()
-        )),
-    )
-    .await?;
-
     let spec_data_dir = if data_dir.join("data").exists() {
         data_dir.join("data")
     } else {
@@ -92,6 +81,69 @@ pub(crate) async fn prepare_instance_launch(
         &instances_root,
         &data_dir,
     );
+
+    let resolved_sandbox =
+        crate::utils::sandbox_policy::resolve_sandbox_settings(instance_data, &app_config)?;
+
+    let res_pre_launch_hook = if instance_data.use_global_hooks {
+        app_config.default_pre_launch_hook.clone()
+    } else {
+        instance_data.pre_launch_hook.clone()
+    };
+    let res_wrapper_command = if instance_data.use_global_hooks {
+        app_config.default_wrapper_command.clone()
+    } else {
+        instance_data.wrapper_command.clone()
+    };
+    let res_post_exit_hook = if instance_data.use_global_hooks {
+        app_config.default_post_exit_hook.clone()
+    } else {
+        instance_data.post_exit_hook.clone()
+    };
+
+    let managed_jre_dir = crate::utils::java::get_managed_jre_dir()?;
+    crate::utils::sandbox_policy::validate_protected_paths_for_play(
+        &resolved_sandbox,
+        &[managed_jre_dir],
+        &game_dir,
+        "managed Java directory",
+    )?;
+    let res_wrapper_command = crate::utils::sandbox_policy::normalize_wrapper_command_for_play(
+        &resolved_sandbox,
+        res_wrapper_command.as_deref(),
+    )?;
+    crate::utils::sandbox_policy::validate_wrapper_path_for_play(
+        &resolved_sandbox,
+        res_wrapper_command.as_deref(),
+        &game_dir,
+    )?;
+
+    let configured_java =
+        crate::utils::java::resolve_instance_java_path(app_handle, instance_data).await?;
+    let configured_java = crate::utils::sandbox_policy::normalize_java_path_before_install(
+        Path::new(&configured_java),
+    )?;
+    crate::utils::sandbox_policy::validate_java_path_for_play(
+        &resolved_sandbox,
+        &configured_java,
+        &game_dir,
+    )?;
+    let java_path_str = crate::utils::java::ensure_java_for_instance(
+        app_handle,
+        instance_data,
+        None,
+        Some(format!(
+            "repair_managed_java_launch_{}",
+            instance_data.slug()
+        )),
+    )
+    .await?;
+    let java_path =
+        crate::utils::sandbox_policy::normalize_java_path_for_play(Path::new(&java_path_str))?;
+    let java_path_str = java_path
+        .to_str()
+        .ok_or_else(|| "Resolved Java executable path is not valid UTF-8".to_string())?
+        .to_string();
 
     verify_modpack_resource_presence(instance_data, &game_dir)?;
 
@@ -119,26 +171,7 @@ pub(crate) async fn prepare_instance_launch(
     let mut resolved_jvm_args = parse_user_jvm_args(java_args_raw)?;
     resolved_jvm_args.extend(game_proxy_jvm_args(&app_config));
 
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let mut env_vars = crate::utils::hooks::resolve_env_vars(&app_config, instance_data);
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-    let env_vars = crate::utils::hooks::resolve_env_vars(&app_config, instance_data);
-
-    let res_pre_launch_hook = if instance_data.use_global_hooks {
-        app_config.default_pre_launch_hook.clone()
-    } else {
-        instance_data.pre_launch_hook.clone()
-    };
-    let res_wrapper_command = if instance_data.use_global_hooks {
-        app_config.default_wrapper_command.clone()
-    } else {
-        instance_data.wrapper_command.clone()
-    };
-    let res_post_exit_hook = if instance_data.use_global_hooks {
-        app_config.default_post_exit_hook.clone()
-    } else {
-        instance_data.post_exit_hook.clone()
-    };
 
     let modloader_type = instance_data
         .modloader
@@ -245,16 +278,56 @@ pub(crate) async fn prepare_instance_launch(
                 .filter(|p| p.exists())
         });
 
-    let resolved_sandbox = crate::utils::sandbox_policy::resolve_sandbox_settings(
-        instance_data,
-        &app_config,
-    )?;
+    let log_file = spec_data_dir
+        .join("logs")
+        .join(format!("{}.log", instance_id));
+    let log_dir = log_file
+        .parent()
+        .ok_or_else(|| "Sandbox log path has no parent directory".to_string())?;
+    tokio::fs::create_dir_all(log_dir)
+        .await
+        .map_err(|e| format!("Failed to create sandbox log directory: {e}"))?;
+    tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+        .await
+        .map_err(|e| format!("Failed to create sandbox log file: {e}"))?;
+
+    // Finish all fallible account materialization before sandbox preparation
+    // retains a private temp directory for the eventual child process.
+    let username = active_account.username.clone();
+    let uuid = if is_offline {
+        piston_lib::auth::generate_offline_uuid(&username)
+    } else {
+        active_account.uuid.clone()
+    };
+    let access_token = if is_offline {
+        "offline".to_string()
+    } else {
+        active_account
+            .access_token
+            .clone()
+            .filter(|token| !token.is_empty())
+            .ok_or_else(|| {
+                "Online launch requires a valid Minecraft access token. Sign in again.".to_string()
+            })?
+    };
+
     let sandbox_policy = crate::utils::sandbox_policy::build_sandbox_policy_for_roots(
         &resolved_sandbox,
         &spec_data_dir,
         &game_dir,
+        &log_file,
         Path::new(&java_path_str),
         exit_handler_jar.as_deref(),
+        res_wrapper_command.as_deref(),
+        res_pre_launch_hook
+            .as_deref()
+            .is_some_and(|hook| !hook.trim().is_empty())
+            || res_post_exit_hook
+                .as_deref()
+                .is_some_and(|hook| !hook.trim().is_empty()),
     )?;
     let sandbox_run_plan = vesta_sandbox::RunPlan::new(
         PathBuf::from(&java_path_str),
@@ -272,50 +345,34 @@ pub(crate) async fn prepare_instance_launch(
     for note in &sandbox_report.notes {
         log::info!("[launch_instance] sandbox: {note}");
     }
-    let (sandbox_prefix, sandbox_wraps_entire_command) = match sandbox_spawn {
-        vesta_sandbox::SandboxedSpawn::Passthrough => (None, true),
-        vesta_sandbox::SandboxedSpawn::Prepared {
-            program,
-            args,
-            pre_exec_notes,
-            ..
-        } => {
-            for note in pre_exec_notes {
-                log::info!("[launch_instance] sandbox spawn: {note}");
+    let (sandbox_prefix, sandbox_wraps_entire_command, sandbox_env, sandbox_cleanup_paths) =
+        match sandbox_spawn {
+            vesta_sandbox::SandboxedSpawn::Passthrough => (None, true, None, Vec::new()),
+            vesta_sandbox::SandboxedSpawn::Prepared {
+                program,
+                args,
+                env,
+                pre_exec_notes,
+                cleanup_paths,
+                ..
+            } => {
+                for note in pre_exec_notes {
+                    log::info!("[launch_instance] sandbox spawn: {note}");
+                }
+                let mut prefix = vec![program.to_string_lossy().to_string()];
+                prefix.extend(args);
+                (
+                    Some(prefix),
+                    resolved_sandbox.wrapper_nesting
+                        == vesta_sandbox::WrapperNesting::SandboxOutside,
+                    Some(env),
+                    cleanup_paths,
+                )
             }
-            let mut prefix = vec![program.to_string_lossy().to_string()];
-            prefix.extend(args);
-            (
-                Some(prefix),
-                resolved_sandbox.wrapper_nesting
-                    == vesta_sandbox::WrapperNesting::SandboxOutside,
-            )
-        }
-    };
-
-    let log_file = spec_data_dir
-        .join("logs")
-        .join(format!("{}.log", instance_id));
-
-    let username = active_account.username.clone();
-
-    let uuid = if is_offline {
-        piston_lib::auth::generate_offline_uuid(&username)
-    } else {
-        active_account.uuid.clone()
-    };
-
-    let access_token = if is_offline {
-        "offline".to_string()
-    } else {
-        active_account
-            .access_token
-            .clone()
-            .filter(|token| !token.is_empty())
-            .ok_or_else(|| {
-                "Online launch requires a valid Minecraft access token. Sign in again.".to_string()
-            })?
-    };
+        };
+    if let Some(prepared_env) = sandbox_env {
+        env_vars = prepared_env;
+    }
 
     if app_config.use_dedicated_gpu {
         #[cfg(target_os = "linux")]
@@ -365,6 +422,7 @@ pub(crate) async fn prepare_instance_launch(
         post_exit_hook: res_post_exit_hook,
         sandbox_prefix,
         sandbox_wraps_entire_command,
+        sandbox_cleanup_paths,
     };
 
     Ok(PreparedInstanceLaunch {

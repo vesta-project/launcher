@@ -63,17 +63,22 @@ Primary modules:
 
 ### Sandbox Policy
 
-The user-facing confinement settings for JVMs Vesta starts for an Instance
-(Play and install/repair processors). Presets are Trusted (default, no
-sandbox), Modded (filesystem and exec allowlists; network and mic on), and
-Paranoid (same filesystem/exec/USB as Modded; network and mic off). Global app
-defaults and per-instance overrides follow the existing `use_global_*` pattern.
-Allowlisted roots are the Vesta data directory and the Instance game directory
-(both read-write), plus optional global and instance extra paths.
-Canonicalized paths deny symlink escapes. Session logs stay under Vesta data
-`logs/`. Wrapper nesting (sandbox-outside vs wrapper-outside) is configurable.
-The Vesta app process itself is not sandboxed; it continues to observe PID,
-exit sidecars, playtime, kill, and crash handling from outside.
+The user-facing confinement settings for an Instance's Play process tree: exit
+handler, an optionally enclosed wrapper, hooks, game JVM, and child processes.
+Launcher-owned installation, repair, Java management, and loader processors are
+trusted work outside this boundary. Presets are Trusted (default, no sandbox),
+Modded (filesystem and exec allowlists; network and mic on), and Paranoid (same
+filesystem/exec/USB as Modded; network and mic off). Global app defaults and
+per-instance overrides follow the existing `use_global_*` pattern. Only shared
+runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`) and the
+selected Java runtime are readable; they are not writable. The Instance game
+directory and exact pre-created session-log file are read-write. Optional global
+and instance extra paths grant read-write access. Paths are canonicalized before
+the Adapter builds its policy. Wrapper nesting (sandbox-outside vs
+wrapper-outside) is configurable. Hooks run inside the Play sandbox and may use
+the shell, but external executables remain subject to the exec allowlist. The
+Vesta app process itself is not sandboxed; it continues to observe PID, exit
+sidecars, playtime, kill, and crash handling from outside.
 
 Primary modules:
 

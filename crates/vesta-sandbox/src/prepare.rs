@@ -15,7 +15,10 @@ pub fn prepare(
     policy: &SandboxPolicy,
 ) -> Result<(SandboxedSpawn, EnforcementReport), SandboxError> {
     if !policy.enabled {
-        return Ok((SandboxedSpawn::Passthrough, EnforcementReport::not_required()));
+        return Ok((
+            SandboxedSpawn::Passthrough,
+            EnforcementReport::not_required(),
+        ));
     }
 
     let (spawn, report) = platform::prepare_platform(run_plan, policy);
@@ -34,7 +37,7 @@ mod tests {
         RunPlan::new(
             "/usr/bin/java",
             vec!["-jar".into(), "game.jar".into()],
-            "/game",
+            std::env::temp_dir(),
             HashMap::new(),
         )
     }
@@ -138,15 +141,17 @@ mod tests {
         };
 
         let (spawn, report) = prepare(&sample_run_plan(), &policy).expect("macOS prepare");
-        assert!(matches!(spawn, SandboxedSpawn::Prepared { .. }));
+        let SandboxedSpawn::Prepared { cleanup_paths, .. } = spawn else {
+            panic!("expected prepared sandbox spawn");
+        };
+        for path in cleanup_paths {
+            std::fs::remove_dir_all(path).unwrap();
+        }
         assert_eq!(
             report.filesystem,
             crate::enforcement::EnforcementStatus::Enforced
         );
-        assert_eq!(
-            report.exec,
-            crate::enforcement::EnforcementStatus::Enforced
-        );
+        assert_eq!(report.exec, crate::enforcement::EnforcementStatus::Enforced);
     }
 
     #[test]
@@ -171,11 +176,13 @@ mod tests {
         };
 
         let (spawn, report) = prepare(&sample_run_plan(), &policy).expect("macOS prepare");
-        assert!(matches!(spawn, SandboxedSpawn::Prepared { .. }));
-        assert_eq!(
-            report.mic,
-            crate::enforcement::EnforcementStatus::Enforced
-        );
+        let SandboxedSpawn::Prepared { cleanup_paths, .. } = spawn else {
+            panic!("expected prepared sandbox spawn");
+        };
+        for path in cleanup_paths {
+            std::fs::remove_dir_all(path).unwrap();
+        }
+        assert_eq!(report.mic, crate::enforcement::EnforcementStatus::Enforced);
         assert_eq!(
             report.network,
             crate::enforcement::EnforcementStatus::Enforced

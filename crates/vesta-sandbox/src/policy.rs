@@ -20,19 +20,14 @@ impl fmt::Display for SandboxPreset {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WrapperNesting {
     #[serde(rename = "sandbox_outside")]
+    #[default]
     SandboxOutside,
     #[serde(rename = "wrapper_outside")]
     WrapperOutside,
-}
-
-impl Default for WrapperNesting {
-    fn default() -> Self {
-        Self::SandboxOutside
-    }
 }
 
 impl fmt::Display for WrapperNesting {
@@ -51,6 +46,12 @@ pub struct PathAccess {
     pub read: bool,
     pub write: bool,
     pub execute: bool,
+    #[serde(default = "default_recursive")]
+    pub recursive: bool,
+}
+
+const fn default_recursive() -> bool {
+    true
 }
 
 impl PathAccess {
@@ -60,6 +61,17 @@ impl PathAccess {
             read,
             write,
             execute,
+            recursive: true,
+        }
+    }
+
+    pub fn file(path: impl Into<PathBuf>, read: bool, write: bool, execute: bool) -> Self {
+        Self {
+            path: path.into(),
+            read,
+            write,
+            execute,
+            recursive: false,
         }
     }
 }

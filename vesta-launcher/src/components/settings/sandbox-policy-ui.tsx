@@ -88,7 +88,7 @@ export function SandboxPresetOptionLabel(props: { preset: SandboxPresetValue }) 
 						/>
 						<CapabilityChip
 							icon={<FolderLockIcon />}
-							label="Path exclusions"
+							label="Files restricted"
 						/>
 						<CapabilityChip icon={<NetworkIcon />} label="Network allowed" />
 						<CapabilityChip icon={<MicIcon />} label="Microphone allowed" />
@@ -99,7 +99,7 @@ export function SandboxPresetOptionLabel(props: { preset: SandboxPresetValue }) 
 						<CapabilityChip icon={<LockIcon />} label="Strict sandbox" />
 						<CapabilityChip
 							icon={<FolderLockIcon />}
-							label="Path exclusions"
+							label="Files restricted"
 						/>
 						<CapabilityChip
 							icon={<NetworkIcon />}

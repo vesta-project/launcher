@@ -14,6 +14,54 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
+struct SandboxCleanupGuard(Vec<std::path::PathBuf>);
+
+impl SandboxCleanupGuard {
+    fn disarm(&mut self) -> Vec<std::path::PathBuf> {
+        std::mem::take(&mut self.0)
+    }
+}
+
+impl Drop for SandboxCleanupGuard {
+    fn drop(&mut self) {
+        cleanup_sandbox_paths(self.0.iter().cloned());
+    }
+}
+
+/// Remove private directories created by `vesta-sandbox`, rejecting arbitrary
+/// paths even if a malformed LaunchSpec reaches this Adapter.
+pub fn cleanup_sandbox_paths(paths: impl IntoIterator<Item = std::path::PathBuf>) {
+    let temp_root = std::env::temp_dir()
+        .canonicalize()
+        .unwrap_or_else(|_| std::env::temp_dir());
+    for path in paths {
+        let owned_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("vesta-sandbox-"));
+        let owned_parent = path
+            .parent()
+            .and_then(|parent| parent.canonicalize().ok())
+            .is_some_and(|parent| parent == temp_root);
+        if !owned_name || !owned_parent {
+            log::error!(
+                "Refusing to remove unrecognized sandbox cleanup path {:?}",
+                path
+            );
+            continue;
+        }
+        if let Err(err) = std::fs::remove_dir_all(&path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "Failed to remove sandbox temporary directory {:?}: {}",
+                    path,
+                    err
+                );
+            }
+        }
+    }
+}
+
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::HWND;
 #[cfg(windows)]
@@ -69,8 +117,13 @@ pub async fn launch_game(
     spec: LaunchSpec,
     log_callback: Option<LogCallback>,
 ) -> Result<LaunchResult> {
-    let plan = RuntimePlan::resolve_installed(RuntimeRequest::from(&spec))
-        .context("Failed to resolve runtime plan")?;
+    let plan = match RuntimePlan::resolve_installed(RuntimeRequest::from(&spec)) {
+        Ok(plan) => plan,
+        Err(err) => {
+            drop(SandboxCleanupGuard(spec.sandbox_cleanup_paths.clone()));
+            return Err(err).context("Failed to resolve runtime plan");
+        }
+    };
     launch_prepared_game(spec, plan, log_callback).await
 }
 
@@ -79,6 +132,7 @@ pub async fn launch_prepared_game(
     plan: RuntimePlan,
     log_callback: Option<LogCallback>,
 ) -> Result<LaunchResult> {
+    let mut sandbox_cleanup = SandboxCleanupGuard(spec.sandbox_cleanup_paths.clone());
     plan.validate_launch_spec(&spec)
         .context("Prepared runtime does not match launch")?;
     log::info!("Launching game instance: {}", spec.instance_id);
@@ -92,8 +146,20 @@ pub async fn launch_prepared_game(
 
     let manifest = plan.manifest;
 
-    // 2. Verify Java installation
-    verify_java(&spec.java_path).context("Java verification failed")?;
+    // 2. Verify Java installation. Sandboxed launches have already validated
+    // Java during host launch preparation; executing `java -version` here would
+    // run the selected binary outside the prepared OS sandbox.
+    if spec
+        .sandbox_prefix
+        .as_ref()
+        .is_some_and(|prefix| !prefix.is_empty())
+    {
+        if !spec.java_path.is_file() {
+            anyhow::bail!("Java executable not found: {:?}", spec.java_path);
+        }
+    } else {
+        verify_java(&spec.java_path).context("Java verification failed")?;
+    }
 
     if let Err(e) = crate::utils::stop_intent::clear_stop_requested(&spec.game_dir) {
         log::warn!(
@@ -309,8 +375,21 @@ pub async fn launch_prepared_game(
     }
 
     // Log the actual command being executed (sandbox + wrapper + exit handler).
+    let sandbox_profile = spec.sandbox_prefix.as_ref().and_then(|prefix| {
+        prefix
+            .windows(2)
+            .find(|window| window[0] == "-p")
+            .map(|window| window[1].as_str())
+    });
+    let redact_arg = |arg: &String| {
+        if sandbox_profile == Some(arg.as_str()) {
+            "<seatbelt-profile>".to_string()
+        } else {
+            arg.clone()
+        }
+    };
     let mut logged_cmd = vec![executable.clone()];
-    logged_cmd.extend(initial_args.iter().cloned());
+    logged_cmd.extend(initial_args.iter().map(redact_arg));
     if let Some(ref exit_handler_jar) = spec.exit_handler_jar {
         if has_user_wrapper {
             logged_cmd.push(spec.java_path.to_string_lossy().to_string());
@@ -351,8 +430,8 @@ pub async fn launch_prepared_game(
         .join(" ");
 
     log::info!("Exec command: {}", full_cmd_str);
-    if let Some(ref prefix) = spec.sandbox_prefix {
-        log::info!("Sandbox prefix: {:?}", prefix);
+    if spec.sandbox_prefix.is_some() {
+        log::info!("OS sandbox prefix is active");
     }
     log::debug!("Java: {:?}", spec.java_path);
     log::debug!("Main class: {}", main_class);
@@ -510,6 +589,7 @@ pub async fn launch_prepared_game(
     let handle = Some(crate::game::launcher::types::ProcessHandle {
         pid,
         child: Some(child),
+        cleanup_paths: sandbox_cleanup.disarm(),
     });
 
     Ok(LaunchResult {
@@ -719,6 +799,68 @@ mod tests {
             let result = verify_java(&full_path);
             assert!(result.is_ok(), "Java verification should succeed");
         }
+    }
+
+    #[test]
+    fn sandbox_outside_wraps_the_user_wrapper() {
+        let prefix = Some(vec![
+            "/usr/bin/sandbox-exec".to_string(),
+            "-p".to_string(),
+            "profile".to_string(),
+        ]);
+        let (executable, args) = apply_sandbox_prefix(
+            "/usr/local/bin/wrapper".to_string(),
+            vec!["--wrapper-arg".to_string()],
+            true,
+            &prefix,
+            true,
+        );
+
+        assert_eq!(executable, "/usr/bin/sandbox-exec");
+        assert_eq!(
+            args,
+            vec!["-p", "profile", "/usr/local/bin/wrapper", "--wrapper-arg"]
+        );
+    }
+
+    #[test]
+    fn wrapper_outside_places_the_sandbox_before_java() {
+        let prefix = Some(vec![
+            "/usr/bin/sandbox-exec".to_string(),
+            "-p".to_string(),
+            "profile".to_string(),
+        ]);
+        let (executable, args) = apply_sandbox_prefix(
+            "/usr/local/bin/wrapper".to_string(),
+            vec!["--wrapper-arg".to_string()],
+            true,
+            &prefix,
+            false,
+        );
+
+        assert_eq!(executable, "/usr/local/bin/wrapper");
+        assert_eq!(
+            args,
+            vec!["--wrapper-arg", "/usr/bin/sandbox-exec", "-p", "profile"]
+        );
+    }
+
+    #[test]
+    fn sandbox_cleanup_only_removes_owned_temp_directories() {
+        let owned = tempfile::Builder::new()
+            .prefix("vesta-sandbox-")
+            .tempdir()
+            .unwrap()
+            .keep();
+        let unrelated = tempfile::Builder::new()
+            .prefix("unrelated-")
+            .tempdir()
+            .unwrap();
+
+        cleanup_sandbox_paths([owned.clone(), unrelated.path().to_path_buf()]);
+
+        assert!(!owned.exists());
+        assert!(unrelated.path().exists());
     }
 }
 #[test]

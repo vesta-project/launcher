@@ -767,7 +767,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					>
 						<SettingsField
 							label="Pre-launch Hook"
-							description="Command to run before the game starts. (e.g. a script to sync worlds)"
+							description="Command to run before the game starts. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -785,7 +785,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 
 						<SettingsField
 							label="Wrapper Command"
-							description="Execute the game through a wrapper (e.g. mangohud, optirun, or a debugger)."
+							description="Execute the game through a wrapper (e.g. mangohud or a debugger). Sandboxed script wrappers must use an absolute shebang interpreter, not /usr/bin/env."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -803,7 +803,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 
 						<SettingsField
 							label="Post-exit Hook"
-							description="Command to run after the game closes."
+							description="Command to run after the game closes. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -828,7 +828,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								Use Global Preset
 							</span>
 							<span style="font-size: 11px; opacity: 0.6;">
-								Link preset and wrapper inclusion only. Path exclusions stay
+								Link preset and wrapper inclusion only. Extra read-write folders stay
 								instance-editable.
 							</span>
 						</div>
@@ -874,7 +874,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							/>
 							<SettingsField
 								label="Include wrapper in the sandbox"
-								description="When a wrapper command is set, run it under the same OS sandbox as the game. Turn this off only if the wrapper needs access the sandbox would block."
+								description="When enabled, the wrapper runs inside the game sandbox. When disabled, the wrapper runs outside the sandbox with your normal user access."
 								headerRight={
 									<Switch
 										checked={p.sandboxWrapperNesting === "sandbox-outside"}
@@ -893,7 +893,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							/>
 						</Show>
 						<SettingsField
-							label="Path exclusions"
+							label="Extra read-write folders"
+							description="The game may read from and write to these folders in addition to its instance folder."
 							body={
 								<PathListEditor
 									paths={p.sandboxExtraPaths}
@@ -902,8 +903,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 										p.setSandboxExtraPaths(paths);
 										p.setIsSandboxDirty(true);
 									}}
-									addLabel="Add instance-only exclusion…"
-									emptyLabel="No instance-only exclusions."
+									addLabel="Add instance-only folder…"
+									emptyLabel="No instance-only folders."
 								/>
 							}
 						/>

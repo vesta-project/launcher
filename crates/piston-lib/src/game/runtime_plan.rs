@@ -396,6 +396,7 @@ mod tests {
             post_exit_hook: None,
             sandbox_prefix: None,
             sandbox_wraps_entire_command: true,
+            sandbox_cleanup_paths: Vec::new(),
         }
     }
 

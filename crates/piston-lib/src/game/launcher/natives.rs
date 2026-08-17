@@ -44,6 +44,8 @@ async fn extract_jar(jar_path: &Path, output_dir: &Path, library: &UnifiedLibrar
         .map(|e| e.exclude.clone())
         .unwrap_or_default();
     tokio::task::spawn_blocking(move || -> Result<()> {
+        let output_root = std::fs::canonicalize(&output_dir)
+            .with_context(|| format!("Failed to canonicalize natives directory: {output_dir:?}"))?;
         let exclusions: Vec<&str> = exclusions.iter().map(|s| s.as_str()).collect();
         let file = std::fs::File::open(&jar_path)
             .with_context(|| format!("Failed to open JAR: {:?}", jar_path))?;
@@ -52,7 +54,11 @@ async fn extract_jar(jar_path: &Path, output_dir: &Path, library: &UnifiedLibrar
 
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i)?;
-            let file_path = entry.name().to_string();
+            let entry_name = entry.name().to_string();
+            let enclosed = entry
+                .enclosed_name()
+                .ok_or_else(|| anyhow::anyhow!("Native JAR contains unsafe path: {entry_name}"))?;
+            let file_path = enclosed.to_string_lossy().to_string();
 
             // Skip if excluded
             if should_exclude(&file_path, &exclusions) {
@@ -65,11 +71,52 @@ async fn extract_jar(jar_path: &Path, output_dir: &Path, library: &UnifiedLibrar
             }
 
             // Extract file
-            let output_path = output_dir.join(&file_path);
+            let output_path = output_root.join(enclosed);
 
-            // Create parent directories
+            // Walk one component at a time. `create_dir_all` would follow an
+            // existing symlink and could create directories outside the native
+            // root before a post-creation canonicalization noticed the escape.
             if let Some(parent) = output_path.parent() {
-                std::fs::create_dir_all(parent)?;
+                let relative_parent = parent.strip_prefix(&output_root)?;
+                let mut current = output_root.clone();
+                for component in relative_parent.components() {
+                    current.push(component);
+                    match std::fs::symlink_metadata(&current) {
+                        Ok(metadata) if metadata.file_type().is_symlink() => {
+                            anyhow::bail!(
+                                "Native extraction refuses symlinked directory: {}",
+                                current.display()
+                            );
+                        }
+                        Ok(metadata) if !metadata.is_dir() => {
+                            anyhow::bail!(
+                                "Native extraction parent is not a directory: {}",
+                                current.display()
+                            );
+                        }
+                        Ok(_) => {}
+                        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                            std::fs::create_dir(&current)?;
+                        }
+                        Err(err) => return Err(err.into()),
+                    }
+                }
+                let canonical_parent = std::fs::canonicalize(parent)?;
+                if !canonical_parent.starts_with(&output_root) {
+                    anyhow::bail!(
+                        "Native extraction path escapes output directory: {}",
+                        entry_name
+                    );
+                }
+            }
+            if std::fs::symlink_metadata(&output_path)
+                .map(|metadata| metadata.file_type().is_symlink())
+                .unwrap_or(false)
+            {
+                anyhow::bail!(
+                    "Native extraction refuses existing symlink: {}",
+                    output_path.display()
+                );
             }
 
             // Write file
@@ -263,5 +310,115 @@ mod tests {
             ext.exists(),
             "Expected permissive-extracted native file to exist"
         );
+    }
+
+    #[tokio::test]
+    async fn rejects_native_jar_path_traversal() {
+        use crate::game::launcher::version_parser::{ExtractRules, Library};
+        use std::io::Write;
+        use tempfile::TempDir;
+
+        let libs_tmp = TempDir::new().unwrap();
+        let natives_tmp = TempDir::new().unwrap();
+        let mut natives_map = std::collections::HashMap::new();
+        natives_map.insert("windows".to_string(), "natives-windows-${arch}".to_string());
+        let lib = Library {
+            name: "com.example:unsafe:1.0".to_string(),
+            downloads: None,
+            url: None,
+            rules: None,
+            natives: Some(natives_map),
+            extract: Some(ExtractRules { exclude: vec![] }),
+            include_in_classpath: true,
+        };
+        let arch = if cfg!(target_pointer_width = "32") {
+            "32"
+        } else {
+            "64"
+        };
+        let coords = format!("{}:natives-windows-{}", lib.name, arch);
+        let jar_path = libs_tmp
+            .path()
+            .join(crate::game::launcher::classpath::maven_to_path(&coords).unwrap());
+        std::fs::create_dir_all(jar_path.parent().unwrap()).unwrap();
+        let file = std::fs::File::create(&jar_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file::<&str, ()>("../escaped.bin", zip::write::FileOptions::default())
+            .unwrap();
+        zip.write_all(b"escape").unwrap();
+        zip.finish().unwrap();
+
+        let unified = UnifiedLibrary::from_library(&lib, None, OsType::Windows);
+        let error = extract_natives(
+            &unified,
+            libs_tmp.path(),
+            natives_tmp.path(),
+            OsType::Windows,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("unsafe path"));
+        assert!(!natives_tmp
+            .path()
+            .parent()
+            .unwrap()
+            .join("escaped.bin")
+            .exists());
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn rejects_symlinked_native_parent_before_creating_outside() {
+        use crate::game::launcher::version_parser::{ExtractRules, Library};
+        use std::io::Write;
+        use std::os::unix::fs::symlink;
+        use tempfile::TempDir;
+
+        let libs_tmp = TempDir::new().unwrap();
+        let natives_tmp = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        symlink(outside.path(), natives_tmp.path().join("link")).unwrap();
+
+        let mut natives_map = std::collections::HashMap::new();
+        natives_map.insert("windows".to_string(), "natives-windows-${arch}".to_string());
+        let lib = Library {
+            name: "com.example:symlink:1.0".to_string(),
+            downloads: None,
+            url: None,
+            rules: None,
+            natives: Some(natives_map),
+            extract: Some(ExtractRules { exclude: vec![] }),
+            include_in_classpath: true,
+        };
+        let arch = if cfg!(target_pointer_width = "32") {
+            "32"
+        } else {
+            "64"
+        };
+        let coords = format!("{}:natives-windows-{}", lib.name, arch);
+        let jar_path = libs_tmp
+            .path()
+            .join(crate::game::launcher::classpath::maven_to_path(&coords).unwrap());
+        std::fs::create_dir_all(jar_path.parent().unwrap()).unwrap();
+        let file = std::fs::File::create(&jar_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file::<&str, ()>("link/new/native.bin", zip::write::FileOptions::default())
+            .unwrap();
+        zip.write_all(b"escape").unwrap();
+        zip.finish().unwrap();
+
+        let unified = UnifiedLibrary::from_library(&lib, None, OsType::Windows);
+        let error = extract_natives(
+            &unified,
+            libs_tmp.path(),
+            natives_tmp.path(),
+            OsType::Windows,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("symlinked directory"));
+        assert!(!outside.path().join("new").exists());
     }
 }

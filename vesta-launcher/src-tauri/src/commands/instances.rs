@@ -1559,15 +1559,30 @@ pub async fn launch_instance(
     let prepared =
         crate::instance::launch_preparation::prepare_instance_launch(&app_handle, &instance_data)
             .await?;
-    let runtime = crate::instance::launch_preparation::ensure_runtime_ready_for_launch(
+    let runtime = match crate::instance::launch_preparation::ensure_runtime_ready_for_launch(
         &app_handle,
         &instance_data,
         prepared.install_spec.clone(),
     )
-    .await?;
-    let runtime_plan = runtime.final_plan.ok_or_else(|| {
-        "Launch blocked: runtime verification produced no launch plan".to_string()
-    })?;
+    .await
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            piston_lib::game::launcher::cleanup_sandbox_paths(
+                prepared.launch_spec.sandbox_cleanup_paths.clone(),
+            );
+            return Err(error);
+        }
+    };
+    let runtime_plan = match runtime.final_plan {
+        Some(plan) => plan,
+        None => {
+            piston_lib::game::launcher::cleanup_sandbox_paths(
+                prepared.launch_spec.sandbox_cleanup_paths.clone(),
+            );
+            return Err("Launch blocked: runtime verification produced no launch plan".to_string());
+        }
+    };
 
     log::info!(
         "[launch_instance] Launching game: {} {}",

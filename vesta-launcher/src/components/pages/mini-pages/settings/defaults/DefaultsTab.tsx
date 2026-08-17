@@ -289,7 +289,7 @@ export function InstanceDefaultsTab() {
 						/>
 						<SettingsField
 							label="Include wrapper in the sandbox"
-							description="When a wrapper command is set, run it under the same OS sandbox as the game. Turn this off only if the wrapper needs access the sandbox would block."
+							description="When enabled, the wrapper runs inside the game sandbox. When disabled, the wrapper runs outside the sandbox with your normal user access."
 							headerRight={
 								<Switch
 									checked={
@@ -311,16 +311,16 @@ export function InstanceDefaultsTab() {
 							}
 						/>
 						<SettingsField
-							label="Path exclusions"
-							description="Extra folders the sandbox may access."
+							label="Extra read-write folders"
+							description="The game may read from and write to these folders in addition to its instance folder."
 							body={
 								<PathListEditor
 									paths={instanceDefaults().default_sandbox_extra_paths ?? []}
 									onChange={(paths) =>
 										updateDefaultField("default_sandbox_extra_paths", paths)
 									}
-									addLabel="Add path exclusion…"
-									emptyLabel="No path exclusions."
+									addLabel="Add read-write folder…"
+									emptyLabel="No extra read-write folders."
 								/>
 							}
 						/>
@@ -336,7 +336,7 @@ export function InstanceDefaultsTab() {
 					>
 						<SettingsField
 							label="Pre-launch Command"
-							description="Runs before the game starts."
+							description="Runs before the game starts. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -355,7 +355,7 @@ export function InstanceDefaultsTab() {
 						<Separator />
 						<SettingsField
 							label="Wrapper Command"
-							description="Wraps the Java process (e.g. mangohud, optirun)."
+							description="Wraps the Java process (e.g. mangohud, optirun). Sandboxed script wrappers must use an absolute shebang interpreter, not /usr/bin/env."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -374,7 +374,7 @@ export function InstanceDefaultsTab() {
 						<Separator />
 						<SettingsField
 							label="Post-exit Command"
-							description="Runs after the game process terminates."
+							description="Runs after the game process terminates. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput

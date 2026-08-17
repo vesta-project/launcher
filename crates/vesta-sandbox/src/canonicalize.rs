@@ -46,9 +46,7 @@ pub fn canonicalize_allowlist(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Sandbox
 }
 
 /// Canonicalize [`PathAccess`] entries, preserving access flags.
-pub fn canonicalize_path_access(
-    entries: &[PathAccess],
-) -> Result<Vec<PathAccess>, SandboxError> {
+pub fn canonicalize_path_access(entries: &[PathAccess]) -> Result<Vec<PathAccess>, SandboxError> {
     let paths: Vec<PathBuf> = entries.iter().map(|entry| entry.path.clone()).collect();
     let canonical = canonicalize_allowlist(&paths)?;
 
@@ -60,6 +58,7 @@ pub fn canonicalize_path_access(
             read: entry.read,
             write: entry.write,
             execute: entry.execute,
+            recursive: entry.recursive,
         })
         .collect())
 }
@@ -77,12 +76,11 @@ fn canonicalize_path(path: &Path) -> Result<PathBuf, SandboxError> {
 
     while !current.as_os_str().is_empty() {
         if current.exists() {
-            let base = std::fs::canonicalize(&current).map_err(|source| {
-                SandboxError::Canonicalize {
+            let base =
+                std::fs::canonicalize(&current).map_err(|source| SandboxError::Canonicalize {
                     path: path.display().to_string(),
                     source,
-                }
-            })?;
+                })?;
             return Ok(base.join(&suffix));
         }
 
@@ -124,7 +122,7 @@ mod tests {
         let root = temp.path().join("data");
         fs::create_dir_all(&root).unwrap();
 
-        let canonical = canonicalize_allowlist(&[root.clone()]).unwrap();
+        let canonical = canonicalize_allowlist(std::slice::from_ref(&root)).unwrap();
         assert_eq!(canonical.len(), 1);
         assert!(canonical[0].ends_with("data"));
     }
@@ -136,8 +134,7 @@ mod tests {
         let child = root.join("child");
         fs::create_dir_all(&child).unwrap();
 
-        let canonical =
-            canonicalize_allowlist(&[root.clone(), child.clone()]).unwrap();
+        let canonical = canonicalize_allowlist(&[root.clone(), child.clone()]).unwrap();
         assert!(is_subpath(&canonical[1], &canonical[0]));
     }
 

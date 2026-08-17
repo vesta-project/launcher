@@ -6,10 +6,10 @@
 
 mod stub;
 
-#[cfg(target_os = "macos")]
-mod macos;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -23,15 +23,15 @@ pub(crate) fn prepare_platform(
 ) -> (SandboxedSpawn, EnforcementReport) {
     #[cfg(target_os = "macos")]
     {
-        return macos::prepare(run_plan, policy);
+        macos::prepare(run_plan, policy)
     }
     #[cfg(target_os = "linux")]
     {
-        return linux::prepare(run_plan, policy);
+        linux::prepare(run_plan, policy)
     }
     #[cfg(target_os = "windows")]
     {
-        return windows::prepare(run_plan, policy);
+        windows::prepare(run_plan, policy)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {

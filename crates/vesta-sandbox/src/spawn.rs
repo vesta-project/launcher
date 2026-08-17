@@ -37,5 +37,9 @@ pub enum SandboxedSpawn {
         env: HashMap<String, String>,
         cwd: PathBuf,
         pre_exec_notes: Vec<String>,
+        /// Private paths created while preparing the sandbox. The host owns
+        /// their removal after the launched process exits (or launch fails).
+        #[serde(default)]
+        cleanup_paths: Vec<PathBuf>,
     },
 }

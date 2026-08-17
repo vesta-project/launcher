@@ -89,6 +89,9 @@ pub struct LaunchSpec {
     /// When true, `sandbox_prefix` wraps the entire command including any user wrapper.
     /// When false, the user wrapper stays outermost and the prefix is inserted before Java.
     pub sandbox_wraps_entire_command: bool,
+
+    /// Private host-created paths to remove if launch fails or after the game exits.
+    pub sandbox_cleanup_paths: Vec<PathBuf>,
 }
 
 impl LaunchSpec {
@@ -142,6 +145,9 @@ pub struct ProcessHandle {
 
     /// Child process handle (optional for reattachment scenarios)
     pub child: Option<tokio::process::Child>,
+
+    /// Private host-created paths whose lifetime matches the child process.
+    pub cleanup_paths: Vec<PathBuf>,
 }
 
 /// Represents a running game instance
@@ -260,6 +266,7 @@ mod tests {
             post_exit_hook: None,
             sandbox_prefix: None,
             sandbox_wraps_entire_command: true,
+            sandbox_cleanup_paths: Vec::new(),
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -295,6 +302,7 @@ mod tests {
             post_exit_hook: None,
             sandbox_prefix: None,
             sandbox_wraps_entire_command: true,
+            sandbox_cleanup_paths: Vec::new(),
         };
 
         assert_eq!(spec.installed_version_id(), "forge-loader-47.2.0-1.20.1");

@@ -56,6 +56,7 @@ pub(crate) async fn record_started_launch(
     }
 
     if let Some(handle) = launch_result.handle.take() {
+        let cleanup_paths = handle.cleanup_paths;
         if let Some(mut child) = handle.child {
             let iid_for_registry = instance_id.clone();
             tokio::spawn(async move {
@@ -66,6 +67,7 @@ pub(crate) async fn record_started_launch(
                         e
                     );
                 }
+                piston_lib::game::launcher::cleanup_sandbox_paths(cleanup_paths);
                 if let Err(e) =
                     piston_lib::game::launcher::registry::unregister_instance(&iid_for_registry)
                         .await
@@ -77,6 +79,8 @@ pub(crate) async fn record_started_launch(
                     );
                 }
             });
+        } else {
+            piston_lib::game::launcher::cleanup_sandbox_paths(cleanup_paths);
         }
     }
 

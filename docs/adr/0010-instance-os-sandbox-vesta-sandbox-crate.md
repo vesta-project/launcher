@@ -2,6 +2,8 @@
 
 Date: 2026-08-16
 
+Amended: 2026-08-17
+
 Status: Accepted
 
 ## Context
@@ -36,9 +38,10 @@ both Modules and pull unused OS code into every build.
 - `piston-lib` gains only a thin, game-agnostic structured launch hook so
   sandbox composition stays correct with exit-handler and wrappers—not a
   dependency on Vesta presets or OS APIs.
-- The same sandbox Interface applies to **Play** and **any JVM Vesta spawns for
-  that Instance** (including Forge/NeoForge processors). No install-vs-play
-  special write mode.
+- The sandbox Interface applies to the **Play process tree**: exit handler,
+  optionally enclosed wrapper, hooks, game JVM, and descendants. Launcher-owned
+  installation, repair, Java management, and Forge/NeoForge processors are
+  trusted work and remain outside this boundary.
 
 ### Presets
 
@@ -50,22 +53,28 @@ both Modules and pull unused OS code into every build.
 
 ### Filesystem policy (Modded / Paranoid)
 
-- Allowlist: Vesta data directory and the Instance `game_dir`, both **read-write**
-  (shared libraries must remain writable because processors and Play share one
-  policy and install tasks are not distinguishable for elevation).
-- Session logs remain at `{vesta data}/logs/…` (inside the Vesta data allowlist).
-- Java/JRE home and `exit-handler.jar`: read + execute.
-- Natives under Vesta data: load/execute as required.
-- Global extra paths (app defaults) plus per-instance extra paths; UI shows
-  inherited globals greyed and allows instance-only additions.
+- Shared runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`):
+  **read-only** during Play. Other launcher state is not readable. Installation
+  and repair own shared-runtime mutations outside the sandbox.
+- Instance `game_dir`: **read-write**.
+- The exact pre-created session log file at `{vesta data}/logs/…`: **read-write**;
+  the containing log directory is not granted recursively.
+- Java/JRE home and `exit-handler.jar`: read-only; Java/JRE helpers are
+  executable.
+- Natives under Vesta data: read/load as required; they are not granted arbitrary
+  process-exec capability.
+- Global extra paths (app defaults) plus per-instance extra paths grant
+  read-write access; UI shows inherited globals greyed and allows instance-only
+  additions.
 - Paths are canonicalized; symlink escapes outside the allowlist are denied.
 
 ### Exec, network, capabilities
 
-- Exec allowlist: JRE/Java helpers, exit-handler, natives, and required system
-  execution for play (not arbitrary shell/`game_dir` binaries). On macOS Modded,
-  `/usr/bin/open` is included so in-game “Open folder” works; this is part of the
-  preset, not reported as a bypass. Paranoid keeps it denied.
+- Exec allowlist: the selected Java executable, required JRE helpers, an
+  explicitly resolved enclosed wrapper (and its absolute shebang interpreter),
+  and shell interpreters only when lifecycle hooks are configured. Arbitrary
+  shell children, `game_dir` binaries, and LaunchServices helpers such as
+  `/usr/bin/open` remain denied because they can escape the process-tree boundary.
 - v1 capability knobs: filesystem, network, exec, microphone. Presets set them;
   no full privacy dashboard in v1.
 - USB/controllers remain allowed under Paranoid.
@@ -76,6 +85,9 @@ both Modules and pull unused OS code into every build.
 - User-configurable nesting: **sandbox outside** (default) vs **wrapper outside**.
 - Wrapper-outside is a documented weaker posture and must be visible in the
   enforcement report.
+- An unsandboxed wrapper may not reside under the game directory or an extra
+  read-write root, preventing one Play session from replacing trusted code used
+  by the next launch.
 
 ### Enforcement honesty
 
@@ -93,21 +105,26 @@ both Modules and pull unused OS code into every build.
 
 ### macOS Seatbelt profile shape
 
-- Use `(allow default)` plus **targeted denials** for product controls:
-  deny/re-allow `file-write*`, optional `network*` / `device-microphone`, and
-  `process-exec*` allowlisting.
+- Use `(allow default)` plus **filtered targeted denials** for product controls:
+  deny filesystem reads, writes, and process execution only when their paths do
+  not match the approved filters; optionally deny `network*` and
+  `device-microphone`. Unconditional deny rules cannot be re-opened reliably by
+  later allow rules in Seatbelt.
 - Do **not** use hard `(deny default)` for the game JVM. That aborts Java during
   `os::init` (SIGABRT / exit 134) before the exit handler can write
   `exit_status.json`, which previously looked like a clean short session.
+- Each launch receives an atomically created private system-temp directory. Its
+  exact path is the only writable temp allowance and the host removes it after
+  the process exits (or launch fails).
 
 ## Consequences
 
 - Locality: OS sandbox mechanics stay in `vesta-sandbox`; Vesta settings stay in
   Tauri; Minecraft launch correctness stays in `piston-lib`.
-- Leverage: install tasks and Play reuse one prepare/apply Interface.
-- Tradeoff: Modded/Paranoid allow **RW** on shared Vesta data, so a hostile
-  game can mutate shared `libraries/`/`assets/`, but should not escape to the
-  rest of the machine.
+- Leverage: one prepare/apply Interface confines the whole Play process tree.
+- Shared runtime roots and managed Java remain readable but cannot be mutated by
+  hostile game code. Writable extras that overlap trusted Java or wrapper paths
+  are rejected before launcher-owned verification can execute them.
 - Tradeoff: device and exec controls will be uneven across OSes; the enforcement
   report is part of the product contract.
 - Follow-ups (not required by this ADR): richer per-toggle UI, deny-overrides
@@ -118,6 +135,6 @@ both Modules and pull unused OS code into every build.
 
 - Domain vocabulary: `CONTEXT.md` (Sandbox Policy, Sandbox Adapter)
 - Prior seams: ADR-0002, ADR-0003
-- Planned crate: `crates/vesta-sandbox`
+- Sandbox crate: `crates/vesta-sandbox`
 - Launch adaptation: `vesta-launcher/src-tauri/src/instance/launch_preparation.rs`
 - Spawn Adapter: `crates/piston-lib/src/game/launcher/process.rs`
