@@ -46,7 +46,6 @@ tauri-plugin-log = "2.8"
 tauri-plugin-shell = "2.3"
 tauri-plugin-dialog = "2.7"
 tauri-plugin-deep-link = "2.4"
-tauri-plugin-macos-permissions = "2.3"
 tauri-plugin-updater = "2.10"
 tauri-plugin-sentry = "0.5"
 sentry = "0.42"
@@ -104,6 +103,9 @@ devtools = ["dep:tauri-plugin-devtools"]
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26.1"
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = "0.3"
 
 [target."cfg(target_os = \"windows\")".dependencies]
 winver = "1.0.0"

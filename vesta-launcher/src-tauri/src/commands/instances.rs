@@ -21,6 +21,67 @@ use tauri::{Emitter, Manager, State};
 const MCLOGS_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const MCLOGS_MAX_LINES: usize = 25_000;
 
+#[cfg(target_os = "macos")]
+fn microphone_permission_granted() -> bool {
+    use objc2::{class, msg_send};
+    use objc2_foundation::NSString;
+
+    unsafe {
+        let media_type = NSString::from_str("soun");
+        let status: i32 = msg_send![
+            class!(AVCaptureDevice),
+            authorizationStatusForMediaType: &*media_type
+        ];
+        status == 3
+    }
+}
+
+#[cfg(target_os = "macos")]
+async fn request_microphone_permission() -> Result<bool, String> {
+    use block2::RcBlock;
+    use objc2::{class, msg_send, runtime::Bool};
+    use objc2_foundation::NSString;
+
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let sender = Arc::new(Mutex::new(Some(sender)));
+    {
+        let completion = RcBlock::new(move |granted: Bool| {
+            if let Ok(mut sender) = sender.lock() {
+                if let Some(sender) = sender.take() {
+                    let _ = sender.send(granted.as_bool());
+                }
+            }
+        });
+
+        unsafe {
+            let media_type = NSString::from_str("soun");
+            let _: () = msg_send![
+                class!(AVCaptureDevice),
+                requestAccessForMediaType: &*media_type,
+                completionHandler: &*completion
+            ];
+        }
+    }
+
+    receiver
+        .await
+        .map_err(|_| "Microphone permission request was cancelled".to_string())
+}
+
+#[cfg(target_os = "macos")]
+async fn ensure_microphone_permission() -> Result<(), String> {
+    if microphone_permission_granted() {
+        return Ok(());
+    }
+
+    log::info!("[macOS Permissions] Requesting microphone permission...");
+    if request_microphone_permission().await? {
+        Ok(())
+    } else {
+        Err("Microphone permission was denied; launch cancelled so voice chat can initialize correctly".to_string())
+    }
+}
+
 lazy_static! {
     static ref LAUNCH_IN_PROGRESS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
@@ -1502,28 +1563,6 @@ pub async fn launch_instance(
     app_handle: tauri::AppHandle,
     instance_data: Instance,
 ) -> Result<(), String> {
-    // macOS: Request microphone permission when the resolved sandbox policy allows
-    // mic access (Trusted/Modded), so voice-chat mods can work. Skip the prompt when
-    // Paranoid denies mic — Seatbelt also denies device-microphone for that preset.
-    #[cfg(target_os = "macos")]
-    {
-        let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
-        let sandbox =
-            crate::utils::sandbox_policy::resolve_sandbox_settings(&instance_data, &app_config)?;
-        let mic_allowed = vesta_sandbox::resolve_preset(sandbox.preset).mic_allowed;
-        if mic_allowed {
-            if !tauri_plugin_macos_permissions::check_microphone_permission().await {
-                log::info!("[macOS Permissions] Requesting microphone permission...");
-                // We don't block the launch if permission is denied, but we try to request it.
-                let _ = tauri_plugin_macos_permissions::request_microphone_permission().await;
-            }
-        } else {
-            log::info!(
-                "[macOS Permissions] Skipping microphone permission request (sandbox preset denies mic)"
-            );
-        }
-    }
-
     if matches!(
         instance_data.installation_status.as_deref(),
         Some("installing") | Some("interrupted")
@@ -1537,6 +1576,23 @@ pub async fn launch_instance(
 
     let instance_id = instance_data.slug();
     let _launch_guard = LaunchInProgressGuard::acquire(instance_id.clone()).await?;
+
+    // Request and await TCC consent before starting Java; Seatbelt separately
+    // denies the microphone for the Paranoid preset.
+    #[cfg(target_os = "macos")]
+    {
+        let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+        let sandbox =
+            crate::utils::sandbox_policy::resolve_sandbox_settings(&instance_data, &app_config)?;
+        let mic_allowed = vesta_sandbox::resolve_preset(sandbox.preset).mic_allowed;
+        if mic_allowed {
+            ensure_microphone_permission().await?;
+        } else {
+            log::info!(
+                "[macOS Permissions] Skipping microphone permission request (sandbox preset denies mic)"
+            );
+        }
+    }
 
     use tauri::Emitter;
     let _ = app_handle.emit(
