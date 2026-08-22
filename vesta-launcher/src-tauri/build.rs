@@ -1,8 +1,11 @@
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    bundle_linux_sandbox_exec();
+
     tauri_build::build();
 
     // Obfuscate CurseForge API Key
@@ -30,15 +33,11 @@ fn main() {
     // Trigger rebuild when migrations change (for diesel_migrations)
     println!("cargo:rerun-if-changed=migrations");
     println!("cargo:rerun-if-env-changed=CURSEFORGE_API_KEY");
-
-    #[cfg(target_os = "linux")]
-    bundle_linux_sandbox_exec();
 }
 
 #[cfg(target_os = "linux")]
 fn bundle_linux_sandbox_exec() {
     use std::path::PathBuf;
-    use std::process::Command;
 
     let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".into());
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -46,40 +45,74 @@ fn bundle_linux_sandbox_exec() {
     let target_dir = env::var("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| workspace_root.join("target"));
+    let target = env::var("TARGET").unwrap_or_else(|_| "unknown-target".into());
+    let binaries_dir = manifest_dir.join("binaries");
+    let helper_dest = binaries_dir.join(format!("vesta-sandbox-exec-{target}"));
 
     println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/bin/vesta-sandbox-exec.rs");
     println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/landlock_exec.rs");
+    println!("cargo:rerun-if-env-changed=TARGET");
+
+    let helper_src = ensure_sandbox_exec_built(&workspace_root, &target_dir, &profile);
+    fs::create_dir_all(&binaries_dir).expect("create binaries directory");
+    fs::copy(&helper_src, &helper_dest).unwrap_or_else(|error| {
+        panic!(
+            "failed to copy vesta-sandbox-exec to {}: {error}",
+            helper_dest.display()
+        );
+    });
+    println!(
+        "cargo:rustc-env=VESTA_SANDBOX_EXEC={}",
+        helper_src.display()
+    );
+}
+
+#[cfg(target_os = "linux")]
+fn ensure_sandbox_exec_built(
+    workspace_root: &Path,
+    target_dir: &Path,
+    profile: &str,
+) -> PathBuf {
+    use std::process::Command;
+
+    let helper_src = target_dir.join(profile).join("vesta-sandbox-exec");
+    if helper_src.is_file() {
+        return helper_src;
+    }
+
+    // Nested `cargo build` must use a separate target dir or it deadlocks waiting
+    // on the parent build script's artifact directory lock.
+    let sidecar_target = target_dir.join("sidecar");
+    let sidecar_helper = sidecar_target.join(profile).join("vesta-sandbox-exec");
+    if sidecar_helper.is_file() {
+        return sidecar_helper;
+    }
 
     let build_status = Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-        .current_dir(&workspace_root)
+        .current_dir(workspace_root)
+        .env("CARGO_TARGET_DIR", &sidecar_target)
         .args([
             "build",
             "-p",
             "vesta-sandbox",
             "--bin",
             "vesta-sandbox-exec",
-            "--profile",
-            &profile,
         ])
-        .status();
+        .status()
+        .unwrap_or_else(|error| {
+            panic!("failed to spawn cargo build for vesta-sandbox-exec helper: {error}");
+        });
 
-    if let Ok(status) = build_status {
-        if !status.success() {
-            println!("cargo:warning=failed to build vesta-sandbox-exec helper");
-        }
+    if !build_status.success() {
+        panic!("failed to build vesta-sandbox-exec helper (required for Linux sandbox presets)");
     }
 
-    let helper_src = target_dir.join(&profile).join("vesta-sandbox-exec");
-    let binaries_dir = manifest_dir.join("binaries");
-    let helper_dest = binaries_dir.join("vesta-sandbox-exec");
-
-    if helper_src.is_file() {
-        let _ = fs::create_dir_all(&binaries_dir);
-        if fs::copy(&helper_src, &helper_dest).is_ok() {
-            println!(
-                "cargo:rustc-env=VESTA_SANDBOX_EXEC={}",
-                helper_src.display()
-            );
-        }
+    if sidecar_helper.is_file() {
+        return sidecar_helper;
     }
+
+    panic!(
+        "vesta-sandbox-exec helper missing after build; expected {}",
+        sidecar_helper.display()
+    );
 }
