@@ -4,8 +4,41 @@ This document covers typical developer workflows, code conventions, and where to
 
 ## Prerequisites
 - **Rust:** Stable toolchain (Cargo).
-- **Bun:** Required for frontend tasks and project scripts. [Install Bun](https://bun.sh/).
+- **Bun:** Required for frontend tasks and project scripts. [Install Bun](https://bun.sh/). Node.js is not required; Tauri and package scripts use Bun.
 - **Java:** Required for certain installer processors and tests.
+
+### Linux system packages (Tauri / WebKit)
+
+Install the WebKitGTK and related development libraries before `bun run vesta:dev` or `cargo test` for the Tauri crate.
+
+**Fedora / RHEL-family:**
+```bash
+sudo dnf install \
+  webkit2gtk4.1-devel \
+  gtk3-devel \
+  libappindicator-gtk3-devel \
+  librsvg2-devel \
+  libxdo-devel \
+  openssl-devel \
+  gcc make pkgconf-pkg-config \
+  curl file xdg-utils \
+  bubblewrap
+```
+
+**Ubuntu / Debian-family** (matches CI):
+```bash
+sudo apt-get install --yes \
+  build-essential \
+  file \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libssl-dev \
+  libwebkit2gtk-4.1-dev \
+  libxdo-dev \
+  pkg-config \
+  xdg-utils \
+  bubblewrap
+```
 
 ## Workflows
 
@@ -21,13 +54,15 @@ This document covers typical developer workflows, code conventions, and where to
   ```bash
   bun run vesta:dev
   ```
-  (Runs Tauri + Vite with hot-reloading.)
+  (Runs Tauri + Vite with hot-reloading. Uses Bun for the Vite frontend; npm is not required.)
+
+**Linux sandbox (Modded / Paranoid presets):** requires `bubblewrap` (`bwrap`), working unprivileged user namespaces, Landlock (Linux 5.13+), and the bundled `vesta-sandbox-exec` helper for exec allowlists. The launcher checks all of these at launch and in settings.
 
 ### CrabNebula DevTools (development only)
 
-Debug builds include [CrabNebula DevTools](https://devtools.crabnebula.dev) for inspecting invoke calls, console output, and Tauri config. The `vesta:dev` script enables the `devtools` Cargo feature; production builds exclude the crate entirely.
+Debug builds can include [CrabNebula DevTools](https://devtools.crabnebula.dev) for inspecting invoke calls, console output, and Tauri config. Use `vesta:dev:tools` to enable the `devtools` Cargo feature; production builds exclude the crate entirely.
 
-1. Run `bun run vesta:dev`
+1. Run `bun run vesta:dev:tools`
 2. Look for the CrabNebula WebSocket connection URL in the terminal output
 3. Open that URL, or go to [devtools.crabnebula.dev](https://devtools.crabnebula.dev) and connect manually
 

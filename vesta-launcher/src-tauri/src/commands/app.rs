@@ -631,6 +631,115 @@ pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), St
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxHostSupport {
+    pub host_os: String,
+    pub enforcement_available: bool,
+    pub enforcement_backend: Option<String>,
+    pub bubblewrap_available: bool,
+    pub bubblewrap_path: Option<String>,
+    pub missing_requirement_message: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_sandbox_host_support() -> SandboxHostSupport {
+    #[cfg(target_os = "linux")]
+    {
+        let bubblewrap_path = vesta_sandbox::bubblewrap_path();
+        let bubblewrap_available = bubblewrap_path.is_some();
+        let user_namespace_available = vesta_sandbox::user_namespace_available();
+        let landlock_available = vesta_sandbox::landlock_available();
+        let landlock_helper = vesta_sandbox::landlock_helper_path();
+        let enforcement_ready = vesta_sandbox::sandbox_enforcement_ready();
+        return SandboxHostSupport {
+            host_os: "linux".to_string(),
+            enforcement_available: enforcement_ready,
+            enforcement_backend: enforcement_ready.then(|| "bubblewrap+landlock".to_string()),
+            bubblewrap_available,
+            bubblewrap_path: bubblewrap_path.map(|path| path.to_string_lossy().into_owned()),
+            missing_requirement_message: if enforcement_ready {
+                None
+            } else if !bubblewrap_available {
+                Some(
+                    "Install the bubblewrap package (provides the bwrap command) to use Modded or Paranoid sandbox presets on Linux."
+                        .to_string(),
+                )
+            } else if !user_namespace_available {
+                Some(
+                    "Unprivileged user namespaces are disabled on this system. Enable kernel.unprivileged_userns_clone or adjust your distribution's bubblewrap restrictions to use Modded or Paranoid sandbox presets on Linux."
+                        .to_string(),
+                )
+            } else if !landlock_available {
+                Some(
+                    "Landlock exec allowlists are unavailable on this kernel (requires Linux 5.13+ with Landlock enabled). Modded and Paranoid presets cannot be enforced."
+                        .to_string(),
+                )
+            } else if landlock_helper.is_none() {
+                Some(
+                    "The vesta-sandbox-exec helper was not found next to the launcher. Rebuild or reinstall Vesta Launcher to use Modded or Paranoid sandbox presets on Linux."
+                        .to_string(),
+                )
+            } else {
+                Some(
+                    "Linux sandbox enforcement is not ready; verify bubblewrap, user namespaces, and Landlock support."
+                        .to_string(),
+                )
+            },
+        };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let seatbelt = std::path::Path::new("/usr/bin/sandbox-exec");
+        let enforcement_available = seatbelt.is_file();
+        return SandboxHostSupport {
+            host_os: "macos".to_string(),
+            enforcement_available,
+            enforcement_backend: enforcement_available.then(|| "seatbelt".to_string()),
+            bubblewrap_available: false,
+            bubblewrap_path: None,
+            missing_requirement_message: if enforcement_available {
+                None
+            } else {
+                Some(
+                    "macOS sandbox-exec was not found; Modded and Paranoid presets cannot be enforced."
+                        .to_string(),
+                )
+            },
+        };
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        SandboxHostSupport {
+            host_os: "windows".to_string(),
+            enforcement_available: false,
+            enforcement_backend: None,
+            bubblewrap_available: false,
+            bubblewrap_path: None,
+            missing_requirement_message: Some(
+                "Windows sandbox enforcement is not available yet; use Trusted on Windows."
+                    .to_string(),
+            ),
+        }
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        SandboxHostSupport {
+            host_os: std::env::consts::OS.to_string(),
+            enforcement_available: false,
+            enforcement_backend: None,
+            bubblewrap_available: false,
+            bubblewrap_path: None,
+            missing_requirement_message: Some(
+                "Sandbox enforcement is not available on this platform.".to_string(),
+            ),
+        }
+    }
+}
+
 pub fn request_guarded_exit(app_handle: &tauri::AppHandle, source: &str) -> Result<(), String> {
     log::info!("Requesting guarded exit from source: {}", source);
     let _ = crate::utils::windows::ensure_main_window_visible(app_handle);

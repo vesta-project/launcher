@@ -10,3 +10,11 @@ license.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0.18"
 tempfile = "3"
+which = "8.0.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4.7"
+
+[[bin]]
+name = "vesta-sandbox-exec"
+path = "src/bin/vesta-sandbox-exec.rs"

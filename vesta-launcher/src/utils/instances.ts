@@ -17,6 +17,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getActiveAccount } from "@utils/auth";
+import { invalidateSandboxHostSupportCache } from "@utils/sandbox-host";
 
 export const DEMO_INSTANCE_ID = -1;
 export const DEMO_INSTANCE_SLUG = "vesta-explorer-demo";
@@ -573,6 +574,9 @@ export async function launchInstance(instance: Instance): Promise<void> {
 	} catch (e) {
 		setLaunching(slug, false);
 		console.error("[launchInstance] Launch command failed:", e);
+		if (String(e).toLowerCase().includes("sandbox")) {
+			invalidateSandboxHostSupportCache();
+		}
 		throw e;
 	}
 }

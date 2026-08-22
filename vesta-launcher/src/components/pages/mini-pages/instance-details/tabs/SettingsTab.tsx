@@ -2,9 +2,11 @@ import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	PathListEditor,
+	SandboxHostNotice,
 	SandboxPresetOptionLabel,
 	SandboxPresetSelect,
 	normalizeSandboxPreset,
+	useSandboxHostSupport,
 	type SandboxPresetValue,
 	type SandboxWrapperNestingValue,
 } from "@components/settings";
@@ -137,6 +139,7 @@ interface SettingsTabProps {
 }
 
 export const SettingsTab = (p: SettingsTabProps) => {
+	const [sandboxSupport] = useSandboxHostSupport();
 	const launchBehaviorOptions: { label: string; value: string }[] = [
 		{ label: "Stay Open", value: "stay-open" },
 		{ label: "Minimize Window", value: "minimize" },
@@ -848,6 +851,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					</div>
 
 					<div class={sandboxStyles.fieldStack}>
+						<SandboxHostNotice support={sandboxSupport()} />
 						<Show
 							when={!p.useGlobalSandbox}
 							fallback={

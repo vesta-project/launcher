@@ -37,8 +37,9 @@ This repository contains the source code for Vesta Launcher, built with Tauri (R
 #### Prerequisites
 
 - Rust toolchain (stable)
-- Bun or Node.js
+- Bun ([install](https://bun.sh/)) — Node.js/npm are not required
 - Java (for some features)
+- On Linux: WebKitGTK and related packages (see [Developer Guide](docs/development/DEVELOPMENT.md))
 
 #### Quick Start
 

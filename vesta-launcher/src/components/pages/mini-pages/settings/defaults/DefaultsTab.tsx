@@ -2,9 +2,11 @@ import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	PathListEditor,
+	SandboxHostNotice,
 	SandboxPresetSelect,
 	normalizeSandboxPreset,
 	normalizeSandboxWrapperNesting,
+	useSandboxHostSupport,
 	type SandboxPresetValue,
 } from "@components/settings";
 import {
@@ -50,6 +52,8 @@ import styles from "../settings-page.module.css";
 import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 
 export function InstanceDefaultsTab() {
+	const [sandboxSupport] = useSandboxHostSupport();
+
 	const handleMemoryChange = (val: number[]) => {
 		const nextMax = val[0] || preferredMaxMemory();
 		updateDefaultField("default_min_memory", DEFAULT_MIN_MEMORY_MB);
@@ -273,6 +277,7 @@ export function InstanceDefaultsTab() {
 					subHeader="Default OS sandbox policy for new instances."
 				>
 					<div class={sandboxStyles.fieldStack}>
+						<SandboxHostNotice support={sandboxSupport()} />
 						<SettingsField
 							label="Preset"
 							description="Capability profile applied at launch."

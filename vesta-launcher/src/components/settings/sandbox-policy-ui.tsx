@@ -12,8 +12,27 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { createMemo, type JSX } from "solid-js";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@ui/tooltip/tooltip";
+import { showToast } from "@ui/toast/toast";
+import {
+	fetchSandboxHostSupport,
+	guardSandboxPresetChange,
+	invalidateSandboxHostSupportCache,
+	sandboxPresetBlockedCopy,
+	type SandboxHostSupport,
+} from "@utils/sandbox-host";
+import {
+	createMemo,
+	createResource,
+	onCleanup,
+	onMount,
+	type JSX,
+	Show,
+} from "solid-js";
 import styles from "./sandbox-policy.module.css";
 
 export type SandboxPresetValue = "trusted" | "modded" | "paranoid";
@@ -120,6 +139,58 @@ export function SandboxPresetOptionLabel(props: { preset: SandboxPresetValue }) 
 	);
 }
 
+export function SandboxHostNotice(props: {
+	support: SandboxHostSupport | undefined;
+}) {
+	const message = createMemo(() => {
+		const support = props.support;
+		if (!support || support.enforcementAvailable) {
+			return null;
+		}
+		return (
+			support.missingRequirementMessage ??
+			"Modded and Paranoid sandbox presets cannot be enforced on this system."
+		);
+	});
+
+	return (
+		<Show when={message()}>
+			{(text) => (
+				<div class={styles.hostNotice} role="alert">
+					{text()}
+				</div>
+			)}
+		</Show>
+	);
+}
+
+export function useSandboxHostSupport() {
+	const [support, actions] = createResource(fetchSandboxHostSupport);
+
+	onMount(() => {
+		const refreshSupport = () => {
+			invalidateSandboxHostSupportCache();
+			void actions.refetch();
+		};
+
+		const handleVisibility = () => {
+			if (!document.hidden) {
+				refreshSupport();
+			}
+		};
+
+		window.addEventListener("focus", refreshSupport);
+		document.addEventListener("visibilitychange", handleVisibility);
+
+		onCleanup(() => {
+			window.removeEventListener("focus", refreshSupport);
+			document.removeEventListener("visibilitychange", handleVisibility);
+		});
+	});
+
+	return [support, actions] as const;
+}
+
 export function SandboxPresetSelect(props: {
 	value: SandboxPresetValue;
 	onChange: (value: SandboxPresetValue) => void;
@@ -130,6 +201,21 @@ export function SandboxPresetSelect(props: {
 			SANDBOX_PRESET_OPTIONS[0],
 	);
 
+	const handleChange = async (next: SandboxPresetValue) => {
+		const { allowed, support } = await guardSandboxPresetChange(next);
+		if (!allowed) {
+			const copy = sandboxPresetBlockedCopy(support);
+			showToast({
+				title: copy.title,
+				description: copy.description,
+				severity: "error",
+				dismissible: true,
+			});
+			return;
+		}
+		props.onChange(next);
+	};
+
 	return (
 		<Select
 			options={SANDBOX_PRESET_OPTIONS}
@@ -137,7 +223,9 @@ export function SandboxPresetSelect(props: {
 			optionTextValue="label"
 			value={selected()}
 			onChange={(option) => {
-				if (option) props.onChange(option.value);
+				if (option) {
+					void handleChange(option.value);
+				}
 			}}
 			itemComponent={(itemProps) => (
 				<SelectItem item={itemProps.item}>

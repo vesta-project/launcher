@@ -172,6 +172,7 @@ fn main() {
             commands::app::path_exists,
             commands::github::get_changelog,
             commands::app::get_network_status,
+            commands::app::get_sandbox_host_support,
             commands::app::set_network_status,
             commands::app::refresh_network_status,
             commands::app::test_proxy_connection,

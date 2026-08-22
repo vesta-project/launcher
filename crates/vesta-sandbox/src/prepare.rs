@@ -21,6 +21,22 @@ pub fn prepare(
         ));
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        if !platform::linux::bubblewrap_available() {
+            return Err(SandboxError::BubblewrapNotFound);
+        }
+        if !platform::linux::user_namespace_available() {
+            return Err(SandboxError::UserNamespaceUnavailable);
+        }
+        if !crate::landlock_exec::landlock_available() {
+            return Err(SandboxError::LandlockUnavailable);
+        }
+        if !crate::landlock_exec::landlock_helper_path().is_some() {
+            return Err(SandboxError::LandlockHelperNotFound);
+        }
+    }
+
     let (spawn, report) = platform::prepare_platform(run_plan, policy);
     validate_required_controls(policy, &report)?;
     Ok((spawn, report))
@@ -64,7 +80,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
     fn modded_prepare_fails_closed_on_stub_platforms() {
         let caps = resolve_preset(SandboxPreset::Modded);
         let policy = SandboxPolicy {
@@ -92,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
     fn paranoid_prepare_fails_closed_on_stub_platforms() {
         let caps = resolve_preset(SandboxPreset::Paranoid);
         let policy = SandboxPolicy {
@@ -187,5 +203,73 @@ mod tests {
             report.network,
             crate::enforcement::EnforcementStatus::Enforced
         );
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn modded_prepare_succeeds_with_bubblewrap_adapter() {
+        if !crate::sandbox_enforcement_ready() {
+            return;
+        }
+
+        let caps = resolve_preset(SandboxPreset::Modded);
+        let policy = SandboxPolicy {
+            enabled: caps.enabled,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![crate::policy::PathAccess::new(
+                std::env::temp_dir(),
+                true,
+                true,
+                false,
+            )],
+            network_allowed: caps.network_allowed,
+            mic_allowed: caps.mic_allowed,
+            usb_allowed: caps.usb_allowed,
+            exec_allowlist: vec![PathBuf::from("/usr/bin/java")],
+            wrapper_nesting: Default::default(),
+            extra_paths: Vec::new(),
+        };
+
+        let (spawn, report) = prepare(&sample_run_plan(), &policy).expect("linux prepare");
+        let SandboxedSpawn::Prepared { cleanup_paths, .. } = spawn else {
+            panic!("expected prepared sandbox spawn");
+        };
+        for path in cleanup_paths {
+            std::fs::remove_dir_all(path).unwrap();
+        }
+        assert_eq!(
+            report.filesystem,
+            crate::enforcement::EnforcementStatus::Enforced
+        );
+        assert_eq!(report.exec, crate::enforcement::EnforcementStatus::Enforced);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn modded_prepare_fails_closed_without_bubblewrap() {
+        if crate::bubblewrap_available() {
+            return;
+        }
+
+        let caps = resolve_preset(SandboxPreset::Modded);
+        let policy = SandboxPolicy {
+            enabled: caps.enabled,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![crate::policy::PathAccess::new(
+                PathBuf::from("/data"),
+                true,
+                true,
+                false,
+            )],
+            network_allowed: caps.network_allowed,
+            mic_allowed: caps.mic_allowed,
+            usb_allowed: caps.usb_allowed,
+            exec_allowlist: vec![PathBuf::from("/java")],
+            wrapper_nesting: Default::default(),
+            extra_paths: Vec::new(),
+        };
+
+        let err = prepare(&sample_run_plan(), &policy).unwrap_err();
+        assert!(matches!(err, SandboxError::BubblewrapNotFound));
     }
 }

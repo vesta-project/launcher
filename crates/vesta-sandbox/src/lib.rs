@@ -3,6 +3,9 @@
 //! See ADR-0010 for the product contract. OS-specific enforcement lives behind
 //! platform adapters; until they ship, Modded/Paranoid presets fail closed.
 
+#[cfg(target_os = "linux")]
+pub mod landlock_exec;
+
 mod canonicalize;
 mod enforcement;
 mod error;
@@ -22,6 +25,90 @@ pub use policy::{
 };
 pub use prepare::prepare;
 pub use spawn::{RunPlan, SandboxedSpawn};
+
+/// Whether Landlock exec allowlists are available on Linux.
+pub fn landlock_available() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        landlock_exec::landlock_available()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Whether Landlock exec enforcement is ready (kernel + helper binary).
+pub fn landlock_enforcement_ready() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        landlock_exec::landlock_enforcement_ready()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Resolved path to the Landlock helper binary on Linux.
+pub fn landlock_helper_path() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        landlock_exec::landlock_helper_path()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// Whether bubblewrap is installed (Linux sandbox presets). Always `false` on other OSes.
+pub fn bubblewrap_available() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        platform::linux::bubblewrap_available()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Whether unprivileged user namespaces work for bubblewrap on Linux.
+pub fn user_namespace_available() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        platform::linux::user_namespace_available()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Whether Linux sandbox presets can be enforced (bubblewrap plus user namespaces).
+pub fn sandbox_enforcement_ready() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        platform::linux::sandbox_enforcement_ready()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Resolved bubblewrap executable path when available on Linux.
+pub fn bubblewrap_path() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        platform::linux::bubblewrap_path()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
 
 #[cfg(test)]
 mod tests {

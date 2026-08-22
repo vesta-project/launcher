@@ -30,4 +30,56 @@ fn main() {
     // Trigger rebuild when migrations change (for diesel_migrations)
     println!("cargo:rerun-if-changed=migrations");
     println!("cargo:rerun-if-env-changed=CURSEFORGE_API_KEY");
+
+    #[cfg(target_os = "linux")]
+    bundle_linux_sandbox_exec();
+}
+
+#[cfg(target_os = "linux")]
+fn bundle_linux_sandbox_exec() {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".into());
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let workspace_root = manifest_dir.join("../..");
+    let target_dir = env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| workspace_root.join("target"));
+
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/bin/vesta-sandbox-exec.rs");
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/landlock_exec.rs");
+
+    let build_status = Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+        .current_dir(&workspace_root)
+        .args([
+            "build",
+            "-p",
+            "vesta-sandbox",
+            "--bin",
+            "vesta-sandbox-exec",
+            "--profile",
+            &profile,
+        ])
+        .status();
+
+    if let Ok(status) = build_status {
+        if !status.success() {
+            println!("cargo:warning=failed to build vesta-sandbox-exec helper");
+        }
+    }
+
+    let helper_src = target_dir.join(&profile).join("vesta-sandbox-exec");
+    let binaries_dir = manifest_dir.join("binaries");
+    let helper_dest = binaries_dir.join("vesta-sandbox-exec");
+
+    if helper_src.is_file() {
+        let _ = fs::create_dir_all(&binaries_dir);
+        if fs::copy(&helper_src, &helper_dest).is_ok() {
+            println!(
+                "cargo:rustc-env=VESTA_SANDBOX_EXEC={}",
+                helper_src.display()
+            );
+        }
+    }
 }
