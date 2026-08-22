@@ -10,6 +10,7 @@ import {
 	openWorldDatapackBrowser,
 	openWorldDatapackDetails,
 } from "./world-datapack-navigation";
+import { applyLanguagePreference, t } from "~/localization";
 
 const mocks = vi.hoisted(() => ({
 	listWorldDatapacks: vi.fn().mockResolvedValue(undefined),
@@ -263,7 +264,10 @@ function deferred<T>() {
 }
 
 describe("world datapack navigation", () => {
-	beforeEach(() => vi.clearAllMocks());
+	beforeEach(() => {
+		vi.clearAllMocks();
+		applyLanguagePreference("en");
+	});
 
 	it("opens a readable world card with pointer and keyboard input", async () => {
 		const onOpen = vi.fn();
@@ -281,7 +285,7 @@ describe("world datapack navigation", () => {
 		));
 
 		const card = screen.getByRole("button", {
-			name: "View datapacks in Test World",
+			name: t("instances-worlds-view-datapacks-aria", { name: "Test World" }),
 		});
 		await fireEvent.click(card);
 		await fireEvent.keyDown(card, { key: "Enter" });
@@ -309,12 +313,18 @@ describe("world datapack navigation", () => {
 				name: "Manage 2 datapacks in Test World",
 			}),
 		).toBeNull();
-		await fireEvent.click(screen.getByLabelText("2 datapacks"));
+		await fireEvent.click(
+			screen.getByLabelText(
+				t("instances-worlds-datapack-count-aria", { count: 2 }),
+			),
+		);
 		expect(onOpen).toHaveBeenCalledOnce();
 		expect(onManageDatapacks).not.toHaveBeenCalled();
 
 		await fireEvent.click(
-			screen.getByRole("button", { name: "Actions for Test World" }),
+			screen.getByRole("button", {
+				name: t("instances-worlds-actions-aria", { name: "Test World" }),
+			}),
 		);
 		expect(onOpen).toHaveBeenCalledOnce();
 	});
