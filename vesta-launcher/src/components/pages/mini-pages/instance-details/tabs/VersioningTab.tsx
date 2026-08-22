@@ -18,6 +18,7 @@ import {
 	SwitchThumb,
 } from "@ui/switch/switch";
 import { Show } from "solid-js";
+import { t } from "~/localization";
 import { ModpackVersionSelector } from "../modpack-version-selector";
 import styles from "./versioning-tab.module.css";
 
@@ -106,8 +107,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 			<div class={panelStyles["settings-panel"]}>
 				<Show when={inst().modpackId}>
 					<SettingsCard
-						header="Linked Modpack"
-						subHeader="Update the pack as one source, or unlink to manage everything manually."
+						header={t("instances-versioning-linked-modpack-title")}
+						subHeader={t("instances-versioning-linked-modpack-subheader")}
 					>
 						<div class={styles["versioning-stack"]}>
 							<ModpackVersionSelector
@@ -135,12 +136,12 @@ export const VersioningTab = (props: VersioningTabProps) => {
 
 				<Show when={!inst().modpackId}>
 					<SettingsCard
-						header="Core Configuration"
-						subHeader="Define the Minecraft version and modloader for this instance."
+						header={t("instances-versioning-core-config-title")}
+						subHeader={t("instances-versioning-core-config-subheader")}
 					>
 						<SettingsField
-							label="Modloader"
-							description="Choose between Vanilla, Forge, Fabric, or others."
+							label={t("instances-versioning-modloader-label")}
+							description={t("instances-versioning-modloader-description")}
 							body={
 								<ModloaderSwitcher
 									options={modloaderSwitcherOptions()}
@@ -155,8 +156,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						/>
 
 						<SettingsField
-							label="Minecraft Version"
-							description="The base version of the game to run."
+							label={t("instances-versioning-mc-version-label")}
+							description={t("instances-versioning-mc-version-description")}
 							headerRight={
 								<Switch
 									checked={props.includeSnapshots()}
@@ -172,7 +173,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 										/>
 									</SwitchControl>
 									<SwitchLabel class={styles["version-snapshot-switch__label"]}>
-										Show Snapshots
+										{t("instances-versioning-show-snapshots")}
 									</SwitchLabel>
 								</Switch>
 							}
@@ -187,14 +188,16 @@ export const VersioningTab = (props: VersioningTabProps) => {
 									onChange={(version) =>
 										version?.id && props.setSelectedMcVersion(version.id)
 									}
-									placeholder="Select version..."
+									placeholder={t("instances-versioning-mc-version-placeholder")}
 									itemComponent={(p) => (
 										<ComboboxItem item={p.item}>
 											{p.item.rawValue.id}
 										</ComboboxItem>
 									)}
 								>
-									<ComboboxControl aria-label="Version Picker">
+									<ComboboxControl
+										aria-label={t("instances-versioning-version-picker-aria")}
+									>
 										<ComboboxInput as="input" />
 										<ComboboxTrigger />
 									</ComboboxControl>
@@ -210,8 +213,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							}
 						>
 							<SettingsField
-								label="Loader Version"
-								description="Specific version of the selected modloader."
+								label={t("instances-versioning-loader-version-label")}
+								description={t("instances-versioning-loader-version-description")}
 								body={
 									<Show
 										when={!props.mcVersions.loading}
@@ -228,7 +231,9 @@ export const VersioningTab = (props: VersioningTabProps) => {
 												loaderVersion?.id &&
 												props.setSelectedLoaderVersion(loaderVersion.id)
 											}
-											placeholder="Select loader version..."
+											placeholder={t(
+												"instances-versioning-loader-version-placeholder",
+											)}
 											itemComponent={(p) => (
 												<ComboboxItem item={p.item}>
 													<div
@@ -251,14 +256,18 @@ export const VersioningTab = (props: VersioningTabProps) => {
 																	opacity: 0.6,
 																}}
 															>
-																Experimental
+																{t("instances-versioning-experimental-badge")}
 															</span>
 														</Show>
 													</div>
 												</ComboboxItem>
 											)}
 										>
-											<ComboboxControl aria-label="Loader Version Selection">
+											<ComboboxControl
+												aria-label={t(
+													"instances-versioning-loader-version-aria",
+												)}
+											>
 												<ComboboxInput as="input" />
 												<ComboboxTrigger />
 											</ComboboxControl>
@@ -276,7 +285,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 									disabled={props.busy || props.isInstalling || props.isGuest}
 									variant="shadow"
 								>
-									Switch Engine
+									{t("instances-versioning-switch-engine")}
 								</Button>
 							</div>
 						</Show>
@@ -284,20 +293,23 @@ export const VersioningTab = (props: VersioningTabProps) => {
 				</Show>
 
 				<Show when={inst().modpackId}>
-				<SettingsCard header="Connection" subHeader="Control the relationship between this instance and its modpack source.">
+				<SettingsCard
+					header={t("instances-versioning-connection-title")}
+					subHeader={t("instances-versioning-connection-subheader")}
+				>
 					<Show when={inst().modpackId}>
 						<SettingsField
-							label="Unlink Connection"
-							description="Disconnect from the source to manage files manually. This is irreversible."
-							actionLabel="Unlink"
+							label={t("instances-versioning-unlink-label")}
+							description={t("instances-versioning-unlink-description")}
+							actionLabel={t("instances-versioning-unlink-action")}
 							destructive
 							onAction={props.handleUnlink}
 							disabled={props.busy || props.isInstalling || props.isGuest}
 						/>
 						<SettingsField
-							label="Delete Bundled Files & Unlink"
-							description="Remove only the bundled modpack files, keep custom resources and overrides, then disconnect the modpack source."
-							actionLabel="Delete & Unlink"
+							label={t("instances-versioning-delete-unlink-label")}
+							description={t("instances-versioning-delete-unlink-description")}
+							actionLabel={t("instances-versioning-delete-unlink-action")}
 							destructive
 							onAction={props.handleDeleteModpackAndUnlink}
 							disabled={props.busy || props.isInstalling || props.isGuest}
