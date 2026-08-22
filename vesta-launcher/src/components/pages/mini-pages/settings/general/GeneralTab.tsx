@@ -113,20 +113,22 @@ export function GeneralSettingsTab() {
 			setProxyTestDetail(result.detail ?? "");
 			setProxyTestOk(result.ok);
 			showToast({
-				title: result.ok ? "Proxy connected" : "Proxy connection failed",
+				title: result.ok
+					? t("settings-general-proxy-connected")
+					: t("settings-general-proxy-connection-failed"),
 				description: result.ok
-					? "Launcher traffic can use this proxy after restart."
-					: "Check the proxy settings row or logs for details.",
+					? t("settings-general-proxy-connected-description")
+					: t("settings-general-proxy-connection-failed-description"),
 				severity: result.ok ? "success" : "error",
 			});
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);
-			setProxyTestMessage("Proxy connection failed");
+			setProxyTestMessage(t("settings-general-proxy-connection-failed"));
 			setProxyTestDetail(message);
 			setProxyTestOk(false);
 			showToast({
-				title: "Proxy connection failed",
-				description: "Check the proxy settings row or logs for details.",
+				title: t("settings-general-proxy-connection-failed"),
+				description: t("settings-general-proxy-connection-failed-description"),
 				severity: "error",
 			});
 		} finally {
@@ -201,7 +203,7 @@ export function GeneralSettingsTab() {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Accessibility">
+				<SettingsCard header={t("settings-general-accessibility-title")}>
 					{osReducedMotion() && (
 						<div
 							style={{
@@ -215,14 +217,12 @@ export function GeneralSettingsTab() {
 								"line-height": "1.5",
 							}}
 						>
-							<strong>OS Animation Disabled:</strong> Your operating system has
-							animations disabled in accessibility settings. UI animations won't
-							appear until you enable them in your system preferences.
+							{t("settings-general-os-reduced-motion-notice")}
 						</div>
 					)}
 					<SettingsField
-						label="Reduced Motion"
-						description="Disable UI animations for a faster and cleaner experience."
+						label={t("settings-general-reduced-motion-label")}
+						description={t("settings-general-reduced-motion-description")}
 						headerRight={
 							<Switch
 								checked={reducedMotion()}
@@ -236,14 +236,14 @@ export function GeneralSettingsTab() {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Privacy & Integration">
+				<SettingsCard header={t("settings-general-privacy-integration-title")}>
 					<SettingsField
-						label="Error Telemetry"
+						label={t("settings-general-telemetry-label")}
 						description={
 							<>
-								Send crash and error diagnostics to help improve reliability.{" "}
+								{t("settings-general-telemetry-description")}{" "}
 								<a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
-									Privacy Policy
+									{t("settings-general-privacy-policy")}
 								</a>
 							</>
 						}
@@ -259,8 +259,8 @@ export function GeneralSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label="Discord Rich Presence"
-						description="Show your current game and status on Discord."
+						label={t("settings-general-discord-presence-label")}
+						description={t("settings-general-discord-presence-description")}
 						headerRight={
 							<Switch
 								checked={discordPresenceEnabled()}
@@ -275,12 +275,12 @@ export function GeneralSettingsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header="Performance"
-					subHeader="Optimization settings for game performance."
+					header={t("settings-general-performance-title")}
+					subHeader={t("settings-general-performance-subheader")}
 				>
 					<SettingsField
-						label="Use Dedicated GPU"
-						description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
+						label={t("settings-general-dedicated-gpu-label")}
+						description={t("settings-general-dedicated-gpu-description")}
 						headerRight={
 							<Switch
 								checked={useDedicatedGpu()}
@@ -294,10 +294,10 @@ export function GeneralSettingsTab() {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Resources">
+				<SettingsCard header={t("settings-general-resources-title")}>
 					<SettingsField
-						label="Automatically Install Dependencies"
-						description="Automatically download and install required mods and engines when adding a new resource."
+						label={t("settings-general-auto-install-deps-label")}
+						description={t("settings-general-auto-install-deps-description")}
 						headerRight={
 							<Switch
 								checked={autoInstallDependencies()}
@@ -310,8 +310,8 @@ export function GeneralSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label="Parallel Download Threads"
-						description="Number of simultaneous downloads when installing resources."
+						label={t("settings-general-parallel-downloads-label")}
+						description={t("settings-general-parallel-downloads-description")}
 						headerRight={
 							<NumberField
 								value={maxDownloadThreads()}
@@ -330,10 +330,10 @@ export function GeneralSettingsTab() {
 				</SettingsCard>
 
 				<div ref={storageCardRef}>
-					<SettingsCard header="Storage">
+					<SettingsCard header={t("settings-general-storage-title")}>
 						<SettingsField
-							label="Artifact Cache Limit"
-							description="Controls the size of the installer artifact and modpack archive cache."
+							label={t("settings-general-artifact-cache-label")}
+							description={t("settings-general-artifact-cache-description")}
 							headerRight={
 								<div
 									style={{
@@ -363,7 +363,7 @@ export function GeneralSettingsTab() {
 											color: "var(--text-secondary)",
 										}}
 									>
-										MB
+										{t("settings-general-cache-limit-unit")}
 									</span>
 								</div>
 							}
@@ -372,12 +372,12 @@ export function GeneralSettingsTab() {
 				</div>
 
 				<SettingsCard
-					header="Network / Proxy"
-					subHeader="Route launcher-managed HTTP traffic through a proxy."
+					header={t("settings-general-network-proxy-title")}
+					subHeader={t("settings-general-network-proxy-subheader")}
 				>
 					<SettingsField
-						label="Use Proxy"
-						description="Apply a proxy to launcher HTTP traffic after restart."
+						label={t("settings-general-use-proxy-label")}
+						description={t("settings-general-use-proxy-description")}
 						headerRight={
 							<Switch
 								checked={proxyEnabled()}
@@ -394,15 +394,13 @@ export function GeneralSettingsTab() {
 								hidden={!proxyRestartRequired()}
 								aria-live="polite"
 							>
-								<strong>Restart required.</strong> Saved changes apply to
-								regular launcher traffic after restart. You can keep editing and
-								test the proxy first.
+								{t("settings-general-proxy-restart-note")}
 							</div>
 						}
 					/>
 					<SettingsField
-						label="Proxy URL"
-						description="Supports http://, https://, socks5://, and socks5h://. HTTPS inspection requires a trusted proxy CA."
+						label={t("settings-general-proxy-url-label")}
+						description={t("settings-general-proxy-url-description")}
 						disabled={!proxyEnabled()}
 						body={
 							<div class={styles["proxy-control-stack"]}>
@@ -421,8 +419,7 @@ export function GeneralSettingsTab() {
 									/>
 								</TextFieldRoot>
 								<div class={styles["proxy-credential-note"]}>
-									Proxy credentials in URLs are saved in launcher config. Use
-									them only on trusted devices.
+									{t("settings-general-proxy-credentials-note")}
 								</div>
 								<div class={styles["proxy-actions-row"]}>
 									<LauncherButton
@@ -431,7 +428,9 @@ export function GeneralSettingsTab() {
 										onClick={handleProxyTest}
 										disabled={isTestingProxy()}
 									>
-										{isTestingProxy() ? "Testing..." : "Test Proxy"}
+										{isTestingProxy()
+											? t("settings-general-proxy-testing")
+											: t("settings-general-proxy-test")}
 									</LauncherButton>
 									{proxyTestMessage() && (
 										<span
@@ -456,8 +455,8 @@ export function GeneralSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label="Use For Launched Games"
-						description="Pass proxy host and port to Minecraft as JVM arguments. Credentials are not passed to the game process."
+						label={t("settings-general-proxy-apply-to-games-label")}
+						description={t("settings-general-proxy-apply-to-games-description")}
 						disabled={!proxyEnabled()}
 						headerRight={
 							<Switch
@@ -472,10 +471,10 @@ export function GeneralSettingsTab() {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="System Tray">
+				<SettingsCard header={t("settings-general-system-tray-title")}>
 					<SettingsField
-						label="Launch On System Startup"
-						description="Start Vesta Launcher automatically when you sign in."
+						label={t("settings-general-autostart-label")}
+						description={t("settings-general-autostart-description")}
 						headerRight={
 							<Switch
 								checked={autostartEnabled()}
@@ -488,8 +487,8 @@ export function GeneralSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label="Show Tray Icon"
-						description="Display the launcher icon in the system tray."
+						label={t("settings-general-show-tray-icon-label")}
+						description={t("settings-general-show-tray-icon-description")}
 						headerRight={
 							<Switch
 								checked={showTrayIcon()}
@@ -502,8 +501,8 @@ export function GeneralSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label="Close Button Hides To Tray"
-						description="When enabled, clicking the window close button hides the launcher to tray instead of requesting app exit."
+						label={t("settings-general-close-to-tray-label")}
+						description={t("settings-general-close-to-tray-description")}
 						headerRight={
 							<Switch
 								checked={closeToTray()}

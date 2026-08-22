@@ -60,6 +60,7 @@ import {
 	For,
 	Show,
 } from "solid-js";
+import { t } from "~/localization";
 import { WorldDatapacksView } from "./WorldDatapacksView";
 import styles from "./WorldsTab.module.css";
 import { getWorldTransferWarnings } from "./world-transfer";
@@ -71,11 +72,32 @@ type PendingTransfer = {
 	mode: Exclude<WorldTransferMode, "duplicate">;
 };
 
-const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
-	{ value: "recency", label: "Recently played" },
-	{ value: "name", label: "Name" },
-	{ value: "size", label: "Size" },
+const sortOptions = (): Array<{ value: SortMode; label: string }> => [
+	{ value: "recency", label: t("instances-worlds-sort-recency") },
+	{ value: "name", label: t("instances-worlds-sort-name") },
+	{ value: "size", label: t("instances-worlds-sort-size") },
 ];
+
+const transferCompatTitle = (mode: WorldTransferMode) =>
+	mode === "move"
+		? t("instances-worlds-transfer-compat-title-move")
+		: mode === "copy"
+			? t("instances-worlds-transfer-compat-title-copy")
+			: t("instances-worlds-transfer-compat-title-duplicate");
+
+const transferConfirmLabel = (mode: WorldTransferMode) =>
+	mode === "move"
+		? t("instances-worlds-transfer-confirm-move")
+		: mode === "copy"
+			? t("instances-worlds-transfer-confirm-copy")
+			: t("instances-worlds-transfer-confirm-duplicate");
+
+const transferStartedTitle = (mode: WorldTransferMode) =>
+	mode === "move"
+		? t("instances-worlds-transfer-started-move")
+		: mode === "copy"
+			? t("instances-worlds-transfer-started-copy")
+			: t("instances-worlds-transfer-started-duplicate");
 
 type WorldAction = {
 	label: string;
@@ -105,36 +127,36 @@ export const WorldCard: Component<{
 }> = (props) => {
 	const actions = (): WorldAction[] => [
 		{
-			label: "Open folder",
+			label: t("instances-worlds-action-open-folder"),
 			icon: FolderIcon,
 			run: () => void openWorldFolder(props.world.ref),
 		},
 		{
-			label: "Manage datapacks",
+			label: t("instances-worlds-action-manage-datapacks"),
 			icon: DatapackIcon,
 			run: props.onManageDatapacks,
 		},
 		{
-			label: "Move to another instance…",
+			label: t("instances-worlds-action-move"),
 			icon: MoveIcon,
 			disabled: props.busy,
 			separatorBefore: true,
 			run: props.onMove,
 		},
 		{
-			label: "Copy to another instance…",
+			label: t("instances-worlds-action-copy"),
 			icon: CopyIcon,
 			disabled: props.busy,
 			run: props.onCopy,
 		},
 		{
-			label: "Duplicate",
+			label: t("instances-settings-duplicate-action"),
 			icon: DuplicateIcon,
 			disabled: props.busy,
 			run: props.onDuplicate,
 		},
 		{
-			label: "Delete world…",
+			label: t("instances-worlds-action-delete"),
 			icon: TrashIcon,
 			disabled: props.busy,
 			destructive: true,
@@ -154,7 +176,9 @@ export const WorldCard: Component<{
 				role="button"
 				tabIndex={props.world.levelStatus === "unreadable" ? undefined : 0}
 				aria-disabled={props.world.levelStatus === "unreadable" || undefined}
-				aria-label={`View datapacks in ${props.world.displayName}`}
+				aria-label={t("instances-worlds-view-datapacks-aria", {
+					name: props.world.displayName,
+				})}
 				onClick={(event: MouseEvent) => {
 					if (
 						event.target !== event.currentTarget &&
@@ -183,7 +207,7 @@ export const WorldCard: Component<{
 					<div class={styles["media-fade"]} aria-hidden="true" />
 					<Show when={props.world.levelStatus === "unreadable"}>
 						<Badge variant="error" class={styles["world-status"]}>
-							Unreadable
+							{t("instances-worlds-status-unreadable")}
 						</Badge>
 					</Show>
 				</div>
@@ -195,7 +219,10 @@ export const WorldCard: Component<{
 							title={
 								props.world.folderName === props.world.displayName
 									? props.world.displayName
-									: `${props.world.displayName} (${props.world.folderName})`
+									: t("instances-worlds-name-with-folder", {
+											displayName: props.world.displayName,
+											folderName: props.world.folderName,
+										})
 							}
 						>
 							{props.world.displayName}
@@ -204,24 +231,36 @@ export const WorldCard: Component<{
 					<div class={styles.metadata}>
 						<span
 							class={styles["metadata-item"]}
-							title={`Last played ${formatDate(props.world.lastPlayedAt)}`}
-							aria-label={`Last played ${formatDate(props.world.lastPlayedAt)}`}
+							title={t("instances-worlds-last-played", {
+								date: formatDate(props.world.lastPlayedAt),
+							})}
+							aria-label={t("instances-worlds-last-played", {
+								date: formatDate(props.world.lastPlayedAt),
+							})}
 						>
 							<TimerIcon class={styles["filled-icon"]} />
 							{formatDate(props.world.lastPlayedAt)}
 						</span>
 						<span
 							class={styles["metadata-item"]}
-							title={`World size ${formatBytes(props.world.sizeBytes)}`}
-							aria-label={`World size ${formatBytes(props.world.sizeBytes)}`}
+							title={t("instances-worlds-size", {
+								size: formatBytes(props.world.sizeBytes),
+							})}
+							aria-label={t("instances-worlds-size", {
+								size: formatBytes(props.world.sizeBytes),
+							})}
 						>
 							<StorageIcon class={styles["outline-icon"]} />
 							{formatBytes(props.world.sizeBytes)}
 						</span>
 						<span
 							class={styles["metadata-item"]}
-							title={`${props.world.datapackCount} datapacks`}
-							aria-label={`${props.world.datapackCount} datapacks`}
+							title={t("instances-worlds-datapack-count-aria", {
+								count: props.world.datapackCount,
+							})}
+							aria-label={t("instances-worlds-datapack-count-aria", {
+								count: props.world.datapackCount,
+							})}
 						>
 							<DatapackIcon class={styles["outline-icon"]} />
 							{props.world.datapackCount}
@@ -234,7 +273,9 @@ export const WorldCard: Component<{
 							as="button"
 							type="button"
 							class={styles["menu-trigger"]}
-							aria-label={`Actions for ${props.world.displayName}`}
+							aria-label={t("instances-worlds-actions-aria", {
+								name: props.world.displayName,
+							})}
 							onClick={(event: MouseEvent) => event.stopPropagation()}
 						>
 							<MoreIcon />
@@ -374,15 +415,10 @@ export const WorldsTab: Component<{
 		let acknowledged = warnings.length === 0;
 		if (warnings.length > 0) {
 			acknowledged = await dialogStore.confirm(
-				`${mode === "move" ? "Move" : mode === "copy" ? "Copy" : "Duplicate"} with compatibility differences?`,
+				transferCompatTitle(mode),
 				warnings.map((warning) => `• ${warning}`).join("\n"),
 				{
-					okLabel:
-						mode === "move"
-							? "Move world"
-							: mode === "copy"
-								? "Copy world"
-								: "Duplicate world",
+					okLabel: transferConfirmLabel(mode),
 					severity: "warning",
 				},
 			);
@@ -394,13 +430,13 @@ export const WorldsTab: Component<{
 		try {
 			await transferWorld(world.ref, destination.id, mode, acknowledged);
 			showToast({
-				title: `${mode === "move" ? "Move" : mode === "copy" ? "Copy" : "Duplicate"} started`,
-				description: "Progress is available in notifications.",
+				title: transferStartedTitle(mode),
+				description: t("instances-worlds-transfer-started-description"),
 				severity: "success",
 			});
 		} catch (error) {
 			showToast({
-				title: "World transfer failed",
+				title: t("instances-worlds-transfer-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -411,10 +447,12 @@ export const WorldsTab: Component<{
 
 	const performDelete = async (world: WorldSummary) => {
 		const confirmed = await dialogStore.confirm(
-			`Delete ${world.displayName}?`,
-			`This permanently deletes the world folder from ${props.instance.name}. This cannot be undone.`,
+			t("instances-worlds-delete-title", { name: world.displayName }),
+			t("instances-worlds-delete-description", {
+				instanceName: props.instance.name,
+			}),
 			{
-				okLabel: "Delete world",
+				okLabel: t("instances-worlds-delete-confirm"),
 				severity: "warning",
 				isDestructive: true,
 			},
@@ -428,13 +466,16 @@ export const WorldsTab: Component<{
 				props.onSelectedWorldChange(null);
 			}
 			showToast({
-				title: "World deleted",
-				description: `${world.displayName} was removed from ${props.instance.name}.`,
+				title: t("instances-worlds-deleted-title"),
+				description: t("instances-worlds-deleted-description", {
+					name: world.displayName,
+					instanceName: props.instance.name,
+				}),
 				severity: "success",
 			});
 		} catch (error) {
 			showToast({
-				title: "Could not delete world",
+				title: t("instances-worlds-delete-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -447,19 +488,19 @@ export const WorldsTab: Component<{
 		<Show
 			when={selectedWorld()}
 			fallback={
-				<section class={styles.root} aria-label="Worlds">
+				<section class={styles.root} aria-label={t("instances-worlds-section-aria")}>
 					<header class={styles.toolbar}>
 						<div class={styles.title}>
-							<h2>Worlds</h2>
+							<h2>{t("instances-worlds-title")}</h2>
 						</div>
 						<div class={styles.controls}>
 							<Select
 								value={sort()}
 								onChange={(value) => value && setSort(value as SortMode)}
-								options={SORT_OPTIONS.map((option) => option.value)}
+								options={sortOptions().map((option) => option.value)}
 								itemComponent={(itemProps) => (
 									<SelectItem item={itemProps.item}>
-										{SORT_OPTIONS.find(
+										{sortOptions().find(
 											(option) => option.value === itemProps.item.rawValue,
 										)?.label ?? itemProps.item.rawValue}
 									</SelectItem>
@@ -467,13 +508,13 @@ export const WorldsTab: Component<{
 							>
 								<SelectTrigger
 									class={styles["sort-select"]}
-									aria-label="Sort worlds"
+									aria-label={t("instances-worlds-sort-aria")}
 								>
 									<SelectValue<string>>
 										{(state) =>
-											SORT_OPTIONS.find(
+											sortOptions().find(
 												(option) => option.value === state.selectedOption(),
-											)?.label ?? "Recently played"
+											)?.label ?? t("instances-worlds-sort-recency")
 										}
 									</SelectValue>
 								</SelectTrigger>
@@ -482,21 +523,21 @@ export const WorldsTab: Component<{
 							<ToggleGroup
 								value={view()}
 								onChange={(value) => value && setView(value as ViewMode)}
-								aria-label="World layout"
+								aria-label={t("instances-worlds-layout-aria")}
 							>
 								<ToggleGroupItem
 									value="grid"
 									icon_only
-									aria-label="Grid view"
-									title="Grid view"
+									aria-label={t("instances-worlds-view-grid")}
+									title={t("instances-worlds-view-grid")}
 								>
 									<GridIcon />
 								</ToggleGroupItem>
 								<ToggleGroupItem
 									value="compact"
 									icon_only
-									aria-label="Compact view"
-									title="Compact view"
+									aria-label={t("instances-worlds-view-compact")}
+									title={t("instances-worlds-view-compact")}
 								>
 									<ListIcon />
 								</ToggleGroupItem>
@@ -506,8 +547,8 @@ export const WorldsTab: Component<{
 								variant="ghost"
 								icon_only
 								class={styles["refresh-button"]}
-								tooltip_text="Refresh worlds"
-								aria-label="Refresh worlds"
+								tooltip_text={t("instances-worlds-refresh")}
+								aria-label={t("instances-worlds-refresh")}
 								disabled={worldsState.loading[props.instance.id]}
 								onClick={() => void listInstanceWorlds(props.instance.id, true)}
 							>
@@ -520,24 +561,24 @@ export const WorldsTab: Component<{
 						when={
 							!worldsState.loading[props.instance.id] || worlds().length > 0
 						}
-						fallback={<div class={styles.loading}>Finding worlds…</div>}
+						fallback={
+							<div class={styles.loading}>{t("instances-worlds-loading")}</div>
+						}
 					>
 						<Show
 							when={!worldsState.errors[props.instance.id]}
 							fallback={
 								<div class={styles.error}>
-									Worlds could not be loaded:{" "}
-									{worldsState.errors[props.instance.id]}
+									{t("instances-worlds-load-error", {
+										error: worldsState.errors[props.instance.id] ?? "",
+									})}
 								</div>
 							}
 						>
 							<Show
 								when={worlds().length > 0}
 								fallback={
-									<div class={styles.empty}>
-										No Java worlds found. Create and play a world in Minecraft
-										and it will appear here.
-									</div>
+									<div class={styles.empty}>{t("instances-worlds-empty")}</div>
 								}
 							>
 								<div class={styles.worlds} data-view={view()}>
@@ -576,10 +617,22 @@ export const WorldsTab: Component<{
 
 					<InstanceSelectionDialog
 						isOpen={Boolean(pending())}
-						title={`${pending()?.mode === "move" ? "Move" : "Copy"} ${pending()?.world.displayName ?? "world"}`}
-						description="Choose a destination instance. Existing worlds are never overwritten or merged."
+						title={
+							pending()?.mode === "move"
+								? t("instances-worlds-transfer-dialog-title-move", {
+										name:
+											pending()?.world.displayName ??
+											t("instances-worlds-transfer-dialog-fallback-name"),
+									})
+								: t("instances-worlds-transfer-dialog-title-copy", {
+										name:
+											pending()?.world.displayName ??
+											t("instances-worlds-transfer-dialog-fallback-name"),
+									})
+						}
+						description={t("instances-worlds-transfer-dialog-description")}
 						options={destinationOptions()}
-						emptyMessage="No other instances are available for this transfer."
+						emptyMessage={t("instances-worlds-transfer-dialog-empty")}
 						onClose={() => setPending(null)}
 						onSelect={(destination) => {
 							const action = pending();

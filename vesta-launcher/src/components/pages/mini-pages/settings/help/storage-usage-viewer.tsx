@@ -16,6 +16,7 @@ import LauncherButton from "@ui/button/button";
 import buttonStyles from "@ui/button/button.module.css";
 import { formatBytes, formatPercent } from "@utils/format-bytes";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { t } from "~/localization";
 import {
 	type Component,
 	createEffect,
@@ -95,7 +96,7 @@ const StorageSegmentBar: Component<{
 				props.dimInactive && props.activeId != null,
 		}}
 		role="group"
-		aria-label="Storage usage breakdown"
+		aria-label={t("settings-help-storage-breakdown-aria")}
 	>
 		<For each={props.items}>
 			{(item) => {
@@ -116,8 +117,14 @@ const StorageSegmentBar: Component<{
 							width: width(),
 							"background-color": item.color,
 						}}
-						title={`${item.label}: ${formatBytes(item.bytes)}`}
-						aria-label={`${item.label}: ${formatBytes(item.bytes)}`}
+						title={t("settings-help-storage-segment-aria", {
+							label: item.label,
+							size: formatBytes(item.bytes),
+						})}
+						aria-label={t("settings-help-storage-segment-aria", {
+							label: item.label,
+							size: formatBytes(item.bytes),
+						})}
 						aria-pressed={isSelected()}
 						aria-current={props.activeId === item.id ? "true" : undefined}
 						onMouseEnter={() => props.onHover?.(item.id)}
@@ -348,7 +355,7 @@ export function StorageUsageViewer() {
 			id: category.id,
 			label: category.label,
 			description: category.governedByArtifactLimit
-				? "Counted toward the artifact cache limit"
+				? t("settings-help-counted-artifact-limit")
 				: category.description,
 			bytes: category.bytes,
 			color:
@@ -429,7 +436,9 @@ export function StorageUsageViewer() {
 	return (
 		<div ref={viewerRef} class={styles["storage-viewer"]}>
 			<div class={styles["storage-summary-row"]}>
-				<span class={styles["storage-summary-label"]}>Total used</span>
+				<span class={styles["storage-summary-label"]}>
+					{t("settings-help-total-used")}
+				</span>
 				<div class={styles["storage-summary-value"]}>
 					<span>{formatBytes(totalBytes())}</span>
 					<LauncherButton
@@ -438,7 +447,9 @@ export function StorageUsageViewer() {
 						disabled={isRefreshing()}
 						onClick={(event) => void handleRefresh(event)}
 					>
-						{isRefreshing() ? "Refreshing…" : "Refresh"}
+						{isRefreshing()
+							? t("settings-help-refreshing")
+							: t("settings-help-refresh")}
 					</LauncherButton>
 				</div>
 			</div>
@@ -446,14 +457,14 @@ export function StorageUsageViewer() {
 			<Show
 				when={displaySnapshot()}
 				fallback={
-					<div class={styles["storage-empty"]}>Loading storage usage…</div>
+					<div class={styles["storage-empty"]}>{t("settings-help-loading")}</div>
 				}
 			>
 				<div class={styles["storage-tabs"]}>
 					<div
 						class={styles["storage-tab-list"]}
 						role="tablist"
-						aria-label="Storage breakdown views"
+						aria-label={t("settings-help-storage-tabs-aria")}
 					>
 						<button
 							type="button"
@@ -465,7 +476,7 @@ export function StorageUsageViewer() {
 							aria-selected={isTabActive("overview")}
 							onClick={(event) => setTab("overview", event)}
 						>
-							Overview
+							{t("settings-help-tab-overview")}
 						</button>
 						<button
 							type="button"
@@ -477,7 +488,7 @@ export function StorageUsageViewer() {
 							aria-selected={isTabActive("instances")}
 							onClick={(event) => setTab("instances", event)}
 						>
-							Instances
+							{t("settings-help-tab-instances")}
 						</button>
 						<button
 							type="button"
@@ -489,7 +500,7 @@ export function StorageUsageViewer() {
 							aria-selected={isTabActive("cache")}
 							onClick={(event) => setTab("cache", event)}
 						>
-							Cache
+							{t("settings-help-tab-cache")}
 						</button>
 					</div>
 
@@ -540,7 +551,7 @@ export function StorageUsageViewer() {
 								when={instances().length > 0}
 								fallback={
 									<div class={styles["storage-empty"]}>
-										No instances are currently tracked for storage breakdown.
+										{t("settings-help-no-instances")}
 									</div>
 								}
 							>
@@ -619,7 +630,7 @@ export function StorageUsageViewer() {
 							<div class={styles["storage-cache-stats"]}>
 								<div class={styles["storage-cache-stats-header"]}>
 									<span class={styles["storage-cache-stats-label"]}>
-										Artifact cache limit
+										{t("settings-help-artifact-cache-limit")}
 									</span>
 									<button
 										type="button"
@@ -630,18 +641,22 @@ export function StorageUsageViewer() {
 												handleEditArtifactCacheLimit(event);
 											}
 										}}
-										title="Edit artifact cache limit"
+										title={t("settings-help-edit-artifact-cache-limit-title")}
 									>
 										<span class={styles["storage-cache-stats-value"]}>
-											{formatBytes(artifactCacheBytes())} /{" "}
-											{formatBytes(displaySnapshot()?.artifactCacheLimitBytes)}{" "}
-											· {cacheUsagePercent()}%
+											{t("settings-help-artifact-cache-usage", {
+												used: formatBytes(artifactCacheBytes()),
+												limit: formatBytes(
+													displaySnapshot()?.artifactCacheLimitBytes,
+												),
+												percent: `${cacheUsagePercent()}%`,
+											})}
 										</span>
 										<span
 											class={styles["storage-cache-edit-label"]}
 											aria-hidden="true"
 										>
-											Edit
+											{t("settings-help-edit")}
 										</span>
 									</button>
 								</div>
@@ -656,12 +671,9 @@ export function StorageUsageViewer() {
 							<Show when={artifactCacheOverLimitBytes() > 0}>
 								<div class={styles["cache-note"]}>
 									<span>
-										Artifact cache is over limit by{" "}
-										<strong>
-											{formatBytes(artifactCacheOverLimitBytes())}
-										</strong>
-										. Vesta evicts least-recently-used artifacts that are not
-										referenced by active installs.
+										{t("settings-help-cache-over-limit", {
+											amount: formatBytes(artifactCacheOverLimitBytes()),
+										})}
 									</span>
 								</div>
 							</Show>
@@ -671,29 +683,29 @@ export function StorageUsageViewer() {
 
 				<div class={styles["storage-actions"]}>
 					<SettingsField
-						label="Open App Data"
-						description="Open the launcher configuration and data directory."
-						actionLabel="Open"
+						label={t("settings-help-open-app-data-label")}
+						description={t("settings-help-open-app-data-description")}
+						actionLabel={t("settings-help-action-open")}
 						onAction={handleOpenAppData}
 					/>
 					<SettingsField
-						label="Open Runtime Storage"
-						description="Open runtime-managed cache files such as player heads and archive staging."
-						actionLabel="Open"
+						label={t("settings-help-open-runtime-storage-label")}
+						description={t("settings-help-open-runtime-storage-description")}
+						actionLabel={t("settings-help-action-open")}
 						onAction={handleOpenRuntimeStorageLocation}
 					/>
 					<SettingsField
-						label="Open Logs"
-						description="Open the launcher diagnostic logs folder."
-						actionLabel="Open"
+						label={t("settings-help-open-logs-label")}
+						description={t("settings-help-open-logs-description")}
+						actionLabel={t("settings-help-action-open")}
 						onAction={handleOpenLauncherLogs}
 					/>
 					<SettingsField
-						label="Clear Cache"
-						description="Remove cached metadata and temporary files. Installed instances are not affected."
-						actionLabel="Clear"
+						label={t("settings-help-clear-cache-label")}
+						description={t("settings-help-clear-cache-description")}
+						actionLabel={t("settings-help-action-clear")}
 						destructive
-						confirmationDesc="This will clear cached metadata and temporary files. Installed instances will not be affected."
+						confirmationDesc={t("settings-help-clear-cache-confirmation")}
 						onAction={handleClearCache}
 					/>
 				</div>

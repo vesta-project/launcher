@@ -39,13 +39,27 @@ import {
 	Show,
 } from "solid-js";
 import styles from "../instance-details.module.css";
+import { t } from "~/localization";
 
 const FILTER_OPTIONS = [
-	{ id: "All", label: "All" },
-	{ id: "mod", label: "Mods" },
-	{ id: "resourcepack", label: "Packs" },
-	{ id: "shader", label: "Shaders" },
-];
+	{ id: "All", messageId: "instances-details-resources-filter-all" },
+	{ id: "mod", messageId: "instances-details-resources-filter-mods" },
+	{ id: "resourcepack", messageId: "instances-details-resources-filter-packs" },
+	{ id: "shader", messageId: "instances-details-resources-filter-shaders" },
+] as const;
+
+const getFilterLabel = (id: string) => {
+	const option = FILTER_OPTIONS.find((entry) => entry.id === id);
+	return option ? t(option.messageId) : t("instances-details-resources-filter-all");
+};
+
+const getBundledTypeLabel = (filterId: string) => {
+	if (filterId === "All") return t("instances-details-resources-type-resources");
+	const option = FILTER_OPTIONS.find((entry) => entry.id === filterId);
+	return option
+		? t(option.messageId).toLowerCase()
+		: t("instances-details-resources-type-resources");
+};
 
 const COLUMN_WIDTHS: Record<string, string | undefined> = {
 	select: "48px",
@@ -130,16 +144,12 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			(resource: any) => !isModpackOwnedResource(resource),
 		),
 	);
-	const bundledCountLabel = createMemo(() => {
-		const noun =
-			props.resourceTypeFilter === "All"
-				? "resources"
-				: FILTER_OPTIONS.find(
-						(option) => option.id === props.resourceTypeFilter,
-					)?.label.toLowerCase() || "resources";
-
-		return `${modpackRows().length} bundled ${noun}`;
-	});
+	const bundledCountLabel = createMemo(() =>
+		t("instances-details-resources-bundled-count", {
+			count: modpackRows().length,
+			type: getBundledTypeLabel(props.resourceTypeFilter),
+		}),
+	);
 	let appliedDefaultExpansionKey = "";
 
 	const renderResourceRow = (
@@ -202,12 +212,16 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 					<div class={styles["modpack-group-name"]}>
 						<ResourceAvatar
 							icon={props.modpackIcon()}
-							name={props.instance?.name || "Linked modpack"}
+							name={
+								props.instance?.name ||
+								t("instances-details-resources-linked-modpack")
+							}
 							class={styles["modpack-group-icon"]}
 						/>
 						<div class={styles["modpack-group-copy"]}>
 							<span class={styles["modpack-group-title"]}>
-								{props.instance?.name || "Linked modpack"}
+								{props.instance?.name ||
+									t("instances-details-resources-linked-modpack")}
 							</span>
 							<span class={styles["modpack-group-meta"]}>
 								{bundledCountLabel()}
@@ -223,7 +237,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 												props.onManageModpackVersions();
 											}}
 										>
-											Update available
+											{t("instances-details-resources-update-available")}
 										</button>
 									</>
 								</Show>
@@ -237,7 +251,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 						<span>
 							{props.currentModpackVersion?.version_number ||
 								props.instance?.modpackVersionId ||
-								"Current"}
+								t("instances-details-resources-current-version")}
 						</span>
 					</div>
 				);
@@ -259,13 +273,13 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										onSelect={props.onManageModpackVersions}
 										disabled={props.busy}
 									>
-										Manage versions
+										{t("instances-details-resources-manage-versions")}
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										onSelect={props.onUnlinkModpack}
 										disabled={props.busy}
 									>
-										Unlink
+										{t("instances-details-resources-unlink")}
 									</DropdownMenuItem>
 									<DropdownMenuSeparator
 										class={styles["row-actions-separator"]}
@@ -283,7 +297,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 												flex: "0 0 auto",
 											}}
 										/>
-										Delete & unlink
+										{t("instances-details-resources-delete-unlink")}
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
@@ -430,7 +444,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 											}}
 											onClick={() => props.setResourceTypeFilter(option.id)}
 										>
-											{option.label}
+											{getFilterLabel(option.id)}
 										</button>
 									)}
 								</For>
@@ -447,20 +461,13 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									options={FILTER_OPTIONS.map((o) => o.id)}
 									itemComponent={(p) => (
 										<SelectItem item={p.item}>
-											{
-												FILTER_OPTIONS.find((o) => o.id === p.item.rawValue)
-													?.label
-											}
+											{getFilterLabel(p.item.rawValue)}
 										</SelectItem>
 									)}
 								>
 									<SelectTrigger>
 										<SelectValue<string>>
-											{(state) =>
-												FILTER_OPTIONS.find(
-													(o) => o.id === state.selectedOption(),
-												)?.label || "All"
-											}
+											{(state) => getFilterLabel(state.selectedOption())}
 										</SelectValue>
 									</SelectTrigger>
 									<SelectContent />
@@ -473,7 +480,9 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								<SearchIcon class={styles["search-icon"]} />
 								<input
 									type="text"
-									placeholder="Search resources..."
+									placeholder={t(
+										"instances-details-resources-search-placeholder",
+									)}
 									value={props.resourceSearch}
 									onInput={handleSearchInput}
 								/>
@@ -495,8 +504,8 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								class={styles["check-updates-btn"]}
 								onClick={props.checkUpdates}
 								disabled={props.busy || props.checkingUpdates}
-								tooltip_text="Check for available updates"
-								aria-label="Check for available updates"
+								tooltip_text={t("instances-details-resources-check-updates")}
+								aria-label={t("instances-details-resources-check-updates")}
 							>
 								<Show
 									when={props.checkingUpdates}
@@ -519,8 +528,8 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										props.router?.navigate("/resources");
 									}
 								}}
-								tooltip_text="Add resources"
-								aria-label="Add resources"
+								tooltip_text={t("instances-details-resources-add")}
+								aria-label={t("instances-details-resources-add")}
 							>
 								<PlusIcon />
 							</Button>
@@ -534,12 +543,14 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 							<button
 								class={styles["clear-selection"]}
 								onClick={() => props.resourcesStore.clearSelection()}
-								title="Clear Selection"
+								title={t("instances-details-resources-clear-selection")}
 							>
 								<CloseIcon width="16" height="16" />
 							</button>
 							<span class={styles["selection-count"]}>
-								{selectionCount()} resources selected
+								{t("instances-details-resources-selected-count", {
+									count: selectionCount(),
+								})}
 							</span>
 						</div>
 						<div class={styles["selection-actions"]}>
@@ -550,7 +561,9 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								disabled={props.busy || props.selectedToUpdateCount === 0}
 								tooltip_text={
 									isCompactTable()
-										? `Update ${props.selectedToUpdateCount} selected`
+										? t("instances-details-resources-update-selected-tooltip", {
+												count: props.selectedToUpdateCount,
+											})
 										: undefined
 								}
 							>
@@ -559,7 +572,11 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									when={!isCompactTable()}
 									fallback={<span>({props.selectedToUpdateCount})</span>}
 								>
-									<span>Update ({props.selectedToUpdateCount})</span>
+									<span>
+										{t("instances-details-resources-update-selected", {
+											count: props.selectedToUpdateCount,
+										})}
+									</span>
 								</Show>
 							</Button>
 							<Button
@@ -568,11 +585,17 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								class={styles["delete-selected"]}
 								onClick={props.handleBatchDelete}
 								disabled={props.busy}
-								tooltip_text={isCompactTable() ? "Delete selected" : undefined}
+								tooltip_text={
+									isCompactTable()
+										? t("instances-details-resources-delete-selected-tooltip")
+										: undefined
+								}
 								icon_only={isCompactTable()}
 							>
 								<TrashIcon />
-								<Show when={!isCompactTable()}>Delete Selected</Show>
+								<Show when={!isCompactTable()}>
+									{t("instances-details-resources-delete-selected")}
+								</Show>
 							</Button>
 						</div>
 					</div>
@@ -705,11 +728,12 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 						>
 							<div class={styles["resources-empty-state"]}>
 								<p>
-									No{" "}
-									{props.resourceTypeFilter !== "All"
-										? props.resourceTypeFilter.toLowerCase() + "s"
-										: "resources"}{" "}
-									found.
+									{t("instances-details-resources-empty", {
+										type:
+											props.resourceTypeFilter !== "All"
+												? getFilterLabel(props.resourceTypeFilter).toLowerCase()
+												: t("instances-details-resources-type-resources"),
+									})}
 								</p>
 							</div>
 						</Show>
