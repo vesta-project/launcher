@@ -63,6 +63,7 @@ import {
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
+import { t } from "~/localization";
 import {
 	type ColorModePreference,
 	type GradientHarmony,
@@ -113,19 +114,19 @@ export function AppearanceSettingsTab() {
 	const getWindowEffectLabel = (effect: string): string => {
 		switch (effect) {
 			case "none":
-				return "None";
+				return t("settings-appearance-window-effect-none");
 			case "transparent":
-				return "Transparent";
+				return t("settings-appearance-window-effect-transparent");
 			case "vibrancy":
-				return "Vibrancy";
+				return t("settings-appearance-window-effect-vibrancy");
 			case "liquid_glass":
-				return "Liquid Glass";
+				return t("settings-appearance-window-effect-liquid-glass");
 			case "mica":
-				return "Mica";
+				return t("settings-appearance-window-effect-mica");
 			case "acrylic":
-				return "Acrylic";
+				return t("settings-appearance-window-effect-acrylic");
 			case "blur":
-				return "Blur";
+				return t("settings-appearance-window-effect-blur");
 			default:
 				return effect
 					.split("_")
@@ -158,8 +159,8 @@ export function AppearanceSettingsTab() {
 							icon_only={true}
 							class={styles["theme-search-trigger"]}
 							onClick={expandSearch}
-							title="Search themes"
-							aria-label="Search themes"
+							title={t("settings-appearance-search-themes")}
+							aria-label={t("settings-appearance-search-themes")}
 						>
 							<SearchIcon class={styles["theme-toolbar-icon"]} />
 						</Button>
@@ -174,7 +175,7 @@ export function AppearanceSettingsTab() {
 									setThemeSearchQuery(event.currentTarget.value)
 								}
 								onBlur={collapseSearchIfEmpty}
-								placeholder="Search themes"
+								placeholder={t("settings-appearance-search-themes")}
 								class={`${styles["theme-search-input"]} ${styles["theme-search-input--expanded"]}`}
 							/>
 						</Show>
@@ -188,23 +189,29 @@ export function AppearanceSettingsTab() {
 										}
 									}}
 								>
-									<ToggleGroupItem value="all">All</ToggleGroupItem>
-									<ToggleGroupItem value="builtin">Defaults</ToggleGroupItem>
-									<ToggleGroupItem value="imported">Imported</ToggleGroupItem>
+									<ToggleGroupItem value="all">
+										{t("settings-appearance-filter-all")}
+									</ToggleGroupItem>
+									<ToggleGroupItem value="builtin">
+										{t("settings-appearance-filter-defaults")}
+									</ToggleGroupItem>
+									<ToggleGroupItem value="imported">
+										{t("settings-appearance-filter-imported")}
+									</ToggleGroupItem>
 								</ToggleGroup>
 							</Show>
 							<div class={styles["theme-toolbar__spacer"]} />
 							<Button variant="ghost" size="sm" onClick={handleImportTheme}>
-								Import
+								{t("settings-appearance-import")}
 							</Button>
 							<Show when={themeId() === "custom"}>
 								<Button
 									variant="ghost"
 									size="sm"
 									onClick={handleExportTheme}
-									title="Export current custom theme"
+									title={t("settings-appearance-export-custom-title")}
 								>
-									Export
+									{t("settings-appearance-export")}
 								</Button>
 							</Show>
 							<ToggleGroup
@@ -218,16 +225,16 @@ export function AppearanceSettingsTab() {
 								<ToggleGroupItem
 									value="grid"
 									icon_only={true}
-									title="Grid view"
-									aria-label="Grid view"
+									title={t("settings-appearance-grid-view")}
+									aria-label={t("settings-appearance-grid-view")}
 								>
 									<GridIcon class={styles["theme-toolbar-icon"]} />
 								</ToggleGroupItem>
 								<ToggleGroupItem
 									value="list"
 									icon_only={true}
-									title="List view"
-									aria-label="List view"
+									title={t("settings-appearance-list-view")}
+									aria-label={t("settings-appearance-list-view")}
 								>
 									<ListIcon class={styles["theme-toolbar-icon"]} />
 								</ToggleGroupItem>
@@ -261,7 +268,7 @@ export function AppearanceSettingsTab() {
 					</div>
 					<Show when={filteredThemeCatalog().length === 0}>
 						<div class={styles["theme-empty-state"]}>
-							No themes match your current filters.
+							{t("settings-appearance-no-themes-match")}
 						</div>
 					</Show>
 				</SettingsCard>
@@ -272,12 +279,12 @@ export function AppearanceSettingsTab() {
 				/>
 
 				<SettingsCard
-					header="Color Mode"
-					subHeader="Choose how Vesta renders light and dark surfaces. This preference applies across themes and app restarts."
+					header={t("settings-appearance-color-mode-title")}
+					subHeader={t("settings-appearance-color-mode-subheader")}
 				>
 					<SettingsField
-						label="Color Mode"
-						description="Follow the system appearance or keep Vesta in light or dark mode."
+						label={t("settings-appearance-color-mode-label")}
+						description={t("settings-appearance-color-mode-description")}
 						headerRight={
 							<ToggleGroup
 								value={colorMode()}
@@ -289,9 +296,15 @@ export function AppearanceSettingsTab() {
 									}
 								}}
 							>
-								<ToggleGroupItem value="system">System</ToggleGroupItem>
-								<ToggleGroupItem value="light">Light</ToggleGroupItem>
-								<ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+								<ToggleGroupItem value="system">
+									{t("settings-appearance-color-mode-system")}
+								</ToggleGroupItem>
+								<ToggleGroupItem value="light">
+									{t("settings-appearance-color-mode-light")}
+								</ToggleGroupItem>
+								<ToggleGroupItem value="dark">
+									{t("settings-appearance-color-mode-dark")}
+								</ToggleGroupItem>
 							</ToggleGroup>
 						}
 					/>
@@ -299,12 +312,12 @@ export function AppearanceSettingsTab() {
 
 				<Show when={canChangeHue()}>
 					<SettingsCard
-						header="Customize Colors"
-						subHeader="Adjust the primary color hue to personalize your theme."
+						header={t("settings-appearance-customize-colors-title")}
+						subHeader={t("settings-appearance-customize-colors-subheader")}
 					>
 						<SettingsField
-							label="Primary Hue"
-							description="The base color used for accents and backgrounds"
+							label={t("settings-appearance-primary-hue-label")}
+							description={t("settings-appearance-primary-hue-description")}
 							body={
 								<div class={styles["hue-customization"]}>
 									<Slider
@@ -332,12 +345,12 @@ export function AppearanceSettingsTab() {
 				</Show>
 
 				<SettingsCard
-					header="Window Transparency"
-					subHeader="Adjust native window compositor effects."
+					header={t("settings-appearance-window-transparency-title")}
+					subHeader={t("settings-appearance-window-transparency-subheader")}
 				>
 					<SettingsField
-						label="Window Effect Material"
-						description="OS-native background blur."
+						label={t("settings-appearance-window-effect-label")}
+						description={t("settings-appearance-window-effect-description")}
 						headerRight={
 							<ToggleGroup
 								value={windowEffect() || "none"}
@@ -357,8 +370,8 @@ export function AppearanceSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label="Background Opacity"
-						description="Lower this value to reveal the native window effect underneath the launcher."
+						label={t("settings-appearance-background-opacity-label")}
+						description={t("settings-appearance-background-opacity-description")}
 						body={
 							<Slider
 								value={[
@@ -389,13 +402,13 @@ export function AppearanceSettingsTab() {
 
 				<Show when={showAdvancedControls()}>
 					<SettingsCard
-						header="Advanced Style"
-						subHeader="Fine-tune the visual style and effects."
+						header={t("settings-appearance-advanced-style-title")}
+						subHeader={t("settings-appearance-advanced-style-subheader")}
 					>
 						<Show when={canChangeStyle()}>
 							<SettingsField
-								label="Material Style"
-								description="Glass keeps depth, Frosted obscures behind-content, Flat removes translucency."
+								label={t("settings-appearance-material-style-label")}
+								description={t("settings-appearance-material-style-description")}
 								headerRight={
 									<ToggleGroup
 										value={styleMode()}
@@ -403,17 +416,23 @@ export function AppearanceSettingsTab() {
 											if (val) handleStyleModeChange(val as StyleMode);
 										}}
 									>
-										<ToggleGroupItem value="glass">Glass</ToggleGroupItem>
-										<ToggleGroupItem value="frosted">Frosted</ToggleGroupItem>
-										<ToggleGroupItem value="flat">Flat</ToggleGroupItem>
+										<ToggleGroupItem value="glass">
+											{t("settings-appearance-material-glass")}
+										</ToggleGroupItem>
+										<ToggleGroupItem value="frosted">
+											{t("settings-appearance-material-frosted")}
+										</ToggleGroupItem>
+										<ToggleGroupItem value="flat">
+											{t("settings-appearance-material-flat")}
+										</ToggleGroupItem>
 									</ToggleGroup>
 								}
 							/>
 						</Show>
 
 						<SettingsField
-							label="Layout Translucency"
-							description="Adjust panel transparency and blur intensity (0 = translucent, 100 = opaque)."
+							label={t("settings-appearance-layout-translucency-label")}
+							description={t("settings-appearance-layout-translucency-description")}
 							body={
 								<Slider
 									value={[opacity()]}
@@ -440,8 +459,8 @@ export function AppearanceSettingsTab() {
 
 						<Show when={styleMode() !== "flat"}>
 							<SettingsField
-								label="Material Grain"
-								description="Change the intensity of the material texture overlay. Only applies to Glass and Frosted styles."
+								label={t("settings-appearance-material-grain-label")}
+								description={t("settings-appearance-material-grain-description")}
 								body={
 									<Slider
 										value={[grainStrength()]}
@@ -466,8 +485,8 @@ export function AppearanceSettingsTab() {
 						</Show>
 
 						<SettingsField
-							label="Background Gradient"
-							description="Enable animated background gradient"
+							label={t("settings-appearance-background-gradient-label")}
+							description={t("settings-appearance-background-gradient-description")}
 							headerRight={
 								<Switch
 									checked={gradientEnabled() ?? false}
@@ -481,8 +500,8 @@ export function AppearanceSettingsTab() {
 						/>
 						<Show when={gradientEnabled()}>
 							<SettingsField
-								label="Gradient Type"
-								description="Linear or circular background"
+								label={t("settings-appearance-gradient-type-label")}
+								description={t("settings-appearance-gradient-type-description")}
 								headerRight={
 									<ToggleGroup
 										value={gradientType() ?? "linear"}
@@ -491,15 +510,19 @@ export function AppearanceSettingsTab() {
 												handleGradientTypeChange(val as "linear" | "radial");
 										}}
 									>
-										<ToggleGroupItem value="linear">Linear</ToggleGroupItem>
-										<ToggleGroupItem value="radial">Circular</ToggleGroupItem>
+										<ToggleGroupItem value="linear">
+											{t("settings-appearance-gradient-linear")}
+										</ToggleGroupItem>
+										<ToggleGroupItem value="radial">
+											{t("settings-appearance-gradient-circular")}
+										</ToggleGroupItem>
 									</ToggleGroup>
 								}
 							/>
 
 							<SettingsField
-								label="Rotation"
-								description="Angle of the background gradient"
+								label={t("settings-appearance-rotation-label")}
+								description={t("settings-appearance-rotation-description")}
 								body={
 									<Slider
 										value={[rotation() ?? 135]}
@@ -524,8 +547,8 @@ export function AppearanceSettingsTab() {
 							/>
 
 							<SettingsField
-								label="Color Harmony"
-								description="Choose how secondary colors are generated"
+								label={t("settings-appearance-color-harmony-label")}
+								description={t("settings-appearance-color-harmony-description")}
 								helpTopic="GRADIENT_HARMONY"
 								headerRight={
 									<ToggleGroup
@@ -535,14 +558,18 @@ export function AppearanceSettingsTab() {
 												handleGradientHarmonyChange(val as GradientHarmony);
 										}}
 									>
-										<ToggleGroupItem value="none">None</ToggleGroupItem>
+										<ToggleGroupItem value="none">
+											{t("settings-appearance-none")}
+										</ToggleGroupItem>
 										<ToggleGroupItem value="complementary">
-											Complement
+											{t("settings-appearance-harmony-complement")}
 										</ToggleGroupItem>
 										<ToggleGroupItem value="analogous">
-											Analogous
+											{t("settings-appearance-harmony-analogous")}
 										</ToggleGroupItem>
-										<ToggleGroupItem value="triadic">Triadic</ToggleGroupItem>
+										<ToggleGroupItem value="triadic">
+											{t("settings-appearance-harmony-triadic")}
+										</ToggleGroupItem>
 									</ToggleGroup>
 								}
 							/>
@@ -550,8 +577,8 @@ export function AppearanceSettingsTab() {
 
 						<Show when={canChangeBorder()}>
 							<SettingsField
-								label="Border Sharpness"
-								description="Thickness of system borders and separator lines (0-6px)"
+								label={t("settings-appearance-border-sharpness-label")}
+								description={t("settings-appearance-border-sharpness-description")}
 								body={
 									<Slider
 										value={[borderThickness() ?? 1]}
@@ -566,7 +593,7 @@ export function AppearanceSettingsTab() {
 										<div class={styles["slider__header"]}>
 											<div class={styles["slider__value-label"]}>
 												{borderThickness() === 0
-													? "None"
+													? t("settings-appearance-none")
 													: `${(borderThickness() ?? 1).toString()}px`}
 											</div>
 										</div>

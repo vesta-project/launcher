@@ -1,5 +1,6 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
+import { t } from "~/localization";
 import type { UiChromeMode } from "~/themes/ui-chrome";
 
 interface UiChromeModeControlProps {
@@ -10,12 +11,12 @@ interface UiChromeModeControlProps {
 export function UiChromeModeControl(props: UiChromeModeControlProps) {
 	return (
 		<SettingsCard
-			header="Launcher Layout"
-			subHeader="Choose how launcher pages are displayed."
+			header={t("settings-appearance-chrome-title")}
+			subHeader={t("settings-appearance-chrome-subheader")}
 		>
 			<SettingsField
-				label="Page style"
-				description="Windowed keeps the framed page viewer. Flat uses sidebar tabs."
+				label={t("settings-appearance-chrome-page-style-label")}
+				description={t("settings-appearance-chrome-page-style-description")}
 				headerRight={
 					<ToggleGroup
 						value={props.value}
@@ -25,8 +26,12 @@ export function UiChromeModeControl(props: UiChromeModeControlProps) {
 							}
 						}}
 					>
-						<ToggleGroupItem value="windowed">Windowed</ToggleGroupItem>
-						<ToggleGroupItem value="flat">Flat</ToggleGroupItem>
+						<ToggleGroupItem value="windowed">
+							{t("settings-appearance-chrome-windowed")}
+						</ToggleGroupItem>
+						<ToggleGroupItem value="flat">
+							{t("settings-appearance-chrome-flat")}
+						</ToggleGroupItem>
 					</ToggleGroup>
 				}
 			/>
