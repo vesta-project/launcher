@@ -33,14 +33,23 @@ import {
 	TextFieldTextArea,
 } from "@ui/text-field/text-field";
 import {
+	formatMemoryLabel,
+	findLaunchBehaviorOption,
+	launchBehaviorOptions,
+} from "@utils/localized-options";
+import {
 	DEFAULT_MIN_MEMORY_MB,
 	getDynamicPreferredMaxMemoryMb,
 	getGeneratedMemoryLimitMb,
 	MAX_GENERATED_MEMORY_MB,
 } from "@utils/memory-policy";
+import { createMemo } from "solid-js";
+import { t } from "~/localization";
 import styles from "../settings-page.module.css";
 
 export function InstanceDefaultsTab() {
+	const launchOptions = createMemo(() => launchBehaviorOptions());
+
 	const handleMemoryChange = (val: number[]) => {
 		const nextMax = val[0] || preferredMaxMemory();
 		updateDefaultField("default_min_memory", DEFAULT_MIN_MEMORY_MB);
@@ -51,21 +60,17 @@ export function InstanceDefaultsTab() {
 		instanceDefaults().default_max_memory ||
 		getDynamicPreferredMaxMemoryMb(getTotalRam());
 	const generatedMemoryLimit = () => getGeneratedMemoryLimitMb(getTotalRam());
-	const formatMemory = (value: number) =>
-		value >= 1024
-			? `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)}GB`
-			: `${value}MB`;
 
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
 				<SettingsCard
-					header="Resolution Defaults"
-					subHeader="Default window size for new instances."
+					header={t("settings-defaults-resolution-title")}
+					subHeader={t("settings-defaults-resolution-subheader")}
 				>
 					<SettingsField
-						label="Game Window"
-						description="Initial width and height for the game window."
+						label={t("settings-defaults-game-window-label")}
+						description={t("settings-defaults-game-window-description")}
 						body={
 							<div
 								style={{
@@ -90,10 +95,10 @@ export function InstanceDefaultsTab() {
 											opacity: 0.6,
 										}}
 									>
-										Width
+										{t("common-width")}
 									</NumberFieldLabel>
 									<NumberFieldGroup>
-										<NumberFieldInput placeholder="Width" />
+										<NumberFieldInput placeholder={t("common-width")} />
 										<NumberFieldIncrementTrigger />
 										<NumberFieldDecrementTrigger />
 									</NumberFieldGroup>
@@ -114,10 +119,10 @@ export function InstanceDefaultsTab() {
 											opacity: 0.6,
 										}}
 									>
-										Height
+										{t("common-height")}
 									</NumberFieldLabel>
 									<NumberFieldGroup>
-										<NumberFieldInput placeholder="Height" />
+										<NumberFieldInput placeholder={t("common-height")} />
 										<NumberFieldIncrementTrigger />
 										<NumberFieldDecrementTrigger />
 									</NumberFieldGroup>
@@ -128,14 +133,14 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header="Memory Defaults"
-					subHeader="Defaults used when creating new instances."
+					header={t("settings-defaults-memory-title")}
+					subHeader={t("settings-defaults-memory-subheader")}
 				>
 					<SettingsField
-						label="Preferred max memory"
-						description={`Used as the starting max memory when Vesta creates a new instance. Larger modpacks may get more automatically. (System Total: ${Math.round(
-							getTotalRam() / 1024,
-						)}GB)`}
+						label={t("settings-defaults-memory-preferred-label")}
+						description={t("settings-defaults-memory-preferred-description", {
+							totalRam: Math.round(getTotalRam() / 1024),
+						})}
 						body={
 							<>
 								<div class={styles["memory-default-control"]}>
@@ -156,9 +161,7 @@ export function InstanceDefaultsTab() {
 											<div
 												style={{ "font-size": "13px", "font-weight": "600" }}
 											>
-												{preferredMaxMemory() >= 1024
-													? `${(preferredMaxMemory() / 1024).toFixed(1)}GB`
-													: `${preferredMaxMemory()}MB`}
+												{formatMemoryLabel(preferredMaxMemory())}
 											</div>
 										</div>
 										<SliderTrack>
@@ -170,10 +173,9 @@ export function InstanceDefaultsTab() {
 								{preferredMaxMemory() > generatedMemoryLimit() && (
 									<div class={styles["memory-default-warning"]}>
 										<span>
-											<strong>Warning:</strong> Allowing Minecraft to use this
-											much memory may leave too little for the rest of the
-											computer. Vesta recommends staying below{" "}
-											<strong>{formatMemory(generatedMemoryLimit())}</strong>.
+											{t("settings-defaults-memory-warning", {
+												recommended: formatMemoryLabel(generatedMemoryLimit()),
+											})}
 										</span>
 									</div>
 								)}
@@ -183,24 +185,24 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header="Launcher Behavior After Launch"
-					subHeader="Choose what the launcher does once a game starts."
+					header={t("settings-defaults-launcher-action-title")}
+					subHeader={t("settings-defaults-launcher-action-subheader")}
 				>
 					<Select
-						options={[
-							{ label: "Stay Open", value: "stay-open" },
-							{ label: "Minimize Window", value: "minimize" },
-							{ label: "Hide To Tray", value: "hide-to-tray" },
-							{ label: "Request Quit", value: "quit" },
-						]}
+						options={launchOptions()}
 						optionValue={"value" as any}
 						optionTextValue={"label" as any}
 						value={
-							(instanceDefaults().default_launcher_action_on_launch ||
-								"stay-open") as string
+							findLaunchBehaviorOption(
+								instanceDefaults().default_launcher_action_on_launch ||
+									"stay-open",
+							) as any
 						}
-						onChange={(value: any) =>
-							updateDefaultField("default_launcher_action_on_launch", value)
+						onChange={(option: any) =>
+							updateDefaultField(
+								"default_launcher_action_on_launch",
+								option?.value,
+							)
 						}
 						itemComponent={(selectProps: any) => (
 							<SelectItem item={selectProps.item}>
@@ -210,7 +212,9 @@ export function InstanceDefaultsTab() {
 					>
 						<SelectTrigger>
 							<SelectValue<any>>
-								{(state) => state.selectedOption()?.label || "Select..."}
+								{(state) =>
+									state.selectedOption()?.label ?? t("common-select-placeholder")
+								}
 							</SelectValue>
 						</SelectTrigger>
 						<SelectContent />
@@ -218,8 +222,8 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header="Launch Arguments"
-					subHeader="Global Java arguments applied to linked instances."
+					header={t("settings-defaults-java-args-title")}
+					subHeader={t("settings-defaults-java-args-subheader")}
 				>
 					<TextFieldRoot>
 						<TextFieldTextArea
@@ -237,8 +241,8 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header="Environment Variables"
-					subHeader="Global environment variables for the game process. One per line (e.g. KEY=VALUE)."
+					header={t("settings-defaults-env-title")}
+					subHeader={t("settings-defaults-env-subheader")}
 				>
 					<TextFieldRoot>
 						<TextFieldTextArea
@@ -260,15 +264,15 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header="Lifecycle Hooks"
-					subHeader="Commands to run at different stages of the instance lifecycle."
+					header={t("settings-defaults-hooks-title")}
+					subHeader={t("settings-defaults-hooks-subheader")}
 				>
 					<div
 						style={{ display: "flex", "flex-direction": "column", gap: "16px" }}
 					>
 						<SettingsField
-							label="Pre-launch Command"
-							description="Runs before the game starts."
+							label={t("settings-defaults-pre-launch-label")}
+							description={t("settings-defaults-pre-launch-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -286,8 +290,8 @@ export function InstanceDefaultsTab() {
 						/>
 						<Separator />
 						<SettingsField
-							label="Wrapper Command"
-							description="Wraps the Java process (e.g. mangohud, optirun)."
+							label={t("settings-defaults-wrapper-label")}
+							description={t("settings-defaults-wrapper-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -305,8 +309,8 @@ export function InstanceDefaultsTab() {
 						/>
 						<Separator />
 						<SettingsField
-							label="Post-exit Command"
-							description="Runs after the game process terminates."
+							label={t("settings-defaults-post-exit-label")}
+							description={t("settings-defaults-post-exit-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
