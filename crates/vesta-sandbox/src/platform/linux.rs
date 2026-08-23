@@ -144,7 +144,7 @@ pub(crate) fn prepare(
         EnforcementStatus::NotRequired
     } else {
         notes.push(
-            "Microphone denied via bubblewrap (--unshare-ipc, read-only XDG_RUNTIME_DIR, and no /dev/snd bind); GPU device nodes remain available."
+            "Microphone denied via bubblewrap (--unshare-ipc, no /dev/snd bind, and no session-bus/libvirt sockets from XDG_RUNTIME_DIR); GPU and display sockets remain available."
                 .to_string(),
         );
         EnforcementStatus::Enforced
@@ -295,15 +295,11 @@ fn build_bwrap_args(
     }
 
     push_existing_ro_bind(&mut args, Path::new("/tmp/.X11-unix"));
-    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-        let runtime_path = Path::new(&runtime_dir);
-        if policy.mic_allowed {
-            push_existing_bind(&mut args, runtime_path, true);
-        } else {
-            // Read-only runtime dir keeps Wayland display sockets visible while blocking
-            // PipeWire/Pulse socket writes when mic is denied.
-            push_existing_ro_bind(&mut args, runtime_path);
-        }
+    push_runtime_dir_binds(&mut args);
+    if let Ok(xauthority) = std::env::var("XAUTHORITY") {
+        // XAUTHORITY often lives under XDG_RUNTIME_DIR; bind it explicitly now
+        // that the runtime dir is no longer mounted wholesale.
+        push_existing_ro_bind(&mut args, Path::new(&xauthority));
     }
 
     args.push("--clearenv".to_string());
@@ -419,13 +415,55 @@ fn push_path_access(args: &mut Vec<String>, entry: &PathAccess, seen: &mut BTree
     }
 
     if entry.write {
-        push_bind_mount(args, &path, &path, entry.recursive);
+        // bwrap binds are always exact for files and recursive for directories;
+        // PathAccess::recursive is a seatbelt/Landlock concern, not a bind flag.
+        push_bind_mount(args, &path, &path, true);
         return;
     }
 
     if entry.read {
         push_bind_mount(args, &path, &path, false);
     }
+}
+
+/// Bind only the display/audio sockets needed for Minecraft — never the whole
+/// `XDG_RUNTIME_DIR`. Mounting the host runtime directory also exposes the
+/// session bus and libvirt sockets, which can D-Bus-activate host apps such as
+/// GNOME Boxes when the sandboxed JVM talks to the desktop.
+fn push_runtime_dir_binds(args: &mut Vec<String>) {
+    let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") else {
+        return;
+    };
+    let runtime_path = Path::new(&runtime_dir);
+    if !runtime_path.is_dir() {
+        return;
+    }
+
+    args.push("--dir".to_string());
+    args.push(runtime_dir.clone());
+
+    let wayland_display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
+    for name in [
+        wayland_display.as_str(),
+        &format!("{wayland_display}.lock"),
+    ] {
+        let host = runtime_path.join(name);
+        // Wayland clients must write to the display socket.
+        push_existing_bind(args, &host, true);
+    }
+
+    // PipeWire/Pulse sockets are required for audio *output* as well as input.
+    // Mic denial is enforced by omitting /dev/snd and unsharing IPC, not by
+    // hiding these sockets.
+    for name in [
+        "pipewire-0",
+        "pipewire-0.lock",
+        "pipewire-0-manager",
+        "pipewire-0-manager.lock",
+    ] {
+        push_existing_bind(args, &runtime_path.join(name), true);
+    }
+    push_existing_bind(args, &runtime_path.join("pulse"), true);
 }
 
 fn push_existing_ro_bind(args: &mut Vec<String>, path: &Path) {
@@ -575,10 +613,23 @@ mod tests {
         if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
             if Path::new(&runtime_dir).exists() {
                 assert!(
-                    args.windows(3).any(|window| {
-                        window[0] == "--ro-bind" && window[1] == runtime_dir
+                    args.windows(2).any(|window| {
+                        window[0] == "--dir" && window[1] == runtime_dir
                     }),
-                    "Paranoid must ro-bind XDG_RUNTIME_DIR when mic is denied"
+                    "Paranoid must create an empty XDG_RUNTIME_DIR mountpoint"
+                );
+                assert!(
+                    !args.windows(3).any(|window| {
+                        (window[0] == "--bind" || window[0] == "--ro-bind")
+                            && window[1] == runtime_dir
+                            && window[2] == runtime_dir
+                    }),
+                    "must not bind the whole XDG_RUNTIME_DIR (exposes session bus/libvirt)"
+                );
+                let bus = format!("{runtime_dir}/bus");
+                assert!(
+                    !args.iter().any(|arg| arg == &bus),
+                    "session bus socket must stay out of the sandbox"
                 );
             }
         }
@@ -611,7 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn modded_build_bwrap_args_rw_binds_runtime_dir_when_mic_allowed() {
+    fn modded_build_bwrap_args_binds_display_audio_sockets_only() {
         let temp = std::env::temp_dir().join("vesta-bwrap-modded-runtime-test");
         let _ = fs::create_dir_all(&temp);
         let policy = sample_policy(SandboxPreset::Modded, &temp);
@@ -623,10 +674,35 @@ mod tests {
         if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
             if Path::new(&runtime_dir).exists() {
                 assert!(
-                    args.windows(3)
-                        .any(|window| window[0] == "--bind" && window[1] == runtime_dir),
-                    "Modded must rw-bind XDG_RUNTIME_DIR when mic is allowed"
+                    args.windows(2).any(|window| {
+                        window[0] == "--dir" && window[1] == runtime_dir
+                    }),
+                    "Modded must create an empty XDG_RUNTIME_DIR mountpoint"
                 );
+                assert!(
+                    !args.windows(3).any(|window| {
+                        (window[0] == "--bind" || window[0] == "--ro-bind")
+                            && window[1] == runtime_dir
+                            && window[2] == runtime_dir
+                    }),
+                    "must not bind the whole XDG_RUNTIME_DIR (exposes session bus/libvirt)"
+                );
+                let bus = format!("{runtime_dir}/bus");
+                let libvirt = format!("{runtime_dir}/libvirt");
+                assert!(
+                    !args.iter().any(|arg| arg == &bus || arg == &libvirt),
+                    "session bus and libvirt must stay out of the sandbox"
+                );
+                let wayland = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
+                let wayland_socket = format!("{runtime_dir}/{wayland}");
+                if Path::new(&wayland_socket).exists() {
+                    assert!(
+                        args.windows(3).any(|window| {
+                            window[0] == "--bind" && window[1] == wayland_socket
+                        }),
+                        "Modded must bind the Wayland display socket"
+                    );
+                }
             }
         }
         let _ = fs::remove_dir_all(temp);

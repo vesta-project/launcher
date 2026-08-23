@@ -289,19 +289,26 @@ pub fn build_sandbox_policy_for_roots(
         return Ok(policy);
     }
 
-    // Play may consume shared launcher data, but only the instance and its
-    // session logs are mutable. Installation/repair processors run outside the
-    // Play sandbox and therefore do not require shared data to be writable.
+    // Play may mutate the instance, session logs, and natives extract tree.
+    // Installation/repair processors run outside the Play sandbox and therefore
+    // do not require shared caches (assets/libraries/versions) to be writable.
     let mut filesystem = vec![
         PathAccess::new(game_dir.to_path_buf(), true, true, false),
         PathAccess::file(log_file.to_path_buf(), true, true, false),
     ];
     let mut protected_paths = Vec::new();
-    for shared_dir in ["assets", "libraries", "versions", "natives"] {
+    // assets/libraries/versions stay read-only shared caches. natives must be
+    // writable: modern Minecraft sets
+    // -Dorg.lwjgl.system.SharedLibraryExtractPath=${natives_directory}/lwjgl
+    // and LWJGL extracts versioned .so trees there at Play time.
+    for shared_dir in ["assets", "libraries", "versions"] {
         let path = data_dir.join(shared_dir);
         protected_paths.push(path.clone());
         filesystem.push(PathAccess::new(path, true, false, false));
     }
+    // Natives is intentionally writable (LWJGL extract), so it is not a
+    // "protected shared path" for the extras-overlap check.
+    filesystem.push(PathAccess::new(data_dir.join("natives"), true, true, false));
 
     // Exec is exact-path by default. Only recognize a Java runtime root when
     // the selected executable has the conventional <java_home>/bin/java shape
@@ -588,11 +595,13 @@ mod tests {
                 .cloned()
                 .unwrap()
         };
-        for shared in ["assets", "libraries", "versions", "natives"] {
+        for shared in ["assets", "libraries", "versions"] {
             let shared_access = access(&data.join(shared));
             assert!(shared_access.read);
             assert!(!shared_access.write);
         }
+        let natives_access = access(&data.join("natives"));
+        assert!(natives_access.read && natives_access.write);
         assert!(policy
             .filesystem_allowlist
             .iter()

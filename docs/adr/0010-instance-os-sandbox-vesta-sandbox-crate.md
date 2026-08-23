@@ -53,16 +53,18 @@ both Modules and pull unused OS code into every build.
 
 ### Filesystem policy (Modded / Paranoid)
 
-- Shared runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`):
-  **read-only** during Play. Other launcher state is not readable. Installation
-  and repair own shared-runtime mutations outside the sandbox.
+- Shared runtime caches (`assets/`, `libraries/`, and `versions/`): **read-only**
+  during Play. Other launcher state is not readable. Installation and repair own
+  shared-runtime mutations outside the sandbox.
+- `natives/`: **read-write**. LWJGL extracts shared libraries under
+  `${natives_directory}/lwjgl/…` at Play time via
+  `org.lwjgl.system.SharedLibraryExtractPath`; a read-only mount fails launch.
 - Instance `game_dir`: **read-write**.
 - The exact pre-created session log file at `{vesta data}/logs/…`: **read-write**;
   the containing log directory is not granted recursively.
 - Java/JRE home and `exit-handler.jar`: read-only; Java/JRE helpers are
   executable.
-- Natives under Vesta data: read/load as required; they are not granted arbitrary
-  process-exec capability.
+- Natives under Vesta data are not granted arbitrary process-exec capability.
 - Global extra paths (app defaults) plus per-instance extra paths grant
   read-write access; UI shows inherited globals greyed and allows instance-only
   additions.
@@ -122,9 +124,11 @@ both Modules and pull unused OS code into every build.
 - Locality: OS sandbox mechanics stay in `vesta-sandbox`; Vesta settings stay in
   Tauri; Minecraft launch correctness stays in `piston-lib`.
 - Leverage: one prepare/apply Interface confines the whole Play process tree.
-- Shared runtime roots and managed Java remain readable but cannot be mutated by
-  hostile game code. Writable extras that overlap trusted Java or wrapper paths
-  are rejected before launcher-owned verification can execute them.
+- Shared runtime caches and managed Java remain readable; `assets/`,
+  `libraries/`, and `versions/` cannot be mutated by hostile game code. Writable
+  extras that overlap trusted Java or wrapper paths are rejected before
+  launcher-owned verification can execute them. `natives/` is writable only
+  because LWJGL must extract shared libraries there at Play time.
 - Tradeoff: device and exec controls will be uneven across OSes; the enforcement
   report is part of the product contract.
 - Follow-ups (not required by this ADR): richer per-toggle UI, deny-overrides
