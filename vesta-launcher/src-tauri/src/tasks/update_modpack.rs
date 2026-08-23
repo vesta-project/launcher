@@ -157,7 +157,7 @@ impl Task for UpdateModpackTask {
                     clear_error
                 );
                 status_guard.mark_success();
-                finished.publish(&app_handle, instance_id, &game_dir);
+                finished.publish(&app_handle, instance_id);
                 return Ok(());
             }
             if let Err(cleanup_error) =
@@ -170,7 +170,7 @@ impl Task for UpdateModpackTask {
                 );
             }
             status_guard.mark_success();
-            finished.publish(&app_handle, instance_id, &game_dir);
+            finished.publish(&app_handle, instance_id);
 
             let skipped_msg = if skipped_deletions > 0 {
                 format!(" ({} user-modified files were kept)", skipped_deletions)

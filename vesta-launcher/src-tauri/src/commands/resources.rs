@@ -1198,6 +1198,18 @@ pub async fn backfill_modpack_resource_provenance_fast(
                         "provenance-backfill",
                     );
                 }
+                if let Err(error) = crate::resources::watcher::resolve_modpack_override_conflicts(
+                    &app_handle,
+                    instance_id,
+                )
+                .await
+                {
+                    log::warn!(
+                        "[resource-provenance] Duplicate repair failed for instance {}: {}",
+                        instance_id,
+                        error
+                    );
+                }
             }
             Err(e) => {
                 log::warn!(
@@ -1248,6 +1260,8 @@ fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::
         return Ok(0);
     };
 
+    let pruned = crate::resources::ledger::remove_missing_in_folder(instance_id, &game_dir)?;
+
     let resources = {
         let mut conn = get_vesta_conn()?;
         ir_dsl::installed_resource
@@ -1267,7 +1281,7 @@ fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::
         );
     }
 
-    Ok(changed)
+    Ok(changed + pruned)
 }
 
 #[tauri::command]

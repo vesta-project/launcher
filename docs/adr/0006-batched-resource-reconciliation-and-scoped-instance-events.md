@@ -62,6 +62,21 @@ report indexing counts before atomic Ledger publication. Background enrichment
 does not create a user notification; manual row identification exposes its busy
 state only in that row's action menu and reports failures through a toast.
 
+Modpack update finalization follows the same local-first boundary. Before the
+new Instance version event is emitted, it prunes missing and obsolete bundled
+rows, matches each manifest entry to at most one physical row, refreshes
+surviving provenance to the new modpack version, and publishes newly discovered
+local rows. The prepared candidates are then handed to the silent enrichment
+Task. Resource and Versioning loads may repeat this repair safely: absent rows
+are removed, real duplicates are re-evaluated, and ambiguous physical disabled
+files are preserved.
+
+Duplicate resolution ranks same-provider project releases by provider order;
+equal or unavailable rankings prefer the bundled copy. Cross-provider copies
+are related only by exact file hash or persisted peer evidence and prefer the
+bundled copy. A losing file is marked disabled only after its rename succeeds;
+missing files are pruned instead of acquiring a synthetic `.disabled` path.
+
 ## Consequences
 
 Local filename rows remain usable when providers are offline or partially

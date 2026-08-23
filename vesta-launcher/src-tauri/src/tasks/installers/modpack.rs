@@ -450,6 +450,7 @@ impl Task for InstallModpackTask {
                 &game_dir,
                 &root_manifest,
                 &known_resolutions,
+                "modpack-install-local-rows",
                 Some(&ctx),
             )
             .await?;
@@ -564,12 +565,13 @@ fn manifest_resource_candidates(
         .collect()
 }
 
-async fn prepare_manifest_resource_rows(
+pub(crate) async fn prepare_manifest_resource_rows(
     app_handle: &tauri::AppHandle,
     instance_id: i32,
     game_dir: &std::path::Path,
     manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
     known_resolutions: &HashMap<String, crate::resources::reconciliation::KnownResourceResolution>,
+    publication_reason: &str,
     progress_context: Option<&TaskContext>,
 ) -> Result<Vec<crate::resources::reconciliation::PreparedResourceCandidate>, String> {
     let candidates =
@@ -613,10 +615,38 @@ async fn prepare_manifest_resource_rows(
         app_handle,
         instance_id,
         &prepared,
-        "modpack-install-local-rows",
+        publication_reason,
     )
     .map_err(|error| error.to_string())?;
     Ok(prepared)
+}
+
+pub(crate) fn spawn_prepared_resource_enrichment(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    instance_name: String,
+    prepared: Vec<crate::resources::reconciliation::PreparedResourceCandidate>,
+    reason: &'static str,
+) {
+    let app_handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = app_handle
+            .state::<TaskManager>()
+            .submit(Box::new(ResourceEnrichmentTask::new(
+                instance_id,
+                instance_name.clone(),
+                prepared,
+                reason,
+            )))
+            .await
+        {
+            log::warn!(
+                "[ResourceReconciliation] Failed to enqueue enrichment for {}: {}",
+                instance_name,
+                error
+            );
+        }
+    });
 }
 
 fn indexing_progress_description(processed: usize, total: usize) -> String {
@@ -656,6 +686,7 @@ pub fn spawn_manifest_resource_linking(
             &game_dir,
             &manifest,
             &HashMap::new(),
+            "modpack-update-local-rows",
             None,
         )
         .await
@@ -670,22 +701,13 @@ pub fn spawn_manifest_resource_linking(
                 return;
             }
         };
-        if let Err(error) = app_handle
-            .state::<TaskManager>()
-            .submit(Box::new(ResourceEnrichmentTask::new(
-                instance_id,
-                instance_name.clone(),
-                prepared,
-                "modpack-update-enrichment",
-            )))
-            .await
-        {
-            log::warn!(
-                "[ResourceReconciliation] Failed to enqueue enrichment for {}: {}",
-                instance_name,
-                error
-            );
-        }
+        spawn_prepared_resource_enrichment(
+            &app_handle,
+            instance_id,
+            instance_name,
+            prepared,
+            "modpack-update-enrichment",
+        );
     });
 }
 

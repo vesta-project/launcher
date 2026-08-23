@@ -1,10 +1,13 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use tauri::Manager;
 
-use crate::tasks::installers::modpack::spawn_manifest_resource_linking;
+use crate::tasks::installers::modpack::{
+    prepare_manifest_resource_rows, spawn_prepared_resource_enrichment,
+};
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::manager::{Task, TaskContext};
 use piston_lib::game::modpack::manifest::ModpackManifest;
@@ -44,12 +47,18 @@ struct PendingUpdate {
 
 pub struct FinishedUpdate {
     processed: crate::models::instance::Instance,
-    manifest: ModpackManifest,
+    prepared: Vec<crate::resources::reconciliation::PreparedResourceCandidate>,
 }
 
 impl FinishedUpdate {
-    pub fn publish(self, app_handle: &tauri::AppHandle, instance_id: i32, game_dir: &Path) {
-        spawn_manifest_resource_linking(app_handle, instance_id, game_dir, &self.manifest);
+    pub fn publish(self, app_handle: &tauri::AppHandle, instance_id: i32) {
+        spawn_prepared_resource_enrichment(
+            app_handle,
+            instance_id,
+            self.processed.name.clone(),
+            self.prepared,
+            "modpack-update-enrichment",
+        );
         let _ = app_handle.emit("core://instance-updated", self.processed.clone());
         let _ = app_handle.emit("core://instance-installed", self.processed);
     }
@@ -385,6 +394,22 @@ pub async fn finish(
     let processed = crate::commands::instances::get_instance(instance.id)
         .map_err(|error| format!("Failed to fetch updated instance for emit: {}", error))?;
 
+    ctx.update_description("Reconciling updated modpack resources...".to_string());
+    let reconciliation =
+        crate::modpack::state::reconcile_updated_ledger(&processed, &manifest, game_dir)
+            .map_err(|error| format!("Failed to reconcile updated resource ownership: {error}"))?;
+    let prepared = prepare_manifest_resource_rows(
+        app_handle,
+        instance.id,
+        game_dir,
+        &manifest,
+        &HashMap::new(),
+        "modpack-update-local-rows",
+        Some(ctx),
+    )
+    .await
+    .map_err(|error| format!("Failed to publish updated resource rows: {error}"))?;
+
     log::info!(
         "[modpack-update] Update complete: {} → {} (MC {} {})",
         instance.modpack_version_id.as_deref().unwrap_or("?"),
@@ -392,10 +417,16 @@ pub async fn finish(
         runtime_fields.minecraft_version,
         runtime_fields.modloader.as_deref().unwrap_or("vanilla"),
     );
+    log::info!(
+        "[modpack-update] Ledger reconciled before version publish: {} missing pruned, {} obsolete bundled removed, {} provenance refreshed",
+        reconciliation.pruned_missing,
+        reconciliation.removed_obsolete_pack_rows,
+        reconciliation.refreshed_provenance,
+    );
 
     Ok(FinishedUpdate {
         processed,
-        manifest,
+        prepared,
     })
 }
 
