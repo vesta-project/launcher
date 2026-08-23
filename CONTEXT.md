@@ -139,10 +139,12 @@ publishing a persistent notification. A restore failure preserves its journal,
 sets the existing `interrupted` status, and exposes a resume action that retries
 restoration without retrying the update.
 
-Successful update finalization reconciles filesystem truth and modpack
-ownership in the Installed Resource Ledger before publishing the new Instance
-version: missing rows and obsolete bundled files are pruned, surviving manifest
-rows receive the new provenance version, and new local rows are published.
+After the file rollback journal is durably committed, successful update
+finalization reconciles filesystem truth and modpack ownership in the Installed
+Resource Ledger before publishing the new Instance version: missing rows and
+obsolete bundled files are pruned, surviving manifest rows receive the new
+provenance version, and new local rows are published. Read-only hashing may run
+before the journal commit, but no Ledger mutation crosses that boundary.
 Provider enrichment remains a silent background Task that starts from those
 coherent local facts. Duplicate resolution retains losing user-owned files only
 after a successful disabled-file rename; missing synthetic rows are pruned on

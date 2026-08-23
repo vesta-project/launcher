@@ -1,12 +1,15 @@
 import type { ResourceVersion } from "@stores/resources";
-import { describe, expect, it, vi } from "vitest";
+import { createRoot, createSignal } from "solid-js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@stores/resources", () => ({ resources: { getVersions: vi.fn() } }));
+const { getVersions } = vi.hoisted(() => ({ getVersions: vi.fn() }));
+vi.mock("@stores/resources", () => ({ resources: { getVersions } }));
 vi.mock("@ui/toast/toast", () => ({ showToast: vi.fn() }));
 
 import {
 	createJoinableProjectVersionLookup,
 	selectConcreteProjectVersion,
+	useProjectVersions,
 } from "./use-project-versions";
 
 function version(
@@ -28,6 +31,10 @@ function version(
 }
 
 describe("project version resolution", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it("joins an in-flight lookup when Install is clicked", async () => {
 		let finish!: (versions: ResourceVersion[]) => void;
 		const fetchVersions = vi.fn(
@@ -69,5 +76,43 @@ describe("project version resolution", () => {
 			selectConcreteProjectVersion([beta, stable], { selectedId: "beta" }),
 		).toBe(beta);
 		expect(selectConcreteProjectVersion([beta, stable], {})).toBe(stable);
+	});
+
+	it("exposes a failed lookup and clears it when the visible retry succeeds", async () => {
+		getVersions
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce([version("stable")]);
+
+		await new Promise<void>((done) => {
+			createRoot((dispose) => {
+				const [selectedId, setSelectedId] = createSignal("");
+				const [url, setUrl] = createSignal("");
+				const lookup = useProjectVersions({
+					isModpackMode: () => true,
+					modpackPath: () => "",
+					modpackUrl: url,
+					modpackInfo: () => ({
+						modpackId: "pack",
+						modpackPlatform: "modrinth",
+					}),
+					selectedModpackVersionId: selectedId,
+					setSelectedModpackVersionId: setSelectedId,
+					setModpackUrl: setUrl,
+				});
+
+				void vi
+					.waitFor(() => {
+						expect(lookup.versionLookupError()?.message).toBe("offline");
+					})
+					.then(async () => {
+						await lookup.retryProjectVersions();
+						expect(lookup.versionLookupError()).toBeUndefined();
+						expect(selectedId()).toBe("stable");
+						expect(url()).toBe("https://example.test/stable.mrpack");
+						dispose();
+						done();
+					});
+			});
+		});
 	});
 });

@@ -183,6 +183,8 @@ function InstallPage(props: InstallPageRouteProps) {
 
 	const {
 		projectVersions,
+		versionLookupError,
+		retryProjectVersions,
 		resolveConcreteVersion,
 		handleModpackVersionChange,
 	} = useProjectVersions({
@@ -665,6 +667,8 @@ function InstallPage(props: InstallPageRouteProps) {
 						}}
 						isInstalling={install.isInstalling()}
 						isFetchingMetadata={isFetchingMetadata()}
+						versionLookupError={versionLookupError()?.message}
+						onRetryVersionLookup={() => void retryProjectVersions()}
 					/>
 				</Show>
 			</div>

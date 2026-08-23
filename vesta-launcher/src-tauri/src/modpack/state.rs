@@ -168,8 +168,6 @@ pub fn match_owned_resources(
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct LocalLedgerReconciliation {
-    pub pruned_missing: usize,
-    pub removed_obsolete_pack_rows: usize,
     pub refreshed_provenance: usize,
 }
 
@@ -185,7 +183,6 @@ pub fn reconcile_updated_ledger(
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
 
-    let pruned_missing = crate::resources::ledger::remove_missing_in_folder(instance.id, game_dir)?;
     let resources = {
         let mut conn = get_vesta_conn()?;
         ir_dsl::installed_resource
@@ -193,30 +190,13 @@ pub fn reconcile_updated_ledger(
             .load::<InstalledResource>(&mut conn)?
     };
     let matched_ids = match_owned_resources(&resources, manifest, game_dir);
-    let obsolete_pack_ids = resources
-        .iter()
-        .filter(|resource| resource.source_kind == "modpack" && !matched_ids.contains(&resource.id))
-        .map(|resource| resource.id)
-        .collect::<Vec<_>>();
-    let mut removed_obsolete_pack_rows = 0;
-    for resource_id in obsolete_pack_ids {
-        crate::resources::ledger::remove_resource(instance.id, resource_id)?;
-        removed_obsolete_pack_rows += 1;
-    }
-
-    let current_resources = {
-        let mut conn = get_vesta_conn()?;
-        ir_dsl::installed_resource
-            .filter(ir_dsl::instance_id.eq(instance.id))
-            .load::<InstalledResource>(&mut conn)?
-    };
-    let current_matches = match_owned_resources(&current_resources, manifest, game_dir);
-    let refreshed_provenance =
-        apply_resource_provenance(instance, &current_resources, &current_matches)?;
+    // Update staging owns deletion of obsolete, unmodified bundled files. Any
+    // unmatched physical file still present here may be a user-modified file
+    // that staging intentionally preserved, so provenance reconciliation must
+    // demote it to custom ownership rather than deleting user data.
+    let refreshed_provenance = apply_resource_provenance(instance, &resources, &matched_ids)?;
 
     Ok(LocalLedgerReconciliation {
-        pruned_missing,
-        removed_obsolete_pack_rows,
         refreshed_provenance,
     })
 }
@@ -364,6 +344,28 @@ mod tests {
 
         assert_eq!(
             match_owned_resources(&rows, &manifest("mods/other.jar", "same"), game.path()),
+            std::collections::HashSet::from([1])
+        );
+    }
+
+    #[test]
+    fn newly_published_bundled_path_does_not_claim_same_version_custom_copy() {
+        let game = tempfile::tempdir().unwrap();
+        let rows = vec![
+            resource(
+                1,
+                game.path()
+                    .join("mods/bundled.jar")
+                    .to_string_lossy()
+                    .into_owned(),
+                "same",
+                "modpack",
+            ),
+            resource(2, "/mods/custom.jar".to_string(), "same", "custom"),
+        ];
+
+        assert_eq!(
+            match_owned_resources(&rows, &manifest("mods/bundled.jar", "same"), game.path()),
             std::collections::HashSet::from([1])
         );
     }

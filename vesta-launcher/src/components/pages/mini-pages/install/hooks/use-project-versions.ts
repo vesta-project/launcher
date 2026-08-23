@@ -192,12 +192,17 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 						"Could not load modpack versions. Install will retry when you try again.",
 					severity: "warning",
 				});
-				throw error;
+				// Keep the populated install form usable. The explicit error signal owns
+				// retry UI, while install submission can retry and report its own failure.
+				return [];
 			}
 		},
 	);
 
-	const retryProjectVersions = () => refetch();
+	const retryProjectVersions = () => {
+		setVersionLookupError(undefined);
+		return refetch();
+	};
 
 	const resolveConcreteVersion = async () => {
 		const ready = applyResolvedVersion(projectVersions() || []);

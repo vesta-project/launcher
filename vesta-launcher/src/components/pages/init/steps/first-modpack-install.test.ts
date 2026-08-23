@@ -82,4 +82,42 @@ describe("first modpack onboarding install", () => {
 		expect(completeOnboarding).not.toHaveBeenCalled();
 		expect(goNext).not.toHaveBeenCalled();
 	});
+
+	it("finishes onboarding without queuing twice after an accepted install", async () => {
+		const getVersions = vi.fn(async () => [stable]);
+		const queueInstall = vi.fn(async () => 42);
+		const completeOnboarding = vi
+			.fn<() => Promise<void>>()
+			.mockRejectedValueOnce(new Error("setup failed"))
+			.mockResolvedValueOnce(undefined);
+		const goNext = vi.fn(async () => {});
+		let acceptedInstanceId: number | undefined;
+
+		await expect(
+			installFirstModpack(project, {
+				getVersions,
+				queueInstall,
+				completeOnboarding,
+				goNext,
+				onInstallAccepted: (instanceId) => {
+					acceptedInstanceId = instanceId;
+				},
+			}),
+		).rejects.toThrow("setup failed");
+
+		await expect(
+			installFirstModpack(project, {
+				getVersions,
+				queueInstall,
+				completeOnboarding,
+				goNext,
+				acceptedInstanceId,
+			}),
+		).resolves.toBe(42);
+
+		expect(getVersions).toHaveBeenCalledTimes(1);
+		expect(queueInstall).toHaveBeenCalledTimes(1);
+		expect(completeOnboarding).toHaveBeenCalledTimes(2);
+		expect(goNext).toHaveBeenCalledTimes(1);
+	});
 });

@@ -89,6 +89,10 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	>(null);
 	const [selectedModpack, setSelectedModpack] =
 		createSignal<CuratedModpack | null>(null);
+	const [acceptedModpackInstall, setAcceptedModpackInstall] = createSignal<{
+		projectId: string;
+		instanceId: number;
+	} | null>(null);
 	const [selectedImportLauncher, setSelectedImportLauncher] =
 		createSignal<LauncherKind | null>(null);
 	const [isDetectingLauncher, setIsDetectingLauncher] = createSignal(false);
@@ -257,6 +261,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 		setInstallingModpackId(modpack.id);
 		setModpacksError("");
 		try {
+			const accepted = acceptedModpackInstall();
 			await installFirstModpack(modpack, {
 				getVersions: async (project) =>
 					await invoke<FirstModpackVersion[]>("get_resource_versions", {
@@ -266,10 +271,18 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 				queueInstall: (url, payload) => installModpackFromUrl(url, payload),
 				completeOnboarding,
 				goNext: props.goNext,
+				acceptedInstanceId:
+					accepted?.projectId === modpack.id ? accepted.instanceId : undefined,
+				onInstallAccepted: (instanceId) =>
+					setAcceptedModpackInstall({ projectId: modpack.id, instanceId }),
 			});
 		} catch (e) {
 			console.error("Failed to install modpack:", e);
-			setModpacksError(`Failed to install ${modpack.name}. Please try again.`);
+			setModpacksError(
+				acceptedModpackInstall()?.projectId === modpack.id
+					? "Installation started, but setup could not finish. Retry to continue."
+					: `Failed to install ${modpack.name}. Please try again.`,
+			);
 		} finally {
 			setInstallingModpackId(null);
 		}
@@ -552,11 +565,15 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 											}}
 										>
 											<div class={styles["spinner--small"]} />
-											Starting installation...
+											{acceptedModpackInstall()?.projectId === modpack.id
+												? "Finishing setup..."
+												: "Starting installation..."}
 										</div>
 									}
 								>
-									Install Modpack
+									{acceptedModpackInstall()?.projectId === modpack.id
+										? "Finish Setup"
+										: "Install Modpack"}
 								</Show>
 							</Button>
 						</div>

@@ -574,6 +574,31 @@ pub(crate) async fn prepare_manifest_resource_rows(
     publication_reason: &str,
     progress_context: Option<&TaskContext>,
 ) -> Result<Vec<crate::resources::reconciliation::PreparedResourceCandidate>, String> {
+    let prepared = prepare_manifest_resource_candidates(
+        instance_id,
+        game_dir,
+        manifest,
+        known_resolutions,
+        progress_context,
+    )
+    .await;
+    crate::resources::reconciliation::publish_local_rows(
+        app_handle,
+        instance_id,
+        &prepared,
+        publication_reason,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(prepared)
+}
+
+pub(crate) async fn prepare_manifest_resource_candidates(
+    instance_id: i32,
+    game_dir: &std::path::Path,
+    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
+    known_resolutions: &HashMap<String, crate::resources::reconciliation::KnownResourceResolution>,
+    progress_context: Option<&TaskContext>,
+) -> Vec<crate::resources::reconciliation::PreparedResourceCandidate> {
     let candidates =
         manifest_resource_candidates(instance_id, game_dir, manifest, known_resolutions);
     let total = candidates.len();
@@ -611,14 +636,7 @@ pub(crate) async fn prepare_manifest_resource_rows(
             Some(total as i32),
         );
     }
-    crate::resources::reconciliation::publish_local_rows(
-        app_handle,
-        instance_id,
-        &prepared,
-        publication_reason,
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(prepared)
+    prepared
 }
 
 pub(crate) fn spawn_prepared_resource_enrichment(

@@ -722,9 +722,11 @@ fn duplicate_candidate(
     right: &InstalledResource,
     peer_matches: bool,
 ) -> bool {
-    (left.platform == right.platform && left.remote_id == right.remote_id)
-        || hashes_match(left, right)
-        || peer_matches
+    let same_provider_project = !left.remote_id.is_empty()
+        && left.platform == right.platform
+        && left.remote_id == right.remote_id
+        && SourcePlatform::from_str_id(&left.platform).is_some();
+    same_provider_project || hashes_match(left, right) || peer_matches
 }
 
 fn cross_provider_peer_matches(
@@ -884,6 +886,16 @@ mod world_datapack_event_tests {
             choose_duplicate_winner(&[bundled, identical], false, None),
             1
         );
+    }
+
+    #[test]
+    fn unresolved_manual_rows_are_not_duplicates_without_hash_evidence() {
+        let bundled = resource(1, "manual", "", "", "modpack", None);
+        let custom = resource(2, "manual", "", "", "custom", None);
+        let differently_hashed = resource(3, "manual", "", "", "custom", Some("different-hash"));
+
+        assert!(!duplicate_candidate(&bundled, &custom, false));
+        assert!(!duplicate_candidate(&bundled, &differently_hashed, false));
     }
 
     #[test]

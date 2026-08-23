@@ -1516,6 +1516,60 @@ mod tests {
     }
 
     #[test]
+    fn unmatched_user_modified_pack_file_is_preserved_as_custom() {
+        use crate::models::instance::Instance;
+        use crate::schema::installed_resource::dsl as installed_dsl;
+        use std::collections::HashSet;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let path = mods.join("preserved.jar");
+        std::fs::write(&path, b"user-modified").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![InstalledResourceFact::Discovered {
+                instance_id: 1,
+                path: path.clone(),
+                metadata: (13, 1),
+                provenance: Some(ResourceProvenance::modpack(
+                    Some("pack".to_string()),
+                    Some("old-version".to_string()),
+                    Some("modrinth".to_string()),
+                )),
+            }],
+        )
+        .unwrap();
+        let before = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        let instance = Instance {
+            id: 1,
+            modpack_id: Some("pack".to_string()),
+            modpack_version_id: Some("new-version".to_string()),
+            modpack_platform: Some("modrinth".to_string()),
+            ..Default::default()
+        };
+
+        apply_modpack_provenance_with_conn(
+            &mut conn,
+            &instance,
+            std::slice::from_ref(&before),
+            &HashSet::new(),
+        )
+        .unwrap();
+        let after = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        assert!(path.exists());
+        assert_eq!(after.source_kind, "custom");
+        assert!(after.source_modpack_id.is_none());
+        assert!(after.source_modpack_version_id.is_none());
+    }
+
+    #[test]
     fn discovered_batch_is_idempotent() {
         let temp = tempfile::tempdir().expect("tempdir");
         let mods = temp.path().join("mods");

@@ -148,6 +148,18 @@ impl Task for UpdateModpackTask {
                     )),
                 };
             }
+            if let Err(reconciliation_error) =
+                finished.publish_local_facts(&app_handle, instance_id)
+            {
+                // Files and Instance metadata are already durably committed. Do not
+                // roll them back solely because derived Ledger publication failed;
+                // the next Resources load safely rebuilds these local facts.
+                status_guard.mark_success();
+                return Err(format!(
+                    "The modpack update was committed, but its resource list could not be reconciled: {}. Reopen Resources to retry.",
+                    reconciliation_error
+                ));
+            }
             if let Err(clear_error) = crate::modpack::update::clear_pending(&game_dir) {
                 // The update is durably committed. Leave both markers in place
                 // so startup can retry cleanup without rolling back new files.

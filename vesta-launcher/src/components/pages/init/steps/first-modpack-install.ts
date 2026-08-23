@@ -25,6 +25,8 @@ interface FirstModpackInstallDependencies {
 	queueInstall: (url: string, payload: Partial<Instance>) => Promise<number>;
 	completeOnboarding: () => Promise<void>;
 	goNext: () => Promise<void>;
+	acceptedInstanceId?: number;
+	onInstallAccepted?: (instanceId: number) => void;
 }
 
 export function selectLatestStableModpackVersion(
@@ -41,36 +43,37 @@ export async function installFirstModpack(
 	project: FirstModpackProject,
 	dependencies: FirstModpackInstallDependencies,
 ): Promise<number> {
-	const versions = await dependencies.getVersions(project);
-	const version = selectLatestStableModpackVersion(versions);
-	if (!version)
-		throw new Error("No downloadable versions found for this modpack");
+	let instanceId = dependencies.acceptedInstanceId;
+	if (instanceId === undefined) {
+		const versions = await dependencies.getVersions(project);
+		const version = selectLatestStableModpackVersion(versions);
+		if (!version)
+			throw new Error("No downloadable versions found for this modpack");
 
-	const payload = buildInstanceInstallPayload(
-		{
-			name: project.name,
-			iconPath:
-				project.iconUrl ||
-				getStableIconId(DEFAULT_ICONS[0]) ||
-				DEFAULT_ICONS[0],
-			minecraftVersion: version.game_versions[0] || "",
-			modloader: version.loaders[0] || "vanilla",
-			modloaderVersion: "",
-			minMemory: 2048,
-			maxMemory: 4096,
-		},
-		{
-			isModpack: true,
-			projectId: project.id,
-			platform: project.platform,
-			versionId: version.id,
-		},
-	);
+		const payload = buildInstanceInstallPayload(
+			{
+				name: project.name,
+				iconPath:
+					project.iconUrl ||
+					getStableIconId(DEFAULT_ICONS[0]) ||
+					DEFAULT_ICONS[0],
+				minecraftVersion: version.game_versions[0] || "",
+				modloader: version.loaders[0] || "vanilla",
+				modloaderVersion: "",
+				minMemory: 2048,
+				maxMemory: 4096,
+			},
+			{
+				isModpack: true,
+				projectId: project.id,
+				platform: project.platform,
+				versionId: version.id,
+			},
+		);
 
-	const instanceId = await dependencies.queueInstall(
-		version.download_url,
-		payload,
-	);
+		instanceId = await dependencies.queueInstall(version.download_url, payload);
+		dependencies.onInstallAccepted?.(instanceId);
+	}
 	await dependencies.completeOnboarding();
 	await dependencies.goNext();
 	return instanceId;
