@@ -1242,7 +1242,9 @@ export function InstallForm(props: InstallFormProps) {
 						class={styles["install-submit-btn"]}
 					>
 						{props.isInstalling
-							? "Installing..."
+							? normalizedIsModpack()
+								? "Starting installation..."
+								: "Creating instance..."
 							: normalizedIsModpack()
 								? "Install Modpack"
 								: "Create Instance"}
