@@ -20,6 +20,7 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { invoke } from "@tauri-apps/api/core";
 import { createMemo, createSignal, For, Show, type Component } from "solid-js";
+import { t } from "~/localization";
 import pageStyles from "../settings-page.module.css";
 import styles from "./JavaTab.module.css";
 
@@ -39,11 +40,22 @@ type DetectedJavaInfo = {
 	is_64bit: boolean;
 };
 
-const SOURCE_LABEL: Record<JavaOption["type"], string> = {
-	managed: "Managed",
-	system: "System",
-	custom: "Custom",
-	browse: "Browse",
+const SOURCE_MESSAGE_ID: Record<
+	Exclude<JavaOption["type"], "browse">,
+	string
+> = {
+	managed: "settings-java-source-managed",
+	system: "settings-java-source-system",
+	custom: "settings-java-source-custom",
+};
+
+const STATUS_MESSAGE_ID: Record<
+	Exclude<JavaOption["type"], "browse">,
+	string
+> = {
+	managed: "settings-java-status-using-managed",
+	system: "settings-java-status-using-system",
+	custom: "settings-java-status-using-custom",
 };
 
 const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
@@ -53,8 +65,8 @@ const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
 		if (!props.option.path) return;
 		void navigator.clipboard.writeText(props.option.path);
 		showToast({
-			title: "Copied",
-			description: "Path copied to clipboard",
+			title: t("common-copied"),
+			description: t("common-java-path-copied"),
 			severity: "success",
 		});
 	};
@@ -68,13 +80,21 @@ const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
 				pathStr: path,
 			});
 			showToast({
-				title: "Java runtime OK",
-				description: `Java ${info.major_version}${info.is_64bit ? " (64-bit)" : " (32-bit)"} verified at ${path}`,
+				title: t("settings-java-runtime-ok"),
+				description: t(
+					info.is_64bit
+						? "settings-java-runtime-verified-64"
+						: "settings-java-runtime-verified-32",
+					{
+						version: info.major_version,
+						path,
+					},
+				),
 				severity: "success",
 			});
 		} catch (error) {
 			showToast({
-				title: "Java runtime failed",
+				title: t("settings-java-runtime-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -94,9 +114,9 @@ const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
 					<PlusIcon />
 				</span>
 				<span class={styles.browseCopy}>
-					<span class={styles.rowTitle}>Browse for Java…</span>
+					<span class={styles.rowTitle}>{t("settings-java-browse-title")}</span>
 					<span class={styles.rowMeta}>
-						Pick a custom runtime for this version
+						{t("settings-java-browse-description")}
 					</span>
 				</span>
 			</button>
@@ -120,15 +140,17 @@ const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
 				<span class={styles.rowHeadline}>
 					<span class={styles.rowTitle}>{props.option.title}</span>
 					<span class={styles.sourceBadge} data-source={props.option.type}>
-						{SOURCE_LABEL[props.option.type]}
+						{t(SOURCE_MESSAGE_ID[props.option.type])}
 					</span>
 					<Show when={props.option.isActive}>
-						<Badge class={styles.activeBadge}>Active</Badge>
+						<Badge class={styles.activeBadge}>{t("settings-java-active")}</Badge>
 					</Show>
 				</span>
 				<Show
 					when={props.option.path}
-					fallback={<span class={styles.rowMeta}>Not installed yet</span>}
+					fallback={
+						<span class={styles.rowMeta}>{t("settings-java-not-installed")}</span>
+					}
 				>
 					{(path) => <span class={styles.rowPath}>{path()}</span>}
 				</Show>
@@ -143,7 +165,7 @@ const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
 						props.option.onDownload?.();
 					}}
 				>
-					Download & Use
+					{t("settings-java-download-use")}
 				</LauncherButton>
 			</Show>
 		</button>
@@ -160,11 +182,13 @@ const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
 						disabled={testing()}
 						onClick={() => void handleTestRuntime()}
 					>
-						{testing() ? "Testing…" : "Test runtime"}
+						{testing()
+							? t("settings-java-testing")
+							: t("settings-java-test-runtime")}
 					</ContextMenuItem>
 					<ContextMenuSeparator />
 					<ContextMenuItem onClick={handleCopyPath}>
-						Copy full path
+						{t("common-copy-full-path")}
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</Show>
@@ -188,8 +212,8 @@ const JavaVersionGroup: Component<{
 	);
 	const statusText = createMemo(() => {
 		const selected = active();
-		if (!selected) return "No runtime selected";
-		return `Using ${SOURCE_LABEL[selected.type].toLowerCase()} runtime`;
+		if (!selected) return t("settings-java-no-runtime-selected");
+		return t(STATUS_MESSAGE_ID[selected.type]);
 	});
 	const runtimes = createMemo((): JavaOption[] =>
 		options().filter((option) => option.type !== "browse"),
@@ -248,8 +272,8 @@ export function JavaSettingsTab() {
 		>
 			<div class={panelStyles["settings-panel"]}>
 				<SettingsCard
-					header="Java Environments"
-					subHeader="Choose the default runtime for each Minecraft Java generation. Instances inherit these unless overridden."
+					header={t("settings-java-environments-title")}
+					subHeader={t("settings-java-environments-subheader")}
 					helpTopic="JAVA_MANAGED"
 					headerRight={
 						<LauncherButton
@@ -260,7 +284,7 @@ export function JavaSettingsTab() {
 							class={styles.rescanButton}
 						>
 							<ReloadIcon class={styles.rescanIcon} />
-							{isScanning() ? "Scanning…" : "Rescan"}
+							{isScanning() ? t("settings-java-scanning") : t("settings-java-rescan")}
 						</LauncherButton>
 					}
 				>
@@ -269,10 +293,8 @@ export function JavaSettingsTab() {
 						fallback={
 							<div class={styles.emptyState}>
 								<div class={styles.spinner} aria-hidden="true" />
-								<p>Loading Minecraft version metadata…</p>
-								<span>
-									Java requirements appear once the launcher manifest is ready.
-								</span>
+								<p>{t("settings-java-loading-metadata")}</p>
+								<span>{t("settings-java-loading-metadata-hint")}</span>
 							</div>
 						}
 					>

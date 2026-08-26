@@ -32,6 +32,7 @@ import {
 	formatLogFileMetadata,
 	getConsoleLogDisplay,
 } from "../console-log-display";
+import { t } from "~/localization";
 
 interface ConsoleTabProps {
 	instanceSlug: string;
@@ -158,7 +159,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									{logDisplay().title}
 								</span>
 								<Show when={logDisplay().live}>
-									<span class={styles["console-live-indicator"]}>LIVE</span>
+									<span class={styles["console-live-indicator"]}>
+										{t("instances-details-console-live")}
+									</span>
 								</Show>
 							</div>
 							<Show when={logDisplay().metadata}>
@@ -193,7 +196,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								<div class={styles["search-input-wrapper"]}>
 									<SearchIcon class={styles["search-icon-fixed"]} />
 									<TextField
-										placeholder="Search logs..."
+										placeholder={t(
+											"instances-details-console-search-placeholder",
+										)}
 										value={consoleStore.state.searchQuery}
 										onInput={(e) =>
 											consoleStore.setSearch(e.currentTarget.value)
@@ -218,7 +223,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							>
 								<FolderIcon />
 							</TooltipTrigger>
-							<TooltipContent>Open logs folder</TooltipContent>
+							<TooltipContent>
+								{t("instances-details-console-open-logs-folder")}
+							</TooltipContent>
 						</Tooltip>
 
 						<Show
@@ -232,11 +239,11 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								size="sm"
 								onClick={() => consoleStore.goLive(props.instanceSlug)}
 								class={styles["console-back-live"]}
-								aria-label="Follow live output"
-								tooltip_text="Return to the live console output"
+								aria-label={t("instances-details-console-follow-live-aria")}
+								tooltip_text={t("instances-details-console-follow-live-tooltip")}
 							>
 								<LiveIcon />
-								<span>Follow live</span>
+								<span>{t("instances-details-console-follow-live")}</span>
 							</Button>
 						</Show>
 
@@ -255,11 +262,13 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 										<HistoryIcon />
 									</PopoverTrigger>
 								</TooltipTrigger>
-								<TooltipContent>Log History</TooltipContent>
+								<TooltipContent>
+									{t("instances-details-console-log-history")}
+								</TooltipContent>
 							</Tooltip>
 							<PopoverContent class={styles["console-history-popover"]}>
 								<div class={styles["history-popover-header"]}>
-									Select Log File
+									{t("instances-details-console-select-log-file")}
 								</div>
 								<div class={styles["history-popover-list"]}>
 									<For each={consoleStore.state.history}>
@@ -299,7 +308,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							>
 								<TrashIcon />
 							</TooltipTrigger>
-							<TooltipContent>Clear console view</TooltipContent>
+							<TooltipContent>
+								{t("instances-details-console-clear-view")}
+							</TooltipContent>
 						</Tooltip>
 					</div>
 				</div>
@@ -342,22 +353,24 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									!consoleStore.state.isCatchingUp
 								}
 							>
-								<h3>No matching logs</h3>
-								<p>Try adjusting your search query or filter levels.</p>
+								<h3>{t("instances-details-console-no-matching-logs")}</h3>
+								<p>
+									{t("instances-details-console-no-matching-logs-description")}
+								</p>
 								<div class={styles["console-empty-actions"]}>
 									<Button
 										variant="slate"
 										size="sm"
 										onClick={() => consoleStore.setSearch("")}
 									>
-										Clear Search
+										{t("instances-details-console-clear-search")}
 									</Button>
 									<Button
 										variant="slate"
 										size="sm"
 										onClick={() => consoleStore.resetFilters()}
 									>
-										Reset Filters
+										{t("instances-details-console-reset-filters")}
 									</Button>
 								</div>
 							</Show>
@@ -366,11 +379,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									!hasFilters() && instancesState.runningIds[props.instanceSlug]
 								}
 							>
-								<h3>Waiting for game output...</h3>
-								<p>
-									The console will display logs once the game starts producing
-									output.
-								</p>
+								<h3>{t("instances-details-console-waiting")}</h3>
+								<p>{t("instances-details-console-waiting-description")}</p>
 							</Show>
 							<Show
 								when={
@@ -378,15 +388,15 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									!instancesState.runningIds[props.instanceSlug]
 								}
 							>
-								<h3>No logs to display</h3>
-								<p>Launch the instance to see game output here.</p>
+								<h3>{t("instances-details-console-no-logs")}</h3>
+								<p>{t("instances-details-console-no-logs-description")}</p>
 								<div class={styles["console-empty-actions"]}>
 									<Button
 										variant="slate"
 										size="sm"
 										onClick={props.openLogsFolder}
 									>
-										Open Logs Folder
+										{t("instances-details-console-open-logs-folder-action")}
 									</Button>
 								</div>
 							</Show>
@@ -437,7 +447,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>
-							{atBottom() ? "Jump to Top" : "Jump to Bottom"}
+							{atBottom()
+								? t("instances-details-console-jump-top")
+								: t("instances-details-console-jump-bottom")}
 						</TooltipContent>
 					</Tooltip>
 				</div>

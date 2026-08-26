@@ -43,6 +43,7 @@ import {
 	Show,
 } from "solid-js";
 import pageStyles from "../settings-page.module.css";
+import { t } from "~/localization";
 import styles from "./AccountTab.module.css";
 
 interface Account {
@@ -145,7 +146,7 @@ const formatTooltipName = (
 	name: string | undefined,
 	source: string | undefined,
 ): string => {
-	if (!name) return "Skin";
+	if (!name) return t("settings-account-default-skin-label");
 	const normalizedSource = (source || "").toLowerCase();
 	if (
 		normalizedSource === "default" ||
@@ -274,7 +275,7 @@ export function AccountSettingsTab() {
 							setCapes(
 								res.capes.map((c) => ({
 									id: c.id,
-									name: c.alias || "Cape",
+									name: c.alias || t("settings-account-default-cape"),
 									url: c.url,
 								})),
 							);
@@ -338,7 +339,7 @@ export function AccountSettingsTab() {
 					setCapes(
 						res.capes.map((c) => ({
 							id: c.id,
-							name: c.alias || "Cape",
+							name: c.alias || t("settings-account-default-cape"),
 							url: c.url,
 						})),
 					);
@@ -637,7 +638,7 @@ export function AccountSettingsTab() {
 				multiple: false,
 				filters: [
 					{
-						name: "Minecraft Skin",
+						name: t("settings-account-skin-file-filter"),
 						extensions: ["png", "jpeg", "jpg"],
 					},
 				],
@@ -708,7 +709,7 @@ export function AccountSettingsTab() {
 							id: tempId,
 							account_uuid: active.uuid,
 							texture_key: tempKey,
-							name: "Uploaded Skin",
+							name: t("settings-account-uploaded-skin"),
 							variant: detectedVariant,
 							image_data: dataUrl,
 							source: "local",
@@ -724,8 +725,8 @@ export function AccountSettingsTab() {
 		} catch (err) {
 			console.error("Failed to upload skin:", err);
 			createNotification({
-				title: "Upload Failed",
-				description: "Could not read the selected file.",
+				title: t("settings-account-upload-failed-title"),
+				description: t("settings-account-upload-failed-description"),
 				notification_type: "immediate",
 			});
 		}
@@ -795,7 +796,7 @@ export function AccountSettingsTab() {
 			setCapes(
 				res.capes.map((c) => ({
 					id: c.id,
-					name: c.alias || "Cape",
+					name: c.alias || t("settings-account-default-cape"),
 					url: c.url,
 				})),
 			);
@@ -822,15 +823,17 @@ export function AccountSettingsTab() {
 			if (updatedAccount) setActiveAccount(updatedAccount);
 
 			createNotification({
-				title: "Account Updated",
-				description: "Your skin and cape changes have been saved successfully.",
+				title: t("settings-account-updated-title"),
+				description: t("settings-account-updated-description"),
 				notification_type: "immediate",
 			});
 		} catch (err) {
 			console.error("Save failed:", err);
 			createNotification({
-				title: "Update Failed",
-				description: `Failed to save changes: ${err instanceof Error ? err.message : String(err)}`,
+				title: t("settings-account-update-failed-title"),
+				description: t("settings-account-update-failed-description", {
+					error: err instanceof Error ? err.message : String(err),
+				}),
 				notification_type: "alert",
 			});
 		} finally {
@@ -845,9 +848,12 @@ export function AccountSettingsTab() {
 	};
 
 	const getAccountDisplayName = (account?: Account | null) => {
-		if (!account) return "Select account";
+		if (!account) return t("settings-account-select-account");
 		return (
-			account.display_name || account.username || account.name || "Account"
+			account.display_name ||
+			account.username ||
+			account.name ||
+			t("settings-account-fallback-name")
 		);
 	};
 
@@ -966,7 +972,7 @@ export function AccountSettingsTab() {
 					<div class={styles.cardHeader}>
 						<SkinIcon width="20" style="color: var(--primary)" />
 						<h2 class={styles.cardTitle} style="text-transform: capitalize;">
-							{category} Outfits
+							{t("settings-account-category-outfits", { category })}
 						</h2>
 					</div>
 					<div class={styles.presetsGrid}>
@@ -1004,11 +1010,13 @@ export function AccountSettingsTab() {
 															e.stopPropagation();
 															setViewerSrc(preferredTexture);
 														}}
-														aria-label="View raw texture"
+														aria-label={t("settings-account-view-raw-texture")}
 													>
 														<ViewIcon width="16" />
 													</TooltipTrigger>
-													<TooltipContent>View raw texture</TooltipContent>
+													<TooltipContent>
+														{t("settings-account-view-raw-texture")}
+													</TooltipContent>
 												</Tooltip>
 												<Show when={isSelected()}>
 													<span class={styles.selectedBadge}>
@@ -1019,7 +1027,7 @@ export function AccountSettingsTab() {
 										</TooltipTrigger>
 										<TooltipContent>
 											{formatTooltipName(
-												skin.name || "Default Skin",
+												skin.name || t("settings-account-default-skin"),
 												(skin.source as any)?.type,
 											)}
 										</TooltipContent>
@@ -1040,7 +1048,11 @@ export function AccountSettingsTab() {
 			<div class={styles.container}>
 				<Show
 					when={activeAccount()}
-					fallback={<div class={styles.noAccount}>No account connected</div>}
+					fallback={
+						<div class={styles.noAccount}>
+							{t("settings-account-no-account")}
+						</div>
+					}
 				>
 					{(active) => (
 						<>
@@ -1056,7 +1068,7 @@ export function AccountSettingsTab() {
 													disabled={saving()}
 													onClick={revertChanges}
 												>
-													Revert
+													{t("settings-account-revert")}
 												</button>
 												<button
 													type="button"
@@ -1067,7 +1079,9 @@ export function AccountSettingsTab() {
 													<Show when={saving()}>
 														<RefreshIcon width="14" class="spin" />
 													</Show>
-													{saving() ? "Syncing..." : "Apply"}
+													{saving()
+														? t("settings-account-syncing")
+														: t("settings-account-apply")}
 												</button>
 											</div>
 										}
@@ -1087,11 +1101,13 @@ export function AccountSettingsTab() {
 													[styles.active]: narrowView() === "browse",
 												}}
 												onClick={() => setNarrowView("browse")}
-												aria-label="Browse skins"
+												aria-label={t("settings-account-browse-skins")}
 											>
 												<ViewIcon width="16" height="16" />
 											</TooltipTrigger>
-											<TooltipContent>Browse skins</TooltipContent>
+											<TooltipContent>
+												{t("settings-account-browse-skins")}
+											</TooltipContent>
 										</Tooltip>
 
 										<Tooltip>
@@ -1103,11 +1119,13 @@ export function AccountSettingsTab() {
 													[styles.active]: narrowView() === "preview",
 												}}
 												onClick={() => setNarrowView("preview")}
-												aria-label="Preview"
+												aria-label={t("settings-account-preview")}
 											>
 												<SkinIcon width="16" height="16" />
 											</TooltipTrigger>
-											<TooltipContent>Preview</TooltipContent>
+											<TooltipContent>
+												{t("settings-account-preview")}
+											</TooltipContent>
 										</Tooltip>
 
 										<Tooltip>
@@ -1116,11 +1134,13 @@ export function AccountSettingsTab() {
 												type="button"
 												class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
 												onClick={handleUploadSkin}
-												aria-label="Upload custom skin"
+												aria-label={t("settings-account-upload-custom-skin")}
 											>
 												<PlusIcon width="16" height="16" />
 											</TooltipTrigger>
-											<TooltipContent>Upload custom skin</TooltipContent>
+											<TooltipContent>
+												{t("settings-account-upload-custom-skin")}
+											</TooltipContent>
 										</Tooltip>
 									</div>
 								</div>
@@ -1145,25 +1165,25 @@ export function AccountSettingsTab() {
 												class={styles.browseTabsTrigger}
 												value="recent"
 											>
-												Recent
+												{t("settings-account-tab-recent")}
 											</TabsTrigger>
 											<TabsTrigger
 												class={styles.browseTabsTrigger}
 												value="defaults"
 											>
-												Default
+												{t("settings-account-tab-default")}
 											</TabsTrigger>
 											<TabsTrigger
 												class={styles.browseTabsTrigger}
 												value="events"
 											>
-												Events
+												{t("settings-account-tab-events")}
 											</TabsTrigger>
 											<TabsTrigger
 												class={styles.browseTabsTrigger}
 												value="capes"
 											>
-												Capes
+												{t("settings-account-tab-capes")}
 											</TabsTrigger>
 										</TabsList>
 									</div>
@@ -1171,7 +1191,9 @@ export function AccountSettingsTab() {
 									<TabsContent value="recent" class={styles.browseTabsContent}>
 										<section class={styles.contentCard}>
 											<div class={styles.cardHeader}>
-												<h2 class={styles.cardTitle}>Recent Skins</h2>
+												<h2 class={styles.cardTitle}>
+													{t("settings-account-recent-skins")}
+												</h2>
 											</div>
 											<div class={styles.presetsGrid}>
 												<For each={filteredRecentHistory()}>
@@ -1201,12 +1223,12 @@ export function AccountSettingsTab() {
 																					e.stopPropagation();
 																					setViewerSrc(item.image_data);
 																				}}
-																				aria-label="View raw texture"
+																				aria-label={t("settings-account-view-raw-texture")}
 																			>
 																				<ViewIcon width="16" />
 																			</TooltipTrigger>
 																			<TooltipContent>
-																				View raw texture
+																				{t("settings-account-view-raw-texture")}
 																			</TooltipContent>
 																		</Tooltip>
 																		<Show when={selected()}>
@@ -1217,7 +1239,16 @@ export function AccountSettingsTab() {
 																	</div>
 																</TooltipTrigger>
 																<TooltipContent>
-																	{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
+																	{t("settings-account-skin-tooltip-with-variant", {
+																		name: formatTooltipName(
+																			item.name,
+																			item.source,
+																		),
+																		variant:
+																			normalizeVariant(item.variant) === "slim"
+																				? t("settings-account-model-slim")
+																				: t("settings-account-model-classic"),
+																	})}
 																</TooltipContent>
 															</Tooltip>
 														);
@@ -1246,7 +1277,9 @@ export function AccountSettingsTab() {
 										<section class={styles.contentCard}>
 											<div class={styles.cardHeader}>
 												<CapeIcon width="20" style="color: var(--primary)" />
-												<h2 class={styles.cardTitle}>Capes & Accessories</h2>
+												<h2 class={styles.cardTitle}>
+													{t("settings-account-capes-title")}
+												</h2>
 											</div>
 											<div class={styles.capesGrid}>
 												<button
@@ -1256,7 +1289,9 @@ export function AccountSettingsTab() {
 													}}
 													onClick={() => handlePreviewCape(null)}
 												>
-													<span class={styles.noneLabel}>NONE</span>
+													<span class={styles.noneLabel}>
+														{t("settings-account-cape-none")}
+													</span>
 													<Show when={!previewCapeId()}>
 														<span class={styles.selectedBadge}>
 															<CheckIcon />
@@ -1321,7 +1356,7 @@ export function AccountSettingsTab() {
 												disabled={saving()}
 												onClick={revertChanges}
 											>
-												Revert
+												{t("settings-account-revert")}
 											</button>
 											<button
 												type="button"
@@ -1332,7 +1367,9 @@ export function AccountSettingsTab() {
 												<Show when={saving()}>
 													<RefreshIcon width="18" class="spin" />
 												</Show>
-												{saving() ? "Syncing..." : "Apply Changes"}
+												{saving()
+													? t("settings-account-syncing")
+													: t("settings-account-apply-changes")}
 											</button>
 										</div>
 									</section>
@@ -1352,11 +1389,13 @@ export function AccountSettingsTab() {
 												type="button"
 												class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
 												onClick={handleUploadSkin}
-												aria-label="Upload custom skin"
+												aria-label={t("settings-account-upload-custom-skin")}
 											>
 												<PlusIcon width="18" />
 											</TooltipTrigger>
-											<TooltipContent>Upload custom skin</TooltipContent>
+											<TooltipContent>
+												{t("settings-account-upload-custom-skin")}
+											</TooltipContent>
 										</Tooltip>
 									</Show>
 
@@ -1391,7 +1430,7 @@ export function AccountSettingsTab() {
 												}
 											}}
 										>
-											Classic
+											{t("settings-account-model-classic")}
 										</button>
 										<button
 											type="button"
@@ -1412,7 +1451,7 @@ export function AccountSettingsTab() {
 												}
 											}}
 										>
-											Slim
+											{t("settings-account-model-slim")}
 										</button>
 									</div>
 								</section>
@@ -1423,7 +1462,7 @@ export function AccountSettingsTab() {
 				<ImageViewer
 					src={viewerSrc()}
 					onClose={() => setViewerSrc(null)}
-					title="Skin Texture Preview"
+					title={t("settings-account-texture-preview-title")}
 					scale={4}
 					pixelated={true}
 				/>

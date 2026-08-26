@@ -9,6 +9,7 @@
 		"vesta:dev": "vite",
 		"build": "npm run i18n:check && vite build",
 		"i18n:check": "tsx scripts/validate-locales.ts",
+		"i18n:audit": "tsx scripts/i18n-audit.ts",
 		"perf:bundle": "npm run build && tsx scripts/check-bundle-budget.ts",
 		"version:bump": "tsx ../scripts/bump-version.ts",
 		"serve": "vite preview",
