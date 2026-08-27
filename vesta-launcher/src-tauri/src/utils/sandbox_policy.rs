@@ -321,9 +321,25 @@ pub fn build_sandbox_policy_for_roots(
     }
 
     if hooks_need_shell {
-        exec_allowlist.push(PathBuf::from("/bin/sh"));
-        // sandbox-exec resolves /bin/sh through the bash variant on macOS.
-        exec_allowlist.push(PathBuf::from("/bin/bash"));
+        #[cfg(target_os = "windows")]
+        {
+            let command_shell = std::env::var_os("ComSpec")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(r"C:\Windows\System32\cmd.exe"));
+            filesystem.push(PathAccess::file(
+                command_shell.clone(),
+                true,
+                false,
+                true,
+            ));
+            exec_allowlist.push(command_shell);
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            exec_allowlist.push(PathBuf::from("/bin/sh"));
+            // sandbox-exec resolves /bin/sh through the bash variant on macOS.
+            exec_allowlist.push(PathBuf::from("/bin/bash"));
+        }
     }
 
     if resolved.wrapper_nesting == WrapperNesting::SandboxOutside {

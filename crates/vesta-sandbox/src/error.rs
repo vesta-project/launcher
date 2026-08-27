@@ -39,6 +39,11 @@ pub enum SandboxError {
     )]
     LandlockHelperNotFound,
 
+    #[error(
+        "the vesta-sandbox-exec helper was not found; reinstall or rebuild Vesta Launcher to enforce Modded or Paranoid AppContainer policies on Windows"
+    )]
+    WindowsSandboxHelperNotFound,
+
     #[error("sandbox preset {preset} cannot be enforced on this platform")]
     PresetUnsupported {
         preset: crate::policy::SandboxPreset,

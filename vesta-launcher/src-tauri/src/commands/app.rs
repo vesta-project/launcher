@@ -712,16 +712,28 @@ pub fn get_sandbox_host_support() -> SandboxHostSupport {
 
     #[cfg(target_os = "windows")]
     {
+        let helper_path = vesta_sandbox::windows_sandbox_helper_path();
+        let enforcement_available = vesta_sandbox::sandbox_enforcement_ready();
         SandboxHostSupport {
             host_os: "windows".to_string(),
-            enforcement_available: false,
-            enforcement_backend: None,
+            enforcement_available,
+            enforcement_backend: enforcement_available
+                .then(|| "appcontainer+job-object".to_string()),
             bubblewrap_available: false,
             bubblewrap_path: None,
-            missing_requirement_message: Some(
-                "Windows sandbox enforcement is not available yet; use Trusted on Windows."
-                    .to_string(),
-            ),
+            missing_requirement_message: if helper_path.is_none() {
+                Some(
+                    "The vesta-sandbox-exec helper was not found next to the launcher. Rebuild or reinstall Vesta Launcher to use Modded or Paranoid sandbox presets on Windows."
+                        .to_string(),
+                )
+            } else if !enforcement_available {
+                Some(
+                    "Windows AppContainer filesystem, network, microphone, and process-tree confinement is available, but Windows cannot yet enforce Vesta's exact descendant executable allowlist. Modded and Paranoid remain fail-closed rather than claiming partial protection."
+                        .to_string(),
+                )
+            } else {
+                None
+            },
         }
     }
 

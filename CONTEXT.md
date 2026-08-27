@@ -93,8 +93,14 @@ The OS-specific Implementation inside `vesta-sandbox` that turns a portable
 `RunPlan` and resolved `SandboxPolicy` into a confined spawn (Seatbelt,
 Landlock/`bwrap`, Windows job/AppContainer, or equivalent). Adapters report
 what was actually enforced. If a control required by the policy cannot be
-enforced, launch fails closed. Ship order is policy/UI and crate first, then
-macOS, Linux, and Windows adapters.
+enforced, launch fails closed. The Windows Implementation has a bundled sidecar,
+an AppContainer plus an atomically inherited kill-on-close Job, and a stable
+per-Instance profile whose synchronized NTFS grants are recorded in a protected
+ACL journal without traversing reparse points. Classic AppContainer cannot
+exact-allowlist descendant Windows system executables, so Windows exec remains
+Partial and playable presets remain fail-closed rather than advertised as full
+parity. Ship order is policy/UI and crate first, then macOS, Linux, and Windows
+adapters.
 
 Primary modules:
 

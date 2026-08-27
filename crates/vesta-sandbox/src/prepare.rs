@@ -37,8 +37,20 @@ pub fn prepare(
         }
     }
 
+    #[cfg(target_os = "windows")]
+    if crate::windows_exec::windows_helper_path().is_none() {
+        return Err(SandboxError::WindowsSandboxHelperNotFound);
+    }
+
     let (spawn, report) = platform::prepare_platform(run_plan, policy);
-    validate_required_controls(policy, &report)?;
+    if let Err(error) = validate_required_controls(policy, &report) {
+        if let SandboxedSpawn::Prepared { cleanup_paths, .. } = &spawn {
+            for path in cleanup_paths {
+                let _ = std::fs::remove_dir_all(path);
+            }
+        }
+        return Err(error);
+    }
     Ok((spawn, report))
 }
 
@@ -81,7 +93,7 @@ mod tests {
 
     #[test]
     #[cfg(windows)]
-    fn modded_prepare_fails_closed_on_stub_platforms() {
+    fn modded_prepare_fails_closed_on_partial_windows_exec_control() {
         let caps = resolve_preset(SandboxPreset::Modded);
         let policy = SandboxPolicy {
             enabled: caps.enabled,
@@ -100,16 +112,18 @@ mod tests {
             extra_paths: Vec::new(),
         };
 
-        let err = prepare(&sample_run_plan(), &policy).unwrap_err();
+        let error = prepare(&sample_run_plan(), &policy).unwrap_err();
         assert!(matches!(
-            err,
-            SandboxError::RequiredControlUnsupported { .. }
+            error,
+            SandboxError::RequiredControlUnsupported {
+                control: crate::ControlKind::Exec
+            }
         ));
     }
 
     #[test]
     #[cfg(windows)]
-    fn paranoid_prepare_fails_closed_on_stub_platforms() {
+    fn paranoid_prepare_fails_closed_on_partial_windows_exec_control() {
         let caps = resolve_preset(SandboxPreset::Paranoid);
         let policy = SandboxPolicy {
             enabled: caps.enabled,
@@ -128,10 +142,12 @@ mod tests {
             extra_paths: Vec::new(),
         };
 
-        let err = prepare(&sample_run_plan(), &policy).unwrap_err();
+        let error = prepare(&sample_run_plan(), &policy).unwrap_err();
         assert!(matches!(
-            err,
-            SandboxError::RequiredControlUnsupported { .. }
+            error,
+            SandboxError::RequiredControlUnsupported {
+                control: crate::ControlKind::Exec
+            }
         ));
     }
 

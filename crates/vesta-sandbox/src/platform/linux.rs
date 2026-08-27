@@ -13,15 +13,7 @@ use std::process::Command;
 const BWRAP_CANDIDATES: &[&str] = &["/usr/bin/bwrap", "/bin/bwrap"];
 
 /// Immutable host paths commonly required by a JVM/LWJGL stack on Linux.
-const COMPAT_RO_ROOTS: &[&str] = &[
-    "/usr",
-    "/lib",
-    "/lib64",
-    "/lib32",
-    "/bin",
-    "/sbin",
-    "/etc",
-];
+const COMPAT_RO_ROOTS: &[&str] = &["/usr", "/lib", "/lib64", "/lib32", "/bin", "/sbin", "/etc"];
 
 /// Returns the resolved bubblewrap executable path when present on this host.
 pub(crate) fn bubblewrap_path() -> Option<PathBuf> {
@@ -84,10 +76,7 @@ pub(crate) fn prepare(
         return missing_bubblewrap(run_plan, policy);
     };
 
-    let sandbox_temp = match tempfile::Builder::new()
-        .prefix("vesta-sandbox-")
-        .tempdir()
-    {
+    let sandbox_temp = match tempfile::Builder::new().prefix("vesta-sandbox-").tempdir() {
         Ok(dir) => dir.keep(),
         Err(err) => {
             return unsupported_with_note(
@@ -139,7 +128,8 @@ pub(crate) fn prepare(
 
     let mic_status = if policy.mic_allowed {
         notes.push(
-            "Microphone allowed; IPC namespace retained for desktop audio when present.".to_string(),
+            "Microphone allowed; IPC namespace retained for desktop audio when present."
+                .to_string(),
         );
         EnforcementStatus::NotRequired
     } else {
@@ -515,12 +505,7 @@ mod tests {
         let (spawn, report) = prepare(&plan, &policy);
         assert!(matches!(spawn, SandboxedSpawn::Prepared { .. }));
         assert_eq!(report.filesystem, EnforcementStatus::Unsupported);
-        assert!(
-            report
-                .notes
-                .iter()
-                .any(|note| note.contains("bubblewrap"))
-        );
+        assert!(report.notes.iter().any(|note| note.contains("bubblewrap")));
     }
 
     #[test]
@@ -538,7 +523,8 @@ mod tests {
         assert!(args.iter().any(|arg| arg == "--clearenv"));
         if Path::new("/dev").exists() {
             assert!(
-                !args.windows(3)
+                !args
+                    .windows(3)
                     .any(|window| window == ["--dev-bind", "/dev", "/dev"]),
                 "Paranoid must not bind the full host /dev tree when mic is denied"
             );
@@ -547,10 +533,9 @@ mod tests {
                 "expected minimal --dev /dev when mic is denied"
             );
         }
-        assert!(
-            args.windows(3)
-                .any(|window| window[0] == "--bind" && window[1] == temp.to_string_lossy())
-        );
+        assert!(args
+            .windows(3)
+            .any(|window| window[0] == "--bind" && window[1] == temp.to_string_lossy()));
         let _ = fs::remove_dir_all(temp);
     }
 
@@ -566,18 +551,16 @@ mod tests {
 
         if Path::new("/tmp/.X11-unix").exists() {
             assert!(
-                args.windows(3).any(|window| {
-                    window[0] == "--ro-bind" && window[1] == "/tmp/.X11-unix"
-                }),
+                args.windows(3)
+                    .any(|window| { window[0] == "--ro-bind" && window[1] == "/tmp/.X11-unix" }),
                 "Paranoid preset must bind /tmp/.X11-unix even when mic is denied"
             );
         }
         if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
             if Path::new(&runtime_dir).exists() {
                 assert!(
-                    args.windows(3).any(|window| {
-                        window[0] == "--ro-bind" && window[1] == runtime_dir
-                    }),
+                    args.windows(3)
+                        .any(|window| { window[0] == "--ro-bind" && window[1] == runtime_dir }),
                     "Paranoid must ro-bind XDG_RUNTIME_DIR when mic is denied"
                 );
             }
@@ -602,8 +585,7 @@ mod tests {
             );
         } else {
             assert!(
-                args.windows(2)
-                    .any(|window| window == ["--dev", "/dev"]),
+                args.windows(2).any(|window| window == ["--dev", "/dev"]),
                 "expected --dev /dev fallback when /dev is missing"
             );
         }
@@ -687,10 +669,7 @@ mod tests {
             port.clone(),
         ]);
 
-        let sandboxed = Command::new(&bwrap)
-            .args(&sandbox_args)
-            .status()
-            .unwrap();
+        let sandboxed = Command::new(&bwrap).args(&sandbox_args).status().unwrap();
         assert!(
             !sandboxed.success(),
             "Paranoid bubblewrap profile allowed a loopback connection"

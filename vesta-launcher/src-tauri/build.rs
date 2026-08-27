@@ -3,8 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 fn main() {
-    #[cfg(target_os = "linux")]
-    bundle_linux_sandbox_exec();
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    bundle_sandbox_exec();
 
     tauri_build::build();
 
@@ -35,8 +35,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CURSEFORGE_API_KEY");
 }
 
-#[cfg(target_os = "linux")]
-fn bundle_linux_sandbox_exec() {
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn bundle_sandbox_exec() {
     use std::path::PathBuf;
 
     let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".into());
@@ -47,13 +47,26 @@ fn bundle_linux_sandbox_exec() {
         .unwrap_or_else(|_| workspace_root.join("target"));
     let target = env::var("TARGET").unwrap_or_else(|_| "unknown-target".into());
     let binaries_dir = manifest_dir.join("binaries");
-    let helper_dest = binaries_dir.join(format!("vesta-sandbox-exec-{target}"));
+    let executable_suffix = if target.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    let helper_dest = binaries_dir.join(format!("vesta-sandbox-exec-{target}{executable_suffix}"));
 
     println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/bin/vesta-sandbox-exec.rs");
     println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/landlock_exec.rs");
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/windows_exec.rs");
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/platform/windows.rs");
     println!("cargo:rerun-if-env-changed=TARGET");
 
-    let helper_src = ensure_sandbox_exec_built(&workspace_root, &target_dir, &profile);
+    let helper_src = ensure_sandbox_exec_built(
+        &workspace_root,
+        &target_dir,
+        &profile,
+        &target,
+        executable_suffix,
+    );
     fs::create_dir_all(&binaries_dir).expect("create binaries directory");
     fs::copy(&helper_src, &helper_dest).unwrap_or_else(|error| {
         panic!(
@@ -67,26 +80,23 @@ fn bundle_linux_sandbox_exec() {
     );
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn ensure_sandbox_exec_built(
     workspace_root: &Path,
     target_dir: &Path,
     profile: &str,
+    target: &str,
+    executable_suffix: &str,
 ) -> PathBuf {
     use std::process::Command;
-
-    let helper_src = target_dir.join(profile).join("vesta-sandbox-exec");
-    if helper_src.is_file() {
-        return helper_src;
-    }
 
     // Nested `cargo build` must use a separate target dir or it deadlocks waiting
     // on the parent build script's artifact directory lock.
     let sidecar_target = target_dir.join("sidecar");
-    let sidecar_helper = sidecar_target.join(profile).join("vesta-sandbox-exec");
-    if sidecar_helper.is_file() {
-        return sidecar_helper;
-    }
+    let sidecar_helper = sidecar_target
+        .join(target)
+        .join(profile)
+        .join(format!("vesta-sandbox-exec{executable_suffix}"));
 
     let build_status = Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
         .current_dir(workspace_root)
@@ -97,6 +107,8 @@ fn ensure_sandbox_exec_built(
             "vesta-sandbox",
             "--bin",
             "vesta-sandbox-exec",
+            "--target",
+            target,
         ])
         .status()
         .unwrap_or_else(|error| {
@@ -104,7 +116,9 @@ fn ensure_sandbox_exec_built(
         });
 
     if !build_status.success() {
-        panic!("failed to build vesta-sandbox-exec helper (required for Linux sandbox presets)");
+        panic!(
+            "failed to build vesta-sandbox-exec helper (required for sandbox presets on {target})"
+        );
     }
 
     if sidecar_helper.is_file() {

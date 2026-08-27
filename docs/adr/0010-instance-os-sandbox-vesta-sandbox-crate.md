@@ -2,7 +2,7 @@
 
 Date: 2026-08-16
 
-Amended: 2026-08-17
+Amended: 2026-08-27
 
 Status: Accepted
 
@@ -116,6 +116,33 @@ both Modules and pull unused OS code into every build.
 - Each launch receives an atomically created private system-temp directory. Its
   exact path is the only writable temp allowance and the host removes it after
   the process exits (or launch fails).
+
+### Windows AppContainer implementation and parity gate
+
+- The Windows Adapter uses a bundled `vesta-sandbox-exec` sidecar. The sidecar
+  launches the Play tree under an AppContainer token and places itself in a
+  kill-on-close Job before target creation, so descendants join the Job without
+  a create-then-assign race. The sidecar relays stdout/stderr and piston locates
+  visible windows belonging to the helper's descendants for graceful close.
+- A deterministic, per-Instance AppContainer profile is derived from the
+  canonical writable Instance root. Required NTFS grants are synchronized
+  before launch and recorded in a protected per-user ACL journal; removed
+  policy roots have their package-SID grants revoked. Recursive synchronization
+  never traverses reparse points. Keeping the profile stable avoids recursively
+  rewriting large Java and game trees on every launch.
+- Network-off and microphone-off are enforced by omitting AppContainer
+  capabilities. Network-on grants internet, client/server, and private-network
+  capabilities, but Windows loopback remains unavailable without a machine-level
+  administrator-managed exemption; the Adapter does not silently create one.
+- Classic AppContainer validates the initial executable and restricts
+  non-system executable access, but Windows system roots remain executable via
+  `ALL APPLICATION PACKAGES`. Those descendants retain the same AppContainer
+  and Job authority, but this is not the exact descendant executable allowlist
+  required above. The Adapter therefore reports exec enforcement as `Partial`,
+  `sandbox_enforcement_ready()` remains false on Windows, and Modded/Paranoid
+  fail closed. Shipping Windows presets as available requires a
+  security-boundary-grade exact descendant exec mechanism or an explicit future
+  decision to change the portable contract.
 
 ## Consequences
 

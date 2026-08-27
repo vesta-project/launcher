@@ -63,7 +63,11 @@ pub fn cleanup_sandbox_paths(paths: impl IntoIterator<Item = std::path::PathBuf>
 }
 
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::Foundation::{CloseHandle, HWND, INVALID_HANDLE_VALUE};
+#[cfg(windows)]
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowThreadProcessId, IsHungAppWindow, IsWindowVisible, PostMessageW, WM_CLOSE,
@@ -75,29 +79,67 @@ pub type LogCallback = Arc<dyn Fn(String, String, String) + Send + Sync + 'stati
 
 #[cfg(windows)]
 fn find_main_window(pid: u32) -> Option<HWND> {
-    static mut FOUND_HWND: Option<HWND> = None;
-    static mut TARGET_PID: u32 = 0;
+    struct WindowSearch {
+        process_ids: std::collections::HashSet<u32>,
+        found: Option<HWND>,
+    }
 
+    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: isize) -> i32 {
+        let search = unsafe { &mut *(lparam as *mut WindowSearch) };
+        let mut process_id = 0;
+        unsafe { GetWindowThreadProcessId(hwnd, &mut process_id) };
+        if search.process_ids.contains(&process_id) && unsafe { IsWindowVisible(hwnd) } != 0 {
+            search.found = Some(hwnd);
+            return 0;
+        }
+        1
+    }
+
+    let mut search = WindowSearch {
+        process_ids: descendant_process_ids(pid),
+        found: None,
+    };
     unsafe {
-        FOUND_HWND = None;
-        TARGET_PID = pid;
+        EnumWindows(
+            Some(enum_callback),
+            (&mut search as *mut WindowSearch) as isize,
+        )
+    };
+    search.found
+}
 
-        extern "system" fn enum_callback(hwnd: HWND, _lparam: isize) -> i32 {
-            unsafe {
-                let mut proc_id = 0;
-                GetWindowThreadProcessId(hwnd, &mut proc_id);
+#[cfg(windows)]
+fn descendant_process_ids(root_pid: u32) -> std::collections::HashSet<u32> {
+    let mut process_ids = std::collections::HashSet::from([root_pid]);
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return process_ids;
+    }
 
-                if proc_id == TARGET_PID && IsWindowVisible(hwnd) != 0 {
-                    FOUND_HWND = Some(hwnd);
-                    return 0; // stop enumeration
-                }
-                1 // continue enumeration
+    let mut relationships = Vec::new();
+    let mut entry = PROCESSENTRY32W {
+        dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+        ..Default::default()
+    };
+    let mut has_entry = unsafe { Process32FirstW(snapshot, &mut entry) } != 0;
+    while has_entry {
+        relationships.push((entry.th32ProcessID, entry.th32ParentProcessID));
+        has_entry = unsafe { Process32NextW(snapshot, &mut entry) } != 0;
+    }
+    unsafe { CloseHandle(snapshot) };
+
+    loop {
+        let mut changed = false;
+        for &(process_id, parent_id) in &relationships {
+            if process_ids.contains(&parent_id) && process_ids.insert(process_id) {
+                changed = true;
             }
         }
-
-        EnumWindows(Some(enum_callback), 0);
-        FOUND_HWND
+        if !changed {
+            break;
+        }
     }
+    process_ids
 }
 
 #[cfg(windows)]

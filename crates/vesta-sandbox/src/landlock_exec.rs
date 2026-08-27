@@ -22,10 +22,7 @@ pub enum LandlockExecError {
     Unsupported,
 
     #[error("failed to canonicalize exec allowlist entry {path}: {source}")]
-    Canonicalize {
-        path: String,
-        source: io::Error,
-    },
+    Canonicalize { path: String, source: io::Error },
 
     #[error("failed to open path for Landlock rule {path}: {source}")]
     OpenPath {
@@ -202,10 +199,12 @@ fn apply_exec_allowlist_linux(paths: &[PathBuf]) -> Result<RestrictionStatus, La
 
     let mut seen = HashSet::new();
     for path in expanded {
-        let canonical = path.canonicalize().map_err(|source| LandlockExecError::Canonicalize {
-            path: path.display().to_string(),
-            source,
-        })?;
+        let canonical = path
+            .canonicalize()
+            .map_err(|source| LandlockExecError::Canonicalize {
+                path: path.display().to_string(),
+                source,
+            })?;
         for (rule_path, access) in exec_rule_entries(&canonical) {
             if !seen.insert(rule_path.clone()) {
                 continue;
@@ -235,7 +234,10 @@ fn apply_exec_allowlist_linux(paths: &[PathBuf]) -> Result<RestrictionStatus, La
 fn exec_rule_entries(path: &Path) -> Vec<(PathBuf, BitFlags<AccessFs>)> {
     let mut entries = Vec::new();
     if path.is_dir() {
-        entries.push((path.to_path_buf(), (AccessFs::Execute | AccessFs::Refer).into()));
+        entries.push((
+            path.to_path_buf(),
+            (AccessFs::Execute | AccessFs::Refer).into(),
+        ));
         return entries;
     }
 
@@ -309,7 +311,10 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let args: Vec<String> = args.into_iter().map(|arg| arg.as_ref().to_string()).collect();
+    let args: Vec<String> = args
+        .into_iter()
+        .map(|arg| arg.as_ref().to_string())
+        .collect();
     let mut allowlist = Vec::new();
     let mut program_start = None;
 

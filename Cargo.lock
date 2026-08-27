@@ -5960,6 +5960,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rappct"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11762a6aea3b0a87a51b21cb2085d252f10c01cd0f3f505e1da002cf6e2427da"
+dependencies = [
+ "thiserror 2.0.18",
+ "windows 0.62.2",
+]
+
+[[package]]
 name = "rav1e"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9136,10 +9146,13 @@ name = "vesta-sandbox"
 version = "0.1.0-alpha.29"
 dependencies = [
  "landlock",
+ "rappct",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "which",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

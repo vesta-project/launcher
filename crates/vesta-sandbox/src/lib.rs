@@ -5,6 +5,8 @@
 
 #[cfg(target_os = "linux")]
 pub mod landlock_exec;
+#[cfg(target_os = "windows")]
+pub mod windows_exec;
 
 mod canonicalize;
 mod enforcement;
@@ -86,15 +88,31 @@ pub fn user_namespace_available() -> bool {
     }
 }
 
-/// Whether Linux sandbox presets can be enforced (bubblewrap plus user namespaces).
+/// Whether sandbox presets can be enforced by the current host adapter.
 pub fn sandbox_enforcement_ready() -> bool {
     #[cfg(target_os = "linux")]
     {
         platform::linux::sandbox_enforcement_ready()
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
+    {
+        platform::windows::sandbox_enforcement_ready()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
         false
+    }
+}
+
+/// Resolved `vesta-sandbox-exec` sidecar path for the Windows AppContainer adapter.
+pub fn windows_sandbox_helper_path() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        windows_exec::windows_helper_path()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
     }
 }
 
