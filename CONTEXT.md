@@ -99,11 +99,16 @@ what was actually enforced. If a control required by the policy cannot be
 enforced, launch fails closed. The Windows Implementation has a bundled sidecar,
 an AppContainer plus an atomically inherited kill-on-close Job, and a stable
 per-Instance profile whose synchronized NTFS grants are recorded in a protected
-ACL journal without traversing reparse points. Classic AppContainer cannot
-distinguish native-image loading from OS execute access and cannot exact-allowlist
-descendant Windows system executables, so Windows exec remains Partial and
-playable presets remain fail-closed rather than advertised as full parity. Ship
-order is policy/UI and crate first, then macOS, Linux, and Windows adapters.
+ACL journal without traversing reparse points. A trusted in-container trampoline
+can create one target with Windows' token-level no-child policy, an exact stdio
+handle list, and a broker DACL that denies all access to both Everyone and Owner
+Rights so the target cannot rewrite or bypass the broker boundary;
+this blocks both System32 and loadable-root child execution. The production
+exit-handler/hook/wrapper launch graph is not migrated around that deny-all
+boundary yet. Classic AppContainer also cannot distinguish native-image loading
+from OS execute access, so Windows exec remains Partial and playable presets
+remain fail-closed rather than advertised as full parity. Ship order is policy/UI
+and crate first, then macOS, Linux, and Windows adapters.
 
 Primary modules:
 

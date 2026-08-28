@@ -23,7 +23,7 @@ const FILE_GENERIC_EXECUTE: u32 = 1_179_808;
 const DELETE: u32 = 65_536;
 const FILE_DELETE_CHILD: u32 = 64;
 const WRITE_AUTHORITY: u32 = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 | DELETE;
-const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "2";
+const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "3";
 
 pub fn windows_helper_path() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
@@ -97,6 +97,18 @@ where
         .is_some_and(|arg| arg == "--windows-filesystem-probe")
     {
         return run_filesystem_probe();
+    }
+    if args
+        .get(1)
+        .is_some_and(|arg| arg == "--windows-restricted-target")
+    {
+        return match run_restricted_target(&args) {
+            Ok(code) => code as i32,
+            Err(err) => {
+                eprintln!("Windows restricted target launch failed: {err}");
+                1
+            }
+        };
     }
 
     match parse_cli(&args).and_then(|invocation| run_invocation(&invocation)) {
@@ -176,7 +188,23 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
         Some("Per-instance Vesta Minecraft sandbox"),
     )
     .map_err(|err| format!("could not create AppContainer profile: {err}"))?;
-    sync_policy_access(&profile, &policy, &profile_name)?;
+    // The trusted sidecar runs briefly inside AppContainer as a trampoline so
+    // it can create the real target with the token-level no-child policy. Its
+    // executable is an Adapter implementation detail, not portable exec intent.
+    let broker_program = std::fs::canonicalize(
+        std::env::current_exe()
+            .map_err(|err| format!("could not resolve sandbox sidecar: {err}"))?,
+    )
+    .map_err(|err| format!("could not canonicalize sandbox sidecar: {err}"))?;
+    let mut access_policy = policy.clone();
+    if !access_policy
+        .exec_allowlist
+        .iter()
+        .any(|path| windows_paths_equal(path, &broker_program))
+    {
+        access_policy.exec_allowlist.push(broker_program.clone());
+    }
+    sync_policy_access(&profile, &access_policy, &profile_name)?;
 
     // A registry-read compatibility capability keeps Win32/JVM startup working
     // while adding no filesystem, network, microphone, or device authority.
@@ -206,11 +234,17 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
             .to_ascii_lowercase()
             .cmp(&right.to_string_lossy().to_ascii_lowercase())
     });
+    let mut broker_args = vec![
+        "--windows-restricted-target".to_string(),
+        "--".to_string(),
+        launch_program.to_string_lossy().into_owned(),
+    ];
+    broker_args.extend(invocation.args.iter().cloned());
     let mut child = launch_in_container_with_io(
         &capabilities,
         &LaunchOptions {
-            exe: launch_program.clone(),
-            cmdline: build_command_line(&invocation.args),
+            exe: win32_process_path(&broker_program),
+            cmdline: build_command_line(&broker_args),
             cwd: Some(
                 std::env::current_dir()
                     .map_err(|err| format!("could not resolve sandbox working directory: {err}"))?,
@@ -252,6 +286,318 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
     join_relay(stdout_relay, "stdout")?;
     join_relay(stderr_relay, "stderr")?;
     wait_result
+}
+
+/// Create the real AppContainer target with a token-level prohibition on child
+/// process creation. This mode runs only inside the AppContainer trampoline
+/// launched by [`run_invocation`]; the target inherits that AppContainer token
+/// and only the three standard-I/O handles.
+fn run_restricted_target(args: &[String]) -> Result<u32, String> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, SetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::System::Threading::{
+        CreateProcessW, GetExitCodeProcess, InitializeProcThreadAttributeList,
+        UpdateProcThreadAttribute, WaitForSingleObject, EXTENDED_STARTUPINFO_PRESENT, INFINITE,
+        PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY,
+        PROC_THREAD_ATTRIBUTE_HANDLE_LIST, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    };
+    use windows_sys::Win32::System::WindowsProgramming::PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
+
+    if args.get(2).is_none_or(|arg| arg != "--") {
+        return Err(
+            "usage: vesta-sandbox-exec --windows-restricted-target -- <program> [args...]"
+                .to_string(),
+        );
+    }
+    let program = args
+        .get(3)
+        .ok_or_else(|| "restricted target program is missing".to_string())?;
+    // The outer trusted sidecar already canonicalized and allowlist-checked the
+    // target before entering AppContainer. Re-canonicalizing here can require
+    // metadata access to undeclared ancestor directories.
+    let program = win32_process_path(Path::new(program));
+
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let stderr = io::stderr();
+    let handles: [HANDLE; 3] = [
+        stdin.as_raw_handle().cast(),
+        stdout.as_raw_handle().cast(),
+        stderr.as_raw_handle().cast(),
+    ];
+    for handle in handles {
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+            return Err("sandbox trampoline received an invalid standard-I/O handle".to_string());
+        }
+        if unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) } == 0 {
+            return Err(format!(
+                "could not make sandbox standard-I/O handle inheritable: {}",
+                io::Error::last_os_error()
+            ));
+        }
+    }
+
+    let mut attribute_bytes = 0usize;
+    unsafe {
+        InitializeProcThreadAttributeList(std::ptr::null_mut(), 2, 0, &mut attribute_bytes);
+    }
+    if attribute_bytes == 0 {
+        return Err(format!(
+            "could not size restricted process attributes: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    let word_size = std::mem::size_of::<usize>();
+    let mut attribute_storage = vec![0usize; attribute_bytes.div_ceil(word_size)];
+    let attribute_list = attribute_storage.as_mut_ptr().cast();
+    if unsafe { InitializeProcThreadAttributeList(attribute_list, 2, 0, &mut attribute_bytes) } == 0
+    {
+        return Err(format!(
+            "could not initialize restricted process attributes: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    struct AttributeListGuard(windows_sys::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST);
+    impl Drop for AttributeListGuard {
+        fn drop(&mut self) {
+            unsafe {
+                windows_sys::Win32::System::Threading::DeleteProcThreadAttributeList(self.0);
+            }
+        }
+    }
+    let _attribute_guard = AttributeListGuard(attribute_list);
+
+    let child_policy = PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
+    if unsafe {
+        UpdateProcThreadAttribute(
+            attribute_list,
+            0,
+            PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY as usize,
+            (&child_policy as *const u32).cast(),
+            std::mem::size_of::<u32>(),
+            std::ptr::null_mut(),
+            std::ptr::null(),
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not set no-child process policy: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    if unsafe {
+        UpdateProcThreadAttribute(
+            attribute_list,
+            0,
+            PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+            handles.as_ptr().cast(),
+            std::mem::size_of_val(&handles),
+            std::ptr::null_mut(),
+            std::ptr::null(),
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not restrict inherited target handles: {}",
+            io::Error::last_os_error()
+        ));
+    }
+
+    deny_dangerous_broker_handles()?;
+
+    // Expose the broker PID only to the adversarial probe. The target uses it
+    // to prove that the AppContainer cannot acquire a privileged broker handle.
+    std::env::set_var("VESTA_SANDBOX_BROKER_PID", std::process::id().to_string());
+    let application: Vec<u16> = program.as_os_str().encode_wide().chain(Some(0)).collect();
+    let command_line = std::iter::once(program.to_string_lossy().into_owned())
+        .chain(args[4..].iter().cloned())
+        .map(|arg| quote_windows_arg(&arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut command_line: Vec<u16> = command_line.encode_utf16().chain(Some(0)).collect();
+    let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+    startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = handles[0];
+    startup.StartupInfo.hStdOutput = handles[1];
+    startup.StartupInfo.hStdError = handles[2];
+    startup.lpAttributeList = attribute_list;
+    let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    if unsafe {
+        CreateProcessW(
+            application.as_ptr(),
+            command_line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+            EXTENDED_STARTUPINFO_PRESENT,
+            std::ptr::null(),
+            std::ptr::null(),
+            &startup.StartupInfo,
+            &mut process,
+        )
+    } == 0
+    {
+        return Err(format!(
+            "CreateProcess with no-child policy failed: {}",
+            io::Error::last_os_error()
+        ));
+    }
+
+    unsafe {
+        CloseHandle(process.hThread);
+    }
+    let wait = unsafe { WaitForSingleObject(process.hProcess, INFINITE) };
+    if wait == u32::MAX {
+        unsafe {
+            CloseHandle(process.hProcess);
+        }
+        return Err(format!(
+            "waiting for restricted target failed: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    let mut exit_code = 0u32;
+    if unsafe { GetExitCodeProcess(process.hProcess, &mut exit_code) } == 0 {
+        unsafe {
+            CloseHandle(process.hProcess);
+        }
+        return Err(format!(
+            "could not read restricted target exit code: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    unsafe {
+        CloseHandle(process.hProcess);
+    }
+    Ok(exit_code)
+}
+
+/// Deny the soon-to-be-created target enough access to use this trusted
+/// trampoline as a process-creation or memory-injection proxy. The outer
+/// sidecar already owns its wait handle, so prepending this deny ACE does not
+/// disrupt lifecycle supervision.
+fn deny_dangerous_broker_handles() -> Result<(), String> {
+    use windows_sys::Win32::Foundation::{LocalFree, HLOCAL};
+    use windows_sys::Win32::Security::Authorization::{
+        GetSecurityInfo, SetEntriesInAclW, SetSecurityInfo, DENY_ACCESS, EXPLICIT_ACCESS_W,
+        NO_MULTIPLE_TRUSTEE, SE_KERNEL_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_WELL_KNOWN_GROUP,
+        TRUSTEE_W,
+    };
+    use windows_sys::Win32::Security::{
+        CreateWellKnownSid, WinCreatorOwnerRightsSid, WinWorldSid, ACL, DACL_SECURITY_INFORMATION,
+        NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID, SECURITY_MAX_SID_SIZE,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, PROCESS_ALL_ACCESS};
+
+    let mut everyone_storage = [0u8; SECURITY_MAX_SID_SIZE as usize];
+    let mut everyone_size = everyone_storage.len() as u32;
+    let everyone: PSID = everyone_storage.as_mut_ptr().cast();
+    if unsafe {
+        CreateWellKnownSid(
+            WinWorldSid,
+            std::ptr::null_mut(),
+            everyone,
+            &mut everyone_size,
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not derive broker deny SID: {}",
+            io::Error::last_os_error()
+        ));
+    }
+
+    // A process owner is otherwise implicitly entitled to WRITE_DAC even when
+    // the DACL denies that bit. An OWNER RIGHTS ACE makes the owner's access
+    // fully subject to the DACL, preventing the same-user/AppContainer target
+    // from removing the broker deny ACE before attacking the trampoline.
+    let mut owner_rights_storage = [0u8; SECURITY_MAX_SID_SIZE as usize];
+    let mut owner_rights_size = owner_rights_storage.len() as u32;
+    let owner_rights: PSID = owner_rights_storage.as_mut_ptr().cast();
+    if unsafe {
+        CreateWellKnownSid(
+            WinCreatorOwnerRightsSid,
+            std::ptr::null_mut(),
+            owner_rights,
+            &mut owner_rights_size,
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not derive broker owner-rights SID: {}",
+            io::Error::last_os_error()
+        ));
+    }
+
+    let mut old_acl: *mut ACL = std::ptr::null_mut();
+    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    let status = unsafe {
+        GetSecurityInfo(
+            GetCurrentProcess(),
+            SE_KERNEL_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut old_acl,
+            std::ptr::null_mut(),
+            &mut descriptor,
+        )
+    };
+    if status != 0 {
+        return Err(format!("could not inspect broker process ACL: {status}"));
+    }
+
+    let deny_entry = |sid: PSID| EXPLICIT_ACCESS_W {
+        grfAccessPermissions: PROCESS_ALL_ACCESS,
+        grfAccessMode: DENY_ACCESS,
+        grfInheritance: NO_INHERITANCE,
+        Trustee: TRUSTEE_W {
+            pMultipleTrustee: std::ptr::null_mut(),
+            MultipleTrusteeOperation: NO_MULTIPLE_TRUSTEE,
+            TrusteeForm: TRUSTEE_IS_SID,
+            TrusteeType: TRUSTEE_IS_WELL_KNOWN_GROUP,
+            ptstrName: sid.cast(),
+        },
+    };
+    let denies = [deny_entry(everyone), deny_entry(owner_rights)];
+    let mut hardened_acl: *mut ACL = std::ptr::null_mut();
+    let acl_status = unsafe {
+        SetEntriesInAclW(
+            denies.len() as u32,
+            denies.as_ptr(),
+            old_acl,
+            &mut hardened_acl,
+        )
+    };
+    if acl_status != 0 {
+        unsafe {
+            LocalFree(descriptor.cast::<core::ffi::c_void>() as HLOCAL);
+        }
+        return Err(format!("could not build broker deny ACL: {acl_status}"));
+    }
+    let set_status = unsafe {
+        SetSecurityInfo(
+            GetCurrentProcess(),
+            SE_KERNEL_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            hardened_acl,
+            std::ptr::null_mut(),
+        )
+    };
+    unsafe {
+        LocalFree(hardened_acl.cast::<core::ffi::c_void>() as HLOCAL);
+        LocalFree(descriptor.cast::<core::ffi::c_void>() as HLOCAL);
+    }
+    if set_status != 0 {
+        return Err(format!("could not harden broker process ACL: {set_status}"));
+    }
+    Ok(())
 }
 
 struct ProcessTreeJob {
@@ -835,11 +1181,49 @@ fn run_filesystem_probe() -> i32 {
             }
         }
         if let Some(system_executable) = std::env::var_os("VESTA_PROBE_SYSTEM_EXECUTABLE") {
-            if !std::process::Command::new(system_executable)
+            if std::process::Command::new(system_executable)
                 .output()
-                .is_ok_and(|output| output.status.success())
+                .is_ok()
             {
                 return Err(18);
+            }
+        }
+        if let Some(loadable_executable) = std::env::var_os("VESTA_PROBE_LOADABLE_EXECUTABLE") {
+            if std::process::Command::new(loadable_executable)
+                .arg("--windows-helper-protocol-version")
+                .output()
+                .is_ok()
+            {
+                return Err(19);
+            }
+        }
+        if let Some(broker_pid) = std::env::var_os("VESTA_SANDBOX_BROKER_PID") {
+            use windows_sys::Win32::Foundation::CloseHandle;
+            use windows_sys::Win32::System::Threading::{
+                OpenProcess, PROCESS_CREATE_PROCESS, PROCESS_DUP_HANDLE, PROCESS_TERMINATE,
+                PROCESS_VM_OPERATION, PROCESS_VM_WRITE, PROCESS_WRITE_DAC, PROCESS_WRITE_OWNER,
+            };
+            let broker_pid = broker_pid
+                .to_string_lossy()
+                .parse::<u32>()
+                .map_err(|_| 92)?;
+            let forbidden_masks = [
+                PROCESS_WRITE_DAC,
+                PROCESS_WRITE_OWNER,
+                PROCESS_TERMINATE,
+                PROCESS_CREATE_PROCESS
+                    | PROCESS_DUP_HANDLE
+                    | PROCESS_VM_OPERATION
+                    | PROCESS_VM_WRITE,
+            ];
+            for mask in forbidden_masks {
+                let broker = unsafe { OpenProcess(mask, 0, broker_pid) };
+                if !broker.is_null() {
+                    unsafe {
+                        CloseHandle(broker);
+                    }
+                    return Err(20);
+                }
             }
         }
         println!("vesta-windows-sandbox-filesystem-probe-ok");
@@ -942,11 +1326,13 @@ mod tests {
         let allowed_write = allowed.join("write.txt");
         let read_only_write = read_only.join("write.txt");
         let blocked_write = blocked.join("write.txt");
+        let loadable_executable = allowed.join("loadable-child.exe");
         let junction = allowed.join("outside-junction");
         std::fs::write(&allowed_read, "allowed\n").unwrap();
         std::fs::write(&read_only_file, "shared\n").unwrap();
         std::fs::write(&blocked_read, "blocked\n").unwrap();
         std::fs::write(&blocked_write, "unchanged\n").unwrap();
+        std::fs::copy(&helper, &loadable_executable).unwrap();
         let junction_output = Command::new(r"C:\Windows\System32\cmd.exe")
             .args(["/D", "/C", "mklink", "/J"])
             .arg(&junction)
@@ -967,7 +1353,7 @@ mod tests {
             enabled: true,
             preset: SandboxPreset::Paranoid,
             filesystem_allowlist: vec![
-                PathAccess::new(&allowed, true, true, false),
+                PathAccess::new(&allowed, true, true, false).loadable(),
                 PathAccess::new(&read_only, true, false, false),
             ],
             network_allowed: caps.network_allowed,
@@ -997,13 +1383,14 @@ mod tests {
             .env("VESTA_PROBE_BLOCKED_WRITE", &blocked_write)
             .env("VESTA_PROBE_REPARSE_READ", junction.join("read.txt"))
             .env("VESTA_PROBE_BLOCKED_NETWORK", network_address.to_string())
-            // Classic AppContainer grants Windows system binaries through ALL
-            // APPLICATION PACKAGES. This deliberately records why the portable
-            // exact-descendant exec control is reported Partial and fails closed.
+            // Both targets have OS execute rights: one through Windows' system
+            // baseline and one because the writable root is loadable. The
+            // target token's child-process policy must still deny both.
             .env(
                 "VESTA_PROBE_SYSTEM_EXECUTABLE",
                 r"C:\Windows\System32\whoami.exe",
             )
+            .env("VESTA_PROBE_LOADABLE_EXECUTABLE", &loadable_executable)
             .output()
             .unwrap();
 
@@ -1226,6 +1613,16 @@ public final class VestaSandboxGameProbe {
         } catch (IOException | SecurityException expected) {
             // Expected: undeclared launcher/private data is inaccessible.
         }
+        for (String name : new String[] {
+            "VESTA_PROBE_SYSTEM_EXECUTABLE", "VESTA_PROBE_LOADABLE_EXECUTABLE"
+        }) {
+            try {
+                new ProcessBuilder(env(name).toString()).start();
+                throw new IllegalStateException("child process unexpectedly started: " + name);
+            } catch (IOException | SecurityException expected) {
+                // Expected: the game JVM token cannot create child processes.
+            }
+        }
         System.out.println("vesta-windows-sandbox-game-probe-ok");
     }
 }
@@ -1283,6 +1680,8 @@ public final class VestaSandboxGameProbe {
                     native_preflight_errors.join(" | ")
                 )
             });
+        let loadable_child = game.join("loadable-child.exe");
+        std::fs::copy(&helper, &loadable_child).unwrap();
 
         let caps = resolve_preset(SandboxPreset::Modded);
         let policy = SandboxPolicy {
@@ -1331,6 +1730,11 @@ public final class VestaSandboxGameProbe {
                 private_temp.join("temp-output.txt"),
             )
             .env("VESTA_PROBE_BLOCKED", &blocked_file)
+            .env(
+                "VESTA_PROBE_SYSTEM_EXECUTABLE",
+                r"C:\Windows\System32\whoami.exe",
+            )
+            .env("VESTA_PROBE_LOADABLE_EXECUTABLE", &loadable_child)
             .output()
             .unwrap();
         let acl_diagnostics = if output.status.success() {

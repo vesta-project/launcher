@@ -5,10 +5,11 @@ use crate::policy::{PathAccess, SandboxPolicy, WrapperNesting};
 use crate::spawn::{RunPlan, SandboxedSpawn};
 
 pub fn sandbox_enforcement_ready() -> bool {
-    // Classic AppContainer enforces descendant authority but cannot express
-    // ADR-0010's exact descendant executable allowlist for Windows system
-    // binaries. Do not advertise full preset readiness until that final control
-    // has a security-boundary-grade implementation.
+    // The Adapter can now give one AppContainer target a token-level no-child
+    // policy, but the production target is currently the launcher-owned exit
+    // handler, which must create the game JVM. Do not advertise readiness until
+    // the launch graph places the restriction on the actual game process and
+    // preserves the documented hook/wrapper behavior.
     false
 }
 
@@ -64,9 +65,9 @@ pub(crate) fn prepare(
         "Windows AppContainer confinement launched through vesta-sandbox-exec.".to_string(),
         "Filesystem authority is synchronized to declared roots using a stable per-instance AppContainer SID; stale grants are revoked before launch.".to_string(),
         "The process tree is contained by a kill-on-close Job Object and descendants retain AppContainer authority.".to_string(),
-        "Native-image loading is granted only for policy paths marked loadable. NTFS uses the same file right for image loading and execution, so loadable roots also have OS-level execute access; exact descendant process-exec enforcement remains partial.".to_string(),
-        "The initial target is validated against the portable exec allowlist, and listed non-system executable paths receive explicit ACLs. Descendant creation is not intercepted; Windows system components and binaries in loadable roots can remain executable, although they stay inside the same AppContainer and Job boundary.".to_string(),
-        "Exact descendant executable allowlisting is partial on classic AppContainer, so required presets fail closed.".to_string(),
+        "Native-image loading is granted only for policy paths marked loadable. NTFS uses the same file right for image loading and execution, so loadable roots also have OS-level execute access.".to_string(),
+        "The initial target is validated against the portable exec allowlist, then a trusted AppContainer trampoline creates it with Windows' token-level no-child policy and only standard-I/O handles. The trampoline denies all Everyone and Owner Rights access to itself before the target starts, preventing ACL replacement, process creation, and memory injection through the broker.".to_string(),
+        "Denying every child is stronger than an allowlist for the game JVM but cannot represent policy-approved descendants. Production exit-handler, hook, and wrapper composition is not migrated yet, so exec remains Partial and required presets fail closed.".to_string(),
     ];
     if policy.wrapper_nesting == WrapperNesting::WrapperOutside {
         notes.push(

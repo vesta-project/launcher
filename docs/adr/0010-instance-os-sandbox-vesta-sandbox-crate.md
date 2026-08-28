@@ -154,6 +154,22 @@ both Modules and pull unused OS code into every build.
   OS-level execute access even though they are not members of the portable exec
   allowlist. This is an additional reason the Adapter reports descendant exec as
   `Partial` and the parity gate remains fail-closed.
+- The Adapter's trusted sidecar can enter AppContainer as a hardened
+  trampoline/supervisor and create one real target with
+  `PROCESS_CREATION_CHILD_PROCESS_RESTRICTED`. It supplies an exact inherited
+  stdio handle list and, before starting the target, adds broker-process deny
+  ACEs for both Everyone and Owner Rights. Denying Owner Rights suppresses the
+  process owner's otherwise implicit ability to rewrite the DACL. Adversarial
+  probes cover System32 executables, writable/loadable-root executables, and
+  broker ACL replacement, ownership, termination, process creation, handle
+  duplication, and memory-injection rights.
+- This Windows primitive is deny-all, not an exact descendant allowlist. It is
+  suitable for the untrusted game JVM but cannot be placed on the current initial
+  target: the launcher-owned exit-handler Java process must create the game JVM,
+  hooks may create a shell, and a sandbox-outside wrapper must create Java. The
+  production launch graph must broker those trusted transitions and apply the
+  deny-all token to the actual game process before Windows exec can report
+  `Enforced` or the parity gate can open.
 
 ## Consequences
 
