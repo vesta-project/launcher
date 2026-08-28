@@ -45,6 +45,11 @@ pub struct PathAccess {
     pub path: PathBuf,
     pub read: bool,
     pub write: bool,
+    /// Permit mapping native code from this path into an already allowed process.
+    /// This is distinct from allowing the path to be started as a child process.
+    /// Adapters must report when their OS cannot enforce that distinction.
+    #[serde(default)]
+    pub load: bool,
     pub execute: bool,
     #[serde(default = "default_recursive")]
     pub recursive: bool,
@@ -60,6 +65,7 @@ impl PathAccess {
             path: path.into(),
             read,
             write,
+            load: false,
             execute,
             recursive: true,
         }
@@ -70,9 +76,42 @@ impl PathAccess {
             path: path.into(),
             read,
             write,
+            load: false,
             execute,
             recursive: false,
         }
+    }
+
+    pub fn loadable(mut self) -> Self {
+        // Mapping a native image necessarily reads it.
+        self.read = true;
+        self.load = true;
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loadable_implies_read_but_not_portable_process_execute() {
+        let access = PathAccess::new("native-library", false, false, false).loadable();
+
+        assert!(access.read);
+        assert!(access.load);
+        assert!(!access.write);
+        assert!(!access.execute);
+    }
+
+    #[test]
+    fn path_access_without_load_field_remains_deserializable() {
+        let access: PathAccess =
+            serde_json::from_str(r#"{"path":"shared","read":true,"write":false,"execute":false}"#)
+                .unwrap();
+
+        assert!(!access.load);
+        assert!(access.recursive);
     }
 }
 

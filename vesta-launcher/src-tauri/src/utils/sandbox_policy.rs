@@ -293,14 +293,20 @@ pub fn build_sandbox_policy_for_roots(
     // session logs are mutable. Installation/repair processors run outside the
     // Play sandbox and therefore do not require shared data to be writable.
     let mut filesystem = vec![
-        PathAccess::new(game_dir.to_path_buf(), true, true, false),
+        // Mods may extract and load JNI libraries beneath the instance root.
+        PathAccess::new(game_dir.to_path_buf(), true, true, false).loadable(),
         PathAccess::file(log_file.to_path_buf(), true, true, false),
     ];
     let mut protected_paths = Vec::new();
     for shared_dir in ["assets", "libraries", "versions", "natives"] {
         let path = data_dir.join(shared_dir);
         protected_paths.push(path.clone());
-        filesystem.push(PathAccess::new(path, true, false, false));
+        let access = PathAccess::new(path, true, false, false);
+        filesystem.push(if shared_dir == "natives" {
+            access.loadable()
+        } else {
+            access
+        });
     }
 
     // Exec is exact-path by default. Only recognize a Java runtime root when
@@ -310,7 +316,8 @@ pub fn build_sandbox_policy_for_roots(
     let mut exec_allowlist = vec![java_path.to_path_buf()];
     if let Some(java_root) = java_runtime_root(java_path) {
         protected_paths.push(java_root.clone());
-        filesystem.push(PathAccess::new(java_root.clone(), true, false, false));
+        // The JVM executable loads runtime DLLs/dylibs from its read-only home.
+        filesystem.push(PathAccess::new(java_root.clone(), true, false, false).loadable());
         let spawn_helper = java_root.join("lib/jspawnhelper");
         if spawn_helper.is_file() {
             exec_allowlist.push(spawn_helper);
@@ -326,12 +333,7 @@ pub fn build_sandbox_policy_for_roots(
             let command_shell = std::env::var_os("ComSpec")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from(r"C:\Windows\System32\cmd.exe"));
-            filesystem.push(PathAccess::file(
-                command_shell.clone(),
-                true,
-                false,
-                true,
-            ));
+            filesystem.push(PathAccess::file(command_shell.clone(), true, false, true));
             exec_allowlist.push(command_shell);
         }
         #[cfg(not(target_os = "windows"))]
@@ -608,6 +610,8 @@ mod tests {
             let shared_access = access(&data.join(shared));
             assert!(shared_access.read);
             assert!(!shared_access.write);
+            assert_eq!(shared_access.load, shared == "natives");
+            assert!(!shared_access.execute);
         }
         assert!(policy
             .filesystem_allowlist
@@ -615,12 +619,19 @@ mod tests {
             .all(|entry| { entry.path != fs::canonicalize(&data).unwrap() }));
         let game_access = access(&game);
         assert!(game_access.read && game_access.write);
+        assert!(game_access.load && !game_access.execute);
         let log_access = access(&log_file);
         assert!(log_access.read && log_access.write);
+        assert!(!log_access.load && !log_access.execute);
         assert!(!log_access.recursive);
         let java_access = access(&java_root);
         assert!(java_access.read && !java_access.write);
+        assert!(java_access.load && !java_access.execute);
+        assert!(policy
+            .exec_allowlist
+            .contains(&fs::canonicalize(&java_bin).unwrap()));
         assert!(policy.extra_paths[0].read && policy.extra_paths[0].write);
+        assert!(!policy.extra_paths[0].load && !policy.extra_paths[0].execute);
     }
 
     #[test]

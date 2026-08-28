@@ -23,6 +23,7 @@ const FILE_GENERIC_EXECUTE: u32 = 1_179_808;
 const DELETE: u32 = 65_536;
 const FILE_DELETE_CHILD: u32 = 64;
 const WRITE_AUTHORITY: u32 = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 | DELETE;
+const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "2";
 
 pub fn windows_helper_path() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
@@ -84,6 +85,13 @@ where
         .into_iter()
         .map(|arg| arg.as_ref().to_string())
         .collect();
+    if args
+        .get(1)
+        .is_some_and(|arg| arg == "--windows-helper-protocol-version")
+    {
+        println!("{WINDOWS_HELPER_PROTOCOL_VERSION}");
+        return 0;
+    }
     if args
         .get(1)
         .is_some_and(|arg| arg == "--windows-filesystem-probe")
@@ -535,13 +543,17 @@ fn is_appcontainer_baseline_path(path: &Path) -> bool {
 
 fn filesystem_access_mask(entry: &PathAccess) -> u32 {
     let mut access = 0;
-    if entry.read {
+    if entry.read || entry.load {
         access |= FILE_GENERIC_READ;
     }
     if entry.write {
         access |= FILE_GENERIC_WRITE | DELETE | FILE_DELETE_CHILD;
     }
-    if entry.execute {
+    // Windows uses FILE_EXECUTE both for executable image mappings and native
+    // library mappings. The portable policy keeps the intents separate, but
+    // NTFS cannot enforce load-only access; the Adapter reports descendant
+    // process-exec enforcement as Partial and required presets fail closed.
+    if entry.execute || entry.load {
         access |= FILE_GENERIC_EXECUTE;
     }
     access
@@ -742,8 +754,7 @@ fn build_command_line(args: &[String]) -> Option<String> {
     Some(format!(
         " {}",
         args.iter()
-            .cloned()
-            .map(|arg| quote_windows_arg(&arg))
+            .map(|arg| quote_windows_arg(arg))
             .collect::<Vec<_>>()
             .join(" ")
     ))
@@ -815,10 +826,8 @@ fn run_filesystem_probe() -> i32 {
             }
         }
         if let Some(blocked_network) = std::env::var_os("VESTA_PROBE_BLOCKED_NETWORK") {
-            let address: std::net::SocketAddr = blocked_network
-                .to_string_lossy()
-                .parse()
-                .map_err(|_| 91)?;
+            let address: std::net::SocketAddr =
+                blocked_network.to_string_lossy().parse().map_err(|_| 91)?;
             if std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_secs(2))
                 .is_ok()
             {
@@ -852,6 +861,31 @@ mod tests {
     use crate::policy::{resolve_preset, SandboxPreset, WrapperNesting};
     use std::process::Command;
 
+    fn current_windows_helper() -> PathBuf {
+        let helper = windows_helper_path().unwrap_or_else(|| {
+            panic!(
+                "Windows AppContainer tests require a built sidecar; run `cargo build -p vesta-sandbox --bin vesta-sandbox-exec` first"
+            )
+        });
+        let version = Command::new(&helper)
+            .arg("--windows-helper-protocol-version")
+            .output()
+            .unwrap_or_else(|err| {
+                panic!(
+                    "could not query sandbox sidecar {}: {err}",
+                    helper.display()
+                )
+            });
+        assert!(
+            version.status.success()
+                && String::from_utf8_lossy(&version.stdout).trim()
+                    == WINDOWS_HELPER_PROTOCOL_VERSION,
+            "sandbox sidecar {} is stale; rebuild it with `cargo build -p vesta-sandbox --bin vesta-sandbox-exec`",
+            helper.display()
+        );
+        helper
+    }
+
     #[test]
     fn command_line_quotes_spaces_quotes_and_trailing_slashes() {
         assert_eq!(quote_windows_arg("plain"), "plain");
@@ -881,10 +915,20 @@ mod tests {
     }
 
     #[test]
+    fn native_load_maps_to_windows_image_right_without_changing_portable_exec_intent() {
+        let access = PathAccess::new(r"C:\game\natives", false, false, false).loadable();
+
+        let mask = filesystem_access_mask(&access);
+
+        assert_ne!(mask & FILE_GENERIC_READ, 0);
+        assert_ne!(mask & FILE_GENERIC_EXECUTE, 0);
+        assert!(!access.execute);
+        assert_eq!(mask & WRITE_AUTHORITY, 0);
+    }
+
+    #[test]
     fn appcontainer_enforces_declared_read_and_write_access() {
-        let Some(helper) = windows_helper_path() else {
-            return;
-        };
+        let helper = current_windows_helper();
         let probe = tempfile::tempdir().unwrap();
         let allowed = probe.path().join("allowed");
         let read_only = probe.path().join("read-only");
@@ -985,9 +1029,7 @@ mod tests {
 
     #[test]
     fn installed_java_starts_inside_appcontainer() {
-        let Some(helper) = windows_helper_path() else {
-            return;
-        };
+        let helper = current_windows_helper();
         let Ok(java) = which::which("java.exe") else {
             return;
         };
@@ -1005,7 +1047,7 @@ mod tests {
             preset: SandboxPreset::Modded,
             filesystem_allowlist: vec![
                 PathAccess::new(probe.path(), true, true, false),
-                PathAccess::new(java_home, true, false, true),
+                PathAccess::new(java_home, true, false, false).loadable(),
             ],
             network_allowed: caps.network_allowed,
             mic_allowed: caps.mic_allowed,
@@ -1043,6 +1085,300 @@ mod tests {
                 .contains("version"),
             "java -version output was not relayed"
         );
+    }
+
+    #[test]
+    fn game_shaped_policy_launches_java_with_required_load_and_write_authority() {
+        let helper = current_windows_helper();
+        let Ok(host_java) = which::which("java.exe") else {
+            return;
+        };
+        let Ok(javac) = which::which("javac.exe") else {
+            return;
+        };
+        let Ok(host_java) = std::fs::canonicalize(host_java) else {
+            return;
+        };
+        let host_java_home = host_java
+            .parent()
+            .and_then(Path::parent)
+            .expect("Java executable should be under <home>/bin");
+        let jlink = host_java_home.join("bin/jlink.exe");
+        if !jlink.is_file() {
+            return;
+        }
+
+        let probe = tempfile::tempdir().unwrap();
+        // A linked runtime below the test root proves Vesta-managed Java gets
+        // its required ACLs; Program Files Java has AppContainer baseline ACLs
+        // and would not exercise this policy entry.
+        let java_home = probe.path().join("managed-runtime");
+        let linked = Command::new(jlink)
+            .args([
+                "--add-modules",
+                "java.base",
+                "--strip-debug",
+                "--no-header-files",
+                "--no-man-pages",
+                "--output",
+            ])
+            .arg(&java_home)
+            .output()
+            .unwrap();
+        assert!(
+            linked.status.success(),
+            "could not create managed Java sandbox probe runtime: stdout={}; stderr={}",
+            String::from_utf8_lossy(&linked.stdout),
+            String::from_utf8_lossy(&linked.stderr)
+        );
+        let java = std::fs::canonicalize(java_home.join("bin/java.exe")).unwrap();
+        let game = probe.path().join("instance");
+        let data = probe.path().join("data");
+        let assets = data.join("assets");
+        let libraries = data.join("libraries");
+        let versions = data.join("versions");
+        let natives = data.join("natives");
+        let logs = data.join("logs");
+        let private_temp = probe.path().join("private-temp");
+        let blocked = probe.path().join("blocked");
+        for directory in [
+            &game,
+            &assets,
+            &libraries,
+            &versions,
+            &natives,
+            &logs,
+            &private_temp,
+            &blocked,
+        ] {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+
+        let asset_file = assets.join("asset.txt");
+        let library_file = libraries.join("library.txt");
+        let version_file = versions.join("version.txt");
+        let native_marker = natives.join("native.txt");
+        let log_file = logs.join("session.log");
+        let game_output = game.join("game-output.txt");
+        let blocked_file = blocked.join("secret.txt");
+        for (path, contents) in [
+            (&asset_file, "asset\n"),
+            (&library_file, "library\n"),
+            (&version_file, "version\n"),
+            (&native_marker, "native\n"),
+        ] {
+            std::fs::write(path, contents).unwrap();
+        }
+        std::fs::write(&log_file, "before\n").unwrap();
+        std::fs::write(&blocked_file, "secret\n").unwrap();
+
+        let source = game.join("VestaSandboxGameProbe.java");
+        std::fs::write(
+            &source,
+            r#"
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+
+public final class VestaSandboxGameProbe {
+    private static Path env(String name) {
+        return Path.of(System.getenv(name));
+    }
+
+    public static void main(String[] args) throws Exception {
+        System.load(env("VESTA_PROBE_NATIVE_LIBRARY").toAbsolutePath().toString());
+        if (args.length == 1 && args[0].equals("--load-only")) {
+            return;
+        }
+
+        for (String name : new String[] {
+            "VESTA_PROBE_ASSET", "VESTA_PROBE_LIBRARY",
+            "VESTA_PROBE_VERSION", "VESTA_PROBE_NATIVE_MARKER"
+        }) {
+            if (Files.readString(env(name)).isBlank()) {
+                throw new IllegalStateException("shared runtime read was empty: " + name);
+            }
+        }
+        Files.writeString(env("VESTA_PROBE_GAME_OUTPUT"), "game-write\n");
+        Files.writeString(
+            env("VESTA_PROBE_LOG"),
+            "sandbox-log\n",
+            StandardOpenOption.TRUNCATE_EXISTING
+        );
+        Files.writeString(env("VESTA_PROBE_TEMP_OUTPUT"), "temp-write\n");
+
+        try {
+            Files.writeString(env("VESTA_PROBE_ASSET"), "unexpected\n");
+            throw new IllegalStateException("shared runtime write unexpectedly succeeded");
+        } catch (IOException | SecurityException expected) {
+            // Expected: shared runtime roots are load/read-only.
+        }
+        try {
+            Files.writeString(env("VESTA_PROBE_NATIVE_MARKER"), "unexpected\n");
+            throw new IllegalStateException("native root write unexpectedly succeeded");
+        } catch (IOException | SecurityException expected) {
+            // Expected: native libraries are loadable but not writable.
+        }
+        try {
+            Files.readString(env("VESTA_PROBE_BLOCKED"));
+            throw new IllegalStateException("undeclared read unexpectedly succeeded");
+        } catch (IOException | SecurityException expected) {
+            // Expected: undeclared launcher/private data is inaccessible.
+        }
+        System.out.println("vesta-windows-sandbox-game-probe-ok");
+    }
+}
+"#,
+        )
+        .unwrap();
+        let compile = Command::new(javac)
+            .arg(&source)
+            .current_dir(&game)
+            .output()
+            .unwrap();
+        assert!(
+            compile.status.success(),
+            "could not compile Java sandbox probe: stdout={}; stderr={}",
+            String::from_utf8_lossy(&compile.stdout),
+            String::from_utf8_lossy(&compile.stderr)
+        );
+
+        // Choose a DLL from the managed java.base image that is independently
+        // loadable after copying. The preflight separates DLL suitability from
+        // the AppContainer permission assertion below.
+        let mut native_preflight_errors = Vec::new();
+        let native_library = ["jimage.dll", "verify.dll", "net.dll", "nio.dll", "zip.dll"]
+            .into_iter()
+            .find_map(|name| {
+                let source = java_home.join("bin").join(name);
+                if !source.is_file() {
+                    return None;
+                }
+                let destination = natives.join(format!("vesta-native-load-{name}"));
+                std::fs::copy(&source, &destination).unwrap();
+                let output = Command::new(&java)
+                    .arg("-cp")
+                    .arg(&game)
+                    .arg("VestaSandboxGameProbe")
+                    .arg("--load-only")
+                    .env("VESTA_PROBE_NATIVE_LIBRARY", &destination)
+                    .output()
+                    .unwrap();
+                if output.status.success() {
+                    Some(destination)
+                } else {
+                    native_preflight_errors.push(format!(
+                        "{name}: stdout={}; stderr={}",
+                        String::from_utf8_lossy(&output.stdout),
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
+                    let _ = std::fs::remove_file(destination);
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "no managed-runtime DLL was suitable for the native load probe: {}",
+                    native_preflight_errors.join(" | ")
+                )
+            });
+
+        let caps = resolve_preset(SandboxPreset::Modded);
+        let policy = SandboxPolicy {
+            enabled: true,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![
+                PathAccess::new(&game, true, true, false).loadable(),
+                PathAccess::file(&log_file, true, true, false),
+                PathAccess::new(&assets, true, false, false),
+                PathAccess::new(&libraries, true, false, false),
+                PathAccess::new(&versions, true, false, false),
+                PathAccess::new(&natives, true, false, false).loadable(),
+                PathAccess::new(&java_home, true, false, false).loadable(),
+                PathAccess::new(&private_temp, true, true, false).loadable(),
+            ],
+            network_allowed: caps.network_allowed,
+            mic_allowed: caps.mic_allowed,
+            usb_allowed: caps.usb_allowed,
+            exec_allowlist: vec![java.clone()],
+            wrapper_nesting: WrapperNesting::SandboxOutside,
+            extra_paths: Vec::new(),
+        };
+        let policy_path = private_temp.join("windows-policy.json");
+        std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+
+        let output = Command::new(&helper)
+            .args(["--windows-policy"])
+            .arg(&policy_path)
+            .arg("--")
+            .arg(&java)
+            .arg("-cp")
+            .arg(&game)
+            .arg("VestaSandboxGameProbe")
+            .current_dir(&game)
+            .env("TEMP", &private_temp)
+            .env("TMP", &private_temp)
+            .env("VESTA_PROBE_ASSET", &asset_file)
+            .env("VESTA_PROBE_LIBRARY", &library_file)
+            .env("VESTA_PROBE_VERSION", &version_file)
+            .env("VESTA_PROBE_NATIVE_MARKER", &native_marker)
+            .env("VESTA_PROBE_NATIVE_LIBRARY", &native_library)
+            .env("VESTA_PROBE_GAME_OUTPUT", &game_output)
+            .env("VESTA_PROBE_LOG", &log_file)
+            .env(
+                "VESTA_PROBE_TEMP_OUTPUT",
+                private_temp.join("temp-output.txt"),
+            )
+            .env("VESTA_PROBE_BLOCKED", &blocked_file)
+            .output()
+            .unwrap();
+        let acl_diagnostics = if output.status.success() {
+            String::new()
+        } else {
+            [
+                java.clone(),
+                java_home.join("bin/jli.dll"),
+                java_home.join("bin/server/jvm.dll"),
+            ]
+            .iter()
+            .map(|path| {
+                let acl = Command::new("icacls.exe").arg(path).output().unwrap();
+                format!(
+                    "{}: stdout={}; stderr={}",
+                    path.display(),
+                    String::from_utf8_lossy(&acl.stdout),
+                    String::from_utf8_lossy(&acl.stderr)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" | ")
+        };
+        cleanup_test_profile(&policy);
+
+        assert!(
+            output.status.success(),
+            "sandboxed game-shaped Java probe exited with {}; stdout={}; stderr={}; ACLs={}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+            acl_diagnostics
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("vesta-windows-sandbox-game-probe-ok")
+        );
+        assert_eq!(
+            std::fs::read_to_string(game_output).unwrap(),
+            "game-write\n"
+        );
+        assert_eq!(std::fs::read_to_string(log_file).unwrap(), "sandbox-log\n");
+        assert_eq!(
+            std::fs::read_to_string(private_temp.join("temp-output.txt")).unwrap(),
+            "temp-write\n"
+        );
+        assert_eq!(std::fs::read_to_string(asset_file).unwrap(), "asset\n");
+        assert_eq!(std::fs::read_to_string(native_marker).unwrap(), "native\n");
+        assert_eq!(std::fs::read_to_string(blocked_file).unwrap(), "secret\n");
     }
 
     fn cleanup_test_profile(policy: &SandboxPolicy) {

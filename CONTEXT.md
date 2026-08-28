@@ -71,9 +71,12 @@ Modded (filesystem and exec allowlists; network and mic on), and Paranoid (same
 filesystem/exec/USB as Modded; network and mic off). Global app defaults and
 per-instance overrides follow the existing `use_global_*` pattern. Only shared
 runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`) and the
-selected Java runtime are readable; they are not writable. The Instance game
-directory and exact pre-created session-log file are read-write. Optional global
-and instance extra paths grant read-write access. Paths are canonicalized before
+selected Java runtime are readable; they are not writable. Native-image load is
+a distinct portable authority from child-process execution: the selected Java
+runtime, shared natives, Instance game directory, and private sandbox temp are
+loadable. The Instance game directory and exact pre-created session-log file are
+read-write. Optional global and instance extra paths grant read-write access.
+Paths are canonicalized before
 the Adapter builds its policy. Wrapper nesting (sandbox-outside vs
 wrapper-outside) is configurable. Hooks run inside the Play sandbox and may use
 the shell, but external executables remain subject to the exec allowlist. The
@@ -97,10 +100,10 @@ enforced, launch fails closed. The Windows Implementation has a bundled sidecar,
 an AppContainer plus an atomically inherited kill-on-close Job, and a stable
 per-Instance profile whose synchronized NTFS grants are recorded in a protected
 ACL journal without traversing reparse points. Classic AppContainer cannot
-exact-allowlist descendant Windows system executables, so Windows exec remains
-Partial and playable presets remain fail-closed rather than advertised as full
-parity. Ship order is policy/UI and crate first, then macOS, Linux, and Windows
-adapters.
+distinguish native-image loading from OS execute access and cannot exact-allowlist
+descendant Windows system executables, so Windows exec remains Partial and
+playable presets remain fail-closed rather than advertised as full parity. Ship
+order is policy/UI and crate first, then macOS, Linux, and Windows adapters.
 
 Primary modules:
 

@@ -36,12 +36,9 @@ pub(crate) fn prepare(
     };
 
     let mut windows_policy = policy.clone();
-    windows_policy.filesystem_allowlist.push(PathAccess::new(
-        sandbox_temp.clone(),
-        true,
-        true,
-        false,
-    ));
+    windows_policy
+        .filesystem_allowlist
+        .push(PathAccess::new(sandbox_temp.clone(), true, true, false).loadable());
     let policy_path = sandbox_temp.join("windows-policy.json");
     let policy_json = match serde_json::to_vec(&windows_policy) {
         Ok(json) => json,
@@ -67,7 +64,8 @@ pub(crate) fn prepare(
         "Windows AppContainer confinement launched through vesta-sandbox-exec.".to_string(),
         "Filesystem authority is synchronized to declared roots using a stable per-instance AppContainer SID; stale grants are revoked before launch.".to_string(),
         "The process tree is contained by a kill-on-close Job Object and descendants retain AppContainer authority.".to_string(),
-        "Initial and non-system executables are validated and granted explicitly. Windows system components already executable by AppContainers cannot be exact-allowlisted, although they remain inside the same AppContainer and Job boundary.".to_string(),
+        "Native-image loading is granted only for policy paths marked loadable. NTFS uses the same file right for image loading and execution, so loadable roots also have OS-level execute access; exact descendant process-exec enforcement remains partial.".to_string(),
+        "The initial target is validated against the portable exec allowlist, and listed non-system executable paths receive explicit ACLs. Descendant creation is not intercepted; Windows system components and binaries in loadable roots can remain executable, although they stay inside the same AppContainer and Job boundary.".to_string(),
         "Exact descendant executable allowlisting is partial on classic AppContainer, so required presets fail closed.".to_string(),
     ];
     if policy.wrapper_nesting == WrapperNesting::WrapperOutside {

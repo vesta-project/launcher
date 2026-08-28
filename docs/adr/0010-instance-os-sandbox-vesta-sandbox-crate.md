@@ -61,8 +61,14 @@ both Modules and pull unused OS code into every build.
   the containing log directory is not granted recursively.
 - Java/JRE home and `exit-handler.jar`: read-only; Java/JRE helpers are
   executable.
-- Natives under Vesta data: read/load as required; they are not granted arbitrary
-  process-exec capability.
+- Natives under Vesta data: read/load as required; they are not members of the
+  portable process-exec allowlist. On Windows, the load/execute file-right
+  limitation documented below prevents exact enforcement of that distinction.
+- Native-image load is represented separately from portable process-exec intent.
+  The selected Java runtime, shared natives, Instance game directory, and private
+  sandbox temp are loadable so the JVM and mods can map their required native
+  libraries. This does not make those paths members of the portable exec
+  allowlist.
 - Global extra paths (app defaults) plus per-instance extra paths grant
   read-write access; UI shows inherited globals greyed and allows instance-only
   additions.
@@ -143,6 +149,11 @@ both Modules and pull unused OS code into every build.
   fail closed. Shipping Windows presets as available requires a
   security-boundary-grade exact descendant exec mechanism or an explicit future
   decision to change the portable contract.
+- Windows maps portable native-image load to NTFS `FILE_EXECUTE`, because Windows
+  exposes no load-only file right. Consequently, loadable roots also have
+  OS-level execute access even though they are not members of the portable exec
+  allowlist. This is an additional reason the Adapter reports descendant exec as
+  `Partial` and the parity gate remains fail-closed.
 
 ## Consequences
 

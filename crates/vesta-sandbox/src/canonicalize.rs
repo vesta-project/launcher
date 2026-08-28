@@ -57,6 +57,7 @@ pub fn canonicalize_path_access(entries: &[PathAccess]) -> Result<Vec<PathAccess
             path,
             read: entry.read,
             write: entry.write,
+            load: entry.load,
             execute: entry.execute,
             recursive: entry.recursive,
         })
@@ -136,6 +137,17 @@ mod tests {
 
         let canonical = canonicalize_allowlist(&[root.clone(), child.clone()]).unwrap();
         assert!(is_subpath(&canonical[1], &canonical[0]));
+    }
+
+    #[test]
+    fn canonicalization_preserves_native_load_without_process_execute() {
+        let temp = TempDir::new().unwrap();
+        let entry = PathAccess::new(temp.path(), true, false, false).loadable();
+
+        let canonical = canonicalize_path_access(&[entry]).unwrap();
+
+        assert!(canonical[0].load);
+        assert!(!canonical[0].execute);
     }
 
     #[test]
