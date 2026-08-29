@@ -713,12 +713,13 @@ pub fn get_sandbox_host_support() -> SandboxHostSupport {
     #[cfg(target_os = "windows")]
     {
         let helper_path = vesta_sandbox::windows_sandbox_helper_path();
-        let enforcement_available = vesta_sandbox::sandbox_enforcement_ready();
+        let enforcement_available =
+            vesta_sandbox::sandbox_enforcement_ready() && helper_path.is_some();
         SandboxHostSupport {
             host_os: "windows".to_string(),
             enforcement_available,
             enforcement_backend: enforcement_available
-                .then(|| "appcontainer+job-object".to_string()),
+                .then(|| "appcontainer+job-object+no-child".to_string()),
             bubblewrap_available: false,
             bubblewrap_path: None,
             missing_requirement_message: if helper_path.is_none() {
@@ -728,7 +729,7 @@ pub fn get_sandbox_host_support() -> SandboxHostSupport {
                 )
             } else if !enforcement_available {
                 Some(
-                    "Windows AppContainer filesystem, network, microphone, and process-tree confinement is available, but Windows cannot yet enforce Vesta's exact descendant executable allowlist. Modded and Paranoid remain fail-closed rather than claiming partial protection."
+                    "Windows AppContainer sandbox enforcement is unavailable on this system. Modded and Paranoid presets remain fail-closed."
                         .to_string(),
                 )
             } else {

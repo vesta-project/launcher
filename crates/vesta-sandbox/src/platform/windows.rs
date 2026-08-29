@@ -2,15 +2,10 @@
 
 use crate::enforcement::{EnforcementReport, EnforcementStatus};
 use crate::policy::{PathAccess, SandboxPolicy, WrapperNesting};
-use crate::spawn::{RunPlan, SandboxedSpawn};
+use crate::spawn::{RunPlan, SandboxCommandPlacement, SandboxedSpawn};
 
 pub fn sandbox_enforcement_ready() -> bool {
-    // The Adapter can now give one AppContainer target a token-level no-child
-    // policy, but the production target is currently the launcher-owned exit
-    // handler, which must create the game JVM. Do not advertise readiness until
-    // the launch graph places the restriction on the actual game process and
-    // preserves the documented hook/wrapper behavior.
-    false
+    crate::windows_exec::windows_helper_path().is_some()
 }
 
 pub(crate) fn prepare(
@@ -36,10 +31,22 @@ pub(crate) fn prepare(
         }
     };
 
+    // Keep the policy outside the AppContainer-writable scratch directory. The
+    // exit supervisor reuses it for pre-hook, game, and post-hook invocations;
+    // placing it under TEMP would let the game broaden a later invocation.
+    let sandbox_scratch = sandbox_temp.join("scratch");
+    if let Err(err) = std::fs::create_dir(&sandbox_scratch) {
+        let _ = std::fs::remove_dir_all(&sandbox_temp);
+        return unsupported_with_note(
+            run_plan,
+            policy,
+            format!("Failed to create the Windows sandbox scratch directory: {err}"),
+        );
+    }
     let mut windows_policy = policy.clone();
     windows_policy
         .filesystem_allowlist
-        .push(PathAccess::new(sandbox_temp.clone(), true, true, false).loadable());
+        .push(PathAccess::new(sandbox_scratch.clone(), true, true, false).loadable());
     let policy_path = sandbox_temp.join("windows-policy.json");
     let policy_json = match serde_json::to_vec(&windows_policy) {
         Ok(json) => json,
@@ -64,10 +71,12 @@ pub(crate) fn prepare(
     let mut notes = vec![
         "Windows AppContainer confinement launched through vesta-sandbox-exec.".to_string(),
         "Filesystem authority is synchronized to declared roots using a stable per-instance AppContainer SID; stale grants are revoked before launch.".to_string(),
-        "The process tree is contained by a kill-on-close Job Object and descendants retain AppContainer authority.".to_string(),
+        "Each restricted invocation is contained by a kill-on-close Job Object. Launches sharing an instance profile are serialized for their complete lifetime so an existing target cannot race a new trampoline before DACL hardening.".to_string(),
         "Native-image loading is granted only for policy paths marked loadable. NTFS uses the same file right for image loading and execution, so loadable roots also have OS-level execute access.".to_string(),
         "The initial target is validated against the portable exec allowlist, then a trusted AppContainer trampoline creates it with Windows' token-level no-child policy and only standard-I/O handles. The trampoline denies all Everyone and Owner Rights access to itself before the target starts, preventing ACL replacement, process creation, and memory injection through the broker.".to_string(),
-        "Denying every child is stronger than an allowlist for the game JVM but cannot represent policy-approved descendants. Production exit-handler, hook, and wrapper composition is not migrated yet, so exec remains Partial and required presets fail closed.".to_string(),
+        "The launcher-owned exit supervisor remains outside AppContainer and invokes the helper separately for the pre-hook shell, game JVM, and post-hook shell. Each restricted target is validated against the exec allowlist and then denied all descendants.".to_string(),
+        "Windows' deny-all child policy is stricter than the portable maximum-authority allowlist: the game cannot start even another allowlisted executable. Generic sandbox-outside wrappers are rejected because they must create Java; wrapper-outside remains an explicit weaker compatibility mode.".to_string(),
+        "The reusable policy file is kept outside the AppContainer-writable scratch directory so a game cannot broaden a later hook invocation.".to_string(),
     ];
     if policy.wrapper_nesting == WrapperNesting::WrapperOutside {
         notes.push(
@@ -79,6 +88,10 @@ pub(crate) fn prepare(
     let network = if policy.network_allowed {
         notes.push(
             "Network enabled through AppContainer internet and private-network capabilities."
+                .to_string(),
+        );
+        notes.push(
+            "Windows AppContainer loopback remains unavailable unless an administrator manages a package exemption; Vesta does not silently create one."
                 .to_string(),
         );
         EnforcementStatus::NotRequired
@@ -102,11 +115,11 @@ pub(crate) fn prepare(
     let mut env = run_plan.env.clone();
     env.insert(
         "TEMP".to_string(),
-        sandbox_temp.to_string_lossy().into_owned(),
+        sandbox_scratch.to_string_lossy().into_owned(),
     );
     env.insert(
         "TMP".to_string(),
-        sandbox_temp.to_string_lossy().into_owned(),
+        sandbox_scratch.to_string_lossy().into_owned(),
     );
 
     let spawn = SandboxedSpawn::Prepared {
@@ -119,12 +132,13 @@ pub(crate) fn prepare(
         env,
         cwd: run_plan.cwd.clone(),
         pre_exec_notes: notes.clone(),
+        placement: SandboxCommandPlacement::GameAndHooks,
         cleanup_paths: vec![sandbox_temp],
     };
     let report = EnforcementReport {
         filesystem: EnforcementStatus::Enforced,
         network,
-        exec: EnforcementStatus::Partial,
+        exec: EnforcementStatus::Enforced,
         mic,
         notes,
     };
@@ -144,6 +158,7 @@ fn unsupported_with_note(
             env: run_plan.env.clone(),
             cwd: run_plan.cwd.clone(),
             pre_exec_notes: notes.clone(),
+            placement: SandboxCommandPlacement::GameAndHooks,
             cleanup_paths: Vec::new(),
         },
         EnforcementReport {
@@ -200,6 +215,8 @@ mod tests {
         let SandboxedSpawn::Prepared {
             program,
             args,
+            env,
+            placement,
             cleanup_paths,
             ..
         } = spawn
@@ -210,10 +227,21 @@ mod tests {
         assert_eq!(args[0], "--windows-policy");
         assert!(PathBuf::from(&args[1]).is_file());
         assert_eq!(args[2], "--");
+        assert_eq!(placement, SandboxCommandPlacement::GameAndHooks);
+        let scratch = PathBuf::from(env.get("TEMP").unwrap());
+        assert_eq!(env.get("TEMP"), env.get("TMP"));
+        assert!(scratch.is_dir());
+        assert!(!PathBuf::from(&args[1]).starts_with(&scratch));
+        let serialized: SandboxPolicy =
+            serde_json::from_slice(&std::fs::read(&args[1]).unwrap()).unwrap();
+        assert!(serialized
+            .filesystem_allowlist
+            .iter()
+            .any(|entry| entry.path == scratch && entry.write));
         assert_eq!(report.filesystem, EnforcementStatus::Enforced);
         assert_eq!(report.network, EnforcementStatus::Enforced);
         assert_eq!(report.mic, EnforcementStatus::Enforced);
-        assert_eq!(report.exec, EnforcementStatus::Partial);
+        assert_eq!(report.exec, EnforcementStatus::Enforced);
         for path in cleanup_paths {
             std::fs::remove_dir_all(path).unwrap();
         }

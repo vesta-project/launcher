@@ -58,6 +58,17 @@ sudo apt-get install --yes \
 
 **Linux sandbox (Modded / Paranoid presets):** requires `bubblewrap` (`bwrap`), working unprivileged user namespaces, Landlock (Linux 5.13+), and the bundled `vesta-sandbox-exec` helper for exec allowlists. The launcher checks all of these at launch and in settings.
 
+**Windows sandbox (Modded / Paranoid presets):** uses the bundled
+`vesta-sandbox-exec.exe`, AppContainer, NTFS package-SID grants, and a no-child
+target policy. Rebuild the helper with
+`cargo build -p vesta-sandbox --bin vesta-sandbox-exec` before running sandbox
+tests. The bundled `exit-handler.jar` must be rebuilt with
+`vesta-launcher/resources/exit-handler/build.bat` after changing its Java source.
+Windows serializes launches of the same Instance profile. Sandbox-outside user
+wrappers are unsupported; select wrapper-outside when compatibility requires a
+wrapper. AppContainer localhost access requires an administrator-managed
+loopback exemption and is not enabled automatically.
+
 ### CrabNebula DevTools (development only)
 
 Debug builds can include [CrabNebula DevTools](https://devtools.crabnebula.dev) for inspecting invoke calls, console output, and Tauri config. Use `vesta:dev:tools` to enable the `devtools` Cargo feature; production builds exclude the crate entirely.

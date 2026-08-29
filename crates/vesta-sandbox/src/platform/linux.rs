@@ -5,7 +5,7 @@
 
 use crate::enforcement::{EnforcementReport, EnforcementStatus};
 use crate::policy::{PathAccess, SandboxPolicy, WrapperNesting};
-use crate::spawn::{RunPlan, SandboxedSpawn};
+use crate::spawn::{RunPlan, SandboxCommandPlacement, SandboxedSpawn};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -152,6 +152,7 @@ pub(crate) fn prepare(
         env,
         cwd: run_plan.cwd.clone(),
         pre_exec_notes: notes.clone(),
+        placement: SandboxCommandPlacement::WholeCommand,
         cleanup_paths: vec![sandbox_temp],
     };
 
@@ -189,6 +190,7 @@ fn missing_bubblewrap(
             env: run_plan.env.clone(),
             cwd: run_plan.cwd.clone(),
             pre_exec_notes: notes.clone(),
+            placement: SandboxCommandPlacement::WholeCommand,
             cleanup_paths: Vec::new(),
         },
         EnforcementReport {
@@ -226,6 +228,7 @@ fn unsupported_with_note(
             env: run_plan.env.clone(),
             cwd: run_plan.cwd.clone(),
             pre_exec_notes: notes.clone(),
+            placement: SandboxCommandPlacement::WholeCommand,
             cleanup_paths: Vec::new(),
         },
         EnforcementReport {

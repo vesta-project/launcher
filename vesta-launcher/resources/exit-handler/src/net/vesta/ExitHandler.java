@@ -14,7 +14,7 @@ import java.util.Map;
  * Wraps Minecraft process to track exit time for accurate playtime calculation.
  * Streams stdout/stderr to console and log file, writes exit_status.json on exit.
  * 
- * Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] -- <java> <args...>
+ * Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] [--sandbox-prefix-arg <arg>]... -- <java> <args...>
  * 
  * Compiled with --release 8 for maximum Java version compatibility.
  */
@@ -25,6 +25,7 @@ public class ExitHandler {
     private static String logFilePath;
     private static String preLaunchHook;
     private static String postExitHook;
+    private static final List<String> sandboxPrefix = new ArrayList<>();
     private static Process gameProcess;
     private static volatile int exitCode = -1;
     private static volatile boolean hasWrittenExitFile = false;
@@ -47,6 +48,13 @@ public class ExitHandler {
                 preLaunchHook = args[++i];
             } else if ("--post-exit-hook".equals(arg) && i + 1 < args.length) {
                 postExitHook = args[++i];
+            } else if ("--sandbox-prefix-arg".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value after --sandbox-prefix-arg");
+                    System.exit(1);
+                    return;
+                }
+                sandboxPrefix.add(args[++i]);
             } else if ("--".equals(arg)) {
                 // Everything after -- is the game command
                 for (int j = i + 1; j < args.length; j++) {
@@ -59,7 +67,7 @@ public class ExitHandler {
         
         // Validate required arguments
         if (instanceId == null || exitFilePath == null || logFilePath == null || gameCommand.isEmpty()) {
-            System.err.println("Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] -- <java> <args...>");
+            System.err.println("Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] [--sandbox-prefix-arg <arg>]... -- <java> <args...>");
             System.err.println("Missing required arguments:");
             if (instanceId == null) System.err.println("  --instance-id");
             if (exitFilePath == null) System.err.println("  --exit-file");
@@ -67,6 +75,10 @@ public class ExitHandler {
             if (gameCommand.isEmpty()) System.err.println("  game command after --");
             System.exit(1);
             return;
+        }
+
+        if (!sandboxPrefix.isEmpty()) {
+            gameCommand.addAll(0, sandboxPrefix);
         }
         
         // Register shutdown hook for graceful termination
@@ -166,13 +178,19 @@ public class ExitHandler {
     private static int executeHook(String commandStr) {
         try {
             boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
-            List<String> cmd = new ArrayList<>();
+            List<String> cmd = new ArrayList<>(sandboxPrefix);
             if (isWindows) {
-                cmd.add("cmd");
+                String commandShell = System.getenv("ComSpec");
+                if (!sandboxPrefix.isEmpty() && (commandShell == null || commandShell.trim().isEmpty())) {
+                    throw new IOException("ComSpec is required for a sandboxed Windows hook");
+                }
+                cmd.add(commandShell == null || commandShell.trim().isEmpty() ? "cmd.exe" : commandShell);
+                cmd.add("/D");
+                cmd.add("/S");
                 cmd.add("/C");
                 cmd.add(commandStr);
             } else {
-                cmd.add("sh");
+                cmd.add(sandboxPrefix.isEmpty() ? "sh" : "/bin/sh");
                 cmd.add("-c");
                 cmd.add(commandStr);
             }

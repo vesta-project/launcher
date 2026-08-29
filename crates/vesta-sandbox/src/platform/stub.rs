@@ -1,6 +1,6 @@
 use crate::enforcement::{EnforcementReport, EnforcementStatus};
 use crate::policy::{SandboxPolicy, WrapperNesting};
-use crate::spawn::{RunPlan, SandboxedSpawn};
+use crate::spawn::{RunPlan, SandboxCommandPlacement, SandboxedSpawn};
 
 /// Shared stub used by platforms without a working sandbox adapter.
 #[allow(dead_code)] // Used by Linux/Windows adapters and non-desktop cfg.
@@ -29,6 +29,7 @@ pub(crate) fn prepare_stub_report(
         env: run_plan.env.clone(),
         cwd: run_plan.cwd.clone(),
         pre_exec_notes: notes.clone(),
+        placement: SandboxCommandPlacement::WholeCommand,
         cleanup_paths: Vec::new(),
     };
 

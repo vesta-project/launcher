@@ -23,7 +23,7 @@ const FILE_GENERIC_EXECUTE: u32 = 1_179_808;
 const DELETE: u32 = 65_536;
 const FILE_DELETE_CHILD: u32 = 64;
 const WRITE_AUTHORITY: u32 = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 | DELETE;
-const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "3";
+const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "4";
 
 pub fn windows_helper_path() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
@@ -34,7 +34,7 @@ pub fn windows_helper_path() -> Option<PathBuf> {
                 "vesta-sandbox-exec-aarch64-pc-windows-msvc.exe",
             ] {
                 let candidate = dir.join(name);
-                if candidate.is_file() {
+                if compatible_windows_helper(&candidate) {
                     return Some(candidate);
                 }
             }
@@ -49,18 +49,18 @@ pub fn windows_helper_path() -> Option<PathBuf> {
         return None;
     }
     if let Some(path) = option_env!("CARGO_BIN_EXE_vesta_sandbox_exec").map(PathBuf::from) {
-        if path.is_file() {
+        if compatible_windows_helper(&path) {
             return Some(path);
         }
     }
     if let Some(path) = option_env!("VESTA_SANDBOX_EXEC").map(PathBuf::from) {
-        if path.is_file() {
+        if compatible_windows_helper(&path) {
             return Some(path);
         }
     }
     if let Ok(path) = std::env::var("VESTA_SANDBOX_EXEC") {
         let path = PathBuf::from(path);
-        if path.is_file() {
+        if compatible_windows_helper(&path) {
             return Some(path);
         }
     }
@@ -69,11 +69,29 @@ pub fn windows_helper_path() -> Option<PathBuf> {
             .join("../../target")
             .join(profile)
             .join("vesta-sandbox-exec.exe");
-        if candidate.is_file() {
+        if compatible_windows_helper(&candidate) {
             return candidate.canonicalize().ok();
         }
     }
-    which::which("vesta-sandbox-exec.exe").ok()
+    which::which("vesta-sandbox-exec.exe")
+        .ok()
+        .filter(|path| compatible_windows_helper(path))
+}
+
+fn compatible_windows_helper(path: &Path) -> bool {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    path.is_file()
+        && std::process::Command::new(path)
+            .arg("--windows-helper-protocol-version")
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .is_ok_and(|output| {
+                output.status.success()
+                    && String::from_utf8_lossy(&output.stdout).trim()
+                        == WINDOWS_HELPER_PROTOCOL_VERSION
+            })
 }
 
 pub fn run_windows_exec_cli<I, S>(args: I) -> i32
@@ -182,6 +200,10 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
     let launch_program = win32_process_path(&canonical_program);
 
     let profile_name = profile_name_for_policy(&policy)?;
+    // A restricted target shares this AppContainer identity with its broker.
+    // Serialize the complete lifetime per profile so no already-running target
+    // can race a newly created broker before that broker hardens its own DACL.
+    let _profile_launch_lock = acquire_profile_launch_lock(&profile_name)?;
     let profile = AppContainerProfile::ensure(
         &profile_name,
         "Vesta Play Sandbox",
@@ -286,6 +308,45 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
     join_relay(stdout_relay, "stdout")?;
     join_relay(stderr_relay, "stderr")?;
     wait_result
+}
+
+struct ProfileLaunchLock(windows_sys::Win32::Foundation::HANDLE);
+
+impl Drop for ProfileLaunchLock {
+    fn drop(&mut self) {
+        unsafe {
+            windows_sys::Win32::System::Threading::ReleaseMutex(self.0);
+            windows_sys::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
+fn acquire_profile_launch_lock(profile_name: &str) -> Result<ProfileLaunchLock, String> {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_ABANDONED, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{CreateMutexW, WaitForSingleObject, INFINITE};
+
+    let name: Vec<u16> = format!(r"Local\VestaSandboxLaunch-{profile_name}")
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    if handle.is_null() {
+        return Err(format!(
+            "could not create per-profile launch mutex: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    let wait = unsafe { WaitForSingleObject(handle, INFINITE) };
+    if wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED {
+        unsafe {
+            CloseHandle(handle);
+        }
+        return Err(format!(
+            "could not acquire per-profile launch mutex: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    Ok(ProfileLaunchLock(handle))
 }
 
 /// Create the real AppContainer target with a token-level prohibition on child
@@ -408,9 +469,13 @@ fn run_restricted_target(args: &[String]) -> Result<u32, String> {
 
     deny_dangerous_broker_handles()?;
 
-    // Expose the broker PID only to the adversarial probe. The target uses it
-    // to prove that the AppContainer cannot acquire a privileged broker handle.
-    std::env::set_var("VESTA_SANDBOX_BROKER_PID", std::process::id().to_string());
+    // Expose the broker PID only to adversarial tests. Production targets do
+    // not need to know that a trusted trampoline exists.
+    if std::env::var_os("VESTA_WINDOWS_SANDBOX_TEST_BROKER").is_some() {
+        std::env::set_var("VESTA_SANDBOX_BROKER_PID", std::process::id().to_string());
+    } else {
+        std::env::remove_var("VESTA_SANDBOX_BROKER_PID");
+    }
     let application: Vec<u16> = program.as_os_str().encode_wide().chain(Some(0)).collect();
     let command_line = std::iter::once(program.to_string_lossy().into_owned())
         .chain(args[4..].iter().cloned())
@@ -897,8 +962,8 @@ fn filesystem_access_mask(entry: &PathAccess) -> u32 {
     }
     // Windows uses FILE_EXECUTE both for executable image mappings and native
     // library mappings. The portable policy keeps the intents separate, but
-    // NTFS cannot enforce load-only access; the Adapter reports descendant
-    // process-exec enforcement as Partial and required presets fail closed.
+    // NTFS cannot enforce load-only access. The target token's no-child policy
+    // independently prevents these loadable images from becoming descendants.
     if entry.execute || entry.load {
         access |= FILE_GENERIC_EXECUTE;
     }
@@ -1197,7 +1262,13 @@ fn run_filesystem_probe() -> i32 {
                 return Err(19);
             }
         }
-        if let Some(broker_pid) = std::env::var_os("VESTA_SANDBOX_BROKER_PID") {
+        for (pid_variable, failure_code) in [
+            ("VESTA_SANDBOX_BROKER_PID", 20),
+            ("VESTA_PROBE_HOST_SUPERVISOR_PID", 21),
+        ] {
+            let Some(broker_pid) = std::env::var_os(pid_variable) else {
+                continue;
+            };
             use windows_sys::Win32::Foundation::CloseHandle;
             use windows_sys::Win32::System::Threading::{
                 OpenProcess, PROCESS_CREATE_PROCESS, PROCESS_DUP_HANDLE, PROCESS_TERMINATE,
@@ -1222,7 +1293,7 @@ fn run_filesystem_probe() -> i32 {
                     unsafe {
                         CloseHandle(broker);
                     }
-                    return Err(20);
+                    return Err(failure_code);
                 }
             }
         }
@@ -1299,6 +1370,27 @@ mod tests {
     }
 
     #[test]
+    fn profile_launch_mutex_serializes_the_full_profile_lifetime() {
+        let profile_name = format!("vesta-sandbox-test-{}", std::process::id());
+        let first = acquire_profile_launch_lock(&profile_name).unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let waiter = std::thread::spawn(move || {
+            let second = acquire_profile_launch_lock(&profile_name).unwrap();
+            sender.send(()).unwrap();
+            drop(second);
+        });
+
+        assert!(receiver
+            .recv_timeout(std::time::Duration::from_millis(150))
+            .is_err());
+        drop(first);
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+        waiter.join().unwrap();
+    }
+
+    #[test]
     fn native_load_maps_to_windows_image_right_without_changing_portable_exec_intent() {
         let access = PathAccess::new(r"C:\game\natives", false, false, false).loadable();
 
@@ -1333,6 +1425,14 @@ mod tests {
         std::fs::write(&blocked_read, "blocked\n").unwrap();
         std::fs::write(&blocked_write, "unchanged\n").unwrap();
         std::fs::copy(&helper, &loadable_executable).unwrap();
+        let positive_control = Command::new(&loadable_executable)
+            .arg("--windows-helper-protocol-version")
+            .output()
+            .unwrap();
+        assert!(
+            positive_control.status.success(),
+            "copied loadable child must execute outside the sandbox"
+        );
         let junction_output = Command::new(r"C:\Windows\System32\cmd.exe")
             .args(["/D", "/C", "mklink", "/J"])
             .arg(&junction)
@@ -1383,6 +1483,11 @@ mod tests {
             .env("VESTA_PROBE_BLOCKED_WRITE", &blocked_write)
             .env("VESTA_PROBE_REPARSE_READ", junction.join("read.txt"))
             .env("VESTA_PROBE_BLOCKED_NETWORK", network_address.to_string())
+            .env("VESTA_WINDOWS_SANDBOX_TEST_BROKER", "1")
+            .env(
+                "VESTA_PROBE_HOST_SUPERVISOR_PID",
+                std::process::id().to_string(),
+            )
             // Both targets have OS execute rights: one through Windows' system
             // baseline and one because the writable root is loadable. The
             // target token's child-process policy must still deny both.
@@ -1472,6 +1577,154 @@ mod tests {
                 .contains("version"),
             "java -version output was not relayed"
         );
+    }
+
+    #[test]
+    fn bundled_exit_handler_sandboxes_hooks_and_game_as_separate_invocations() {
+        let helper = current_windows_helper();
+        let Ok(java) = which::which("java.exe") else {
+            return;
+        };
+        let exit_handler = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../vesta-launcher/resources/exit-handler/exit-handler.jar");
+        let Ok(exit_handler) = std::fs::canonicalize(exit_handler) else {
+            return;
+        };
+        let probe = tempfile::tempdir().unwrap();
+        let allowed = probe.path().join("instance");
+        let read_only = probe.path().join("shared");
+        let host_private = probe.path().join("host-private");
+        let sandbox_scratch = host_private.join("scratch");
+        std::fs::create_dir_all(&allowed).unwrap();
+        std::fs::create_dir_all(&read_only).unwrap();
+        std::fs::create_dir_all(&host_private).unwrap();
+        std::fs::create_dir_all(&sandbox_scratch).unwrap();
+        let allowed_read = allowed.join("read.txt");
+        let allowed_write = allowed.join("write.txt");
+        let read_only_read = read_only.join("read.txt");
+        let read_only_write = read_only.join("write.txt");
+        let blocked_read = host_private.join("blocked-read.txt");
+        let blocked_write = host_private.join("blocked-write.txt");
+        std::fs::write(&allowed_read, "allowed\n").unwrap();
+        std::fs::write(&read_only_read, "shared\n").unwrap();
+        std::fs::write(&blocked_read, "blocked\n").unwrap();
+        std::fs::write(&blocked_write, "unchanged\n").unwrap();
+        let loadable_child = allowed.join("loadable-child.exe");
+        std::fs::copy(&helper, &loadable_child).unwrap();
+        let command_shell = std::env::var_os("ComSpec")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Windows\System32\cmd.exe"));
+
+        let caps = resolve_preset(SandboxPreset::Modded);
+        let policy = SandboxPolicy {
+            enabled: true,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![
+                PathAccess::new(&allowed, true, true, false).loadable(),
+                PathAccess::new(&read_only, true, false, false),
+                PathAccess::new(&sandbox_scratch, true, true, false).loadable(),
+                PathAccess::file(&command_shell, true, false, true),
+            ],
+            network_allowed: caps.network_allowed,
+            mic_allowed: caps.mic_allowed,
+            usb_allowed: caps.usb_allowed,
+            exec_allowlist: vec![helper.clone(), command_shell],
+            wrapper_nesting: WrapperNesting::SandboxOutside,
+            extra_paths: Vec::new(),
+        };
+        let policy_path = host_private.join("windows-policy.json");
+        std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        let pre_marker = allowed.join("pre-hook.txt");
+        let post_marker = allowed.join("post-hook.txt");
+        let pre_external = allowed.join("pre-external.txt");
+        let post_external = allowed.join("post-external.txt");
+        let pre_escape = allowed.join("pre-escape.txt");
+        let post_escape = allowed.join("post-escape.txt");
+        let exit_file = host_private.join("exit-status.json");
+        let log_file = host_private.join("game.log");
+        let pre_hook = format!(
+            "whoami.exe > \"{}\" 2>&1 && echo escaped> \"{}\" & echo pre> \"{}\"",
+            pre_external.display(),
+            pre_escape.display(),
+            pre_marker.display()
+        );
+        let post_hook = format!(
+            "whoami.exe > \"{}\" 2>&1 && echo escaped> \"{}\" & echo post> \"{}\"",
+            post_external.display(),
+            post_escape.display(),
+            post_marker.display()
+        );
+
+        let prefix = [
+            helper.to_string_lossy().into_owned(),
+            "--windows-policy".to_string(),
+            policy_path.to_string_lossy().into_owned(),
+            "--".to_string(),
+        ];
+        let mut command = Command::new(java);
+        command
+            .arg("-jar")
+            .arg(&exit_handler)
+            .arg("--instance-id")
+            .arg("exit-handler-sandbox-probe")
+            .arg("--exit-file")
+            .arg(&exit_file)
+            .arg("--log-file")
+            .arg(&log_file)
+            .arg("--pre-launch-hook")
+            .arg(&pre_hook)
+            .arg("--post-exit-hook")
+            .arg(&post_hook);
+        for arg in &prefix {
+            command.arg("--sandbox-prefix-arg").arg(arg);
+        }
+        let output = command
+            .arg("--")
+            .arg(&helper)
+            .arg("--windows-filesystem-probe")
+            .current_dir(&allowed)
+            .env("TEMP", &sandbox_scratch)
+            .env("TMP", &sandbox_scratch)
+            .env("VESTA_WINDOWS_SANDBOX_TEST_BROKER", "1")
+            .env(
+                "VESTA_PROBE_HOST_SUPERVISOR_PID",
+                std::process::id().to_string(),
+            )
+            .env("VESTA_PROBE_ALLOWED_READ", &allowed_read)
+            .env("VESTA_PROBE_ALLOWED_WRITE", &allowed_write)
+            .env("VESTA_PROBE_READ_ONLY_READ", &read_only_read)
+            .env("VESTA_PROBE_READ_ONLY_WRITE", &read_only_write)
+            .env("VESTA_PROBE_BLOCKED_READ", &blocked_read)
+            .env("VESTA_PROBE_BLOCKED_WRITE", &blocked_write)
+            .env(
+                "VESTA_PROBE_SYSTEM_EXECUTABLE",
+                r"C:\Windows\System32\whoami.exe",
+            )
+            .env("VESTA_PROBE_LOADABLE_EXECUTABLE", &loadable_child)
+            .output()
+            .unwrap();
+
+        cleanup_test_profile(&policy);
+        assert!(
+            output.status.success(),
+            "exit-handler sandbox probe exited with {}; stdout={}; stderr={}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(std::fs::read_to_string(&pre_marker).unwrap().trim(), "pre");
+        assert_eq!(
+            std::fs::read_to_string(&post_marker).unwrap().trim(),
+            "post"
+        );
+        assert!(pre_external.is_file());
+        assert!(post_external.is_file());
+        assert!(!pre_escape.exists());
+        assert!(!post_escape.exists());
+        let log = std::fs::read_to_string(&log_file).unwrap();
+        assert!(log.contains("vesta-windows-sandbox-filesystem-probe-ok"));
+        let exit_status = std::fs::read_to_string(&exit_file).unwrap();
+        assert!(exit_status.contains("\"exit_code\": 0"));
     }
 
     #[test]

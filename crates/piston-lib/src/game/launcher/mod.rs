@@ -21,7 +21,9 @@ pub use registry::{
     get_instance, get_running_instances, is_instance_running, load_registry, register_instance,
     unregister_instance,
 };
-pub use types::{GameInstance, InstanceState, LaunchResult, LaunchSpec, ProcessHandle};
+pub use types::{
+    GameInstance, InstanceState, LaunchResult, LaunchSpec, ProcessHandle, SandboxCommandPlacement,
+};
 pub use version_parser::{
     get_asset_index, get_main_class, parse_version_json, resolve_version_chain, Argument,
     Arguments, Library, VersionManifest,

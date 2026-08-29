@@ -26,6 +26,19 @@ impl RunPlan {
     }
 }
 
+/// Where the host must insert the prepared sandbox command.
+///
+/// Most adapters wrap the launcher-visible command. Windows instead keeps the
+/// trusted exit supervisor outside AppContainer and applies a fresh restricted
+/// helper invocation to the game and each hook.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxCommandPlacement {
+    #[default]
+    WholeCommand,
+    GameAndHooks,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SandboxedSpawn {
     /// Use the original [`RunPlan`] unchanged (Trusted preset).
@@ -37,6 +50,8 @@ pub enum SandboxedSpawn {
         env: HashMap<String, String>,
         cwd: PathBuf,
         pre_exec_notes: Vec<String>,
+        #[serde(default)]
+        placement: SandboxCommandPlacement,
         /// Private paths created while preparing the sandbox. The host owns
         /// their removal after the launched process exits (or launch fails).
         #[serde(default)]

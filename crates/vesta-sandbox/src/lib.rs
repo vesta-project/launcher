@@ -26,7 +26,7 @@ pub use policy::{
     resolve_preset, PathAccess, PresetCapabilities, SandboxPolicy, SandboxPreset, WrapperNesting,
 };
 pub use prepare::prepare;
-pub use spawn::{RunPlan, SandboxedSpawn};
+pub use spawn::{RunPlan, SandboxCommandPlacement, SandboxedSpawn};
 
 /// Whether Landlock exec allowlists are available on Linux.
 pub fn landlock_available() -> bool {

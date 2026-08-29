@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     #[cfg(windows)]
-    fn modded_prepare_fails_closed_on_partial_windows_exec_control() {
+    fn modded_prepare_succeeds_with_windows_appcontainer_adapter() {
         let caps = resolve_preset(SandboxPreset::Modded);
         let policy = SandboxPolicy {
             enabled: caps.enabled,
@@ -112,18 +112,19 @@ mod tests {
             extra_paths: Vec::new(),
         };
 
-        let error = prepare(&sample_run_plan(), &policy).unwrap_err();
-        assert!(matches!(
-            error,
-            SandboxError::RequiredControlUnsupported {
-                control: crate::ControlKind::Exec
-            }
-        ));
+        let (spawn, report) = prepare(&sample_run_plan(), &policy).unwrap();
+        let SandboxedSpawn::Prepared { cleanup_paths, .. } = spawn else {
+            panic!("expected prepared Windows sandbox spawn");
+        };
+        assert_eq!(report.exec, crate::EnforcementStatus::Enforced);
+        for path in cleanup_paths {
+            std::fs::remove_dir_all(path).unwrap();
+        }
     }
 
     #[test]
     #[cfg(windows)]
-    fn paranoid_prepare_fails_closed_on_partial_windows_exec_control() {
+    fn paranoid_prepare_succeeds_with_windows_appcontainer_adapter() {
         let caps = resolve_preset(SandboxPreset::Paranoid);
         let policy = SandboxPolicy {
             enabled: caps.enabled,
@@ -142,13 +143,16 @@ mod tests {
             extra_paths: Vec::new(),
         };
 
-        let error = prepare(&sample_run_plan(), &policy).unwrap_err();
-        assert!(matches!(
-            error,
-            SandboxError::RequiredControlUnsupported {
-                control: crate::ControlKind::Exec
-            }
-        ));
+        let (spawn, report) = prepare(&sample_run_plan(), &policy).unwrap();
+        let SandboxedSpawn::Prepared { cleanup_paths, .. } = spawn else {
+            panic!("expected prepared Windows sandbox spawn");
+        };
+        assert_eq!(report.exec, crate::EnforcementStatus::Enforced);
+        assert_eq!(report.network, crate::EnforcementStatus::Enforced);
+        assert_eq!(report.mic, crate::EnforcementStatus::Enforced);
+        for path in cleanup_paths {
+            std::fs::remove_dir_all(path).unwrap();
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 Date: 2026-08-16
 
-Amended: 2026-08-27
+Amended: 2026-08-29
 
 Status: Accepted
 
@@ -38,8 +38,10 @@ both Modules and pull unused OS code into every build.
 - `piston-lib` gains only a thin, game-agnostic structured launch hook so
   sandbox composition stays correct with exit-handler and wrappers—not a
   dependency on Vesta presets or OS APIs.
-- The sandbox Interface applies to the **Play process tree**: exit handler,
-  optionally enclosed wrapper, hooks, game JVM, and descendants. Launcher-owned
+- The sandbox Interface applies to the **Play process graph**: an optionally
+  enclosed wrapper, hooks, game JVM, and descendants. On Windows, the
+  launcher-owned exit handler is a trusted supervisor outside AppContainer and
+  creates separate restricted invocations for hooks and the game. Launcher-owned
   installation, repair, Java management, and Forge/NeoForge processors are
   trusted work and remain outside this boundary.
 
@@ -91,6 +93,9 @@ both Modules and pull unused OS code into every build.
 - User-configurable nesting: **sandbox outside** (default) vs **wrapper outside**.
 - Wrapper-outside is a documented weaker posture and must be visible in the
   enforcement report.
+- Windows rejects a generic sandbox-outside wrapper because the no-child target
+  cannot start Java. Wrapper-outside remains supported as the explicit weaker
+  compatibility mode.
 - An unsandboxed wrapper may not reside under the game directory or an extra
   read-write root, preventing one Play session from replacing trusted code used
   by the next launch.
@@ -123,10 +128,11 @@ both Modules and pull unused OS code into every build.
   exact path is the only writable temp allowance and the host removes it after
   the process exits (or launch fails).
 
-### Windows AppContainer implementation and parity gate
+### Windows AppContainer implementation
 
 - The Windows Adapter uses a bundled `vesta-sandbox-exec` sidecar. The sidecar
-  launches the Play tree under an AppContainer token and places itself in a
+  launches each untrusted Play target under an AppContainer token and places
+  itself in a
   kill-on-close Job before target creation, so descendants join the Job without
   a create-then-assign race. The sidecar relays stdout/stderr and piston locates
   visible windows belonging to the helper's descendants for graceful close.
@@ -140,42 +146,52 @@ both Modules and pull unused OS code into every build.
   capabilities. Network-on grants internet, client/server, and private-network
   capabilities, but Windows loopback remains unavailable without a machine-level
   administrator-managed exemption; the Adapter does not silently create one.
-- Classic AppContainer validates the initial executable and restricts
-  non-system executable access, but Windows system roots remain executable via
-  `ALL APPLICATION PACKAGES`. Those descendants retain the same AppContainer
-  and Job authority, but this is not the exact descendant executable allowlist
-  required above. The Adapter therefore reports exec enforcement as `Partial`,
-  `sandbox_enforcement_ready()` remains false on Windows, and Modded/Paranoid
-  fail closed. Shipping Windows presets as available requires a
-  security-boundary-grade exact descendant exec mechanism or an explicit future
-  decision to change the portable contract.
 - Windows maps portable native-image load to NTFS `FILE_EXECUTE`, because Windows
   exposes no load-only file right. Consequently, loadable roots also have
   OS-level execute access even though they are not members of the portable exec
-  allowlist. This is an additional reason the Adapter reports descendant exec as
-  `Partial` and the parity gate remains fail-closed.
-- The Adapter's trusted sidecar can enter AppContainer as a hardened
-  trampoline/supervisor and create one real target with
+  allowlist. Process creation is independently blocked by the target token's
+  no-child policy.
+- The Adapter's trusted sidecar enters AppContainer as a hardened
+  trampoline/supervisor and creates one real target with
   `PROCESS_CREATION_CHILD_PROCESS_RESTRICTED`. It supplies an exact inherited
   stdio handle list and, before starting the target, adds broker-process deny
   ACEs for both Everyone and Owner Rights. Denying Owner Rights suppresses the
   process owner's otherwise implicit ability to rewrite the DACL. Adversarial
   probes cover System32 executables, writable/loadable-root executables, and
   broker ACL replacement, ownership, termination, process creation, handle
-  duplication, and memory-injection rights.
-- This Windows primitive is deny-all, not an exact descendant allowlist. It is
-  suitable for the untrusted game JVM but cannot be placed on the current initial
-  target: the launcher-owned exit-handler Java process must create the game JVM,
-  hooks may create a shell, and a sandbox-outside wrapper must create Java. The
-  production launch graph must broker those trusted transitions and apply the
-  deny-all token to the actual game process before Windows exec can report
-  `Enforced` or the parity gate can open.
+  duplication, memory-injection rights, and access to an unsandboxed same-user
+  supervisor.
+- The launcher-owned exit handler stays outside AppContainer. `piston-lib`
+  passes it a structured, repeated argument vector for the sandbox prefix; the
+  handler prepends that exact vector independently to the pre-hook shell, game
+  JVM, and post-hook shell. The helper validates each initial target against the
+  exec allowlist before applying AppContainer and the token-level no-child rule.
+  Log relay, exit code/status, descendant-window discovery, graceful close, and
+  forced tree termination continue through the trusted supervisor/helper chain.
+- The policy JSON is stored outside the AppContainer-writable scratch directory,
+  preventing the game from broadening the later post-hook invocation. A named
+  per-profile mutex is held for each helper invocation's full lifetime, so a
+  running same-profile target cannot race a newly created trampoline before it
+  hardens its DACL. This intentionally serializes simultaneous launches of the
+  same Instance profile.
+- The Windows primitive is deny-all, not an exact descendant allowlist. The
+  portable exec list is a maximum-authority policy, so denying even listed game
+  descendants is secure but may be less compatible than macOS/Linux. Hooks get
+  a separately validated shell target and can use shell built-ins; their external
+  child processes remain denied. Generic sandbox-outside wrappers fail closed
+  because they must create Java; wrapper-outside remains explicitly weaker.
+- With these production boundaries, the Adapter reports exec as `Enforced`,
+  `sandbox_enforcement_ready()` is true, and Modded/Paranoid pass the parity
+  gate on supported Windows systems. AppContainer still cannot use localhost
+  without an administrator-managed loopback exemption; Vesta does not silently
+  create or request that machine-level exemption.
 
 ## Consequences
 
 - Locality: OS sandbox mechanics stay in `vesta-sandbox`; Vesta settings stay in
   Tauri; Minecraft launch correctness stays in `piston-lib`.
-- Leverage: one prepare/apply Interface confines the whole Play process tree.
+- Leverage: one prepare/apply Interface confines the untrusted Play process
+  graph while trusted lifecycle supervision stays observable to the launcher.
 - Shared runtime roots and managed Java remain readable but cannot be mutated by
   hostile game code. Writable extras that overlap trusted Java or wrapper paths
   are rejected before launcher-owned verification can execute them.

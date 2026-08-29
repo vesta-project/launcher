@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Where a prepared OS sandbox command is composed into the launch graph.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SandboxCommandPlacement {
+    /// Wrap the launcher-visible command (the portable macOS/Linux behavior).
+    #[default]
+    WholeCommand,
+    /// Keep trusted exit supervision outside and wrap the game plus each hook.
+    GameAndHooks,
+}
+
 /// Specification for launching a game instance
 #[derive(Debug, Clone)]
 pub struct LaunchSpec {
@@ -89,6 +99,10 @@ pub struct LaunchSpec {
     /// When true, `sandbox_prefix` wraps the entire command including any user wrapper.
     /// When false, the user wrapper stays outermost and the prefix is inserted before Java.
     pub sandbox_wraps_entire_command: bool,
+
+    /// Whether the prefix wraps the outer command or is delegated to the
+    /// trusted exit supervisor for the game and hooks.
+    pub sandbox_command_placement: SandboxCommandPlacement,
 
     /// Private host-created paths to remove if launch fails or after the game exits.
     pub sandbox_cleanup_paths: Vec<PathBuf>,
@@ -266,6 +280,7 @@ mod tests {
             post_exit_hook: None,
             sandbox_prefix: None,
             sandbox_wraps_entire_command: true,
+            sandbox_command_placement: Default::default(),
             sandbox_cleanup_paths: Vec::new(),
         };
 
@@ -302,6 +317,7 @@ mod tests {
             post_exit_hook: None,
             sandbox_prefix: None,
             sandbox_wraps_entire_command: true,
+            sandbox_command_placement: Default::default(),
             sandbox_cleanup_paths: Vec::new(),
         };
 

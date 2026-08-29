@@ -6,7 +6,7 @@
 
 use crate::enforcement::{EnforcementReport, EnforcementStatus};
 use crate::policy::{SandboxPolicy, WrapperNesting};
-use crate::spawn::{RunPlan, SandboxedSpawn};
+use crate::spawn::{RunPlan, SandboxCommandPlacement, SandboxedSpawn};
 use std::path::{Path, PathBuf};
 
 pub(crate) fn prepare(
@@ -85,6 +85,7 @@ pub(crate) fn prepare(
         env,
         cwd: run_plan.cwd.clone(),
         pre_exec_notes: notes.clone(),
+        placement: SandboxCommandPlacement::WholeCommand,
         cleanup_paths: vec![sandbox_temp],
     };
 
@@ -116,6 +117,7 @@ fn unsupported_with_note(
             env: run_plan.env.clone(),
             cwd: run_plan.cwd.clone(),
             pre_exec_notes: notes.clone(),
+            placement: SandboxCommandPlacement::WholeCommand,
             cleanup_paths: Vec::new(),
         },
         EnforcementReport {

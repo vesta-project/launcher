@@ -4,7 +4,7 @@ use crate::game::launcher::{
     classpath::{build_classpath_filtered, validate_classpath},
     natives::extract_natives,
     registry::register_instance,
-    types::{GameInstance, LaunchResult, LaunchSpec},
+    types::{GameInstance, LaunchResult, LaunchSpec, SandboxCommandPlacement},
 };
 use crate::game::runtime_plan::{RuntimePlan, RuntimeRequest};
 use crate::utils::process::PistonCommandExt;
@@ -301,6 +301,14 @@ pub async fn launch_prepared_game(
         .as_ref()
         .map(|w| !w.trim().is_empty())
         .unwrap_or(false);
+    validate_sandbox_command_graph(
+        spec.sandbox_command_placement,
+        spec.sandbox_prefix.as_deref(),
+        spec.exit_handler_jar.is_some(),
+        spec.pre_launch_hook.is_some() || spec.post_exit_hook.is_some(),
+        has_user_wrapper,
+        spec.sandbox_wraps_entire_command,
+    )?;
     let (executable, initial_args) = if let Some(ref wrapper) = spec.wrapper_command {
         let parts = shlex::split(wrapper)
             .unwrap_or_else(|| wrapper.split_whitespace().map(|s| s.to_string()).collect());
@@ -313,13 +321,22 @@ pub async fn launch_prepared_game(
         (spec.java_path.to_string_lossy().to_string(), Vec::new())
     };
 
-    let (executable, initial_args) = apply_sandbox_prefix(
-        executable,
-        initial_args,
-        has_user_wrapper,
-        &spec.sandbox_prefix,
-        spec.sandbox_wraps_entire_command,
-    );
+    let delegate_sandbox_to_exit_handler = spec.exit_handler_jar.is_some()
+        && spec.sandbox_command_placement == SandboxCommandPlacement::GameAndHooks;
+    let (executable, initial_args) = if delegate_sandbox_to_exit_handler {
+        // Windows keeps the launcher-owned exit supervisor outside the
+        // AppContainer. It will create independently restricted helper
+        // invocations for hooks and the actual game JVM.
+        (executable, initial_args)
+    } else {
+        apply_sandbox_prefix(
+            executable,
+            initial_args,
+            has_user_wrapper,
+            &spec.sandbox_prefix,
+            spec.sandbox_wraps_entire_command,
+        )
+    };
 
     if let Some(ref exit_handler_jar) = spec.exit_handler_jar {
         // Wrap with exit handler JAR
@@ -358,6 +375,10 @@ pub async fn launch_prepared_game(
         if let Some(ref post_hook) = spec.post_exit_hook {
             command.arg("--post-exit-hook");
             command.arg(post_hook);
+        }
+
+        if delegate_sandbox_to_exit_handler {
+            command.args(exit_handler_sandbox_args(&spec.sandbox_prefix));
         }
 
         command.arg("--");
@@ -454,6 +475,9 @@ pub async fn launch_prepared_game(
         if let Some(ref post_hook) = spec.post_exit_hook {
             logged_cmd.push("--post-exit-hook".to_string());
             logged_cmd.push(post_hook.clone());
+        }
+        if delegate_sandbox_to_exit_handler {
+            logged_cmd.extend(exit_handler_sandbox_args(&spec.sandbox_prefix));
         }
         logged_cmd.push("--".to_string());
         logged_cmd.extend(game_base_command.iter().cloned());
@@ -639,6 +663,45 @@ pub async fn launch_prepared_game(
         log_file,
         handle,
     })
+}
+
+fn validate_sandbox_command_graph(
+    placement: SandboxCommandPlacement,
+    sandbox_prefix: Option<&[String]>,
+    has_exit_handler: bool,
+    has_hooks: bool,
+    has_user_wrapper: bool,
+    sandbox_wraps_entire_command: bool,
+) -> Result<()> {
+    if placement != SandboxCommandPlacement::GameAndHooks {
+        return Ok(());
+    }
+    if sandbox_prefix.is_none_or(|prefix| prefix.is_empty()) {
+        anyhow::bail!("GameAndHooks sandbox placement requires a non-empty sandbox command prefix");
+    }
+    if !has_exit_handler && has_hooks {
+        anyhow::bail!(
+            "GameAndHooks sandbox placement requires an exit supervisor when hooks are configured"
+        );
+    }
+    if has_user_wrapper && sandbox_wraps_entire_command {
+        anyhow::bail!(
+            "GameAndHooks cannot place a generic wrapper inside the no-child sandbox boundary; use wrapper-outside"
+        );
+    }
+    Ok(())
+}
+
+/// Encode a prefix as repeated option/value pairs so no quoting or delimiter
+/// convention can alter an argument. The Java exit supervisor reconstructs the
+/// exact vector and prepends it to the game and hook shell commands.
+fn exit_handler_sandbox_args(sandbox_prefix: &Option<Vec<String>>) -> Vec<String> {
+    sandbox_prefix
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .flat_map(|arg| ["--sandbox-prefix-arg".to_string(), arg.clone()])
+        .collect()
 }
 
 /// Apply an optional OS sandbox argv prefix around the resolved executable.
@@ -885,6 +948,77 @@ mod tests {
             args,
             vec!["--wrapper-arg", "/usr/bin/sandbox-exec", "-p", "profile"]
         );
+    }
+
+    #[test]
+    fn exit_handler_receives_lossless_repeated_sandbox_prefix_arguments() {
+        let prefix = Some(vec![
+            r"C:\Program Files\Vesta\vesta-sandbox-exec.exe".to_string(),
+            "--windows-policy".to_string(),
+            r"C:\Temp\policy with spaces.json".to_string(),
+            "--".to_string(),
+        ]);
+
+        assert_eq!(
+            exit_handler_sandbox_args(&prefix),
+            vec![
+                "--sandbox-prefix-arg",
+                r"C:\Program Files\Vesta\vesta-sandbox-exec.exe",
+                "--sandbox-prefix-arg",
+                "--windows-policy",
+                "--sandbox-prefix-arg",
+                r"C:\Temp\policy with spaces.json",
+                "--sandbox-prefix-arg",
+                "--",
+            ]
+        );
+    }
+
+    #[test]
+    fn game_and_hooks_placement_fails_closed_without_a_prefix() {
+        for prefix in [None, Some(Vec::<String>::new())] {
+            assert!(validate_sandbox_command_graph(
+                SandboxCommandPlacement::GameAndHooks,
+                prefix.as_deref(),
+                true,
+                false,
+                false,
+                true,
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn game_and_hooks_rejects_unsupervised_hooks_and_enclosed_wrappers() {
+        let prefix = ["vesta-sandbox-exec".to_string()];
+        assert!(validate_sandbox_command_graph(
+            SandboxCommandPlacement::GameAndHooks,
+            Some(&prefix),
+            false,
+            true,
+            false,
+            true,
+        )
+        .is_err());
+        assert!(validate_sandbox_command_graph(
+            SandboxCommandPlacement::GameAndHooks,
+            Some(&prefix),
+            true,
+            false,
+            true,
+            true,
+        )
+        .is_err());
+        assert!(validate_sandbox_command_graph(
+            SandboxCommandPlacement::GameAndHooks,
+            Some(&prefix),
+            true,
+            true,
+            true,
+            false,
+        )
+        .is_ok());
     }
 
     #[test]

@@ -55,6 +55,33 @@ pub(crate) struct PreparedInstanceLaunch {
     pub offline: bool,
 }
 
+#[cfg(target_os = "windows")]
+fn validate_windows_sandbox_launch_graph(
+    preset: vesta_sandbox::SandboxPreset,
+    wrapper_nesting: vesta_sandbox::WrapperNesting,
+    wrapper_command: Option<&str>,
+    has_hooks: bool,
+    exit_handler_available: bool,
+) -> Result<(), String> {
+    if preset == vesta_sandbox::SandboxPreset::Trusted {
+        return Ok(());
+    }
+    let has_wrapper = wrapper_command.is_some_and(|wrapper| !wrapper.trim().is_empty());
+    if has_wrapper && wrapper_nesting == vesta_sandbox::WrapperNesting::SandboxOutside {
+        return Err(
+            "Windows sandboxing cannot place a generic wrapper inside the no-child game boundary because the wrapper must start Java. Select wrapper-outside or remove the wrapper."
+                .to_string(),
+        );
+    }
+    if has_hooks && !exit_handler_available {
+        return Err(
+            "Windows sandboxed hooks require the bundled exit-handler.jar, but it was not found."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 pub(crate) async fn prepare_instance_launch(
     app_handle: &tauri::AppHandle,
     instance_data: &Instance,
@@ -281,6 +308,23 @@ pub(crate) async fn prepare_instance_launch(
     let log_file = spec_data_dir
         .join("logs")
         .join(format!("{}.log", instance_id));
+
+    #[cfg(target_os = "windows")]
+    {
+        let has_hooks = res_pre_launch_hook
+            .as_deref()
+            .is_some_and(|hook| !hook.trim().is_empty())
+            || res_post_exit_hook
+                .as_deref()
+                .is_some_and(|hook| !hook.trim().is_empty());
+        validate_windows_sandbox_launch_graph(
+            resolved_sandbox.preset,
+            resolved_sandbox.wrapper_nesting,
+            res_wrapper_command.as_deref(),
+            has_hooks,
+            exit_handler_jar.is_some(),
+        )?;
+    }
     let log_dir = log_file
         .parent()
         .ok_or_else(|| "Sandbox log path has no parent directory".to_string())?;
@@ -345,31 +389,50 @@ pub(crate) async fn prepare_instance_launch(
     for note in &sandbox_report.notes {
         log::info!("[launch_instance] sandbox: {note}");
     }
-    let (sandbox_prefix, sandbox_wraps_entire_command, sandbox_env, sandbox_cleanup_paths) =
-        match sandbox_spawn {
-            vesta_sandbox::SandboxedSpawn::Passthrough => (None, true, None, Vec::new()),
-            vesta_sandbox::SandboxedSpawn::Prepared {
-                program,
-                args,
-                env,
-                pre_exec_notes,
-                cleanup_paths,
-                ..
-            } => {
-                for note in pre_exec_notes {
-                    log::info!("[launch_instance] sandbox spawn: {note}");
-                }
-                let mut prefix = vec![program.to_string_lossy().to_string()];
-                prefix.extend(args);
-                (
-                    Some(prefix),
-                    resolved_sandbox.wrapper_nesting
-                        == vesta_sandbox::WrapperNesting::SandboxOutside,
-                    Some(env),
-                    cleanup_paths,
-                )
+    let (
+        sandbox_prefix,
+        sandbox_wraps_entire_command,
+        sandbox_command_placement,
+        sandbox_env,
+        sandbox_cleanup_paths,
+    ) = match sandbox_spawn {
+        vesta_sandbox::SandboxedSpawn::Passthrough => (
+            None,
+            true,
+            piston_lib::game::launcher::SandboxCommandPlacement::WholeCommand,
+            None,
+            Vec::new(),
+        ),
+        vesta_sandbox::SandboxedSpawn::Prepared {
+            program,
+            args,
+            env,
+            pre_exec_notes,
+            placement,
+            cleanup_paths,
+            ..
+        } => {
+            for note in pre_exec_notes {
+                log::info!("[launch_instance] sandbox spawn: {note}");
             }
-        };
+            let mut prefix = vec![program.to_string_lossy().to_string()];
+            prefix.extend(args);
+            (
+                Some(prefix),
+                resolved_sandbox.wrapper_nesting == vesta_sandbox::WrapperNesting::SandboxOutside,
+                match placement {
+                    vesta_sandbox::SandboxCommandPlacement::WholeCommand => {
+                        piston_lib::game::launcher::SandboxCommandPlacement::WholeCommand
+                    }
+                    vesta_sandbox::SandboxCommandPlacement::GameAndHooks => {
+                        piston_lib::game::launcher::SandboxCommandPlacement::GameAndHooks
+                    }
+                },
+                Some(env),
+                cleanup_paths,
+            )
+        }
+    };
     if let Some(prepared_env) = sandbox_env {
         env_vars = prepared_env;
     }
@@ -422,6 +485,7 @@ pub(crate) async fn prepare_instance_launch(
         post_exit_hook: res_post_exit_hook,
         sandbox_prefix,
         sandbox_wraps_entire_command,
+        sandbox_command_placement,
         sandbox_cleanup_paths,
     };
 
@@ -766,6 +830,8 @@ fn restore_installed_status(app_handle: &tauri::AppHandle, inst: &Instance) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
+    use super::validate_windows_sandbox_launch_graph;
     use super::{game_proxy_jvm_args, parse_user_jvm_args};
 
     #[test]
@@ -847,5 +913,41 @@ mod tests {
 
         assert_eq!(args[0], "-Xmx2G");
         assert!(args.contains(&"-Dhttp.proxyHost=127.0.0.1".to_string()));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn windows_rejects_a_sandbox_outside_wrapper() {
+        let error = validate_windows_sandbox_launch_graph(
+            vesta_sandbox::SandboxPreset::Modded,
+            vesta_sandbox::WrapperNesting::SandboxOutside,
+            Some("wrapper.exe --flag"),
+            false,
+            true,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Select wrapper-outside"));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn windows_supports_wrapper_outside_and_requires_supervision_for_hooks() {
+        assert!(validate_windows_sandbox_launch_graph(
+            vesta_sandbox::SandboxPreset::Modded,
+            vesta_sandbox::WrapperNesting::WrapperOutside,
+            Some("wrapper.exe --flag"),
+            true,
+            true,
+        )
+        .is_ok());
+        assert!(validate_windows_sandbox_launch_graph(
+            vesta_sandbox::SandboxPreset::Paranoid,
+            vesta_sandbox::WrapperNesting::SandboxOutside,
+            None,
+            true,
+            false,
+        )
+        .is_err());
     }
 }

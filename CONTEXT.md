@@ -63,8 +63,11 @@ Primary modules:
 
 ### Sandbox Policy
 
-The user-facing confinement settings for an Instance's Play process tree: exit
-handler, an optionally enclosed wrapper, hooks, game JVM, and child processes.
+The user-facing confinement settings for an Instance's Play process graph:
+hooks, game JVM, and child processes, plus an optionally enclosed wrapper. On
+Windows, the launcher-owned exit handler is a trusted supervisor outside the
+AppContainer and starts the hooks and game through separate restricted helper
+invocations.
 Launcher-owned installation, repair, Java management, and loader processors are
 trusted work outside this boundary. Presets are Trusted (default, no sandbox),
 Modded (filesystem and exec allowlists; network and mic on), and Paranoid (same
@@ -103,12 +106,15 @@ ACL journal without traversing reparse points. A trusted in-container trampoline
 can create one target with Windows' token-level no-child policy, an exact stdio
 handle list, and a broker DACL that denies all access to both Everyone and Owner
 Rights so the target cannot rewrite or bypass the broker boundary;
-this blocks both System32 and loadable-root child execution. The production
-exit-handler/hook/wrapper launch graph is not migrated around that deny-all
-boundary yet. Classic AppContainer also cannot distinguish native-image loading
-from OS execute access, so Windows exec remains Partial and playable presets
-remain fail-closed rather than advertised as full parity. Ship order is policy/UI
-and crate first, then macOS, Linux, and Windows adapters.
+this blocks both System32 and loadable-root child execution. The trusted exit
+supervisor delegates the pre-hook shell, game JVM, and post-hook shell to
+separate helper invocations. A per-profile named mutex covers each invocation's
+complete lifetime, closing the same-profile broker startup race, and the reusable
+policy file is outside writable sandbox TEMP. Windows reports exec enforcement
+as Enforced and exposes playable presets. Its no-child policy is intentionally
+stricter than the portable maximum-authority allowlist: game descendants are
+denied even when their executable is listed. Generic sandbox-outside wrappers
+are rejected; wrapper-outside remains an explicit weaker compatibility mode.
 
 Primary modules:
 
