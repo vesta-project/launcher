@@ -102,16 +102,25 @@ what was actually enforced. If a control required by the policy cannot be
 enforced, launch fails closed. The Windows Implementation has a bundled sidecar,
 an AppContainer plus an atomically inherited kill-on-close Job, and a stable
 per-Instance profile whose synchronized NTFS grants are recorded in a protected
-ACL journal without traversing reparse points. A trusted in-container trampoline
+ACL journal without traversing reparse points. Declared roots also receive
+journaled, non-inheriting resolution ACEs on their private ancestor chain so
+Win32 canonicalization (including Java `Path.toRealPath`) can reach them. These
+permit traversal, metadata, and ancestor-name enumeration, but no child-file
+reads or writes. Because a standard user cannot grant the package SID on shared
+profile parents such as `C:\Users`, sandboxed Java is launched through a
+short-lived, mutex-reserved DOS drive rooted directly at its allowlisted runtime;
+the mapping is removed when the launch ends. A trusted in-container trampoline
 can create one target with Windows' token-level no-child policy, an exact stdio
 handle list, and a broker DACL that denies all access to both Everyone and Owner
 Rights so the target cannot rewrite or bypass the broker boundary;
 this blocks both System32 and loadable-root child execution. The trusted exit
 supervisor delegates the pre-hook shell, game JVM, and post-hook shell to
 separate helper invocations. A per-profile named mutex covers each invocation's
-complete lifetime, closing the same-profile broker startup race, and the reusable
-policy file is outside writable sandbox TEMP. Windows reports exec enforcement
-as Enforced and exposes playable presets. Its no-child policy is intentionally
+complete lifetime, closing the same-profile broker startup race. A second named
+mutex serializes the complete ACL journal/DACL transaction across profiles so
+concurrent Instances cannot lose one another's shared runtime grants. The
+reusable policy file is outside writable sandbox TEMP. Windows reports exec
+enforcement as Enforced and exposes playable presets. Its no-child policy is intentionally
 stricter than the portable maximum-authority allowlist: game descendants are
 denied even when their executable is listed. Generic sandbox-outside wrappers
 are rejected; wrapper-outside remains an explicit weaker compatibility mode.

@@ -142,6 +142,39 @@ both Modules and pull unused OS code into every build.
   policy roots have their package-SID grants revoked. Recursive synchronization
   never traverses reparse points. Keeping the profile stable avoids recursively
   rewriting large Java and game trees on every launch.
+- The complete journal and DACL reconciliation transaction is serialized by a
+  cross-profile named mutex acquired after the per-profile lifetime mutex.
+  Different Instances share assets, libraries, versions, natives, and JRE
+  roots, so concurrent read/modify/write DACL updates must preserve every
+  active package SID.
+- Each declared filesystem or executable path adds journaled, non-inheriting
+  directory-resolution ACEs to its private parent chain. They combine
+  `FILE_GENERIC_EXECUTE` with `FILE_LIST_DIRECTORY`, which Win32
+  `FindFirstFile` requires while Java `Path.toRealPath` resolves
+  `conf/security/java.security`. This exposes ancestor entry names, but not
+  child-file contents, writes, deletes, or inherited access. The walk stops
+  before drive/UNC share roots and known Windows baseline roots, and stale
+  ancestor ACEs are revoked through the same policy transaction. Paths inside
+  the current user profile stop at that profile root rather than attempting an
+  elevated DACL change on the shared `C:\Users` parent.
+- Exact ancestor ACEs use `SetFileSecurityW`, whose directory updates do not
+  propagate the package SID to children. Recursive declared roots retain one
+  inheritable root ACE. ACL journal format 2 migrates and removes the former
+  explicit per-descendant grants once, so later root revocation cannot leave a
+  stale child grant behind. Cold synchronization scans for protected DACLs that
+  cannot inherit the root ACE and grants only those boundaries directly;
+  revocation performs the matching protected-boundary scan. Reparse targets are
+  never followed.
+- Java performs component-by-component `FindFirstFile` canonicalization of
+  `java.home/conf/security/java.security`. Standard users cannot add a package
+  SID to shared parents such as `C:\Users`, so the helper launches `java.exe` or
+  `javaw.exe` through a short-lived DOS drive rooted directly at the allowlisted
+  runtime. Free letters are coordinated with per-letter named mutexes and the
+  exact mapping is removed when the sandboxed process exits. This changes only
+  the spelling of the executable path; policy validation and NTFS grants remain
+  attached to the canonical runtime. A caller-supplied `-Djava.home` is rejected
+  because it would bypass this compatibility mapping and recreate the provider
+  initialization failure.
 - Network-off and microphone-off are enforced by omitting AppContainer
   capabilities. Network-on grants internet, client/server, and private-network
   capabilities, but Windows loopback remains unavailable without a machine-level

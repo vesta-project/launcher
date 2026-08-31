@@ -20,10 +20,13 @@ use std::path::{Path, PathBuf};
 const FILE_GENERIC_READ: u32 = 1_179_785;
 const FILE_GENERIC_WRITE: u32 = 1_179_926;
 const FILE_GENERIC_EXECUTE: u32 = 1_179_808;
+const FILE_LIST_DIRECTORY: u32 = 0x0000_0001;
+const DIRECTORY_RESOLVE_ACCESS: u32 = FILE_GENERIC_EXECUTE | FILE_LIST_DIRECTORY;
+const ACL_JOURNAL_FORMAT_VERSION: u32 = 2;
 const DELETE: u32 = 65_536;
 const FILE_DELETE_CHILD: u32 = 64;
 const WRITE_AUTHORITY: u32 = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 | DELETE;
-const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "4";
+const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "5";
 
 pub fn windows_helper_path() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
@@ -197,8 +200,6 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
             canonical_program.display()
         ));
     }
-    let launch_program = win32_process_path(&canonical_program);
-
     let profile_name = profile_name_for_policy(&policy)?;
     // A restricted target shares this AppContainer identity with its broker.
     // Serialize the complete lifetime per profile so no already-running target
@@ -227,6 +228,26 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
         access_policy.exec_allowlist.push(broker_program.clone());
     }
     sync_policy_access(&profile, &access_policy, &profile_name)?;
+    // Java 25 canonicalizes java.home one component at a time with
+    // FindFirstFile. A standard user cannot add an AppContainer ACE to the
+    // shared C:\Users directory, even though the declared JRE itself is
+    // allowlisted. Launch Java through a short-lived DOS drive rooted directly
+    // at its runtime so canonicalization never crosses that shared directory.
+    let java_runtime_drive = JavaRuntimeDrive::for_program(&canonical_program)?;
+    if java_runtime_drive.is_some()
+        && invocation
+            .args
+            .iter()
+            .any(|arg| arg.starts_with("-Djava.home="))
+    {
+        return Err(
+            "sandboxed Java reserves java.home for its allowlisted runtime mapping".to_string(),
+        );
+    }
+    let launch_program = java_runtime_drive
+        .as_ref()
+        .map(|drive| drive.program.clone())
+        .unwrap_or_else(|| win32_process_path(&canonical_program));
 
     // A registry-read compatibility capability keeps Win32/JVM startup working
     // while adding no filesystem, network, microphone, or device authority.
@@ -310,9 +331,9 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
     wait_result
 }
 
-struct ProfileLaunchLock(windows_sys::Win32::Foundation::HANDLE);
+struct NamedMutexGuard(windows_sys::Win32::Foundation::HANDLE);
 
-impl Drop for ProfileLaunchLock {
+impl Drop for NamedMutexGuard {
     fn drop(&mut self) {
         unsafe {
             windows_sys::Win32::System::Threading::ReleaseMutex(self.0);
@@ -321,18 +342,163 @@ impl Drop for ProfileLaunchLock {
     }
 }
 
-fn acquire_profile_launch_lock(profile_name: &str) -> Result<ProfileLaunchLock, String> {
+struct JavaRuntimeDrive {
+    program: PathBuf,
+    device_name: Vec<u16>,
+    target_name: Vec<u16>,
+    mutex: windows_sys::Win32::Foundation::HANDLE,
+}
+
+impl JavaRuntimeDrive {
+    fn for_program(program: &Path) -> Result<Option<Self>, String> {
+        let is_java = program
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                name.eq_ignore_ascii_case("java.exe") || name.eq_ignore_ascii_case("javaw.exe")
+            });
+        if !is_java {
+            return Ok(None);
+        }
+        let java_home = program
+            .parent()
+            .and_then(Path::parent)
+            .ok_or_else(|| format!("Java executable has no runtime root: {}", program.display()))?;
+        let relative_program = program.strip_prefix(java_home).map_err(|_| {
+            format!(
+                "Java executable {} is outside its inferred runtime {}",
+                program.display(),
+                java_home.display()
+            )
+        })?;
+        let target = java_drive_target(java_home)?;
+
+        use windows_sys::Win32::Foundation::{
+            CloseHandle, ERROR_FILE_NOT_FOUND, WAIT_ABANDONED, WAIT_OBJECT_0,
+        };
+        use windows_sys::Win32::Storage::FileSystem::{
+            DefineDosDeviceW, QueryDosDeviceW, DDD_NO_BROADCAST_SYSTEM, DDD_RAW_TARGET_PATH,
+        };
+        use windows_sys::Win32::System::Threading::{
+            CreateMutexW, ReleaseMutex, WaitForSingleObject,
+        };
+
+        for letter in (b'D'..=b'Z').rev() {
+            let drive = format!("{}:", letter as char);
+            let device_name: Vec<u16> = drive.encode_utf16().chain(Some(0)).collect();
+            let mutex_name: Vec<u16> = format!("Local\\VestaSandboxJavaDrive-{}", letter as char)
+                .encode_utf16()
+                .chain(Some(0))
+                .collect();
+            let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, mutex_name.as_ptr()) };
+            if mutex.is_null() {
+                continue;
+            }
+            let wait = unsafe { WaitForSingleObject(mutex, 0) };
+            if wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED {
+                unsafe { CloseHandle(mutex) };
+                continue;
+            }
+
+            let mut existing = [0u16; 512];
+            let occupied = unsafe {
+                QueryDosDeviceW(
+                    device_name.as_ptr(),
+                    existing.as_mut_ptr(),
+                    existing.len() as u32,
+                ) != 0
+            };
+            if occupied
+                || io::Error::last_os_error().raw_os_error() != Some(ERROR_FILE_NOT_FOUND as i32)
+            {
+                unsafe {
+                    ReleaseMutex(mutex);
+                    CloseHandle(mutex);
+                }
+                continue;
+            }
+
+            let target_name: Vec<u16> = target.encode_utf16().chain(Some(0)).collect();
+            let defined = unsafe {
+                DefineDosDeviceW(
+                    DDD_RAW_TARGET_PATH | DDD_NO_BROADCAST_SYSTEM,
+                    device_name.as_ptr(),
+                    target_name.as_ptr(),
+                )
+            };
+            if defined == 0 {
+                unsafe {
+                    ReleaseMutex(mutex);
+                    CloseHandle(mutex);
+                }
+                continue;
+            }
+
+            return Ok(Some(Self {
+                program: PathBuf::from(format!("{}:\\", letter as char)).join(relative_program),
+                device_name,
+                target_name,
+                mutex,
+            }));
+        }
+
+        Err("no free DOS drive is available for sandboxed Java path resolution".to_string())
+    }
+}
+
+impl Drop for JavaRuntimeDrive {
+    fn drop(&mut self) {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::Storage::FileSystem::{
+            DefineDosDeviceW, DDD_EXACT_MATCH_ON_REMOVE, DDD_NO_BROADCAST_SYSTEM,
+            DDD_RAW_TARGET_PATH, DDD_REMOVE_DEFINITION,
+        };
+        use windows_sys::Win32::System::Threading::ReleaseMutex;
+
+        unsafe {
+            DefineDosDeviceW(
+                DDD_REMOVE_DEFINITION
+                    | DDD_EXACT_MATCH_ON_REMOVE
+                    | DDD_RAW_TARGET_PATH
+                    | DDD_NO_BROADCAST_SYSTEM,
+                self.device_name.as_ptr(),
+                self.target_name.as_ptr(),
+            );
+            ReleaseMutex(self.mutex);
+            CloseHandle(self.mutex);
+        }
+    }
+}
+
+fn java_drive_target(java_home: &Path) -> Result<String, String> {
+    let path = java_home.to_string_lossy();
+    if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+        return Ok(format!(r"\??\UNC\{unc}"));
+    }
+    if let Some(dos) = path.strip_prefix(r"\\?\") {
+        return Ok(format!(r"\??\{dos}"));
+    }
+    if let Some(unc) = path.strip_prefix(r"\\") {
+        return Ok(format!(r"\??\UNC\{unc}"));
+    }
+    if java_home.is_absolute() {
+        return Ok(format!(r"\??\{path}"));
+    }
+    Err(format!(
+        "Java runtime path is not absolute: {}",
+        java_home.display()
+    ))
+}
+
+fn acquire_named_mutex(name: &str, purpose: &str) -> Result<NamedMutexGuard, String> {
     use windows_sys::Win32::Foundation::{CloseHandle, WAIT_ABANDONED, WAIT_OBJECT_0};
     use windows_sys::Win32::System::Threading::{CreateMutexW, WaitForSingleObject, INFINITE};
 
-    let name: Vec<u16> = format!(r"Local\VestaSandboxLaunch-{profile_name}")
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
+    let name: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
     let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
     if handle.is_null() {
         return Err(format!(
-            "could not create per-profile launch mutex: {}",
+            "could not create {purpose} mutex: {}",
             io::Error::last_os_error()
         ));
     }
@@ -342,11 +508,28 @@ fn acquire_profile_launch_lock(profile_name: &str) -> Result<ProfileLaunchLock, 
             CloseHandle(handle);
         }
         return Err(format!(
-            "could not acquire per-profile launch mutex: {}",
+            "could not acquire {purpose} mutex: {}",
             io::Error::last_os_error()
         ));
     }
-    Ok(ProfileLaunchLock(handle))
+    Ok(NamedMutexGuard(handle))
+}
+
+fn acquire_profile_launch_lock(profile_name: &str) -> Result<NamedMutexGuard, String> {
+    acquire_named_mutex(
+        &format!(r"Local\VestaSandboxLaunch-{profile_name}"),
+        "per-profile launch",
+    )
+}
+
+fn acquire_acl_reconciliation_lock() -> Result<NamedMutexGuard, String> {
+    // Different instance profiles share launcher resource and JRE roots. ACL
+    // updates are read/modify/write operations, so serialize them across every
+    // profile or concurrent launches can lose (or resurrect) another SID ACE.
+    acquire_named_mutex(
+        r"Local\VestaSandboxAclReconciliation-v2",
+        "cross-profile ACL reconciliation",
+    )
 }
 
 /// Create the real AppContainer target with a token-level prohibition on child
@@ -792,6 +975,8 @@ struct AclEntry {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct AclJournal {
+    #[serde(default)]
+    format_version: u32,
     committed: bool,
     entries: Vec<AclEntry>,
 }
@@ -801,6 +986,10 @@ fn sync_policy_access(
     policy: &SandboxPolicy,
     profile_name: &str,
 ) -> Result<(), String> {
+    // Production callers already hold the per-profile lifetime mutex. Always
+    // acquire this cross-profile lock second and keep it across the complete
+    // journal plus DACL transaction.
+    let _acl_reconciliation_lock = acquire_acl_reconciliation_lock()?;
     let desired = compile_acl_entries(policy);
     let journal_path = acl_journal_path(profile_name)?;
     let journal_root = journal_path
@@ -816,7 +1005,24 @@ fn sync_policy_access(
             journal_root.display()
         ));
     }
-    let previous = read_acl_journal(&journal_path)?;
+    let mut previous = read_acl_journal(&journal_path)?;
+    if previous.format_version > ACL_JOURNAL_FORMAT_VERSION {
+        return Err(format!(
+            "sandbox ACL journal {} uses unsupported format {}",
+            journal_path.display(),
+            previous.format_version
+        ));
+    }
+    if previous.format_version < ACL_JOURNAL_FORMAT_VERSION && !previous.entries.is_empty() {
+        // Format 1 explicitly wrote the package SID onto every descendant.
+        // Remove those legacy ACEs once before switching to inheritable root
+        // grants; otherwise a later root revocation could leave explicit child
+        // grants behind.
+        for entry in &previous.entries {
+            revoke_legacy_acl_entry(entry, profile.sid.as_string())?;
+        }
+        previous = AclJournal::default();
+    }
     if previous.committed && previous.entries == desired {
         return Ok(());
     }
@@ -834,6 +1040,7 @@ fn sync_policy_access(
     write_acl_journal(
         &journal_path,
         &AclJournal {
+            format_version: ACL_JOURNAL_FORMAT_VERSION,
             committed: false,
             entries: desired.clone(),
         },
@@ -843,7 +1050,7 @@ fn sync_policy_access(
     for entry in &desired {
         let overlaps_removed = removed
             .iter()
-            .any(|removed| acl_entries_overlap(entry, removed));
+            .any(|removed| acl_revocation_affects(entry, removed));
         if !previous.committed || !previous_set.contains(entry) || overlaps_removed {
             grant_acl_entry(entry, profile)?;
         }
@@ -852,6 +1059,7 @@ fn sync_policy_access(
     write_acl_journal(
         &journal_path,
         &AclJournal {
+            format_version: ACL_JOURNAL_FORMAT_VERSION,
             committed: true,
             entries: desired,
         },
@@ -860,11 +1068,12 @@ fn sync_policy_access(
 
 fn compile_acl_entries(policy: &SandboxPolicy) -> Vec<AclEntry> {
     let mut entries: BTreeMap<(PathBuf, bool), u32> = BTreeMap::new();
-    for entry in policy
+    let filesystem_entries: Vec<_> = policy
         .filesystem_allowlist
         .iter()
         .chain(policy.extra_paths.iter())
-    {
+        .collect();
+    for entry in &filesystem_entries {
         let access = filesystem_access_mask(entry);
         if access != 0 {
             *entries
@@ -878,6 +1087,45 @@ fn compile_acl_entries(policy: &SandboxPolicy) -> Vec<AclEntry> {
             .entry((executable.clone(), is_directory))
             .or_default() |= FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
     }
+
+    // An AppContainer ACE on a declared leaf does not make its undeclared
+    // parents resolvable. This matters for APIs such as Path::toRealPath: Java
+    // calls FindFirstFile for every component before opening java.security,
+    // classpath JARs, and native images. Add non-inheriting traversal, metadata,
+    // and exact-directory listing authority without granting child-file reads.
+    let mut ancestor_sources: Vec<&Path> = filesystem_entries
+        .iter()
+        .map(|entry| entry.path.as_path())
+        .collect();
+    ancestor_sources.extend(policy.exec_allowlist.iter().map(PathBuf::as_path));
+    let user_profile = std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .and_then(|path| std::fs::canonicalize(path).ok());
+    for source in ancestor_sources {
+        // Platform-owned additions such as the private scratch directory are
+        // created after Tauri canonicalizes the user policy. Normalize again
+        // here so `C:\...` and `\\?\C:\...` cannot bypass the profile cutoff.
+        let source = std::fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
+        if is_appcontainer_baseline_path(&source) {
+            continue;
+        }
+        for ancestor in acl_ancestor_paths(&source, user_profile.as_deref()) {
+            let exact_key = (ancestor.clone(), false);
+            if let Some(access) = entries.get_mut(&exact_key) {
+                *access |= DIRECTORY_RESOLVE_ACCESS;
+                continue;
+            }
+            let recursive_key = (ancestor.clone(), true);
+            if entries
+                .get(&recursive_key)
+                .is_some_and(|access| access & DIRECTORY_RESOLVE_ACCESS == DIRECTORY_RESOLVE_ACCESS)
+            {
+                continue;
+            }
+            entries.insert(exact_key, DIRECTORY_RESOLVE_ACCESS);
+        }
+    }
+
     entries
         .into_iter()
         .map(|((path, recursive), access)| AclEntry {
@@ -888,9 +1136,30 @@ fn compile_acl_entries(policy: &SandboxPolicy) -> Vec<AclEntry> {
         .collect()
 }
 
-fn acl_entries_overlap(left: &AclEntry, right: &AclEntry) -> bool {
-    windows_path_starts_with(&left.path, &right.path)
-        || windows_path_starts_with(&right.path, &left.path)
+fn acl_ancestor_paths(path: &Path, user_profile: Option<&Path>) -> Vec<PathBuf> {
+    let within_user_profile =
+        user_profile.filter(|profile| windows_path_starts_with(path, profile));
+    let mut ancestors = Vec::new();
+    let mut current = path.parent();
+    while let Some(ancestor) = current {
+        // Never try to rewrite a drive root or UNC share root. Windows gives
+        // AppContainers the baseline traversal needed to reach child scopes.
+        if ancestor.parent().is_none() {
+            break;
+        }
+        if within_user_profile.is_some_and(|profile| !windows_path_starts_with(ancestor, profile)) {
+            break;
+        }
+        ancestors.push(ancestor.to_path_buf());
+        current = ancestor.parent();
+    }
+    ancestors
+}
+
+fn acl_revocation_affects(desired: &AclEntry, removed: &AclEntry) -> bool {
+    windows_paths_equal(&desired.path, &removed.path)
+        || (removed.recursive && windows_path_starts_with(&desired.path, &removed.path))
+        || (desired.recursive && windows_path_starts_with(&removed.path, &desired.path))
 }
 
 fn acl_journal_path(profile_name: &str) -> Result<PathBuf, String> {
@@ -999,39 +1268,74 @@ fn grant_path_recursive(
         return Ok(());
     }
     let is_recursive_directory = recursive && metadata.is_dir();
-    let resource = if is_recursive_directory {
-        ResourcePath::Directory(path.to_path_buf())
-    } else {
-        ResourcePath::File(path.to_path_buf())
-    };
-    grant_to_package(resource, &profile.sid, AccessMask(access)).map_err(|err| {
-        format!(
-            "could not grant AppContainer access to {}: {err}",
-            path.display()
-        )
-    })?;
+    grant_path_access(profile, path, is_recursive_directory, access)?;
     if is_recursive_directory {
-        // FILE_EXECUTE on a directory is traversal, not permission to execute
-        // files beneath it. Keep this ACE non-inheriting.
+        grant_protected_descendants(profile, path, access)?;
+    }
+    Ok(())
+}
+
+fn grant_path_access(
+    profile: &AppContainerProfile,
+    path: &Path,
+    recursive_directory: bool,
+    access: u32,
+) -> Result<(), String> {
+    if recursive_directory {
         grant_to_package(
-            ResourcePath::File(path.to_path_buf()),
+            ResourcePath::Directory(path.to_path_buf()),
             &profile.sid,
-            AccessMask(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE),
+            AccessMask(access),
         )
         .map_err(|err| {
             format!(
-                "could not grant AppContainer traversal to {}: {err}",
+                "could not grant AppContainer access to {}: {err}",
                 path.display()
             )
         })?;
+        // FILE_EXECUTE on a directory is traversal, not permission to execute
+        // files beneath it. Keep the additional root ACE non-inheriting and use
+        // SetFileSecurity so Windows does not reprocess the directory subtree.
+        grant_sid_access_exact(
+            path,
+            profile.sid.as_string(),
+            FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
+        )?;
+    } else {
+        grant_sid_access_exact(path, profile.sid.as_string(), access)?;
     }
-    if is_recursive_directory {
-        for child in std::fs::read_dir(path)
-            .map_err(|err| format!("could not enumerate {}: {err}", path.display()))?
-        {
-            let child = child
-                .map_err(|err| format!("could not enumerate child of {}: {err}", path.display()))?;
-            grant_path_recursive(profile, &child.path(), true, access)?;
+    // ResourcePath::Directory installs an object/container-inheriting ACE.
+    // NTFS propagates it to existing inheriting descendants and applies it to
+    // new descendants without walking the tree here. Reparse targets are not
+    // traversed by ACL inheritance, avoiding both the escape risk and the
+    // pathological per-file launch cost of explicit descriptor rewrites.
+    Ok(())
+}
+
+fn grant_protected_descendants(
+    profile: &AppContainerProfile,
+    root: &Path,
+    access: u32,
+) -> Result<(), String> {
+    use std::os::windows::fs::MetadataExt;
+
+    for child in std::fs::read_dir(root)
+        .map_err(|err| format!("could not enumerate {}: {err}", root.display()))?
+    {
+        let child = child
+            .map_err(|err| format!("could not enumerate child of {}: {err}", root.display()))?;
+        let path = child.path();
+        let metadata = std::fs::symlink_metadata(&path)
+            .map_err(|err| format!("could not inspect {}: {err}", path.display()))?;
+        if metadata.file_attributes() & 0x0000_0400 != 0 {
+            continue;
+        }
+        let is_directory = metadata.is_dir();
+        if dacl_is_protected(&path)? {
+            grant_path_access(profile, &path, is_directory, access)?;
+        }
+        if is_directory {
+            grant_protected_descendants(profile, &path, access)?;
         }
     }
     Ok(())
@@ -1041,14 +1345,114 @@ fn revoke_acl_entry(entry: &AclEntry, sid: &str) -> Result<(), String> {
     if !entry.path.exists() {
         return Ok(());
     }
-    match revoke_path_recursive(&entry.path, entry.recursive, sid) {
+    let recursive_directory = entry.recursive && entry.path.is_dir();
+    let result = (|| {
+        if recursive_directory {
+            revoke_protected_descendants(&entry.path, sid)?;
+        }
+        revoke_sid_access(&entry.path, sid, recursive_directory)
+    })();
+    match result {
         Ok(()) => Ok(()),
         Err(_) if is_appcontainer_baseline_path(&entry.path) => Ok(()),
         Err(err) => Err(err),
     }
 }
 
-fn revoke_path_recursive(path: &Path, recursive: bool, sid: &str) -> Result<(), String> {
+fn revoke_protected_descendants(root: &Path, sid: &str) -> Result<(), String> {
+    use std::os::windows::fs::MetadataExt;
+
+    for child in std::fs::read_dir(root).map_err(|err| {
+        format!(
+            "could not enumerate {} for ACL cleanup: {err}",
+            root.display()
+        )
+    })? {
+        let child = child.map_err(|err| {
+            format!(
+                "could not enumerate child of {} for ACL cleanup: {err}",
+                root.display()
+            )
+        })?;
+        let path = child.path();
+        let metadata = std::fs::symlink_metadata(&path).map_err(|err| {
+            format!(
+                "could not inspect {} for ACL cleanup: {err}",
+                path.display()
+            )
+        })?;
+        if metadata.file_attributes() & 0x0000_0400 != 0 {
+            continue;
+        }
+        let is_directory = metadata.is_dir();
+        if is_directory {
+            revoke_protected_descendants(&path, sid)?;
+        }
+        if dacl_is_protected(&path)? {
+            revoke_sid_access(&path, sid, is_directory)?;
+        }
+    }
+    Ok(())
+}
+
+fn dacl_is_protected(path: &Path) -> Result<bool, String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
+    use windows_sys::Win32::Security::{
+        GetSecurityDescriptorControl, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+        SECURITY_DESCRIPTOR_CONTROL, SE_DACL_PROTECTED,
+    };
+
+    let wide_path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    unsafe {
+        let status = GetNamedSecurityInfoW(
+            wide_path.as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut descriptor,
+        );
+        if status != 0 {
+            return Err(format!(
+                "could not inspect DACL inheritance on {}: error {status}",
+                path.display()
+            ));
+        }
+        let mut control: SECURITY_DESCRIPTOR_CONTROL = 0;
+        let mut revision = 0;
+        let ok = GetSecurityDescriptorControl(descriptor, &mut control, &mut revision);
+        LocalFree(descriptor);
+        if ok == 0 {
+            return Err(format!(
+                "GetSecurityDescriptorControl for {}: {}",
+                path.display(),
+                io::Error::last_os_error()
+            ));
+        }
+        Ok(control & SE_DACL_PROTECTED != 0)
+    }
+}
+
+fn revoke_legacy_acl_entry(entry: &AclEntry, sid: &str) -> Result<(), String> {
+    if !entry.path.exists() {
+        return Ok(());
+    }
+    revoke_path_recursive_legacy(&entry.path, entry.recursive, sid)?;
+    if entry.recursive && entry.path.is_dir() {
+        // The legacy root also carried an inheritable ACE. Propagate its
+        // removal once after exact descendant ACE cleanup so inherited copies
+        // cannot survive the migration.
+        revoke_sid_access(&entry.path, sid, true)?;
+    }
+    Ok(())
+}
+
+fn revoke_path_recursive_legacy(path: &Path, recursive: bool, sid: &str) -> Result<(), String> {
     use std::os::windows::fs::MetadataExt;
 
     let metadata = std::fs::symlink_metadata(path).map_err(|err| {
@@ -1073,22 +1477,37 @@ fn revoke_path_recursive(path: &Path, recursive: bool, sid: &str) -> Result<(), 
                     path.display()
                 )
             })?;
-            revoke_path_recursive(&child.path(), true, sid)?;
+            revoke_path_recursive_legacy(&child.path(), true, sid)?;
         }
     }
-    revoke_sid_access(path, sid)
+    revoke_sid_access(path, sid, false)
 }
 
-fn revoke_sid_access(path: &Path, sid_sddl: &str) -> Result<(), String> {
+fn grant_sid_access_exact(path: &Path, sid_sddl: &str, access: u32) -> Result<(), String> {
+    update_sid_access(path, sid_sddl, access, false, false)
+}
+
+fn revoke_sid_access(path: &Path, sid_sddl: &str, propagate: bool) -> Result<(), String> {
+    update_sid_access(path, sid_sddl, 0, true, propagate)
+}
+
+fn update_sid_access(
+    path: &Path,
+    sid_sddl: &str,
+    access: u32,
+    revoke: bool,
+    propagate: bool,
+) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::{
-        ConvertStringSidToSidW, GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW,
-        EXPLICIT_ACCESS_W, REVOKE_ACCESS, SE_FILE_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN,
-        TRUSTEE_W,
+        ConvertStringSidToSidW, GetExplicitEntriesFromAclW, GetNamedSecurityInfoW,
+        SetEntriesInAclW, SetNamedSecurityInfoW, EXPLICIT_ACCESS_W, GRANT_ACCESS, REVOKE_ACCESS,
+        SE_FILE_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
     };
     use windows_sys::Win32::Security::{
-        ACL, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
+        EqualSid, InitializeSecurityDescriptor, SetFileSecurityW, SetSecurityDescriptorDacl, ACL,
+        DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_DESCRIPTOR,
     };
 
     let wide_sid: Vec<u16> = sid_sddl.encode_utf16().chain(Some(0)).collect();
@@ -1119,6 +1538,32 @@ fn revoke_sid_access(path: &Path, sid_sddl: &str) -> Result<(), String> {
             LocalFree(sid);
             return Err(format!("GetNamedSecurityInfoW error {get_status}"));
         }
+        if revoke {
+            let mut explicit_count = 0;
+            let mut explicit_entries: *mut EXPLICIT_ACCESS_W = std::ptr::null_mut();
+            let explicit_status =
+                GetExplicitEntriesFromAclW(old_acl, &mut explicit_count, &mut explicit_entries);
+            if explicit_status != 0 {
+                LocalFree(descriptor);
+                LocalFree(sid);
+                return Err(format!(
+                    "GetExplicitEntriesFromAclW error {explicit_status}"
+                ));
+            }
+            let contains_sid = explicit_count != 0
+                && std::slice::from_raw_parts(explicit_entries, explicit_count as usize)
+                    .iter()
+                    .any(|entry| {
+                        entry.Trustee.TrusteeForm == TRUSTEE_IS_SID
+                            && EqualSid(sid, entry.Trustee.ptstrName.cast()) != 0
+                    });
+            LocalFree(explicit_entries.cast());
+            if !contains_sid {
+                LocalFree(descriptor);
+                LocalFree(sid);
+                return Ok(());
+            }
+        }
 
         let trustee = TRUSTEE_W {
             pMultipleTrustee: std::ptr::null_mut(),
@@ -1128,8 +1573,8 @@ fn revoke_sid_access(path: &Path, sid_sddl: &str) -> Result<(), String> {
             ptstrName: sid.cast(),
         };
         let entry = EXPLICIT_ACCESS_W {
-            grfAccessPermissions: 0,
-            grfAccessMode: REVOKE_ACCESS,
+            grfAccessPermissions: access,
+            grfAccessMode: if revoke { REVOKE_ACCESS } else { GRANT_ACCESS },
             grfInheritance: 0,
             Trustee: trustee,
         };
@@ -1139,20 +1584,65 @@ fn revoke_sid_access(path: &Path, sid_sddl: &str) -> Result<(), String> {
             LocalFree(sid);
             return Err(format!("SetEntriesInAclW error {acl_status}"));
         }
-        let set_status = SetNamedSecurityInfoW(
-            wide_path.as_ptr(),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            new_acl,
-            std::ptr::null_mut(),
-        );
+        let set_status = if propagate {
+            SetNamedSecurityInfoW(
+                wide_path.as_ptr(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                new_acl,
+                std::ptr::null_mut(),
+            )
+        } else {
+            // SetNamedSecurityInfo automatically imposes the inheritance model
+            // on the entire subtree even for an exact ACE. SetFileSecurity is
+            // deliberately used for exact entries because directory security
+            // applied through it is not inherited by child objects.
+            let mut security_descriptor = SECURITY_DESCRIPTOR::default();
+            if InitializeSecurityDescriptor(
+                (&mut security_descriptor as *mut SECURITY_DESCRIPTOR).cast(),
+                1,
+            ) == 0
+            {
+                let error = io::Error::last_os_error();
+                LocalFree(new_acl.cast());
+                LocalFree(descriptor);
+                LocalFree(sid);
+                return Err(format!("InitializeSecurityDescriptor: {error}"));
+            }
+            if SetSecurityDescriptorDacl(
+                (&mut security_descriptor as *mut SECURITY_DESCRIPTOR).cast(),
+                1,
+                new_acl,
+                0,
+            ) == 0
+            {
+                let error = io::Error::last_os_error();
+                LocalFree(new_acl.cast());
+                LocalFree(descriptor);
+                LocalFree(sid);
+                return Err(format!("SetSecurityDescriptorDacl: {error}"));
+            }
+            if SetFileSecurityW(
+                wide_path.as_ptr(),
+                DACL_SECURITY_INFORMATION,
+                (&mut security_descriptor as *mut SECURITY_DESCRIPTOR).cast(),
+            ) == 0
+            {
+                io::Error::last_os_error().raw_os_error().unwrap_or(1) as u32
+            } else {
+                0
+            }
+        };
         LocalFree(new_acl.cast());
         LocalFree(descriptor);
         LocalFree(sid);
         if set_status != 0 {
-            return Err(format!("SetNamedSecurityInfoW error {set_status}"));
+            return Err(format!(
+                "could not apply ACL to {}: error {set_status}",
+                path.display()
+            ));
         }
     }
     Ok(())
@@ -1218,9 +1708,13 @@ fn run_filesystem_probe() -> i32 {
         let allowed_write = probe_path("VESTA_PROBE_ALLOWED_WRITE")?;
         let read_only_write = probe_path("VESTA_PROBE_READ_ONLY_WRITE")?;
         let blocked_write = probe_path("VESTA_PROBE_BLOCKED_WRITE")?;
+        let protected_read = std::env::var_os("VESTA_PROBE_PROTECTED_READ").map(PathBuf::from);
 
         std::fs::read_to_string(allowed_read).map_err(|_| 10)?;
         std::fs::read_to_string(read_only_read).map_err(|_| 11)?;
+        if let Some(protected_read) = protected_read {
+            std::fs::read_to_string(protected_read).map_err(|_| 17)?;
+        }
         if std::fs::read_to_string(blocked_read).is_ok() {
             return Err(12);
         }
@@ -1391,6 +1885,70 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_profiles_preserve_both_sids_on_a_shared_root() {
+        let probe = tempfile::tempdir().unwrap();
+        let shared = probe.path().join("shared-runtime");
+        let shared_child = shared.join("asset.txt");
+        let instance_a = probe.path().join("instance-a");
+        let instance_b = probe.path().join("instance-b");
+        for path in [&shared, &instance_a, &instance_b] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        std::fs::write(&shared_child, "asset\n").unwrap();
+
+        let policy_for = |instance: &Path| SandboxPolicy {
+            enabled: true,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![
+                PathAccess::new(instance, true, true, false),
+                PathAccess::new(&shared, true, false, false),
+            ],
+            network_allowed: true,
+            mic_allowed: true,
+            usb_allowed: true,
+            exec_allowlist: Vec::new(),
+            wrapper_nesting: WrapperNesting::SandboxOutside,
+            extra_paths: Vec::new(),
+        };
+        let policy_a = policy_for(&instance_a);
+        let policy_b = policy_for(&instance_b);
+        let _guard_a = TestProfileGuard(policy_a.clone());
+        let _guard_b = TestProfileGuard(policy_b.clone());
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+
+        let launch_sync = |policy: SandboxPolicy, barrier: std::sync::Arc<std::sync::Barrier>| {
+            std::thread::spawn(move || {
+                let profile_name = profile_name_for_policy(&policy).unwrap();
+                let _profile_lock = acquire_profile_launch_lock(&profile_name).unwrap();
+                let profile =
+                    AppContainerProfile::ensure(&profile_name, &profile_name, None).unwrap();
+                barrier.wait();
+                sync_policy_access(&profile, &policy, &profile_name).unwrap();
+                profile.sid.as_string().to_string()
+            })
+        };
+        let thread_a = launch_sync(policy_a, barrier.clone());
+        let thread_b = launch_sync(policy_b, barrier.clone());
+        barrier.wait();
+        let sid_a = thread_a.join().unwrap();
+        let sid_b = thread_b.join().unwrap();
+
+        let acl = Command::new("icacls.exe")
+            .arg(&shared_child)
+            .output()
+            .unwrap();
+        let acl = String::from_utf8_lossy(&acl.stdout);
+        assert!(
+            acl.contains(&sid_a),
+            "shared child ACL omitted {sid_a}: {acl}"
+        );
+        assert!(
+            acl.contains(&sid_b),
+            "shared child ACL omitted {sid_b}: {acl}"
+        );
+    }
+
+    #[test]
     fn native_load_maps_to_windows_image_right_without_changing_portable_exec_intent() {
         let access = PathAccess::new(r"C:\game\natives", false, false, false).loadable();
 
@@ -1403,25 +1961,212 @@ mod tests {
     }
 
     #[test]
+    fn acl_compilation_adds_one_non_inheriting_resolution_entry_per_parent() {
+        let probe = tempfile::tempdir().unwrap();
+        let declared = probe.path().join("nested").join("instance");
+        std::fs::create_dir_all(&declared).unwrap();
+        let first = declared.join("first.txt");
+        let second = declared.join("second.txt");
+        std::fs::write(&first, "first").unwrap();
+        std::fs::write(&second, "second").unwrap();
+        let caps = resolve_preset(SandboxPreset::Modded);
+        let policy = SandboxPolicy {
+            enabled: true,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![
+                PathAccess::file(&first, true, false, false),
+                PathAccess::file(&second, true, false, false),
+            ],
+            network_allowed: caps.network_allowed,
+            mic_allowed: caps.mic_allowed,
+            usb_allowed: caps.usb_allowed,
+            exec_allowlist: Vec::new(),
+            wrapper_nesting: WrapperNesting::SandboxOutside,
+            extra_paths: Vec::new(),
+        };
+
+        let entries = compile_acl_entries(&policy);
+        let canonical_declared = std::fs::canonicalize(&declared).unwrap();
+        let parent_entries: Vec<_> = entries
+            .iter()
+            .filter(|entry| windows_paths_equal(&entry.path, &canonical_declared))
+            .collect();
+        assert_eq!(parent_entries.len(), 1);
+        assert_eq!(parent_entries[0].access, DIRECTORY_RESOLVE_ACCESS);
+        assert!(!parent_entries[0].recursive);
+        assert_ne!(parent_entries[0].access & FILE_LIST_DIRECTORY, 0);
+        assert_eq!(parent_entries[0].access & WRITE_AUTHORITY, 0);
+
+        let filesystem_root = canonical_declared
+            .ancestors()
+            .find(|ancestor| ancestor.parent().is_none())
+            .unwrap();
+        assert!(!entries
+            .iter()
+            .any(|entry| windows_paths_equal(&entry.path, filesystem_root)));
+        if let Some(profile_parent) = std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .and_then(|path| std::fs::canonicalize(path).ok())
+            .and_then(|path| path.parent().map(Path::to_path_buf))
+        {
+            assert!(!entries
+                .iter()
+                .any(|entry| windows_paths_equal(&entry.path, &profile_parent)));
+        }
+    }
+
+    #[test]
+    fn acl_ancestor_walk_stops_before_profile_parent_and_roots() {
+        let profile = Path::new(r"C:\Users\alice");
+        let user_path = Path::new(r"C:\Users\alice\AppData\Roaming\Vesta\data.bin");
+        let user_ancestors = acl_ancestor_paths(user_path, Some(profile));
+        assert!(user_ancestors
+            .iter()
+            .any(|path| windows_paths_equal(path, profile)));
+        assert!(!user_ancestors
+            .iter()
+            .any(|path| windows_paths_equal(path, Path::new(r"C:\Users"))));
+        assert!(!user_ancestors
+            .iter()
+            .any(|path| windows_paths_equal(path, Path::new(r"C:\"))));
+
+        let unc_root = Path::new(r"\\server\share");
+        let unc_ancestors = acl_ancestor_paths(
+            Path::new(r"\\server\share\games\instance\options.txt"),
+            None,
+        );
+        assert!(unc_ancestors
+            .iter()
+            .any(|path| windows_paths_equal(path, Path::new(r"\\server\share\games"))));
+        assert!(!unc_ancestors
+            .iter()
+            .any(|path| windows_paths_equal(path, unc_root)));
+    }
+
+    #[test]
+    fn acl_reconciliation_replays_only_grants_touched_by_revocation_scope() {
+        let runtime = AclEntry {
+            path: PathBuf::from(r"C:\Users\alice\data\java"),
+            access: FILE_GENERIC_READ,
+            recursive: true,
+        };
+        let exact_parent = AclEntry {
+            path: PathBuf::from(r"C:\Users\alice\data"),
+            access: FILE_GENERIC_EXECUTE,
+            recursive: false,
+        };
+        assert!(!acl_revocation_affects(&runtime, &exact_parent));
+
+        let recursive_parent = AclEntry {
+            recursive: true,
+            ..exact_parent.clone()
+        };
+        assert!(acl_revocation_affects(&runtime, &recursive_parent));
+
+        let exact_child = AclEntry {
+            path: runtime.path.join("conf"),
+            access: FILE_GENERIC_READ,
+            recursive: false,
+        };
+        assert!(acl_revocation_affects(&runtime, &exact_child));
+    }
+
+    #[test]
+    fn java_drive_targets_support_dos_and_unc_runtime_roots() {
+        assert_eq!(
+            java_drive_target(Path::new(r"C:\runtime")).unwrap(),
+            r"\??\C:\runtime"
+        );
+        assert_eq!(
+            java_drive_target(Path::new(r"\\?\C:\runtime")).unwrap(),
+            r"\??\C:\runtime"
+        );
+        assert_eq!(
+            java_drive_target(Path::new(r"\\server\share\runtime")).unwrap(),
+            r"\??\UNC\server\share\runtime"
+        );
+        assert_eq!(
+            java_drive_target(Path::new(r"\\?\UNC\server\share\runtime")).unwrap(),
+            r"\??\UNC\server\share\runtime"
+        );
+    }
+
+    #[test]
+    fn exact_directory_acl_update_does_not_grant_child_access() {
+        let probe = tempfile::tempdir().unwrap();
+        let child = probe.path().join("child.txt");
+        std::fs::write(&child, "unchanged").unwrap();
+        let caps = resolve_preset(SandboxPreset::Modded);
+        let policy = SandboxPolicy {
+            enabled: true,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![PathAccess::new(probe.path(), true, true, false)],
+            network_allowed: caps.network_allowed,
+            mic_allowed: caps.mic_allowed,
+            usb_allowed: caps.usb_allowed,
+            exec_allowlist: Vec::new(),
+            wrapper_nesting: WrapperNesting::SandboxOutside,
+            extra_paths: Vec::new(),
+        };
+        let profile_guard = TestProfileGuard(policy.clone());
+        let profile_name = profile_name_for_policy(&policy).unwrap();
+        let profile = AppContainerProfile::ensure(&profile_name, &profile_name, None).unwrap();
+        let profile_sid = profile.sid.as_string().to_string();
+        let grant = grant_sid_access_exact(probe.path(), &profile_sid, DIRECTORY_RESOLVE_ACCESS);
+        let after = Command::new("icacls.exe").arg(&child).output().unwrap();
+        let parent_with_grant = Command::new("icacls.exe")
+            .arg(probe.path())
+            .output()
+            .unwrap();
+        let revoke = revoke_sid_access(probe.path(), &profile_sid, false);
+        let parent_after_revoke = Command::new("icacls.exe")
+            .arg(probe.path())
+            .output()
+            .unwrap();
+        drop(profile);
+        drop(profile_guard);
+
+        grant.unwrap();
+        revoke.unwrap();
+        assert!(!String::from_utf8_lossy(&after.stdout).contains(&profile_sid));
+        assert!(String::from_utf8_lossy(&parent_with_grant.stdout).contains(&profile_sid));
+        assert!(!String::from_utf8_lossy(&parent_after_revoke.stdout).contains(&profile_sid));
+    }
+
+    #[test]
     fn appcontainer_enforces_declared_read_and_write_access() {
         let helper = current_windows_helper();
         let probe = tempfile::tempdir().unwrap();
         let allowed = probe.path().join("allowed");
         let read_only = probe.path().join("read-only");
+        let protected = allowed.join("protected-dacl");
         let blocked = probe.path().join("blocked");
         std::fs::create_dir_all(&allowed).unwrap();
         std::fs::create_dir_all(&read_only).unwrap();
+        std::fs::create_dir_all(&protected).unwrap();
         std::fs::create_dir_all(&blocked).unwrap();
         let allowed_read = allowed.join("read.txt");
         let read_only_file = read_only.join("read.txt");
         let blocked_read = blocked.join("read.txt");
         let allowed_write = allowed.join("write.txt");
         let read_only_write = read_only.join("write.txt");
+        let protected_read = protected.join("read.txt");
         let blocked_write = blocked.join("write.txt");
         let loadable_executable = allowed.join("loadable-child.exe");
         let junction = allowed.join("outside-junction");
         std::fs::write(&allowed_read, "allowed\n").unwrap();
         std::fs::write(&read_only_file, "shared\n").unwrap();
+        std::fs::write(&protected_read, "protected\n").unwrap();
+        let protected_acl = Command::new("icacls.exe")
+            .arg(&protected)
+            .arg("/inheritance:d")
+            .output()
+            .unwrap();
+        assert!(
+            protected_acl.status.success(),
+            "could not protect test DACL: {}",
+            String::from_utf8_lossy(&protected_acl.stderr)
+        );
         std::fs::write(&blocked_read, "blocked\n").unwrap();
         std::fs::write(&blocked_write, "unchanged\n").unwrap();
         std::fs::copy(&helper, &loadable_executable).unwrap();
@@ -1463,6 +2208,7 @@ mod tests {
             wrapper_nesting: WrapperNesting::SandboxOutside,
             extra_paths: Vec::new(),
         };
+        let profile_guard = TestProfileGuard(policy.clone());
         let policy_path = probe.path().join("policy.json");
         std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
 
@@ -1477,6 +2223,7 @@ mod tests {
             .current_dir(&allowed)
             .env("VESTA_PROBE_ALLOWED_READ", &allowed_read)
             .env("VESTA_PROBE_READ_ONLY_READ", &read_only_file)
+            .env("VESTA_PROBE_PROTECTED_READ", &protected_read)
             .env("VESTA_PROBE_BLOCKED_READ", &blocked_read)
             .env("VESTA_PROBE_ALLOWED_WRITE", &allowed_write)
             .env("VESTA_PROBE_READ_ONLY_WRITE", &read_only_write)
@@ -1499,7 +2246,7 @@ mod tests {
             .output()
             .unwrap();
 
-        cleanup_test_profile(&policy);
+        drop(profile_guard);
 
         assert!(
             output.status.success(),
@@ -1548,6 +2295,7 @@ mod tests {
             wrapper_nesting: WrapperNesting::SandboxOutside,
             extra_paths: Vec::new(),
         };
+        let profile_guard = TestProfileGuard(policy.clone());
         let policy_path = probe.path().join("policy.json");
         std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
 
@@ -1557,12 +2305,13 @@ mod tests {
                 policy_path.to_str().unwrap(),
                 "--",
                 java.to_str().unwrap(),
+                "-XshowSettings:security:providers",
                 "-version",
             ])
             .current_dir(probe.path())
             .output()
             .unwrap();
-        cleanup_test_profile(&policy);
+        drop(profile_guard);
 
         assert!(
             output.status.success(),
@@ -1572,10 +2321,8 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .to_ascii_lowercase()
-                .contains("version"),
-            "java -version output was not relayed"
+            String::from_utf8_lossy(&output.stderr).contains("Provider name: SUN"),
+            "Java security providers were not initialized"
         );
     }
 
@@ -1632,6 +2379,7 @@ mod tests {
             wrapper_nesting: WrapperNesting::SandboxOutside,
             extra_paths: Vec::new(),
         };
+        let profile_guard = TestProfileGuard(policy.clone());
         let policy_path = host_private.join("windows-policy.json");
         std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
         let pre_marker = allowed.join("pre-hook.txt");
@@ -1704,7 +2452,7 @@ mod tests {
             .output()
             .unwrap();
 
-        cleanup_test_profile(&policy);
+        drop(profile_guard);
         assert!(
             output.status.success(),
             "exit-handler sandbox probe exited with {}; stdout={}; stderr={}",
@@ -1820,6 +2568,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.security.Security;
 
 public final class VestaSandboxGameProbe {
     private static Path env(String name) {
@@ -1827,6 +2578,11 @@ public final class VestaSandboxGameProbe {
     }
 
     public static void main(String[] args) throws Exception {
+        if (Security.getProviders().length == 0) {
+            throw new IllegalStateException("Java security providers were not initialized");
+        }
+        MessageDigest.getInstance("SHA-256").digest(new byte[] { 1, 2, 3 });
+        new SecureRandom().nextBytes(new byte[32]);
         System.load(env("VESTA_PROBE_NATIVE_LIBRARY").toAbsolutePath().toString());
         if (args.length == 1 && args[0].equals("--load-only")) {
             return;
@@ -1957,6 +2713,7 @@ public final class VestaSandboxGameProbe {
             wrapper_nesting: WrapperNesting::SandboxOutside,
             extra_paths: Vec::new(),
         };
+        let profile_guard = TestProfileGuard(policy.clone());
         let policy_path = private_temp.join("windows-policy.json");
         std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
 
@@ -2011,7 +2768,7 @@ public final class VestaSandboxGameProbe {
             .collect::<Vec<_>>()
             .join(" | ")
         };
-        cleanup_test_profile(&policy);
+        drop(profile_guard);
 
         assert!(
             output.status.success(),
@@ -2038,16 +2795,38 @@ public final class VestaSandboxGameProbe {
         assert_eq!(std::fs::read_to_string(blocked_file).unwrap(), "secret\n");
     }
 
-    fn cleanup_test_profile(policy: &SandboxPolicy) {
-        let profile_name = profile_name_for_policy(policy).unwrap();
-        let profile = AppContainerProfile::ensure(&profile_name, &profile_name, None).unwrap();
-        let journal_path = acl_journal_path(&profile_name).unwrap();
+    struct TestProfileGuard(SandboxPolicy);
+
+    impl Drop for TestProfileGuard {
+        fn drop(&mut self) {
+            let _ = cleanup_test_profile(&self.0);
+        }
+    }
+
+    fn cleanup_test_profile(policy: &SandboxPolicy) -> Result<(), String> {
+        let profile_name = profile_name_for_policy(policy)?;
+        cleanup_profile_name(&profile_name)
+    }
+
+    fn cleanup_profile_name(profile_name: &str) -> Result<(), String> {
+        // Match production lock order: profile lifetime first, global ACL
+        // reconciliation second.
+        let _profile_lock = acquire_profile_launch_lock(profile_name)?;
+        let _acl_reconciliation_lock = acquire_acl_reconciliation_lock()?;
+        let profile = AppContainerProfile::ensure(profile_name, profile_name, None)
+            .map_err(|err| format!("could not reopen test AppContainer profile: {err}"))?;
+        let journal_path = acl_journal_path(profile_name)?;
         if let Ok(journal) = read_acl_journal(&journal_path) {
             for entry in &journal.entries {
-                let _ = revoke_acl_entry(entry, profile.sid.as_string());
+                if journal.format_version < ACL_JOURNAL_FORMAT_VERSION {
+                    let _ = revoke_legacy_acl_entry(entry, profile.sid.as_string());
+                } else {
+                    let _ = revoke_acl_entry(entry, profile.sid.as_string());
+                }
             }
         }
         let _ = std::fs::remove_file(journal_path);
         let _ = profile.delete();
+        Ok(())
     }
 }

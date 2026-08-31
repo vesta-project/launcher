@@ -71,6 +71,8 @@ pub(crate) fn prepare(
     let mut notes = vec![
         "Windows AppContainer confinement launched through vesta-sandbox-exec.".to_string(),
         "Filesystem authority is synchronized to declared roots using a stable per-instance AppContainer SID; stale grants are revoked before launch.".to_string(),
+        "Win32 path resolution requires non-inheriting traversal, metadata, and name-enumeration access on private ancestor directories of declared roots. This exposes ancestor entry names, but not child-file contents or writes.".to_string(),
+        "Sandboxed Java uses a per-launch DOS drive rooted at the allowlisted runtime so Java security-provider canonicalization does not require elevated ACL changes on shared profile parents. The mapping is mutex-reserved and removed at process exit.".to_string(),
         "Each restricted invocation is contained by a kill-on-close Job Object. Launches sharing an instance profile are serialized for their complete lifetime so an existing target cannot race a new trampoline before DACL hardening.".to_string(),
         "Native-image loading is granted only for policy paths marked loadable. NTFS uses the same file right for image loading and execution, so loadable roots also have OS-level execute access.".to_string(),
         "The initial target is validated against the portable exec allowlist, then a trusted AppContainer trampoline creates it with Windows' token-level no-child policy and only standard-I/O handles. The trampoline denies all Everyone and Owner Rights access to itself before the target starts, preventing ACL replacement, process creation, and memory injection through the broker.".to_string(),
@@ -242,6 +244,10 @@ mod tests {
         assert_eq!(report.network, EnforcementStatus::Enforced);
         assert_eq!(report.mic, EnforcementStatus::Enforced);
         assert_eq!(report.exec, EnforcementStatus::Enforced);
+        assert!(report
+            .notes
+            .iter()
+            .any(|note| note.contains("ancestor entry names")));
         for path in cleanup_paths {
             std::fs::remove_dir_all(path).unwrap();
         }
