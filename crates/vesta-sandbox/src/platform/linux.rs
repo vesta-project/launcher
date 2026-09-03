@@ -264,7 +264,6 @@ fn build_bwrap_args(
     let mut args = vec![
         "--unshare-user".to_string(),
         "--die-with-parent".to_string(),
-        "--new-session".to_string(),
     ];
 
     if !policy.network_allowed {

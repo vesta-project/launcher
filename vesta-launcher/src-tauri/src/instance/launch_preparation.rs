@@ -289,7 +289,8 @@ pub(crate) async fn prepare_instance_launch(
         .map_err(|e| format!("Failed to create sandbox log directory: {e}"))?;
     tokio::fs::OpenOptions::new()
         .create(true)
-        .append(true)
+        .write(true)
+        .truncate(true)
         .open(&log_file)
         .await
         .map_err(|e| format!("Failed to create sandbox log file: {e}"))?;
