@@ -73,12 +73,13 @@ trusted work outside this boundary. Presets are Trusted (default, no sandbox),
 Modded (filesystem and exec allowlists; network and mic on), and Paranoid (same
 filesystem/exec/USB as Modded; network and mic off). Global app defaults and
 per-instance overrides follow the existing `use_global_*` pattern. Shared
-runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`) plus the
+runtime caches (`assets/`, `libraries/`, and `versions/`) plus the
 selected Java runtime are readable but not writable. Native-image load is a
 distinct portable authority from child-process execution: the selected Java
 runtime, shared natives, Instance game directory, and private sandbox temp are
-loadable. Runtime extraction and validation writes belong in private sandbox
-temp rather than the shared native cache. The Instance game directory and exact
+loadable. Windows redirects runtime extraction and validation writes into private
+sandbox temp and keeps shared natives read-only. Linux and macOS retain writable
+natives for runtime extraction. The Instance game directory and exact
 pre-created session-log file are read-write. Optional global and instance extra
 paths grant read-write access.
 Paths are canonicalized before
