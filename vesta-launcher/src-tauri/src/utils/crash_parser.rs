@@ -306,7 +306,9 @@ fn launch_failed_before_window(log_content: &str) -> bool {
         "Fabric Loader",
     ];
 
-    !RUNNING_MARKERS.iter().any(|marker| log_content.contains(marker))
+    !RUNNING_MARKERS
+        .iter()
+        .any(|marker| log_content.contains(marker))
 }
 
 /// Parse Fabric FormattedException mod-resolution failures

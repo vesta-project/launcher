@@ -435,10 +435,7 @@ fn push_runtime_dir_binds(args: &mut Vec<String>) {
     args.push(runtime_dir.clone());
 
     let wayland_display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
-    for name in [
-        wayland_display.as_str(),
-        &format!("{wayland_display}.lock"),
-    ] {
+    for name in [wayland_display.as_str(), &format!("{wayland_display}.lock")] {
         let host = runtime_path.join(name);
         // Wayland clients must write to the display socket.
         push_existing_bind(args, &host, true);
@@ -599,9 +596,8 @@ mod tests {
         if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
             if Path::new(&runtime_dir).exists() {
                 assert!(
-                    args.windows(2).any(|window| {
-                        window[0] == "--dir" && window[1] == runtime_dir
-                    }),
+                    args.windows(2)
+                        .any(|window| { window[0] == "--dir" && window[1] == runtime_dir }),
                     "Paranoid must create an empty XDG_RUNTIME_DIR mountpoint"
                 );
                 assert!(
@@ -659,9 +655,8 @@ mod tests {
         if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
             if Path::new(&runtime_dir).exists() {
                 assert!(
-                    args.windows(2).any(|window| {
-                        window[0] == "--dir" && window[1] == runtime_dir
-                    }),
+                    args.windows(2)
+                        .any(|window| { window[0] == "--dir" && window[1] == runtime_dir }),
                     "Modded must create an empty XDG_RUNTIME_DIR mountpoint"
                 );
                 assert!(
@@ -678,13 +673,13 @@ mod tests {
                     !args.iter().any(|arg| arg == &bus || arg == &libvirt),
                     "session bus and libvirt must stay out of the sandbox"
                 );
-                let wayland = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
+                let wayland =
+                    std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
                 let wayland_socket = format!("{runtime_dir}/{wayland}");
                 if Path::new(&wayland_socket).exists() {
                     assert!(
-                        args.windows(3).any(|window| {
-                            window[0] == "--bind" && window[1] == wayland_socket
-                        }),
+                        args.windows(3)
+                            .any(|window| { window[0] == "--bind" && window[1] == wayland_socket }),
                         "Modded must bind the Wayland display socket"
                     );
                 }

@@ -178,12 +178,8 @@ pub(crate) fn spawn_log_file_follower(app_handle: tauri::AppHandle, run_state: I
                 break;
             }
 
-            let (new_session_offset, session_chunk) = read_log_growth(
-                &session_log,
-                session_offset,
-                &mut session_carry,
-            )
-            .await;
+            let (new_session_offset, session_chunk) =
+                read_log_growth(&session_log, session_offset, &mut session_carry).await;
             if new_session_offset > session_offset {
                 session_offset = new_session_offset;
                 session_stall_ticks = 0;
@@ -593,9 +589,8 @@ pub(crate) fn reattach_or_reconcile_persisted_processes(app_handle: tauri::AppHa
                             run_state.pid = surviving_pid;
                             run_state.process_group_id =
                                 Some(capture_process_group_id(surviving_pid));
-                            let _ = crate::utils::process_state::add_running_process(
-                                run_state.clone(),
-                            );
+                            let _ =
+                                crate::utils::process_state::add_running_process(run_state.clone());
                         }
                     }
 
