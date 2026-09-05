@@ -289,25 +289,28 @@ pub fn build_sandbox_policy_for_roots(
         return Ok(policy);
     }
 
-    // Play consumes immutable shared launcher data. Windows redirects runtime
-    // native extraction into a private AppContainer temp directory so the
-    // shared native cache remains read/load-only.
+    // Shared caches stay immutable during Play. Linux and macOS allow the
+    // runtime-managed natives tree to remain writable for LWJGL extraction;
+    // Windows redirects extraction to private AppContainer temp and keeps the
+    // shared tree read/load-only.
     let mut filesystem = vec![
         // Mods may extract and load JNI libraries beneath the instance root.
         PathAccess::new(game_dir.to_path_buf(), true, true, false).loadable(),
         PathAccess::file(log_file.to_path_buf(), true, true, false),
     ];
     let mut protected_paths = Vec::new();
-    for shared_dir in ["assets", "libraries", "versions", "natives"] {
+    // assets/libraries/versions stay read-only shared caches on every OS.
+    for shared_dir in ["assets", "libraries", "versions"] {
         let path = data_dir.join(shared_dir);
         protected_paths.push(path.clone());
-        let access = PathAccess::new(path, true, false, false);
-        filesystem.push(if shared_dir == "natives" {
-            access.loadable()
-        } else {
-            access
-        });
+        filesystem.push(PathAccess::new(path, true, false, false));
     }
+    let natives = data_dir.join("natives");
+    let natives_writable = !cfg!(target_os = "windows");
+    if !natives_writable {
+        protected_paths.push(natives.clone());
+    }
+    filesystem.push(PathAccess::new(natives, true, natives_writable, false).loadable());
 
     // Exec is exact-path by default. Only recognize a Java runtime root when
     // the selected executable has the conventional <java_home>/bin/java shape
@@ -623,13 +626,17 @@ mod tests {
                 .cloned()
                 .unwrap()
         };
-        for shared in ["assets", "libraries", "versions", "natives"] {
+        for shared in ["assets", "libraries", "versions"] {
             let shared_access = access(&data.join(shared));
             assert!(shared_access.read);
             assert!(!shared_access.write);
-            assert_eq!(shared_access.load, shared == "natives");
+            assert!(!shared_access.load);
             assert!(!shared_access.execute);
         }
+        let natives_access = access(&data.join("natives"));
+        assert!(natives_access.read && natives_access.load);
+        assert_eq!(natives_access.write, !cfg!(target_os = "windows"));
+        assert!(!natives_access.execute);
         assert!(policy
             .filesystem_allowlist
             .iter()

@@ -149,6 +149,10 @@ pub struct LaunchResult {
 
     /// Handle to the child process (if available)
     pub handle: Option<ProcessHandle>,
+
+    /// When true, the child owns stdio and the app should tail `log_file`
+    /// (and eventually `latest.log`) for the live console.
+    pub console_from_log_file: bool,
 }
 
 /// Handle to a running process

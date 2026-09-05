@@ -55,10 +55,13 @@ both Modules and pull unused OS code into every build.
 
 ### Filesystem policy (Modded / Paranoid)
 
-- Shared runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`):
-  **read-only** during Play. Natives are loadable. Other launcher state is not
-  readable. Installation and repair own shared-runtime mutations outside the
-  sandbox.
+- Shared runtime caches (`assets/`, `libraries/`, and `versions/`): **read-only**
+  during Play. Other launcher state is not readable. Installation and repair own
+  shared-runtime mutations outside the sandbox.
+- `natives/`: read/load on every OS. Linux and macOS permit runtime writes
+  because LWJGL extracts shared libraries under
+  `${natives_directory}/lwjgl/…` at Play time. Windows redirects extraction to
+  per-invocation AppContainer temp and keeps this shared tree read-only.
 - Instance `game_dir`: **read-write**.
 - The exact pre-created session log file at `{vesta data}/logs/…`: **read-write**;
   the containing log directory is not granted recursively.
@@ -242,10 +245,12 @@ both Modules and pull unused OS code into every build.
   Tauri; Minecraft launch correctness stays in `piston-lib`.
 - Leverage: one prepare/apply Interface confines the untrusted Play process
   graph while trusted lifecycle supervision stays observable to the launcher.
-- Shared runtime roots and managed Java remain readable but cannot be mutated by
-  hostile game code; runtime extraction is isolated in per-invocation temp.
-  Writable extras that overlap trusted Java or wrapper paths
-  are rejected before launcher-owned verification can execute them.
+- Shared runtime caches and managed Java remain readable; `assets/`,
+  `libraries/`, and `versions/` cannot be mutated by hostile game code. Writable
+  extras that overlap trusted Java or wrapper paths are rejected before
+  launcher-owned verification can execute them. Linux and macOS keep `natives/`
+  writable only for runtime extraction; Windows isolates extraction in private
+  per-invocation temp and keeps shared natives read-only.
 - Tradeoff: device and exec controls will be uneven across OSes; the enforcement
   report is part of the product contract.
 - Follow-ups (not required by this ADR): richer per-toggle UI, deny-overrides

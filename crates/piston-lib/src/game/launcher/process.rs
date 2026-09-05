@@ -362,8 +362,11 @@ pub async fn launch_prepared_game(
 
         let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
 
-        // Ensure .vesta directory exists
-        tokio::fs::create_dir_all(spec.game_dir.join(".vesta")).await?;
+        // Ensure .vesta directory exists and drop stale exit status from a prior run.
+        let vesta_dir = spec.game_dir.join(".vesta");
+        tokio::fs::create_dir_all(&vesta_dir).await?;
+        let _ = tokio::fs::remove_file(vesta_dir.join("exit_status.json")).await;
+        let _ = tokio::fs::remove_file(vesta_dir.join("game_pid")).await;
 
         // If we have a wrapper, the executable is the wrapper, and its FIRST argument after its own args
         // should be the java path to run the exit handler.
@@ -419,9 +422,18 @@ pub async fn launch_prepared_game(
     command.current_dir(&spec.game_dir);
     command.envs(&spec.env_vars);
 
-    // Pipe stdout and stderr for real-time console streaming
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
+    // stdin is null so a closed launcher tty cannot SIGHUP the sandbox session.
+    command.stdin(Stdio::null());
+    if spec.exit_handler_jar.is_some() {
+        // Exit handler writes the session log itself. Leaving stdout/stderr piped
+        // to the launcher caused SIGPIPE / sticky PrintStream errors that killed
+        // console streaming (and sometimes the wrapper JVM) under sandbox.
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+    } else {
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+    }
 
     // Configure process to be detached so it survives launcher close
     // We use our unified suppress_console and detach helper
@@ -679,6 +691,7 @@ pub async fn launch_prepared_game(
         instance,
         log_file,
         handle,
+        console_from_log_file: use_exit_handler,
     })
 }
 

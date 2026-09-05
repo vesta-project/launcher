@@ -10,7 +10,7 @@ The sandbox protects the Play process tree: the exit handler, the optional wrapp
 
 - Trusted remains unchanged and unsandboxed.
 - Modded and Paranoid deny filesystem reads and writes by default, then allow only declared roots plus the minimum macOS/JVM compatibility roots.
-- Only the shared runtime roots (`assets`, `libraries`, `versions`, and `natives`) are readable and not writable by Play; other launcher state is unreadable.
+- Shared runtime caches (`assets`, `libraries`, `versions`) are readable and not writable by Play; `natives` is writable because LWJGL extracts shared libraries there at Play time; other launcher state is unreadable.
 - The instance game directory and exact pre-created Vesta session-log file are readable and writable by Play.
 - The selected Java runtime and exit-handler resources are readable and executable but not writable by Play.
 - Extra paths remain readable and writable. Their UI copy must state that explicitly.
