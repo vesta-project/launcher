@@ -222,6 +222,77 @@ pub fn set_enabled(resource_id: i32, enabled: bool) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DisableResourceResult {
+    pub disabled: bool,
+    pub removed_missing: bool,
+}
+
+/// Disables one physical Resource without ever publishing a synthetic path.
+/// Missing files are pruned, and the Ledger changes only after a successful
+/// rename (or when the existing file already has the disabled suffix).
+pub fn disable_resource(instance_id: i32, resource_id: i32) -> Result<DisableResourceResult> {
+    let mut conn = get_vesta_conn()?;
+    disable_resource_with_conn(&mut conn, instance_id, resource_id)
+}
+
+fn disable_resource_with_conn(
+    conn: &mut SqliteConnection,
+    instance_id: i32,
+    resource_id: i32,
+) -> Result<DisableResourceResult> {
+    let Some(resource) = ir_dsl::installed_resource
+        .filter(ir_dsl::id.eq(resource_id))
+        .filter(ir_dsl::instance_id.eq(instance_id))
+        .first::<InstalledResource>(conn)
+        .optional()?
+    else {
+        return Ok(DisableResourceResult::default());
+    };
+
+    let current_path = PathBuf::from(&resource.local_path);
+    if !current_path.exists() {
+        diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
+            .execute(conn)?;
+        return Ok(DisableResourceResult {
+            removed_missing: true,
+            ..DisableResourceResult::default()
+        });
+    }
+
+    let disabled_path = toggled_path(&current_path, false);
+    let renamed = disabled_path != current_path;
+    if renamed {
+        if disabled_path.exists() {
+            anyhow::bail!(
+                "Cannot disable {} because {} already exists",
+                current_path.display(),
+                disabled_path.display()
+            );
+        }
+        std::fs::rename(&current_path, &disabled_path)?;
+    }
+
+    if let Err(error) =
+        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
+            .set((
+                ir_dsl::local_path.eq(normalize_path(&disabled_path)),
+                ir_dsl::is_enabled.eq(false),
+            ))
+            .execute(conn)
+    {
+        if renamed {
+            let _ = std::fs::rename(&disabled_path, &current_path);
+        }
+        return Err(error.into());
+    }
+
+    Ok(DisableResourceResult {
+        disabled: true,
+        removed_missing: false,
+    })
+}
+
 pub fn clear_modpack_provenance(instance_id: i32) -> Result<usize> {
     let mut conn = get_vesta_conn()?;
     Ok(diesel::update(
@@ -243,6 +314,16 @@ pub fn apply_modpack_provenance(
     resources: &[InstalledResource],
     matched_ids: &HashSet<i32>,
 ) -> Result<usize> {
+    let mut conn = get_vesta_conn()?;
+    apply_modpack_provenance_with_conn(&mut conn, instance, resources, matched_ids)
+}
+
+fn apply_modpack_provenance_with_conn(
+    conn: &mut SqliteConnection,
+    instance: &Instance,
+    resources: &[InstalledResource],
+    matched_ids: &HashSet<i32>,
+) -> Result<usize> {
     let Some(modpack_id) = instance.modpack_id.clone() else {
         return Ok(0);
     };
@@ -253,7 +334,6 @@ pub fn apply_modpack_provenance(
         return Ok(0);
     };
 
-    let mut conn = get_vesta_conn()?;
     let mut changed = 0;
     for resource in resources {
         if matched_ids.contains(&resource.id) {
@@ -272,7 +352,7 @@ pub fn apply_modpack_provenance(
                     ir_dsl::source_modpack_version_id.eq(Some(modpack_version_id.clone())),
                     ir_dsl::source_modpack_platform.eq(Some(modpack_platform.clone())),
                 ))
-                .execute(&mut conn)?;
+                .execute(conn)?;
         } else {
             let already_custom = resource.source_kind == "custom"
                 && resource.source_modpack_id.is_none()
@@ -288,7 +368,7 @@ pub fn apply_modpack_provenance(
                     ir_dsl::source_modpack_version_id.eq(Option::<String>::None),
                     ir_dsl::source_modpack_platform.eq(Option::<String>::None),
                 ))
-                .execute(&mut conn)?;
+                .execute(conn)?;
         }
         changed += 1;
     }
@@ -297,10 +377,18 @@ pub fn apply_modpack_provenance(
 
 pub fn remove_missing_in_folder(instance_id: i32, folder: &Path) -> Result<usize> {
     let mut conn = get_vesta_conn()?;
+    remove_missing_in_folder_with_conn(&mut conn, instance_id, folder)
+}
+
+fn remove_missing_in_folder_with_conn(
+    conn: &mut SqliteConnection,
+    instance_id: i32,
+    folder: &Path,
+) -> Result<usize> {
     let prefix = normalize_path(folder);
     let resources = ir_dsl::installed_resource
         .filter(ir_dsl::instance_id.eq(instance_id))
-        .load::<InstalledResource>(&mut conn)?;
+        .load::<InstalledResource>(conn)?;
     let mut removed = 0;
     for resource in resources
         .into_iter()
@@ -309,10 +397,29 @@ pub fn remove_missing_in_folder(instance_id: i32, folder: &Path) -> Result<usize
         if !Path::new(&resource.local_path).exists() {
             removed +=
                 diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
-                    .execute(&mut conn)?;
+                    .execute(conn)?;
         }
     }
     Ok(removed)
+}
+
+pub fn remove_missing(instance_id: i32) -> Result<usize> {
+    let mut conn = get_vesta_conn()?;
+    let resources = ir_dsl::installed_resource
+        .filter(ir_dsl::instance_id.eq(instance_id))
+        .load::<InstalledResource>(&mut conn)?;
+    let missing_ids = resources
+        .into_iter()
+        .filter(|resource| !Path::new(&resource.local_path).exists())
+        .map(|resource| resource.id)
+        .collect::<Vec<_>>();
+    if missing_ids.is_empty() {
+        return Ok(0);
+    }
+    Ok(
+        diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq_any(missing_ids)))
+            .execute(&mut conn)?,
+    )
 }
 
 pub fn unlink_path(instance_id: i32, path: &Path) -> Result<usize> {
@@ -1184,7 +1291,8 @@ fn resource_type_for_path(path: &Path) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        record_download_with_conn, record_many_with_conn, remove_resource_rows_with_conn,
+        apply_modpack_provenance_with_conn, disable_resource_with_conn, record_download_with_conn,
+        record_many_with_conn, remove_missing_in_folder_with_conn, remove_resource_rows_with_conn,
         toggled_path, DownloadLedgerEntry, InstalledResourceFact, ResourceProvenance,
     };
     use crate::models::resource::{ReleaseType, ResourceVersion, SourcePlatform};
@@ -1275,6 +1383,190 @@ mod tests {
             toggled_path(Path::new("mods/a.jar.disabled"), true),
             Path::new("mods/a.jar")
         );
+    }
+
+    #[test]
+    fn missing_resource_is_pruned_instead_of_getting_a_disabled_path() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+
+        let mut conn = test_connection();
+        let missing = Path::new("/missing/mods/example.jar");
+        record_many_with_conn(&mut conn, vec![discovered(1, missing)]).unwrap();
+        let row = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        let result = disable_resource_with_conn(&mut conn, 1, row.id).unwrap();
+
+        assert!(result.removed_missing);
+        assert!(!result.disabled);
+        assert_eq!(
+            installed_dsl::installed_resource
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn successful_disable_renames_before_updating_the_ledger() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let path = mods.join("example.jar");
+        std::fs::write(&path, b"jar").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(&mut conn, vec![discovered(1, &path)]).unwrap();
+        let row = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        let result = disable_resource_with_conn(&mut conn, 1, row.id).unwrap();
+        let disabled = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        assert!(result.disabled);
+        assert!(!path.exists());
+        assert!(Path::new(&disabled.local_path).exists());
+        assert!(disabled.local_path.ends_with(".disabled"));
+        assert!(!disabled.is_enabled);
+    }
+
+    #[test]
+    fn next_load_prunes_stale_rows_in_the_instance_folder() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+
+        let temp = tempfile::tempdir().unwrap();
+        let missing = temp.path().join("mods/synthetic.jar.disabled");
+        let mut conn = test_connection();
+        record_many_with_conn(&mut conn, vec![discovered(1, &missing)]).unwrap();
+
+        assert_eq!(
+            remove_missing_in_folder_with_conn(&mut conn, 1, temp.path()).unwrap(),
+            1
+        );
+        assert_eq!(
+            installed_dsl::installed_resource
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn surviving_bundled_row_refreshes_to_the_new_modpack_version() {
+        use crate::models::instance::Instance;
+        use crate::schema::installed_resource::dsl as installed_dsl;
+        use std::collections::HashSet;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let path = mods.join("bundled.jar");
+        std::fs::write(&path, b"jar").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![InstalledResourceFact::Discovered {
+                instance_id: 1,
+                path,
+                metadata: (3, 1),
+                provenance: Some(ResourceProvenance::modpack(
+                    Some("pack".to_string()),
+                    Some("old-version".to_string()),
+                    Some("modrinth".to_string()),
+                )),
+            }],
+        )
+        .unwrap();
+        let before = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        let instance = Instance {
+            id: 1,
+            modpack_id: Some("pack".to_string()),
+            modpack_version_id: Some("new-version".to_string()),
+            modpack_platform: Some("modrinth".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            apply_modpack_provenance_with_conn(
+                &mut conn,
+                &instance,
+                std::slice::from_ref(&before),
+                &HashSet::from([before.id]),
+            )
+            .unwrap(),
+            1
+        );
+        let after = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert_eq!(
+            after.source_modpack_version_id.as_deref(),
+            Some("new-version")
+        );
+        assert_eq!(after.source_kind, "modpack");
+    }
+
+    #[test]
+    fn unmatched_user_modified_pack_file_is_preserved_as_custom() {
+        use crate::models::instance::Instance;
+        use crate::schema::installed_resource::dsl as installed_dsl;
+        use std::collections::HashSet;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let path = mods.join("preserved.jar");
+        std::fs::write(&path, b"user-modified").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![InstalledResourceFact::Discovered {
+                instance_id: 1,
+                path: path.clone(),
+                metadata: (13, 1),
+                provenance: Some(ResourceProvenance::modpack(
+                    Some("pack".to_string()),
+                    Some("old-version".to_string()),
+                    Some("modrinth".to_string()),
+                )),
+            }],
+        )
+        .unwrap();
+        let before = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        let instance = Instance {
+            id: 1,
+            modpack_id: Some("pack".to_string()),
+            modpack_version_id: Some("new-version".to_string()),
+            modpack_platform: Some("modrinth".to_string()),
+            ..Default::default()
+        };
+
+        apply_modpack_provenance_with_conn(
+            &mut conn,
+            &instance,
+            std::slice::from_ref(&before),
+            &HashSet::new(),
+        )
+        .unwrap();
+        let after = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        assert!(path.exists());
+        assert_eq!(after.source_kind, "custom");
+        assert!(after.source_modpack_id.is_none());
+        assert!(after.source_modpack_version_id.is_none());
     }
 
     #[test]

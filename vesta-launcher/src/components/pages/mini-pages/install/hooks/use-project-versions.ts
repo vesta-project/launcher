@@ -10,6 +10,7 @@ import {
 	batch,
 	createEffect,
 	createResource,
+	createSignal,
 	untrack,
 } from "solid-js";
 
@@ -60,8 +61,109 @@ interface UseProjectVersionsParams {
 	setModpackUrl: (url: string) => void;
 }
 
+type ProjectVersionSource = { id: string; platform: string };
+
+export function createJoinableProjectVersionLookup(
+	fetchVersions: (source: ProjectVersionSource) => Promise<ResourceVersion[]>,
+) {
+	let active: { key: string; promise: Promise<ResourceVersion[]> } | undefined;
+
+	return (source: ProjectVersionSource) => {
+		const key = `${source.platform}:${source.id}`;
+		if (active?.key === key) return active.promise;
+
+		const promise = fetchVersions(source).finally(() => {
+			if (active?.promise === promise) active = undefined;
+		});
+		active = { key, promise };
+		return promise;
+	};
+}
+
+export function selectConcreteProjectVersion(
+	versions: ResourceVersion[],
+	options: {
+		selectedId?: string;
+		initialVersion?: string;
+		currentUrl?: string;
+		minecraftVersion?: string;
+		loader?: string;
+	},
+): ResourceVersion | undefined {
+	const downloadable = versions.filter((version) => !!version.download_url);
+	const requestedId = options.selectedId || options.initialVersion;
+	if (requestedId) {
+		const requested = downloadable.find(
+			(version) =>
+				version.id === requestedId || version.version_number === requestedId,
+		);
+		if (requested) return requested;
+	}
+
+	if (options.currentUrl) {
+		const current = downloadable.find(
+			(version) => version.download_url === options.currentUrl,
+		);
+		if (current) return current;
+	}
+
+	const stable = downloadable.filter(
+		(version) => version.release_type === "release",
+	);
+	const candidates = stable.length > 0 ? stable : downloadable;
+	if (candidates.length === 0) return undefined;
+
+	const best =
+		options.minecraftVersion || options.loader
+			? findBestVersion(
+					candidates,
+					options.minecraftVersion || "",
+					options.loader || null,
+					"release",
+					"modpack",
+				)
+			: undefined;
+	return best || candidates[0];
+}
+
 export function useProjectVersions(params: UseProjectVersionsParams) {
-	const [projectVersions] = createResource(
+	const [versionLookupError, setVersionLookupError] = createSignal<
+		Error | undefined
+	>();
+	const loadVersions = createJoinableProjectVersionLookup(
+		async ({ id, platform }) => {
+			const prefetched = params.prefetchedVersions?.();
+			return prefetched && prefetched.length > 0
+				? prefetched
+				: await withTimeout(
+						resources.getVersions(platform as SourcePlatform, id),
+						PROJECT_VERSIONS_TIMEOUT_MS,
+						"Project versions lookup",
+					);
+		},
+	);
+
+	const applyResolvedVersion = (versions: ResourceVersion[]) => {
+		const info = params.modpackInfo();
+		const target = selectConcreteProjectVersion(versions, {
+			selectedId: params.selectedModpackVersionId(),
+			initialVersion:
+				params.initialVersion?.() ||
+				(info as { modpackVersionId?: string } | undefined)?.modpackVersionId,
+			currentUrl: params.modpackUrl(),
+			minecraftVersion: params.initialMinecraftVersion?.(),
+			loader: params.initialModloader?.(),
+		});
+		if (target && params.isModpackMode()) {
+			batch(() => {
+				params.setSelectedModpackVersionId(target.id);
+				params.setModpackUrl(target.download_url);
+			});
+		}
+		return target;
+	};
+
+	const [projectVersions, { refetch }] = createResource(
 		() => {
 			if (params.modpackPath()) return null;
 
@@ -75,80 +177,44 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 		},
 		async ({ id, platform }: { id: string; platform: string }) => {
 			try {
-				const prefetched = params.prefetchedVersions?.();
-				const vs =
-					prefetched && prefetched.length > 0
-						? prefetched
-						: await withTimeout(
-								resources.getVersions(platform as SourcePlatform, id),
-								PROJECT_VERSIONS_TIMEOUT_MS,
-								"Project versions lookup",
-							);
-				const currentUrl = params.modpackUrl();
-				const info = params.modpackInfo();
-				const initialVer =
-					params.initialVersion?.() ||
-					(info as { modpackVersionId?: string } | undefined)?.modpackVersionId;
-
-				if (initialVer) {
-					const match = vs.find(
-						(v: ResourceVersion) =>
-							v.id === initialVer || v.version_number === initialVer,
-					);
-					if (match) {
-						batch(() => {
-							params.setSelectedModpackVersionId(match.id);
-							params.setModpackUrl(match.download_url);
-						});
-						return vs;
-					}
-				}
-
-				if (currentUrl) {
-					const match = vs.find(
-						(v: ResourceVersion) => v.download_url === currentUrl,
-					);
-					if (match) {
-						batch(() => {
-							params.setSelectedModpackVersionId(match.id);
-							params.setModpackUrl(match.download_url);
-						});
-						return vs;
-					}
-				}
-
-				if (vs.length > 0 && params.isModpackMode()) {
-					const mcVersion = params.initialMinecraftVersion?.();
-					const loader = params.initialModloader?.();
-					const best =
-						mcVersion || loader
-							? findBestVersion(
-									vs,
-									mcVersion || "",
-									loader || null,
-									"release",
-									"modpack",
-								)
-							: undefined;
-					const target = best || vs[0];
-					batch(() => {
-						params.setSelectedModpackVersionId(target.id);
-						params.setModpackUrl(target.download_url);
-					});
-				}
+				const vs = await loadVersions({ id, platform });
+				setVersionLookupError(undefined);
+				applyResolvedVersion(vs);
 				return vs;
 			} catch (error) {
 				console.error("[InstallPage] Version fetch failed:", error);
+				setVersionLookupError(
+					error instanceof Error ? error : new Error(String(error)),
+				);
 				showToast({
 					title: "Version Sync Failed",
 					description:
-						"Could not load modpack versions right now. You can still continue and retry shortly.",
+						"Could not load modpack versions. Install will retry when you try again.",
 					severity: "warning",
 				});
+				// Keep the populated install form usable. The explicit error signal owns
+				// retry UI, while install submission can retry and report its own failure.
 				return [];
 			}
 		},
 	);
+
+	const retryProjectVersions = () => {
+		setVersionLookupError(undefined);
+		return refetch();
+	};
+
+	const resolveConcreteVersion = async () => {
+		const ready = applyResolvedVersion(projectVersions() || []);
+		if (ready?.download_url) return ready;
+
+		const versions = await refetch();
+		const resolved = applyResolvedVersion(versions || []);
+		if (!resolved?.download_url) {
+			throw new Error("No downloadable modpack release is available.");
+		}
+		return resolved;
+	};
 
 	createEffect(() => {
 		const versions = projectVersions();
@@ -185,5 +251,11 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 		params.setModpackUrl(target.download_url);
 	};
 
-	return { projectVersions, handleModpackVersionChange };
+	return {
+		projectVersions,
+		versionLookupError,
+		retryProjectVersions,
+		resolveConcreteVersion,
+		handleModpackVersionChange,
+	};
 }

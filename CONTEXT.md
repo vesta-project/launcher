@@ -219,6 +219,17 @@ publishing a persistent notification. A restore failure preserves its journal,
 sets the existing `interrupted` status, and exposes a resume action that retries
 restoration without retrying the update.
 
+After the file rollback journal is durably committed, successful update
+finalization reconciles filesystem truth and modpack ownership in the Installed
+Resource Ledger before publishing the new Instance version: missing rows and
+obsolete bundled files are pruned, surviving manifest rows receive the new
+provenance version, and new local rows are published. Read-only hashing may run
+before the journal commit, but no Ledger mutation crosses that boundary.
+Provider enrichment remains a silent background Task that starts from those
+coherent local facts. Duplicate resolution retains losing user-owned files only
+after a successful disabled-file rename; missing synthetic rows are pruned on
+the next Resource/Versioning repair load.
+
 Primary modules:
 
 - `vesta-launcher/src-tauri/src/modpack/state.rs`
@@ -395,6 +406,13 @@ hydrates the description, version list, sidebar, and focused-version regions
 behind independent loading boundaries; background refreshes do not unmount
 already-available regions.
 
+Opening a modpack from Browse may populate its Instance Draft before the
+project-version request settles. That lookup is joinable: Install immediately
+enters its starting state, awaits or retries the lightweight release lookup,
+merges the concrete downloadable version into the payload, and queues exactly
+one Task. Archive summary parsing remains independent background presentation
+work and never gates submission.
+
 Primary modules:
 
 - `vesta-launcher/src/stores/resources.ts`
@@ -447,6 +465,12 @@ Primary modules:
 The in-progress editable state for creating or updating an Instance. It includes
 initial values, dirty state, memory defaults, version compatibility, modpack
 sync, and final payload construction.
+
+The first-Instance onboarding Adapter uses the same payload builder for its
+one-click modpack path. It resolves the latest stable download, queues the
+existing modpack install command with 2–4 GB defaults, and only then completes
+onboarding; failure leaves the Draft step available for retry. There is no
+parallel global modpack-dialog state.
 
 Primary modules:
 

@@ -2,10 +2,10 @@ import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 import { DialogRoot } from "@components/dialog/dialog-root";
 import { openMiniPage, router } from "@components/page-viewer/page-viewer";
 import { FatalPage } from "@components/pages/fatal/fatal-page";
-import { WorldArchiveSelectionDialog } from "@components/worlds/WorldArchiveSelectionDialog";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
+import { WorldArchiveSelectionDialog } from "@components/worlds/WorldArchiveSelectionDialog";
 import { Route, Router } from "@solidjs/router";
 import {
 	cleanupDialogSystem,
@@ -14,7 +14,6 @@ import {
 } from "@stores/dialog-store";
 import "@stores/versions"; // eager-load version metadata on boot
 import { setupInstanceListeners } from "@stores/instances";
-import { GlobalModpackInstallDialog } from "@stores/modpack-install";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -456,7 +455,6 @@ function Root(props: ChildrenProp) {
 			{props.children}
 			<SessionExpiredDialog />
 			<DialogRoot />
-			<GlobalModpackInstallDialog />
 			<WorldArchiveSelectionDialog />
 		</>
 	);

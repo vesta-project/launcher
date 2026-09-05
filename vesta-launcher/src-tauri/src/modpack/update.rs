@@ -1,10 +1,13 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use tauri::Manager;
 
-use crate::tasks::installers::modpack::spawn_manifest_resource_linking;
+use crate::tasks::installers::modpack::{
+    prepare_manifest_resource_candidates, spawn_prepared_resource_enrichment,
+};
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::manager::{Task, TaskContext};
 use piston_lib::game::modpack::manifest::ModpackManifest;
@@ -44,12 +47,50 @@ struct PendingUpdate {
 
 pub struct FinishedUpdate {
     processed: crate::models::instance::Instance,
+    prepared: Vec<crate::resources::reconciliation::PreparedResourceCandidate>,
     manifest: ModpackManifest,
+    game_dir: PathBuf,
 }
 
 impl FinishedUpdate {
-    pub fn publish(self, app_handle: &tauri::AppHandle, instance_id: i32, game_dir: &Path) {
-        spawn_manifest_resource_linking(app_handle, instance_id, game_dir, &self.manifest);
+    pub fn publish_local_facts(
+        &self,
+        app_handle: &tauri::AppHandle,
+        instance_id: i32,
+    ) -> Result<(), String> {
+        let pruned_missing =
+            crate::resources::ledger::remove_missing_in_folder(instance_id, &self.game_dir)
+                .map_err(|error| format!("Failed to prune stale resource rows: {error}"))?;
+        crate::resources::reconciliation::publish_local_rows(
+            app_handle,
+            instance_id,
+            &self.prepared,
+            "modpack-update-local-rows",
+        )
+        .map_err(|error| format!("Failed to publish updated resource rows: {error}"))?;
+        let reconciliation = crate::modpack::state::reconcile_updated_ledger(
+            &self.processed,
+            &self.manifest,
+            &self.game_dir,
+        )
+        .map_err(|error| format!("Failed to reconcile updated resource ownership: {error}"))?;
+
+        log::info!(
+            "[modpack-update] Ledger reconciled after durable update commit: {} missing/obsolete rows pruned, {} provenance refreshed",
+            pruned_missing,
+            reconciliation.refreshed_provenance,
+        );
+        Ok(())
+    }
+
+    pub fn publish(self, app_handle: &tauri::AppHandle, instance_id: i32) {
+        spawn_prepared_resource_enrichment(
+            app_handle,
+            instance_id,
+            self.processed.name.clone(),
+            self.prepared,
+            "modpack-update-enrichment",
+        );
         let _ = app_handle.emit("core://instance-updated", self.processed.clone());
         let _ = app_handle.emit("core://instance-installed", self.processed);
     }
@@ -385,6 +426,16 @@ pub async fn finish(
     let processed = crate::commands::instances::get_instance(instance.id)
         .map_err(|error| format!("Failed to fetch updated instance for emit: {}", error))?;
 
+    ctx.update_description("Preparing updated modpack resources...".to_string());
+    let prepared = prepare_manifest_resource_candidates(
+        instance.id,
+        game_dir,
+        &manifest,
+        &HashMap::new(),
+        Some(ctx),
+    )
+    .await;
+
     log::info!(
         "[modpack-update] Update complete: {} → {} (MC {} {})",
         instance.modpack_version_id.as_deref().unwrap_or("?"),
@@ -395,7 +446,9 @@ pub async fn finish(
 
     Ok(FinishedUpdate {
         processed,
+        prepared,
         manifest,
+        game_dir: game_dir.to_path_buf(),
     })
 }
 

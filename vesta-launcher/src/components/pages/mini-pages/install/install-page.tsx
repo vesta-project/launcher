@@ -122,11 +122,10 @@ function InstallPage(props: InstallPageRouteProps) {
 	);
 	const effectivePendingResource = createMemo(() => props.pendingResource);
 	const pendingResourceIsNonModpack = createMemo(() => {
-		const resourceType =
-			(
-				effectivePendingResource()?.installType ??
-				effectivePendingResource()?.project.resource_type
-			)?.toLowerCase();
+		const resourceType = (
+			effectivePendingResource()?.installType ??
+			effectivePendingResource()?.project.resource_type
+		)?.toLowerCase();
 		return (
 			!!resourceType &&
 			resourceType !== "modpack" &&
@@ -182,17 +181,13 @@ function InstallPage(props: InstallPageRouteProps) {
 		selectedModpackVersionId,
 	});
 
-	const install = useInstallSubmit({
-		close: props.close,
-		navigateHome: () => activeRouter()?.navigate("/home"),
-		isModpackMode,
-		modpackUrl: source.modpackUrl,
-		modpackPath: source.modpackPath,
-		modpackInfo: source.modpackInfo as any,
-		pendingResource: effectivePendingResource,
-	});
-
-	const { projectVersions, handleModpackVersionChange } = useProjectVersions({
+	const {
+		projectVersions,
+		versionLookupError,
+		retryProjectVersions,
+		resolveConcreteVersion,
+		handleModpackVersionChange,
+	} = useProjectVersions({
 		isModpackMode,
 		modpackPath: source.modpackPath,
 		modpackUrl: source.modpackUrl,
@@ -206,6 +201,17 @@ function InstallPage(props: InstallPageRouteProps) {
 		selectedModpackVersionId,
 		setSelectedModpackVersionId,
 		setModpackUrl: source.setModpackUrl,
+	});
+
+	const install = useInstallSubmit({
+		close: props.close,
+		navigateHome: () => activeRouter()?.navigate("/home"),
+		isModpackMode,
+		modpackUrl: source.modpackUrl,
+		modpackPath: source.modpackPath,
+		modpackInfo: source.modpackInfo as any,
+		resolveConcreteModpackVersion: resolveConcreteVersion,
+		pendingResource: effectivePendingResource,
 	});
 
 	// --- Enrich modpackInfo with version details when the selected version resolves ---
@@ -448,7 +454,9 @@ function InstallPage(props: InstallPageRouteProps) {
 	);
 	const loadingTitle = createMemo(() => {
 		if (install.isInstalling())
-			return isModpackMode() ? "Installing modpack..." : "Creating instance...";
+			return isModpackMode()
+				? "Starting installation..."
+				: "Creating instance...";
 		if (metadataStatus().phase === "reading-local-pack")
 			return "Reading modpack manifest...";
 		if (isMatchingSource()) return "Matching online source...";
@@ -462,7 +470,9 @@ function InstallPage(props: InstallPageRouteProps) {
 			if (isResourceInstanceMode()) {
 				return `Installing ${effectivePendingResource()?.project.name || "the selected resource"} after the instance is created.`;
 			}
-			return "Creating files and applying the selected configuration.";
+			return isModpackMode()
+				? "Resolving the selected release and queuing its install task."
+				: "Creating files and applying the selected configuration.";
 		}
 		return metadataStatus().message;
 	});
@@ -657,6 +667,8 @@ function InstallPage(props: InstallPageRouteProps) {
 						}}
 						isInstalling={install.isInstalling()}
 						isFetchingMetadata={isFetchingMetadata()}
+						versionLookupError={versionLookupError()?.message}
+						onRetryVersionLookup={() => void retryProjectVersions()}
 					/>
 				</Show>
 			</div>
