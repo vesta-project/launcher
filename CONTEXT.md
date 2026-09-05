@@ -72,13 +72,15 @@ Launcher-owned installation, repair, Java management, and loader processors are
 trusted work outside this boundary. Presets are Trusted (default, no sandbox),
 Modded (filesystem and exec allowlists; network and mic on), and Paranoid (same
 filesystem/exec/USB as Modded; network and mic off). Global app defaults and
-per-instance overrides follow the existing `use_global_*` pattern. Only shared
-runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`) and the
-selected Java runtime are readable; they are not writable. Native-image load is
-a distinct portable authority from child-process execution: the selected Java
+per-instance overrides follow the existing `use_global_*` pattern. Shared
+runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`) plus the
+selected Java runtime are readable but not writable. Native-image load is a
+distinct portable authority from child-process execution: the selected Java
 runtime, shared natives, Instance game directory, and private sandbox temp are
-loadable. The Instance game directory and exact pre-created session-log file are
-read-write. Optional global and instance extra paths grant read-write access.
+loadable. Runtime extraction and validation writes belong in private sandbox
+temp rather than the shared native cache. The Instance game directory and exact
+pre-created session-log file are read-write. Optional global and instance extra
+paths grant read-write access.
 Paths are canonicalized before
 the Adapter builds its policy. Wrapper nesting (sandbox-outside vs
 wrapper-outside) is configurable. Hooks run inside the Play sandbox and may use
@@ -107,9 +109,16 @@ journaled, non-inheriting resolution ACEs on their private ancestor chain so
 Win32 canonicalization (including Java `Path.toRealPath`) can reach them. These
 permit traversal, metadata, and ancestor-name enumeration, but no child-file
 reads or writes. Because a standard user cannot grant the package SID on shared
-profile parents such as `C:\Users`, sandboxed Java is launched through a
-short-lived, mutex-reserved DOS drive rooted directly at its allowlisted runtime;
-the mapping is removed when the launch ends. A trusted in-container trampoline
+profile parents such as `C:\Users`, sandboxed Java receives a short-lived,
+mutex-reserved DOS drive rooted at its user profile. Java-visible classpath,
+argument, environment, and working-directory paths are rewritten through that
+alias while NTFS policy remains attached to their canonical roots; the mapping
+is removed when the launch ends. Each restricted invocation uses a fresh
+writable/loadable directory beneath its AppContainer package temp. The trusted
+helper copies JNA's architecture-specific `jnidispatch.dll` from the active,
+read-allowlisted classpath JAR into that directory and configures
+`jna.boot.library.path`; Java, JNA, LWJGL, and Netty temp paths are otherwise
+directed there. The directory is removed after exit. A trusted in-container trampoline
 can create one target with Windows' token-level no-child policy, an exact stdio
 handle list, and a broker DACL that denies all access to both Everyone and Owner
 Rights so the target cannot rewrite or bypass the broker boundary;
@@ -119,7 +128,8 @@ separate helper invocations. A per-profile named mutex covers each invocation's
 complete lifetime, closing the same-profile broker startup race. A second named
 mutex serializes the complete ACL journal/DACL transaction across profiles so
 concurrent Instances cannot lose one another's shared runtime grants. The
-reusable policy file is outside writable sandbox TEMP. Windows reports exec
+reusable policy file is stored beside the protected ACL journals, outside all
+accepted writable sandbox roots. Windows reports exec
 enforcement as Enforced and exposes playable presets. Its no-child policy is intentionally
 stricter than the portable maximum-authority allowlist: game descendants are
 denied even when their executable is listed. Generic sandbox-outside wrappers

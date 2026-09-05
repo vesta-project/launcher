@@ -80,7 +80,10 @@ jobs:
 
   build:
     needs: [bump-version]
-    if: ${{ !cancelled() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped') }}
+    # A bump dispatch pushes a tag, and that tag starts the authoritative build
+    # run. Skipping the dispatch build prevents two runs uploading the same
+    # version concurrently.
+    if: ${{ !cancelled() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.bump == 'none')) }}
     permissions:
       contents: read
     strategy:
@@ -260,6 +263,7 @@ jobs:
             -name "*.exe" -o \
             -name "*.dmg" -o \
             -name "*.deb" -o \
+            -name "*.rpm" -o \
             -name "*.AppImage" -o \
             -name "*.app.tar.gz" -o \
             -name "*.sig" \
@@ -315,6 +319,13 @@ jobs:
                   target_name="vesta-launcher_${VERSION}_amd64.deb"
                 fi
                 ;;
+              rpm)
+                if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+                  target_name="vesta-launcher-${VERSION}-1.aarch64.rpm"
+                else
+                  target_name="vesta-launcher-${VERSION}-1.x86_64.rpm"
+                fi
+                ;;
               AppImage)
                 if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
                   target_name="Vesta_Launcher_${VERSION}_aarch64.AppImage"
@@ -356,6 +367,7 @@ jobs:
             target/${{ matrix.target }}/release/bundle/**/*.exe
             target/${{ matrix.target }}/release/bundle/**/*.dmg
             target/${{ matrix.target }}/release/bundle/**/*.deb
+            target/${{ matrix.target }}/release/bundle/**/*.rpm
             target/${{ matrix.target }}/release/bundle/**/*.AppImage
             target/${{ matrix.target }}/release/bundle/**/*.AppImage.tar.gz
             target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
@@ -495,19 +507,36 @@ jobs:
           add_platform "linux-aarch64" "Vesta_Launcher_${VERSION}_aarch64.AppImage"
 
           WINDOWS_EXPECTED=false
+          MACOS_EXPECTED=false
+          LINUX_EXPECTED=false
           if [ "${{ github.event_name }}" = "push" ]; then
             WINDOWS_EXPECTED=true
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.build_windows }}" = "true" ]; then
-            WINDOWS_EXPECTED=true
+            MACOS_EXPECTED=true
+            LINUX_EXPECTED=true
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.build_windows }}" = "true" ]; then WINDOWS_EXPECTED=true; fi
+            if [ "${{ github.event.inputs.build_macos }}" = "true" ]; then MACOS_EXPECTED=true; fi
+            if [ "${{ github.event.inputs.build_linux }}" = "true" ]; then LINUX_EXPECTED=true; fi
           fi
 
-          if [ "$WINDOWS_EXPECTED" = "true" ]; then
-            if ! echo "$JSON_DATA" | jq -e 'has("windows-x86_64") and has("windows-aarch64")' > /dev/null; then
-              echo "Error: Missing Windows platform entries in latest.json while Windows builds are enabled"
-              echo "$JSON_DATA" | jq .
-              exit 1
-            fi
-          fi
+          require_platforms() {
+            local label="$1"
+            local expected="$2"
+            shift 2
+            [ "$expected" = "true" ] || return 0
+            local platform
+            for platform in "$@"; do
+              if ! echo "$JSON_DATA" | jq -e --arg platform "$platform" 'has($platform)' > /dev/null; then
+                echo "Error: Missing $label platform entry $platform in latest.json while $label builds are enabled"
+                echo "$JSON_DATA" | jq .
+                exit 1
+              fi
+            done
+          }
+
+          require_platforms "Windows" "$WINDOWS_EXPECTED" windows-x86_64 windows-aarch64
+          require_platforms "macOS" "$MACOS_EXPECTED" darwin-x86_64 darwin-aarch64
+          require_platforms "Linux" "$LINUX_EXPECTED" linux-x86_64 linux-aarch64
 
           jq -n \
             --arg v "$VERSION" \

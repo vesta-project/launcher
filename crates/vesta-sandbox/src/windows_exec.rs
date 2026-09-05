@@ -14,7 +14,7 @@ use rappct::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
-use std::io::{self, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 const FILE_GENERIC_READ: u32 = 1_179_785;
@@ -26,7 +26,8 @@ const ACL_JOURNAL_FORMAT_VERSION: u32 = 2;
 const DELETE: u32 = 65_536;
 const FILE_DELETE_CHILD: u32 = 64;
 const WRITE_AUTHORITY: u32 = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 | DELETE;
-const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "5";
+const MAX_JNA_DISPATCH_BYTES: u64 = 16 * 1024 * 1024;
+const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "7";
 
 pub fn windows_helper_path() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
@@ -211,6 +212,7 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
         Some("Per-instance Vesta Minecraft sandbox"),
     )
     .map_err(|err| format!("could not create AppContainer profile: {err}"))?;
+    let target_temp = create_appcontainer_target_temp(&profile_name)?;
     // The trusted sidecar runs briefly inside AppContainer as a trampoline so
     // it can create the real target with the token-level no-child policy. Its
     // executable is an Adapter implementation detail, not portable exec intent.
@@ -227,24 +229,43 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
     {
         access_policy.exec_allowlist.push(broker_program.clone());
     }
+    access_policy
+        .filesystem_allowlist
+        .push(PathAccess::new(target_temp.path(), true, true, false).loadable());
     sync_policy_access(&profile, &access_policy, &profile_name)?;
-    // Java 25 canonicalizes java.home one component at a time with
-    // FindFirstFile. A standard user cannot add an AppContainer ACE to the
-    // shared C:\Users directory, even though the declared JRE itself is
-    // allowlisted. Launch Java through a short-lived DOS drive rooted directly
-    // at its runtime so canonicalization never crosses that shared directory.
-    let java_runtime_drive = JavaRuntimeDrive::for_program(&canonical_program)?;
-    if java_runtime_drive.is_some()
-        && invocation
-            .args
-            .iter()
-            .any(|arg| arg.starts_with("-Djava.home="))
-    {
-        return Err(
-            "sandboxed Java reserves java.home for its allowlisted runtime mapping".to_string(),
-        );
+    // Java 25 canonicalizes java.home, classpath entries, and game paths one
+    // component at a time with FindFirstFile. A standard user cannot add an
+    // AppContainer ACE to the shared C:\Users directory. Give Java a
+    // short-lived drive rooted at USERPROFILE and rewrite only path-shaped
+    // references so canonicalization starts below that inaccessible parent.
+    let java_profile_drive = JavaProfileDrive::for_program(&canonical_program)?;
+    if java_profile_drive.is_some() {
+        for property in [
+            "-Djava.home=",
+            "-Djava.io.tmpdir=",
+            "-Duser.home=",
+            "-Djna.boot.library.path=",
+            "-Djna.boot.library.name=",
+        ] {
+            if invocation.args.iter().any(|arg| arg.starts_with(property)) {
+                return Err(format!(
+                    "sandboxed Java reserves {} for its allowlisted runtime paths",
+                    property.trim_start_matches("-D").trim_end_matches('=')
+                ));
+            }
+        }
     }
-    let launch_program = java_runtime_drive
+    let jna_boot_dir = if java_profile_drive.is_some() {
+        prepare_jna_boot_library(
+            &invocation.args,
+            &policy,
+            target_temp.path(),
+            &canonical_program,
+        )?
+    } else {
+        None
+    };
+    let launch_program = java_profile_drive
         .as_ref()
         .map(|drive| drive.program.clone())
         .unwrap_or_else(|| win32_process_path(&canonical_program));
@@ -271,7 +292,22 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
     // The raw handle intentionally remains open until this helper exits.
     let _job = attach_current_process_to_kill_job()?;
 
-    let mut environment: Vec<_> = std::env::vars_os().collect();
+    let mut environment: Vec<_> = std::env::vars_os()
+        .map(|(name, value)| {
+            let value = java_profile_drive
+                .as_ref()
+                .map(|drive| drive.rewrite_os_value(value.clone()))
+                .unwrap_or(value);
+            (name, value)
+        })
+        .collect();
+    environment.retain(|(name, _)| {
+        !name.to_string_lossy().eq_ignore_ascii_case("TEMP")
+            && !name.to_string_lossy().eq_ignore_ascii_case("TMP")
+    });
+    for name in ["TEMP", "TMP"] {
+        environment.push((name.into(), target_temp.path().as_os_str().to_os_string()));
+    }
     environment.sort_by(|(left, _), (right, _)| {
         left.to_string_lossy()
             .to_ascii_lowercase()
@@ -282,16 +318,47 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
         "--".to_string(),
         launch_program.to_string_lossy().into_owned(),
     ];
-    broker_args.extend(invocation.args.iter().cloned());
+    if let Some(drive) = &java_profile_drive {
+        // The JDK obtains user.home from Windows rather than USERPROFILE, so
+        // make that Java-visible path use the same alias. Caller arguments are
+        // appended afterwards and remain authoritative, but any profile path
+        // they contain is rewritten below.
+        broker_args.push(format!(
+            "-Duser.home={}",
+            drive.profile.alias_root.display()
+        ));
+        let java_temp = target_temp
+            .path()
+            .to_str()
+            .ok_or_else(|| "sandboxed Java requires a Unicode TEMP path".to_string())?;
+        broker_args.push(format!("-Djava.io.tmpdir={java_temp}"));
+        if let Some(jna_boot_dir) = &jna_boot_dir {
+            broker_args.push(format!(
+                "-Djna.boot.library.path={}",
+                jna_boot_dir.display()
+            ));
+        }
+        broker_args.extend(
+            invocation
+                .args
+                .iter()
+                .map(|arg| rewrite_java_runtime_temp_arg(arg, java_temp, drive)),
+        );
+    } else {
+        broker_args.extend(invocation.args.iter().cloned());
+    }
+    let current_dir = std::env::current_dir()
+        .map_err(|err| format!("could not resolve sandbox working directory: {err}"))?;
+    let launch_cwd = java_profile_drive
+        .as_ref()
+        .map(|drive| drive.rewrite_path(&current_dir))
+        .unwrap_or(current_dir);
     let mut child = launch_in_container_with_io(
         &capabilities,
         &LaunchOptions {
             exe: win32_process_path(&broker_program),
             cmdline: build_command_line(&broker_args),
-            cwd: Some(
-                std::env::current_dir()
-                    .map_err(|err| format!("could not resolve sandbox working directory: {err}"))?,
-            ),
+            cwd: Some(launch_cwd),
             // CreateProcess with an AppContainer security-capabilities attribute
             // is unreliable with a null environment on supported Windows builds.
             // The sidecar already inherited the launcher's complete environment
@@ -342,14 +409,257 @@ impl Drop for NamedMutexGuard {
     }
 }
 
-struct JavaRuntimeDrive {
+fn create_appcontainer_target_temp(profile_name: &str) -> Result<tempfile::TempDir, String> {
+    let local_app_data = std::env::var_os("LOCALAPPDATA")
+        .ok_or_else(|| "LOCALAPPDATA is unavailable for Windows sandbox temp".to_string())?;
+    let package_temp = PathBuf::from(local_app_data)
+        .join("Packages")
+        .join(profile_name)
+        .join("AC")
+        .join("Temp");
+    std::fs::create_dir_all(&package_temp).map_err(|err| {
+        format!(
+            "could not create AppContainer package temp {}: {err}",
+            package_temp.display()
+        )
+    })?;
+    tempfile::Builder::new()
+        .prefix("vesta-session-")
+        .tempdir_in(&package_temp)
+        .map_err(|err| {
+            format!(
+                "could not create private AppContainer target temp in {}: {err}",
+                package_temp.display()
+            )
+        })
+}
+
+pub(crate) fn create_windows_policy_temp() -> Result<tempfile::TempDir, String> {
+    let state_root = windows_acl_state_root()?;
+    std::fs::create_dir_all(&state_root).map_err(|err| {
+        format!(
+            "could not create protected Windows sandbox state {}: {err}",
+            state_root.display()
+        )
+    })?;
+    tempfile::Builder::new()
+        .prefix("policy-")
+        .tempdir_in(&state_root)
+        .map_err(|err| {
+            format!(
+                "could not create protected Windows policy directory in {}: {err}",
+                state_root.display()
+            )
+        })
+}
+
+fn prepare_jna_boot_library(
+    args: &[String],
+    policy: &SandboxPolicy,
+    target_temp: &Path,
+    java_program: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let Some(classpath) = java_classpath(args) else {
+        return Ok(None);
+    };
+    let resources = jna_dispatch_resources_for_java(java_program)?;
+    let mut active_jna_jar = None;
+
+    for jar_path in std::env::split_paths(&OsString::from(classpath)) {
+        if !jar_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("jar"))
+        {
+            continue;
+        }
+        let Ok(canonical_jar) = std::fs::canonicalize(&jar_path) else {
+            // The JVM also ignores missing classpath entries.
+            continue;
+        };
+        if !policy_allows_read(policy, &canonical_jar) {
+            // Do not let the trusted helper become a filesystem oracle. A JAR
+            // outside the read policy is not a viable application classpath
+            // entry for the restricted JVM either.
+            continue;
+        }
+
+        let Ok(file) = std::fs::File::open(&canonical_jar) else {
+            continue;
+        };
+        let Ok(mut archive) = zip::ZipArchive::new(file) else {
+            continue;
+        };
+        if active_jna_jar.is_none() {
+            if archive.by_name("com/sun/jna/Native.class").is_err() {
+                continue;
+            }
+            active_jna_jar = Some(canonical_jar.clone());
+        }
+
+        for resource in resources {
+            let Ok(mut entry) = archive.by_name(resource) else {
+                continue;
+            };
+            if entry.size() > MAX_JNA_DISPATCH_BYTES {
+                return Err(format!(
+                    "JNA dispatch library in {} exceeds the {} byte safety limit",
+                    canonical_jar.display(),
+                    MAX_JNA_DISPATCH_BYTES
+                ));
+            }
+
+            let boot_dir = target_temp.join("jna-boot");
+            std::fs::create_dir(&boot_dir).map_err(|err| {
+                format!(
+                    "could not create private JNA boot directory {}: {err}",
+                    boot_dir.display()
+                )
+            })?;
+            let destination = boot_dir.join("jnidispatch.dll");
+            let mut output = std::fs::File::create(&destination).map_err(|err| {
+                format!(
+                    "could not create private JNA dispatch library {}: {err}",
+                    destination.display()
+                )
+            })?;
+            let copied = io::copy(
+                &mut entry.by_ref().take(MAX_JNA_DISPATCH_BYTES + 1),
+                &mut output,
+            )
+            .map_err(|err| {
+                format!(
+                    "could not extract JNA dispatch library from {}: {err}",
+                    canonical_jar.display()
+                )
+            })?;
+            if copied > MAX_JNA_DISPATCH_BYTES {
+                let _ = std::fs::remove_file(&destination);
+                return Err(format!(
+                    "JNA dispatch library in {} exceeds the {} byte safety limit",
+                    canonical_jar.display(),
+                    MAX_JNA_DISPATCH_BYTES
+                ));
+            }
+            return Ok(Some(boot_dir));
+        }
+    }
+
+    if let Some(active_jna_jar) = active_jna_jar {
+        return Err(format!(
+            "JNA classpath beginning at {} has no dispatch library for this Windows architecture",
+            active_jna_jar.display()
+        ));
+    }
+
+    Ok(None)
+}
+
+fn jna_dispatch_resources_for_java(java_program: &Path) -> Result<&'static [&'static str], String> {
+    const IMAGE_FILE_MACHINE_I386: u16 = 0x014c;
+    const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
+    const IMAGE_FILE_MACHINE_ARM64: u16 = 0xaa64;
+
+    match windows_pe_machine(java_program)? {
+        IMAGE_FILE_MACHINE_I386 => Ok(&["com/sun/jna/win32-x86/jnidispatch.dll"]),
+        IMAGE_FILE_MACHINE_AMD64 => Ok(&[
+            "com/sun/jna/win32-x86-64/jnidispatch.dll",
+            "com/sun/jna/win32-amd64/jnidispatch.dll",
+        ]),
+        IMAGE_FILE_MACHINE_ARM64 => Ok(&["com/sun/jna/win32-aarch64/jnidispatch.dll"]),
+        machine => Err(format!(
+            "Java executable {} uses unsupported PE machine 0x{machine:04x}",
+            java_program.display()
+        )),
+    }
+}
+
+fn windows_pe_machine(program: &Path) -> Result<u16, String> {
+    let mut file = std::fs::File::open(program).map_err(|err| {
+        format!(
+            "could not inspect Java executable {}: {err}",
+            program.display()
+        )
+    })?;
+    let mut dos_header = [0u8; 64];
+    file.read_exact(&mut dos_header).map_err(|err| {
+        format!(
+            "could not read Java executable {}: {err}",
+            program.display()
+        )
+    })?;
+    if &dos_header[..2] != b"MZ" {
+        return Err(format!(
+            "Java executable {} has no DOS header",
+            program.display()
+        ));
+    }
+    let pe_offset = u32::from_le_bytes(dos_header[0x3c..0x40].try_into().unwrap()) as u64;
+    file.seek(SeekFrom::Start(pe_offset)).map_err(|err| {
+        format!(
+            "could not seek Java executable {} to its PE header: {err}",
+            program.display()
+        )
+    })?;
+    let mut pe_header = [0u8; 6];
+    file.read_exact(&mut pe_header).map_err(|err| {
+        format!(
+            "could not read Java executable {} PE header: {err}",
+            program.display()
+        )
+    })?;
+    if &pe_header[..4] != b"PE\0\0" {
+        return Err(format!(
+            "Java executable {} has an invalid PE header",
+            program.display()
+        ));
+    }
+    Ok(u16::from_le_bytes([pe_header[4], pe_header[5]]))
+}
+
+fn java_classpath(args: &[String]) -> Option<&str> {
+    for (index, arg) in args.iter().enumerate() {
+        if matches!(arg.as_str(), "-cp" | "-classpath" | "--class-path") {
+            return args.get(index + 1).map(String::as_str);
+        }
+        for prefix in ["-cp=", "-classpath=", "--class-path="] {
+            if let Some(classpath) = arg.strip_prefix(prefix) {
+                return Some(classpath);
+            }
+        }
+    }
+    None
+}
+
+fn policy_allows_read(policy: &SandboxPolicy, path: &Path) -> bool {
+    policy
+        .filesystem_allowlist
+        .iter()
+        .chain(policy.extra_paths.iter())
+        .filter(|entry| entry.read)
+        .any(|entry| {
+            let allowed =
+                std::fs::canonicalize(&entry.path).unwrap_or_else(|_| entry.path.to_path_buf());
+            windows_paths_equal(path, &allowed)
+                || (entry.recursive && windows_path_starts_with(path, &allowed))
+        })
+}
+
+struct JavaProfileDrive {
     program: PathBuf,
+    profile: DosDriveMapping,
+    _runtime: Option<DosDriveMapping>,
+}
+
+struct DosDriveMapping {
+    root: PathBuf,
+    alias_root: PathBuf,
     device_name: Vec<u16>,
     target_name: Vec<u16>,
     mutex: windows_sys::Win32::Foundation::HANDLE,
 }
 
-impl JavaRuntimeDrive {
+impl JavaProfileDrive {
     fn for_program(program: &Path) -> Result<Option<Self>, String> {
         let is_java = program
             .file_name()
@@ -360,18 +670,65 @@ impl JavaRuntimeDrive {
         if !is_java {
             return Ok(None);
         }
-        let java_home = program
-            .parent()
-            .and_then(Path::parent)
-            .ok_or_else(|| format!("Java executable has no runtime root: {}", program.display()))?;
-        let relative_program = program.strip_prefix(java_home).map_err(|_| {
+        let profile_root = std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .ok_or_else(|| "USERPROFILE is unavailable for sandboxed Java paths".to_string())?;
+        let profile_root = std::fs::canonicalize(&profile_root).map_err(|err| {
             format!(
-                "Java executable {} is outside its inferred runtime {}",
-                program.display(),
-                java_home.display()
+                "could not canonicalize Java profile root {}: {err}",
+                profile_root.display()
             )
         })?;
-        let target = java_drive_target(java_home)?;
+        let profile = DosDriveMapping::for_root(profile_root)?;
+        let (program, runtime) = if let Ok(relative) = program.strip_prefix(&profile.root) {
+            (profile.alias_root.join(relative), None)
+        } else {
+            let java_home = program.parent().and_then(Path::parent).ok_or_else(|| {
+                format!("Java executable has no runtime root: {}", program.display())
+            })?;
+            let runtime = DosDriveMapping::for_root(java_home.to_path_buf())?;
+            (runtime.rewrite_path(program), Some(runtime))
+        };
+
+        Ok(Some(Self {
+            program,
+            profile,
+            _runtime: runtime,
+        }))
+    }
+
+    fn rewrite_path(&self, path: &Path) -> PathBuf {
+        self.profile.rewrite_path(path)
+    }
+
+    fn rewrite_os_value(&self, value: OsString) -> OsString {
+        value
+            .to_str()
+            .map(|value| OsString::from(self.rewrite_text(value)))
+            .unwrap_or(value)
+    }
+
+    fn rewrite_text(&self, value: &str) -> String {
+        self.profile.rewrite_text(value)
+    }
+}
+
+fn rewrite_java_runtime_temp_arg(arg: &str, java_temp: &str, drive: &JavaProfileDrive) -> String {
+    for (property, child) in [
+        ("-Djna.tmpdir=", "jna"),
+        ("-Dorg.lwjgl.system.SharedLibraryExtractPath=", "lwjgl"),
+        ("-Dio.netty.native.workdir=", "netty"),
+    ] {
+        if arg.starts_with(property) {
+            return format!("{property}{}", Path::new(java_temp).join(child).display());
+        }
+    }
+    drive.rewrite_text(arg)
+}
+
+impl DosDriveMapping {
+    fn for_root(root: PathBuf) -> Result<Self, String> {
+        let target = java_drive_target(&root)?;
 
         use windows_sys::Win32::Foundation::{
             CloseHandle, ERROR_FILE_NOT_FOUND, WAIT_ABANDONED, WAIT_OBJECT_0,
@@ -434,19 +791,36 @@ impl JavaRuntimeDrive {
                 continue;
             }
 
-            return Ok(Some(Self {
-                program: PathBuf::from(format!("{}:\\", letter as char)).join(relative_program),
+            return Ok(Self {
+                root,
+                alias_root: PathBuf::from(format!("{}:\\", letter as char)),
                 device_name,
                 target_name,
                 mutex,
-            }));
+            });
         }
 
         Err("no free DOS drive is available for sandboxed Java path resolution".to_string())
     }
+
+    fn rewrite_path(&self, path: &Path) -> PathBuf {
+        PathBuf::from(self.rewrite_text(&path.to_string_lossy()))
+    }
+
+    fn rewrite_text(&self, value: &str) -> String {
+        let canonical = self.root.to_string_lossy().into_owned();
+        let win32 = win32_process_path(&self.root)
+            .to_string_lossy()
+            .into_owned();
+        rewrite_path_references(
+            value,
+            &[win32, canonical],
+            &self.alias_root.to_string_lossy(),
+        )
+    }
 }
 
-impl Drop for JavaRuntimeDrive {
+impl Drop for DosDriveMapping {
     fn drop(&mut self) {
         use windows_sys::Win32::Foundation::CloseHandle;
         use windows_sys::Win32::Storage::FileSystem::{
@@ -468,6 +842,58 @@ impl Drop for JavaRuntimeDrive {
             CloseHandle(self.mutex);
         }
     }
+}
+
+fn rewrite_path_references(value: &str, roots: &[String], alias_root: &str) -> String {
+    let mut rewritten = value.to_string();
+    for root in roots {
+        let mut offset = 0;
+        while offset + root.len() <= rewritten.len() {
+            let Some(relative_index) = rewritten[offset..].find(|character: char| {
+                character.eq_ignore_ascii_case(&root.chars().next().unwrap_or_default())
+            }) else {
+                break;
+            };
+            let start = offset + relative_index;
+            let end = start + root.len();
+            if rewritten.is_char_boundary(end)
+                && rewritten[start..end].eq_ignore_ascii_case(root)
+                && path_reference_boundary(&rewritten, start, end)
+            {
+                let suffix_has_separator = rewritten[end..]
+                    .chars()
+                    .next()
+                    .is_some_and(|character| character == '\\' || character == '/');
+                let replacement = if suffix_has_separator {
+                    alias_root.trim_end_matches(['\\', '/'])
+                } else {
+                    alias_root
+                };
+                rewritten.replace_range(start..end, replacement);
+                offset = start + replacement.len();
+            } else {
+                offset = rewritten[start..]
+                    .char_indices()
+                    .nth(1)
+                    .map(|(next, _)| start + next)
+                    .unwrap_or(rewritten.len());
+            }
+        }
+    }
+    rewritten
+}
+
+fn path_reference_boundary(value: &str, start: usize, end: usize) -> bool {
+    let before = value[..start].chars().next_back();
+    let after = value[end..].chars().next();
+    before.is_none_or(|character| {
+        matches!(
+            character,
+            '=' | ';' | ':' | ',' | '"' | '\'' | '@' | ' ' | '\t'
+        )
+    }) && after.is_none_or(|character| {
+        matches!(character, '\\' | '/' | ';' | ',' | '"' | '\'' | ' ' | '\t')
+    })
 }
 
 fn java_drive_target(java_home: &Path) -> Result<String, String> {
@@ -1163,12 +1589,15 @@ fn acl_revocation_affects(desired: &AclEntry, removed: &AclEntry) -> bool {
 }
 
 fn acl_journal_path(profile_name: &str) -> Result<PathBuf, String> {
+    Ok(windows_acl_state_root()?.join(format!("{profile_name}.json")))
+}
+
+fn windows_acl_state_root() -> Result<PathBuf, String> {
     let local_app_data = std::env::var_os("LOCALAPPDATA")
         .ok_or_else(|| "LOCALAPPDATA is unavailable for Windows sandbox state".to_string())?;
     Ok(PathBuf::from(local_app_data)
         .join("VestaLauncher")
-        .join("sandbox-profiles")
-        .join(format!("{profile_name}.json")))
+        .join("sandbox-profiles"))
 }
 
 fn read_acl_journal(path: &Path) -> Result<AclJournal, String> {
@@ -1864,6 +2293,80 @@ mod tests {
     }
 
     #[test]
+    fn java_classpath_recognizes_supported_option_spellings() {
+        for args in [
+            vec!["-cp".into(), "one;two".into(), "Main".into()],
+            vec!["-classpath".into(), "one;two".into(), "Main".into()],
+            vec!["--class-path".into(), "one;two".into(), "Main".into()],
+            vec!["--class-path=one;two".into(), "Main".into()],
+        ] {
+            assert_eq!(java_classpath(&args), Some("one;two"));
+        }
+        assert_eq!(java_classpath(&["Main".into()]), None);
+    }
+
+    #[test]
+    fn jna_boot_extraction_uses_the_first_active_jna_classpath_jar() {
+        let Ok(java) = which::which("java.exe") else {
+            return;
+        };
+        let java = std::fs::canonicalize(java).unwrap();
+        let probe = tempfile::tempdir().unwrap();
+        let decoy = probe.path().join("decoy.jar");
+        let active = probe.path().join("renamed-library.jar");
+        let resources = probe.path().join("renamed-resources.jar");
+        let target_temp = probe.path().join("private-temp");
+        std::fs::create_dir(&target_temp).unwrap();
+
+        let decoy_archive = zip::ZipWriter::new(std::fs::File::create(&decoy).unwrap());
+        decoy_archive.finish().unwrap();
+        let mut active_archive = zip::ZipWriter::new(std::fs::File::create(&active).unwrap());
+        active_archive
+            .start_file(
+                "com/sun/jna/Native.class",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        active_archive.write_all(b"synthetic-class").unwrap();
+        active_archive.finish().unwrap();
+        let mut resource_archive = zip::ZipWriter::new(std::fs::File::create(&resources).unwrap());
+        resource_archive
+            .start_file(
+                jna_dispatch_resources_for_java(&java).unwrap()[0],
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        resource_archive.write_all(b"synthetic-dispatch").unwrap();
+        resource_archive.finish().unwrap();
+
+        let policy = SandboxPolicy {
+            enabled: true,
+            preset: SandboxPreset::Modded,
+            filesystem_allowlist: vec![PathAccess::new(probe.path(), true, false, false)],
+            network_allowed: true,
+            mic_allowed: true,
+            usb_allowed: true,
+            exec_allowlist: vec![java.clone()],
+            wrapper_nesting: WrapperNesting::SandboxOutside,
+            extra_paths: Vec::new(),
+        };
+        let classpath = std::env::join_paths([&decoy, &active, &resources]).unwrap();
+        let boot_dir = prepare_jna_boot_library(
+            &["-cp".into(), classpath.to_string_lossy().into_owned()],
+            &policy,
+            &target_temp,
+            &java,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read(boot_dir.join("jnidispatch.dll")).unwrap(),
+            b"synthetic-dispatch"
+        );
+    }
+
+    #[test]
     fn profile_launch_mutex_serializes_the_full_profile_lifetime() {
         let profile_name = format!("vesta-sandbox-test-{}", std::process::id());
         let first = acquire_profile_launch_lock(&profile_name).unwrap();
@@ -2088,6 +2591,35 @@ mod tests {
         assert_eq!(
             java_drive_target(Path::new(r"\\?\UNC\server\share\runtime")).unwrap(),
             r"\??\UNC\server\share\runtime"
+        );
+    }
+
+    #[test]
+    fn java_profile_alias_rewrites_only_path_shaped_references() {
+        let roots = vec![
+            r"\\?\C:\Users\Player".to_string(),
+            r"C:\Users\Player".to_string(),
+        ];
+
+        assert_eq!(
+            rewrite_path_references(
+                r"-Djava.library.path=C:\Users\Player\data\natives",
+                &roots,
+                r"Z:\"
+            ),
+            r"-Djava.library.path=Z:\data\natives"
+        );
+        assert_eq!(
+            rewrite_path_references(
+                r"C:\Users\Player\a.jar;C:\Users\Player\b.jar",
+                &roots,
+                r"Z:\"
+            ),
+            r"Z:\a.jar;Z:\b.jar"
+        );
+        assert_eq!(
+            rewrite_path_references(r"opaqueC:\Users\Player\token", &roots, r"Z:\"),
+            r"opaqueC:\Users\Player\token"
         );
     }
 
@@ -2527,28 +3059,36 @@ mod tests {
         let versions = data.join("versions");
         let natives = data.join("natives");
         let logs = data.join("logs");
-        let private_temp = probe.path().join("private-temp");
         let blocked = probe.path().join("blocked");
         for directory in [
-            &game,
-            &assets,
-            &libraries,
-            &versions,
-            &natives,
-            &logs,
-            &private_temp,
-            &blocked,
+            &game, &assets, &libraries, &versions, &natives, &logs, &blocked,
         ] {
             std::fs::create_dir_all(directory).unwrap();
         }
 
         let asset_file = assets.join("asset.txt");
-        let library_file = libraries.join("library.txt");
+        // Fabric calls Path::toRealPath on deeply nested classpath JARs. This
+        // must use the Java profile alias because resolving the original path
+        // would enumerate the inaccessible shared C:\Users directory.
+        let library_file = libraries
+            .join("at")
+            .join("yawk")
+            .join("lz4")
+            .join("lz4-java")
+            .join("1.10.1")
+            .join("lz4-java-1.10.1.jar");
         let version_file = versions.join("version.txt");
-        let native_marker = natives.join("native.txt");
+        let native_marker = natives
+            .join("26.2")
+            .join("lwjgl")
+            .join("3.4.1-snapshot")
+            .join("x64")
+            .join("VeryImportant670.dll");
         let log_file = logs.join("session.log");
         let game_output = game.join("game-output.txt");
         let blocked_file = blocked.join("secret.txt");
+        std::fs::create_dir_all(library_file.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(native_marker.parent().unwrap()).unwrap();
         for (path, contents) in [
             (&asset_file, "asset\n"),
             (&library_file, "library\n"),
@@ -2592,7 +3132,8 @@ public final class VestaSandboxGameProbe {
             "VESTA_PROBE_ASSET", "VESTA_PROBE_LIBRARY",
             "VESTA_PROBE_VERSION", "VESTA_PROBE_NATIVE_MARKER"
         }) {
-            if (Files.readString(env(name)).isBlank()) {
+            Path resolved = env(name).toRealPath();
+            if (Files.readString(resolved).isBlank()) {
                 throw new IllegalStateException("shared runtime read was empty: " + name);
             }
         }
@@ -2602,7 +3143,32 @@ public final class VestaSandboxGameProbe {
             "sandbox-log\n",
             StandardOpenOption.TRUNCATE_EXISTING
         );
-        Files.writeString(env("VESTA_PROBE_TEMP_OUTPUT"), "temp-write\n");
+        Path configuredTemp = Path.of(System.getProperty("java.io.tmpdir"))
+            .toAbsolutePath().normalize();
+        Path tempOutput = configuredTemp.resolve("temp-output.txt");
+        Files.writeString(tempOutput, "temp-write\n");
+
+        for (String property : new String[] {
+            "jna.boot.library.path", "jna.tmpdir",
+            "org.lwjgl.system.SharedLibraryExtractPath",
+            "io.netty.native.workdir"
+        }) {
+            Path extractionRoot = Path.of(System.getProperty(property))
+                .toAbsolutePath().normalize();
+            if (!extractionRoot.startsWith(configuredTemp)) {
+                throw new IllegalStateException(property + " escaped private sandbox temp");
+            }
+            Files.createDirectories(extractionRoot);
+        }
+        Path jnaDispatch = Path.of(System.getProperty("jna.boot.library.path"))
+            .resolve("jnidispatch.dll");
+        System.load(jnaDispatch.toString());
+        Path jnaProbe = Path.of(System.getProperty("jna.tmpdir")).resolve("jna-extract.dll");
+        Files.writeString(jnaProbe, "jna-extract\n");
+        Path lwjglProbe = Path.of(System.getProperty("org.lwjgl.system.SharedLibraryExtractPath"))
+            .resolve("3.4.1-snapshot").resolve("x64").resolve("VeryImportant670.dll");
+        Files.createDirectories(lwjglProbe.getParent());
+        Files.writeString(lwjglProbe, "lwjgl-extract\n");
 
         try {
             Files.writeString(env("VESTA_PROBE_ASSET"), "unexpected\n");
@@ -2612,9 +3178,9 @@ public final class VestaSandboxGameProbe {
         }
         try {
             Files.writeString(env("VESTA_PROBE_NATIVE_MARKER"), "unexpected\n");
-            throw new IllegalStateException("native root write unexpectedly succeeded");
+            throw new IllegalStateException("shared native cache write unexpectedly succeeded");
         } catch (IOException | SecurityException expected) {
-            // Expected: native libraries are loadable but not writable.
+            // Expected: extraction happens in private temp, not the shared cache.
         }
         try {
             Files.readString(env("VESTA_PROBE_BLOCKED"));
@@ -2691,6 +3257,25 @@ public final class VestaSandboxGameProbe {
             });
         let loadable_child = game.join("loadable-child.exe");
         std::fs::copy(&helper, &loadable_child).unwrap();
+        let jna_jar = libraries.join("jna-5.17.0.jar");
+        let mut jna_archive = zip::ZipWriter::new(std::fs::File::create(&jna_jar).unwrap());
+        jna_archive
+            .start_file(
+                "com/sun/jna/Native.class",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        jna_archive.write_all(b"synthetic-jna-class").unwrap();
+        jna_archive
+            .start_file(
+                jna_dispatch_resources_for_java(&java).unwrap()[0],
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        jna_archive
+            .write_all(&std::fs::read(&native_library).unwrap())
+            .unwrap();
+        jna_archive.finish().unwrap();
 
         let caps = resolve_preset(SandboxPreset::Modded);
         let policy = SandboxPolicy {
@@ -2704,7 +3289,6 @@ public final class VestaSandboxGameProbe {
                 PathAccess::new(&versions, true, false, false),
                 PathAccess::new(&natives, true, false, false).loadable(),
                 PathAccess::new(&java_home, true, false, false).loadable(),
-                PathAccess::new(&private_temp, true, true, false).loadable(),
             ],
             network_allowed: caps.network_allowed,
             mic_allowed: caps.mic_allowed,
@@ -2714,7 +3298,7 @@ public final class VestaSandboxGameProbe {
             extra_paths: Vec::new(),
         };
         let profile_guard = TestProfileGuard(policy.clone());
-        let policy_path = private_temp.join("windows-policy.json");
+        let policy_path = probe.path().join("windows-policy.json");
         std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
 
         let output = Command::new(&helper)
@@ -2722,12 +3306,19 @@ public final class VestaSandboxGameProbe {
             .arg(&policy_path)
             .arg("--")
             .arg(&java)
+            .arg(format!("-Djna.tmpdir={}", natives.join("jna").display()))
+            .arg(format!(
+                "-Dorg.lwjgl.system.SharedLibraryExtractPath={}",
+                natives.join("lwjgl").display()
+            ))
+            .arg(format!(
+                "-Dio.netty.native.workdir={}",
+                natives.join("netty").display()
+            ))
             .arg("-cp")
-            .arg(&game)
+            .arg(std::env::join_paths([&jna_jar, &game]).unwrap())
             .arg("VestaSandboxGameProbe")
             .current_dir(&game)
-            .env("TEMP", &private_temp)
-            .env("TMP", &private_temp)
             .env("VESTA_PROBE_ASSET", &asset_file)
             .env("VESTA_PROBE_LIBRARY", &library_file)
             .env("VESTA_PROBE_VERSION", &version_file)
@@ -2735,10 +3326,6 @@ public final class VestaSandboxGameProbe {
             .env("VESTA_PROBE_NATIVE_LIBRARY", &native_library)
             .env("VESTA_PROBE_GAME_OUTPUT", &game_output)
             .env("VESTA_PROBE_LOG", &log_file)
-            .env(
-                "VESTA_PROBE_TEMP_OUTPUT",
-                private_temp.join("temp-output.txt"),
-            )
             .env("VESTA_PROBE_BLOCKED", &blocked_file)
             .env(
                 "VESTA_PROBE_SYSTEM_EXECUTABLE",
@@ -2786,10 +3373,6 @@ public final class VestaSandboxGameProbe {
             "game-write\n"
         );
         assert_eq!(std::fs::read_to_string(log_file).unwrap(), "sandbox-log\n");
-        assert_eq!(
-            std::fs::read_to_string(private_temp.join("temp-output.txt")).unwrap(),
-            "temp-write\n"
-        );
         assert_eq!(std::fs::read_to_string(asset_file).unwrap(), "asset\n");
         assert_eq!(std::fs::read_to_string(native_marker).unwrap(), "native\n");
         assert_eq!(std::fs::read_to_string(blocked_file).unwrap(), "secret\n");

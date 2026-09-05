@@ -9153,6 +9153,7 @@ dependencies = [
  "thiserror 2.0.18",
  "which",
  "windows-sys 0.61.2",
+ "zip 8.2.0",
 ]
 
 [[package]]

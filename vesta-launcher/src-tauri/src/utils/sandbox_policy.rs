@@ -289,9 +289,9 @@ pub fn build_sandbox_policy_for_roots(
         return Ok(policy);
     }
 
-    // Play may consume shared launcher data, but only the instance and its
-    // session logs are mutable. Installation/repair processors run outside the
-    // Play sandbox and therefore do not require shared data to be writable.
+    // Play consumes immutable shared launcher data. Windows redirects runtime
+    // native extraction into a private AppContainer temp directory so the
+    // shared native cache remains read/load-only.
     let mut filesystem = vec![
         // Mods may extract and load JNI libraries beneath the instance root.
         PathAccess::new(game_dir.to_path_buf(), true, true, false).loadable(),
@@ -483,6 +483,23 @@ mod tests {
         }
     }
 
+    fn test_hook_shell() -> PathBuf {
+        #[cfg(target_os = "windows")]
+        let shell = std::env::var_os("ComSpec")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Windows\System32\cmd.exe"));
+        #[cfg(not(target_os = "windows"))]
+        let shell = PathBuf::from("/bin/sh");
+        fs::canonicalize(shell).unwrap()
+    }
+
+    fn test_wrapper_command(argument: &str) -> (PathBuf, String) {
+        let command_path = std::env::current_exe().unwrap();
+        let executable = fs::canonicalize(&command_path).unwrap();
+        let command = format!("\"{}\" {argument}", command_path.display());
+        (executable, command)
+    }
+
     fn sample_config() -> AppConfig {
         AppConfig {
             default_sandbox_preset: "modded".to_string(),
@@ -658,6 +675,7 @@ mod tests {
             wrapper_nesting: WrapperNesting::WrapperOutside,
             extra_paths: Vec::new(),
         };
+        let (wrapper, wrapper_command) = test_wrapper_command("ignored");
         let policy = build_sandbox_policy_for_roots(
             &resolved,
             &data,
@@ -665,13 +683,12 @@ mod tests {
             &log_file,
             &java_bin,
             None,
-            Some("/usr/bin/env ignored"),
+            Some(&wrapper_command),
             true,
         )
         .unwrap();
 
-        let shell = fs::canonicalize("/bin/sh").unwrap();
-        let wrapper = fs::canonicalize("/usr/bin/env").unwrap();
+        let shell = test_hook_shell();
         assert!(policy.exec_allowlist.contains(&shell));
         assert!(!policy.exec_allowlist.contains(&wrapper));
     }
@@ -700,6 +717,7 @@ mod tests {
             wrapper_nesting: WrapperNesting::SandboxOutside,
             extra_paths: Vec::new(),
         };
+        let (wrapper, wrapper_command) = test_wrapper_command("ignored");
         let policy = build_sandbox_policy_for_roots(
             &resolved,
             &data,
@@ -707,12 +725,11 @@ mod tests {
             &log_file,
             &java_bin,
             None,
-            Some("/usr/bin/env ignored"),
+            Some(&wrapper_command),
             false,
         )
         .unwrap();
 
-        let wrapper = fs::canonicalize("/usr/bin/env").unwrap();
         assert!(policy.exec_allowlist.contains(&wrapper));
         let wrapper_access = policy
             .filesystem_allowlist
@@ -720,9 +737,7 @@ mod tests {
             .find(|entry| entry.path == wrapper)
             .unwrap();
         assert!(wrapper_access.read && !wrapper_access.write && wrapper_access.execute);
-        assert!(!policy
-            .exec_allowlist
-            .contains(&fs::canonicalize("/bin/sh").unwrap()));
+        assert!(!policy.exec_allowlist.contains(&test_hook_shell()));
     }
 
     #[test]
@@ -747,19 +762,14 @@ mod tests {
             wrapper_nesting: WrapperNesting::SandboxOutside,
             extra_paths: Vec::new(),
         };
-        let normalized = normalize_wrapper_command_for_play(
-            &resolved,
-            Some("/usr/bin/env --ignore-environment"),
-        )
-        .unwrap()
-        .unwrap();
+        let (wrapper, wrapper_command) = test_wrapper_command("--vesta-test-argument");
+        let normalized = normalize_wrapper_command_for_play(&resolved, Some(&wrapper_command))
+            .unwrap()
+            .unwrap();
         let parts = shlex::split(&normalized).unwrap();
 
-        assert_eq!(
-            PathBuf::from(&parts[0]),
-            fs::canonicalize("/usr/bin/env").unwrap()
-        );
-        assert_eq!(parts[1], "--ignore-environment");
+        assert_eq!(PathBuf::from(&parts[0]), wrapper);
+        assert_eq!(parts[1], "--vesta-test-argument");
     }
 
     #[test]

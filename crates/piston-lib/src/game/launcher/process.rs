@@ -34,16 +34,33 @@ pub fn cleanup_sandbox_paths(paths: impl IntoIterator<Item = std::path::PathBuf>
     let temp_root = std::env::temp_dir()
         .canonicalize()
         .unwrap_or_else(|_| std::env::temp_dir());
+    #[cfg(windows)]
+    let windows_policy_root = std::env::var_os("LOCALAPPDATA").map(|root| {
+        std::path::PathBuf::from(root)
+            .join("VestaLauncher")
+            .join("sandbox-profiles")
+    });
     for path in paths {
-        let owned_name = path
+        let file_name = path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("vesta-sandbox-"));
-        let owned_parent = path
-            .parent()
-            .and_then(|parent| parent.canonicalize().ok())
-            .is_some_and(|parent| parent == temp_root);
-        if !owned_name || !owned_parent {
+            .unwrap_or_default();
+        let canonical_parent = path.parent().and_then(|parent| parent.canonicalize().ok());
+        let owned_system_temp = file_name.starts_with("vesta-sandbox-")
+            && canonical_parent
+                .as_ref()
+                .is_some_and(|parent| parent == &temp_root);
+        #[cfg(windows)]
+        let owned_windows_policy = file_name.starts_with("policy-")
+            && windows_policy_root.as_ref().is_some_and(|root| {
+                let root = root.canonicalize().unwrap_or_else(|_| root.clone());
+                canonical_parent
+                    .as_ref()
+                    .is_some_and(|parent| parent == &root)
+            });
+        #[cfg(not(windows))]
+        let owned_windows_policy = false;
+        if !owned_system_temp && !owned_windows_policy {
             log::error!(
                 "Refusing to remove unrecognized sandbox cleanup path {:?}",
                 path
@@ -1037,6 +1054,24 @@ mod tests {
 
         assert!(!owned.exists());
         assert!(unrelated.path().exists());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn sandbox_cleanup_removes_owned_windows_policy_directories() {
+        let root = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap())
+            .join("VestaLauncher")
+            .join("sandbox-profiles");
+        std::fs::create_dir_all(&root).unwrap();
+        let owned = tempfile::Builder::new()
+            .prefix("policy-")
+            .tempdir_in(root)
+            .unwrap()
+            .keep();
+
+        cleanup_sandbox_paths([owned.clone()]);
+
+        assert!(!owned.exists());
     }
 }
 #[test]

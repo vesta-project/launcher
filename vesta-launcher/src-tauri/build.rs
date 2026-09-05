@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 fn main() {
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     bundle_sandbox_exec();
 
     tauri_build::build();
@@ -35,7 +35,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CURSEFORGE_API_KEY");
 }
 
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn bundle_sandbox_exec() {
     use std::path::PathBuf;
 
@@ -80,7 +80,7 @@ fn bundle_sandbox_exec() {
     );
 }
 
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn ensure_sandbox_exec_built(
     workspace_root: &Path,
     target_dir: &Path,
@@ -98,7 +98,8 @@ fn ensure_sandbox_exec_built(
         .join(profile)
         .join(format!("vesta-sandbox-exec{executable_suffix}"));
 
-    let build_status = Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+    let mut command = Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
+    command
         .current_dir(workspace_root)
         .env("CARGO_TARGET_DIR", &sidecar_target)
         .args([
@@ -109,15 +110,19 @@ fn ensure_sandbox_exec_built(
             "vesta-sandbox-exec",
             "--target",
             target,
-        ])
-        .status()
-        .unwrap_or_else(|error| {
-            panic!("failed to spawn cargo build for vesta-sandbox-exec helper: {error}");
-        });
+        ]);
+    if profile == "release" {
+        command.arg("--release");
+    } else if profile != "debug" {
+        command.args(["--profile", profile]);
+    }
+    let build_status = command.status().unwrap_or_else(|error| {
+        panic!("failed to spawn cargo build for vesta-sandbox-exec helper: {error}");
+    });
 
     if !build_status.success() {
         panic!(
-            "failed to build vesta-sandbox-exec helper (required for sandbox presets on {target})"
+            "failed to build vesta-sandbox-exec helper required by Tauri externalBin for {target}"
         );
     }
 

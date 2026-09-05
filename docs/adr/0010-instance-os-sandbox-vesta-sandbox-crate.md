@@ -56,16 +56,18 @@ both Modules and pull unused OS code into every build.
 ### Filesystem policy (Modded / Paranoid)
 
 - Shared runtime roots (`assets/`, `libraries/`, `versions/`, and `natives/`):
-  **read-only** during Play. Other launcher state is not readable. Installation
-  and repair own shared-runtime mutations outside the sandbox.
+  **read-only** during Play. Natives are loadable. Other launcher state is not
+  readable. Installation and repair own shared-runtime mutations outside the
+  sandbox.
 - Instance `game_dir`: **read-write**.
 - The exact pre-created session log file at `{vesta data}/logs/…`: **read-write**;
   the containing log directory is not granted recursively.
 - Java/JRE home and `exit-handler.jar`: read-only; Java/JRE helpers are
   executable.
 - Natives under Vesta data: read/load as required; they are not members of the
-  portable process-exec allowlist. On Windows, the load/execute file-right
-  limitation documented below prevents exact enforcement of that distinction.
+  portable process-exec allowlist. On Windows, the load/execute
+  file-right limitation documented below prevents exact enforcement of that
+  distinction.
 - Native-image load is represented separately from portable process-exec intent.
   The selected Java runtime, shared natives, Instance game directory, and private
   sandbox temp are loadable so the JVM and mods can map their required native
@@ -127,6 +129,10 @@ both Modules and pull unused OS code into every build.
 - Each launch receives an atomically created private system-temp directory. Its
   exact path is the only writable temp allowance and the host removes it after
   the process exits (or launch fails).
+- Tauri's `externalBin` declaration is platform-global. The build script
+  therefore packages a target-matched `vesta-sandbox-exec` on macOS as well as
+  Linux and Windows; it is a no-op compatibility sidecar on macOS, where
+  runtime confinement remains Seatbelt-only.
 
 ### Windows AppContainer implementation
 
@@ -142,6 +148,10 @@ both Modules and pull unused OS code into every build.
   policy roots have their package-SID grants revoked. Recursive synchronization
   never traverses reparse points. Keeping the profile stable avoids recursively
   rewriting large Java and game trees on every launch.
+- Reusable policy files live under the same protected state root as ACL
+  journals, never in general system temp. Writable policy roots that overlap
+  that state are rejected, preventing one game or Instance profile from
+  broadening a later game or hook invocation.
 - The complete journal and DACL reconciliation transaction is serialized by a
   cross-profile named mutex acquired after the per-profile lifetime mutex.
   Different Instances share assets, libraries, versions, natives, and JRE
@@ -166,15 +176,24 @@ both Modules and pull unused OS code into every build.
   revocation performs the matching protected-boundary scan. Reparse targets are
   never followed.
 - Java performs component-by-component `FindFirstFile` canonicalization of
-  `java.home/conf/security/java.security`. Standard users cannot add a package
-  SID to shared parents such as `C:\Users`, so the helper launches `java.exe` or
-  `javaw.exe` through a short-lived DOS drive rooted directly at the allowlisted
-  runtime. Free letters are coordinated with per-letter named mutexes and the
-  exact mapping is removed when the sandboxed process exits. This changes only
-  the spelling of the executable path; policy validation and NTFS grants remain
-  attached to the canonical runtime. A caller-supplied `-Djava.home` is rejected
-  because it would bypass this compatibility mapping and recreate the provider
-  initialization failure.
+  `java.home`, classpath JARs, and game paths. Standard users cannot add a
+  package SID to shared parents such as `C:\Users`, so the helper gives Java a
+  short-lived DOS drive rooted at the current user profile. It rewrites
+  path-shaped Java arguments and environment values plus the working directory
+  through that alias; an external Java runtime receives a second alias. Policy
+  validation and NTFS grants remain attached to the canonical roots. Each
+  helper invocation creates a fresh writable/loadable directory beneath its
+  AppContainer package temp. JNA's use of `File.createTempFile` still requires
+  inaccessible volume-root metadata, so the trusted helper performs a bounded
+  extraction of only the architecture-specific `jnidispatch.dll` entry from
+  the active, read-allowlisted JNA classpath JAR into private temp and supplies
+  `jna.boot.library.path`. It reserves `java.io.tmpdir` and redirects the
+  standard JNA, LWJGL, and Netty temp properties there, leaving the shared
+  native cache read-only. Free letters are coordinated with per-letter named
+  mutexes and each mapping is removed when the sandboxed process exits.
+  Caller-supplied `java.home`, `java.io.tmpdir`, `user.home`, and
+  `jna.boot.library.path` values are rejected because they would bypass these
+  compatibility mappings.
 - Network-off and microphone-off are enforced by omitting AppContainer
   capabilities. Network-on grants internet, client/server, and private-network
   capabilities, but Windows loopback remains unavailable without a machine-level
@@ -201,9 +220,7 @@ both Modules and pull unused OS code into every build.
   exec allowlist before applying AppContainer and the token-level no-child rule.
   Log relay, exit code/status, descendant-window discovery, graceful close, and
   forced tree termination continue through the trusted supervisor/helper chain.
-- The policy JSON is stored outside the AppContainer-writable scratch directory,
-  preventing the game from broadening the later post-hook invocation. A named
-  per-profile mutex is held for each helper invocation's full lifetime, so a
+- A named per-profile mutex is held for each helper invocation's full lifetime, so a
   running same-profile target cannot race a newly created trampoline before it
   hardens its DACL. This intentionally serializes simultaneous launches of the
   same Instance profile.
@@ -226,7 +243,8 @@ both Modules and pull unused OS code into every build.
 - Leverage: one prepare/apply Interface confines the untrusted Play process
   graph while trusted lifecycle supervision stays observable to the launcher.
 - Shared runtime roots and managed Java remain readable but cannot be mutated by
-  hostile game code. Writable extras that overlap trusted Java or wrapper paths
+  hostile game code; runtime extraction is isolated in per-invocation temp.
+  Writable extras that overlap trusted Java or wrapper paths
   are rejected before launcher-owned verification can execute them.
 - Tradeoff: device and exec controls will be uneven across OSes; the enforcement
   report is part of the product contract.
