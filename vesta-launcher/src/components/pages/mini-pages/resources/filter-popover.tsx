@@ -492,7 +492,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 															toggleGroupExpand(group.id || group.name, e)
 														}
 													>
-												<ChevronDownIcon />
+														<ChevronDownIcon />
 													</button>
 												</Show>
 											</div>
@@ -577,4 +577,5 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 		</div>
 	);
 }
+
 import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";

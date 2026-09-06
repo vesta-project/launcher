@@ -9,7 +9,8 @@ export type ArtifactRole =
 
 const normalizeRole = (role: string): ArtifactRole => {
 	const normalized = role.toLowerCase().replaceAll("-", "").replaceAll("_", "");
-	if (normalized === "datapack" || normalized === "datapacks") return "datapack";
+	if (normalized === "datapack" || normalized === "datapacks")
+		return "datapack";
 	if (
 		normalized === "resourcepack" ||
 		normalized === "resourcepacks" ||
@@ -23,7 +24,10 @@ const normalizeRole = (role: string): ArtifactRole => {
 };
 
 export function versionArtifactFiles(
-	version: Pick<ResourceVersion, "files" | "download_url" | "file_name" | "hash">,
+	version: Pick<
+		ResourceVersion,
+		"files" | "download_url" | "file_name" | "hash"
+	>,
 ): ResourceVersionFile[] {
 	if (version.files && version.files.length > 0) return version.files;
 	if (!version.download_url) return [];
@@ -38,7 +42,10 @@ export function versionArtifactFiles(
 }
 
 export function versionArtifactRoles(
-	version: Pick<ResourceVersion, "files" | "download_url" | "file_name" | "hash">,
+	version: Pick<
+		ResourceVersion,
+		"files" | "download_url" | "file_name" | "hash"
+	>,
 ): ArtifactRole[] {
 	const roles = new Set<ArtifactRole>();
 	for (const file of versionArtifactFiles(version)) {
@@ -48,7 +55,10 @@ export function versionArtifactRoles(
 }
 
 export function hasDatapackAndResourcePack(
-	version: Pick<ResourceVersion, "files" | "download_url" | "file_name" | "hash">,
+	version: Pick<
+		ResourceVersion,
+		"files" | "download_url" | "file_name" | "hash"
+	>,
 ): boolean {
 	const roles = versionArtifactRoles(version);
 	return roles.includes("datapack") && roles.includes("resourcepack");
@@ -56,14 +66,18 @@ export function hasDatapackAndResourcePack(
 
 /** Short badges for UI chips, e.g. ["Datapack", "Resource pack"]. */
 export function artifactRoleLabels(
-	version: Pick<ResourceVersion, "files" | "download_url" | "file_name" | "hash">,
+	version: Pick<
+		ResourceVersion,
+		"files" | "download_url" | "file_name" | "hash"
+	>,
 ): string[] {
 	const roles = versionArtifactRoles(version);
 	const labels: string[] = [];
 	if (roles.includes("datapack")) labels.push("Datapack");
 	if (roles.includes("resourcepack")) labels.push("Resource pack");
 	if (roles.includes("world")) labels.push("World");
-	if (labels.length === 0 && roles.includes("primary")) labels.push("Primary file");
+	if (labels.length === 0 && roles.includes("primary"))
+		labels.push("Primary file");
 	return labels;
 }
 
@@ -140,7 +154,10 @@ export function projectTypeLabel(
 
 /** One-line summary when a version ships multiple pack sides. */
 export function artifactBundleSummary(
-	version: Pick<ResourceVersion, "files" | "download_url" | "file_name" | "hash">,
+	version: Pick<
+		ResourceVersion,
+		"files" | "download_url" | "file_name" | "hash"
+	>,
 ): string | null {
 	const labels = artifactRoleLabels(version);
 	if (labels.length <= 1) return null;

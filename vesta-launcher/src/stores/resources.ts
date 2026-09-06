@@ -1,19 +1,18 @@
+import {
+	firstSourceForResourceType,
+	getSourceDescriptor,
+} from "@resources/source-catalog";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ProgressUpdate } from "@utils/notifications";
+import type { ResourceInstallRequest } from "@utils/resource-install-intent";
 import {
 	installingIdsFromTargets,
 	installTargetMatchesTaskId,
 	reconcileInstalledInstanceTargets,
 } from "@utils/resource-install-progress";
-import type { ResourceInstallRequest } from "@utils/resource-install-intent";
-import {
-	firstSourceForResourceType,
-	getSourceDescriptor,
-} from "@resources/source-catalog";
 import { createStore, reconcile } from "solid-js/store";
 import { refreshInstanceResourceRows } from "./instance-resource-overview";
-import { Instance } from "./instances";
 import type { ResourceInstallTarget } from "./worlds";
 
 export type ResourceType =
@@ -450,7 +449,10 @@ export const resources = {
 		}
 
 		const current = resourceStore.categories;
-		if (current.includes(c) || current.some((cat) => cat.toLowerCase() === lower)) {
+		if (
+			current.includes(c) ||
+			current.some((cat) => cat.toLowerCase() === lower)
+		) {
 			setResourceStore(
 				"categories",
 				current.filter((cat) => cat.toLowerCase() !== lower),
@@ -720,7 +722,10 @@ export const resources = {
 				? `${project.source}:${project.id}:${version.id}:world:${resolvedTarget.world.instanceId}:${resolvedTarget.world.directoryName}`
 				: `${project.source}:${project.id}:${version.id}:instance:${resolvedTarget.instanceId}`
 			: `${project.source}:${project.id}:${version.id}:modpack`;
-		publishInstallingTargets([...resourceStore.installingTargetKeys, targetKey]);
+		publishInstallingTargets([
+			...resourceStore.installingTargetKeys,
+			targetKey,
+		]);
 
 		try {
 			// Cache project metadata for future offline/icon use

@@ -1,7 +1,7 @@
-import * as CheckboxPrimitive from "@kobalte/core/checkbox";
-import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import CheckIcon from "@assets/icons/controls/check.svg";
 import MinusIcon from "@assets/icons/controls/minus.svg";
+import * as CheckboxPrimitive from "@kobalte/core/checkbox";
+import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import clsx from "clsx";
 import { Match, Switch, splitProps, type ValidComponent } from "solid-js";
 import styles from "./checkbox.module.css";

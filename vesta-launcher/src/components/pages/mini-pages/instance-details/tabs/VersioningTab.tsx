@@ -284,26 +284,29 @@ export const VersioningTab = (props: VersioningTabProps) => {
 				</Show>
 
 				<Show when={inst().modpackId}>
-				<SettingsCard header="Connection" subHeader="Control the relationship between this instance and its modpack source.">
-					<Show when={inst().modpackId}>
-						<SettingsField
-							label="Unlink Connection"
-							description="Disconnect from the source to manage files manually. This is irreversible."
-							actionLabel="Unlink"
-							destructive
-							onAction={props.handleUnlink}
-							disabled={props.busy || props.isInstalling || props.isGuest}
-						/>
-						<SettingsField
-							label="Delete Bundled Files & Unlink"
-							description="Remove only the bundled modpack files, keep custom resources and overrides, then disconnect the modpack source."
-							actionLabel="Delete & Unlink"
-							destructive
-							onAction={props.handleDeleteModpackAndUnlink}
-							disabled={props.busy || props.isInstalling || props.isGuest}
-						/>
-					</Show>
-				</SettingsCard>
+					<SettingsCard
+						header="Connection"
+						subHeader="Control the relationship between this instance and its modpack source."
+					>
+						<Show when={inst().modpackId}>
+							<SettingsField
+								label="Unlink Connection"
+								description="Disconnect from the source to manage files manually. This is irreversible."
+								actionLabel="Unlink"
+								destructive
+								onAction={props.handleUnlink}
+								disabled={props.busy || props.isInstalling || props.isGuest}
+							/>
+							<SettingsField
+								label="Delete Bundled Files & Unlink"
+								description="Remove only the bundled modpack files, keep custom resources and overrides, then disconnect the modpack source."
+								actionLabel="Delete & Unlink"
+								destructive
+								onAction={props.handleDeleteModpackAndUnlink}
+								disabled={props.busy || props.isInstalling || props.isGuest}
+							/>
+						</Show>
+					</SettingsCard>
 				</Show>
 			</div>
 		</div>

@@ -55,7 +55,8 @@
 .hostNotice {
 	padding: 10px 12px;
 	border-radius: 8px;
-	border: 1px solid color-mix(in srgb, var(--destructive) 35%, var(--border-subtle));
+	border: 1px solid
+		color-mix(in srgb, var(--destructive) 35%, var(--border-subtle));
 	background: color-mix(in srgb, var(--destructive) 8%, var(--surface-overlay));
 	color: color-mix(in srgb, var(--destructive) 80%, currentColor);
 	font-size: 12px;

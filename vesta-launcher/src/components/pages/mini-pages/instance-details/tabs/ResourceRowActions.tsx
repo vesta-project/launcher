@@ -1,6 +1,6 @@
+import TrashIcon from "@assets/icons/actions/delete.svg";
 import DownloadIcon from "@assets/icons/actions/download.svg";
 import ReloadIcon from "@assets/icons/actions/reload.svg";
-import TrashIcon from "@assets/icons/actions/delete.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
 import type { ResourceVersion } from "@stores/resources";
 import {
@@ -108,7 +108,9 @@ export function ResourceRowActions(props: ResourceRowActionsProps) {
 									disabled={props.busy}
 									class={styles["row-actions-update"]}
 								>
-									<DownloadIcon style={{ "margin-right": "8px", flex: "0 0 auto" }} />
+									<DownloadIcon
+										style={{ "margin-right": "8px", flex: "0 0 auto" }}
+									/>
 									Update to {update().version_number}
 								</DropdownMenuItem>
 							)}
@@ -130,16 +132,18 @@ export function ResourceRowActions(props: ResourceRowActionsProps) {
 									}
 									fallback={
 										<>
-									<ReloadIcon
-										style={{ "margin-right": "8px", flex: "0 0 auto" }}
-										class={styles["checking-updates-spinner"]}
-									/>
+											<ReloadIcon
+												style={{ "margin-right": "8px", flex: "0 0 auto" }}
+												class={styles["checking-updates-spinner"]}
+											/>
 											Checking...
 										</>
 									}
 								>
 									<>
-										<ReloadIcon style={{ "margin-right": "8px", flex: "0 0 auto" }} />
+										<ReloadIcon
+											style={{ "margin-right": "8px", flex: "0 0 auto" }}
+										/>
 										Check for Updates
 									</>
 								</Show>

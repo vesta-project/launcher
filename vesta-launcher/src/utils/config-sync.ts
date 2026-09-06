@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { updateStartupConfigField } from "@utils/startup-state";
+import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { batch, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import {

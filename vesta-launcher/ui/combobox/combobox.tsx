@@ -1,9 +1,9 @@
+import CheckIcon from "@assets/icons/controls/check.svg";
 import type { PolymorphicProps } from "@kobalte/core";
 import * as ComboboxPrimitive from "@kobalte/core/combobox";
-import CheckIcon from "@assets/icons/controls/check.svg";
 import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { Component, splitProps, type ValidComponent } from "solid-js";
+import { splitProps, type ValidComponent } from "solid-js";
 import styles from "./combobox.module.css";
 
 const Combobox = ComboboxPrimitive.Combobox;
@@ -45,9 +45,7 @@ function ComboboxItemIndicator<T extends ValidComponent = "div">(
 	]);
 	return (
 		<ComboboxPrimitive.ItemIndicator {...rest}>
-			{props.children ?? (
-				<CheckIcon class={styles["size-4"]} />
-			)}
+			{props.children ?? <CheckIcon class={styles["size-4"]} />}
 		</ComboboxPrimitive.ItemIndicator>
 	);
 }

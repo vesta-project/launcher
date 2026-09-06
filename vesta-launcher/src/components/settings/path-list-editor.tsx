@@ -1,8 +1,8 @@
 import AddIcon from "@assets/icons/actions/add.svg";
 import DeleteIcon from "@assets/icons/actions/delete.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
-import Button from "@ui/button/button";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import Button from "@ui/button/button";
 import { For, Show } from "solid-js";
 import styles from "./path-list-editor.module.css";
 

@@ -79,11 +79,9 @@
 	background: var(--surface-low);
 	border: 1px solid var(--border-subtle);
 	border-radius: 8px;
-	cursor: default;
 	transition: all 0.2s ease;
 	width: 100%;
 	text-align: left;
-	cursor: default;
 	cursor: default;
 }
 

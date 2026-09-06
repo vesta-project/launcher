@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getInstancePrimaryAction, normalizeInstanceTab, summarizeResources } from "./instance-details-view";
+import {
+	getInstancePrimaryAction,
+	normalizeInstanceTab,
+	summarizeResources,
+} from "./instance-details-view";
 
 describe("normalizeInstanceTab", () => {
 	it("keeps canonical tabs and redirects legacy screenshots", () => {
@@ -14,9 +18,21 @@ describe("getInstancePrimaryAction", () => {
 	it.each([
 		[{ running: true }, "Stop", "stop"],
 		[{ launching: true }, "Starting…", "spinner"],
-		[{ operationInProgress: true, operationLabel: "Repairing" }, "Repairing…", "spinner"],
-		[{ interrupted: true, lastOperation: "repair" }, "Resume repair", "recovery"],
-		[{ needsInstallation: true, installationFailed: true }, "Retry install", "error"],
+		[
+			{ operationInProgress: true, operationLabel: "Repairing" },
+			"Repairing…",
+			"spinner",
+		],
+		[
+			{ interrupted: true, lastOperation: "repair" },
+			"Resume repair",
+			"recovery",
+		],
+		[
+			{ needsInstallation: true, installationFailed: true },
+			"Retry install",
+			"error",
+		],
 		[{ updateRecovery: true }, "Resume recovery", "error"],
 		[{ hasCrash: true }, "View crash", "error"],
 		[{}, "Play", "play"],
@@ -29,6 +45,8 @@ describe("getInstancePrimaryAction", () => {
 
 describe("summarizeResources", () => {
 	it("describes mixed ownership and known updates without filler", () => {
-		expect(summarizeResources([{ source_kind: "modpack" }, {}], 1)).toBe("2 installed · 1 bundled · 1 custom · 1 update");
+		expect(summarizeResources([{ source_kind: "modpack" }, {}], 1)).toBe(
+			"2 installed · 1 bundled · 1 custom · 1 update",
+		);
 	});
 });

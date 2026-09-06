@@ -22,11 +22,11 @@ import {
 import { getProjectCompatibilityForInstance } from "@utils/resources";
 import {
 	type Component,
-	type JSX,
 	createEffect,
 	createMemo,
 	createSignal,
 	For,
+	type JSX,
 	onCleanup,
 	onMount,
 	Show,
@@ -84,8 +84,7 @@ const CardTagOverflow: Component<{
 			measure.querySelectorAll<HTMLElement>("[data-tag-measure]"),
 		);
 		const widths = tagEls.map((el) => el.getBoundingClientRect().width);
-		const moreWidth =
-			moreMeasureRef?.getBoundingClientRect().width || 36;
+		const moreWidth = moreMeasureRef?.getBoundingClientRect().width || 36;
 		const available = row.clientWidth;
 		setVisibleCount(countFittingTags(available, widths, moreWidth));
 	};
@@ -140,9 +139,7 @@ const CardTagOverflow: Component<{
 					</TooltipTrigger>
 					<TooltipContent onClick={(e: MouseEvent) => e.stopPropagation()}>
 						<div class={styles["tooltip-tags"]}>
-							<For each={hiddenTags()}>
-								{(tag) => props.renderTag(tag)}
-							</For>
+							<For each={hiddenTags()}>{(tag) => props.renderTag(tag)}</For>
 						</div>
 					</TooltipContent>
 				</Tooltip>
@@ -285,9 +282,7 @@ const ResourceCard: Component<{
 	// Prefer the first gallery image for browse banners.
 	const remoteBannerUrl = createMemo(() => {
 		const p = props.project;
-		return p.gallery.length > 0
-			? p.gallery[0]
-			: (p.featured_gallery ?? null);
+		return p.gallery.length > 0 ? p.gallery[0] : (p.featured_gallery ?? null);
 	});
 
 	const preferredBannerUrl = createMemo(() => {
@@ -530,9 +525,7 @@ const ResourceCard: Component<{
 				requestedInstallType,
 			);
 			if (best) {
-				if (
-					requiresWorldTarget(props.project, best, requestedInstallType)
-				) {
+				if (requiresWorldTarget(props.project, best, requestedInstallType)) {
 					resources.setInstallRequest({
 						project: props.project,
 						versions,
@@ -633,14 +626,13 @@ const ResourceCard: Component<{
 					}
 					const filterId = categoryObj()?.id || tag;
 					resources.toggleCategory(filterId);
-					activeRouter()?.updateQuery(
-						"categories",
-						resources.state.categories,
-					);
+					activeRouter()?.updateQuery("categories", resources.state.categories);
 					activeRouter()?.updateQuery("loader", resources.state.loader);
 				}}
 			>
-				{isModloaderTag ? formatLoaderLabel(tagLower) : categoryObj()?.name || tag}
+				{isModloaderTag
+					? formatLoaderLabel(tagLower)
+					: categoryObj()?.name || tag}
 			</Badge>
 		);
 	};

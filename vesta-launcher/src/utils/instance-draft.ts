@@ -1,5 +1,8 @@
+import type {
+	SandboxPresetValue,
+	SandboxWrapperNestingValue,
+} from "@components/settings/sandbox-policy-ui";
 import type { Instance } from "@utils/instances";
-import type { SandboxPresetValue, SandboxWrapperNestingValue } from "@components/settings/sandbox-policy-ui";
 
 export type LauncherAction = Exclude<Instance["launcherActionOnLaunch"], null>;
 

@@ -1,7 +1,7 @@
 import FolderLockIcon from "@assets/icons/security/folder-lock.svg";
 import LockIcon from "@assets/icons/security/lock.svg";
-import MicOffIcon from "@assets/icons/security/mic-off.svg";
 import MicIcon from "@assets/icons/security/mic.svg";
+import MicOffIcon from "@assets/icons/security/mic-off.svg";
 import NetworkIcon from "@assets/icons/security/network.svg";
 import ShieldCheckIcon from "@assets/icons/security/shield-check.svg";
 import ShieldOffIcon from "@assets/icons/security/shield-off.svg";
@@ -12,25 +12,21 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@ui/tooltip/tooltip";
 import { showToast } from "@ui/toast/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	fetchSandboxHostSupport,
 	guardSandboxPresetChange,
 	invalidateSandboxHostSupportCache,
-	sandboxPresetBlockedCopy,
 	type SandboxHostSupport,
+	sandboxPresetBlockedCopy,
 } from "@utils/sandbox-host";
 import {
 	createMemo,
 	createResource,
+	type JSX,
 	onCleanup,
 	onMount,
-	type JSX,
 	Show,
 } from "solid-js";
 import styles from "./sandbox-policy.module.css";
@@ -71,7 +67,9 @@ function CapabilityChip(props: {
 	);
 }
 
-export function SandboxPresetOptionLabel(props: { preset: SandboxPresetValue }) {
+export function SandboxPresetOptionLabel(props: {
+	preset: SandboxPresetValue;
+}) {
 	return (
 		<div class={styles.presetOption}>
 			<span class={styles.presetLabel}>
@@ -227,9 +225,7 @@ export function SandboxPresetSelect(props: {
 			<SelectTrigger>
 				<SelectValue<(typeof SANDBOX_PRESET_OPTIONS)[number]>>
 					{(state) => (
-						<SandboxPresetOptionLabel
-							preset={state.selectedOption().value}
-						/>
+						<SandboxPresetOptionLabel preset={state.selectedOption().value} />
 					)}
 				</SelectValue>
 			</SelectTrigger>

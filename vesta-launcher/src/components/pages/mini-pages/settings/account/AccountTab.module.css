@@ -1,4 +1,4 @@
-﻿.container {
+.container {
 	display: grid;
 	grid-template-columns: 1fr minmax(320px, 30%);
 	flex: 1;
@@ -62,10 +62,8 @@
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	cursor: default;
 	transition: all 0.2s ease;
 	flex-shrink: 0;
-	cursor: default;
 	cursor: default;
 }
 
@@ -138,9 +136,7 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	cursor: default;
 	transition: all 0.2s ease;
-	cursor: default;
 	cursor: default;
 }
 
@@ -255,10 +251,8 @@
 	padding: 4px 8px;
 	margin-left: -8px;
 	border-radius: 6px;
-	cursor: default;
 	transition: background 0.2s;
 	width: fit-content;
-	cursor: default;
 	cursor: default;
 }
 
@@ -342,9 +336,7 @@
 	background: var(--surface-overlay);
 	border: var(--border-width-subtle) solid var(--border-subtle);
 	color: var(--text-muted);
-	cursor: default;
 	transition: all 0.2s;
-	cursor: default;
 	cursor: default;
 }
 
@@ -365,9 +357,7 @@
 	color: var(--text-secondary);
 	font-weight: 600;
 	font-size: 14px;
-	cursor: default;
 	transition: all 0.2s;
-	cursor: default;
 	cursor: default;
 }
 
@@ -426,9 +416,7 @@
 	border: var(--border-width-subtle) solid var(--border-subtle);
 	color: var(--text-base);
 	font-weight: 600;
-	cursor: default;
 	transition: all 0.2s;
-	cursor: default;
 	cursor: default;
 }
 
@@ -467,7 +455,6 @@
 	align-items: center;
 	gap: 12px;
 	padding: 10px 12px;
-	cursor: default;
 	transition: all 0.2s;
 	background: transparent;
 	border: none;
@@ -477,7 +464,6 @@
 	font-family: inherit;
 	font-size: 14px;
 	text-align: left;
-	cursor: default;
 	cursor: default;
 }
 
@@ -507,9 +493,7 @@
 	text-align: left;
 	background: transparent;
 	border: none;
-	cursor: default;
 	width: 100%;
-	cursor: default;
 	cursor: default;
 }
 
@@ -653,9 +637,7 @@
 	color: var(--text-muted);
 	border: none;
 	background: transparent;
-	cursor: default;
 	transition: all 0.2s;
-	cursor: default;
 	cursor: default;
 }
 
@@ -689,7 +671,6 @@
 	overflow: hidden;
 	border: 2px solid transparent;
 	background: var(--surface-overlay);
-	cursor: default;
 	transition: all 0.2s;
 	padding: 0;
 	display: flex;
@@ -697,7 +678,6 @@
 	align-items: center;
 	justify-content: center;
 	position: relative;
-	cursor: default;
 	cursor: default;
 }
 
@@ -738,6 +718,7 @@
 	height: 100%;
 	object-fit: contain;
 	image-rendering: pixelated;
+	/* biome-ignore lint/suspicious/noDuplicateProperties: browser compatibility fallback */
 	image-rendering: crisp-edges;
 	filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
@@ -769,8 +750,6 @@
 	opacity: 0;
 	transition: all 0.2s;
 	z-index: 10;
-	cursor: default;
-	cursor: default;
 	cursor: default;
 }
 
@@ -805,13 +784,11 @@
 	border-radius: 10px;
 	overflow: hidden;
 	border: 2px solid transparent;
-	cursor: default;
 	transition: all 0.2s;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	padding: 0;
-	cursor: default;
 	cursor: default;
 	/* Mojang capes are 10x16. */
 	background: var(--surface-overlay);
@@ -927,14 +904,12 @@
 	border: none;
 	font-weight: 700;
 	font-size: 13px;
-	cursor: default;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
 	transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 	box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
-	cursor: default;
 	cursor: default;
 }
 
@@ -960,9 +935,7 @@
 	border-radius: 10px;
 	font-size: 12px;
 	font-weight: 700;
-	cursor: default;
 	transition: all 0.2s ease;
-	cursor: default;
 	cursor: default;
 }
 
@@ -985,9 +958,7 @@
 	color: var(--text-base);
 	font-weight: 700;
 	font-size: 13px;
-	cursor: default;
 	transition: all 0.2s ease;
-	cursor: default;
 	cursor: default;
 }
 
@@ -1107,13 +1078,11 @@
 	font-size: 12px;
 	font-weight: 700;
 	border: var(--border-width-subtle) solid var(--border-subtle);
-	cursor: default;
 	transition: all 0.2s ease;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	cursor: default;
 	cursor: default;
 }
 

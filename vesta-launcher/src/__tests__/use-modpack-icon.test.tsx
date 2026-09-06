@@ -24,7 +24,11 @@ const IconProbe = () => {
 
 describe("useModpackIcon", () => {
 	it("does not suspend its page while decorative icon hydration is pending", () => {
-		mockedInvoke.mockReturnValueOnce(new Promise(() => {}));
+		mockedInvoke.mockReturnValueOnce(
+			new Promise(() => {
+				// Intentionally left pending to exercise non-suspending hydration.
+			}),
+		);
 
 		render(() => (
 			<Suspense fallback={<span data-testid="fallback">Loading page</span>}>

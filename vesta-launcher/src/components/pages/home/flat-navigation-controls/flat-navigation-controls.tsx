@@ -1,6 +1,6 @@
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
 import ForwardsArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
-import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import { pageViewerOpen, router } from "@components/page-viewer/page-viewer";
 import { createShellHistoryControls } from "@utils/flat-shell-navigation";
 import { Show } from "solid-js";

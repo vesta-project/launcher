@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
-import { gzipSync } from "node:zlib";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 
 interface ManifestChunk {
 	file: string;
@@ -58,7 +58,8 @@ function gzipBytes(files: Set<string>, exclude = new Set<string>()): number {
 }
 
 const mainEntry = findEntry(
-	(key, chunk) => chunk.isEntry === true && (chunk.name === "main" || key === "index.html"),
+	(key, chunk) =>
+		chunk.isEntry === true && (chunk.name === "main" || key === "index.html"),
 );
 const mainFiles = collectStaticFiles(mainEntry);
 
@@ -143,6 +144,8 @@ const assetBytes = [...mainFiles].reduce(
 	(total, file) => total + statSync(join(DIST, file)).size,
 	0,
 );
-console.log(`Main startup transfer set: ${(assetBytes / 1024).toFixed(1)} KiB raw`);
+console.log(
+	`Main startup transfer set: ${(assetBytes / 1024).toFixed(1)} KiB raw`,
+);
 
 if (failed) process.exit(1);

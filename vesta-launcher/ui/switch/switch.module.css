@@ -33,11 +33,9 @@
 	border-radius: 9999px;
 	border: var(--border-width-subtle) solid var(--switch-track-border);
 	background-color: var(--switch-track-off);
-	cursor: default;
 	transition: background-color 150ms ease-in-out;
 	pointer-events: auto; /* ensure control receives pointer events */
 	z-index: 1; /* bring above potential overlays */
-	cursor: default;
 	cursor: default;
 }
 

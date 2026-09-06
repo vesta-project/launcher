@@ -1,8 +1,8 @@
-import * as PaginationPrimitive from "@kobalte/core/pagination";
-import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";
 import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
 import EllipsisHorizontalIcon from "@assets/icons/controls/ellipsis-horizontal.svg";
+import * as PaginationPrimitive from "@kobalte/core/pagination";
+import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import { cn } from "@utils/ui";
 import type { JSX, ValidComponent } from "solid-js";
 import { Show, splitProps } from "solid-js";

@@ -114,9 +114,7 @@ describe("ResourceInstanceSelectionDialog", () => {
 	});
 
 	it("uses freshly fetched versions for cross-provider installed matching", async () => {
-		mocks.invoke.mockResolvedValue([
-			installed({ hash: "target-hash" }),
-		]);
+		mocks.invoke.mockResolvedValue([installed({ hash: "target-hash" })]);
 		mocks.getVersions.mockResolvedValue([
 			version("target", { hash: "target-hash" }),
 		]);
@@ -150,7 +148,9 @@ describe("ResourceInstanceSelectionDialog", () => {
 		mocks.getVersions.mockImplementation((_source: string, id: string) =>
 			id === "first" ? first.promise : second.promise,
 		);
-		const [selectedProject, setSelectedProject] = createSignal(project("first"));
+		const [selectedProject, setSelectedProject] = createSignal(
+			project("first"),
+		);
 
 		render(() => (
 			<ResourceInstanceSelectionDialog
@@ -177,9 +177,9 @@ describe("ResourceInstanceSelectionDialog", () => {
 			version("first", { game_versions: ["1.20.1"], loaders: ["forge"] }),
 		]);
 		await Promise.resolve();
-		expect(
-			(screen.getByTestId("option-7") as HTMLButtonElement).disabled,
-		).toBe(false);
+		expect((screen.getByTestId("option-7") as HTMLButtonElement).disabled).toBe(
+			false,
+		);
 	});
 
 	it("discards installed rows loaded for a previous project", async () => {
@@ -188,7 +188,9 @@ describe("ResourceInstanceSelectionDialog", () => {
 		mocks.invoke
 			.mockImplementationOnce(() => first.promise)
 			.mockImplementationOnce(() => second.promise);
-		const [selectedProject, setSelectedProject] = createSignal(project("first"));
+		const [selectedProject, setSelectedProject] = createSignal(
+			project("first"),
+		);
 		const suppliedVersions = [version("second")];
 
 		render(() => (
@@ -220,9 +222,9 @@ describe("ResourceInstanceSelectionDialog", () => {
 			}),
 		]);
 		await Promise.resolve();
-		expect(
-			(screen.getByTestId("option-7") as HTMLButtonElement).disabled,
-		).toBe(false);
+		expect((screen.getByTestId("option-7") as HTMLButtonElement).disabled).toBe(
+			false,
+		);
 	});
 
 	it("blocks selection when installed resources cannot be verified", async () => {
@@ -246,8 +248,8 @@ describe("ResourceInstanceSelectionDialog", () => {
 				"Could not verify installed resources",
 			),
 		);
-		expect(
-			(screen.getByTestId("option-7") as HTMLButtonElement).disabled,
-		).toBe(true);
+		expect((screen.getByTestId("option-7") as HTMLButtonElement).disabled).toBe(
+			true,
+		);
 	});
 });

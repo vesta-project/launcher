@@ -1,11 +1,11 @@
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
-import DownloadIcon from "@assets/icons/actions/download.svg";
-import FolderIcon from "@assets/icons/content/folder.svg";
 import PlusIcon from "@assets/icons/actions/add.svg";
-import ReloadIcon from "@assets/icons/actions/reload.svg";
 import TrashIcon from "@assets/icons/actions/delete.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
 import PackIcon from "@assets/icons/content/layers.svg";
+import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
 import type {
@@ -98,14 +98,11 @@ const DatapackRow: Component<{
 		Boolean(props.entry.platform && props.entry.projectId);
 
 	const handleToggle = async (enabled: boolean) => {
-		if (!canManage() || props.busy) return;
+		const resourceId = props.entry.resourceId;
+		if (!canManage() || resourceId == null || props.busy) return;
 		props.onBusyChange(true);
 		try {
-			await toggleWorldDatapack(
-				props.world.ref,
-				props.entry.resourceId!,
-				enabled,
-			);
+			await toggleWorldDatapack(props.world.ref, resourceId, enabled);
 		} catch (error) {
 			showToast({
 				title: `Could not ${enabled ? "enable" : "disable"} datapack`,
@@ -118,7 +115,8 @@ const DatapackRow: Component<{
 	};
 
 	const handleDelete = async () => {
-		if (!canManage() || props.busy) return;
+		const resourceId = props.entry.resourceId;
+		if (!canManage() || resourceId == null || props.busy) return;
 		const confirmed = await dialogStore.confirm(
 			`Remove ${props.entry.displayName}?`,
 			`This removes the datapack from ${props.world.displayName}. A linked resource pack is removed only when no other world still references it.`,
@@ -131,10 +129,7 @@ const DatapackRow: Component<{
 
 		props.onBusyChange(true);
 		try {
-			const removal = await deleteWorldDatapack(
-				props.world.ref,
-				props.entry.resourceId!,
-			);
+			const removal = await deleteWorldDatapack(props.world.ref, resourceId);
 			const companionDescription =
 				removal.removedCompanionCount > 0
 					? " Its linked resource pack was also removed."
@@ -335,9 +330,9 @@ export const WorldDatapacksView: Component<{
 	) => void;
 }> = (props) => {
 	const key = createMemo(() => worldRefKey(props.world.ref));
-	const [busyResourceIds, setBusyResourceIds] = createSignal<ReadonlySet<number>>(
-		new Set(),
-	);
+	const [busyResourceIds, setBusyResourceIds] = createSignal<
+		ReadonlySet<number>
+	>(new Set());
 	const [projectIcons, setProjectIcons] = createSignal<Record<string, string>>(
 		{},
 	);

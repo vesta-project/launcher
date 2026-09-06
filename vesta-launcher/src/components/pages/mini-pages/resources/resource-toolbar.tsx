@@ -15,8 +15,8 @@ import {
 import { TextField } from "@ui/text-field/text-field";
 import { batch, createMemo, For, Show } from "solid-js";
 import {
-	activeBrowseFilterCount,
 	ActiveFilterChips,
+	activeBrowseFilterCount,
 	hasActiveBrowseFilters,
 } from "./active-filter-chips";
 import { FilterPopover } from "./filter-popover";
@@ -89,7 +89,9 @@ export function ResourceToolbar(props: {
 							onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) =>
 								props.onSearchInput(e.currentTarget.value)
 							}
-							onKeyDown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
+							onKeyDown={(
+								e: KeyboardEvent & { currentTarget: HTMLInputElement },
+							) => {
 								if (e.key === "Enter") {
 									e.preventDefault();
 									props.onSearchCommit?.(e.currentTarget.value);

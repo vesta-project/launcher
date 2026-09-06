@@ -299,9 +299,9 @@ export function StorageUsageViewer() {
 
 	const categoryColorMap = createMemo(() => {
 		const map = new Map<string, string>();
-		categories().forEach((category, index) =>
-			map.set(category.id, categoryColor(category.id, index)),
-		);
+		categories().forEach((category, index) => {
+			map.set(category.id, categoryColor(category.id, index));
+		});
 		return map;
 	});
 

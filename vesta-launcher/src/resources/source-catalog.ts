@@ -1,8 +1,8 @@
 import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
 import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
 import SmithedIcon from "@assets/branding/sources/smithed.svg";
-import type { Component } from "solid-js";
 import type { ResourceType, SourcePlatform } from "@stores/resources";
+import type { Component } from "solid-js";
 
 export type SourceSortOption = {
 	label: string;
@@ -112,11 +112,11 @@ export function sourcesForResourceType(
 export function firstSourceForResourceType(
 	resourceType: ResourceType,
 ): SourceDescriptor {
-	return (
-		sourcesForResourceType(resourceType)[0] ?? RESOURCE_SOURCES[0]
-	);
+	return sourcesForResourceType(resourceType)[0] ?? RESOURCE_SOURCES[0];
 }
 
-export function isContentSourcePlatform(value: string): value is SourcePlatform {
+export function isContentSourcePlatform(
+	value: string,
+): value is SourcePlatform {
 	return RESOURCE_SOURCES.some((source) => source.id === value);
 }

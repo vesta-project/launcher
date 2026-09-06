@@ -186,6 +186,10 @@ export async function installModpackFromZip(
 		preLaunchHook: null,
 		postExitHook: null,
 		wrapperCommand: null,
+		useGlobalSandbox: true,
+		sandboxPreset: null,
+		sandboxWrapperNesting: null,
+		sandboxExtraPaths: "[]",
 	};
 	return await withTimeout(
 		invoke("install_modpack_from_zip", {
@@ -239,6 +243,10 @@ export async function installModpackFromUrl(
 		preLaunchHook: null,
 		postExitHook: null,
 		wrapperCommand: null,
+		useGlobalSandbox: true,
+		sandboxPreset: null,
+		sandboxWrapperNesting: null,
+		sandboxExtraPaths: "[]",
 	};
 	return await withTimeout(
 		invoke("install_modpack_from_url", {

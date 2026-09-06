@@ -1,7 +1,7 @@
-import { SettingsCard, SettingsField } from "@components/settings";
-import SearchIcon from "@assets/icons/content/search.svg";
-import ListIcon from "@assets/icons/content/list.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
+import ListIcon from "@assets/icons/content/list.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
+import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	activeThemeDefinition,
@@ -13,7 +13,6 @@ import {
 	canChangeStyle,
 	colorMode,
 	filteredThemeCatalog,
-	getThemeSource,
 	gradientEnabled,
 	gradientHarmony,
 	gradientType,
@@ -66,12 +65,9 @@ import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import {
 	type ColorModePreference,
 	type GradientHarmony,
-	getThemeById,
 	isBuiltinThemeId,
 	type StyleMode,
-	type ThemeConfig,
 	type ThemeVariableValue,
-	type UiChromeMode,
 } from "../../../../../themes/presets";
 import { ThemePresetCard } from "../../../../theme-preset-card/theme-preset-card";
 import styles from "../settings-page.module.css";
@@ -283,9 +279,7 @@ export function AppearanceSettingsTab() {
 								value={colorMode()}
 								onChange={(mode) => {
 									if (mode) {
-										void handleColorModeChange(
-											mode as ColorModePreference,
-										);
+										void handleColorModeChange(mode as ColorModePreference);
 									}
 								}}
 							>

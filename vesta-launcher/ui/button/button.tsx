@@ -29,9 +29,9 @@ function Button(p: ButtonProps) {
 	const c = children(() => p.children);
 	const props = mergeProps(
 		{
-			color: "none",
-			variant: "solid",
-			size: "md",
+			color: "none" as const,
+			variant: "solid" as const,
+			size: "md" as const,
 			icon_only: false,
 			tooltip_placement: "top" as TooltipPlacement,
 		},

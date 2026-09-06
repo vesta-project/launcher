@@ -1,14 +1,16 @@
-import { SettingsCard, SettingsField } from "@components/settings";
-import panelStyles from "@components/settings/settings.module.css";
 import {
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
 	PathListEditor,
 	SandboxHostNotice,
 	SandboxPresetSelect,
-	normalizeSandboxPreset,
-	normalizeSandboxWrapperNesting,
-	useSandboxHostSupport,
 	type SandboxPresetValue,
+	SettingsCard,
+	SettingsField,
+	useSandboxHostSupport,
 } from "@components/settings";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
+import panelStyles from "@components/settings/settings.module.css";
 import {
 	getTotalRam,
 	instanceDefaults,
@@ -49,7 +51,6 @@ import {
 	MAX_GENERATED_MEMORY_MB,
 } from "@utils/memory-policy";
 import styles from "../settings-page.module.css";
-import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 
 export function InstanceDefaultsTab() {
 	const [sandboxSupport] = useSandboxHostSupport();

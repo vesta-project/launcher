@@ -123,7 +123,11 @@ export function ActiveFilterChips(props: { router?: any }) {
 								<span class={styles["filter-chip-kind"]}>{chip.kind}</span>
 							</Show>
 							<span class={styles["filter-chip-label"]}>{chip.label}</span>
-							<CloseIcon class={styles["filter-chip-x"]} width="12" height="12" />
+							<CloseIcon
+								class={styles["filter-chip-x"]}
+								width="12"
+								height="12"
+							/>
 						</button>
 					)}
 				</For>

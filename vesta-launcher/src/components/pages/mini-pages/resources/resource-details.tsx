@@ -1,7 +1,7 @@
-import BellIcon from "@assets/icons/status/bell.svg";
 import DownloadIcon from "@assets/icons/actions/download.svg";
 import ExternalLinkIcon from "@assets/icons/actions/external-link.svg";
 import HeartIcon from "@assets/icons/content/heart.svg";
+import BellIcon from "@assets/icons/status/bell.svg";
 import InfoIcon from "@assets/icons/status/info.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
@@ -48,9 +48,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { resolveResourceUrl } from "@utils/assets";
-import { formatDate } from "@utils/date";
 import { confirmDatapackWorldCompatibility } from "@utils/datapack-compatibility-confirm";
+import { formatDate } from "@utils/date";
 import { openExternal } from "@utils/external-link";
 import {
 	createAnimatedIconPreview,
@@ -1624,8 +1623,9 @@ const ResourceDetailsPage: Component<{
 			setIsInstanceDialogOpen(true);
 			return;
 		}
+		if (!inst) return;
 
-		if (p && inst && requiresWorldTarget(p, version, installType())) {
+		if (p && requiresWorldTarget(p, version, installType())) {
 			setWorldInstall({
 				project: p,
 				versions: resources.state.versions,
@@ -1663,7 +1663,7 @@ const ResourceDetailsPage: Component<{
 					version,
 					{
 						kind: "instance",
-						instanceId: inst!.id,
+						instanceId: inst.id,
 					},
 					{ installType: installType() },
 				);

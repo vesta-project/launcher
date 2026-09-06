@@ -1,5 +1,5 @@
-import InfoIcon from "@assets/icons/status/bell.svg";
 import CloseIcon from "@assets/icons/actions/close.svg";
+import InfoIcon from "@assets/icons/status/bell.svg";
 import ErrorIcon from "@assets/icons/status/error.svg";
 import Button from "@ui/button/button";
 import { Progress } from "@ui/progress/progress";
@@ -9,7 +9,7 @@ import type {
 	NotificationType,
 } from "@utils/notifications";
 import clsx from "clsx";
-import { For, JSX, Show, splitProps } from "solid-js";
+import { For, Show, splitProps } from "solid-js";
 import styles from "./notification-item.module.css";
 
 export interface NotificationItemProps {

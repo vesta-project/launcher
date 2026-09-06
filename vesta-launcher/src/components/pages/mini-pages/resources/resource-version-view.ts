@@ -90,11 +90,7 @@ export function versionsSupportedByInstance(
 	installType: ResourceType | undefined = project?.resource_type,
 ): ResourceVersion[] {
 	const matchingProjectType = versions.filter((version) =>
-		versionMatchesResourceType(
-			installType,
-			version,
-			project?.source,
-		),
+		versionMatchesResourceType(installType, version, project?.source),
 	);
 	if (!instance || installType === "modpack") {
 		return matchingProjectType;
@@ -104,7 +100,7 @@ export function versionsSupportedByInstance(
 	if (installType === "datapack") return matchingProjectType;
 	return matchingProjectType.filter(
 		(version) =>
-			getCompatibilityForInstance(project, version, instance, installType).type !==
-			"incompatible",
+			getCompatibilityForInstance(project, version, instance, installType)
+				.type !== "incompatible",
 	);
 }

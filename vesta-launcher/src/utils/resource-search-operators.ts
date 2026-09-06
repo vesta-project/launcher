@@ -54,8 +54,8 @@ export function parseSearchFilterOperators(
 	const commitTrailing = options.commitTrailing === true;
 
 	OPERATOR_RE.lastIndex = 0;
-	let match: RegExpExecArray | null;
-	while ((match = OPERATOR_RE.exec(input)) !== null) {
+	let match = OPERATOR_RE.exec(input);
+	while (match !== null) {
 		const key = match[1].toLowerCase();
 		const value = match[2];
 		const start = match.index;
@@ -63,6 +63,7 @@ export function parseSearchFilterOperators(
 		const atEnd = end >= input.length || input.slice(end).trim() === "";
 		const whitespaceTerminated =
 			end < input.length && /\s/.test(input.charAt(end));
+		match = OPERATOR_RE.exec(input);
 
 		const canCommit = whitespaceTerminated || (commitTrailing && atEnd);
 		if (!canCommit) continue;
