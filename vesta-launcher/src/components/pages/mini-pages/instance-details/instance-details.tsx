@@ -66,10 +66,10 @@ import { createAnimatedIconPreview } from "@utils/icon-animation";
 import {
 	normalizeSandboxPreset,
 	normalizeSandboxWrapperNesting,
-	parseSandboxExtraPaths,
 	type SandboxPresetValue,
 	type SandboxWrapperNestingValue,
 } from "@components/settings/sandbox-policy-ui";
+import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 import {
 	applyInstanceEditDraft,
 	type InstanceEditDirty,

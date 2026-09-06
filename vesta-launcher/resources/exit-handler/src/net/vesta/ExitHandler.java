@@ -266,7 +266,9 @@ public class ExitHandler {
     private static long getProcessId(Process process) {
         try {
             // Java 9+: Process.pid()
-            java.lang.reflect.Method pidMethod = process.getClass().getMethod("pid");
+            // Reflect on the public API, not the package-private ProcessImpl
+            // class whose methods are inaccessible under Java's module system.
+            java.lang.reflect.Method pidMethod = Process.class.getMethod("pid");
             Object value = pidMethod.invoke(process);
             if (value instanceof Long) {
                 return ((Long) value).longValue();

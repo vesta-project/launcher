@@ -34,34 +34,37 @@ function mapSupport(response: SandboxHostSupportResponse): SandboxHostSupport {
 	};
 }
 
-export function isEnforcedSandboxPreset(
-	preset: SandboxPresetValue,
-): boolean {
+export function isEnforcedSandboxPreset(preset: SandboxPresetValue): boolean {
 	return preset === "modded" || preset === "paranoid";
 }
 
 function nonTauriSandboxHostSupport(): SandboxHostSupport {
 	return {
 		hostOs: "unknown",
-		enforcementAvailable: true,
+		enforcementAvailable: false,
 		enforcementBackend: null,
 		bubblewrapAvailable: false,
 		bubblewrapPath: null,
-		missingRequirementMessage: null,
+		missingRequirementMessage:
+			"Sandbox enforcement requires the Vesta desktop runtime and is unavailable in browser previews.",
 	};
 }
 
 function fetchSandboxHostSupportFromBackend(): Promise<SandboxHostSupport> {
 	if (!supportPromise) {
-		supportPromise = invoke<SandboxHostSupportResponse>("get_sandbox_host_support")
+		const request = invoke<SandboxHostSupportResponse>(
+			"get_sandbox_host_support",
+		)
 			.then(mapSupport)
 			.then((support) => {
-				cachedSupport = support;
+				// An invalidation may have started a newer host capability check.
+				if (supportPromise === request) cachedSupport = support;
 				return support;
 			})
 			.finally(() => {
-				supportPromise = null;
+				if (supportPromise === request) supportPromise = null;
 			});
+		supportPromise = request;
 	}
 
 	return supportPromise;
@@ -97,9 +100,10 @@ export function invalidateSandboxHostSupportCache() {
 	supportPromise = null;
 }
 
-export function sandboxPresetBlockedCopy(
-	support: SandboxHostSupport,
-): { title: string; description: string } {
+export function sandboxPresetBlockedCopy(support: SandboxHostSupport): {
+	title: string;
+	description: string;
+} {
 	const description =
 		support.missingRequirementMessage ??
 		"Sandbox enforcement is unavailable on this system.";

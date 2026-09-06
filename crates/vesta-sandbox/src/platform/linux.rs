@@ -134,7 +134,7 @@ pub(crate) fn prepare(
         EnforcementStatus::NotRequired
     } else {
         notes.push(
-            "Microphone denied via bubblewrap (--unshare-ipc, no /dev/snd bind, and no session-bus/libvirt sockets from XDG_RUNTIME_DIR); GPU and display sockets remain available."
+            "Microphone denied via bubblewrap (--unshare-ipc, no /dev/snd bind, and no PipeWire/PulseAudio sockets). Linux microphone-off also disables audio playback; GPU and display sockets remain available."
                 .to_string(),
         );
         EnforcementStatus::Enforced
@@ -287,7 +287,7 @@ fn build_bwrap_args(
     }
 
     push_existing_ro_bind(&mut args, Path::new("/tmp/.X11-unix"));
-    push_runtime_dir_binds(&mut args);
+    push_runtime_dir_binds(&mut args, policy.mic_allowed);
     if let Ok(xauthority) = std::env::var("XAUTHORITY") {
         // XAUTHORITY often lives under XDG_RUNTIME_DIR; bind it explicitly now
         // that the runtime dir is no longer mounted wholesale.
@@ -422,28 +422,40 @@ fn push_path_access(args: &mut Vec<String>, entry: &PathAccess, seen: &mut BTree
 /// `XDG_RUNTIME_DIR`. Mounting the host runtime directory also exposes the
 /// session bus and libvirt sockets, which can D-Bus-activate host apps such as
 /// GNOME Boxes when the sandboxed JVM talks to the desktop.
-fn push_runtime_dir_binds(args: &mut Vec<String>) {
+fn push_runtime_dir_binds(args: &mut Vec<String>, mic_allowed: bool) {
     let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") else {
         return;
     };
-    let runtime_path = Path::new(&runtime_dir);
+    let wayland_display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
+    push_runtime_dir_binds_at(args, Path::new(&runtime_dir), &wayland_display, mic_allowed);
+}
+
+fn push_runtime_dir_binds_at(
+    args: &mut Vec<String>,
+    runtime_path: &Path,
+    wayland_display: &str,
+    mic_allowed: bool,
+) {
     if !runtime_path.is_dir() {
         return;
     }
 
     args.push("--dir".to_string());
-    args.push(runtime_dir.clone());
+    args.push(runtime_path.to_string_lossy().into_owned());
 
-    let wayland_display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
-    for name in [wayland_display.as_str(), &format!("{wayland_display}.lock")] {
+    for name in [wayland_display, &format!("{wayland_display}.lock")] {
         let host = runtime_path.join(name);
         // Wayland clients must write to the display socket.
         push_existing_bind(args, &host, true);
     }
 
-    // PipeWire/Pulse sockets are required for audio *output* as well as input.
-    // Mic denial is enforced by omitting /dev/snd and unsharing IPC, not by
-    // hiding these sockets.
+    // Audio-server Unix sockets provide capture as well as playback. Neither
+    // the IPC namespace nor hiding /dev/snd restricts their protocol, so mic-off
+    // must withhold these sockets too. Without a playback-only broker this also
+    // disables sound output.
+    if !mic_allowed {
+        return;
+    }
     for name in [
         "pipewire-0",
         "pipewire-0.lock",
@@ -493,6 +505,54 @@ mod tests {
             exec_allowlist: vec![PathBuf::from("/usr/bin/java")],
             wrapper_nesting: WrapperNesting::default(),
             extra_paths: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn runtime_socket_binds_withhold_capture_endpoints_when_microphone_is_denied() {
+        let runtime = tempfile::tempdir().unwrap();
+        // Regular files suffice: bind selection must not depend on a live
+        // desktop/audio session on the test runner.
+        for name in [
+            "wayland-0",
+            "wayland-0.lock",
+            "pipewire-0",
+            "pipewire-0.lock",
+            "pipewire-0-manager",
+            "pipewire-0-manager.lock",
+            "bus",
+        ] {
+            fs::write(runtime.path().join(name), b"").unwrap();
+        }
+        fs::create_dir(runtime.path().join("pulse")).unwrap();
+        fs::write(runtime.path().join("pulse/native"), b"").unwrap();
+        fs::create_dir(runtime.path().join("libvirt")).unwrap();
+
+        for mic_allowed in [false, true] {
+            let mut args = Vec::new();
+            push_runtime_dir_binds_at(&mut args, runtime.path(), "wayland-0", mic_allowed);
+            let mounted = |name: &str| {
+                let path = runtime.path().join(name).to_string_lossy().into_owned();
+                args.windows(3).any(|window| {
+                    matches!(window[0].as_str(), "--bind" | "--ro-bind")
+                        && window[1] == path
+                        && window[2] == path
+                })
+            };
+            assert!(mounted("wayland-0"));
+            assert!(mounted("wayland-0.lock"));
+            for name in [
+                "pipewire-0",
+                "pipewire-0.lock",
+                "pipewire-0-manager",
+                "pipewire-0-manager.lock",
+                "pulse",
+            ] {
+                assert_eq!(mounted(name), mic_allowed, "unexpected mount: {name}");
+            }
+            assert!(!mounted("bus"));
+            assert!(!mounted("libvirt"));
+            assert!(!mounted(""), "must not expose the entire runtime directory");
         }
     }
 

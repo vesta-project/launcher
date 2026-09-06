@@ -91,7 +91,8 @@ both Modules and pull unused OS code into every build.
 - v1 capability knobs: filesystem, network, exec, microphone. Presets set them;
   no full privacy dashboard in v1.
 - USB/controllers remain allowed under Paranoid.
-- GPU/display/audio output remain allowed for playable presets.
+- GPU/display remain allowed for playable presets. Audio output remains allowed
+  except on Linux when microphone access is denied (see below).
 
 ### Wrapper composition
 
@@ -136,6 +137,18 @@ both Modules and pull unused OS code into every build.
   therefore packages a target-matched `vesta-sandbox-exec` on macOS as well as
   Linux and Windows; it is a no-op compatibility sidecar on macOS, where
   runtime confinement remains Seatbelt-only.
+
+### Linux microphone isolation
+
+- The Linux Adapter exposes selected display/audio sockets, never the complete
+  `XDG_RUNTIME_DIR` or its session bus. When microphone access is denied it also
+  withholds PipeWire and PulseAudio sockets, omits `/dev/snd`, and unshares IPC.
+  Audio-server sockets permit recording independently of direct device access;
+  hiding capture devices or using an IPC namespace alone does not deny recording.
+- Linux microphone-off therefore disables sound playback as well as recording.
+  The enforcement report explicitly warns about this limitation. Preserving
+  playback would require a separately enforced playback-only audio broker;
+  ordinary host audio sockets must not be exposed as a substitute.
 
 ### Windows AppContainer implementation
 
@@ -183,7 +196,9 @@ both Modules and pull unused OS code into every build.
   package SID to shared parents such as `C:\Users`, so the helper gives Java a
   short-lived DOS drive rooted at the current user profile. It rewrites
   path-shaped Java arguments and environment values plus the working directory
-  through that alias; an external Java runtime receives a second alias. Policy
+  through that alias, recognizing both long profile paths and Windows 8.3
+  spellings (such as `RUNNER~1`) so Java canonicalization does not fall back
+  through denied profile ancestors. An external Java runtime receives a second alias. Policy
   validation and NTFS grants remain attached to the canonical roots. Each
   helper invocation creates a fresh writable/loadable directory beneath its
   AppContainer package temp. JNA's use of `File.createTempFile` still requires

@@ -82,6 +82,11 @@ sandbox temp and keeps shared natives read-only. Linux and macOS retain writable
 natives for runtime extraction. The Instance game directory and exact
 pre-created session-log file are read-write. Optional global and instance extra
 paths grant read-write access.
+Shared frontend path parsing lives in `src/utils/sandbox-policy.ts`, below both
+settings persistence and UI. Browser previews cannot attest OS enforcement and
+therefore leave enforced presets unavailable. On Linux, microphone denial also
+withholds audio-server sockets and disables playback; the preset UI explains
+this limitation.
 Paths are canonicalized before
 the Adapter builds its policy. Wrapper nesting (sandbox-outside vs
 wrapper-outside) is configurable. Hooks run inside the Play sandbox and may use
@@ -135,6 +140,12 @@ enforcement as Enforced and exposes playable presets. Its no-child policy is int
 stricter than the portable maximum-authority allowlist: game descendants are
 denied even when their executable is listed. Generic sandbox-outside wrappers
 are rejected; wrapper-outside remains an explicit weaker compatibility mode.
+The Runtime launch Adapter never logs full command arguments or hook bodies,
+which can contain account tokens and user secrets. Instance Lifecycle treats
+the game-writable PID sidecar as an untrusted hint: Unix recovery must verify
+membership in the original isolated process group; Windows does not adopt a
+host PID from that file. Process-group identity survives replacement of a dead
+wrapper PID during recovery.
 
 Primary modules:
 

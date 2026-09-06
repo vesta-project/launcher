@@ -70,8 +70,7 @@ pub(crate) async fn record_started_launch(
         let cleanup_paths = handle.cleanup_paths;
         if let Some(mut child) = handle.child {
             let iid_for_registry = instance_id.clone();
-            let game_dir_for_wait = run_state.game_dir.clone();
-            let wrapper_pid = run_state.pid;
+            let run_state_for_wait = run_state.clone();
             tokio::spawn(async move {
                 if let Err(e) = child.wait().await {
                     log::error!(
@@ -85,14 +84,7 @@ pub(crate) async fn record_started_launch(
                 // still alive (Crash Assistant child trees, SIGPIPE on pipes, OOM
                 // of the wrapper). Keep temp dirs and registry entry until the
                 // exit monitor confirms the game itself is gone.
-                let surviving = find_java_pid_for_game_dir(&game_dir_for_wait, wrapper_pid)
-                    .or_else(|| {
-                        let pid_path = game_dir_for_wait.join(".vesta").join("game_pid");
-                        std::fs::read_to_string(pid_path)
-                            .ok()
-                            .and_then(|s| s.trim().parse::<u32>().ok())
-                            .filter(|pid| *pid != wrapper_pid && is_pid_running(*pid))
-                    });
+                let surviving = find_surviving_game_pid(&run_state_for_wait);
                 if let Some(game_pid) = surviving {
                     log::warn!(
                         "[instance::lifecycle] Wrapper PID for {} exited; game PID {} still alive — deferring sandbox cleanup",
@@ -317,7 +309,7 @@ pub(crate) fn spawn_exit_monitor(
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             sys.refresh_all();
-            if is_launch_alive(run_state.pid, run_state.process_group_id) {
+            if sys.process(sysinfo::Pid::from_u32(run_state.pid)).is_some() {
                 continue;
             }
 
@@ -334,7 +326,7 @@ pub(crate) fn spawn_exit_monitor(
                         outcome.pid
                     );
                     run_state.pid = outcome.pid;
-                    run_state.process_group_id = Some(capture_process_group_id(outcome.pid));
+                    // Keep the original group identity even if its leader died.
                     if let Err(e) =
                         crate::utils::process_state::add_running_process(run_state.clone())
                     {
@@ -578,7 +570,7 @@ pub(crate) fn reattach_or_reconcile_persisted_processes(app_handle: tauri::AppHa
                 log::info!("Found {} persisted running processes", processes.len());
 
                 for mut run_state in processes {
-                    if !is_launch_alive(run_state.pid, run_state.process_group_id) {
+                    if !is_pid_running(run_state.pid) {
                         if let Some(surviving_pid) = find_surviving_game_pid(&run_state) {
                             log::warn!(
                                 "Persisted wrapper PID {} for {} is gone; reattaching to game PID {}",
@@ -1002,6 +994,8 @@ fn capture_process_group_id(pid: u32) -> u32 {
 }
 
 fn is_launch_alive(pid: u32, process_group_id: Option<u32>) -> bool {
+    #[cfg(not(unix))]
+    let _ = process_group_id;
     #[cfg(unix)]
     {
         let pgid = process_group_id.unwrap_or(pid) as i32;
@@ -1019,25 +1013,51 @@ fn is_launch_alive(pid: u32, process_group_id: Option<u32>) -> bool {
     is_pid_running(pid)
 }
 
-/// Prefer the exit-handler's published game PID, then fall back to scanning for a
-/// still-running JVM whose command line references this instance game directory.
+/// A game-writable PID sidecar is only a hint, never authority to adopt (and
+/// later terminate) a host process. Recovery requires kernel-confirmed membership
+/// in the original isolated launch process group. Windows has no equivalent
+/// group identity here, so it must not adopt a PID from this untrusted file.
+fn pid_belongs_to_launch_group(pid: u32, run_state: &InstanceRunState) -> bool {
+    #[cfg(unix)]
+    {
+        let Some(group) = run_state.process_group_id else {
+            return false;
+        };
+        if pid == 0 || pid == run_state.pid || group == 0 || group > i32::MAX as u32 {
+            return false;
+        }
+        // Never recover into the launcher's own (non-isolated) process group.
+        if group == unsafe { libc::getpgrp() } as u32 {
+            return false;
+        }
+        pid <= i32::MAX as u32 && unsafe { libc::getpgid(pid as i32) } == group as i32
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (pid, run_state);
+        false
+    }
+}
+
+/// Prefer the exit-handler's verified hint, then scan for a game JVM within the
+/// same launch group. A matching command line alone is insufficient evidence.
 fn find_surviving_game_pid(run_state: &InstanceRunState) -> Option<u32> {
     let pid_path = run_state.game_dir.join(".vesta").join("game_pid");
     if let Ok(contents) = std::fs::read_to_string(&pid_path) {
         if let Ok(pid) = contents.trim().parse::<u32>() {
-            if pid != run_state.pid && is_pid_running(pid) {
+            if pid_belongs_to_launch_group(pid, run_state) && is_pid_running(pid) {
                 return Some(pid);
             }
         }
     }
 
-    find_java_pid_for_game_dir(&run_state.game_dir, run_state.pid)
+    find_java_pid_for_game_dir(run_state)
 }
 
-fn find_java_pid_for_game_dir(game_dir: &std::path::Path, exclude_pid: u32) -> Option<u32> {
+fn find_java_pid_for_game_dir(run_state: &InstanceRunState) -> Option<u32> {
     #[cfg(target_os = "linux")]
     {
-        let needle = game_dir.to_string_lossy();
+        let needle = run_state.game_dir.to_string_lossy();
         let proc = std::fs::read_dir("/proc").ok()?;
         let mut matches = Vec::new();
         for entry in proc.flatten() {
@@ -1046,10 +1066,13 @@ fn find_java_pid_for_game_dir(game_dir: &std::path::Path, exclude_pid: u32) -> O
             let Ok(pid) = name.parse::<u32>() else {
                 continue;
             };
-            if pid == exclude_pid {
+            if !pid_belongs_to_launch_group(pid, run_state) {
                 continue;
             }
-            let cmdline = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+            let Ok(cmdline) = std::fs::read(format!("/proc/{pid}/cmdline")) else {
+                // Processes can exit or become unreadable during enumeration.
+                continue;
+            };
             if cmdline.is_empty() {
                 continue;
             }
@@ -1094,7 +1117,7 @@ fn find_java_pid_for_game_dir(game_dir: &std::path::Path, exclude_pid: u32) -> O
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (game_dir, exclude_pid);
+        let _ = run_state;
         None
     }
 }
@@ -1129,6 +1152,61 @@ mod tests {
     use super::*;
     use std::io::Write;
     use std::path::PathBuf;
+
+    fn recovery_run_state(game_dir: PathBuf) -> InstanceRunState {
+        InstanceRunState {
+            instance_id: "recovery-test".to_string(),
+            pid: u32::MAX,
+            process_group_id: None,
+            log_file: game_dir.join("latest.log"),
+            game_dir,
+            version_id: "test".to_string(),
+            modloader: None,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            cleanup_paths: Vec::new(),
+            console_from_log_file: false,
+        }
+    }
+
+    #[test]
+    fn recovery_rejects_game_pid_sidecar_pointing_at_host_process() {
+        let dir = tempfile::tempdir().unwrap();
+        let run_state = recovery_run_state(dir.path().to_path_buf());
+        std::fs::create_dir(dir.path().join(".vesta")).unwrap();
+        std::fs::write(
+            dir.path().join(".vesta/game_pid"),
+            std::process::id().to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(find_surviving_game_pid(&run_state), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recovery_requires_the_original_isolated_process_group() {
+        use std::os::unix::process::CommandExt;
+        let dir = tempfile::tempdir().unwrap();
+        let mut run_state = recovery_run_state(dir.path().to_path_buf());
+        let mut child = std::process::Command::new("/bin/sleep")
+            .arg("30")
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        run_state.process_group_id = Some(pid);
+        std::fs::create_dir(dir.path().join(".vesta")).unwrap();
+        std::fs::write(dir.path().join(".vesta/game_pid"), pid.to_string()).unwrap();
+        let recovered = find_surviving_game_pid(&run_state);
+        let host_accepted = pid_belongs_to_launch_group(std::process::id(), &run_state);
+        // Reap the positive-control process before asserting, even on failure.
+        let _ = child.kill();
+        let _ = child.wait();
+        assert_eq!(recovered, Some(pid));
+        assert!(!host_accepted);
+        run_state.process_group_id = Some(unsafe { libc::getpgrp() } as u32);
+        assert!(!pid_belongs_to_launch_group(std::process::id(), &run_state));
+    }
 
     #[test]
     fn playtime_minutes_rounds_down_and_never_negative() {

@@ -54,10 +54,12 @@ fn bundle_sandbox_exec() {
     };
     let helper_dest = binaries_dir.join(format!("vesta-sandbox-exec-{target}{executable_suffix}"));
 
-    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/bin/vesta-sandbox-exec.rs");
-    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/landlock_exec.rs");
-    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/windows_exec.rs");
-    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src/platform/windows.rs");
+    // The packaged helper depends on the whole policy crate, not only its
+    // executable entry point. Rebuild it when shared policy code or resolved
+    // dependencies change so incremental builds cannot bundle a stale helper.
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src");
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/Cargo.toml");
+    println!("cargo:rerun-if-changed=../../Cargo.lock");
     println!("cargo:rerun-if-env-changed=TARGET");
 
     let helper_src = ensure_sandbox_exec_built(
@@ -104,6 +106,7 @@ fn ensure_sandbox_exec_built(
         .env("CARGO_TARGET_DIR", &sidecar_target)
         .args([
             "build",
+            "--locked",
             "-p",
             "vesta-sandbox",
             "--bin",

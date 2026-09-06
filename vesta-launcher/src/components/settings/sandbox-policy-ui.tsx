@@ -47,20 +47,6 @@ export const SANDBOX_PRESET_OPTIONS: {
 	{ value: "paranoid", label: "Paranoid" },
 ];
 
-export function parseSandboxExtraPaths(
-	raw: string | string[] | null | undefined,
-): string[] {
-	if (Array.isArray(raw)) return raw;
-	if (!raw || !raw.trim()) return [];
-	try {
-		const parsed = JSON.parse(raw) as unknown;
-		if (!Array.isArray(parsed)) return [];
-		return parsed.filter((entry): entry is string => typeof entry === "string");
-	} catch {
-		return [];
-	}
-}
-
 function CapabilityChip(props: {
 	icon: JSX.Element;
 	off?: boolean;
@@ -144,8 +130,13 @@ export function SandboxHostNotice(props: {
 }) {
 	const message = createMemo(() => {
 		const support = props.support;
-		if (!support || support.enforcementAvailable) {
+		if (!support) {
 			return null;
+		}
+		if (support.enforcementAvailable) {
+			return support.hostOs === "linux"
+				? "On Linux, Paranoid blocks microphone access by also disabling game audio playback."
+				: null;
 		}
 		return (
 			support.missingRequirementMessage ??

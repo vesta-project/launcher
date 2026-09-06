@@ -653,6 +653,7 @@ struct JavaProfileDrive {
 
 struct DosDriveMapping {
     root: PathBuf,
+    root_references: Vec<String>,
     alias_root: PathBuf,
     device_name: Vec<u16>,
     target_name: Vec<u16>,
@@ -729,6 +730,21 @@ fn rewrite_java_runtime_temp_arg(arg: &str, java_temp: &str, drive: &JavaProfile
 impl DosDriveMapping {
     fn for_root(root: PathBuf) -> Result<Self, String> {
         let target = java_drive_target(&root)?;
+        let mut root_references = vec![
+            win32_process_path(&root).to_string_lossy().into_owned(),
+            root.to_string_lossy().into_owned(),
+        ];
+        // TEMP and Java arguments can use the profile's DOS 8.3 spelling (for
+        // example RUNNER~1). It names the same directory but must also be
+        // redirected to avoid traversing the inaccessible C:\Users parent.
+        if let Some(short_root) = short_windows_path(&root) {
+            root_references.push(
+                win32_process_path(&short_root)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            root_references.push(short_root.to_string_lossy().into_owned());
+        }
 
         use windows_sys::Win32::Foundation::{
             CloseHandle, ERROR_FILE_NOT_FOUND, WAIT_ABANDONED, WAIT_OBJECT_0,
@@ -793,6 +809,7 @@ impl DosDriveMapping {
 
             return Ok(Self {
                 root,
+                root_references,
                 alias_root: PathBuf::from(format!("{}:\\", letter as char)),
                 device_name,
                 target_name,
@@ -808,16 +825,31 @@ impl DosDriveMapping {
     }
 
     fn rewrite_text(&self, value: &str) -> String {
-        let canonical = self.root.to_string_lossy().into_owned();
-        let win32 = win32_process_path(&self.root)
-            .to_string_lossy()
-            .into_owned();
         rewrite_path_references(
             value,
-            &[win32, canonical],
+            &self.root_references,
             &self.alias_root.to_string_lossy(),
         )
     }
+}
+
+fn short_windows_path(path: &Path) -> Option<PathBuf> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+
+    let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let required = unsafe { GetShortPathNameW(path.as_ptr(), std::ptr::null_mut(), 0) };
+    if required == 0 {
+        return None;
+    }
+    let mut buffer = vec![0u16; required as usize];
+    let written = unsafe { GetShortPathNameW(path.as_ptr(), buffer.as_mut_ptr(), required) };
+    if written == 0 || written >= required {
+        return None;
+    }
+    Some(PathBuf::from(OsString::from_wide(
+        &buffer[..written as usize],
+    )))
 }
 
 impl Drop for DosDriveMapping {
@@ -2624,6 +2656,24 @@ mod tests {
     }
 
     #[test]
+    fn java_drive_alias_rewrites_short_and_long_root_spellings() {
+        let probe = tempfile::Builder::new()
+            .prefix("vesta-long-profile-name-")
+            .tempdir()
+            .unwrap();
+        let root = std::fs::canonicalize(probe.path()).unwrap();
+        let mapping = DosDriveMapping::for_root(root.clone()).unwrap();
+        let short_root = short_windows_path(&root).unwrap();
+        let expected = mapping.alias_root.join("assets").join("asset.txt");
+        for spelling in [root, short_root.clone(), win32_process_path(&short_root)] {
+            assert_eq!(
+                mapping.rewrite_path(&spelling.join("assets").join("asset.txt")),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn exact_directory_acl_update_does_not_grant_child_access() {
         let probe = tempfile::tempdir().unwrap();
         let child = probe.path().join("child.txt");
@@ -2869,6 +2919,9 @@ mod tests {
         let Ok(exit_handler) = std::fs::canonicalize(exit_handler) else {
             return;
         };
+        // Java 21's JAR class loader does not accept the verbatim \\?\ prefix
+        // returned by Rust canonicalize, even though Windows file APIs do.
+        let exit_handler = win32_process_path(&exit_handler);
         let probe = tempfile::tempdir().unwrap();
         let allowed = probe.path().join("instance");
         let read_only = probe.path().join("shared");
@@ -2990,6 +3043,11 @@ mod tests {
             "exit-handler sandbox probe exited with {}; stdout={}; stderr={}",
             output.status,
             String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !String::from_utf8_lossy(&output.stderr).contains("Unable to resolve game PID"),
+            "exit-handler could not reflect Process.pid(): {}",
             String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(std::fs::read_to_string(&pre_marker).unwrap().trim(), "pre");

@@ -66,7 +66,7 @@ import {
 	upsertCustomTheme,
 	validateTheme,
 } from "../themes/presets";
-import { parseSandboxExtraPaths } from "@components/settings/sandbox-policy-ui";
+import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 
 export interface AppConfig {
 	id: number;

@@ -61,18 +61,14 @@ pub fn cleanup_sandbox_paths(paths: impl IntoIterator<Item = std::path::PathBuf>
         #[cfg(not(windows))]
         let owned_windows_policy = false;
         if !owned_system_temp && !owned_windows_policy {
-            log::error!(
-                "Refusing to remove unrecognized sandbox cleanup path {:?}",
-                path
-            );
+            log::error!("Refusing to remove unrecognized sandbox cleanup path");
             continue;
         }
         if let Err(err) = std::fs::remove_dir_all(&path) {
             if err.kind() != std::io::ErrorKind::NotFound {
                 log::warn!(
-                    "Failed to remove sandbox temporary directory {:?}: {}",
-                    path,
-                    err
+                    "Failed to remove sandbox temporary directory: {:?}",
+                    err.kind()
                 );
             }
         }
@@ -284,7 +280,7 @@ pub async fn launch_prepared_game(
     // 5. Build JVM arguments (substitutes ${classpath} in manifest with our classpath string)
     log::debug!("Building JVM arguments");
     let jvm_args = build_jvm_arguments(&spec, &manifest, &natives_dir, &classpath, os);
-    log::info!("Launch JVM arguments: {:?}", jvm_args);
+    log::debug!("Built {} JVM arguments (values omitted)", jvm_args.len());
 
     // 6. Build game arguments
     log::debug!("Building game arguments");
@@ -457,74 +453,8 @@ pub async fn launch_prepared_game(
 
     // 10. Spawn process
     log::info!("Spawning Minecraft process");
-    // Log the full command for debugging. Construct a human-readable command string
-    // which includes proper quoting for arguments. This is helpful for reproducing
-    // the exact invocation in logs and debugging.
-
-    // Make the quoting helper top-level so it can be unit-tested.
-    fn quote_arg(s: &str) -> String {
-        crate::game::launcher::process::quote_arg_internal(s)
-    }
-
-    // Log the actual command being executed (sandbox + wrapper + exit handler).
-    let sandbox_profile = spec.sandbox_prefix.as_ref().and_then(|prefix| {
-        prefix
-            .windows(2)
-            .find(|window| window[0] == "-p")
-            .map(|window| window[1].as_str())
-    });
-    let redact_arg = |arg: &String| {
-        if sandbox_profile == Some(arg.as_str()) {
-            "<seatbelt-profile>".to_string()
-        } else {
-            arg.clone()
-        }
-    };
-    let mut logged_cmd = vec![executable.clone()];
-    logged_cmd.extend(initial_args.iter().map(redact_arg));
-    if let Some(ref exit_handler_jar) = spec.exit_handler_jar {
-        if has_user_wrapper {
-            logged_cmd.push(spec.java_path.to_string_lossy().to_string());
-        }
-        let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
-        logged_cmd.extend([
-            "-jar".to_string(),
-            exit_handler_jar.to_string_lossy().to_string(),
-            "--instance-id".to_string(),
-            spec.instance_id.clone(),
-            "--exit-file".to_string(),
-            exit_file.to_string_lossy().to_string(),
-            "--log-file".to_string(),
-            log_file.to_string_lossy().to_string(),
-        ]);
-        if let Some(ref pre_hook) = spec.pre_launch_hook {
-            logged_cmd.push("--pre-launch-hook".to_string());
-            logged_cmd.push(pre_hook.clone());
-        }
-        if let Some(ref post_hook) = spec.post_exit_hook {
-            logged_cmd.push("--post-exit-hook".to_string());
-            logged_cmd.push(post_hook.clone());
-        }
-        if delegate_sandbox_to_exit_handler {
-            logged_cmd.extend(exit_handler_sandbox_args(&spec.sandbox_prefix));
-        }
-        logged_cmd.push("--".to_string());
-        logged_cmd.extend(game_base_command.iter().cloned());
-    } else {
-        if has_user_wrapper {
-            logged_cmd.push(spec.java_path.to_string_lossy().to_string());
-        }
-        logged_cmd.extend(jvm_args.iter().cloned());
-        logged_cmd.push(main_class.clone());
-        logged_cmd.extend(game_args.iter().cloned());
-    }
-    let full_cmd_str = logged_cmd
-        .iter()
-        .map(|a| quote_arg(a))
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    log::info!("Exec command: {}", full_cmd_str);
+    // Arguments (including JVM properties and hook bodies) can contain account
+    // tokens or arbitrary user secrets. Do not reconstruct a command for logs.
     if spec.sandbox_prefix.is_some() {
         log::info!("OS sandbox prefix is active");
     }
@@ -764,20 +694,6 @@ fn apply_sandbox_prefix(
         args.extend(prefix.iter().cloned());
         (executable, args)
     }
-}
-
-/// Internal quoting helper used for logs / shell-copy; kept separate so it can be
-/// unit-tested where needed.
-pub(crate) fn quote_arg_internal(s: &str) -> String {
-    if s.is_empty() {
-        return "\"\"".to_string();
-    }
-    // Add quotes if whitespace or double-quote present; escape backslashes and double quotes
-    if s.chars().any(|c| c.is_whitespace() || c == '"') {
-        let esc = s.replace('\\', "\\\\").replace('"', "\\\"");
-        return format!("\"{}\"", esc);
-    }
-    s.to_string()
 }
 
 /// Verify Java installation
@@ -1086,22 +1002,4 @@ mod tests {
 
         assert!(!owned.exists());
     }
-}
-#[test]
-fn quote_arg_internal_quotes_paths_with_spaces() {
-    // a path with spaces should be quoted
-    let p = r"C:\Program Files\Some Libs";
-    let out = quote_arg_internal(p);
-    assert!(out.starts_with('"') && out.ends_with('"'));
-    assert!(out.contains("Program Files"));
-
-    // a classpath with separators and spaces should be quoted as a single token
-    let cp = r"C:\Path With Spaces\lib.jar;C:\other\lib2.jar";
-    let cp_out = quote_arg_internal(cp);
-    assert!(cp_out.starts_with('"') && cp_out.ends_with('"'));
-    assert!(cp_out.contains("Path With Spaces"));
-
-    // when there is no whitespace, should be returned verbatim
-    let simple = "no_spaces_here";
-    assert_eq!(quote_arg_internal(simple), simple.to_string());
 }
