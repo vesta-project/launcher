@@ -11,7 +11,7 @@ function memoizeRouteLoader(loader: RouteLoader): RouteLoader {
 	return () => (pending ??= loader());
 }
 
-const routeLoaders: Record<string, RouteLoader> = {
+const routeLoaders = {
 	"/config": memoizeRouteLoader(
 		() => import("@components/pages/mini-pages/settings/settings-page"),
 	),
@@ -54,9 +54,10 @@ const routeLoaders: Record<string, RouteLoader> = {
 	"/debug-test": memoizeRouteLoader(
 		() => import("@components/pages/mini-pages/debug-test"),
 	),
-};
+} satisfies Record<string, RouteLoader>;
 
-const routeComponent = (path: string) => lazy(() => routeLoaders[path]?.());
+const routeComponent = (path: keyof typeof routeLoaders) =>
+	lazy(() => routeLoaders[path]());
 
 const ChangelogPage = routeComponent("/changelog");
 const DebugTestPage = routeComponent("/debug-test");
@@ -87,7 +88,7 @@ export async function prepareMiniRoute(
 	path: string,
 	options: { preloadData?: boolean } = {},
 ): Promise<void> {
-	const loader = routeLoaders[path];
+	const loader = routeLoaders[path as keyof typeof routeLoaders];
 	if (!loader) return;
 	await loader();
 	if (path === "/config") {
