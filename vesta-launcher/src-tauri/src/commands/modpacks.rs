@@ -2118,6 +2118,10 @@ async fn prepare_instance(
         pre_launch_hook: instance_data.pre_launch_hook.clone(),
         wrapper_command: instance_data.wrapper_command.clone(),
         post_exit_hook: instance_data.post_exit_hook.clone(),
+        use_global_sandbox: instance_data.use_global_sandbox,
+        sandbox_preset: instance_data.sandbox_preset.clone(),
+        sandbox_wrapper_nesting: instance_data.sandbox_wrapper_nesting.clone(),
+        sandbox_extra_paths: instance_data.sandbox_extra_paths.clone(),
     })
 }
 

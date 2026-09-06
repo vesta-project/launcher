@@ -3856,6 +3856,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "landlock"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cca98e95f35b29d469dade6724c6f96cec9236640f745a0e99b0334ec320ab1"
+dependencies = [
+ "enumflags2",
+ "libc",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3911,9 +3922,9 @@ checksum = "2c4a545a15244c7d945065b5d392b2d2d7f21526fba56ce51467b06ed445e8f7"
 
 [[package]]
 name = "libc"
-version = "0.2.183"
+version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
+checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "libdbus-sys"
@@ -4046,16 +4057,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d640282b302c0bb0a2a8e0233ead9035e3bed871f0b7e81fe4a1ec829765db44"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "macos-accessibility-client"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edf7710fbff50c24124331760978fb9086d6de6288dcdb38b25a97f8b1bdebbb"
-dependencies = [
- "core-foundation 0.9.4",
- "core-foundation-sys",
 ]
 
 [[package]]
@@ -5956,6 +5957,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12a5a2d6c7039059af621472a4389be1215a816df61aa4d531cfe85264aee95f"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "rappct"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11762a6aea3b0a87a51b21cb2085d252f10c01cd0f3f505e1da002cf6e2427da"
+dependencies = [
+ "thiserror 2.0.18",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -7881,21 +7892,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-macos-permissions"
-version = "2.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5607e0707d37d7b20e287cf0ce396d1efebe7b833b8e9cbd2ea4257091d9c604"
-dependencies = [
- "macos-accessibility-client",
- "objc2",
- "objc2-foundation",
- "serde",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "tauri-plugin-os"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9069,6 +9065,7 @@ dependencies = [
  "anyhow-tauri",
  "async-trait",
  "base64 0.22.1",
+ "block2",
  "chrono",
  "cocoa",
  "diesel",
@@ -9094,6 +9091,8 @@ dependencies = [
  "murmur2",
  "notify",
  "oauth2",
+ "objc2",
+ "objc2-foundation",
  "open",
  "piston-lib",
  "rand 0.10.1",
@@ -9117,7 +9116,6 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-log",
- "tauri-plugin-macos-permissions",
  "tauri-plugin-os",
  "tauri-plugin-sentry",
  "tauri-plugin-shell",
@@ -9134,11 +9132,27 @@ dependencies = [
  "urlencoding",
  "uuid 1.23.2",
  "version-compare",
+ "vesta-sandbox",
  "walkdir",
  "which",
  "window-vibrancy 0.7.1",
  "windows-sys 0.61.2",
  "winver",
+ "zip 8.2.0",
+]
+
+[[package]]
+name = "vesta-sandbox"
+version = "0.1.0-alpha.29"
+dependencies = [
+ "landlock",
+ "rappct",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "which",
+ "windows-sys 0.61.2",
  "zip 8.2.0",
 ]
 

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["vesta-launcher/src-tauri", "crates/piston-lib"]
+members = ["vesta-launcher/src-tauri", "crates/piston-lib", "crates/vesta-sandbox"]
 
 [workspace.package]
 version = "0.1.0-alpha.29"

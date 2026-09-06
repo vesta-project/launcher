@@ -122,7 +122,6 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             let _ = crate::utils::windows::ensure_main_window_visible(app);
@@ -173,6 +172,7 @@ fn main() {
             commands::app::path_exists,
             commands::github::get_changelog,
             commands::app::get_network_status,
+            commands::app::get_sandbox_host_support,
             commands::app::set_network_status,
             commands::app::refresh_network_status,
             commands::app::test_proxy_connection,

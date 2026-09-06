@@ -4,7 +4,7 @@ use crate::game::launcher::{
     classpath::{build_classpath_filtered, validate_classpath},
     natives::extract_natives,
     registry::register_instance,
-    types::{GameInstance, LaunchResult, LaunchSpec},
+    types::{GameInstance, LaunchResult, LaunchSpec, SandboxCommandPlacement},
 };
 use crate::game::runtime_plan::{RuntimePlan, RuntimeRequest};
 use crate::utils::process::PistonCommandExt;
@@ -14,8 +14,73 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
+struct SandboxCleanupGuard(Vec<std::path::PathBuf>);
+
+impl SandboxCleanupGuard {
+    fn disarm(&mut self) -> Vec<std::path::PathBuf> {
+        std::mem::take(&mut self.0)
+    }
+}
+
+impl Drop for SandboxCleanupGuard {
+    fn drop(&mut self) {
+        cleanup_sandbox_paths(self.0.iter().cloned());
+    }
+}
+
+/// Remove private directories created by `vesta-sandbox`, rejecting arbitrary
+/// paths even if a malformed LaunchSpec reaches this Adapter.
+pub fn cleanup_sandbox_paths(paths: impl IntoIterator<Item = std::path::PathBuf>) {
+    let temp_root = std::env::temp_dir()
+        .canonicalize()
+        .unwrap_or_else(|_| std::env::temp_dir());
+    #[cfg(windows)]
+    let windows_policy_root = std::env::var_os("LOCALAPPDATA").map(|root| {
+        std::path::PathBuf::from(root)
+            .join("VestaLauncher")
+            .join("sandbox-profiles")
+    });
+    for path in paths {
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        let canonical_parent = path.parent().and_then(|parent| parent.canonicalize().ok());
+        let owned_system_temp = file_name.starts_with("vesta-sandbox-")
+            && canonical_parent
+                .as_ref()
+                .is_some_and(|parent| parent == &temp_root);
+        #[cfg(windows)]
+        let owned_windows_policy = file_name.starts_with("policy-")
+            && windows_policy_root.as_ref().is_some_and(|root| {
+                let root = root.canonicalize().unwrap_or_else(|_| root.clone());
+                canonical_parent
+                    .as_ref()
+                    .is_some_and(|parent| parent == &root)
+            });
+        #[cfg(not(windows))]
+        let owned_windows_policy = false;
+        if !owned_system_temp && !owned_windows_policy {
+            log::error!("Refusing to remove unrecognized sandbox cleanup path");
+            continue;
+        }
+        if let Err(err) = std::fs::remove_dir_all(&path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "Failed to remove sandbox temporary directory: {:?}",
+                    err.kind()
+                );
+            }
+        }
+    }
+}
+
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::Foundation::{CloseHandle, HWND, INVALID_HANDLE_VALUE};
+#[cfg(windows)]
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowThreadProcessId, IsHungAppWindow, IsWindowVisible, PostMessageW, WM_CLOSE,
@@ -27,29 +92,67 @@ pub type LogCallback = Arc<dyn Fn(String, String, String) + Send + Sync + 'stati
 
 #[cfg(windows)]
 fn find_main_window(pid: u32) -> Option<HWND> {
-    static mut FOUND_HWND: Option<HWND> = None;
-    static mut TARGET_PID: u32 = 0;
+    struct WindowSearch {
+        process_ids: std::collections::HashSet<u32>,
+        found: Option<HWND>,
+    }
 
+    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: isize) -> i32 {
+        let search = unsafe { &mut *(lparam as *mut WindowSearch) };
+        let mut process_id = 0;
+        unsafe { GetWindowThreadProcessId(hwnd, &mut process_id) };
+        if search.process_ids.contains(&process_id) && unsafe { IsWindowVisible(hwnd) } != 0 {
+            search.found = Some(hwnd);
+            return 0;
+        }
+        1
+    }
+
+    let mut search = WindowSearch {
+        process_ids: descendant_process_ids(pid),
+        found: None,
+    };
     unsafe {
-        FOUND_HWND = None;
-        TARGET_PID = pid;
+        EnumWindows(
+            Some(enum_callback),
+            (&mut search as *mut WindowSearch) as isize,
+        )
+    };
+    search.found
+}
 
-        extern "system" fn enum_callback(hwnd: HWND, _lparam: isize) -> i32 {
-            unsafe {
-                let mut proc_id = 0;
-                GetWindowThreadProcessId(hwnd, &mut proc_id);
+#[cfg(windows)]
+fn descendant_process_ids(root_pid: u32) -> std::collections::HashSet<u32> {
+    let mut process_ids = std::collections::HashSet::from([root_pid]);
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return process_ids;
+    }
 
-                if proc_id == TARGET_PID && IsWindowVisible(hwnd) != 0 {
-                    FOUND_HWND = Some(hwnd);
-                    return 0; // stop enumeration
-                }
-                1 // continue enumeration
+    let mut relationships = Vec::new();
+    let mut entry = PROCESSENTRY32W {
+        dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+        ..Default::default()
+    };
+    let mut has_entry = unsafe { Process32FirstW(snapshot, &mut entry) } != 0;
+    while has_entry {
+        relationships.push((entry.th32ProcessID, entry.th32ParentProcessID));
+        has_entry = unsafe { Process32NextW(snapshot, &mut entry) } != 0;
+    }
+    unsafe { CloseHandle(snapshot) };
+
+    loop {
+        let mut changed = false;
+        for &(process_id, parent_id) in &relationships {
+            if process_ids.contains(&parent_id) && process_ids.insert(process_id) {
+                changed = true;
             }
         }
-
-        EnumWindows(Some(enum_callback), 0);
-        FOUND_HWND
+        if !changed {
+            break;
+        }
     }
+    process_ids
 }
 
 #[cfg(windows)]
@@ -69,8 +172,13 @@ pub async fn launch_game(
     spec: LaunchSpec,
     log_callback: Option<LogCallback>,
 ) -> Result<LaunchResult> {
-    let plan = RuntimePlan::resolve_installed(RuntimeRequest::from(&spec))
-        .context("Failed to resolve runtime plan")?;
+    let plan = match RuntimePlan::resolve_installed(RuntimeRequest::from(&spec)) {
+        Ok(plan) => plan,
+        Err(err) => {
+            drop(SandboxCleanupGuard(spec.sandbox_cleanup_paths.clone()));
+            return Err(err).context("Failed to resolve runtime plan");
+        }
+    };
     launch_prepared_game(spec, plan, log_callback).await
 }
 
@@ -79,6 +187,7 @@ pub async fn launch_prepared_game(
     plan: RuntimePlan,
     log_callback: Option<LogCallback>,
 ) -> Result<LaunchResult> {
+    let mut sandbox_cleanup = SandboxCleanupGuard(spec.sandbox_cleanup_paths.clone());
     plan.validate_launch_spec(&spec)
         .context("Prepared runtime does not match launch")?;
     log::info!("Launching game instance: {}", spec.instance_id);
@@ -92,8 +201,20 @@ pub async fn launch_prepared_game(
 
     let manifest = plan.manifest;
 
-    // 2. Verify Java installation
-    verify_java(&spec.java_path).context("Java verification failed")?;
+    // 2. Verify Java installation. Sandboxed launches have already validated
+    // Java during host launch preparation; executing `java -version` here would
+    // run the selected binary outside the prepared OS sandbox.
+    if spec
+        .sandbox_prefix
+        .as_ref()
+        .is_some_and(|prefix| !prefix.is_empty())
+    {
+        if !spec.java_path.is_file() {
+            anyhow::bail!("Java executable not found: {:?}", spec.java_path);
+        }
+    } else {
+        verify_java(&spec.java_path).context("Java verification failed")?;
+    }
 
     if let Err(e) = crate::utils::stop_intent::clear_stop_requested(&spec.game_dir) {
         log::warn!(
@@ -159,7 +280,7 @@ pub async fn launch_prepared_game(
     // 5. Build JVM arguments (substitutes ${classpath} in manifest with our classpath string)
     log::debug!("Building JVM arguments");
     let jvm_args = build_jvm_arguments(&spec, &manifest, &natives_dir, &classpath, os);
-    log::info!("Launch JVM arguments: {:?}", jvm_args);
+    log::debug!("Built {} JVM arguments (values omitted)", jvm_args.len());
 
     // 6. Build game arguments
     log::debug!("Building game arguments");
@@ -188,6 +309,19 @@ pub async fn launch_prepared_game(
     game_base_command.extend(game_args.clone());
 
     // Resolve what the actual executable and its initial args are
+    let has_user_wrapper = spec
+        .wrapper_command
+        .as_ref()
+        .map(|w| !w.trim().is_empty())
+        .unwrap_or(false);
+    validate_sandbox_command_graph(
+        spec.sandbox_command_placement,
+        spec.sandbox_prefix.as_deref(),
+        spec.exit_handler_jar.is_some(),
+        spec.pre_launch_hook.is_some() || spec.post_exit_hook.is_some(),
+        has_user_wrapper,
+        spec.sandbox_wraps_entire_command,
+    )?;
     let (executable, initial_args) = if let Some(ref wrapper) = spec.wrapper_command {
         let parts = shlex::split(wrapper)
             .unwrap_or_else(|| wrapper.split_whitespace().map(|s| s.to_string()).collect());
@@ -200,6 +334,23 @@ pub async fn launch_prepared_game(
         (spec.java_path.to_string_lossy().to_string(), Vec::new())
     };
 
+    let delegate_sandbox_to_exit_handler = spec.exit_handler_jar.is_some()
+        && spec.sandbox_command_placement == SandboxCommandPlacement::GameAndHooks;
+    let (executable, initial_args) = if delegate_sandbox_to_exit_handler {
+        // Windows keeps the launcher-owned exit supervisor outside the
+        // AppContainer. It will create independently restricted helper
+        // invocations for hooks and the actual game JVM.
+        (executable, initial_args)
+    } else {
+        apply_sandbox_prefix(
+            executable,
+            initial_args,
+            has_user_wrapper,
+            &spec.sandbox_prefix,
+            spec.sandbox_wraps_entire_command,
+        )
+    };
+
     if let Some(ref exit_handler_jar) = spec.exit_handler_jar {
         // Wrap with exit handler JAR
         // Structure: [Wrapper] <java> -jar <exit-handler.jar> ... -- <original game command>
@@ -207,17 +358,19 @@ pub async fn launch_prepared_game(
 
         let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
 
-        // Ensure .vesta directory exists
-        tokio::fs::create_dir_all(spec.game_dir.join(".vesta")).await?;
+        // Ensure .vesta directory exists and drop stale exit status from a prior run.
+        let vesta_dir = spec.game_dir.join(".vesta");
+        tokio::fs::create_dir_all(&vesta_dir).await?;
+        let _ = tokio::fs::remove_file(vesta_dir.join("exit_status.json")).await;
+        let _ = tokio::fs::remove_file(vesta_dir.join("game_pid")).await;
 
         // If we have a wrapper, the executable is the wrapper, and its FIRST argument after its own args
         // should be the java path to run the exit handler.
         // Wait, if executable is Java (no wrapper), this works too.
-        command = tokio::process::Command::new(executable);
-        command.args(initial_args);
+        command = tokio::process::Command::new(&executable);
+        command.args(&initial_args);
 
-        // If there WAS a wrapper, we need to push Java path as the next arg
-        if spec.wrapper_command.is_some() {
+        if has_user_wrapper {
             command.arg(&spec.java_path);
         }
 
@@ -240,17 +393,20 @@ pub async fn launch_prepared_game(
             command.arg(post_hook);
         }
 
+        if delegate_sandbox_to_exit_handler {
+            command.args(exit_handler_sandbox_args(&spec.sandbox_prefix));
+        }
+
         command.arg("--");
 
         // Pass the original game command (java path and all args)
         command.args(&game_base_command);
     } else {
         // No exit handler, just wrapper + game
-        command = tokio::process::Command::new(executable);
-        command.args(initial_args);
+        command = tokio::process::Command::new(&executable);
+        command.args(&initial_args);
 
-        // If there WAS a wrapper, we need to push Java path as the next arg
-        if spec.wrapper_command.is_some() {
+        if has_user_wrapper {
             command.arg(&spec.java_path);
         }
 
@@ -262,9 +418,18 @@ pub async fn launch_prepared_game(
     command.current_dir(&spec.game_dir);
     command.envs(&spec.env_vars);
 
-    // Pipe stdout and stderr for real-time console streaming
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
+    // stdin is null so a closed launcher tty cannot SIGHUP the sandbox session.
+    command.stdin(Stdio::null());
+    if spec.exit_handler_jar.is_some() {
+        // Exit handler writes the session log itself. Leaving stdout/stderr piped
+        // to the launcher caused SIGPIPE / sticky PrintStream errors that killed
+        // console streaming (and sometimes the wrapper JVM) under sandbox.
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+    } else {
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+    }
 
     // Configure process to be detached so it survives launcher close
     // We use our unified suppress_console and detach helper
@@ -288,45 +453,11 @@ pub async fn launch_prepared_game(
 
     // 10. Spawn process
     log::info!("Spawning Minecraft process");
-    // Log the full command for debugging. Construct a human-readable command string
-    // which includes proper quoting for arguments. This is helpful for reproducing
-    // the exact invocation in logs and debugging.
-
-    // Make the quoting helper top-level so it can be unit-tested.
-    fn quote_arg(s: &str) -> String {
-        crate::game::launcher::process::quote_arg_internal(s)
+    // Arguments (including JVM properties and hook bodies) can contain account
+    // tokens or arbitrary user secrets. Do not reconstruct a command for logs.
+    if spec.sandbox_prefix.is_some() {
+        log::info!("OS sandbox prefix is active");
     }
-
-    // Log the actual command being executed (with or without exit handler wrapper)
-    let full_cmd_str = if let Some(exit_handler_jar) = &spec.exit_handler_jar {
-        let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
-        let mut wrapper_cmd = vec![
-            spec.java_path.to_string_lossy().to_string(),
-            "-jar".to_string(),
-            exit_handler_jar.to_string_lossy().to_string(),
-            "--instance-id".to_string(),
-            spec.instance_id.clone(),
-            "--exit-file".to_string(),
-            exit_file.to_string_lossy().to_string(),
-            "--log-file".to_string(),
-            log_file.to_string_lossy().to_string(),
-            "--".to_string(),
-        ];
-        wrapper_cmd.extend(game_base_command.clone());
-        wrapper_cmd
-            .iter()
-            .map(|a| quote_arg(a))
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        game_base_command
-            .iter()
-            .map(|a| quote_arg(a))
-            .collect::<Vec<_>>()
-            .join(" ")
-    };
-
-    log::info!("Exec command: {}", full_cmd_str);
     log::debug!("Java: {:?}", spec.java_path);
     log::debug!("Main class: {}", main_class);
     log::debug!("Working directory: {:?}", spec.game_dir);
@@ -483,27 +614,86 @@ pub async fn launch_prepared_game(
     let handle = Some(crate::game::launcher::types::ProcessHandle {
         pid,
         child: Some(child),
+        cleanup_paths: sandbox_cleanup.disarm(),
     });
 
     Ok(LaunchResult {
         instance,
         log_file,
         handle,
+        console_from_log_file: use_exit_handler,
     })
 }
 
-/// Internal quoting helper used for logs / shell-copy; kept separate so it can be
-/// unit-tested where needed.
-pub(crate) fn quote_arg_internal(s: &str) -> String {
-    if s.is_empty() {
-        return "\"\"".to_string();
+fn validate_sandbox_command_graph(
+    placement: SandboxCommandPlacement,
+    sandbox_prefix: Option<&[String]>,
+    has_exit_handler: bool,
+    has_hooks: bool,
+    has_user_wrapper: bool,
+    sandbox_wraps_entire_command: bool,
+) -> Result<()> {
+    if placement != SandboxCommandPlacement::GameAndHooks {
+        return Ok(());
     }
-    // Add quotes if whitespace or double-quote present; escape backslashes and double quotes
-    if s.chars().any(|c| c.is_whitespace() || c == '"') {
-        let esc = s.replace('\\', "\\\\").replace('"', "\\\"");
-        return format!("\"{}\"", esc);
+    if sandbox_prefix.is_none_or(|prefix| prefix.is_empty()) {
+        anyhow::bail!("GameAndHooks sandbox placement requires a non-empty sandbox command prefix");
     }
-    s.to_string()
+    if !has_exit_handler && has_hooks {
+        anyhow::bail!(
+            "GameAndHooks sandbox placement requires an exit supervisor when hooks are configured"
+        );
+    }
+    if has_user_wrapper && sandbox_wraps_entire_command {
+        anyhow::bail!(
+            "GameAndHooks cannot place a generic wrapper inside the no-child sandbox boundary; use wrapper-outside"
+        );
+    }
+    Ok(())
+}
+
+/// Encode a prefix as repeated option/value pairs so no quoting or delimiter
+/// convention can alter an argument. The Java exit supervisor reconstructs the
+/// exact vector and prepends it to the game and hook shell commands.
+fn exit_handler_sandbox_args(sandbox_prefix: &Option<Vec<String>>) -> Vec<String> {
+    sandbox_prefix
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .flat_map(|arg| ["--sandbox-prefix-arg".to_string(), arg.clone()])
+        .collect()
+}
+
+/// Apply an optional OS sandbox argv prefix around the resolved executable.
+///
+/// - `wraps_entire_command`: sandbox becomes the new executable and wraps the
+///   previous executable (including a user wrapper).
+/// - otherwise (wrapper-outside): keep the user wrapper as executable and append
+///   the sandbox prefix before Java is pushed by the caller.
+fn apply_sandbox_prefix(
+    executable: String,
+    initial_args: Vec<String>,
+    has_user_wrapper: bool,
+    sandbox_prefix: &Option<Vec<String>>,
+    wraps_entire_command: bool,
+) -> (String, Vec<String>) {
+    let Some(prefix) = sandbox_prefix.as_ref() else {
+        return (executable, initial_args);
+    };
+    if prefix.is_empty() {
+        return (executable, initial_args);
+    }
+
+    if wraps_entire_command || !has_user_wrapper {
+        let mut args = prefix[1..].to_vec();
+        args.push(executable);
+        args.extend(initial_args);
+        (prefix[0].clone(), args)
+    } else {
+        let mut args = initial_args;
+        args.extend(prefix.iter().cloned());
+        (executable, args)
+    }
 }
 
 /// Verify Java installation
@@ -661,22 +851,155 @@ mod tests {
             assert!(result.is_ok(), "Java verification should succeed");
         }
     }
-}
-#[test]
-fn quote_arg_internal_quotes_paths_with_spaces() {
-    // a path with spaces should be quoted
-    let p = r"C:\Program Files\Some Libs";
-    let out = quote_arg_internal(p);
-    assert!(out.starts_with('"') && out.ends_with('"'));
-    assert!(out.contains("Program Files"));
 
-    // a classpath with separators and spaces should be quoted as a single token
-    let cp = r"C:\Path With Spaces\lib.jar;C:\other\lib2.jar";
-    let cp_out = quote_arg_internal(cp);
-    assert!(cp_out.starts_with('"') && cp_out.ends_with('"'));
-    assert!(cp_out.contains("Path With Spaces"));
+    #[test]
+    fn sandbox_outside_wraps_the_user_wrapper() {
+        let prefix = Some(vec![
+            "/usr/bin/sandbox-exec".to_string(),
+            "-p".to_string(),
+            "profile".to_string(),
+        ]);
+        let (executable, args) = apply_sandbox_prefix(
+            "/usr/local/bin/wrapper".to_string(),
+            vec!["--wrapper-arg".to_string()],
+            true,
+            &prefix,
+            true,
+        );
 
-    // when there is no whitespace, should be returned verbatim
-    let simple = "no_spaces_here";
-    assert_eq!(quote_arg_internal(simple), simple.to_string());
+        assert_eq!(executable, "/usr/bin/sandbox-exec");
+        assert_eq!(
+            args,
+            vec!["-p", "profile", "/usr/local/bin/wrapper", "--wrapper-arg"]
+        );
+    }
+
+    #[test]
+    fn wrapper_outside_places_the_sandbox_before_java() {
+        let prefix = Some(vec![
+            "/usr/bin/sandbox-exec".to_string(),
+            "-p".to_string(),
+            "profile".to_string(),
+        ]);
+        let (executable, args) = apply_sandbox_prefix(
+            "/usr/local/bin/wrapper".to_string(),
+            vec!["--wrapper-arg".to_string()],
+            true,
+            &prefix,
+            false,
+        );
+
+        assert_eq!(executable, "/usr/local/bin/wrapper");
+        assert_eq!(
+            args,
+            vec!["--wrapper-arg", "/usr/bin/sandbox-exec", "-p", "profile"]
+        );
+    }
+
+    #[test]
+    fn exit_handler_receives_lossless_repeated_sandbox_prefix_arguments() {
+        let prefix = Some(vec![
+            r"C:\Program Files\Vesta\vesta-sandbox-exec.exe".to_string(),
+            "--windows-policy".to_string(),
+            r"C:\Temp\policy with spaces.json".to_string(),
+            "--".to_string(),
+        ]);
+
+        assert_eq!(
+            exit_handler_sandbox_args(&prefix),
+            vec![
+                "--sandbox-prefix-arg",
+                r"C:\Program Files\Vesta\vesta-sandbox-exec.exe",
+                "--sandbox-prefix-arg",
+                "--windows-policy",
+                "--sandbox-prefix-arg",
+                r"C:\Temp\policy with spaces.json",
+                "--sandbox-prefix-arg",
+                "--",
+            ]
+        );
+    }
+
+    #[test]
+    fn game_and_hooks_placement_fails_closed_without_a_prefix() {
+        for prefix in [None, Some(Vec::<String>::new())] {
+            assert!(validate_sandbox_command_graph(
+                SandboxCommandPlacement::GameAndHooks,
+                prefix.as_deref(),
+                true,
+                false,
+                false,
+                true,
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn game_and_hooks_rejects_unsupervised_hooks_and_enclosed_wrappers() {
+        let prefix = ["vesta-sandbox-exec".to_string()];
+        assert!(validate_sandbox_command_graph(
+            SandboxCommandPlacement::GameAndHooks,
+            Some(&prefix),
+            false,
+            true,
+            false,
+            true,
+        )
+        .is_err());
+        assert!(validate_sandbox_command_graph(
+            SandboxCommandPlacement::GameAndHooks,
+            Some(&prefix),
+            true,
+            false,
+            true,
+            true,
+        )
+        .is_err());
+        assert!(validate_sandbox_command_graph(
+            SandboxCommandPlacement::GameAndHooks,
+            Some(&prefix),
+            true,
+            true,
+            true,
+            false,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn sandbox_cleanup_only_removes_owned_temp_directories() {
+        let owned = tempfile::Builder::new()
+            .prefix("vesta-sandbox-")
+            .tempdir()
+            .unwrap()
+            .keep();
+        let unrelated = tempfile::Builder::new()
+            .prefix("unrelated-")
+            .tempdir()
+            .unwrap();
+
+        cleanup_sandbox_paths([owned.clone(), unrelated.path().to_path_buf()]);
+
+        assert!(!owned.exists());
+        assert!(unrelated.path().exists());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn sandbox_cleanup_removes_owned_windows_policy_directories() {
+        let root = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap())
+            .join("VestaLauncher")
+            .join("sandbox-profiles");
+        std::fs::create_dir_all(&root).unwrap();
+        let owned = tempfile::Builder::new()
+            .prefix("policy-")
+            .tempdir_in(root)
+            .unwrap()
+            .keep();
+
+        cleanup_sandbox_paths([owned.clone()]);
+
+        assert!(!owned.exists());
+    }
 }

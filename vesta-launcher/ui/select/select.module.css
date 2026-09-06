@@ -81,7 +81,7 @@
 	border-radius: 4px;
 	font-size: 14px;
 	line-height: 1;
-	color: var(--text-secondary);
+	color: var(--text-primary);
 	user-select: none;
 	outline: none;
 	cursor: default;
@@ -96,16 +96,26 @@
 .select__item[data-highlighted] {
 	outline: none;
 	background-color: var(--interactive-base);
-	color: var(--text-on-accent) !important;
+	color: var(--text-on-accent);
 }
 
-.select__item[data-selected] {
+/* Custom option content often sets its own text colors; force inheritance on
+   highlight so contrast against the accent background stays readable. */
+.select__item[data-highlighted] :where(*) {
+	color: inherit !important;
+}
+
+.select__item[data-selected]:not([data-highlighted]) {
 	color: var(--interactive-base);
 	font-weight: 600;
 }
 
+.select__item[data-selected]:not([data-highlighted]) :where(*) {
+	color: inherit;
+}
+
 .select__item[data-highlighted][data-selected] {
-	color: var(--text-on-accent) !important;
+	color: var(--text-on-accent);
 }
 
 .select__item-indicator {

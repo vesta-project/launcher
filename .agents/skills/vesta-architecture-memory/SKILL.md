@@ -88,6 +88,7 @@ Use this first-pass lookup, then confirm with `area-finder.html`.
 | `src-tauri/src/schema/*`, `models/*`, migrations | Persisted models and database knowledge | `architecture-map.html`, `slop-cleanup.html` |
 | `crates/piston-lib/src/game/installer/*` | Runtime install and Runtime Preparation | `findings.html`, sidecar runtime notes |
 | `crates/piston-lib/src/game/launcher/*` | Runtime launch and process Adapter | `findings.html` |
+| `crates/vesta-sandbox/*` | Sandbox Policy and Sandbox Adapter | `architecture-map.html`, `roadmap.html`, `findings.html` |
 | `crates/piston-lib/src/unified_manifest.rs`, manifest cache, metadata fetcher | Manifest vocabulary and metadata path | `architecture-map.html`, `slop-cleanup.html` |
 | `docs/*`, `README*`, `TESTS.md`, requirements docs | Docs/tests navigability | `slop-cleanup.html`, `roadmap.html` |
 

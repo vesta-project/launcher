@@ -61,6 +61,98 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/tasks/update_modpack.rs`
 - `vesta-launcher/src-tauri/src/tasks/installers/external_import_resync.rs`
 
+### Sandbox Policy
+
+The user-facing confinement settings for an Instance's Play process graph:
+hooks, game JVM, and child processes, plus an optionally enclosed wrapper. On
+Windows, the launcher-owned exit handler is a trusted supervisor outside the
+AppContainer and starts the hooks and game through separate restricted helper
+invocations.
+Launcher-owned installation, repair, Java management, and loader processors are
+trusted work outside this boundary. Presets are Trusted (default, no sandbox),
+Modded (filesystem and exec allowlists; network and mic on), and Paranoid (same
+filesystem/exec/USB as Modded; network and mic off). Global app defaults and
+per-instance overrides follow the existing `use_global_*` pattern. Shared
+runtime caches (`assets/`, `libraries/`, and `versions/`) plus the
+selected Java runtime are readable but not writable. Native-image load is a
+distinct portable authority from child-process execution: the selected Java
+runtime, shared natives, Instance game directory, and private sandbox temp are
+loadable. Windows redirects runtime extraction and validation writes into private
+sandbox temp and keeps shared natives read-only. Linux and macOS retain writable
+natives for runtime extraction. The Instance game directory and exact
+pre-created session-log file are read-write. Optional global and instance extra
+paths grant read-write access.
+Shared frontend path parsing lives in `src/utils/sandbox-policy.ts`, below both
+settings persistence and UI. Browser previews cannot attest OS enforcement and
+therefore leave enforced presets unavailable. On Linux, microphone denial also
+withholds audio-server sockets and disables playback; the preset UI explains
+this limitation.
+Paths are canonicalized before
+the Adapter builds its policy. Wrapper nesting (sandbox-outside vs
+wrapper-outside) is configurable. Hooks run inside the Play sandbox and may use
+the shell, but external executables remain subject to the exec allowlist. The
+Vesta app process itself is not sandboxed; it continues to observe PID, exit
+sidecars, playtime, kill, and crash handling from outside.
+
+Primary modules:
+
+- `crates/vesta-sandbox`
+- `vesta-launcher/src-tauri/src/utils/sandbox_policy.rs`
+- `vesta-launcher/src-tauri/src/instance/launch_preparation.rs`
+- `docs/adr/0010-instance-os-sandbox-vesta-sandbox-crate.md`
+
+### Sandbox Adapter
+
+The OS-specific Implementation inside `vesta-sandbox` that turns a portable
+`RunPlan` and resolved `SandboxPolicy` into a confined spawn (Seatbelt,
+Landlock/`bwrap`, Windows job/AppContainer, or equivalent). Adapters report
+what was actually enforced. If a control required by the policy cannot be
+enforced, launch fails closed. The Windows Implementation has a bundled sidecar,
+an AppContainer plus an atomically inherited kill-on-close Job, and a stable
+per-Instance profile whose synchronized NTFS grants are recorded in a protected
+ACL journal without traversing reparse points. Declared roots also receive
+journaled, non-inheriting resolution ACEs on their private ancestor chain so
+Win32 canonicalization (including Java `Path.toRealPath`) can reach them. These
+permit traversal, metadata, and ancestor-name enumeration, but no child-file
+reads or writes. Because a standard user cannot grant the package SID on shared
+profile parents such as `C:\Users`, sandboxed Java receives a short-lived,
+mutex-reserved DOS drive rooted at its user profile. Java-visible classpath,
+argument, environment, and working-directory paths are rewritten through that
+alias while NTFS policy remains attached to their canonical roots; the mapping
+is removed when the launch ends. Each restricted invocation uses a fresh
+writable/loadable directory beneath its AppContainer package temp. The trusted
+helper copies JNA's architecture-specific `jnidispatch.dll` from the active,
+read-allowlisted classpath JAR into that directory and configures
+`jna.boot.library.path`; Java, JNA, LWJGL, and Netty temp paths are otherwise
+directed there. The directory is removed after exit. A trusted in-container trampoline
+can create one target with Windows' token-level no-child policy, an exact stdio
+handle list, and a broker DACL that denies all access to both Everyone and Owner
+Rights so the target cannot rewrite or bypass the broker boundary;
+this blocks both System32 and loadable-root child execution. The trusted exit
+supervisor delegates the pre-hook shell, game JVM, and post-hook shell to
+separate helper invocations. A per-profile named mutex covers each invocation's
+complete lifetime, closing the same-profile broker startup race. A second named
+mutex serializes the complete ACL journal/DACL transaction across profiles so
+concurrent Instances cannot lose one another's shared runtime grants. The
+reusable policy file is stored beside the protected ACL journals, outside all
+accepted writable sandbox roots. Windows reports exec
+enforcement as Enforced and exposes playable presets. Its no-child policy is intentionally
+stricter than the portable maximum-authority allowlist: game descendants are
+denied even when their executable is listed. Generic sandbox-outside wrappers
+are rejected; wrapper-outside remains an explicit weaker compatibility mode.
+The Runtime launch Adapter never logs full command arguments or hook bodies,
+which can contain account tokens and user secrets. Instance Lifecycle treats
+the game-writable PID sidecar as an untrusted hint: Unix recovery must verify
+membership in the original isolated process group; Windows does not adopt a
+host PID from that file. Process-group identity survives replacement of a dead
+wrapper PID during recovery.
+
+Primary modules:
+
+- `crates/vesta-sandbox`
+- `crates/piston-lib/src/game/launcher/process.rs` (thin `sandbox_prefix` spawn hook)
+- `docs/adr/0010-instance-os-sandbox-vesta-sandbox-crate.md`
+
 ### Authentication Session and Availability
 
 The boundary between persisted Microsoft/Minecraft account state and the

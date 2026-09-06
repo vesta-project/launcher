@@ -27,6 +27,8 @@ not worth doing today.
 - [ADR-0006: Batch Resource Reconciliation And Scope Instance Events](0006-batched-resource-reconciliation-and-scoped-instance-events.md)
 - [ADR-0007: Keep Localization Catalogs With The Launcher](0007-keep-localization-catalogs-with-launcher.md)
 - [ADR-0008: Keep Command Execution In Frontend And Persist Keybindings In SQLite](0008-keyboard-command-catalog.md)
+- [ADR-0009: Keep Worlds Filesystem-Owned With Portable Vesta Manifests](0009-filesystem-owned-worlds-and-portable-world-manifests.md)
+- [ADR-0010: Instance OS Sandbox Via `vesta-sandbox`](0010-instance-os-sandbox-vesta-sandbox-crate.md)
 
 Use `0000-template.md` for the first decision and number accepted records as
 `0001-short-title.md`, `0002-short-title.md`, and so on.

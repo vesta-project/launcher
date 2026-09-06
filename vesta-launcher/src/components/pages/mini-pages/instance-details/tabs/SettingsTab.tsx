@@ -1,5 +1,17 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
+import {
+	PathListEditor,
+	SandboxHostNotice,
+	SandboxPresetOptionLabel,
+	SandboxPresetSelect,
+	normalizeSandboxPreset,
+	useSandboxHostSupport,
+	type SandboxPresetValue,
+	type SandboxWrapperNestingValue,
+} from "@components/settings";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
+import { instanceDefaults } from "@stores/settings";
 import Button from "@ui/button/button";
 import {
 	ContextMenu,
@@ -101,6 +113,17 @@ interface SettingsTabProps {
 	setLauncherActionOnLaunch: (v: string) => void;
 	setIsLaunchActionDirty: (v: boolean) => void;
 
+	useGlobalSandbox: boolean;
+	setUseGlobalSandbox: (v: boolean) => void;
+	sandboxPreset: SandboxPresetValue;
+	setSandboxPreset: (v: SandboxPresetValue) => void;
+	sandboxWrapperNesting: SandboxWrapperNestingValue;
+	setSandboxWrapperNesting: (v: SandboxWrapperNestingValue) => void;
+	sandboxExtraPaths: string[];
+	setSandboxExtraPaths: (v: string[]) => void;
+	inheritedSandboxExtraPaths: string[];
+	setIsSandboxDirty: (v: boolean) => void;
+
 	handleSave: () => void;
 	saving: () => boolean;
 	totalRam: number;
@@ -116,6 +139,7 @@ interface SettingsTabProps {
 }
 
 export const SettingsTab = (p: SettingsTabProps) => {
+	const [sandboxSupport] = useSandboxHostSupport();
 	const launchBehaviorOptions: { label: string; value: string }[] = [
 		{ label: "Stay Open", value: "stay-open" },
 		{ label: "Minimize Window", value: "minimize" },
@@ -746,7 +770,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					>
 						<SettingsField
 							label="Pre-launch Hook"
-							description="Command to run before the game starts. (e.g. a script to sync worlds)"
+							description="Command to run before the game starts. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -764,7 +788,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 
 						<SettingsField
 							label="Wrapper Command"
-							description="Execute the game through a wrapper (e.g. mangohud, optirun, or a debugger)."
+							description="Execute the game through a wrapper (e.g. mangohud or a debugger). Sandboxed script wrappers must use an absolute shebang interpreter, not /usr/bin/env."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -782,7 +806,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 
 						<SettingsField
 							label="Post-exit Hook"
-							description="Command to run after the game closes."
+							description="Command to run after the game closes. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -798,6 +822,97 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							}
 						/>
 					</Show>
+				</SettingsCard>
+
+				<SettingsCard header="Sandbox">
+					<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 4px;">
+						<div style="display: flex; flex-direction: column; gap: 2px;">
+							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
+								Use Global Preset
+							</span>
+							<span style="font-size: 11px; opacity: 0.6;">
+								Link preset and wrapper inclusion only. Extra read-write folders stay
+								instance-editable.
+							</span>
+						</div>
+						<Switch
+							checked={p.useGlobalSandbox}
+							onCheckedChange={(val: boolean) => {
+								batch(() => {
+									p.setUseGlobalSandbox(val);
+									p.setIsSandboxDirty(true);
+								});
+							}}
+						>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					</div>
+
+					<div class={sandboxStyles.fieldStack}>
+						<SandboxHostNotice support={sandboxSupport()} />
+						<Show
+							when={!p.useGlobalSandbox}
+							fallback={
+								<div style="padding: 12px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.75; margin-bottom: 4px;">
+									<SandboxPresetOptionLabel
+										preset={normalizeSandboxPreset(
+											instanceDefaults().default_sandbox_preset,
+										)}
+									/>
+								</div>
+							}
+						>
+							<SettingsField
+								label="Preset"
+								body={
+									<SandboxPresetSelect
+										value={p.sandboxPreset}
+										onChange={(value) => {
+											p.setSandboxPreset(value);
+											p.setIsSandboxDirty(true);
+										}}
+									/>
+								}
+							/>
+							<SettingsField
+								label="Include wrapper in the sandbox"
+								description="When enabled, the wrapper runs inside the game sandbox. When disabled, the wrapper runs outside the sandbox with your normal user access."
+								headerRight={
+									<Switch
+										checked={p.sandboxWrapperNesting === "sandbox-outside"}
+										onCheckedChange={(checked: boolean) => {
+											p.setSandboxWrapperNesting(
+												checked ? "sandbox-outside" : "wrapper-outside",
+											);
+											p.setIsSandboxDirty(true);
+										}}
+									>
+										<SwitchControl>
+											<SwitchThumb />
+										</SwitchControl>
+									</Switch>
+								}
+							/>
+						</Show>
+						<SettingsField
+							label="Extra read-write folders"
+							description="The game may read from and write to these folders in addition to its instance folder."
+							body={
+								<PathListEditor
+									paths={p.sandboxExtraPaths}
+									inheritedPaths={p.inheritedSandboxExtraPaths}
+									onChange={(paths) => {
+										p.setSandboxExtraPaths(paths);
+										p.setIsSandboxDirty(true);
+									}}
+									addLabel="Add instance-only folder…"
+									emptyLabel="No instance-only folders."
+								/>
+							}
+						/>
+					</div>
 				</SettingsCard>
 
 				<SettingsCard header="Maintenance">

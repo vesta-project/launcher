@@ -19,6 +19,7 @@ pub mod instance_helpers;
 pub mod instance_runtime;
 pub mod launch_intents;
 pub mod process_state;
+pub mod sandbox_policy;
 pub mod sanitize;
 pub mod storage;
 pub mod texture;

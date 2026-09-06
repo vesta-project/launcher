@@ -99,6 +99,77 @@ jobs:
       - name: Run Rust tests
         run: cargo test --workspace --locked --no-fail-fast
 
+  sandbox-platforms:
+    name: Sandbox adapter (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install Linux sandbox and Tauri dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            bubblewrap \
+            build-essential \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            netcat-openbsd \
+            pkg-config \
+            xdg-utils
+
+      - name: Set up Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Rust
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup override set "$RUST_TOOLCHAIN"
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-sandbox-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-sandbox-${{ env.RUST_TOOLCHAIN }}-
+
+      - name: Build sandbox sidecar
+        run: cargo build -p vesta-sandbox --bin vesta-sandbox-exec --locked
+
+      - name: Test native sandbox adapter
+        run: cargo test -p vesta-sandbox --locked
+
+      - name: Test sandbox launch-process integration
+        run: cargo test -p piston-lib game::launcher::process::tests --locked
+
+      - name: Check launcher integration and sidecar packaging
+        run: cargo check -p vesta-launcher --all-targets --locked
+
   workflow:
     name: Workflow validation
     runs-on: ubuntu-latest
@@ -191,6 +262,7 @@ jobs:
     needs:
       - frontend
       - rust
+      - sandbox-platforms
       - workflow
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -199,14 +271,17 @@ jobs:
         env:
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           RUST_RESULT: ${{ needs.rust.result }}
+          SANDBOX_PLATFORMS_RESULT: ${{ needs.sandbox-platforms.result }}
           WORKFLOW_RESULT: ${{ needs.workflow.result }}
         run: |
           if [[ "$FRONTEND_RESULT" != "success" ||
                 "$RUST_RESULT" != "success" ||
+                "$SANDBOX_PLATFORMS_RESULT" != "success" ||
                 "$WORKFLOW_RESULT" != "success" ]]; then
             echo "A required CI job did not pass."
             echo "frontend=$FRONTEND_RESULT"
             echo "rust=$RUST_RESULT"
+            echo "sandbox-platforms=$SANDBOX_PLATFORMS_RESULT"
             echo "workflow=$WORKFLOW_RESULT"
             exit 1
           fi

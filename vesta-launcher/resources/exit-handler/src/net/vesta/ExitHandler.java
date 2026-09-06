@@ -14,7 +14,7 @@ import java.util.Map;
  * Wraps Minecraft process to track exit time for accurate playtime calculation.
  * Streams stdout/stderr to console and log file, writes exit_status.json on exit.
  * 
- * Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] -- <java> <args...>
+ * Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] [--sandbox-prefix-arg <arg>]... -- <java> <args...>
  * 
  * Compiled with --release 8 for maximum Java version compatibility.
  */
@@ -25,6 +25,7 @@ public class ExitHandler {
     private static String logFilePath;
     private static String preLaunchHook;
     private static String postExitHook;
+    private static final List<String> sandboxPrefix = new ArrayList<>();
     private static Process gameProcess;
     private static volatile int exitCode = -1;
     private static volatile boolean hasWrittenExitFile = false;
@@ -47,6 +48,13 @@ public class ExitHandler {
                 preLaunchHook = args[++i];
             } else if ("--post-exit-hook".equals(arg) && i + 1 < args.length) {
                 postExitHook = args[++i];
+            } else if ("--sandbox-prefix-arg".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value after --sandbox-prefix-arg");
+                    System.exit(1);
+                    return;
+                }
+                sandboxPrefix.add(args[++i]);
             } else if ("--".equals(arg)) {
                 // Everything after -- is the game command
                 for (int j = i + 1; j < args.length; j++) {
@@ -59,7 +67,7 @@ public class ExitHandler {
         
         // Validate required arguments
         if (instanceId == null || exitFilePath == null || logFilePath == null || gameCommand.isEmpty()) {
-            System.err.println("Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] -- <java> <args...>");
+            System.err.println("Usage: java -jar exit-handler.jar --instance-id <id> --exit-file <path> --log-file <path> [--pre-launch-hook <cmd>] [--post-exit-hook <cmd>] [--sandbox-prefix-arg <arg>]... -- <java> <args...>");
             System.err.println("Missing required arguments:");
             if (instanceId == null) System.err.println("  --instance-id");
             if (exitFilePath == null) System.err.println("  --exit-file");
@@ -67,6 +75,10 @@ public class ExitHandler {
             if (gameCommand.isEmpty()) System.err.println("  game command after --");
             System.exit(1);
             return;
+        }
+
+        if (!sandboxPrefix.isEmpty()) {
+            gameCommand.addAll(0, sandboxPrefix);
         }
         
         // Register shutdown hook for graceful termination
@@ -82,6 +94,7 @@ public class ExitHandler {
                 }
             }
             // Write exit file if not already written
+            clearGamePidFile();
             writeExitFile();
         }, "ExitHandler-ShutdownHook"));
         
@@ -102,16 +115,16 @@ public class ExitHandler {
             
             // Run pre-launch hook if specified
             if (preLaunchHook != null && !preLaunchHook.trim().isEmpty()) {
-                System.out.println("[Hook] Executing pre-launch hook: " + preLaunchHook);
+                safePrintln(System.out, "[Hook] Executing pre-launch hook: " + preLaunchHook);
                 int hookExitCode = executeHook(preLaunchHook);
                 if (hookExitCode != 0) {
-                    System.err.println("[Hook] Pre-launch hook failed with exit code: " + hookExitCode);
+                    safePrintln(System.err, "[Hook] Pre-launch hook failed with exit code: " + hookExitCode);
                     exitCode = hookExitCode;
                     writeExitFile();
                     System.exit(hookExitCode);
                     return;
                 }
-                System.out.println("[Hook] Pre-launch hook completed successfully");
+                safePrintln(System.out, "[Hook] Pre-launch hook completed successfully");
             }
             
             // Start the game process
@@ -119,8 +132,14 @@ public class ExitHandler {
             pb.redirectErrorStream(false); // Keep stdout and stderr separate
             
             gameProcess = pb.start();
+            // Publish the real game PID immediately so the launcher can keep
+            // tracking the session if this wrapper JVM dies early (sandbox
+            // wrapper teardown, SIGPIPE on piped stdio, OOM, etc.).
+            writeGamePidFile(getProcessId(gameProcess));
             
-            // Stream handlers for stdout and stderr
+            // Stream handlers for stdout and stderr.
+            // Never let a broken launcher pipe kill this JVM via SIGPIPE: log
+            // file is authoritative; console forwarding is best-effort.
             Thread stdoutThread = new Thread(() -> streamOutput(gameProcess.getInputStream(), System.out, "stdout"), "stdout-reader");
             Thread stderrThread = new Thread(() -> streamOutput(gameProcess.getErrorStream(), System.err, "stderr"), "stderr-reader");
             
@@ -136,16 +155,17 @@ public class ExitHandler {
             
             // Run post-exit hook if specified
             if (postExitHook != null && !postExitHook.trim().isEmpty()) {
-                System.out.println("[Hook] Executing post-exit hook: " + postExitHook);
+                safePrintln(System.out, "[Hook] Executing post-exit hook: " + postExitHook);
                 int hookExitCode = executeHook(postExitHook);
                 if (hookExitCode != 0) {
-                    System.err.println("[Hook] Post-exit hook failed with exit code: " + hookExitCode);
+                    safePrintln(System.err, "[Hook] Post-exit hook failed with exit code: " + hookExitCode);
                 } else {
-                    System.out.println("[Hook] Post-exit hook completed successfully");
+                    safePrintln(System.out, "[Hook] Post-exit hook completed successfully");
                 }
             }
             
             // Write exit file
+            clearGamePidFile();
             writeExitFile();
             
             // Exit with game's exit code
@@ -166,13 +186,19 @@ public class ExitHandler {
     private static int executeHook(String commandStr) {
         try {
             boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
-            List<String> cmd = new ArrayList<>();
+            List<String> cmd = new ArrayList<>(sandboxPrefix);
             if (isWindows) {
-                cmd.add("cmd");
+                String commandShell = System.getenv("ComSpec");
+                if (!sandboxPrefix.isEmpty() && (commandShell == null || commandShell.trim().isEmpty())) {
+                    throw new IOException("ComSpec is required for a sandboxed Windows hook");
+                }
+                cmd.add(commandShell == null || commandShell.trim().isEmpty() ? "cmd.exe" : commandShell);
+                cmd.add("/D");
+                cmd.add("/S");
                 cmd.add("/C");
                 cmd.add(commandStr);
             } else {
-                cmd.add("sh");
+                cmd.add(sandboxPrefix.isEmpty() ? "sh" : "/bin/sh");
                 cmd.add("-c");
                 cmd.add(commandStr);
             }
@@ -209,16 +235,98 @@ public class ExitHandler {
         ) {
             String line;
             while ((line = reader.readLine()) != null) {
-                // Write to console (for launcher to capture via LogCallback)
-                console.println(line);
-                // Write to log file
+                // Write to log file first (authoritative for playtime/crash analysis)
                 logWriter.println(line);
+                // Best-effort console forward for the launcher; never abort the
+                // session if the parent closed our stdout/stderr pipe.
+                safePrintln(console, line);
             }
         } catch (IOException e) {
             // Stream closed, game exited
         }
     }
-    
+
+    private static void safePrintln(PrintStream console, String line) {
+        if (console == null) {
+            return;
+        }
+        try {
+            console.println(line);
+            if (console.checkError()) {
+                // Broken pipe / closed console — stop forwarding further.
+            }
+        } catch (Exception ignored) {
+            // Ignore; log file remains the source of truth.
+        }
+    }
+
+    /**
+     * Best-effort PID extraction compatible with Java 8+.
+     */
+    private static long getProcessId(Process process) {
+        try {
+            // Java 9+: Process.pid()
+            // Reflect on the public API, not the package-private ProcessImpl
+            // class whose methods are inaccessible under Java's module system.
+            java.lang.reflect.Method pidMethod = Process.class.getMethod("pid");
+            Object value = pidMethod.invoke(process);
+            if (value instanceof Long) {
+                return ((Long) value).longValue();
+            }
+            if (value instanceof Integer) {
+                return ((Integer) value).longValue();
+            }
+        } catch (Exception ignored) {
+            // Fall through to UNIX ProcessImpl hack for Java 8.
+        }
+        try {
+            java.lang.reflect.Field field = process.getClass().getDeclaredField("pid");
+            field.setAccessible(true);
+            return field.getLong(process);
+        } catch (Exception e) {
+            System.err.println("[ExitHandler] Unable to resolve game PID: " + e.getMessage());
+            return -1;
+        }
+    }
+
+    private static File gamePidFile() {
+        File exitFile = new File(exitFilePath);
+        File exitDir = exitFile.getParentFile();
+        if (exitDir == null) {
+            return new File("game_pid");
+        }
+        return new File(exitDir, "game_pid");
+    }
+
+    private static void writeGamePidFile(long pid) {
+        if (pid <= 0) {
+            return;
+        }
+        try {
+            File pidFile = gamePidFile();
+            File parent = pidFile.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(new FileOutputStream(pidFile), StandardCharsets.UTF_8))) {
+                writer.print(Long.toString(pid));
+            }
+        } catch (Exception e) {
+            System.err.println("[ExitHandler] Failed to write game PID file: " + e.getMessage());
+        }
+    }
+
+    private static void clearGamePidFile() {
+        try {
+            File pidFile = gamePidFile();
+            if (pidFile.exists() && !pidFile.delete()) {
+                System.err.println("[ExitHandler] Failed to delete game PID file");
+            }
+        } catch (Exception e) {
+            System.err.println("[ExitHandler] Failed to clear game PID file: " + e.getMessage());
+        }
+    }
+
     /**
      * Write exit status to JSON file
      */

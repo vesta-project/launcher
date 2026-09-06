@@ -10,7 +10,7 @@
 	border-radius: 3px;
 	border: var(--border-width-strong) solid
 		hsl(var(--color__primary-hue) 20% 60% / 5%);
-	z-index: var(--z-popover);
+	z-index: var(--z-tooltip);
 }
 
 .tooltip__content[data-expanded] {

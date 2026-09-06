@@ -21,6 +21,67 @@ use tauri::{Emitter, Manager, State};
 const MCLOGS_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const MCLOGS_MAX_LINES: usize = 25_000;
 
+#[cfg(target_os = "macos")]
+fn microphone_permission_granted() -> bool {
+    use objc2::{class, msg_send};
+    use objc2_foundation::NSString;
+
+    unsafe {
+        let media_type = NSString::from_str("soun");
+        let status: i32 = msg_send![
+            class!(AVCaptureDevice),
+            authorizationStatusForMediaType: &*media_type
+        ];
+        status == 3
+    }
+}
+
+#[cfg(target_os = "macos")]
+async fn request_microphone_permission() -> Result<bool, String> {
+    use block2::RcBlock;
+    use objc2::{class, msg_send, runtime::Bool};
+    use objc2_foundation::NSString;
+
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let sender = Arc::new(Mutex::new(Some(sender)));
+    {
+        let completion = RcBlock::new(move |granted: Bool| {
+            if let Ok(mut sender) = sender.lock() {
+                if let Some(sender) = sender.take() {
+                    let _ = sender.send(granted.as_bool());
+                }
+            }
+        });
+
+        unsafe {
+            let media_type = NSString::from_str("soun");
+            let _: () = msg_send![
+                class!(AVCaptureDevice),
+                requestAccessForMediaType: &*media_type,
+                completionHandler: &*completion
+            ];
+        }
+    }
+
+    receiver
+        .await
+        .map_err(|_| "Microphone permission request was cancelled".to_string())
+}
+
+#[cfg(target_os = "macos")]
+async fn ensure_microphone_permission() -> Result<(), String> {
+    if microphone_permission_granted() {
+        return Ok(());
+    }
+
+    log::info!("[macOS Permissions] Requesting microphone permission...");
+    if request_microphone_permission().await? {
+        Ok(())
+    } else {
+        Err("Microphone permission was denied; launch cancelled so voice chat can initialize correctly".to_string())
+    }
+}
+
 lazy_static! {
     static ref LAUNCH_IN_PROGRESS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
@@ -1057,6 +1118,10 @@ pub async fn create_instance(
         pre_launch_hook: inst.pre_launch_hook,
         wrapper_command: inst.wrapper_command,
         post_exit_hook: inst.post_exit_hook,
+        use_global_sandbox: inst.use_global_sandbox,
+        sandbox_preset: inst.sandbox_preset,
+        sandbox_wrapper_nesting: inst.sandbox_wrapper_nesting,
+        sandbox_extra_paths: inst.sandbox_extra_paths,
     };
 
     diesel::insert_into(instance)
@@ -1397,6 +1462,10 @@ pub async fn update_instance(
             pre_launch_hook.eq(&final_instance.pre_launch_hook),
             wrapper_command.eq(&final_instance.wrapper_command),
             post_exit_hook.eq(&final_instance.post_exit_hook),
+            use_global_sandbox.eq(final_instance.use_global_sandbox),
+            sandbox_preset.eq(&final_instance.sandbox_preset),
+            sandbox_wrapper_nesting.eq(&final_instance.sandbox_wrapper_nesting),
+            sandbox_extra_paths.eq(&final_instance.sandbox_extra_paths),
             updated_at.eq(&now),
         ))
         .execute(&mut conn)
@@ -1494,17 +1563,6 @@ pub async fn launch_instance(
     app_handle: tauri::AppHandle,
     instance_data: Instance,
 ) -> Result<(), String> {
-    // macOS: Ensure microphone permissions are granted before launch
-    // to allow voice chat mods in Minecraft to function.
-    #[cfg(target_os = "macos")]
-    {
-        if !tauri_plugin_macos_permissions::check_microphone_permission().await {
-            log::info!("[macOS Permissions] Requesting microphone permission...");
-            // We don't block the launch if permission is denied, but we try to request it.
-            let _ = tauri_plugin_macos_permissions::request_microphone_permission().await;
-        }
-    }
-
     if matches!(
         instance_data.installation_status.as_deref(),
         Some("installing") | Some("interrupted")
@@ -1518,6 +1576,23 @@ pub async fn launch_instance(
 
     let instance_id = instance_data.slug();
     let _launch_guard = LaunchInProgressGuard::acquire(instance_id.clone()).await?;
+
+    // Request and await TCC consent before starting Java; Seatbelt separately
+    // denies the microphone for the Paranoid preset.
+    #[cfg(target_os = "macos")]
+    {
+        let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+        let sandbox =
+            crate::utils::sandbox_policy::resolve_sandbox_settings(&instance_data, &app_config)?;
+        let mic_allowed = vesta_sandbox::resolve_preset(sandbox.preset).mic_allowed;
+        if mic_allowed {
+            ensure_microphone_permission().await?;
+        } else {
+            log::info!(
+                "[macOS Permissions] Skipping microphone permission request (sandbox preset denies mic)"
+            );
+        }
+    }
 
     use tauri::Emitter;
     let _ = app_handle.emit(
@@ -1540,15 +1615,30 @@ pub async fn launch_instance(
     let prepared =
         crate::instance::launch_preparation::prepare_instance_launch(&app_handle, &instance_data)
             .await?;
-    let runtime = crate::instance::launch_preparation::ensure_runtime_ready_for_launch(
+    let runtime = match crate::instance::launch_preparation::ensure_runtime_ready_for_launch(
         &app_handle,
         &instance_data,
         prepared.install_spec.clone(),
     )
-    .await?;
-    let runtime_plan = runtime.final_plan.ok_or_else(|| {
-        "Launch blocked: runtime verification produced no launch plan".to_string()
-    })?;
+    .await
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            piston_lib::game::launcher::cleanup_sandbox_paths(
+                prepared.launch_spec.sandbox_cleanup_paths.clone(),
+            );
+            return Err(error);
+        }
+    };
+    let runtime_plan = match runtime.final_plan {
+        Some(plan) => plan,
+        None => {
+            piston_lib::game::launcher::cleanup_sandbox_paths(
+                prepared.launch_spec.sandbox_cleanup_paths.clone(),
+            );
+            return Err("Launch blocked: runtime verification produced no launch plan".to_string());
+        }
+    };
 
     log::info!(
         "[launch_instance] Launching game: {} {}",

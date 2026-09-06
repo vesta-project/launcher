@@ -55,6 +55,33 @@ pub(crate) struct PreparedInstanceLaunch {
     pub offline: bool,
 }
 
+#[cfg(target_os = "windows")]
+fn validate_windows_sandbox_launch_graph(
+    preset: vesta_sandbox::SandboxPreset,
+    wrapper_nesting: vesta_sandbox::WrapperNesting,
+    wrapper_command: Option<&str>,
+    has_hooks: bool,
+    exit_handler_available: bool,
+) -> Result<(), String> {
+    if preset == vesta_sandbox::SandboxPreset::Trusted {
+        return Ok(());
+    }
+    let has_wrapper = wrapper_command.is_some_and(|wrapper| !wrapper.trim().is_empty());
+    if has_wrapper && wrapper_nesting == vesta_sandbox::WrapperNesting::SandboxOutside {
+        return Err(
+            "Windows sandboxing cannot place a generic wrapper inside the no-child game boundary because the wrapper must start Java. Select wrapper-outside or remove the wrapper."
+                .to_string(),
+        );
+    }
+    if has_hooks && !exit_handler_available {
+        return Err(
+            "Windows sandboxed hooks require the bundled exit-handler.jar, but it was not found."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 pub(crate) async fn prepare_instance_launch(
     app_handle: &tauri::AppHandle,
     instance_data: &Instance,
@@ -66,17 +93,6 @@ pub(crate) async fn prepare_instance_launch(
 
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-    let java_path_str = crate::utils::java::ensure_java_for_instance(
-        app_handle,
-        instance_data,
-        None,
-        Some(format!(
-            "repair_managed_java_launch_{}",
-            instance_data.slug()
-        )),
-    )
-    .await?;
-
     let spec_data_dir = if data_dir.join("data").exists() {
         data_dir.join("data")
     } else {
@@ -92,6 +108,69 @@ pub(crate) async fn prepare_instance_launch(
         &instances_root,
         &data_dir,
     );
+
+    let resolved_sandbox =
+        crate::utils::sandbox_policy::resolve_sandbox_settings(instance_data, &app_config)?;
+
+    let res_pre_launch_hook = if instance_data.use_global_hooks {
+        app_config.default_pre_launch_hook.clone()
+    } else {
+        instance_data.pre_launch_hook.clone()
+    };
+    let res_wrapper_command = if instance_data.use_global_hooks {
+        app_config.default_wrapper_command.clone()
+    } else {
+        instance_data.wrapper_command.clone()
+    };
+    let res_post_exit_hook = if instance_data.use_global_hooks {
+        app_config.default_post_exit_hook.clone()
+    } else {
+        instance_data.post_exit_hook.clone()
+    };
+
+    let managed_jre_dir = crate::utils::java::get_managed_jre_dir()?;
+    crate::utils::sandbox_policy::validate_protected_paths_for_play(
+        &resolved_sandbox,
+        &[managed_jre_dir],
+        &game_dir,
+        "managed Java directory",
+    )?;
+    let res_wrapper_command = crate::utils::sandbox_policy::normalize_wrapper_command_for_play(
+        &resolved_sandbox,
+        res_wrapper_command.as_deref(),
+    )?;
+    crate::utils::sandbox_policy::validate_wrapper_path_for_play(
+        &resolved_sandbox,
+        res_wrapper_command.as_deref(),
+        &game_dir,
+    )?;
+
+    let configured_java =
+        crate::utils::java::resolve_instance_java_path(app_handle, instance_data).await?;
+    let configured_java = crate::utils::sandbox_policy::normalize_java_path_before_install(
+        Path::new(&configured_java),
+    )?;
+    crate::utils::sandbox_policy::validate_java_path_for_play(
+        &resolved_sandbox,
+        &configured_java,
+        &game_dir,
+    )?;
+    let java_path_str = crate::utils::java::ensure_java_for_instance(
+        app_handle,
+        instance_data,
+        None,
+        Some(format!(
+            "repair_managed_java_launch_{}",
+            instance_data.slug()
+        )),
+    )
+    .await?;
+    let java_path =
+        crate::utils::sandbox_policy::normalize_java_path_for_play(Path::new(&java_path_str))?;
+    let java_path_str = java_path
+        .to_str()
+        .ok_or_else(|| "Resolved Java executable path is not valid UTF-8".to_string())?
+        .to_string();
 
     verify_modpack_resource_presence(instance_data, &game_dir)?;
 
@@ -119,26 +198,7 @@ pub(crate) async fn prepare_instance_launch(
     let mut resolved_jvm_args = parse_user_jvm_args(java_args_raw)?;
     resolved_jvm_args.extend(game_proxy_jvm_args(&app_config));
 
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let mut env_vars = crate::utils::hooks::resolve_env_vars(&app_config, instance_data);
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-    let env_vars = crate::utils::hooks::resolve_env_vars(&app_config, instance_data);
-
-    let res_pre_launch_hook = if instance_data.use_global_hooks {
-        app_config.default_pre_launch_hook.clone()
-    } else {
-        instance_data.pre_launch_hook.clone()
-    };
-    let res_wrapper_command = if instance_data.use_global_hooks {
-        app_config.default_wrapper_command.clone()
-    } else {
-        instance_data.wrapper_command.clone()
-    };
-    let res_post_exit_hook = if instance_data.use_global_hooks {
-        app_config.default_post_exit_hook.clone()
-    } else {
-        instance_data.post_exit_hook.clone()
-    };
 
     let modloader_type = instance_data
         .modloader
@@ -249,14 +309,44 @@ pub(crate) async fn prepare_instance_launch(
         .join("logs")
         .join(format!("{}.log", instance_id));
 
-    let username = active_account.username.clone();
+    #[cfg(target_os = "windows")]
+    {
+        let has_hooks = res_pre_launch_hook
+            .as_deref()
+            .is_some_and(|hook| !hook.trim().is_empty())
+            || res_post_exit_hook
+                .as_deref()
+                .is_some_and(|hook| !hook.trim().is_empty());
+        validate_windows_sandbox_launch_graph(
+            resolved_sandbox.preset,
+            resolved_sandbox.wrapper_nesting,
+            res_wrapper_command.as_deref(),
+            has_hooks,
+            exit_handler_jar.is_some(),
+        )?;
+    }
+    let log_dir = log_file
+        .parent()
+        .ok_or_else(|| "Sandbox log path has no parent directory".to_string())?;
+    tokio::fs::create_dir_all(log_dir)
+        .await
+        .map_err(|e| format!("Failed to create sandbox log directory: {e}"))?;
+    tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_file)
+        .await
+        .map_err(|e| format!("Failed to create sandbox log file: {e}"))?;
 
+    // Finish all fallible account materialization before sandbox preparation
+    // retains a private temp directory for the eventual child process.
+    let username = active_account.username.clone();
     let uuid = if is_offline {
         piston_lib::auth::generate_offline_uuid(&username)
     } else {
         active_account.uuid.clone()
     };
-
     let access_token = if is_offline {
         "offline".to_string()
     } else {
@@ -268,6 +358,85 @@ pub(crate) async fn prepare_instance_launch(
                 "Online launch requires a valid Minecraft access token. Sign in again.".to_string()
             })?
     };
+
+    let sandbox_policy = crate::utils::sandbox_policy::build_sandbox_policy_for_roots(
+        &resolved_sandbox,
+        &spec_data_dir,
+        &game_dir,
+        &log_file,
+        Path::new(&java_path_str),
+        exit_handler_jar.as_deref(),
+        res_wrapper_command.as_deref(),
+        res_pre_launch_hook
+            .as_deref()
+            .is_some_and(|hook| !hook.trim().is_empty())
+            || res_post_exit_hook
+                .as_deref()
+                .is_some_and(|hook| !hook.trim().is_empty()),
+    )?;
+    let sandbox_run_plan = vesta_sandbox::RunPlan::new(
+        PathBuf::from(&java_path_str),
+        Vec::new(),
+        game_dir.clone(),
+        env_vars.clone(),
+    );
+    let (sandbox_spawn, sandbox_report) =
+        vesta_sandbox::prepare(&sandbox_run_plan, &sandbox_policy).map_err(|e| {
+            format!(
+                "Sandbox policy could not be applied ({}): {e}",
+                resolved_sandbox.preset
+            )
+        })?;
+    for note in &sandbox_report.notes {
+        log::info!("[launch_instance] sandbox: {note}");
+    }
+    let (
+        sandbox_prefix,
+        sandbox_wraps_entire_command,
+        sandbox_command_placement,
+        sandbox_env,
+        sandbox_cleanup_paths,
+    ) = match sandbox_spawn {
+        vesta_sandbox::SandboxedSpawn::Passthrough => (
+            None,
+            true,
+            piston_lib::game::launcher::SandboxCommandPlacement::WholeCommand,
+            None,
+            Vec::new(),
+        ),
+        vesta_sandbox::SandboxedSpawn::Prepared {
+            program,
+            args,
+            env,
+            pre_exec_notes,
+            placement,
+            cleanup_paths,
+            ..
+        } => {
+            for note in pre_exec_notes {
+                log::info!("[launch_instance] sandbox spawn: {note}");
+            }
+            let mut prefix = vec![program.to_string_lossy().to_string()];
+            prefix.extend(args);
+            (
+                Some(prefix),
+                resolved_sandbox.wrapper_nesting == vesta_sandbox::WrapperNesting::SandboxOutside,
+                match placement {
+                    vesta_sandbox::SandboxCommandPlacement::WholeCommand => {
+                        piston_lib::game::launcher::SandboxCommandPlacement::WholeCommand
+                    }
+                    vesta_sandbox::SandboxCommandPlacement::GameAndHooks => {
+                        piston_lib::game::launcher::SandboxCommandPlacement::GameAndHooks
+                    }
+                },
+                Some(env),
+                cleanup_paths,
+            )
+        }
+    };
+    if let Some(prepared_env) = sandbox_env {
+        env_vars = prepared_env;
+    }
 
     if app_config.use_dedicated_gpu {
         #[cfg(target_os = "linux")]
@@ -315,6 +484,10 @@ pub(crate) async fn prepare_instance_launch(
         wrapper_command: res_wrapper_command,
         pre_launch_hook: res_pre_launch_hook,
         post_exit_hook: res_post_exit_hook,
+        sandbox_prefix,
+        sandbox_wraps_entire_command,
+        sandbox_command_placement,
+        sandbox_cleanup_paths,
     };
 
     Ok(PreparedInstanceLaunch {
@@ -658,6 +831,8 @@ fn restore_installed_status(app_handle: &tauri::AppHandle, inst: &Instance) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
+    use super::validate_windows_sandbox_launch_graph;
     use super::{game_proxy_jvm_args, parse_user_jvm_args};
 
     #[test]
@@ -739,5 +914,41 @@ mod tests {
 
         assert_eq!(args[0], "-Xmx2G");
         assert!(args.contains(&"-Dhttp.proxyHost=127.0.0.1".to_string()));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn windows_rejects_a_sandbox_outside_wrapper() {
+        let error = validate_windows_sandbox_launch_graph(
+            vesta_sandbox::SandboxPreset::Modded,
+            vesta_sandbox::WrapperNesting::SandboxOutside,
+            Some("wrapper.exe --flag"),
+            false,
+            true,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Select wrapper-outside"));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn windows_supports_wrapper_outside_and_requires_supervision_for_hooks() {
+        assert!(validate_windows_sandbox_launch_graph(
+            vesta_sandbox::SandboxPreset::Modded,
+            vesta_sandbox::WrapperNesting::WrapperOutside,
+            Some("wrapper.exe --flag"),
+            true,
+            true,
+        )
+        .is_ok());
+        assert!(validate_windows_sandbox_launch_graph(
+            vesta_sandbox::SandboxPreset::Paranoid,
+            vesta_sandbox::WrapperNesting::SandboxOutside,
+            None,
+            true,
+            false,
+        )
+        .is_err());
     }
 }

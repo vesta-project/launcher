@@ -1,6 +1,15 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
+	PathListEditor,
+	SandboxHostNotice,
+	SandboxPresetSelect,
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	useSandboxHostSupport,
+	type SandboxPresetValue,
+} from "@components/settings";
+import {
 	getTotalRam,
 	instanceDefaults,
 	updateDefaultField,
@@ -27,6 +36,7 @@ import {
 	SliderThumb,
 	SliderTrack,
 } from "@ui/slider/slider";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import {
 	TextFieldInput,
 	TextFieldRoot,
@@ -39,8 +49,11 @@ import {
 	MAX_GENERATED_MEMORY_MB,
 } from "@utils/memory-policy";
 import styles from "../settings-page.module.css";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 
 export function InstanceDefaultsTab() {
+	const [sandboxSupport] = useSandboxHostSupport();
+
 	const handleMemoryChange = (val: number[]) => {
 		const nextMax = val[0] || preferredMaxMemory();
 		updateDefaultField("default_min_memory", DEFAULT_MIN_MEMORY_MB);
@@ -260,6 +273,66 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
+					header="Sandbox"
+					subHeader="Default OS sandbox policy for new instances."
+				>
+					<div class={sandboxStyles.fieldStack}>
+						<SandboxHostNotice support={sandboxSupport()} />
+						<SettingsField
+							label="Preset"
+							description="Capability profile applied at launch."
+							body={
+								<SandboxPresetSelect
+									value={normalizeSandboxPreset(
+										instanceDefaults().default_sandbox_preset,
+									)}
+									onChange={(value: SandboxPresetValue) =>
+										updateDefaultField("default_sandbox_preset", value)
+									}
+								/>
+							}
+						/>
+						<SettingsField
+							label="Include wrapper in the sandbox"
+							description="When enabled, the wrapper runs inside the game sandbox. When disabled, the wrapper runs outside the sandbox with your normal user access."
+							headerRight={
+								<Switch
+									checked={
+										normalizeSandboxWrapperNesting(
+											instanceDefaults().default_sandbox_wrapper_nesting,
+										) === "sandbox-outside"
+									}
+									onCheckedChange={(checked: boolean) =>
+										updateDefaultField(
+											"default_sandbox_wrapper_nesting",
+											checked ? "sandbox-outside" : "wrapper-outside",
+										)
+									}
+								>
+									<SwitchControl>
+										<SwitchThumb />
+									</SwitchControl>
+								</Switch>
+							}
+						/>
+						<SettingsField
+							label="Extra read-write folders"
+							description="The game may read from and write to these folders in addition to its instance folder."
+							body={
+								<PathListEditor
+									paths={instanceDefaults().default_sandbox_extra_paths ?? []}
+									onChange={(paths) =>
+										updateDefaultField("default_sandbox_extra_paths", paths)
+									}
+									addLabel="Add read-write folder…"
+									emptyLabel="No extra read-write folders."
+								/>
+							}
+						/>
+					</div>
+				</SettingsCard>
+
+				<SettingsCard
 					header="Lifecycle Hooks"
 					subHeader="Commands to run at different stages of the instance lifecycle."
 				>
@@ -268,7 +341,7 @@ export function InstanceDefaultsTab() {
 					>
 						<SettingsField
 							label="Pre-launch Command"
-							description="Runs before the game starts."
+							description="Runs before the game starts. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -287,7 +360,7 @@ export function InstanceDefaultsTab() {
 						<Separator />
 						<SettingsField
 							label="Wrapper Command"
-							description="Wraps the Java process (e.g. mangohud, optirun)."
+							description="Wraps the Java process (e.g. mangohud, optirun). Sandboxed script wrappers must use an absolute shebang interpreter, not /usr/bin/env."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -306,7 +379,7 @@ export function InstanceDefaultsTab() {
 						<Separator />
 						<SettingsField
 							label="Post-exit Command"
-							description="Runs after the game process terminates."
+							description="Runs after the game process terminates. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
 							body={
 								<TextFieldRoot>
 									<TextFieldInput

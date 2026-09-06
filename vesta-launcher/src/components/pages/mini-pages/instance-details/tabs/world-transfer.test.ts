@@ -40,6 +40,10 @@ const instance = (overrides: Partial<Instance> = {}): Instance => ({
 	preLaunchHook: null,
 	postExitHook: null,
 	wrapperCommand: null,
+	useGlobalSandbox: true,
+	sandboxPreset: null,
+	sandboxWrapperNesting: null,
+	sandboxExtraPaths: "[]",
 	...overrides,
 });
 

@@ -106,6 +106,10 @@ diesel::table! {
         pre_launch_hook -> Nullable<Text>,
         wrapper_command -> Nullable<Text>,
         post_exit_hook -> Nullable<Text>,
+        use_global_sandbox -> Bool,
+        sandbox_preset -> Nullable<Text>,
+        sandbox_wrapper_nesting -> Nullable<Text>,
+        sandbox_extra_paths -> Text,
     }
 }
 

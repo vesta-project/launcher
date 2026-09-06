@@ -182,6 +182,10 @@ impl Task for CloneInstanceTask {
                     pre_launch_hook: source.pre_launch_hook.clone(),
                     wrapper_command: source.wrapper_command.clone(),
                     post_exit_hook: source.post_exit_hook.clone(),
+                    use_global_sandbox: source.use_global_sandbox,
+                    sandbox_preset: source.sandbox_preset.clone(),
+                    sandbox_wrapper_nesting: source.sandbox_wrapper_nesting.clone(),
+                    sandbox_extra_paths: source.sandbox_extra_paths.clone(),
                 };
 
                 diesel::insert_into(instance)

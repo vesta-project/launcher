@@ -17,6 +17,11 @@ pub struct InstanceRunState {
     /// Process ID
     pub pid: u32,
 
+    /// Process group ID captured at launch (Unix). When the top-level PID is a
+    /// short-lived sandbox wrapper, the group may still contain the game JVM.
+    #[serde(default)]
+    pub process_group_id: Option<u32>,
+
     /// Path to the log file
     pub log_file: PathBuf,
 
@@ -31,6 +36,14 @@ pub struct InstanceRunState {
 
     /// Timestamp when the process was started
     pub started_at: String,
+
+    /// Private sandbox temp directories to remove only after the game itself exits.
+    #[serde(default)]
+    pub cleanup_paths: Vec<PathBuf>,
+
+    /// Tail log files for the live console (exit-handler owns process stdio).
+    #[serde(default)]
+    pub console_from_log_file: bool,
 }
 
 /// Get the path to the process state file in app data
@@ -99,11 +112,14 @@ mod tests {
         let state = InstanceRunState {
             instance_id: "test-instance".to_string(),
             pid: 1234,
+            process_group_id: Some(1234),
             log_file: PathBuf::from("/tmp/test.log"),
             game_dir: PathBuf::from("/tmp/game"),
             version_id: "1.20.1".to_string(),
             modloader: None,
             started_at: "2025-12-17T00:00:00Z".to_string(),
+            cleanup_paths: Vec::new(),
+            console_from_log_file: false,
         };
 
         let json = serde_json::to_string(&state).unwrap();
