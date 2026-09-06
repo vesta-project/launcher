@@ -15,12 +15,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn(
-		async (
+		(
 			_event: string,
 			listener: (event: { payload: Record<string, any> }) => void,
 		) => {
 			mocks.listener = listener;
-			return mocks.unlisten;
+			return Promise.resolve(mocks.unlisten);
 		},
 	),
 }));

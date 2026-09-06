@@ -1,6 +1,6 @@
+import CheckIcon from "@assets/icons/controls/check.svg";
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SelectPrimitive from "@kobalte/core/select";
-import CheckIcon from "@assets/icons/controls/check.svg";
 import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import type { ValidComponent } from "solid-js";

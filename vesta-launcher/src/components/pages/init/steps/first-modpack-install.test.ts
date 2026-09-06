@@ -30,20 +30,22 @@ const stable: FirstModpackVersion = {
 describe("first modpack onboarding install", () => {
 	it("queues the latest stable release before completing onboarding", async () => {
 		const order: string[] = [];
-		const queueInstall = vi.fn(async () => {
+		const queueInstall = vi.fn(() => {
 			order.push("install");
-			return 42;
+			return Promise.resolve(42);
 		});
 
 		await expect(
 			installFirstModpack(project, {
 				getVersions: async () => [beta, stable],
 				queueInstall,
-				completeOnboarding: async () => {
+				completeOnboarding: () => {
 					order.push("complete");
+					return Promise.resolve();
 				},
-				goNext: async () => {
+				goNext: () => {
 					order.push("next");
+					return Promise.resolve();
 				},
 			}),
 		).resolves.toBe(42);
@@ -71,9 +73,7 @@ describe("first modpack onboarding install", () => {
 		await expect(
 			installFirstModpack(project, {
 				getVersions: async () => [stable],
-				queueInstall: async () => {
-					throw new Error("queue failed");
-				},
+				queueInstall: () => Promise.reject(new Error("queue failed")),
 				completeOnboarding,
 				goNext,
 			}),
@@ -90,7 +90,7 @@ describe("first modpack onboarding install", () => {
 			.fn<() => Promise<void>>()
 			.mockRejectedValueOnce(new Error("setup failed"))
 			.mockResolvedValueOnce(undefined);
-		const goNext = vi.fn(async () => {});
+		const goNext = vi.fn(() => Promise.resolve());
 		let acceptedInstanceId: number | undefined;
 
 		await expect(

@@ -24,16 +24,17 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { getActiveAccount } from "@utils/auth";
 import {
-	currentThemeConfig,
 	colorMode,
+	currentThemeConfig,
 	onConfigUpdate,
 	saveThemeUpdate as persistThemeUpdate,
-	setUiChromeModeEnabled,
 	setColorMode,
+	setUiChromeModeEnabled,
 	uiChromeModeEnabled,
 } from "@utils/config-sync";
-import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 import { getStartupConfig } from "@utils/startup-state";
+import { hasTauriRuntime } from "@utils/tauri-runtime";
 import {
 	batch,
 	createEffect,
@@ -45,8 +46,8 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 import {
 	applyTheme,
-	type GradientHarmony,
 	type ColorModePreference,
+	type GradientHarmony,
 	getAllThemes,
 	getSupportedWindowEffects,
 	getThemeById,
@@ -65,7 +66,6 @@ import {
 	upsertCustomTheme,
 	validateTheme,
 } from "../themes/presets";
-import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 
 export interface AppConfig {
 	id: number;
@@ -130,7 +130,10 @@ export interface AppConfig {
 		| "hide-to-tray"
 		| "quit";
 	default_sandbox_preset?: "trusted" | "modded" | "paranoid";
-	default_sandbox_wrapper_nesting?: "sandbox-outside" | "wrapper-outside";
+	default_sandbox_wrapper_nesting?:
+		| "sandbox-outside"
+		| "wrapper-outside"
+		| "wrapper_outside";
 	default_sandbox_extra_paths?: string[];
 
 	[key: string]: any;
@@ -1486,9 +1489,7 @@ export async function updateDefaultField(field: string, value: any) {
 	let storeValue = value;
 	let persistValue = value;
 	if (field === "default_sandbox_extra_paths") {
-		const paths = Array.isArray(value)
-			? value
-			: parseSandboxExtraPaths(value);
+		const paths = Array.isArray(value) ? value : parseSandboxExtraPaths(value);
 		storeValue = paths;
 		persistValue = JSON.stringify(paths);
 	}
@@ -1576,8 +1577,8 @@ export async function refreshStorageSnapshot() {
 }
 
 // Config update listener management
-let unsubscribeConfigUpdate: (() => void) | null = null;
-let unlistenJavaPaths: (() => void) | undefined;
+let _unsubscribeConfigUpdate: (() => void) | null = null;
+let _unlistenJavaPaths: (() => void) | undefined;
 
 export function getCacheSizeDisplay(): string {
 	return cacheSizeValue() || "0 bytes";
@@ -1761,7 +1762,7 @@ async function initializeSettings() {
 		listen("java-paths-updated", () => {
 			refreshJavas();
 		}).then((fn) => {
-			unlistenJavaPaths = fn;
+			_unlistenJavaPaths = fn;
 		});
 
 		// Refresh Java data on initial load
@@ -1769,7 +1770,7 @@ async function initializeSettings() {
 	}
 
 	// Set up config update listener from other windows
-	unsubscribeConfigUpdate = onConfigUpdate((field, value) => {
+	_unsubscribeConfigUpdate = onConfigUpdate((field, value) => {
 		if (field === "debug_logging") setDebugLogging(value);
 		if (field === "auto_update_enabled") setAutoUpdateEnabled(value);
 		if (field === "startup_check_updates") setStartupCheckUpdates(value);

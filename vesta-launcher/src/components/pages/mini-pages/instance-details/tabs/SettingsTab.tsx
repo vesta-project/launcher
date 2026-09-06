@@ -1,16 +1,17 @@
-import { SettingsCard, SettingsField } from "@components/settings";
-import panelStyles from "@components/settings/settings.module.css";
 import {
+	normalizeSandboxPreset,
 	PathListEditor,
 	SandboxHostNotice,
 	SandboxPresetOptionLabel,
 	SandboxPresetSelect,
-	normalizeSandboxPreset,
-	useSandboxHostSupport,
 	type SandboxPresetValue,
 	type SandboxWrapperNestingValue,
+	SettingsCard,
+	SettingsField,
+	useSandboxHostSupport,
 } from "@components/settings";
 import sandboxStyles from "@components/settings/sandbox-policy.module.css";
+import panelStyles from "@components/settings/settings.module.css";
 import { instanceDefaults } from "@stores/settings";
 import Button from "@ui/button/button";
 import {
@@ -831,8 +832,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								Use Global Preset
 							</span>
 							<span style="font-size: 11px; opacity: 0.6;">
-								Link preset and wrapper inclusion only. Extra read-write folders stay
-								instance-editable.
+								Link preset and wrapper inclusion only. Extra read-write folders
+								stay instance-editable.
 							</span>
 						</div>
 						<Switch
@@ -916,14 +917,56 @@ export const SettingsTab = (p: SettingsTabProps) => {
 				</SettingsCard>
 
 				<SettingsCard header="Maintenance">
-					<SettingsField label="Export Instance" description="Pack this instance into a file for sharing or backup." actionLabel="Export…" onAction={() => p.setShowExportDialog(true)} disabled={p.isGuest || p.busy || p.isInstalling} />
-					<SettingsField label="Duplicate Instance" description="Create an exact clone of this instance." actionLabel="Duplicate" onAction={p.handleDuplicate} disabled={p.busy || p.isInstalling} />
-					<SettingsField label={p.instance.modpackId ? "Repair Files" : "Repair Instance"} description="Verify instance files and re-download anything missing." actionLabel="Repair" onAction={() => p.repairInstance(p.instance.id)} disabled={p.isGuest || p.busy || p.isInstalling} />
+					<SettingsField
+						label="Export Instance"
+						description="Pack this instance into a file for sharing or backup."
+						actionLabel="Export…"
+						onAction={() => p.setShowExportDialog(true)}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
+					<SettingsField
+						label="Duplicate Instance"
+						description="Create an exact clone of this instance."
+						actionLabel="Duplicate"
+						onAction={p.handleDuplicate}
+						disabled={p.busy || p.isInstalling}
+					/>
+					<SettingsField
+						label={p.instance.modpackId ? "Repair Files" : "Repair Instance"}
+						description="Verify instance files and re-download anything missing."
+						actionLabel="Repair"
+						onAction={() => p.repairInstance(p.instance.id)}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
 				</SettingsCard>
 
 				<SettingsCard header="Danger Zone" destructive>
-					<SettingsField label="Reset Instance" description={<span>Reinstall from scratch and <strong>permanently delete</strong> worlds, configs, and screenshots.</span>} actionLabel="Reset" destructive onAction={p.handleHardReset} disabled={p.isGuest || p.busy || p.isInstalling} />
-					<SettingsField label="Delete Instance" description={<span>Remove this instance and all its files. This action is <strong>permanent and irreversible</strong>.</span>} actionLabel="Delete" destructive onAction={p.handleUninstall} disabled={p.isGuest || p.busy || p.isInstalling} />
+					<SettingsField
+						label="Reset Instance"
+						description={
+							<span>
+								Reinstall from scratch and <strong>permanently delete</strong>{" "}
+								worlds, configs, and screenshots.
+							</span>
+						}
+						actionLabel="Reset"
+						destructive
+						onAction={p.handleHardReset}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
+					<SettingsField
+						label="Delete Instance"
+						description={
+							<span>
+								Remove this instance and all its files. This action is{" "}
+								<strong>permanent and irreversible</strong>.
+							</span>
+						}
+						actionLabel="Delete"
+						destructive
+						onAction={p.handleUninstall}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
 				</SettingsCard>
 			</div>
 		</div>

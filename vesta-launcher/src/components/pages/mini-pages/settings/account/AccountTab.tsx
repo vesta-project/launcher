@@ -1,10 +1,10 @@
-﻿import CapeIcon from "@assets/icons/content/cape-icon.svg";
-import CheckIcon from "@assets/icons/controls/check.svg";
-import PlusIcon from "@assets/icons/actions/add.svg";
+﻿import PlusIcon from "@assets/icons/actions/add.svg";
 // Assets
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import CapeIcon from "@assets/icons/content/cape-icon.svg";
 import ViewIcon from "@assets/icons/content/search.svg";
 import SkinIcon from "@assets/icons/content/skin-icon.svg";
+import CheckIcon from "@assets/icons/controls/check.svg";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";

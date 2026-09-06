@@ -122,7 +122,9 @@ describe("resource install intent", () => {
 		).toBe(true);
 		expect(
 			hasDownloadableArtifact(
-				version({ files: [{ url: "", file_name: "data.zip", role: "datapack" }] }),
+				version({
+					files: [{ url: "", file_name: "data.zip", role: "datapack" }],
+				}),
 			),
 		).toBe(false);
 	});

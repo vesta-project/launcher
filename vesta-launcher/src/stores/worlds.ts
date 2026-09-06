@@ -164,7 +164,7 @@ export function worldRefKey(world: WorldRef): string {
 	return `${world.instanceId}:${world.directoryName}`;
 }
 
-async function ensureWorldEventListener() {
+function ensureWorldEventListener() {
 	if (eventUnlisten) return eventUnlisten;
 	eventUnlisten = listen<InstanceWorldsChangedEvent>(
 		"core://instance-worlds-changed",
@@ -185,7 +185,7 @@ async function ensureWorldEventListener() {
 	return eventUnlisten;
 }
 
-async function ensureWorldDatapackEventListener() {
+function ensureWorldDatapackEventListener() {
 	if (datapackEventUnlisten) return datapackEventUnlisten;
 	datapackEventUnlisten = listen<WorldDatapacksChangedEvent>(
 		"core://world-datapacks-changed",
@@ -211,8 +211,9 @@ export function listInstanceWorlds(
 	forceRefresh = false,
 ): Promise<WorldSummary[]> {
 	void ensureWorldEventListener();
-	if (!forceRefresh && inFlight.has(instanceId)) {
-		return inFlight.get(instanceId)!;
+	const pending = inFlight.get(instanceId);
+	if (!forceRefresh && pending) {
+		return pending;
 	}
 
 	setWorldsState("loading", instanceId, true);
@@ -274,8 +275,9 @@ export function listWorldDatapacks(
 ): Promise<WorldDatapackOverview> {
 	void ensureWorldDatapackEventListener();
 	const key = worldRefKey(world);
-	if (!forceRefresh && datapackInFlight.has(key)) {
-		return datapackInFlight.get(key)!;
+	const pending = datapackInFlight.get(key);
+	if (!forceRefresh && pending) {
+		return pending;
 	}
 
 	setWorldDatapacksState("loading", key, true);
@@ -314,8 +316,9 @@ export function checkWorldDatapackUpdates(
 ): Promise<WorldDatapackUpdateCheck> {
 	void ensureWorldDatapackEventListener();
 	const key = worldRefKey(world);
-	if (!forceRefresh && datapackUpdatesInFlight.has(key)) {
-		return datapackUpdatesInFlight.get(key)!;
+	const pending = datapackUpdatesInFlight.get(key);
+	if (!forceRefresh && pending) {
+		return pending;
 	}
 
 	setWorldDatapacksState("updatesLoading", key, true);
@@ -363,7 +366,7 @@ export async function toggleWorldDatapack(
 	});
 }
 
-export async function deleteWorldDatapack(
+export function deleteWorldDatapack(
 	world: WorldRef,
 	resourceId: number,
 ): Promise<WorldDatapackRemoval> {

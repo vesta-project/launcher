@@ -211,4 +211,5 @@ const SessionExpiredDialog: Component = () => {
 };
 
 export default SessionExpiredDialog;
+
 import WarningIcon from "@assets/icons/controls/warning.svg";

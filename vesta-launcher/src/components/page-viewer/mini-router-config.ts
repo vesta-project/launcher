@@ -56,7 +56,7 @@ const routeLoaders: Record<string, RouteLoader> = {
 	),
 };
 
-const routeComponent = (path: string) => lazy(() => routeLoaders[path]!());
+const routeComponent = (path: string) => lazy(() => routeLoaders[path]?.());
 
 const ChangelogPage = routeComponent("/changelog");
 const DebugTestPage = routeComponent("/debug-test");

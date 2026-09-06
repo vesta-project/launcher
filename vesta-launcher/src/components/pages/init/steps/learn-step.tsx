@@ -1,6 +1,6 @@
-import { createSignal, For, type JSX, Show } from "solid-js";
 import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";
 import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
+import { createSignal, For, type JSX, Show } from "solid-js";
 import styles from "../init.module.css";
 
 interface LearnStepProps {

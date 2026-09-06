@@ -1,6 +1,6 @@
+import CloseIcon from "@assets/icons/actions/close.svg";
 import type { PolymorphicProps } from "@kobalte/core";
 import * as DialogPrimitive from "@kobalte/core/dialog";
-import CloseIcon from "@assets/icons/actions/close.svg";
 import type { ClassProp } from "@ui/props";
 import clsx from "clsx";
 import {

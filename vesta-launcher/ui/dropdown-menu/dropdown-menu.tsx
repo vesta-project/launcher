@@ -1,7 +1,7 @@
-import type { PolymorphicProps } from "@kobalte/core";
-import * as DropdownMenuPrimitive from "@kobalte/core/dropdown-menu";
 import CheckIcon from "@assets/icons/controls/check.svg";
 import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
+import type { PolymorphicProps } from "@kobalte/core";
+import * as DropdownMenuPrimitive from "@kobalte/core/dropdown-menu";
 import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { type ComponentProps, splitProps, type ValidComponent } from "solid-js";

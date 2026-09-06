@@ -97,9 +97,18 @@
 }
 
 .recording .capture {
-	border-color: color-mix(in srgb, var(--accent-primary) 60%, var(--border-default));
-	background: color-mix(in srgb, var(--accent-primary) 10%, var(--surface-base));
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 12%, transparent);
+	border-color: color-mix(
+		in srgb,
+		var(--accent-primary) 60%,
+		var(--border-default)
+	);
+	background: color-mix(
+		in srgb,
+		var(--accent-primary) 10%,
+		var(--surface-base)
+	);
+	box-shadow: 0 0 0 3px
+		color-mix(in srgb, var(--accent-primary) 12%, transparent);
 	color: var(--text-primary);
 }
 

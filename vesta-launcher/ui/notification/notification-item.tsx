@@ -1,5 +1,5 @@
-import InfoIcon from "@assets/icons/status/bell.svg";
 import CloseIcon from "@assets/icons/actions/close.svg";
+import InfoIcon from "@assets/icons/status/bell.svg";
 import ErrorIcon from "@assets/icons/status/error.svg";
 import Button from "@ui/button/button";
 import { Progress } from "@ui/progress/progress";

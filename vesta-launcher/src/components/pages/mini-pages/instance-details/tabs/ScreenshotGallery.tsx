@@ -1,8 +1,8 @@
-import FolderIcon from "@assets/icons/content/folder.svg";
-import CopyIcon from "@assets/icons/content/link.svg";
-import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import TrashIcon from "@assets/icons/actions/delete.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
+import CopyIcon from "@assets/icons/content/link.svg";
 import ListIcon from "@assets/icons/content/list.svg";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";

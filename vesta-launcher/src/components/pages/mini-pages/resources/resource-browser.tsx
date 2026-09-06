@@ -1,11 +1,11 @@
-import { getSourceDescriptor } from "@resources/source-catalog";
-import ErrorIcon from "@assets/icons/status/error.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
 import ListIcon from "@assets/icons/content/list.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
+import ErrorIcon from "@assets/icons/status/error.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
+import { getSourceDescriptor } from "@resources/source-catalog";
 import { type Instance, instancesState } from "@stores/instances";
 import {
 	type ResourceProject,
@@ -90,7 +90,9 @@ const ResourceBrowser: Component<{
 	const activeSelectionProjectKey = createMemo(() => {
 		const project =
 			worldInstall()?.project ??
-			(isInstanceDialogOpen() ? resources.state.installRequest?.project : undefined);
+			(isInstanceDialogOpen()
+				? resources.state.installRequest?.project
+				: undefined);
 		return project ? projectKey(project) : null;
 	});
 
@@ -363,20 +365,23 @@ const ResourceBrowser: Component<{
 		});
 
 		if (debounceTimer) clearTimeout(debounceTimer);
-		debounceTimer = window.setTimeout(async () => {
-			resources.setOffset(0);
-			await resources.search();
+		debounceTimer = window.setTimeout(
+			async () => {
+				resources.setOffset(0);
+				await resources.search();
 
-			untrack(() => {
-				const currentRouterQuery = activeRouter()?.currentParams.get().query;
-				if (
-					resources.state.query === queryText &&
-					currentRouterQuery !== queryText
-				) {
-					activeRouter()?.updateQuery("query", queryText);
-				}
-			});
-		}, commitTrailing ? 0 : 500);
+				untrack(() => {
+					const currentRouterQuery = activeRouter()?.currentParams.get().query;
+					if (
+						resources.state.query === queryText &&
+						currentRouterQuery !== queryText
+					) {
+						activeRouter()?.updateQuery("query", queryText);
+					}
+				});
+			},
+			commitTrailing ? 0 : 500,
+		);
 	};
 
 	const handleSearchInput = (value: string) => {
@@ -696,10 +701,7 @@ const ResourceBrowser: Component<{
 											class={styles["empty-state-action"]}
 											onClick={() => {
 												resources.resetFilters();
-												activeRouter()?.updateQuery(
-													"selectedInstanceId",
-													null,
-												);
+												activeRouter()?.updateQuery("selectedInstanceId", null);
 												activeRouter()?.updateQuery("gameVersion", null);
 												activeRouter()?.updateQuery("loader", null);
 												activeRouter()?.updateQuery("categories", []);
@@ -722,14 +724,13 @@ const ResourceBrowser: Component<{
 								<For each={resources.state.results}>
 									{(project) => (
 										<ResourceCard
-										project={project}
-										viewMode={resources.state.viewMode}
-										router={activeRouter()}
-										installSelectionActive={
-											activeSelectionProjectKey() ===
-											projectKey(project)
-										}
-									/>
+											project={project}
+											viewMode={resources.state.viewMode}
+											router={activeRouter()}
+											installSelectionActive={
+												activeSelectionProjectKey() === projectKey(project)
+											}
+										/>
 									)}
 								</For>
 							</div>

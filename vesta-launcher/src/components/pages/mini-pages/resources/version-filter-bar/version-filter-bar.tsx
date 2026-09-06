@@ -1,7 +1,7 @@
-import clsx from "clsx";
-import CheckIcon from "@assets/icons/controls/check.svg";
 import CloseIcon from "@assets/icons/actions/close.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
+import CheckIcon from "@assets/icons/controls/check.svg";
+import clsx from "clsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import styles from "./version-filter-bar.module.css";
 
@@ -338,8 +338,8 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 					</Show>
 				</div>
 
-        <span class={styles["filter-count"]}>
-          {props.filteredCount} / {props.totalCount}
+				<span class={styles["filter-count"]}>
+					{props.filteredCount} / {props.totalCount}
 				</span>
 			</div>
 

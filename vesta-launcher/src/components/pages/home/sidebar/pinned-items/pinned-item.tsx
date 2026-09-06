@@ -18,8 +18,6 @@ import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
 import { generateVestaDeepLink } from "@utils/deep-links";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
-import { ariaShortcut, displayChord } from "~/keybindings/chords";
-import { keybindingFor } from "~/keybindings/store";
 import {
 	DEFAULT_ICONS,
 	getInstanceSlug,
@@ -28,6 +26,8 @@ import {
 } from "@utils/instances";
 import { clsx } from "clsx";
 import { createMemo, createSignal, onMount, Show } from "solid-js";
+import { ariaShortcut, displayChord } from "~/keybindings/chords";
+import { keybindingFor } from "~/keybindings/store";
 import { SidebarButton } from "../sidebar-buttons/sidebar-buttons";
 import styles from "./pinned-item.module.css";
 

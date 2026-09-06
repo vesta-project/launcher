@@ -123,11 +123,19 @@
 }
 
 .runtimeRowActive {
-	background: color-mix(in srgb, var(--primary-accent) 12%, var(--surface-raised));
+	background: color-mix(
+		in srgb,
+		var(--primary-accent) 12%,
+		var(--surface-raised)
+	);
 }
 
 .runtimeRowActive:hover {
-	background: color-mix(in srgb, var(--primary-accent) 16%, var(--surface-raised));
+	background: color-mix(
+		in srgb,
+		var(--primary-accent) 16%,
+		var(--surface-raised)
+	);
 }
 
 .radio {
@@ -206,7 +214,11 @@
 
 .sourceBadge[data-source="managed"] {
 	color: color-mix(in srgb, var(--primary-accent) 80%, var(--text-primary));
-	border-color: color-mix(in srgb, var(--primary-accent) 30%, var(--border-subtle));
+	border-color: color-mix(
+		in srgb,
+		var(--primary-accent) 30%,
+		var(--border-subtle)
+	);
 	background: color-mix(in srgb, var(--primary-accent) 12%, transparent);
 }
 

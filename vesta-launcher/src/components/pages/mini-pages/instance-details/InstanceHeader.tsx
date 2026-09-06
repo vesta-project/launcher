@@ -1,18 +1,18 @@
-import ErrorIcon from "@assets/icons/status/error.svg";
 import PinIcon from "@assets/icons/actions/pin.svg";
-import PinOffIcon from "@assets/icons/actions/unpin.svg";
 import PlayIcon from "@assets/icons/actions/play.svg";
+import RecoveryIcon from "@assets/icons/actions/reload.svg";
 import KillIcon from "@assets/icons/actions/stop.svg";
+import PinOffIcon from "@assets/icons/actions/unpin.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
-import RecoveryIcon from "@assets/icons/actions/reload.svg";
+import ErrorIcon from "@assets/icons/status/error.svg";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { formatRelativeTime } from "@utils/date";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
 import { Show } from "solid-js";
-import type { ReturnTypeOfPrimaryAction } from "./instance-header-types";
 import styles from "./InstanceHeader.module.css";
+import type { ReturnTypeOfPrimaryAction } from "./instance-header-types";
 
 interface InstanceHeaderProps {
 	instance: any;
@@ -28,7 +28,6 @@ interface InstanceHeaderProps {
 	onOpenVersion: () => void;
 	setRef: (element: HTMLElement) => void;
 }
-
 
 export function InstanceHeader(props: InstanceHeaderProps) {
 	const icon = () =>

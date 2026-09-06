@@ -126,12 +126,10 @@ export const cacheSize: [
 export const storageSnapshot: [
 	Resource<StorageSnapshot>,
 	ResourceActions<StorageSnapshot | undefined>,
-] = createResource<StorageSnapshot, boolean>(
-	settingsDataEnabled,
-	(enabled) =>
-		enabled
-			? fetchStorageSnapshot(false)
-			: Promise.resolve(emptyStorageSnapshot()),
+] = createResource<StorageSnapshot, boolean>(settingsDataEnabled, (enabled) =>
+	enabled
+		? fetchStorageSnapshot(false)
+		: Promise.resolve(emptyStorageSnapshot()),
 );
 
 // System memory

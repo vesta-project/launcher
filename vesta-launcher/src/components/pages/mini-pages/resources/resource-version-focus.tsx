@@ -1,19 +1,19 @@
-import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import FabricIcon from "@assets/branding/modloaders/fabric-logo.svg";
+import ForgeIcon from "@assets/branding/modloaders/forge-logo.svg";
+import NeoForgeIcon from "@assets/branding/modloaders/neoforge-logo.svg";
+import QuiltIcon from "@assets/branding/modloaders/quilt-logo.svg";
 import ClipboardIcon from "@assets/icons/actions/copy.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import OpenIcon from "@assets/icons/actions/external-link.svg";
 import CubeIcon from "@assets/icons/content/cube.svg";
 import DependenciesIcon from "@assets/icons/content/dependencies.svg";
-import DownloadIcon from "@assets/icons/actions/download.svg";
 import EnvironmentIcon from "@assets/icons/content/environment.svg";
-import FabricIcon from "@assets/branding/modloaders/fabric-logo.svg";
 import FileIcon from "@assets/icons/content/file.svg";
-import ForgeIcon from "@assets/branding/modloaders/forge-logo.svg";
 import HistoryIcon from "@assets/icons/content/history.svg";
-import NeoForgeIcon from "@assets/branding/modloaders/neoforge-logo.svg";
-import OpenIcon from "@assets/icons/actions/external-link.svg";
-import QuiltIcon from "@assets/branding/modloaders/quilt-logo.svg";
-import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import TagIcon from "@assets/icons/content/tag.svg";
-import TrashIcon from "@assets/icons/actions/delete.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
 import type {
 	ResourceDependency,
@@ -428,12 +428,16 @@ const DependencyGroup: Component<{
 			<For each={props.dependencies}>
 				{(dependency) => {
 					const project = () => props.projects.get(dependency.project_id);
+					const openProject = () => {
+						const selectedProject = project();
+						if (selectedProject) props.onOpenProject(selectedProject);
+					};
 					return (
 						<button
 							type="button"
 							class={styles["focus-dependency-row"]}
 							disabled={!project()}
-							onClick={() => project() && props.onOpenProject(project()!)}
+							onClick={openProject}
 						>
 							<Show
 								when={project()?.icon_url}

@@ -6,6 +6,12 @@ import {
 } from "@components/page-sidebar/page-sidebar";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import {
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	type SandboxPresetValue,
+	type SandboxWrapperNestingValue,
+} from "@components/settings/sandbox-policy-ui";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
@@ -17,7 +23,6 @@ import {
 	type ResourceProjectRef,
 	refreshInstanceResourceRows,
 } from "@stores/instance-resource-overview";
-import { instanceDefaults } from "@stores/settings";
 import {
 	clearRunning,
 	instancesState,
@@ -37,6 +42,7 @@ import {
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
+import { instanceDefaults } from "@stores/settings";
 import { useMinecraftVersions } from "@stores/versions";
 import type {
 	WorldDatapackSummary,
@@ -63,13 +69,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import { getCrashDetails, parseCrashDetails } from "@utils/crash-handler";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
-import {
-	normalizeSandboxPreset,
-	normalizeSandboxWrapperNesting,
-	type SandboxPresetValue,
-	type SandboxWrapperNestingValue,
-} from "@components/settings/sandbox-policy-ui";
-import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 import {
 	applyInstanceEditDraft,
 	type InstanceEditDirty,
@@ -101,7 +100,6 @@ import {
 	startModpackUpdate,
 	unlinkInstance,
 	updateInstance,
-	updateInstanceModpackVersion,
 } from "@utils/instances";
 import { createMediaQuery } from "@utils/media-query";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
@@ -117,6 +115,7 @@ import {
 	createRetainedTabLoader,
 } from "@utils/preloadable-lazy";
 import { requiresWorldTarget } from "@utils/resource-install-intent";
+import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -1732,8 +1731,7 @@ export default function InstanceDetails(
 					setUseGlobalSandbox(inst.useGlobalSandbox ?? true);
 					setSandboxPreset(
 						normalizeSandboxPreset(
-							inst.sandboxPreset ??
-								instanceDefaults().default_sandbox_preset,
+							inst.sandboxPreset ?? instanceDefaults().default_sandbox_preset,
 						),
 					);
 					setSandboxWrapperNesting(
@@ -2367,7 +2365,9 @@ export default function InstanceDetails(
 					currentVersion={info.row.original.current_version}
 					busy={busy()}
 					onMenuItemSelect={suppressRowNavigation}
-					onUpdate={handleUpdate}
+					onUpdate={async (resource, version) => {
+						await handleUpdate(resource, version);
+					}}
 					onDelete={async (resource) => {
 						if (
 							await dialogStore.confirm(
@@ -3150,9 +3150,7 @@ export default function InstanceDetails(
 														setSandboxWrapperNesting={setSandboxWrapperNesting}
 														sandboxExtraPaths={sandboxExtraPaths()}
 														setSandboxExtraPaths={setSandboxExtraPaths}
-														inheritedSandboxExtraPaths={
-															inheritedSandboxExtraPaths()
-														}
+														inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
 														setIsSandboxDirty={setIsSandboxDirty}
 														invoke={invoke}
 														showToast={showToast}

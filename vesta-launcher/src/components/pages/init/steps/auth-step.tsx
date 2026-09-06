@@ -283,5 +283,6 @@ function AuthStep(props: AuthStepProps) {
 }
 
 export default AuthStep;
+
 import MicrosoftIcon from "@assets/branding/microsoft.svg";
 import ConnectionLostIcon from "@assets/icons/status/connection-lost.svg";

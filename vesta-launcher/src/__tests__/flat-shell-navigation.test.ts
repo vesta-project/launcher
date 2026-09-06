@@ -376,7 +376,7 @@ describe("route-scoped reload", () => {
 		let reloads = 0;
 
 		router.navigate("/instance", { id: 1 });
-		router.registerReload(async () => {
+		router.registerReload(() => {
 			reloads += 1;
 			return Promise.resolve();
 		}, "/instance");
@@ -406,7 +406,7 @@ describe("route-scoped reload", () => {
 
 		expect(canReload()).toBe(false);
 
-		router.registerReload(async () => {}, "/instance");
+		router.registerReload(() => Promise.resolve(), "/instance");
 		expect(canReload()).toBe(true);
 
 		router.navigate("/config");
@@ -419,7 +419,7 @@ describe("route-scoped reload", () => {
 		const { router } = createTestRouter();
 		router.navigate("/instance", { id: 1 });
 
-		const dispose = router.registerReload(async () => {}, "/instance");
+		const dispose = router.registerReload(() => Promise.resolve(), "/instance");
 		expect(router.canReload()).toBe(true);
 
 		dispose();

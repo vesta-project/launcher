@@ -8,6 +8,7 @@ import {
 	javaOptions,
 	refreshJavas,
 } from "@stores/settings";
+import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
 import {
@@ -18,8 +19,7 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
-import { invoke } from "@tauri-apps/api/core";
-import { createMemo, createSignal, For, Show, type Component } from "solid-js";
+import { type Component, createMemo, createSignal, For, Show } from "solid-js";
 import pageStyles from "../settings-page.module.css";
 import styles from "./JavaTab.module.css";
 
@@ -180,11 +180,8 @@ const JavaVersionGroup: Component<{
 			(option) => option.version === props.requirement.major_version,
 		),
 	);
-	const active = createMemo(
-		(): JavaOption | undefined =>
-			options().find(
-				(option) => option.isActive && option.type !== "browse",
-			),
+	const active = createMemo((): JavaOption | undefined =>
+		options().find((option) => option.isActive && option.type !== "browse"),
 	);
 	const statusText = createMemo(() => {
 		const selected = active();
@@ -194,9 +191,8 @@ const JavaVersionGroup: Component<{
 	const runtimes = createMemo((): JavaOption[] =>
 		options().filter((option) => option.type !== "browse"),
 	);
-	const browse = createMemo(
-		(): JavaOption | undefined =>
-			options().find((option) => option.type === "browse"),
+	const browse = createMemo((): JavaOption | undefined =>
+		options().find((option) => option.type === "browse"),
 	);
 
 	return (

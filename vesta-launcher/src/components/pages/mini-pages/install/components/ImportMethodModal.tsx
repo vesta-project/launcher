@@ -1,9 +1,9 @@
-import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
-import CubeIcon from "@assets/icons/content/cube.svg";
-import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
-import LinkIcon from "@assets/icons/content/link.svg";
 import PrismLauncherIcon from "@assets/branding/launchers/prism-launcher.svg";
+import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
+import CubeIcon from "@assets/icons/content/cube.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
+import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
 import LauncherButton from "@ui/button/button";
 import {
 	Dialog,
@@ -13,12 +13,9 @@ import {
 	DialogTitle,
 } from "@ui/dialog/dialog";
 import type { LauncherKind } from "@utils/launcher-imports";
-import { createEffect, createSignal, For, Show, type JSX } from "solid-js";
+import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
 import { launcherOptions } from "../config/launcher-options";
-import {
-	isHttpUrl,
-	pickLocalModpackFile,
-} from "../install-entry-actions";
+import { isHttpUrl, pickLocalModpackFile } from "../install-entry-actions";
 import styles from "../install-page.module.css";
 
 export type ImportMethodModalStep = "methods" | "launchers";
@@ -202,9 +199,7 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 										</div>
 										<Show when={urlError()}>
 											{(err) => (
-												<p class={styles["import-method-url-error"]}>
-													{err()}
-												</p>
+												<p class={styles["import-method-url-error"]}>{err()}</p>
 											)}
 										</Show>
 									</div>

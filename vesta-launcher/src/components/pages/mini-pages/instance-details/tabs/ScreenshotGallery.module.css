@@ -164,7 +164,6 @@
 .empty {
 	display: flex;
 	align-items: center;
-	justify-content: center;
 	height: 56px;
 	justify-content: flex-start;
 	padding: 0 16px;

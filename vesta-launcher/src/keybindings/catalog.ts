@@ -4,7 +4,7 @@ import {
 	pageViewerOpen,
 	router,
 } from "@components/page-viewer/page-viewer";
-import { pinning, type PinnedPage } from "@stores/pinning";
+import { type PinnedPage, pinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -66,7 +66,7 @@ function lastPinned(): PinnedPage | undefined {
 
 function currentSearchTarget(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(
-		'[data-keybinding-search] input:not([disabled]), input[data-keybinding-search]:not([disabled])',
+		"[data-keybinding-search] input:not([disabled]), input[data-keybinding-search]:not([disabled])",
 	);
 }
 

@@ -88,13 +88,13 @@ export function getCachedInstanceResourceOverview(instanceId: number) {
 	return overviewCache.get(instanceId)?.value;
 }
 
-export async function loadInstanceResourceOverview(
+export function loadInstanceResourceOverview(
 	instanceId: number,
 	options: { force?: boolean } = {},
 ): Promise<InstanceResourceOverview> {
 	const cached = overviewCache.get(instanceId);
 	if (!options.force && cached) {
-		return cached.value;
+		return Promise.resolve(cached.value);
 	}
 
 	const pending = inFlight.get(instanceId);
@@ -164,9 +164,11 @@ export function refreshInstanceResourceRows(
 		let rows: InstalledResource[] = [];
 		do {
 			rowsTrailing.delete(instanceId);
-			rows = instanceOwnedResources(await invoke<InstalledResource[]>("get_installed_resources", {
-				instanceId,
-			}));
+			rows = instanceOwnedResources(
+				await invoke<InstalledResource[]>("get_installed_resources", {
+					instanceId,
+				}),
+			);
 			updateCachedInstanceResources(instanceId, rows);
 		} while (rowsTrailing.delete(instanceId));
 		return rows;

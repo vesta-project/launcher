@@ -54,9 +54,7 @@ export function requiresWorldTarget(
 	if (installType === "datapack") return true;
 	return (version?.files ?? []).some((file) => {
 		const role = normalizeArtifactRole(file.role);
-		return (
-			role === "datapack" || (role === "primary" && installType === "datapack")
-		);
+		return role === "datapack";
 	});
 }
 

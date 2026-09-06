@@ -107,10 +107,7 @@ describe("versionsSupportedByInstance", () => {
 		expect(
 			versionsSupportedByInstance(
 				project("datapack"),
-				[
-					...mixedVersions,
-					version("older-datapack", ["1.20.6"], ["datapack"]),
-				],
+				[...mixedVersions, version("older-datapack", ["1.20.6"], ["datapack"])],
 				instance("1.21", "fabric"),
 			).map((item) => item.id),
 		).toEqual(["datapack", "older-datapack"]);

@@ -2,8 +2,6 @@
 
 import StandalonePageViewer from "@components/page-viewer/standalone-page-viewer";
 import { initTheme } from "@components/theming";
-import { installKeybindingDispatcher } from "~/keybindings/dispatcher";
-import { initializeKeybindings } from "~/keybindings/store";
 import {
 	applyCommonConfigUpdates,
 	onConfigUpdate,
@@ -11,6 +9,8 @@ import {
 	unsubscribeFromConfigUpdates,
 } from "@utils/config-sync";
 import { type MountableElement, render } from "solid-js/web";
+import { installKeybindingDispatcher } from "~/keybindings/dispatcher";
+import { initializeKeybindings } from "~/keybindings/store";
 import "./reset.css";
 import "./styles.css";
 

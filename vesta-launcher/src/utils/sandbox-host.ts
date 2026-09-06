@@ -70,28 +70,28 @@ function fetchSandboxHostSupportFromBackend(): Promise<SandboxHostSupport> {
 	return supportPromise;
 }
 
-export async function fetchSandboxHostSupport(): Promise<SandboxHostSupport> {
+export function fetchSandboxHostSupport(): Promise<SandboxHostSupport> {
 	if (!hasTauriRuntime()) {
-		return nonTauriSandboxHostSupport();
+		return Promise.resolve(nonTauriSandboxHostSupport());
 	}
 
 	if (cachedSupport) {
-		return cachedSupport;
+		return Promise.resolve(cachedSupport);
 	}
 
 	return fetchSandboxHostSupportFromBackend();
 }
 
-export async function fetchSandboxHostSupportForce(): Promise<SandboxHostSupport> {
+export function fetchSandboxHostSupportForce(): Promise<SandboxHostSupport> {
 	if (!hasTauriRuntime()) {
-		return nonTauriSandboxHostSupport();
+		return Promise.resolve(nonTauriSandboxHostSupport());
 	}
 
 	invalidateSandboxHostSupportCache();
 	return fetchSandboxHostSupportFromBackend();
 }
 
-export async function refreshSandboxHostSupport(): Promise<SandboxHostSupport> {
+export function refreshSandboxHostSupport(): Promise<SandboxHostSupport> {
 	return fetchSandboxHostSupportForce();
 }
 

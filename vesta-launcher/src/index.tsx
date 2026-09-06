@@ -1,9 +1,7 @@
 /* @refresh reload */
 
-import { installKeybindingDispatcher } from "~/keybindings/dispatcher";
-import { initializeKeybindings } from "~/keybindings/store";
-import { initSentryMonitoring } from "@utils/sentry";
 import { scheduleCommonPagePreloads } from "@utils/page-preload";
+import { initSentryMonitoring } from "@utils/sentry";
 import {
 	applyStartupRouteTarget,
 	bootstrapStartup,
@@ -11,6 +9,8 @@ import {
 import { presentCurrentWindowAfterPaint } from "@utils/window-readiness";
 import { createSignal, Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
+import { installKeybindingDispatcher } from "~/keybindings/dispatcher";
+import { initializeKeybindings } from "~/keybindings/store";
 import App from "./app";
 import "./reset.css";
 import "./styles.css";

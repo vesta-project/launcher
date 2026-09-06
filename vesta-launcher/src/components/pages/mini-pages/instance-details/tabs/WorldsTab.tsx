@@ -1,15 +1,15 @@
+import CopyIcon from "@assets/icons/actions/copy.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import DuplicateIcon from "@assets/icons/actions/duplicate.svg";
+import MoveIcon from "@assets/icons/actions/move.svg";
 import ReloadIcon from "@assets/icons/actions/reload.svg";
-import TimerIcon from "@assets/icons/content/timer.svg";
-import FolderIcon from "@assets/icons/content/folder.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
+import DatapackIcon from "@assets/icons/content/layers.svg";
 import ListIcon from "@assets/icons/content/list.svg";
 import StorageIcon from "@assets/icons/content/storage.svg";
-import DatapackIcon from "@assets/icons/content/layers.svg";
-import MoveIcon from "@assets/icons/actions/move.svg";
-import CopyIcon from "@assets/icons/actions/copy.svg";
-import DuplicateIcon from "@assets/icons/actions/duplicate.svg";
-import TrashIcon from "@assets/icons/actions/delete.svg";
+import TimerIcon from "@assets/icons/content/timer.svg";
 import InstanceSelectionDialog, {
 	type InstanceSelectionOption,
 } from "@components/instances/InstanceSelectionDialog";
@@ -252,9 +252,7 @@ export const WorldCard: Component<{
 										<DropdownMenuItem
 											disabled={action.disabled}
 											class={
-												action.destructive
-													? styles["delete-action"]
-													: undefined
+												action.destructive ? styles["delete-action"] : undefined
 											}
 											onSelect={action.run}
 										>
@@ -276,9 +274,7 @@ export const WorldCard: Component<{
 							</Show>
 							<ContextMenuItem
 								disabled={action.disabled}
-								class={
-									action.destructive ? styles["delete-action"] : undefined
-								}
+								class={action.destructive ? styles["delete-action"] : undefined}
 								onSelect={action.run}
 							>
 								<ActionLabel action={action} />

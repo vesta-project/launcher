@@ -1,11 +1,11 @@
-import ReloadIcon from "@assets/icons/actions/reload.svg";
 import PlusIcon from "@assets/icons/actions/add.svg";
-import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
-import SearchIcon from "@assets/icons/content/search.svg";
-import TrashIcon from "@assets/icons/actions/delete.svg";
 import CloseIcon from "@assets/icons/actions/close.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
 import DownloadIcon from "@assets/icons/actions/download.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
+import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { flexRender } from "@tanstack/solid-table";
 import { createVirtualizer } from "@tanstack/solid-virtual";
 import { ResourceAvatar } from "@ui/avatar";

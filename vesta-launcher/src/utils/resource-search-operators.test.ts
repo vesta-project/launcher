@@ -51,9 +51,7 @@ describe("parseSearchFilterOperators", () => {
 	});
 
 	it("accepts version: as an alias for mc:", () => {
-		expect(
-			parseSearchFilterOperators("version:1.21.1 sodium"),
-		).toEqual({
+		expect(parseSearchFilterOperators("version:1.21.1 sodium")).toEqual({
 			remainder: "sodium",
 			filters: { gameVersion: "1.21.1" },
 			didExtract: true,

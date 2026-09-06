@@ -1,7 +1,7 @@
-import { SettingsCard, SettingsField } from "@components/settings";
-import SearchIcon from "@assets/icons/content/search.svg";
-import ListIcon from "@assets/icons/content/list.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
+import ListIcon from "@assets/icons/content/list.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
+import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	activeThemeDefinition,
@@ -279,9 +279,7 @@ export function AppearanceSettingsTab() {
 								value={colorMode()}
 								onChange={(mode) => {
 									if (mode) {
-										void handleColorModeChange(
-											mode as ColorModePreference,
-										);
+										void handleColorModeChange(mode as ColorModePreference);
 									}
 								}}
 							>
