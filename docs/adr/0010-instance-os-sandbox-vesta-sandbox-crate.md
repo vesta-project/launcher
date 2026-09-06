@@ -231,6 +231,13 @@ both Modules and pull unused OS code into every build.
   broker ACL replacement, ownership, termination, process creation, handle
   duplication, memory-injection rights, and access to an unsandboxed same-user
   supervisor.
+- The release sidecar uses the Windows GUI subsystem and the restricted target
+  starts with `STARTF_USESHOWWINDOW`/`SW_HIDE`. Redirected stdio remains
+  attached to the launcher relay without flashing a terminal window.
+  `CREATE_NO_WINDOW` is intentionally not used for the restricted target: in
+  combination with AppContainer and extended process attributes it makes
+  managed Java 25 fail during DLL initialization with
+  `STATUS_DLL_INIT_FAILED` (`0xC0000142`).
 - The launcher-owned exit handler stays outside AppContainer. `piston-lib`
   passes it a structured, repeated argument vector for the sandbox prefix; the
   handler prepends that exact vector independently to the pre-hook shell, game

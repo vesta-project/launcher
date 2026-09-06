@@ -787,6 +787,7 @@ pub async fn kill_instance(instance_id: &str) -> Result<String> {
             log::warn!("Process appears stalled; force killing");
             let output = std::process::Command::new("taskkill")
                 .args(["/PID", &instance.pid.to_string(), "/T", "/F"])
+                .suppress_console()
                 .output()
                 .context("Failed to execute taskkill")?;
 

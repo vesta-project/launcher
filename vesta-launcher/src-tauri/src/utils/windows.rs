@@ -4,6 +4,9 @@ use std::sync::Mutex;
 use tauri::webview::Color;
 use tauri::{Emitter, Manager};
 
+#[cfg(target_os = "windows")]
+use piston_lib::utils::process::PistonCommandExt;
+
 const IDLE_MINI_WINDOW_CAPACITY: usize = 2;
 
 #[derive(Default)]
@@ -241,7 +244,8 @@ pub fn set_windows_gpu_preference(executable_path: &std::path::Path) -> Result<(
         path_str
     );
 
-    let output = std::process::Command::new("reg")
+    let mut command = std::process::Command::new("reg");
+    command
         .args([
             "add",
             "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences",
@@ -253,7 +257,8 @@ pub fn set_windows_gpu_preference(executable_path: &std::path::Path) -> Result<(
             "GpuPreference=2;",
             "/f",
         ])
-        .output()?;
+        .suppress_console();
+    let output = command.output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

@@ -1,3 +1,7 @@
+// The release sidecar is launched from Vesta's GUI process and must never
+// allocate its own console while relaying redirected standard I/O.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use std::env;
 use std::process;
 

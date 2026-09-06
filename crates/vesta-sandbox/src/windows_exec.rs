@@ -1004,7 +1004,8 @@ fn run_restricted_target(args: &[String]) -> Result<u32, String> {
         CreateProcessW, GetExitCodeProcess, InitializeProcThreadAttributeList,
         UpdateProcThreadAttribute, WaitForSingleObject, EXTENDED_STARTUPINFO_PRESENT, INFINITE,
         PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY,
-        PROC_THREAD_ATTRIBUTE_HANDLE_LIST, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+        PROC_THREAD_ATTRIBUTE_HANDLE_LIST, STARTF_USESHOWWINDOW, STARTF_USESTDHANDLES,
+        STARTUPINFOEXW,
     };
     use windows_sys::Win32::System::WindowsProgramming::PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
 
@@ -1126,7 +1127,13 @@ fn run_restricted_target(args: &[String]) -> Result<u32, String> {
     let mut command_line: Vec<u16> = command_line.encode_utf16().chain(Some(0)).collect();
     let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
     startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
-    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    // CREATE_NO_WINDOW makes managed Java 25 fail during DLL initialization
+    // when combined with AppContainer security capabilities and the extended
+    // startup attributes below (STATUS_DLL_INIT_FAILED). Ask Windows to keep
+    // any console host hidden instead; this preserves Java initialization and
+    // the redirected standard handles without flashing a terminal window.
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    startup.StartupInfo.wShowWindow = 0; // SW_HIDE
     startup.StartupInfo.hStdInput = handles[0];
     startup.StartupInfo.hStdOutput = handles[1];
     startup.StartupInfo.hStdError = handles[2];

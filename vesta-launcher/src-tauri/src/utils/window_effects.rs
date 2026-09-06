@@ -19,11 +19,20 @@ struct WindowsVersionInfo {
 pub fn get_window_effect_capabilities() -> WindowEffectCapabilities {
     #[cfg(target_os = "windows")]
     {
-        let raw_version = sysinfo::System::long_os_version().or_else(sysinfo::System::os_version);
-        let parsed = raw_version
-            .as_deref()
-            .and_then(parse_windows_version)
-            .or_else(detect_windows_version_from_cmd);
+        // Query Windows directly instead of spawning `cmd /C ver`. A release Tauri
+        // process has no console, so every console child can otherwise become a
+        // visible Windows Terminal window. This function runs once per webview,
+        // including the two prewarmed mini windows during startup.
+        let detected_version = winver::WindowsVersion::detect();
+        let raw_version = sysinfo::System::long_os_version()
+            .or_else(sysinfo::System::os_version)
+            .or_else(|| detected_version.as_ref().map(ToString::to_string));
+        let parsed = detected_version
+            .map(|version| WindowsVersionInfo {
+                major: version.major,
+                build: version.build,
+            })
+            .or_else(|| raw_version.as_deref().and_then(parse_windows_version));
 
         let mut effects = vec![
             "none".to_string(),
@@ -141,21 +150,6 @@ fn parse_windows_version(raw: &str) -> Option<WindowsVersionInfo> {
     } else {
         None
     }
-}
-
-#[cfg(target_os = "windows")]
-fn detect_windows_version_from_cmd() -> Option<WindowsVersionInfo> {
-    let output = std::process::Command::new("cmd")
-        .args(["/C", "ver"])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let raw = String::from_utf8(output.stdout).ok()?;
-    parse_windows_version(raw.trim())
 }
 
 #[cfg(target_os = "macos")]
