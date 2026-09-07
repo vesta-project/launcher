@@ -1,6 +1,7 @@
 use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
+#[cfg(not(target_os = "windows"))]
 use tauri::webview::Color;
 use tauri::{Emitter, Manager};
 
@@ -118,8 +119,10 @@ fn build_mini_window(
     .disable_drag_drop_handler()
     .visible(false)
     .transparent(true)
-    .decorations(false)
-    .background_color(Color(20, 20, 20, 255));
+    .decorations(false);
+
+    #[cfg(not(target_os = "windows"))]
+    let win_builder = win_builder.background_color(Color(20, 20, 20, 255));
 
     #[cfg(target_os = "macos")]
     let win_builder = win_builder

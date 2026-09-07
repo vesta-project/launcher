@@ -16,6 +16,27 @@ struct WindowsVersionInfo {
     build: u32,
 }
 
+#[cfg(target_os = "windows")]
+fn windows_supported_effects(version: Option<WindowsVersionInfo>) -> Vec<String> {
+    let mut effects = vec!["none".to_string(), "transparent".to_string()];
+
+    if let Some(version) = version {
+        // window-vibrancy uses the legacy Blur Behind path on Windows 7/10
+        // and early Windows 11. It is no longer supported from build 22621.
+        if version.major < 10 || version.build < 22621 {
+            effects.push("blur".to_string());
+        }
+        if version.major >= 10 {
+            effects.push("acrylic".to_string());
+            if version.build >= 22000 {
+                effects.push("mica".to_string());
+            }
+        }
+    }
+
+    effects
+}
+
 pub fn get_window_effect_capabilities() -> WindowEffectCapabilities {
     #[cfg(target_os = "windows")]
     {
@@ -34,20 +55,7 @@ pub fn get_window_effect_capabilities() -> WindowEffectCapabilities {
             })
             .or_else(|| raw_version.as_deref().and_then(parse_windows_version));
 
-        let mut effects = vec![
-            "none".to_string(),
-            "transparent".to_string(),
-            "blur".to_string(),
-        ];
-
-        if let Some(version) = parsed {
-            if version.major >= 10 {
-                effects.push("acrylic".to_string());
-                if version.build >= 22000 {
-                    effects.push("mica".to_string());
-                }
-            }
-        }
+        let effects = windows_supported_effects(parsed);
 
         let default_effect = if effects.iter().any(|e| e == "mica") {
             "mica"
@@ -173,4 +181,38 @@ fn macos_version_from_sw_vers() -> Option<String> {
     String::from_utf8(output.stdout)
         .ok()
         .map(|v| v.trim().to_string())
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod windows_tests {
+    use super::*;
+
+    #[test]
+    fn blur_support_stops_at_windows_11_build_22621() {
+        let early_windows_11 = windows_supported_effects(Some(WindowsVersionInfo {
+            major: 10,
+            build: 22000,
+        }));
+        assert!(early_windows_11.iter().any(|effect| effect == "blur"));
+        assert!(early_windows_11.iter().any(|effect| effect == "mica"));
+
+        let current_windows_11 = windows_supported_effects(Some(WindowsVersionInfo {
+            major: 10,
+            build: 26100,
+        }));
+        assert!(!current_windows_11.iter().any(|effect| effect == "blur"));
+        assert!(current_windows_11.iter().any(|effect| effect == "mica"));
+        assert!(current_windows_11.iter().any(|effect| effect == "acrylic"));
+    }
+
+    #[test]
+    fn windows_10_keeps_blur_and_acrylic() {
+        let effects = windows_supported_effects(Some(WindowsVersionInfo {
+            major: 10,
+            build: 19045,
+        }));
+        assert!(effects.iter().any(|effect| effect == "blur"));
+        assert!(effects.iter().any(|effect| effect == "acrylic"));
+        assert!(!effects.iter().any(|effect| effect == "mica"));
+    }
 }

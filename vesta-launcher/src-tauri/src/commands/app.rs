@@ -3,6 +3,7 @@ use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
 use crate::utils::storage::{self, StorageSnapshot};
+use tauri::webview::Color;
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -615,8 +616,18 @@ pub fn present_window_when_ready(
 #[tauri::command]
 pub fn clear_window_startup_background(window: tauri::WebviewWindow) -> Result<(), String> {
     window
+        .as_ref()
+        .window()
         .set_background_color(None)
-        .map_err(|e| format!("Failed to clear startup background: {}", e))
+        .map_err(|e| format!("Failed to clear native startup background: {}", e))?;
+
+    // Tauri/Wry maps WebviewWindow::set_background_color(None) to an opaque
+    // white webview background. Keep webview transparent so native materials
+    // remain visible after startup fallback is removed.
+    window
+        .as_ref()
+        .set_background_color(Some(Color(0, 0, 0, 0)))
+        .map_err(|e| format!("Failed to clear webview startup background: {}", e))
 }
 
 pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), String> {
@@ -980,6 +991,13 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
     let (active_effect, was_coerced) =
         crate::utils::window_effects::normalize_window_effect(&effect, &capabilities);
 
+    log::info!(
+        "Applying window effect: label='{}', requested='{}', active='{}'",
+        window.label(),
+        effect,
+        active_effect
+    );
+
     if was_coerced {
         notify_unsupported_window_effect(
             app_handle,
@@ -995,6 +1013,28 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
         use window_vibrancy::{
             apply_acrylic, apply_blur, apply_mica, clear_acrylic, clear_blur, clear_mica,
         };
+        use windows_sys::Win32::{
+            Graphics::Dwm::DwmExtendFrameIntoClientArea, UI::Controls::MARGINS,
+        };
+
+        // Acrylic's transient backdrop only paints through WebView2 when the DWM frame
+        // covers the client area. Reset the margins for every other effect so switching
+        // back to Mica restores its normal system-backdrop composition.
+        let frame_margin = if active_effect == "acrylic" { -1 } else { 0 };
+        let margins = MARGINS {
+            cxLeftWidth: frame_margin,
+            cxRightWidth: frame_margin,
+            cyTopHeight: frame_margin,
+            cyBottomHeight: frame_margin,
+        };
+        let hwnd = window.hwnd().map_err(|err| err.to_string())?.0;
+        let frame_result = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
+        if frame_result < 0 {
+            return Err(format!(
+                "Failed to configure DWM frame for window effect '{}': HRESULT {:#010x}",
+                active_effect, frame_result as u32
+            ));
+        }
 
         if let Err(err) = clear_blur(&window) {
             log::warn!("Failed to clear blur window effect: {}", err);
@@ -1066,6 +1106,11 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
         }
     }
 
+    log::info!(
+        "Window effect applied: label='{}', active='{}'",
+        window.label(),
+        active_effect
+    );
     Ok(())
 }
 

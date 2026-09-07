@@ -843,12 +843,13 @@ button {
 	cursor: text;
 }
 
-/* OS effects can fully expose the native material behind the webview */
+/* Keep the configured app tint over native materials. Without this base layer,
+   switching effects changes the apparent opacity of every translucent panel. */
 :root[data-window-effect]:not([data-window-effect="none"]):not(
 		[data-window-effect=""]
 	)
 	#app {
-	background-color: transparent !important;
+	background-color: var(--app-background-tint-with-opacity) !important;
 	background-image: var(--background-image) !important;
 }
 

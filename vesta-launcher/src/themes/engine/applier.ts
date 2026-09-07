@@ -20,6 +20,64 @@ export type ColorModePreference = "system" | "light" | "dark";
 
 let colorModePreference: ColorModePreference = "system";
 
+// Native effects are stateful window resources. Keep requests serialized and
+// acknowledge them before exposing the material through CSS.
+let nativeEffectApplied: string | null = null;
+let nativeEffectDesired = "none";
+let nativeEffectWorker: Promise<void> | null = null;
+
+function hasTauriRuntime(): boolean {
+	return Boolean((window as any).__TAURI_INTERNALS__);
+}
+
+async function drainNativeEffectRequests(): Promise<void> {
+	try {
+		while (nativeEffectApplied !== nativeEffectDesired) {
+			const requested = nativeEffectDesired;
+			try {
+				await invoke("set_window_effect", { effect: requested });
+				// Even a superseded success changed the native window.
+				nativeEffectApplied = requested;
+			} catch (error) {
+				console.error(`Failed to apply window effect "${requested}":`, error);
+				// Clearing/applying may have partially changed the native state.
+				// Render a solid fallback; retry only on a later request.
+				nativeEffectApplied = null;
+				if (nativeEffectDesired === requested) break;
+			}
+		}
+	} finally {
+		reflectNativeEffect(
+			document.documentElement,
+			nativeEffectApplied ?? "none",
+		);
+		// Release in this same continuation, before callers can enqueue again.
+		nativeEffectWorker = null;
+	}
+}
+
+function requestNativeEffect(effect: string): Promise<void> {
+	nativeEffectDesired = effect;
+	if (!nativeEffectWorker) {
+		// Assign the worker before draining, including an already-satisfied request.
+		nativeEffectWorker = Promise.resolve().then(drainNativeEffectRequests);
+	}
+	return waitForNativeEffectSettled();
+}
+
+export async function waitForNativeEffectSettled(): Promise<void> {
+	while (nativeEffectWorker) await nativeEffectWorker;
+}
+
+function reflectNativeEffect(root: HTMLElement, effect: string): void {
+	root.setAttribute("data-window-effect", effect);
+	if (effect === "none" || effect === "") {
+		root.style.setProperty("--background-color", "var(--app-background-tint)");
+	} else {
+		root.style.removeProperty("--background-color");
+	}
+}
+
 export function normalizeColorModePreference(
 	value: unknown,
 ): ColorModePreference {
@@ -158,6 +216,10 @@ export function applyTheme(
 	const effectToSet = normalizeWindowEffectForCurrentOS(
 		theme.windowEffect || "none",
 	);
+	const nativeRuntime = hasTauriRuntime();
+	const effectiveEffect = nativeRuntime
+		? (nativeEffectApplied ?? "none")
+		: effectToSet;
 	const styleMode = theme.style ?? "glass";
 	const nextThemeVarKeys = Object.keys(vars).filter((key) =>
 		key.startsWith("--theme-var-"),
@@ -214,7 +276,10 @@ export function applyTheme(
 		currentSecondaryHue === vars["--hue-secondary"] &&
 		numMatch(currentBackgroundOpacity, vars["--background-opacity"]) &&
 		numMatch(currentOpacity, vars["--effect-opacity"]) &&
-		currentWindowEffect === effectToSet &&
+		currentWindowEffect === effectiveEffect &&
+		(!nativeRuntime ||
+			(nativeEffectApplied === effectToSet &&
+				nativeEffectDesired === effectToSet)) &&
 		currentBorderWidth === vars["--border-width-subtle"]
 	) {
 		const anyVarChanged = nextThemeVarKeys.some((key) => {
@@ -250,13 +315,18 @@ export function applyTheme(
 	root.setAttribute("data-theme-var-keys", nextThemeVarKeys.join(","));
 	applyCustomCss(theme);
 
-	applyBackgroundState(theme, effectToSet, root, style);
+	applyBackgroundState(theme, effectiveEffect, root, style);
 
-	if (currentWindowEffect !== effectToSet || isFirstApply) {
-		root.setAttribute("data-window-effect", effectToSet);
-		if ((window as any).__TAURI_INTERNALS__) {
-			invoke("set_window_effect", { effect: effectToSet }).catch(console.error);
+	if (nativeRuntime) {
+		reflectNativeEffect(root, effectiveEffect);
+		if (
+			nativeEffectApplied !== effectToSet ||
+			nativeEffectDesired !== effectToSet
+		) {
+			void requestNativeEffect(effectToSet);
 		}
+	} else if (currentWindowEffect !== effectToSet || isFirstApply) {
+		root.setAttribute("data-window-effect", effectToSet);
 	}
 
 	// Apply style mode attribute
