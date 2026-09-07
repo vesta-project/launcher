@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::tasks::manager::{Task, TaskContext};
+use tauri::Manager;
 
 use crate::sync::safeguards;
 
@@ -53,70 +54,94 @@ impl Task for UpdateModpackTask {
 
         Box::pin(async move {
             // The command already marked this instance as updating. Construct
-            // the guard before any fallible task setup so every failure restores
-            // the last playable installation before TaskManager publishes its
-            // persistent failure notification.
+            // the guard before pausing the watcher or any other fallible task
+            // setup so every failure restores the last playable installation
+            // before TaskManager publishes its persistent failure notification.
             let mut status_guard = crate::modpack::update::StatusGuard::new(
                 app_handle.clone(),
                 instance_id,
                 game_dir.clone(),
             );
-
-            // ─── Load instance ───────────────────────────────────────────
-            let mut conn =
-                crate::utils::db::get_vesta_conn().map_err(|e| format!("DB error: {}", e))?;
-            use crate::schema::instance::dsl::*;
-            use diesel::prelude::*;
-
-            let inst: crate::models::instance::Instance = instance
-                .find(instance_id)
-                .first(&mut conn)
-                .map_err(|e| format!("Instance not found: {}", e))?;
-
-            // ─── Safeguard: ensure Minecraft is not running ──────────────
-            ctx.update_description("Checking that Minecraft is not running...".to_string());
-            if let Err(e) = safeguards::check_instance_not_running(&game_dir) {
-                return Err(format!("{}", e));
-            }
-
-            // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
-            let mut plan =
-                crate::modpack::engine::plan(&app_handle, &inst, &game_dir, &new_version_id, &ctx)
-                    .await?;
-
-            let total_actions = plan.actions.actionable_count();
-            let already_up_to_date = plan.actions.is_empty() && total_actions == 0;
-            log::info!(
-                "[UpdateModpackTask] Action plan: {} actions, {} protected, {} world collisions, {} corrupted",
-                total_actions,
-                plan.actions.protected_count,
-                plan.actions.world_collisions.len(),
-                plan.actions.corrupted_configs.len(),
-            );
-
-            let outcome =
-                crate::modpack::engine::apply(&app_handle, &game_dir, &mut plan, &ctx).await?;
-            let skipped_deletions = outcome.skipped_deletions;
-            let preserved_worlds = outcome.preserved_worlds;
-
-            ctx.update_full(
-                90,
-                "Saving manifest and finalizing...".to_string(),
-                Some(5),
-                Some(6),
-            );
-            let finished = match crate::modpack::update::finish(
-                &app_handle,
-                &ctx,
-                &inst,
-                &plan.old_manifest,
-                &plan.new_manifest,
-                &new_version_id,
-                &game_dir,
-                &plan.zip_path,
-            )
-            .await
+            let watcher_handle = app_handle.clone();
+            let resume_game_dir = game_dir.clone();
+            if let Err(pause_error) = watcher_handle
+                .state::<crate::resources::watcher::ResourceWatcher>()
+                .unwatch_instance(instance_id)
+                .await
             {
+                let recovery = status_guard.recover_failure();
+                return match recovery {
+                    Ok(_) => Err(format!(
+                        "Failed to pause resource watcher: {}",
+                        pause_error
+                    )),
+                    Err(recovery_error) => Err(format!(
+                        "Failed to pause resource watcher: {}. Automatic recovery is incomplete: {}.",
+                        pause_error, recovery_error
+                    )),
+                };
+            }
+            let update_result = async move {
+                // ─── Load instance ───────────────────────────────────────────
+                let mut conn =
+                    crate::utils::db::get_vesta_conn().map_err(|e| format!("DB error: {}", e))?;
+                use crate::schema::instance::dsl::*;
+                use diesel::prelude::*;
+
+                let inst: crate::models::instance::Instance = instance
+                    .find(instance_id)
+                    .first(&mut conn)
+                    .map_err(|e| format!("Instance not found: {}", e))?;
+
+                // ─── Safeguard: ensure Minecraft is not running ──────────────
+                ctx.update_description("Checking that Minecraft is not running...".to_string());
+                if let Err(e) = safeguards::check_instance_not_running(&game_dir) {
+                    return Err(format!("{}", e));
+                }
+
+                // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
+                let mut plan = crate::modpack::engine::plan(
+                    &app_handle,
+                    &inst,
+                    &game_dir,
+                    &new_version_id,
+                    &ctx,
+                )
+                .await?;
+
+                let total_actions = plan.actions.actionable_count();
+                let already_up_to_date = plan.actions.is_empty() && total_actions == 0;
+                log::info!(
+                    "[UpdateModpackTask] Action plan: {} actions, {} protected, {} world collisions, {} corrupted",
+                    total_actions,
+                    plan.actions.protected_count,
+                    plan.actions.world_collisions.len(),
+                    plan.actions.corrupted_configs.len(),
+                );
+
+                let outcome =
+                    crate::modpack::engine::apply(&app_handle, &game_dir, &mut plan, &ctx).await?;
+                let skipped_deletions = outcome.skipped_deletions;
+                let preserved_worlds = outcome.preserved_worlds;
+
+                ctx.update_full(
+                    90,
+                    "Saving manifest and finalizing...".to_string(),
+                    Some(5),
+                    Some(6),
+                );
+                let finished = match crate::modpack::update::finish(
+                    &app_handle,
+                    &ctx,
+                    &inst,
+                    &plan.old_manifest,
+                    &plan.new_manifest,
+                    &new_version_id,
+                    &game_dir,
+                    &plan.zip_path,
+                )
+                .await
+                {
                 Ok(finished) => finished,
                 Err(update_error) => {
                     let file_rollback = outcome.rollback();
@@ -135,9 +160,9 @@ impl Task for UpdateModpackTask {
                         )),
                     };
                 }
-            };
-            if let Err(finalize_error) = outcome.finalize() {
-                return match status_guard.recover_failure() {
+                };
+                if let Err(finalize_error) = outcome.finalize() {
+                    return match status_guard.recover_failure() {
                     Ok(_) => Err(format!(
                         "Failed to commit update recovery state: {}. The previous instance was restored.",
                         finalize_error
@@ -146,73 +171,97 @@ impl Task for UpdateModpackTask {
                         "Failed to commit update recovery state: {}. Automatic recovery is incomplete: {}.",
                         finalize_error, recovery_error
                     )),
-                };
-            }
-            if let Err(reconciliation_error) =
-                finished.publish_local_facts(&app_handle, instance_id)
-            {
+                    };
+                }
+                if let Err(reconciliation_error) =
+                    finished.publish_local_facts(&app_handle, instance_id)
+                {
                 // Files and Instance metadata are already durably committed. Do not
                 // roll them back solely because derived Ledger publication failed;
                 // the next Resources load safely rebuilds these local facts.
-                status_guard.mark_success();
-                return Err(format!(
-                    "The modpack update was committed, but its resource list could not be reconciled: {}. Reopen Resources to retry.",
-                    reconciliation_error
-                ));
-            }
-            if let Err(clear_error) = crate::modpack::update::clear_pending(&game_dir) {
+                    status_guard.mark_success();
+                    return Err(format!(
+                        "The modpack update was committed, but its resource list could not be reconciled: {}. Reopen Resources to retry.",
+                        reconciliation_error
+                    ));
+                }
+                if let Err(clear_error) = crate::modpack::update::clear_pending(&game_dir) {
                 // The update is durably committed. Leave both markers in place
                 // so startup can retry cleanup without rolling back new files.
-                log::warn!(
-                    "[UpdateModpackTask] Pending update cleanup deferred for instance {}: {}",
-                    instance_id,
-                    clear_error
-                );
+                    log::warn!(
+                        "[UpdateModpackTask] Pending update cleanup deferred for instance {}: {}",
+                        instance_id,
+                        clear_error
+                    );
+                    status_guard.mark_success();
+                    finished.publish(&app_handle, instance_id);
+                    return Ok(());
+                }
+                if let Err(cleanup_error) =
+                    crate::sync::staging::RollbackSnapshot::cleanup_committed(&game_dir)
+                {
+                    log::warn!(
+                        "[UpdateModpackTask] Committed rollback cleanup deferred for instance {}: {}",
+                        instance_id,
+                        cleanup_error
+                    );
+                }
                 status_guard.mark_success();
                 finished.publish(&app_handle, instance_id);
-                return Ok(());
-            }
-            if let Err(cleanup_error) =
-                crate::sync::staging::RollbackSnapshot::cleanup_committed(&game_dir)
-            {
-                log::warn!(
-                    "[UpdateModpackTask] Committed rollback cleanup deferred for instance {}: {}",
-                    instance_id,
-                    cleanup_error
-                );
-            }
-            status_guard.mark_success();
-            finished.publish(&app_handle, instance_id);
 
-            let skipped_msg = if skipped_deletions > 0 {
-                format!(" ({} user-modified files were kept)", skipped_deletions)
-            } else {
-                String::new()
-            };
-            let world_msg = if preserved_worlds > 0 {
-                format!(
-                    " {} world save(s) were preserved in timestamped folders.",
-                    preserved_worlds
-                )
-            } else {
-                String::new()
-            };
-
-            ctx.update_full(
-                100,
-                if already_up_to_date {
-                    "Modpack is already up to date.".to_string()
+                let skipped_msg = if skipped_deletions > 0 {
+                    format!(" ({} user-modified files were kept)", skipped_deletions)
                 } else {
+                    String::new()
+                };
+                let world_msg = if preserved_worlds > 0 {
                     format!(
-                        "Modpack updated to version {} successfully.{}{}",
-                        plan.new_manifest.version, skipped_msg, world_msg
+                        " {} world save(s) were preserved in timestamped folders.",
+                        preserved_worlds
                     )
-                },
-                Some(6),
-                Some(6),
-            );
+                } else {
+                    String::new()
+                };
 
-            Ok(())
+                ctx.update_full(
+                    100,
+                    if already_up_to_date {
+                        "Modpack is already up to date.".to_string()
+                    } else {
+                        format!(
+                            "Modpack updated to version {} successfully.{}{}",
+                            plan.new_manifest.version, skipped_msg, world_msg
+                        )
+                    },
+                    Some(6),
+                    Some(6),
+                );
+
+                Ok(())
+            }
+            .await;
+
+            let watcher_result = watcher_handle
+                .state::<crate::resources::watcher::ResourceWatcher>()
+                .watch_instance_without_scan(
+                    instance_id,
+                    resume_game_dir.to_string_lossy().into_owned(),
+                )
+                .await
+                .map_err(|error| format!("Failed to resume resource watcher: {error}"));
+
+            match (update_result, watcher_result) {
+                (Ok(()), Ok(())) => Ok(()),
+                (Err(update_error), Ok(())) => Err(update_error),
+                (Ok(()), Err(watcher_error)) => Err(format!(
+                    "Modpack update completed, but its resource watcher could not be resumed: {}",
+                    watcher_error
+                )),
+                (Err(update_error), Err(watcher_error)) => Err(format!(
+                    "{}. Resource watcher could not be resumed: {}",
+                    update_error, watcher_error
+                )),
+            }
         })
     }
 }
