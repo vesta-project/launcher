@@ -2703,8 +2703,12 @@ const ResourceDetailsPage: Component<{
 																	By{" "}
 																	{project()?.authors &&
 																	(project()?.authors?.length ?? 0) > 0
-																		? project()?.authors?.[0]
+																		? project()?.authors?.join(", ")
 																		: project()?.author}
+																	<Show when={project()?.organization?.name}>
+																		{" · "}
+																		{project()?.organization?.name}
+																	</Show>
 																</span>
 																<Show
 																	when={(project()?.download_count ?? 0) > 0}

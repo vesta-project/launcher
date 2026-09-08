@@ -24,6 +24,21 @@ export type ResourceType =
 	| "world";
 export type SourcePlatform = "modrinth" | "curseforge" | "smithed";
 
+export type ResourceAuthor = {
+	id: string;
+	username: string;
+	avatar_url: string | null;
+	role: string;
+	ordering: number;
+};
+
+export type ResourceOrganization = {
+	id: string;
+	slug: string;
+	name: string;
+	icon_url: string | null;
+};
+
 export type ResourceProject = {
 	id: string;
 	source: SourcePlatform;
@@ -34,6 +49,9 @@ export type ResourceProject = {
 	icon_url: string | null;
 	author: string;
 	authors: string[];
+	author_details?: ResourceAuthor[];
+	organization?: ResourceOrganization | null;
+	project_types?: ResourceType[];
 	download_count: number;
 	follower_count: number;
 	categories: string[];

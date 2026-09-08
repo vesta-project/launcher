@@ -602,6 +602,9 @@ impl ResourceSource for CurseForgeSource {
                     .map(|a| a.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()),
                 authors: item.authors.iter().map(|a| a.name.clone()).collect(),
+                author_details: Vec::new(),
+                organization: None,
+                project_types: vec![query.resource_type],
                 download_count: item.download_count as u64,
                 follower_count: 0,
                 categories: item
@@ -693,6 +696,9 @@ impl ResourceSource for CurseForgeSource {
                 .map(|a| a.name.clone())
                 .unwrap_or_else(|| "Unknown".to_string()),
             authors: item.authors.iter().map(|a| a.name.clone()).collect(),
+            author_details: Vec::new(),
+            organization: None,
+            project_types: vec![Self::map_class_id_to_type(item.class_id.unwrap_or(6))],
             download_count: item.download_count as u64,
             follower_count: 0,
             categories: item
@@ -766,6 +772,9 @@ impl ResourceSource for CurseForgeSource {
                     .map(|a| a.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()),
                 authors: item.authors.iter().map(|a| a.name.clone()).collect(),
+                author_details: Vec::new(),
+                organization: None,
+                project_types: vec![Self::map_class_id_to_type(item.class_id.unwrap_or(6))],
                 download_count: item.download_count as u64,
                 follower_count: 0,
                 categories: item

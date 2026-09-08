@@ -1,7 +1,8 @@
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceType, ResourceVersion,
-    ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
+    ResourceChangelogStatus, ResourceDependency, ResourceOrganization, ResourceProject,
+    ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse,
+    SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use anyhow::anyhow;
@@ -39,6 +40,10 @@ struct ModrinthProjectHit {
     icon_url: Option<String>,
     #[serde(default)]
     author: String,
+    #[serde(default)]
+    author_id: String,
+    organization: Option<String>,
+    organization_id: Option<String>,
     downloads: u64,
     categories: Option<Vec<String>>,
     project_types: Vec<String>,
@@ -68,17 +73,36 @@ struct ModrinthProject {
     published: String,
     updated: String,
     followers: u64,
+    team_id: String,
+    organization: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct ModrinthTeamMember {
+    team_id: String,
     user: ModrinthUser,
     role: String,
+    #[serde(default)]
+    is_owner: bool,
+    #[serde(default)]
+    accepted: bool,
+    #[serde(default)]
+    ordering: i64,
 }
 
 #[derive(Deserialize)]
 struct ModrinthUser {
+    id: String,
     username: String,
+    avatar_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ModrinthOrganization {
+    id: String,
+    slug: String,
+    name: String,
+    icon_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -155,6 +179,37 @@ fn resource_type(value: &str) -> ResourceType {
 
 fn primary_project_type(project_types: &[String]) -> &str {
     project_types.first().map(String::as_str).unwrap_or("mod")
+}
+
+fn map_project_types(project_types: &[String]) -> Vec<ResourceType> {
+    project_types
+        .iter()
+        .map(|value| resource_type(value))
+        .collect()
+}
+
+fn map_authors(mut members: Vec<ModrinthTeamMember>) -> Vec<ResourceAuthor> {
+    members.retain(|member| member.accepted);
+    members.sort_by_key(|member| (member.ordering, !member.is_owner));
+    members
+        .into_iter()
+        .map(|member| ResourceAuthor {
+            id: member.user.id,
+            username: member.user.username,
+            avatar_url: member.user.avatar_url,
+            role: member.role,
+            ordering: member.ordering,
+        })
+        .collect()
+}
+
+fn map_organization(organization: ModrinthOrganization) -> ResourceOrganization {
+    ResourceOrganization {
+        id: organization.id,
+        slug: organization.slug,
+        name: organization.name,
+        icon_url: organization.icon_url,
+    }
 }
 
 impl Default for ModrinthSource {
@@ -422,6 +477,27 @@ impl ResourceSource for ModrinthSource {
                     icon_url: hit.icon_url,
                     author: author.clone(),
                     authors: vec![author],
+                    author_details: if hit.author_id.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![ResourceAuthor {
+                            id: hit.author_id,
+                            username: hit.author,
+                            avatar_url: None,
+                            role: "Owner".to_string(),
+                            ordering: 0,
+                        }]
+                    },
+                    organization: match (hit.organization_id, hit.organization) {
+                        (Some(id), Some(name)) => Some(ResourceOrganization {
+                            id,
+                            slug: String::new(),
+                            name,
+                            icon_url: None,
+                        }),
+                        _ => None,
+                    },
+                    project_types: map_project_types(&hit.project_types),
                     download_count: hit.downloads,
                     follower_count: hit.follows,
                     categories: hit.categories.unwrap_or_default(),
@@ -464,36 +540,41 @@ impl ResourceSource for ModrinthSource {
             .await
             .map_err(|e| anyhow!("Modrinth project JSON decode error: {}. ID: {}", e, id))?;
 
-        // Fetch team members to find author
+        // Attribution is enrichment: a temporary team/organization failure must
+        // not make an otherwise installable project disappear.
         let team_url = format!("{MODRINTH_API_V3}/project/{}/members", project.id);
-        let team_response = self.client.get(&team_url).send().await?;
-
-        let members: Vec<ModrinthTeamMember> = if team_response.status().is_success() {
-            team_response.json().await.unwrap_or_else(|_| Vec::new())
-        } else {
-            Vec::new()
+        let author_details = match self.client.get(&team_url).send().await {
+            Ok(response) if response.status().is_success() => {
+                map_authors(response.json().await.unwrap_or_default())
+            }
+            _ => Vec::new(),
         };
 
-        // Use the first "Owner" or just first member
-        let author_name = if members.is_empty() {
-            "Unknown".to_string()
-        } else {
-            members
-                .iter()
-                .find(|m| m.role.to_lowercase() == "owner")
-                .map(|m| m.user.username.clone())
-                .unwrap_or_else(|| {
-                    members
-                        .first()
-                        .map(|m| m.user.username.clone())
-                        .unwrap_or_else(|| "Unknown".to_string())
-                })
-        };
-
-        let authors_list = if members.is_empty() {
+        let author_name = author_details
+            .first()
+            .map(|author| author.username.clone())
+            .unwrap_or_else(|| "Unknown".to_string());
+        let authors_list = if author_details.is_empty() {
             vec!["Unknown".to_string()]
         } else {
-            members.iter().map(|m| m.user.username.clone()).collect()
+            author_details
+                .iter()
+                .map(|author| author.username.clone())
+                .collect()
+        };
+
+        let organization = if let Some(organization_id) = project.organization.as_deref() {
+            let url = format!("{MODRINTH_API_V3}/organization/{organization_id}");
+            match self.client.get(url).send().await {
+                Ok(response) if response.status().is_success() => response
+                    .json::<ModrinthOrganization>()
+                    .await
+                    .ok()
+                    .map(map_organization),
+                _ => None,
+            }
+        } else {
+            None
         };
 
         let primary_type = primary_project_type(&project.project_types).to_string();
@@ -514,6 +595,9 @@ impl ResourceSource for ModrinthSource {
             icon_url: project.icon_url,
             author: author_name,
             authors: authors_list,
+            author_details,
+            organization,
+            project_types: map_project_types(&project.project_types),
             download_count: project.downloads,
             follower_count: project.followers,
             categories: project.categories,
@@ -559,10 +643,83 @@ impl ResourceSource for ModrinthSource {
             )
         })?;
 
+        let mut team_ids = projects
+            .iter()
+            .map(|project| project.team_id.clone())
+            .collect::<Vec<_>>();
+        team_ids.sort();
+        team_ids.dedup();
+        let members_by_team = if team_ids.is_empty() {
+            HashMap::new()
+        } else {
+            let team_ids_json = serde_json::to_string(&team_ids)?;
+            match self
+                .client
+                .get(format!("{MODRINTH_API_V3}/teams"))
+                .query(&[("ids", &team_ids_json)])
+                .send()
+                .await
+            {
+                Ok(response) if response.status().is_success() => response
+                    .json::<Vec<Vec<ModrinthTeamMember>>>()
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|members| {
+                        let team_id = members.first()?.team_id.clone();
+                        Some((team_id, map_authors(members)))
+                    })
+                    .collect(),
+                _ => HashMap::new(),
+            }
+        };
+
+        let mut organization_ids = projects
+            .iter()
+            .filter_map(|project| project.organization.clone())
+            .collect::<Vec<_>>();
+        organization_ids.sort();
+        organization_ids.dedup();
+        let organizations_by_id = if organization_ids.is_empty() {
+            HashMap::new()
+        } else {
+            let organization_ids_json = serde_json::to_string(&organization_ids)?;
+            match self
+                .client
+                .get(format!("{MODRINTH_API_V3}/organizations"))
+                .query(&[("ids", &organization_ids_json)])
+                .send()
+                .await
+            {
+                Ok(response) if response.status().is_success() => response
+                    .json::<Vec<ModrinthOrganization>>()
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|organization| (organization.id.clone(), map_organization(organization)))
+                    .collect(),
+                _ => HashMap::new(),
+            }
+        };
+
         Ok(projects
             .into_iter()
             .map(|p| {
                 let primary_type = primary_project_type(&p.project_types).to_string();
+                let author_details = members_by_team.get(&p.team_id).cloned().unwrap_or_default();
+                let authors = author_details
+                    .iter()
+                    .map(|author| author.username.clone())
+                    .collect::<Vec<_>>();
+                let author = authors
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let organization = p
+                    .organization
+                    .as_ref()
+                    .and_then(|id| organizations_by_id.get(id))
+                    .cloned();
 
                 let featured_gallery = p
                     .gallery
@@ -578,8 +735,11 @@ impl ResourceSource for ModrinthSource {
                     summary: p.summary,
                     description: Some(p.description),
                     icon_url: p.icon_url,
-                    author: "Unknown".to_string(),
-                    authors: vec!["Unknown".to_string()],
+                    author,
+                    authors,
+                    author_details,
+                    organization,
+                    project_types: map_project_types(&p.project_types),
                     download_count: p.downloads,
                     follower_count: p.followers,
                     categories: p.categories,
@@ -948,7 +1108,9 @@ impl ResourceSource for ModrinthSource {
 
 #[cfg(test)]
 mod tests {
-    use super::{project_type_filter, ModrinthSource, ModrinthVersion};
+    use super::{
+        map_authors, project_type_filter, ModrinthSource, ModrinthTeamMember, ModrinthVersion,
+    };
     use crate::models::resource::{
         DependencyType, ResourceChangelogFormat, ResourceChangelogStatus, ResourceType,
     };
@@ -960,6 +1122,21 @@ mod tests {
             "all_project_types"
         );
         assert_eq!(project_type_filter(ResourceType::Mod), "project_type");
+    }
+
+    #[test]
+    fn accepted_authors_are_ordered_with_owner_first_on_ties() {
+        let members: Vec<ModrinthTeamMember> = serde_json::from_value(serde_json::json!([
+            {"team_id":"team","user":{"id":"member","username":"Member","avatar_url":null},"role":"Developer","is_owner":false,"accepted":true,"ordering":0},
+            {"team_id":"team","user":{"id":"pending","username":"Pending","avatar_url":null},"role":"Member","is_owner":false,"accepted":false,"ordering":-1},
+            {"team_id":"team","user":{"id":"owner","username":"Owner","avatar_url":null},"role":"Owner","is_owner":true,"accepted":true,"ordering":0}
+        ])).unwrap();
+
+        let authors = map_authors(members);
+
+        assert_eq!(authors.len(), 2);
+        assert_eq!(authors[0].username, "Owner");
+        assert_eq!(authors[1].username, "Member");
     }
 
     #[test]

@@ -772,6 +772,9 @@ impl SmithedSource {
             } else {
                 vec![author]
             },
+            author_details: Vec::new(),
+            organization: None,
+            project_types: vec![resource_type],
             download_count: downloads,
             follower_count: 0,
             categories: data.categories.unwrap_or_default(),
@@ -1067,6 +1070,9 @@ impl SmithedSource {
             icon_url,
             author,
             authors,
+            author_details: Vec::new(),
+            organization: None,
+            project_types: vec![resource_type],
             download_count: downloads,
             follower_count: 0,
             categories: pack.categories,
