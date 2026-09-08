@@ -1,5 +1,6 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { supportsEnvironmentFilters } from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
 import { useMinecraftVersions } from "@stores/versions";
@@ -213,6 +214,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 		resources.state.resourceType === "modpack";
 
 	const isModpack = () => resources.state.resourceType === "modpack";
+	const shouldShowEnvironment = () =>
+		supportsEnvironmentFilters(
+			resources.state.activeSource,
+			resources.state.resourceType,
+		);
 
 	const selectedInstance = () => {
 		if (!resources.state.selectedInstanceId) return null;
@@ -421,6 +427,44 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 					</div>
 				</Show>
 
+				<Show when={shouldShowEnvironment()}>
+					<div class={styles["filter-popover-section"]}>
+						<label class={styles["filter-label"]}>Environment</label>
+						<div class={styles["environment-filter-options"]}>
+							<button
+								class={styles["environment-filter-option"]}
+								classList={{ [styles.active]: resources.state.client }}
+								aria-pressed={resources.state.client}
+								onClick={() => {
+									resources.setClient(!resources.state.client);
+									activeRouter()?.updateQuery(
+										"client",
+										resources.state.client || null,
+									);
+								}}
+								type="button"
+							>
+								Client
+							</button>
+							<button
+								class={styles["environment-filter-option"]}
+								classList={{ [styles.active]: resources.state.server }}
+								aria-pressed={resources.state.server}
+								onClick={() => {
+									resources.setServer(!resources.state.server);
+									activeRouter()?.updateQuery(
+										"server",
+										resources.state.server || null,
+									);
+								}}
+								type="button"
+							>
+								Server
+							</button>
+						</div>
+					</div>
+				</Show>
+
 				<Show when={availableCategories().length > 0}>
 					<div class={styles["filter-popover-section"]}>
 						<label class={styles["filter-label"]}>Categories</label>
@@ -565,6 +609,8 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 							activeRouter()?.updateQuery("selectedInstanceId", null);
 							activeRouter()?.updateQuery("gameVersion", null);
 							activeRouter()?.updateQuery("loader", null);
+							activeRouter()?.updateQuery("client", null);
+							activeRouter()?.updateQuery("server", null);
 							activeRouter()?.updateQuery("categories", []);
 							activeRouter()?.updateQuery("query", "");
 						}}

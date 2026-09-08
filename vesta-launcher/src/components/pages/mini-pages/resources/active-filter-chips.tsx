@@ -9,6 +9,9 @@ export function hasActiveBrowseFilters(): boolean {
 		resources.state.selectedInstanceId ||
 			resources.state.gameVersion ||
 			resources.state.loader ||
+			resources.state.client ||
+			resources.state.server ||
+			resources.state.creator ||
 			resources.state.categories.length > 0,
 	);
 }
@@ -18,6 +21,9 @@ export function activeBrowseFilterCount(): number {
 	if (resources.state.selectedInstanceId) count++;
 	if (resources.state.gameVersion) count++;
 	if (resources.state.loader) count++;
+	if (resources.state.client) count++;
+	if (resources.state.server) count++;
+	if (resources.state.creator) count++;
 	count += resources.state.categories.length;
 	return count;
 }
@@ -28,6 +34,7 @@ export function ActiveFilterChips(props: { router?: any }) {
 			key: string;
 			kind?: string;
 			label: string;
+			iconUrl?: string | null;
 			onRemove: () => void;
 		}[] = [];
 
@@ -82,6 +89,51 @@ export function ActiveFilterChips(props: { router?: any }) {
 			});
 		}
 
+		if (resources.state.client) {
+			result.push({
+				key: "client",
+				kind: "Environment",
+				label: "Client",
+				onRemove: () => {
+					resources.setClient(false);
+					props.router?.updateQuery("client", null);
+				},
+			});
+		}
+
+		if (resources.state.server) {
+			result.push({
+				key: "server",
+				kind: "Environment",
+				label: "Server",
+				onRemove: () => {
+					resources.setServer(false);
+					props.router?.updateQuery("server", null);
+				},
+			});
+		}
+
+		if (resources.state.creator) {
+			const creator = resources.state.creator;
+			result.push({
+				key: "creator",
+				kind: creator.kind === "organization" ? "Organization" : "Author",
+				label: creator.name,
+				iconUrl: creator.icon_url,
+				onRemove: () => {
+					resources.setCreator(null);
+					for (const key of [
+						"creatorKind",
+						"creatorId",
+						"creatorName",
+						"creatorIconUrl",
+					]) {
+						props.router?.updateQuery(key, null);
+					}
+				},
+			});
+		}
+
 		for (const catId of resources.state.categories) {
 			if (
 				catId.toLowerCase() === "fabric" ||
@@ -119,6 +171,13 @@ export function ActiveFilterChips(props: { router?: any }) {
 							type="button"
 							title={`Remove ${chip.kind || "filter"}: ${chip.label}`}
 						>
+							<Show when={chip.iconUrl}>
+								<img
+									class={styles["filter-chip-icon"]}
+									src={chip.iconUrl || ""}
+									alt=""
+								/>
+							</Show>
 							<Show when={chip.kind}>
 								<span class={styles["filter-chip-kind"]}>{chip.kind}</span>
 							</Show>
@@ -139,6 +198,16 @@ export function ActiveFilterChips(props: { router?: any }) {
 							props.router?.updateQuery("selectedInstanceId", null);
 							props.router?.updateQuery("gameVersion", null);
 							props.router?.updateQuery("loader", null);
+							props.router?.updateQuery("client", null);
+							props.router?.updateQuery("server", null);
+							for (const key of [
+								"creatorKind",
+								"creatorId",
+								"creatorName",
+								"creatorIconUrl",
+							]) {
+								props.router?.updateQuery(key, null);
+							}
 							props.router?.updateQuery("categories", []);
 							props.router?.updateQuery("query", "");
 						});

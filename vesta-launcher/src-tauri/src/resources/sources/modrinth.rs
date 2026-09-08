@@ -1,8 +1,8 @@
 use crate::models::resource::{
     DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceEnvironment, ResourceOrganization,
-    ResourceProject, ResourceProjectLink, ResourceType, ResourceVersion, ResourceVersionDetails,
-    SearchQuery, SearchResponse, SourcePlatform,
+    ResourceChangelogStatus, ResourceCreatorFilter, ResourceCreatorKind, ResourceDependency,
+    ResourceEnvironment, ResourceOrganization, ResourceProject, ResourceProjectLink, ResourceType,
+    ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use anyhow::anyhow;
@@ -81,6 +81,10 @@ struct ModrinthProject {
     organization: Option<String>,
     #[serde(default)]
     environment: Vec<String>,
+    #[serde(default)]
+    loaders: Vec<String>,
+    #[serde(default)]
+    game_versions: Vec<String>,
     #[serde(default)]
     link_urls: HashMap<String, ModrinthProjectLink>,
 }
@@ -445,11 +449,97 @@ impl ModrinthSource {
             changelog_status,
         })
     }
+
+    async fn search_creator_projects(
+        &self,
+        query: &SearchQuery,
+        creator: &ResourceCreatorFilter,
+    ) -> Result<SearchResponse> {
+        let route = match creator.kind {
+            ResourceCreatorKind::Author => "user",
+            ResourceCreatorKind::Organization => "organization",
+        };
+        let url = format!(
+            "{MODRINTH_API_V3}/{route}/{}/projects",
+            urlencoding::encode(&creator.id)
+        );
+        let mut projects: Vec<ModrinthProject> = self
+            .request_json(self.client.get(url), "fetch creator projects")
+            .await?;
+        let text = query.text.as_deref().unwrap_or("").trim().to_lowercase();
+        projects.retain(|project| {
+            project
+                .project_types
+                .iter()
+                .any(|value| resource_type(value) == query.resource_type)
+                && (text.is_empty()
+                    || project.name.to_lowercase().contains(&text)
+                    || project.summary.to_lowercase().contains(&text))
+                && query
+                    .game_version
+                    .as_ref()
+                    .is_none_or(|version| project.game_versions.contains(version))
+                && query.loader.as_ref().is_none_or(|loader| {
+                    project.loaders.iter().any(|value| {
+                        value.eq_ignore_ascii_case(loader)
+                            || (loader.eq_ignore_ascii_case("quilt")
+                                && value.eq_ignore_ascii_case("fabric"))
+                    })
+                })
+                && query.categories.as_ref().is_none_or(|categories| {
+                    categories.iter().all(|category| {
+                        project
+                            .categories
+                            .iter()
+                            .any(|value| value.eq_ignore_ascii_case(category))
+                    })
+                })
+                && (!(query.client || query.server)
+                    || map_environment(&project.environment).is_some_and(|environment| {
+                        (!query.client || environment.client)
+                            && (!query.server || environment.server)
+                    }))
+        });
+
+        match query.sort_by.as_deref().unwrap_or("relevance") {
+            "downloads" => projects.sort_by_key(|project| std::cmp::Reverse(project.downloads)),
+            "newest" | "date_created" => projects.sort_by(|a, b| b.published.cmp(&a.published)),
+            "updated" | "date_modified" => projects.sort_by(|a, b| b.updated.cmp(&a.updated)),
+            _ if text.is_empty() => projects.sort_by(|a, b| a.name.cmp(&b.name)),
+            _ => {}
+        }
+        if query.sort_order.as_deref() == Some("asc")
+            && matches!(
+                query.sort_by.as_deref(),
+                Some("downloads" | "newest" | "date_created" | "updated" | "date_modified")
+            )
+        {
+            projects.reverse();
+        }
+
+        let total_hits = projects.len() as u64;
+        let ids = projects
+            .into_iter()
+            .skip(query.offset as usize)
+            .take(query.limit as usize)
+            .map(|project| project.id)
+            .collect::<Vec<_>>();
+        let fetched = self.get_projects(&ids).await?;
+        let mut by_id = fetched
+            .into_iter()
+            .map(|project| (project.id.clone(), project))
+            .collect::<HashMap<_, _>>();
+        let hits = ids.into_iter().filter_map(|id| by_id.remove(&id)).collect();
+        Ok(SearchResponse { hits, total_hits })
+    }
 }
 
 #[async_trait]
 impl ResourceSource for ModrinthSource {
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
+        if let Some(creator) = query.creator.clone() {
+            return self.search_creator_projects(&query, &creator).await;
+        }
         let mut url = format!(
             "{MODRINTH_API_V3}/search?query={}&limit={}&offset={}",
             urlencoding::encode(query.text.as_deref().unwrap_or("")),

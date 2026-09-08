@@ -9,6 +9,7 @@ import { getSourceDescriptor } from "@resources/source-catalog";
 import { type Instance, instancesState } from "@stores/instances";
 import {
 	type ResourceProject,
+	type ResourceCreatorFilter,
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
@@ -64,6 +65,12 @@ const ResourceBrowser: Component<{
 	resourceType?: any;
 	gameVersion?: string;
 	loader?: string;
+	client?: boolean;
+	server?: boolean;
+	creatorKind?: ResourceCreatorFilter["kind"];
+	creatorId?: string;
+	creatorName?: string;
+	creatorIconUrl?: string;
 	activeSource?: any;
 	sortBy?: string;
 	sortOrder?: string;
@@ -414,6 +421,23 @@ const ResourceBrowser: Component<{
 				);
 				isInitializedFromProps = true;
 			}
+			if (props.client !== undefined) {
+				resources.setClient(props.client);
+				isInitializedFromProps = true;
+			}
+			if (props.server !== undefined) {
+				resources.setServer(props.server);
+				isInitializedFromProps = true;
+			}
+			if (props.creatorKind && props.creatorId && props.creatorName) {
+				resources.setCreator({
+					kind: props.creatorKind,
+					id: props.creatorId,
+					name: props.creatorName,
+					icon_url: props.creatorIconUrl || null,
+				});
+				isInitializedFromProps = true;
+			}
 			if (props.activeSource !== undefined) {
 				resources.setSource(props.activeSource);
 				isInitializedFromProps = true;
@@ -468,6 +492,12 @@ const ResourceBrowser: Component<{
 			resourceType: resources.state.resourceType,
 			gameVersion: resources.state.gameVersion,
 			loader: resources.state.loader,
+			client: resources.state.client,
+			server: resources.state.server,
+			creatorKind: resources.state.creator?.kind,
+			creatorId: resources.state.creator?.id,
+			creatorName: resources.state.creator?.name,
+			creatorIconUrl: resources.state.creator?.icon_url,
 			activeSource: resources.state.activeSource,
 			sortBy: resources.state.sortBy,
 			sortOrder: resources.state.sortOrder,
@@ -526,6 +556,9 @@ const ResourceBrowser: Component<{
 		resources.state.resourceType;
 		resources.state.gameVersion;
 		resources.state.loader;
+		resources.state.client;
+		resources.state.server;
+		resources.state.creator;
 		resources.state.categories;
 		resources.state.sortBy;
 		resources.state.sortOrder;

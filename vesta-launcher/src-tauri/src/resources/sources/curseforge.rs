@@ -1,8 +1,8 @@
 use crate::models::resource::{
     DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceProjectLink,
-    ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse,
-    SourcePlatform,
+    ResourceChangelogStatus, ResourceCreatorKind, ResourceDependency, ResourceProject,
+    ResourceProjectLink, ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use crate::utils::url::normalize_url;
@@ -552,6 +552,14 @@ impl ResourceSource for CurseForgeSource {
 
         if let Some(text) = query.text {
             url.push_str(&format!("&searchFilter={}", urlencoding::encode(&text)));
+        }
+
+        if let Some(creator) = &query.creator {
+            if creator.kind == ResourceCreatorKind::Author {
+                if let Ok(author_id) = creator.id.parse::<i64>() {
+                    url.push_str(&format!("&authorId={author_id}"));
+                }
+            }
         }
 
         if let Some(version) = query.game_version {

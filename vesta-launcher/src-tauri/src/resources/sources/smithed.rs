@@ -1,8 +1,8 @@
 use crate::models::resource::{
     DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceProjectLink,
-    ResourceType, ResourceVersion, ResourceVersionDetails, ResourceVersionFile, SearchQuery,
-    SearchResponse, SourcePlatform,
+    ResourceChangelogStatus, ResourceCreatorFilter, ResourceCreatorKind, ResourceDependency,
+    ResourceProject, ResourceProjectLink, ResourceType, ResourceVersion, ResourceVersionDetails,
+    ResourceVersionFile, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use anyhow::{anyhow, Result};
@@ -1175,11 +1175,112 @@ impl SmithedSource {
             updated_at: Self::millis_to_rfc3339(meta.stats.as_ref().and_then(|s| s.updated)),
         })
     }
+
+    async fn search_creator_projects(
+        &self,
+        query: &SearchQuery,
+        creator: &ResourceCreatorFilter,
+    ) -> Result<SearchResponse> {
+        if creator.kind != ResourceCreatorKind::Author {
+            return Ok(SearchResponse {
+                hits: Vec::new(),
+                total_hits: 0,
+            });
+        }
+        let url = format!(
+            "{API_BASE}/users/{}/packs",
+            urlencoding::encode(&creator.id)
+        );
+        let ids: Vec<String> = self
+            .client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        let text = query.text.as_deref().unwrap_or("").trim().to_lowercase();
+        let mut projects = Vec::new();
+        for id in ids {
+            let Ok((pack, meta)) = self.fetch_pack_data(&id).await else {
+                continue;
+            };
+            if !text.is_empty()
+                && !pack
+                    .display
+                    .name
+                    .as_deref()
+                    .unwrap_or(&id)
+                    .to_lowercase()
+                    .contains(&text)
+                && !pack
+                    .display
+                    .description
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&text)
+            {
+                continue;
+            }
+            if query.categories.as_ref().is_some_and(|categories| {
+                !categories.iter().all(|category| {
+                    pack.categories
+                        .iter()
+                        .any(|value| value.eq_ignore_ascii_case(category))
+                })
+            }) {
+                continue;
+            }
+            if query.game_version.as_ref().is_some_and(|version| {
+                !pack
+                    .versions
+                    .iter()
+                    .any(|candidate| candidate.supports.contains(version))
+            }) {
+                continue;
+            }
+            if let Ok(project) = self
+                .map_pack_project(&id, pack, meta, Some(query.resource_type))
+                .await
+            {
+                projects.push(project);
+            }
+        }
+
+        match query.sort_by.as_deref().unwrap_or("relevance") {
+            "downloads" | "popularity" => {
+                projects.sort_by_key(|project| std::cmp::Reverse(project.download_count))
+            }
+            "newest" | "updated" | "last_updated" => {
+                projects.sort_by(|a, b| b.updated_at.cmp(&a.updated_at))
+            }
+            _ => projects.sort_by(|a, b| a.name.cmp(&b.name)),
+        }
+        if query.sort_order.as_deref() == Some("asc")
+            && matches!(
+                query.sort_by.as_deref(),
+                Some("downloads" | "popularity" | "newest" | "updated" | "last_updated")
+            )
+        {
+            projects.reverse();
+        }
+        let total_hits = projects.len() as u64;
+        let hits = projects
+            .into_iter()
+            .skip(query.offset as usize)
+            .take(query.limit as usize)
+            .collect();
+        Ok(SearchResponse { hits, total_hits })
+    }
 }
 
 #[async_trait]
 impl ResourceSource for SmithedSource {
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
+        if let Some(creator) = query.creator.clone() {
+            return self.search_creator_projects(&query, &creator).await;
+        }
         match query.resource_type {
             ResourceType::DataPack => {}
             _ => {

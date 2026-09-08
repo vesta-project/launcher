@@ -479,10 +479,16 @@
 
 .filter-chip-kind {
 	font-size: 10px;
-	font-weight: 600;
-	letter-spacing: 0.02em;
-	text-transform: uppercase;
+	font-weight: 500;
 	color: var(--text-tertiary);
+	flex-shrink: 0;
+}
+
+.filter-chip-icon {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	object-fit: cover;
 	flex-shrink: 0;
 }
 
@@ -594,6 +600,38 @@
 .filter-combobox {
 	width: 100%;
 	font-size: 13px;
+}
+
+.environment-filter-options {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px;
+}
+
+.environment-filter-option {
+	height: 30px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--surface-medium);
+	color: var(--text-secondary);
+	font: inherit;
+	font-size: 12px;
+	cursor: default;
+}
+
+.environment-filter-option:hover {
+	border-color: var(--border-strong);
+	color: var(--text-primary);
+}
+
+.environment-filter-option.active {
+	border-color: var(--accent-primary);
+	background: color-mix(
+		in srgb,
+		var(--accent-primary) 14%,
+		var(--surface-medium)
+	);
+	color: var(--text-primary);
 }
 
 /* ===== Results Info Bar ===== */
