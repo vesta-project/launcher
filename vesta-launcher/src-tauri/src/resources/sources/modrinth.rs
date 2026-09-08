@@ -11,6 +11,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+const MODRINTH_API_V3: &str = "https://api.modrinth.com/v3";
 // v3 does not currently expose hash lookup endpoints. Keep these calls visibly
 // isolated so the remaining v2 dependency can be removed independently.
 const MODRINTH_LEGACY_API_V2: &str = "https://api.modrinth.com/v2";
@@ -32,15 +33,15 @@ struct ModrinthSearchResult {
 #[derive(Deserialize)]
 struct ModrinthProjectHit {
     project_id: String,
-    title: String,
+    name: String,
     #[serde(default)]
-    description: String,
+    summary: String,
     icon_url: Option<String>,
     #[serde(default)]
     author: String,
     downloads: u64,
     categories: Option<Vec<String>>,
-    project_type: String,
+    project_types: Vec<String>,
     slug: String,
     #[serde(rename = "date_created")]
     published: Option<String>,
@@ -55,20 +56,18 @@ struct ModrinthProjectHit {
 #[derive(Deserialize)]
 struct ModrinthProject {
     id: String,
-    title: String,
+    name: String,
+    summary: String,
     description: String,
-    body: String,
     icon_url: Option<String>,
     downloads: u64,
     categories: Vec<String>,
-    project_type: String,
+    project_types: Vec<String>,
     slug: String,
     gallery: Option<Vec<ModrinthGalleryItem>>,
     published: String,
     updated: String,
     followers: u64,
-    team: String,
-    curseforge_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -135,12 +134,27 @@ pub struct ModrinthSource {
     client: Client,
 }
 
-fn project_type_facet(resource_type: ResourceType) -> &'static str {
+fn project_type_filter(resource_type: ResourceType) -> &'static str {
     if resource_type == ResourceType::DataPack {
         "all_project_types"
     } else {
         "project_type"
     }
+}
+
+fn resource_type(value: &str) -> ResourceType {
+    match value {
+        "resourcepack" => ResourceType::ResourcePack,
+        "shader" => ResourceType::Shader,
+        "datapack" => ResourceType::DataPack,
+        "modpack" => ResourceType::Modpack,
+        "world" => ResourceType::World,
+        _ => ResourceType::Mod,
+    }
+}
+
+fn primary_project_type(project_types: &[String]) -> &str {
+    project_types.first().map(String::as_str).unwrap_or("mod")
 }
 
 impl Default for ModrinthSource {
@@ -271,7 +285,7 @@ impl ModrinthSource {
 impl ResourceSource for ModrinthSource {
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
         let mut url = format!(
-            "{MODRINTH_LEGACY_API_V2}/search?query={}&limit={}&offset={}",
+            "{MODRINTH_API_V3}/search?query={}&limit={}&offset={}",
             urlencoding::encode(query.text.as_deref().unwrap_or("")),
             query.limit,
             query.offset
@@ -281,8 +295,7 @@ impl ResourceSource for ModrinthSource {
             url.push_str(&format!("&index={}", sort));
         }
 
-        // Add facets for filtering
-        let mut facets = Vec::new();
+        let mut filters = Vec::new();
 
         // Resource Type
         let mr_type = match query.resource_type {
@@ -296,8 +309,8 @@ impl ResourceSource for ModrinthSource {
         // A Modrinth project can publish mod, plugin, and datapack versions
         // under one project. `all_project_types` searches those version-level
         // distributions while `project_type` only describes the project shell.
-        let project_type_facet = project_type_facet(query.resource_type);
-        facets.push(format!("[\"{}:{}\"]", project_type_facet, mr_type));
+        let project_type_filter = project_type_filter(query.resource_type);
+        filters.push(format!("{project_type_filter} = [\"{mr_type}\"]"));
 
         let has_optional_filters = query.game_version.is_some()
             || query.loader.is_some()
@@ -316,7 +329,10 @@ impl ResourceSource for ModrinthSource {
             .unwrap_or(true);
 
         if let Some(version) = query.game_version {
-            facets.push(format!("[\"versions:{}\"]", version));
+            filters.push(format!(
+                "game_versions = [\"{}\"]",
+                version.replace('"', "\\\"")
+            ));
         }
 
         if let Some(loader) = query.loader {
@@ -325,44 +341,49 @@ impl ResourceSource for ModrinthSource {
                 || query.resource_type == ResourceType::Modpack
             {
                 if loader.to_lowercase() == "quilt" {
-                    facets.push("[\"categories:quilt\", \"categories:fabric\"]".to_string());
+                    filters.push("(loaders = [\"quilt\"] OR loaders = [\"fabric\"])".to_string());
                 } else {
-                    facets.push(format!("[\"categories:{}\"]", loader.to_lowercase()));
+                    filters.push(format!("loaders = [\"{}\"]", loader.to_lowercase()));
                 }
             }
         }
 
         if let Some(categories) = &query.categories {
             for category in categories {
-                facets.push(format!("[\"categories:{}\"]", category));
+                filters.push(format!(
+                    "categories = [\"{}\"]",
+                    category.replace('"', "\\\"")
+                ));
             }
         }
 
         if let Some(q_facets) = &query.facets {
             for facet in q_facets {
-                facets.push(format!("[\"{}\"]", facet));
+                filters.push(facet.clone());
             }
         }
 
-        if !facets.is_empty() {
-            let facets_json = format!("[{}]", facets.join(","));
-            url.push_str(&format!("&facets={}", urlencoding::encode(&facets_json)));
+        if !filters.is_empty() {
+            url.push_str(&format!(
+                "&new_filters={}",
+                urlencoding::encode(&filters.join(" AND "))
+            ));
         }
 
         let mut result = self.fetch_search_url(&url).await?;
 
         if result.hits.is_empty() && is_blank_query && has_optional_filters && query.offset == 0 {
-            let fallback_facets = format!("[[\"{}:{}\"]]", project_type_facet, mr_type);
+            let fallback_filter = format!("{project_type_filter} = [\"{mr_type}\"]");
             let mut fallback_url = format!(
-                "{MODRINTH_LEGACY_API_V2}/search?query=&limit={}&offset=0",
+                "{MODRINTH_API_V3}/search?query=&limit={}&offset=0",
                 query.limit
             );
             if let Some(sort) = &query.sort_by {
                 fallback_url.push_str(&format!("&index={}", sort));
             }
             fallback_url.push_str(&format!(
-                "&facets={}",
-                urlencoding::encode(&fallback_facets)
+                "&new_filters={}",
+                urlencoding::encode(&fallback_filter)
             ));
 
             log::warn!(
@@ -395,8 +416,8 @@ impl ResourceSource for ModrinthSource {
                     id: hit.project_id,
                     source: SourcePlatform::Modrinth,
                     resource_type: query.resource_type,
-                    name: hit.title,
-                    summary: hit.description,
+                    name: hit.name,
+                    summary: hit.summary,
                     description: None,
                     icon_url: hit.icon_url,
                     author: author.clone(),
@@ -404,7 +425,11 @@ impl ResourceSource for ModrinthSource {
                     download_count: hit.downloads,
                     follower_count: hit.follows,
                     categories: hit.categories.unwrap_or_default(),
-                    web_url: format!("https://modrinth.com/{}/{}", hit.project_type, hit.slug),
+                    web_url: format!(
+                        "https://modrinth.com/{}/{}",
+                        primary_project_type(&hit.project_types),
+                        hit.slug
+                    ),
                     external_ids: None,
                     gallery: hit.gallery.unwrap_or_default(),
                     featured_gallery: hit.featured_gallery,
@@ -421,7 +446,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_project(&self, id: &str) -> Result<ResourceProject> {
-        let url = format!("{MODRINTH_LEGACY_API_V2}/project/{id}");
+        let url = format!("{MODRINTH_API_V3}/project/{id}");
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -440,7 +465,7 @@ impl ResourceSource for ModrinthSource {
             .map_err(|e| anyhow!("Modrinth project JSON decode error: {}. ID: {}", e, id))?;
 
         // Fetch team members to find author
-        let team_url = format!("{MODRINTH_LEGACY_API_V2}/team/{}/members", project.team);
+        let team_url = format!("{MODRINTH_API_V3}/project/{}/members", project.id);
         let team_response = self.client.get(&team_url).send().await?;
 
         let members: Vec<ModrinthTeamMember> = if team_response.status().is_success() {
@@ -471,19 +496,7 @@ impl ResourceSource for ModrinthSource {
             members.iter().map(|m| m.user.username.clone()).collect()
         };
 
-        let res_type = match project.project_type.as_str() {
-            "mod" => ResourceType::Mod,
-            "resourcepack" => ResourceType::ResourcePack,
-            "shader" => ResourceType::Shader,
-            "datapack" => ResourceType::DataPack,
-            "modpack" => ResourceType::Modpack,
-            _ => ResourceType::Mod,
-        };
-
-        let mut external_ids = std::collections::HashMap::new();
-        if let Some(cf_id) = project.curseforge_id {
-            external_ids.insert("curseforge".to_string(), cf_id);
-        }
+        let primary_type = primary_project_type(&project.project_types).to_string();
 
         let featured_gallery = project
             .gallery
@@ -494,25 +507,18 @@ impl ResourceSource for ModrinthSource {
         Ok(ResourceProject {
             id: project.id,
             source: SourcePlatform::Modrinth,
-            resource_type: res_type,
-            name: project.title,
-            summary: project.description,
-            description: Some(project.body),
+            resource_type: resource_type(&primary_type),
+            name: project.name,
+            summary: project.summary,
+            description: Some(project.description),
             icon_url: project.icon_url,
             author: author_name,
             authors: authors_list,
             download_count: project.downloads,
             follower_count: project.followers,
             categories: project.categories,
-            web_url: format!(
-                "https://modrinth.com/{}/{}",
-                project.project_type, project.slug
-            ),
-            external_ids: if external_ids.is_empty() {
-                None
-            } else {
-                Some(external_ids)
-            },
+            web_url: format!("https://modrinth.com/{}/{}", primary_type, project.slug),
+            external_ids: None,
             gallery: project
                 .gallery
                 .unwrap_or_default()
@@ -533,7 +539,7 @@ impl ResourceSource for ModrinthSource {
         let ids_json = serde_json::to_string(ids)?;
         let response = self
             .client
-            .get(format!("{MODRINTH_LEGACY_API_V2}/projects"))
+            .get(format!("{MODRINTH_API_V3}/projects"))
             .query(&[("ids", &ids_json)])
             .send()
             .await?;
@@ -556,19 +562,7 @@ impl ResourceSource for ModrinthSource {
         Ok(projects
             .into_iter()
             .map(|p| {
-                let res_type = match p.project_type.as_str() {
-                    "mod" => ResourceType::Mod,
-                    "resourcepack" => ResourceType::ResourcePack,
-                    "shader" => ResourceType::Shader,
-                    "datapack" => ResourceType::DataPack,
-                    "modpack" => ResourceType::Modpack,
-                    _ => ResourceType::Mod,
-                };
-
-                let mut external_ids = std::collections::HashMap::new();
-                if let Some(cf_id) = p.curseforge_id {
-                    external_ids.insert("curseforge".to_string(), cf_id);
-                }
+                let primary_type = primary_project_type(&p.project_types).to_string();
 
                 let featured_gallery = p
                     .gallery
@@ -579,22 +573,18 @@ impl ResourceSource for ModrinthSource {
                 ResourceProject {
                     id: p.id,
                     source: SourcePlatform::Modrinth,
-                    resource_type: res_type,
-                    name: p.title,
-                    summary: p.description,
-                    description: Some(p.body),
+                    resource_type: resource_type(&primary_type),
+                    name: p.name,
+                    summary: p.summary,
+                    description: Some(p.description),
                     icon_url: p.icon_url,
                     author: "Unknown".to_string(),
                     authors: vec!["Unknown".to_string()],
                     download_count: p.downloads,
                     follower_count: p.followers,
                     categories: p.categories,
-                    web_url: format!("https://modrinth.com/{}/{}", p.project_type, p.slug),
-                    external_ids: if external_ids.is_empty() {
-                        None
-                    } else {
-                        Some(external_ids)
-                    },
+                    web_url: format!("https://modrinth.com/{}/{}", primary_type, p.slug),
+                    external_ids: None,
                     gallery: p
                         .gallery
                         .unwrap_or_default()
@@ -615,11 +605,14 @@ impl ResourceSource for ModrinthSource {
         game_version: Option<&str>,
         loader: Option<&str>,
     ) -> Result<Vec<ResourceVersion>> {
-        let url = format!("{MODRINTH_LEGACY_API_V2}/project/{project_id}/version");
+        let url = format!("{MODRINTH_API_V3}/project/{project_id}/version");
 
         let mut params = Vec::new();
         if let Some(gv) = game_version {
-            params.push(("game_versions", format!("[\"{}\"]", gv)));
+            params.push((
+                "loader_fields",
+                serde_json::json!({ "game_versions": [gv] }).to_string(),
+            ));
         }
         if let Some(l) = loader {
             params.push(("loaders", format!("[\"{}\"]", l.to_lowercase())));
@@ -714,7 +707,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_version(&self, _project_id: &str, version_id: &str) -> Result<ResourceVersion> {
-        let url = format!("{MODRINTH_LEGACY_API_V2}/version/{version_id}");
+        let url = format!("{MODRINTH_API_V3}/version/{version_id}");
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -733,7 +726,7 @@ impl ResourceSource for ModrinthSource {
         _project_id: &str,
         version_id: &str,
     ) -> Result<ResourceVersionDetails> {
-        let url = format!("{MODRINTH_LEGACY_API_V2}/version/{version_id}");
+        let url = format!("{MODRINTH_API_V3}/version/{version_id}");
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -893,7 +886,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_categories(&self) -> Result<Vec<ResourceCategory>> {
-        let url = format!("{MODRINTH_LEGACY_API_V2}/tag/category");
+        let url = format!("{MODRINTH_API_V3}/tag/category");
         let response = self.client.get(url).send().await?;
         if !response.status().is_success() {
             let status = response.status();
@@ -955,7 +948,7 @@ impl ResourceSource for ModrinthSource {
 
 #[cfg(test)]
 mod tests {
-    use super::{project_type_facet, ModrinthSource, ModrinthVersion};
+    use super::{project_type_filter, ModrinthSource, ModrinthVersion};
     use crate::models::resource::{
         DependencyType, ResourceChangelogFormat, ResourceChangelogStatus, ResourceType,
     };
@@ -963,10 +956,10 @@ mod tests {
     #[test]
     fn datapack_searches_include_mixed_modrinth_projects() {
         assert_eq!(
-            project_type_facet(ResourceType::DataPack),
+            project_type_filter(ResourceType::DataPack),
             "all_project_types"
         );
-        assert_eq!(project_type_facet(ResourceType::Mod), "project_type");
+        assert_eq!(project_type_filter(ResourceType::Mod), "project_type");
     }
 
     #[test]
