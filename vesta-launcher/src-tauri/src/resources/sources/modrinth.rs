@@ -8,9 +8,11 @@ use crate::resources::sources::ResourceSource;
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder, StatusCode};
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::time::Duration;
 
 const MODRINTH_API_V3: &str = "https://api.modrinth.com/v3";
 // v3 does not currently expose hash lookup endpoints. Keep these calls visibly
@@ -162,7 +164,7 @@ fn project_type_filter(resource_type: ResourceType) -> &'static str {
     if resource_type == ResourceType::DataPack {
         "all_project_types"
     } else {
-        "project_type"
+        "project_types"
     }
 }
 
@@ -225,23 +227,63 @@ impl ModrinthSource {
         }
     }
 
-    async fn fetch_search_url(&self, url: &str) -> Result<ModrinthSearchResult> {
-        let response = self.client.get(url).send().await?;
+    async fn request_json<T: DeserializeOwned>(
+        &self,
+        request: RequestBuilder,
+        operation: &str,
+    ) -> Result<T> {
+        let retry = request.try_clone();
+        let mut response = request.send().await?;
+
+        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+            if let Some(retry) = retry {
+                let retry_after = response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .unwrap_or(1)
+                    .min(30);
+                tokio::time::sleep(Duration::from_secs(retry_after)).await;
+                response = retry.send().await?;
+            }
+        }
 
         if !response.status().is_success() {
             let status = response.status();
+            let retry_after = response
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
             let body = response.text().await.unwrap_or_default();
+            let description = serde_json::from_str::<serde_json::Value>(&body)
+                .ok()
+                .and_then(|value| {
+                    value
+                        .get("description")
+                        .or_else(|| value.get("error"))
+                        .and_then(|value| value.as_str())
+                        .map(str::to_string)
+                })
+                .filter(|value| !value.is_empty())
+                .unwrap_or(body);
+            let retry_hint = retry_after
+                .map(|seconds| format!("; retry after {seconds}s"))
+                .unwrap_or_default();
             return Err(anyhow!(
-                "Modrinth API error during search ({}): {}",
-                status,
-                body
+                "Modrinth API {operation} failed ({status}{retry_hint}): {description}"
             ));
         }
 
         response
             .json()
             .await
-            .map_err(|e| anyhow!("Modrinth search JSON decode error: {}. URL: {}", e, url))
+            .map_err(|error| anyhow!("Modrinth API {operation} response was invalid: {error}"))
+    }
+
+    async fn fetch_search_url(&self, url: &str) -> Result<ModrinthSearchResult> {
+        self.request_json(self.client.get(url), "search").await
     }
 
     fn map_version(v: ModrinthVersion, preferred_hash: Option<&str>) -> Result<ResourceVersion> {
@@ -365,7 +407,7 @@ impl ResourceSource for ModrinthSource {
         // under one project. `all_project_types` searches those version-level
         // distributions while `project_type` only describes the project shell.
         let project_type_filter = project_type_filter(query.resource_type);
-        filters.push(format!("{project_type_filter} = [\"{mr_type}\"]"));
+        filters.push(format!("{project_type_filter} IN [\"{mr_type}\"]"));
 
         let has_optional_filters = query.game_version.is_some()
             || query.loader.is_some()
@@ -385,7 +427,7 @@ impl ResourceSource for ModrinthSource {
 
         if let Some(version) = query.game_version {
             filters.push(format!(
-                "game_versions = [\"{}\"]",
+                "game_versions IN [\"{}\"]",
                 version.replace('"', "\\\"")
             ));
         }
@@ -396,9 +438,9 @@ impl ResourceSource for ModrinthSource {
                 || query.resource_type == ResourceType::Modpack
             {
                 if loader.to_lowercase() == "quilt" {
-                    filters.push("(loaders = [\"quilt\"] OR loaders = [\"fabric\"])".to_string());
+                    filters.push("(loaders IN [\"quilt\"] OR loaders IN [\"fabric\"])".to_string());
                 } else {
-                    filters.push(format!("loaders = [\"{}\"]", loader.to_lowercase()));
+                    filters.push(format!("loaders IN [\"{}\"]", loader.to_lowercase()));
                 }
             }
         }
@@ -406,7 +448,7 @@ impl ResourceSource for ModrinthSource {
         if let Some(categories) = &query.categories {
             for category in categories {
                 filters.push(format!(
-                    "categories = [\"{}\"]",
+                    "categories IN [\"{}\"]",
                     category.replace('"', "\\\"")
                 ));
             }
@@ -428,7 +470,7 @@ impl ResourceSource for ModrinthSource {
         let mut result = self.fetch_search_url(&url).await?;
 
         if result.hits.is_empty() && is_blank_query && has_optional_filters && query.offset == 0 {
-            let fallback_filter = format!("{project_type_filter} = [\"{mr_type}\"]");
+            let fallback_filter = format!("{project_type_filter} IN [\"{mr_type}\"]");
             let mut fallback_url = format!(
                 "{MODRINTH_API_V3}/search?query=&limit={}&offset=0",
                 query.limit
@@ -523,32 +565,18 @@ impl ResourceSource for ModrinthSource {
 
     async fn get_project(&self, id: &str) -> Result<ResourceProject> {
         let url = format!("{MODRINTH_API_V3}/project/{id}");
-        let response = self.client.get(&url).send().await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Modrinth API error fetching project ({}): {}",
-                status,
-                body
-            ));
-        }
-
-        let project: ModrinthProject = response
-            .json()
-            .await
-            .map_err(|e| anyhow!("Modrinth project JSON decode error: {}. ID: {}", e, id))?;
+        let project: ModrinthProject = self
+            .request_json(self.client.get(&url), "fetch project")
+            .await?;
 
         // Attribution is enrichment: a temporary team/organization failure must
         // not make an otherwise installable project disappear.
         let team_url = format!("{MODRINTH_API_V3}/project/{}/members", project.id);
-        let author_details = match self.client.get(&team_url).send().await {
-            Ok(response) if response.status().is_success() => {
-                map_authors(response.json().await.unwrap_or_default())
-            }
-            _ => Vec::new(),
-        };
+        let author_details = self
+            .request_json(self.client.get(&team_url), "fetch project members")
+            .await
+            .map(map_authors)
+            .unwrap_or_default();
 
         let author_name = author_details
             .first()
@@ -565,14 +593,10 @@ impl ResourceSource for ModrinthSource {
 
         let organization = if let Some(organization_id) = project.organization.as_deref() {
             let url = format!("{MODRINTH_API_V3}/organization/{organization_id}");
-            match self.client.get(url).send().await {
-                Ok(response) if response.status().is_success() => response
-                    .json::<ModrinthOrganization>()
-                    .await
-                    .ok()
-                    .map(map_organization),
-                _ => None,
-            }
+            self.request_json(self.client.get(url), "fetch organization")
+                .await
+                .ok()
+                .map(map_organization)
         } else {
             None
         };
@@ -621,27 +645,14 @@ impl ResourceSource for ModrinthSource {
         }
 
         let ids_json = serde_json::to_string(ids)?;
-        let response = self
-            .client
-            .get(format!("{MODRINTH_API_V3}/projects"))
-            .query(&[("ids", &ids_json)])
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Modrinth batch project fetch failed: {}",
-                response.status()
-            ));
-        }
-
-        let projects: Vec<ModrinthProject> = response.json().await.map_err(|e| {
-            anyhow!(
-                "Modrinth batch projects JSON decode error: {}. IDs: {}",
-                e,
-                ids_json
+        let projects: Vec<ModrinthProject> = self
+            .request_json(
+                self.client
+                    .get(format!("{MODRINTH_API_V3}/projects"))
+                    .query(&[("ids", &ids_json)]),
+                "fetch projects",
             )
-        })?;
+            .await?;
 
         let mut team_ids = projects
             .iter()
@@ -654,23 +665,25 @@ impl ResourceSource for ModrinthSource {
         } else {
             let team_ids_json = serde_json::to_string(&team_ids)?;
             match self
-                .client
-                .get(format!("{MODRINTH_API_V3}/teams"))
-                .query(&[("ids", &team_ids_json)])
-                .send()
+                .request_json::<Vec<Vec<ModrinthTeamMember>>>(
+                    self.client
+                        .get(format!("{MODRINTH_API_V3}/teams"))
+                        .query(&[("ids", &team_ids_json)]),
+                    "fetch project teams",
+                )
                 .await
             {
-                Ok(response) if response.status().is_success() => response
-                    .json::<Vec<Vec<ModrinthTeamMember>>>()
-                    .await
-                    .unwrap_or_default()
+                Ok(groups) => groups
                     .into_iter()
                     .filter_map(|members| {
                         let team_id = members.first()?.team_id.clone();
                         Some((team_id, map_authors(members)))
                     })
                     .collect(),
-                _ => HashMap::new(),
+                Err(error) => {
+                    log::warn!("[Modrinth] Team enrichment failed: {error}");
+                    HashMap::new()
+                }
             }
         };
 
@@ -685,20 +698,22 @@ impl ResourceSource for ModrinthSource {
         } else {
             let organization_ids_json = serde_json::to_string(&organization_ids)?;
             match self
-                .client
-                .get(format!("{MODRINTH_API_V3}/organizations"))
-                .query(&[("ids", &organization_ids_json)])
-                .send()
+                .request_json::<Vec<ModrinthOrganization>>(
+                    self.client
+                        .get(format!("{MODRINTH_API_V3}/organizations"))
+                        .query(&[("ids", &organization_ids_json)]),
+                    "fetch organizations",
+                )
                 .await
             {
-                Ok(response) if response.status().is_success() => response
-                    .json::<Vec<ModrinthOrganization>>()
-                    .await
-                    .unwrap_or_default()
+                Ok(organizations) => organizations
                     .into_iter()
                     .map(|organization| (organization.id.clone(), map_organization(organization)))
                     .collect(),
-                _ => HashMap::new(),
+                Err(error) => {
+                    log::warn!("[Modrinth] Organization enrichment failed: {error}");
+                    HashMap::new()
+                }
             }
         };
 
@@ -778,106 +793,24 @@ impl ResourceSource for ModrinthSource {
             params.push(("loaders", format!("[\"{}\"]", l.to_lowercase())));
         }
 
-        let response = self.client.get(&url).query(&params).send().await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Modrinth API error fetching versions ({}): {}",
-                status,
-                body
-            ));
-        }
-
-        let versions: Vec<ModrinthVersion> = response.json().await.map_err(|e| {
-            anyhow!(
-                "Modrinth versions JSON decode error: {}. Project: {}",
-                e,
-                project_id
+        let versions: Vec<ModrinthVersion> = self
+            .request_json(
+                self.client.get(&url).query(&params),
+                "fetch project versions",
             )
-        })?;
+            .await?;
 
-        Ok(versions
+        versions
             .into_iter()
-            .map(|v| {
-                let primary_file = v
-                    .files
-                    .iter()
-                    .find(|f| f.primary)
-                    .or_else(|| {
-                        v.files.iter().find(|f| {
-                            let url = f.url.to_lowercase();
-                            // Prioritize actual game files and exclude metadata/signatures
-                            (url.ends_with(".mrpack")
-                                || url.ends_with(".jar")
-                                || url.ends_with(".zip"))
-                                && !url.contains("cosign-bundle")
-                                && !url.ends_with(".asc")
-                        })
-                    })
-                    .unwrap_or(&v.files[0]);
-
-                log::debug!(
-                    "[Modrinth] Selected version file: {} (primary: {}) for version {}",
-                    primary_file.filename,
-                    primary_file.primary,
-                    v.version_number
-                );
-
-                ResourceVersion {
-                    id: v.id,
-                    project_id: v.project_id,
-                    version_number: v.version_number,
-                    game_versions: v.game_versions,
-                    loaders: v.loaders,
-                    download_url: primary_file.url.clone(),
-                    file_name: primary_file.filename.clone(),
-                    release_type: match v.version_type.as_str() {
-                        "release" => ReleaseType::Release,
-                        "beta" => ReleaseType::Beta,
-                        "alpha" => ReleaseType::Alpha,
-                        _ => ReleaseType::Release,
-                    },
-                    hash: primary_file.hashes.sha1.clone(),
-                    dependencies: v
-                        .dependencies
-                        .into_iter()
-                        .filter(|d| d.project_id.is_some())
-                        .map(|d| ResourceDependency {
-                            project_id: d.project_id.unwrap(),
-                            version_id: d.version_id,
-                            file_name: d.file_name,
-                            dependency_type: match d.dependency_type.as_str() {
-                                "required" => DependencyType::Required,
-                                "optional" => DependencyType::Optional,
-                                "incompatible" => DependencyType::Incompatible,
-                                "embedded" => DependencyType::Embedded,
-                                _ => DependencyType::Optional,
-                            },
-                        })
-                        .collect(),
-                    published_at: Some(v.date_published),
-                    download_count: v.downloads,
-                    file_size: primary_file.size,
-                    files: Vec::new(),
-                }
-            })
-            .collect())
+            .map(|version| Self::map_version(version, None))
+            .collect()
     }
 
     async fn get_version(&self, _project_id: &str, version_id: &str) -> Result<ResourceVersion> {
         let url = format!("{MODRINTH_API_V3}/version/{version_id}");
-        let response = self.client.get(&url).send().await?;
-
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Modrinth version fetch failed: {}",
-                response.status()
-            ));
-        }
-
-        let v: ModrinthVersion = response.json().await?;
+        let v: ModrinthVersion = self
+            .request_json(self.client.get(&url), "fetch version")
+            .await?;
         Self::map_version(v, None)
     }
 
@@ -887,100 +820,27 @@ impl ResourceSource for ModrinthSource {
         version_id: &str,
     ) -> Result<ResourceVersionDetails> {
         let url = format!("{MODRINTH_API_V3}/version/{version_id}");
-        let response = self.client.get(&url).send().await?;
-
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Modrinth version details fetch failed: {}",
-                response.status()
-            ));
-        }
-
-        Self::map_version_details(response.json().await?)
+        let version = self
+            .request_json(self.client.get(&url), "fetch version details")
+            .await?;
+        Self::map_version_details(version)
     }
 
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {
         let url = format!("{MODRINTH_LEGACY_API_V2}/version_file/{hash}?algorithm=sha1");
-        let response = self.client.get(&url).send().await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Modrinth hash lookup failed ({}): {}",
-                status,
-                body
-            ));
-        }
-
-        let v: ModrinthVersion = response.json().await.map_err(|e| {
-            anyhow!(
-                "Modrinth hash lookup JSON decode error: {}. Hash: {}",
-                e,
-                hash
-            )
-        })?;
+        let v: ModrinthVersion = self
+            .request_json(self.client.get(&url), "look up version by hash")
+            .await?;
 
         let project = self.get_project(&v.project_id).await?;
-
-        let primary_file = v
-            .files
-            .iter()
-            .find(|f| f.primary)
-            .or_else(|| {
-                v.files.iter().find(|f| {
-                    let url = f.url.to_lowercase();
-                    (url.ends_with(".mrpack") || url.ends_with(".jar") || url.ends_with(".zip"))
-                        && !url.ends_with(".cosign-bundle.json")
-                })
-            })
-            .unwrap_or(&v.files[0]);
+        let version = Self::map_version(v, Some(hash))?;
 
         log::info!(
-            "[Modrinth] get_by_hash: Selected project {} version {}, file: {} (primary: {})",
+            "[Modrinth] get_by_hash: Selected project {} version {}, file: {}",
             project.name,
-            v.version_number,
-            primary_file.filename,
-            primary_file.primary
+            version.version_number,
+            version.file_name
         );
-
-        let version = ResourceVersion {
-            id: v.id,
-            project_id: v.project_id,
-            version_number: v.version_number,
-            game_versions: v.game_versions,
-            loaders: v.loaders,
-            download_url: primary_file.url.clone(),
-            file_name: primary_file.filename.clone(),
-            release_type: match v.version_type.as_str() {
-                "release" => ReleaseType::Release,
-                "beta" => ReleaseType::Beta,
-                "alpha" => ReleaseType::Alpha,
-                _ => ReleaseType::Release,
-            },
-            hash: primary_file.hashes.sha1.clone(),
-            dependencies: v
-                .dependencies
-                .into_iter()
-                .filter(|d| d.project_id.is_some())
-                .map(|d| ResourceDependency {
-                    project_id: d.project_id.unwrap(),
-                    version_id: d.version_id,
-                    file_name: d.file_name,
-                    dependency_type: match d.dependency_type.as_str() {
-                        "required" => DependencyType::Required,
-                        "optional" => DependencyType::Optional,
-                        "incompatible" => DependencyType::Incompatible,
-                        "embedded" => DependencyType::Embedded,
-                        _ => DependencyType::Optional,
-                    },
-                })
-                .collect(),
-            published_at: Some(v.date_published),
-            download_count: v.downloads,
-            file_size: primary_file.size,
-            files: Vec::new(),
-        };
 
         Ok((project, version))
     }
@@ -993,26 +853,17 @@ impl ResourceSource for ModrinthSource {
             return Ok(HashMap::new());
         }
 
-        let response = self
-            .client
-            .post(format!("{MODRINTH_LEGACY_API_V2}/version_files"))
-            .json(&serde_json::json!({
-                "hashes": hashes,
-                "algorithm": "sha1"
-            }))
-            .send()
+        let versions: HashMap<String, ModrinthVersion> = self
+            .request_json(
+                self.client
+                    .post(format!("{MODRINTH_LEGACY_API_V2}/version_files"))
+                    .json(&serde_json::json!({
+                        "hashes": hashes,
+                        "algorithm": "sha1"
+                    })),
+                "look up versions by hash",
+            )
             .await?;
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Modrinth batch hash lookup failed ({}): {}",
-                status,
-                body
-            ));
-        }
-
-        let versions: HashMap<String, ModrinthVersion> = response.json().await?;
         let project_ids = versions
             .values()
             .map(|version| version.project_id.clone())
@@ -1047,18 +898,9 @@ impl ResourceSource for ModrinthSource {
 
     async fn get_categories(&self) -> Result<Vec<ResourceCategory>> {
         let url = format!("{MODRINTH_API_V3}/tag/category");
-        let response = self.client.get(url).send().await?;
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Modrinth categories fetch failed ({}): {}",
-                status,
-                body
-            ));
-        }
-
-        let cats: Vec<ModrinthCategory> = response.json().await?;
+        let cats: Vec<ModrinthCategory> = self
+            .request_json(self.client.get(url), "fetch categories")
+            .await?;
         Ok(cats
             .into_iter()
             .filter(|c| {
@@ -1121,7 +963,7 @@ mod tests {
             project_type_filter(ResourceType::DataPack),
             "all_project_types"
         );
-        assert_eq!(project_type_filter(ResourceType::Mod), "project_type");
+        assert_eq!(project_type_filter(ResourceType::Mod), "project_types");
     }
 
     #[test]
@@ -1182,5 +1024,27 @@ mod tests {
         assert_eq!(details.changelog.as_deref(), Some("## Changes\n\n- Faster"));
         assert_eq!(details.changelog_format, ResourceChangelogFormat::Markdown);
         assert_eq!(details.changelog_status, ResourceChangelogStatus::Available);
+    }
+
+    #[test]
+    fn version_without_files_returns_an_error() {
+        let payload: ModrinthVersion = serde_json::from_value(serde_json::json!({
+            "id": "empty-version",
+            "project_id": "project-1",
+            "version_number": "1.0.0",
+            "game_versions": [],
+            "loaders": [],
+            "files": [],
+            "version_type": "release",
+            "dependencies": [],
+            "date_published": "2026-08-01T00:00:00Z",
+            "downloads": 0,
+            "changelog": null
+        }))
+        .unwrap();
+
+        let error = ModrinthSource::map_version(payload, None).unwrap_err();
+
+        assert!(error.to_string().contains("has no files"));
     }
 }
