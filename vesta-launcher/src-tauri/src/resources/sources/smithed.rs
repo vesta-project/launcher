@@ -7,6 +7,7 @@ use crate::models::resource::{
 use crate::resources::sources::ResourceSource;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use futures::{stream, StreamExt};
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -1200,62 +1201,77 @@ impl SmithedSource {
             .json()
             .await?;
         let text = query.text.as_deref().unwrap_or("").trim().to_lowercase();
-        let mut projects = Vec::new();
-        for id in ids {
-            let Ok((pack, meta)) = self.fetch_pack_data(&id).await else {
-                continue;
-            };
-            if !text.is_empty()
-                && !pack
-                    .display
-                    .name
-                    .as_deref()
-                    .unwrap_or(&id)
-                    .to_lowercase()
-                    .contains(&text)
-                && !pack
-                    .display
-                    .description
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_lowercase()
-                    .contains(&text)
-            {
-                continue;
-            }
-            if query.categories.as_ref().is_some_and(|categories| {
-                !categories.iter().all(|category| {
-                    pack.categories
-                        .iter()
-                        .any(|value| value.eq_ignore_ascii_case(category))
-                })
-            }) {
-                continue;
-            }
-            if query.game_version.as_ref().is_some_and(|version| {
-                !pack
-                    .versions
-                    .iter()
-                    .any(|candidate| candidate.supports.contains(version))
-            }) {
-                continue;
-            }
-            if let Ok(project) = self
-                .map_pack_project(&id, pack, meta, Some(query.resource_type))
-                .await
-            {
-                projects.push(project);
-            }
-        }
+        let categories = query.categories.clone();
+        let game_version = query.game_version.clone();
+        let resource_type = query.resource_type;
+        let mut projects = stream::iter(ids)
+            .map(|id| {
+                let text = text.clone();
+                let categories = categories.clone();
+                let game_version = game_version.clone();
+                async move {
+                    let (pack, meta) = self.fetch_pack_data(&id).await.ok()?;
+                    if !text.is_empty()
+                        && !pack
+                            .display
+                            .name
+                            .as_deref()
+                            .unwrap_or(&id)
+                            .to_lowercase()
+                            .contains(&text)
+                        && !pack
+                            .display
+                            .description
+                            .as_deref()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&text)
+                    {
+                        return None;
+                    }
+                    if categories.as_ref().is_some_and(|categories| {
+                        !categories.iter().all(|category| {
+                            pack.categories
+                                .iter()
+                                .any(|value| value.eq_ignore_ascii_case(category))
+                        })
+                    }) {
+                        return None;
+                    }
+                    if game_version.as_ref().is_some_and(|version| {
+                        !pack
+                            .versions
+                            .iter()
+                            .any(|candidate| candidate.supports.contains(version))
+                    }) {
+                        return None;
+                    }
+                    let trending = meta
+                        .stats
+                        .as_ref()
+                        .and_then(|stats| stats.downloads.as_ref())
+                        .and_then(|downloads| downloads.past_week)
+                        .unwrap_or(0);
+                    self.map_pack_project(&id, pack, meta, Some(resource_type))
+                        .await
+                        .ok()
+                        .map(|project| (project, trending))
+                }
+            })
+            .buffer_unordered(8)
+            .filter_map(async move |project| project)
+            .collect::<Vec<_>>()
+            .await;
 
-        match query.sort_by.as_deref().unwrap_or("relevance") {
+        match Self::map_sort(query.sort_by.as_deref()) {
             "downloads" | "popularity" => {
-                projects.sort_by_key(|project| std::cmp::Reverse(project.download_count))
+                projects.sort_by_key(|(project, _)| std::cmp::Reverse(project.download_count))
             }
             "newest" | "updated" | "last_updated" => {
-                projects.sort_by(|a, b| b.updated_at.cmp(&a.updated_at))
+                projects.sort_by(|(a, _), (b, _)| b.updated_at.cmp(&a.updated_at))
             }
-            _ => projects.sort_by(|a, b| a.name.cmp(&b.name)),
+            "trending" => projects.sort_by_key(|(_, score)| std::cmp::Reverse(*score)),
+            _ => projects.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name)),
         }
         if query.sort_order.as_deref() == Some("asc")
             && matches!(
@@ -1270,6 +1286,7 @@ impl SmithedSource {
             .into_iter()
             .skip(query.offset as usize)
             .take(query.limit as usize)
+            .map(|(project, _)| project)
             .collect();
         Ok(SearchResponse { hits, total_hits })
     }

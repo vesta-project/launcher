@@ -82,9 +82,7 @@
 
 .field-label {
 	font-size: 11px;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.4px;
+	font-weight: 500;
 	color: var(--text-secondary);
 	flex-shrink: 0;
 }
@@ -1349,9 +1347,7 @@
 .focus-section-heading span {
 	color: var(--text-muted);
 	font-size: 10px;
-	font-weight: 700;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
+	font-weight: 500;
 }
 
 .focus-section-heading h2,
@@ -1526,8 +1522,7 @@
 .focus-dependency-group h4 {
 	margin-bottom: 6px;
 	font-size: 11px;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
+	font-weight: 500;
 }
 
 .focus-dependency-group--required h4 {

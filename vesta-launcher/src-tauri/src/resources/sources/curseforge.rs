@@ -555,11 +555,19 @@ impl ResourceSource for CurseForgeSource {
         }
 
         if let Some(creator) = &query.creator {
-            if creator.kind == ResourceCreatorKind::Author {
-                if let Ok(author_id) = creator.id.parse::<i64>() {
-                    url.push_str(&format!("&authorId={author_id}"));
-                }
+            let Ok(author_id) = creator.id.parse::<i64>() else {
+                return Ok(SearchResponse {
+                    hits: Vec::new(),
+                    total_hits: 0,
+                });
+            };
+            if creator.kind != ResourceCreatorKind::Author {
+                return Ok(SearchResponse {
+                    hits: Vec::new(),
+                    total_hits: 0,
+                });
             }
+            url.push_str(&format!("&authorId={author_id}"));
         }
 
         if let Some(version) = query.game_version {

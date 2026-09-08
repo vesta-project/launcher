@@ -643,6 +643,18 @@ const ResourceCard: Component<{
 		<div
 			class={`${styles["resource-card"]} ${styles["theme-card"]} ${styles[props.viewMode]}`}
 			onClick={navigateToDetails}
+			onKeyDown={(event) => {
+				if (
+					event.target === event.currentTarget &&
+					(event.key === "Enter" || event.key === " ")
+				) {
+					event.preventDefault();
+					navigateToDetails();
+				}
+			}}
+			role="link"
+			tabIndex={0}
+			aria-label={`View ${props.project.name}`}
 			classList={{ [styles.installed]: isInstalled() }}
 		>
 			<Show when={props.viewMode === "grid"}>

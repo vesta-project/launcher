@@ -289,8 +289,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 							: undefined
 					}
 				>
-					<label class={styles["filter-label"]}>Instance</label>
+					<span class={styles["filter-label"]}>Instance</span>
 					<Select<any>
+						aria-label="Instance"
 						disabled={isModpack()}
 						options={[
 							{ id: "none", name: "No Instance" } as any,
@@ -373,8 +374,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 				</div>
 
 				<div class={styles["filter-popover-section"]}>
-					<label class={styles["filter-label"]}>Minecraft Version</label>
+					<span class={styles["filter-label"]}>Minecraft version</span>
 					<Combobox
+						aria-label="Minecraft version"
 						options={gameVersions()}
 						value={resources.state.gameVersion || "All versions"}
 						onChange={(v: string | null) => {
@@ -399,8 +401,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 				<Show when={shouldShowLoader()}>
 					<div class={styles["filter-popover-section"]}>
-						<label class={styles["filter-label"]}>Mod Loader</label>
+						<span class={styles["filter-label"]}>Mod loader</span>
 						<Select
+							aria-label="Mod loader"
 							options={["All Loaders", ...LOADERS]}
 							value={
 								LOADERS.find(
@@ -429,8 +432,12 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 				<Show when={shouldShowEnvironment()}>
 					<div class={styles["filter-popover-section"]}>
-						<label class={styles["filter-label"]}>Environment</label>
-						<div class={styles["environment-filter-options"]}>
+						<span class={styles["filter-label"]}>Environment</span>
+						<div
+							class={styles["environment-filter-options"]}
+							role="group"
+							aria-label="Environment"
+						>
 							<button
 								class={styles["environment-filter-option"]}
 								classList={{ [styles.active]: resources.state.client }}
@@ -467,7 +474,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 				<Show when={availableCategories().length > 0}>
 					<div class={styles["filter-popover-section"]}>
-						<label class={styles["filter-label"]}>Categories</label>
+						<span class={styles["filter-label"]}>Categories</span>
 						<div class={styles["category-groups-popover"]}>
 							<For each={availableCategories()}>
 								{(group) => (
@@ -477,9 +484,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 												class={styles["category-group-header"]}
 												classList={{ [styles["not-clickable"]]: !group.id }}
 											>
-												<div
+												<button
 													class={styles["category-group-title"]}
 													title={group.id}
+													type="button"
+													disabled={!group.id}
 													classList={{
 														[styles.clickable]: group.id !== undefined,
 														[styles.active]:
@@ -517,7 +526,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 														</div>
 													</Show>
 													<span>{group.name}</span>
-												</div>
+												</button>
 												<Show
 													when={
 														group.items.length > 0 &&
@@ -526,6 +535,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 												>
 													<button
 														class={styles["expand-toggle"]}
+														type="button"
+														aria-label={`Toggle ${group.name} categories`}
+														aria-expanded={resources.state.expandedCategoryGroups.includes(
+															group.id || group.name,
+														)}
 														classList={{
 															[styles.expanded]:
 																resources.state.expandedCategoryGroups.includes(
@@ -611,6 +625,14 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 							activeRouter()?.updateQuery("loader", null);
 							activeRouter()?.updateQuery("client", null);
 							activeRouter()?.updateQuery("server", null);
+							for (const key of [
+								"creatorKind",
+								"creatorId",
+								"creatorName",
+								"creatorIconUrl",
+							]) {
+								activeRouter()?.updateQuery(key, null);
+							}
 							activeRouter()?.updateQuery("categories", []);
 							activeRouter()?.updateQuery("query", "");
 						}}

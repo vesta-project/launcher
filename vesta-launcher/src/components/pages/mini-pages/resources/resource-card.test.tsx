@@ -152,6 +152,21 @@ describe("ResourceCard", () => {
 		expect(screen.queryByText(/Contributor/)).toBeNull();
 	});
 
+	it("opens project details from the keyboard", async () => {
+		render(() => <ResourceCard project={project} viewMode="list" />);
+
+		await fireEvent.keyDown(
+			screen.getByRole("link", { name: "View Test Pack" }),
+			{ key: "Enter" },
+		);
+
+		expect(mocks.navigate).toHaveBeenCalledWith(
+			"/resource-details",
+			expect.objectContaining({ projectId: project.id }),
+			expect.anything(),
+		);
+	});
+
 	it("keeps the clicked resource type while versions are loading", async () => {
 		const versions = deferred<ResourceVersion[]>();
 		mocks.getVersions.mockReturnValue(versions.promise);

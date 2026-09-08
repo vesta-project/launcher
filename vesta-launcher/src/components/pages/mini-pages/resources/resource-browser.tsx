@@ -65,8 +65,8 @@ const ResourceBrowser: Component<{
 	resourceType?: any;
 	gameVersion?: string;
 	loader?: string;
-	client?: boolean;
-	server?: boolean;
+	client?: boolean | string;
+	server?: boolean | string;
 	creatorKind?: ResourceCreatorFilter["kind"];
 	creatorId?: string;
 	creatorName?: string;
@@ -83,6 +83,8 @@ const ResourceBrowser: Component<{
 	expandedCategoryGroups?: string[];
 	router?: MiniRouter;
 }> = (props) => {
+	const routeBoolean = (value: boolean | string | undefined) =>
+		value === true || value === "true";
 	const activeRouter = createMemo(() => props.router || router());
 	let debounceTimer: number | undefined;
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
@@ -426,11 +428,11 @@ const ResourceBrowser: Component<{
 				isInitializedFromProps = true;
 			}
 			if (props.client !== undefined) {
-				resources.setClient(props.client);
+				resources.setClient(routeBoolean(props.client));
 				isInitializedFromProps = true;
 			}
 			if (props.server !== undefined) {
-				resources.setServer(props.server);
+				resources.setServer(routeBoolean(props.server));
 				isInitializedFromProps = true;
 			}
 			if (props.creatorKind && props.creatorId && props.creatorName) {
@@ -727,6 +729,9 @@ const ResourceBrowser: Component<{
 											resources.state.categories.length > 0 ||
 											resources.state.gameVersion ||
 											resources.state.loader ||
+											resources.state.client ||
+											resources.state.server ||
+											resources.state.creator ||
 											resources.state.selectedInstanceId
 										}
 									>
@@ -737,6 +742,16 @@ const ResourceBrowser: Component<{
 												activeRouter()?.updateQuery("selectedInstanceId", null);
 												activeRouter()?.updateQuery("gameVersion", null);
 												activeRouter()?.updateQuery("loader", null);
+												activeRouter()?.updateQuery("client", null);
+												activeRouter()?.updateQuery("server", null);
+												for (const key of [
+													"creatorKind",
+													"creatorId",
+													"creatorName",
+													"creatorIconUrl",
+												]) {
+													activeRouter()?.updateQuery(key, null);
+												}
 												activeRouter()?.updateQuery("categories", []);
 												activeRouter()?.updateQuery("query", "");
 											}}

@@ -197,6 +197,18 @@ fn resource_type(value: &str) -> ResourceType {
     }
 }
 
+fn matches_resource_type(value: &str, expected: ResourceType) -> bool {
+    matches!(
+        (value, expected),
+        ("mod", ResourceType::Mod)
+            | ("resourcepack", ResourceType::ResourcePack)
+            | ("shader", ResourceType::Shader)
+            | ("datapack", ResourceType::DataPack)
+            | ("modpack", ResourceType::Modpack)
+            | ("world", ResourceType::World)
+    )
+}
+
 fn primary_project_type(project_types: &[String]) -> &str {
     project_types.first().map(String::as_str).unwrap_or("mod")
 }
@@ -233,12 +245,15 @@ fn map_environment(values: &[String]) -> Option<ResourceEnvironment> {
     let mut server = false;
     for value in values {
         match value.as_str() {
-            "client_only" => client = true,
-            "server_only" => server = true,
+            "client_only" | "singleplayer_only" => client = true,
+            "server_only" | "dedicated_server_only" => server = true,
             "client_and_server"
+            | "client_or_server"
             | "client_or_server_prefers_both"
             | "client_or_server_prefers_client"
-            | "client_or_server_prefers_server" => {
+            | "client_or_server_prefers_server"
+            | "client_only_server_optional"
+            | "server_only_client_optional" => {
                 client = true;
                 server = true;
             }
@@ -471,7 +486,7 @@ impl ModrinthSource {
             project
                 .project_types
                 .iter()
-                .any(|value| resource_type(value) == query.resource_type)
+                .any(|value| matches_resource_type(value, query.resource_type))
                 && (text.is_empty()
                     || project.name.to_lowercase().contains(&text)
                     || project.summary.to_lowercase().contains(&text))
@@ -591,23 +606,34 @@ impl ResourceSource for ModrinthSource {
         let environment_values = match (query.client, query.server) {
             (true, true) => Some(vec![
                 "client_and_server",
+                "client_or_server",
                 "client_or_server_prefers_both",
                 "client_or_server_prefers_client",
                 "client_or_server_prefers_server",
+                "client_only_server_optional",
+                "server_only_client_optional",
             ]),
             (true, false) => Some(vec![
                 "client_only",
+                "singleplayer_only",
                 "client_and_server",
+                "client_or_server",
                 "client_or_server_prefers_both",
                 "client_or_server_prefers_client",
                 "client_or_server_prefers_server",
+                "client_only_server_optional",
+                "server_only_client_optional",
             ]),
             (false, true) => Some(vec![
                 "server_only",
+                "dedicated_server_only",
                 "client_and_server",
+                "client_or_server",
                 "client_or_server_prefers_both",
                 "client_or_server_prefers_client",
                 "client_or_server_prefers_server",
+                "client_only_server_optional",
+                "server_only_client_optional",
             ]),
             (false, false) => None,
         };
@@ -1105,8 +1131,8 @@ impl ResourceSource for ModrinthSource {
 #[cfg(test)]
 mod tests {
     use super::{
-        map_authors, map_environment, map_links, project_type_filter, ModrinthProjectLink,
-        ModrinthSource, ModrinthTeamMember, ModrinthVersion,
+        map_authors, map_environment, map_links, matches_resource_type, project_type_filter,
+        ModrinthProjectLink, ModrinthSource, ModrinthTeamMember, ModrinthVersion,
     };
     use crate::models::resource::{
         DependencyType, ResourceChangelogFormat, ResourceChangelogStatus, ResourceType,
@@ -1146,7 +1172,22 @@ mod tests {
         let both = map_environment(&["client_and_server".to_string()]).unwrap();
         assert!(both.client);
         assert!(both.server);
+
+        let singleplayer = map_environment(&["singleplayer_only".to_string()]).unwrap();
+        assert!(singleplayer.client);
+        assert!(!singleplayer.server);
+
+        let optional = map_environment(&["server_only_client_optional".to_string()]).unwrap();
+        assert!(optional.client);
+        assert!(optional.server);
         assert!(map_environment(&["unknown".to_string()]).is_none());
+    }
+
+    #[test]
+    fn creator_project_types_do_not_treat_plugins_as_mods() {
+        assert!(matches_resource_type("mod", ResourceType::Mod));
+        assert!(!matches_resource_type("plugin", ResourceType::Mod));
+        assert!(matches_resource_type("modpack", ResourceType::Modpack));
     }
 
     #[test]
