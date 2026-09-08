@@ -8,8 +8,8 @@ import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { getSourceDescriptor } from "@resources/source-catalog";
 import { type Instance, instancesState } from "@stores/instances";
 import {
-	type ResourceProject,
 	type ResourceCreatorFilter,
+	type ResourceProject,
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";

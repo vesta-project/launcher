@@ -17,8 +17,8 @@ import {
 } from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
 import {
-	type ResourceDependency,
 	type ResourceCreatorFilter,
+	type ResourceDependency,
 	type ResourceProject,
 	type ResourceType,
 	type ResourceVersion,

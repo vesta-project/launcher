@@ -4,9 +4,9 @@ import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import {
+	primaryResourceOwner,
 	type ResourceProject,
 	type ResourceVersion,
-	primaryResourceOwner,
 	resources,
 } from "@stores/resources";
 import { Badge } from "@ui/badge";
