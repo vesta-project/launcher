@@ -11,6 +11,10 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+// v3 does not currently expose hash lookup endpoints. Keep these calls visibly
+// isolated so the remaining v2 dependency can be removed independently.
+const MODRINTH_LEGACY_API_V2: &str = "https://api.modrinth.com/v2";
+
 #[derive(Deserialize)]
 struct ModrinthCategory {
     icon: String,
@@ -267,7 +271,7 @@ impl ModrinthSource {
 impl ResourceSource for ModrinthSource {
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
         let mut url = format!(
-            "https://api.modrinth.com/v2/search?query={}&limit={}&offset={}",
+            "{MODRINTH_LEGACY_API_V2}/search?query={}&limit={}&offset={}",
             urlencoding::encode(query.text.as_deref().unwrap_or("")),
             query.limit,
             query.offset
@@ -350,7 +354,7 @@ impl ResourceSource for ModrinthSource {
         if result.hits.is_empty() && is_blank_query && has_optional_filters && query.offset == 0 {
             let fallback_facets = format!("[[\"{}:{}\"]]", project_type_facet, mr_type);
             let mut fallback_url = format!(
-                "https://api.modrinth.com/v2/search?query=&limit={}&offset=0",
+                "{MODRINTH_LEGACY_API_V2}/search?query=&limit={}&offset=0",
                 query.limit
             );
             if let Some(sort) = &query.sort_by {
@@ -417,7 +421,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_project(&self, id: &str) -> Result<ResourceProject> {
-        let url = format!("https://api.modrinth.com/v2/project/{}", id);
+        let url = format!("{MODRINTH_LEGACY_API_V2}/project/{id}");
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -436,7 +440,7 @@ impl ResourceSource for ModrinthSource {
             .map_err(|e| anyhow!("Modrinth project JSON decode error: {}. ID: {}", e, id))?;
 
         // Fetch team members to find author
-        let team_url = format!("https://api.modrinth.com/v2/team/{}/members", project.team);
+        let team_url = format!("{MODRINTH_LEGACY_API_V2}/team/{}/members", project.team);
         let team_response = self.client.get(&team_url).send().await?;
 
         let members: Vec<ModrinthTeamMember> = if team_response.status().is_success() {
@@ -529,7 +533,7 @@ impl ResourceSource for ModrinthSource {
         let ids_json = serde_json::to_string(ids)?;
         let response = self
             .client
-            .get("https://api.modrinth.com/v2/projects")
+            .get(format!("{MODRINTH_LEGACY_API_V2}/projects"))
             .query(&[("ids", &ids_json)])
             .send()
             .await?;
@@ -611,7 +615,7 @@ impl ResourceSource for ModrinthSource {
         game_version: Option<&str>,
         loader: Option<&str>,
     ) -> Result<Vec<ResourceVersion>> {
-        let url = format!("https://api.modrinth.com/v2/project/{}/version", project_id);
+        let url = format!("{MODRINTH_LEGACY_API_V2}/project/{project_id}/version");
 
         let mut params = Vec::new();
         if let Some(gv) = game_version {
@@ -710,7 +714,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_version(&self, _project_id: &str, version_id: &str) -> Result<ResourceVersion> {
-        let url = format!("https://api.modrinth.com/v2/version/{}", version_id);
+        let url = format!("{MODRINTH_LEGACY_API_V2}/version/{version_id}");
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -729,7 +733,7 @@ impl ResourceSource for ModrinthSource {
         _project_id: &str,
         version_id: &str,
     ) -> Result<ResourceVersionDetails> {
-        let url = format!("https://api.modrinth.com/v2/version/{}", version_id);
+        let url = format!("{MODRINTH_LEGACY_API_V2}/version/{version_id}");
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -743,10 +747,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {
-        let url = format!(
-            "https://api.modrinth.com/v2/version_file/{}?algorithm=sha1",
-            hash
-        );
+        let url = format!("{MODRINTH_LEGACY_API_V2}/version_file/{hash}?algorithm=sha1");
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -841,7 +842,7 @@ impl ResourceSource for ModrinthSource {
 
         let response = self
             .client
-            .post("https://api.modrinth.com/v2/version_files")
+            .post(format!("{MODRINTH_LEGACY_API_V2}/version_files"))
             .json(&serde_json::json!({
                 "hashes": hashes,
                 "algorithm": "sha1"
@@ -892,7 +893,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_categories(&self) -> Result<Vec<ResourceCategory>> {
-        let url = "https://api.modrinth.com/v2/tag/category";
+        let url = format!("{MODRINTH_LEGACY_API_V2}/tag/category");
         let response = self.client.get(url).send().await?;
         if !response.status().is_success() {
             let status = response.status();
