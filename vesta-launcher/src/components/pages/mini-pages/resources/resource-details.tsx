@@ -1,6 +1,7 @@
 import DownloadIcon from "@assets/icons/actions/download.svg";
 import ExternalLinkIcon from "@assets/icons/actions/external-link.svg";
 import HeartIcon from "@assets/icons/content/heart.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
 import BellIcon from "@assets/icons/status/bell.svg";
 import InfoIcon from "@assets/icons/status/info.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
@@ -17,6 +18,7 @@ import {
 import { instancesState } from "@stores/instances";
 import {
 	type ResourceDependency,
+	type ResourceCreatorFilter,
 	type ResourceProject,
 	type ResourceType,
 	type ResourceVersion,
@@ -683,6 +685,100 @@ const ResourceDetailsPage: Component<{
 		resources.setQuery("");
 		activeRouter()?.navigate("/resources");
 	};
+
+	const handleBrowseByCreator = (creator: ResourceCreatorFilter) => {
+		const p = project();
+		if (!p) return;
+
+		resources.setSource(p.source);
+		resources.setType(installType());
+		resources.setQuery("");
+		resources.setCategories([]);
+		resources.setGameVersion(null);
+		resources.setLoader(null);
+		resources.setClient(false);
+		resources.setServer(false);
+		resources.setInstance(null);
+		resources.setCreator(creator);
+		activeRouter()?.navigate("/resources", {
+			activeSource: p.source,
+			resourceType: installType(),
+			creatorKind: creator.kind,
+			creatorId: creator.id,
+			creatorName: creator.name,
+			creatorIconUrl: creator.icon_url || undefined,
+		});
+	};
+
+	const projectCreators = createMemo(() => {
+		const p = project();
+		if (!p) return [];
+		const creators: Array<{
+			filter: ResourceCreatorFilter;
+			role: string;
+			owner: boolean;
+		}> = [];
+		if (p.organization) {
+			creators.push({
+				filter: {
+					kind: "organization",
+					id: p.organization.id,
+					name: p.organization.name,
+					icon_url: p.organization.icon_url,
+				},
+				role: "Organization",
+				owner: true,
+			});
+		}
+		const authors = [...(p.author_details ?? [])].sort(
+			(a, b) =>
+				Number(Boolean(b.is_owner)) - Number(Boolean(a.is_owner)) ||
+				a.ordering - b.ordering,
+		);
+		for (const author of authors) {
+			creators.push({
+				filter: {
+					kind: "author",
+					id: author.id,
+					name: author.username,
+					icon_url: author.avatar_url,
+				},
+				role: author.is_owner ? "Owner" : author.role || "Member",
+				owner: Boolean(author.is_owner),
+			});
+		}
+		if (authors.length === 0 && p.author) {
+			creators.push({
+				filter: {
+					kind: "author",
+					id: "",
+					name: p.author,
+					icon_url: null,
+				},
+				role: p.organization ? "Owner" : "Author",
+				owner: !p.organization,
+			});
+		}
+		return creators;
+	});
+
+	const projectLinks = createMemo(() => {
+		const p = project();
+		if (!p) return [];
+		const source = getSourceDescriptor(p.source);
+		const links = [
+			{
+				kind: "project",
+				label: `View on ${source?.label ?? p.source}`,
+				url: p.web_url,
+			},
+			...(p.links ?? []),
+		];
+		const seen = new Set<string>();
+		return links.filter(
+			(link) => link.url && !seen.has(link.url) && seen.add(link.url),
+		);
+	});
 
 	const [peerProjectLookup] = createResource(
 		project,
@@ -2535,6 +2631,75 @@ const ResourceDetailsPage: Component<{
 				</div>
 			</section>
 
+			<Show when={projectCreators().length > 0}>
+				<section class={styles["sidebar-section"]}>
+					<div class={styles["sidebar-section-heading"]}>
+						<h3>Creators</h3>
+					</div>
+					<div class={styles["creator-list"]}>
+						<For each={projectCreators()}>
+							{(creator) => (
+								<button
+									class={styles["creator-row"]}
+									disabled={!creator.filter.id}
+									onClick={() => handleBrowseByCreator(creator.filter)}
+									type="button"
+									title={
+										creator.filter.id
+											? `Browse projects by ${creator.filter.name}`
+											: creator.filter.name
+									}
+								>
+									<Show
+										when={creator.filter.icon_url}
+										fallback={
+											<span class={styles["creator-avatar-fallback"]}>
+												{creator.filter.name.charAt(0).toUpperCase()}
+											</span>
+										}
+									>
+										<img
+											class={styles["creator-avatar"]}
+											src={creator.filter.icon_url || ""}
+											alt=""
+										/>
+									</Show>
+									<span class={styles["creator-copy"]}>
+										<span class={styles["creator-name"]}>
+											{creator.filter.name}
+										</span>
+										<span class={styles["creator-role"]}>{creator.role}</span>
+									</span>
+								</button>
+							)}
+						</For>
+					</div>
+				</section>
+			</Show>
+
+			<Show when={projectLinks().length > 0}>
+				<section class={styles["sidebar-section"]}>
+					<div class={styles["sidebar-section-heading"]}>
+						<LinkIcon width={16} height={16} />
+						<h3>Links</h3>
+					</div>
+					<div class={styles["project-link-list"]}>
+						<For each={projectLinks()}>
+							{(link) => (
+								<button
+									class={styles["project-link-row"]}
+									onClick={() => openExternal(link.url)}
+									type="button"
+								>
+									<span>{link.label}</span>
+									<ExternalLinkIcon width={13} height={13} />
+								</button>
+							)}
+						</For>
+					</div>
+				</section>
+			</Show>
+
 			<section class={styles["sidebar-section"]}>
 				<div class={styles["sidebar-section-heading"]}>
 					<InfoIcon width={16} height={16} />
@@ -2699,17 +2864,6 @@ const ResourceDetailsPage: Component<{
 													>
 														<div class={styles["project-meta-row"]}>
 															<div class={styles["meta-stats"]}>
-																<span class={styles["meta-item"]}>
-																	By{" "}
-																	{project()?.authors &&
-																	(project()?.authors?.length ?? 0) > 0
-																		? project()?.authors?.join(", ")
-																		: project()?.author}
-																	<Show when={project()?.organization?.name}>
-																		{" · "}
-																		{project()?.organization?.name}
-																	</Show>
-																</span>
 																<Show
 																	when={(project()?.download_count ?? 0) > 0}
 																>

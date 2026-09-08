@@ -25,6 +25,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@stores/resources", () => ({
+	primaryResourceOwner: (project: ResourceProject) => ({
+		name:
+			project.organization?.name ||
+			project.author_details?.find((author) => author.is_owner)?.username ||
+			project.author,
+		iconUrl: project.organization?.icon_url || null,
+		kind: project.organization ? "organization" : "author",
+	}),
 	resources: {
 		state: mocks.state,
 		getVersions: mocks.getVersions,
@@ -119,6 +127,29 @@ describe("ResourceCard", () => {
 		vi.clearAllMocks();
 		mocks.state.resourceType = "resourcepack";
 		mocks.state.selectedInstanceId = 7;
+	});
+
+	it("shows only the organization as the primary owner", () => {
+		render(() => (
+			<ResourceCard
+				project={{
+					...project,
+					author: "Project owner",
+					authors: ["Project owner", "Contributor"],
+					organization: {
+						id: "vesta",
+						slug: "vesta",
+						name: "Vesta team",
+						icon_url: null,
+					},
+				}}
+				viewMode="list"
+			/>
+		));
+
+		expect(screen.getByText("by Vesta team")).toBeTruthy();
+		expect(screen.queryByText(/Project owner/)).toBeNull();
+		expect(screen.queryByText(/Contributor/)).toBeNull();
 	});
 
 	it("keeps the clicked resource type while versions are loading", async () => {

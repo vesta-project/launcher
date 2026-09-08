@@ -6,6 +6,7 @@ import { instancesState } from "@stores/instances";
 import {
 	type ResourceProject,
 	type ResourceVersion,
+	primaryResourceOwner,
 	resources,
 } from "@stores/resources";
 import { Badge } from "@ui/badge";
@@ -171,6 +172,7 @@ const ResourceCard: Component<{
 	installSelectionActive?: boolean;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
+	const primaryOwner = createMemo(() => primaryResourceOwner(props.project));
 	const installType = () => resources.state.resourceType;
 	const isInstalled = createMemo(() => {
 		if (installType() === "datapack") return false;
@@ -690,7 +692,7 @@ const ResourceCard: Component<{
 						<div class={styles["card-title-area"]}>
 							<h3 class={styles["card-title"]}>{props.project.name}</h3>
 							<span class={styles["card-author"]}>
-								by {props.project.author}
+								by {primaryOwner().name}
 							</span>
 							<div class={styles["card-stats"]}>
 								<span class={styles["card-stats-item"]}>
@@ -753,7 +755,7 @@ const ResourceCard: Component<{
 						<div class={styles["card-list-header-left"]}>
 							<span class={styles["card-list-name"]}>{props.project.name}</span>
 							<span class={styles["card-list-meta"]}>
-								<span>by {props.project.author}</span>
+								<span>by {primaryOwner().name}</span>
 								<span>·</span>
 								<span>
 									{props.project.download_count.toLocaleString()}{" "}
