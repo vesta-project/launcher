@@ -1,7 +1,8 @@
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceType, ResourceVersion,
-    ResourceVersionDetails, SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
+    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceProjectLink,
+    ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse,
+    SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use crate::utils::url::normalize_url;
@@ -63,10 +64,16 @@ struct CFScreenshot {
     thumbnail_url: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CFLinks {
     website_url: String,
+    #[serde(default)]
+    wiki_url: Option<String>,
+    #[serde(default)]
+    issues_url: Option<String>,
+    #[serde(default)]
+    source_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -75,9 +82,13 @@ struct CFLogo {
     thumbnail_url: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct CFAuthor {
+    #[serde(default)]
+    id: i64,
     name: String,
+    #[serde(default)]
+    url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -212,6 +223,41 @@ impl CurseForgeSource {
             .post(url)
             .header("x-api-key", &self.api_key)
             .header("Accept", "application/json")
+    }
+
+    fn map_authors(authors: &[CFAuthor]) -> Vec<ResourceAuthor> {
+        authors
+            .iter()
+            .enumerate()
+            .map(|(index, author)| ResourceAuthor {
+                id: author.id.to_string(),
+                username: author.name.clone(),
+                avatar_url: None,
+                profile_url: author.url.clone(),
+                role: if index == 0 { "Owner" } else { "Author" }.to_string(),
+                ordering: index as i64,
+                is_owner: index == 0,
+            })
+            .collect()
+    }
+
+    fn map_links(links: &CFLinks) -> Vec<ResourceProjectLink> {
+        [
+            ("wiki", "Wiki", links.wiki_url.as_deref()),
+            ("issues", "Issue tracker", links.issues_url.as_deref()),
+            ("source", "Source code", links.source_url.as_deref()),
+        ]
+        .into_iter()
+        .filter_map(|(kind, label, url)| {
+            url.filter(|url| url.starts_with("https://"))
+                .map(|url| ResourceProjectLink {
+                    kind: kind.to_string(),
+                    label: label.to_string(),
+                    url: url.to_string(),
+                    donation: false,
+                })
+        })
+        .collect()
     }
 
     fn split_game_versions(values: &[String]) -> (Vec<String>, Vec<String>) {
@@ -602,7 +648,7 @@ impl ResourceSource for CurseForgeSource {
                     .map(|a| a.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()),
                 authors: item.authors.iter().map(|a| a.name.clone()).collect(),
-                author_details: Vec::new(),
+                author_details: Self::map_authors(&item.authors),
                 organization: None,
                 project_types: vec![query.resource_type],
                 download_count: item.download_count as u64,
@@ -612,7 +658,9 @@ impl ResourceSource for CurseForgeSource {
                     .into_iter()
                     .map(|c| c.id.to_string())
                     .collect(),
-                web_url: item.links.website_url,
+                web_url: item.links.website_url.clone(),
+                links: Self::map_links(&item.links),
+                environment: None,
                 external_ids: None,
                 featured_gallery: item
                     .screenshots
@@ -696,7 +744,7 @@ impl ResourceSource for CurseForgeSource {
                 .map(|a| a.name.clone())
                 .unwrap_or_else(|| "Unknown".to_string()),
             authors: item.authors.iter().map(|a| a.name.clone()).collect(),
-            author_details: Vec::new(),
+            author_details: Self::map_authors(&item.authors),
             organization: None,
             project_types: vec![Self::map_class_id_to_type(item.class_id.unwrap_or(6))],
             download_count: item.download_count as u64,
@@ -706,7 +754,9 @@ impl ResourceSource for CurseForgeSource {
                 .into_iter()
                 .map(|c| c.id.to_string())
                 .collect(),
-            web_url: item.links.website_url,
+            web_url: item.links.website_url.clone(),
+            links: Self::map_links(&item.links),
+            environment: None,
             external_ids: None,
             featured_gallery: item
                 .screenshots
@@ -772,7 +822,7 @@ impl ResourceSource for CurseForgeSource {
                     .map(|a| a.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()),
                 authors: item.authors.iter().map(|a| a.name.clone()).collect(),
-                author_details: Vec::new(),
+                author_details: Self::map_authors(&item.authors),
                 organization: None,
                 project_types: vec![Self::map_class_id_to_type(item.class_id.unwrap_or(6))],
                 download_count: item.download_count as u64,
@@ -782,7 +832,9 @@ impl ResourceSource for CurseForgeSource {
                     .into_iter()
                     .map(|c| c.id.to_string())
                     .collect(),
-                web_url: item.links.website_url,
+                web_url: item.links.website_url.clone(),
+                links: Self::map_links(&item.links),
+                environment: None,
                 external_ids: None,
                 featured_gallery: item
                     .screenshots

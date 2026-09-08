@@ -28,13 +28,34 @@ export type ResourceAuthor = {
 	id: string;
 	username: string;
 	avatar_url: string | null;
+	profile_url?: string | null;
 	role: string;
 	ordering: number;
+	is_owner?: boolean;
 };
 
 export type ResourceOrganization = {
 	id: string;
 	slug: string;
+	name: string;
+	icon_url: string | null;
+};
+
+export type ResourceProjectLink = {
+	kind: string;
+	label: string;
+	url: string;
+	donation: boolean;
+};
+
+export type ResourceEnvironment = {
+	client: boolean;
+	server: boolean;
+};
+
+export type ResourceCreatorFilter = {
+	kind: "author" | "organization";
+	id: string;
 	name: string;
 	icon_url: string | null;
 };
@@ -56,12 +77,34 @@ export type ResourceProject = {
 	follower_count: number;
 	categories: string[];
 	web_url: string;
+	links?: ResourceProjectLink[];
+	environment?: ResourceEnvironment | null;
 	external_ids?: Record<string, string>;
 	gallery: string[];
 	featured_gallery?: string | null;
 	published_at: string | null;
 	updated_at: string | null;
 };
+
+export function primaryResourceOwner(project: ResourceProject): {
+	name: string;
+	iconUrl: string | null;
+	kind: "author" | "organization";
+} {
+	if (project.organization) {
+		return {
+			name: project.organization.name,
+			iconUrl: project.organization.icon_url,
+			kind: "organization",
+		};
+	}
+	const owner = project.author_details?.find((author) => author.is_owner);
+	return {
+		name: owner?.username || project.author || project.authors[0] || "Unknown",
+		iconUrl: owner?.avatar_url || null,
+		kind: "author",
+	};
+}
 
 export type SearchResponse = {
 	hits: ResourceProject[];

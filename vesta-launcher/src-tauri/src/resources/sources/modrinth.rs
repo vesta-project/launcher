@@ -1,8 +1,8 @@
 use crate::models::resource::{
     DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceOrganization, ResourceProject,
-    ResourceType, ResourceVersion, ResourceVersionDetails, SearchQuery, SearchResponse,
-    SourcePlatform,
+    ResourceChangelogStatus, ResourceDependency, ResourceEnvironment, ResourceOrganization,
+    ResourceProject, ResourceProjectLink, ResourceType, ResourceVersion, ResourceVersionDetails,
+    SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use anyhow::anyhow;
@@ -58,6 +58,8 @@ struct ModrinthProjectHit {
     follows: u64,
     gallery: Option<Vec<String>>,
     featured_gallery: Option<String>,
+    #[serde(default)]
+    environment: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -77,6 +79,18 @@ struct ModrinthProject {
     followers: u64,
     team_id: String,
     organization: Option<String>,
+    #[serde(default)]
+    environment: Vec<String>,
+    #[serde(default)]
+    link_urls: HashMap<String, ModrinthProjectLink>,
+}
+
+#[derive(Deserialize)]
+struct ModrinthProjectLink {
+    platform: String,
+    #[serde(default)]
+    donation: bool,
+    url: String,
 }
 
 #[derive(Deserialize)]
@@ -197,12 +211,67 @@ fn map_authors(mut members: Vec<ModrinthTeamMember>) -> Vec<ResourceAuthor> {
         .into_iter()
         .map(|member| ResourceAuthor {
             id: member.user.id,
-            username: member.user.username,
+            username: member.user.username.clone(),
             avatar_url: member.user.avatar_url,
+            profile_url: Some(format!(
+                "https://modrinth.com/user/{}",
+                member.user.username
+            )),
             role: member.role,
             ordering: member.ordering,
+            is_owner: member.is_owner,
         })
         .collect()
+}
+
+fn map_environment(values: &[String]) -> Option<ResourceEnvironment> {
+    let mut client = false;
+    let mut server = false;
+    for value in values {
+        match value.as_str() {
+            "client_only" => client = true,
+            "server_only" => server = true,
+            "client_and_server"
+            | "client_or_server_prefers_both"
+            | "client_or_server_prefers_client"
+            | "client_or_server_prefers_server" => {
+                client = true;
+                server = true;
+            }
+            _ => {}
+        }
+    }
+    (client || server).then_some(ResourceEnvironment { client, server })
+}
+
+fn link_label(kind: &str) -> String {
+    match kind {
+        "source" => "Source code".to_string(),
+        "issues" => "Issue tracker".to_string(),
+        "wiki" => "Wiki".to_string(),
+        "discord" => "Discord".to_string(),
+        "patreon" => "Patreon".to_string(),
+        "ko-fi" => "Ko-fi".to_string(),
+        other => other.replace(['-', '_'], " "),
+    }
+}
+
+fn map_links(links: HashMap<String, ModrinthProjectLink>) -> Vec<ResourceProjectLink> {
+    let mut links = links
+        .into_iter()
+        .filter_map(|(key, link)| {
+            link.url
+                .starts_with("https://")
+                .then(|| ResourceProjectLink {
+                    kind: link.platform,
+                    label: link_label(&key),
+                    url: link.url,
+                    donation: link.donation,
+                })
+        })
+        .collect::<Vec<_>>();
+    links.sort_by(|a, b| (a.donation, &a.label).cmp(&(b.donation, &b.label)));
+    links
 }
 
 fn map_organization(organization: ModrinthOrganization) -> ResourceOrganization {
@@ -409,22 +478,6 @@ impl ResourceSource for ModrinthSource {
         let project_type_filter = project_type_filter(query.resource_type);
         filters.push(format!("{project_type_filter} IN [\"{mr_type}\"]"));
 
-        let has_optional_filters = query.game_version.is_some()
-            || query.loader.is_some()
-            || query
-                .categories
-                .as_ref()
-                .is_some_and(|categories| !categories.is_empty())
-            || query
-                .facets
-                .as_ref()
-                .is_some_and(|facets| !facets.is_empty());
-        let is_blank_query = query
-            .text
-            .as_deref()
-            .map(|text| text.trim().is_empty())
-            .unwrap_or(true);
-
         if let Some(version) = query.game_version {
             filters.push(format!(
                 "game_versions IN [\"{}\"]",
@@ -443,6 +496,40 @@ impl ResourceSource for ModrinthSource {
                     filters.push(format!("loaders IN [\"{}\"]", loader.to_lowercase()));
                 }
             }
+        }
+
+        let environment_values = match (query.client, query.server) {
+            (true, true) => Some(vec![
+                "client_and_server",
+                "client_or_server_prefers_both",
+                "client_or_server_prefers_client",
+                "client_or_server_prefers_server",
+            ]),
+            (true, false) => Some(vec![
+                "client_only",
+                "client_and_server",
+                "client_or_server_prefers_both",
+                "client_or_server_prefers_client",
+                "client_or_server_prefers_server",
+            ]),
+            (false, true) => Some(vec![
+                "server_only",
+                "client_and_server",
+                "client_or_server_prefers_both",
+                "client_or_server_prefers_client",
+                "client_or_server_prefers_server",
+            ]),
+            (false, false) => None,
+        };
+        if let Some(values) = environment_values {
+            filters.push(format!(
+                "environment IN [{}]",
+                values
+                    .into_iter()
+                    .map(|value| format!("\"{value}\""))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
         }
 
         if let Some(categories) = &query.categories {
@@ -467,38 +554,7 @@ impl ResourceSource for ModrinthSource {
             ));
         }
 
-        let mut result = self.fetch_search_url(&url).await?;
-
-        if result.hits.is_empty() && is_blank_query && has_optional_filters && query.offset == 0 {
-            let fallback_filter = format!("{project_type_filter} IN [\"{mr_type}\"]");
-            let mut fallback_url = format!(
-                "{MODRINTH_API_V3}/search?query=&limit={}&offset=0",
-                query.limit
-            );
-            if let Some(sort) = &query.sort_by {
-                fallback_url.push_str(&format!("&index={}", sort));
-            }
-            fallback_url.push_str(&format!(
-                "&new_filters={}",
-                urlencoding::encode(&fallback_filter)
-            ));
-
-            log::warn!(
-                "[Modrinth] Blank search returned no hits with optional filters. Retrying default browse without compatibility/category filters. resource_type={}, limit={}, original_url={}, fallback_url={}",
-                mr_type,
-                query.limit,
-                url,
-                fallback_url
-            );
-            let fallback_result = self.fetch_search_url(&fallback_url).await?;
-            log::info!(
-                "[Modrinth] Blank search fallback returned {} hits (total_hits={}) for resource_type={}",
-                fallback_result.hits.len(),
-                fallback_result.total_hits,
-                mr_type
-            );
-            result = fallback_result;
-        }
+        let result = self.fetch_search_url(&url).await?;
 
         let hits: Vec<ResourceProject> = result
             .hits
@@ -524,10 +580,12 @@ impl ResourceSource for ModrinthSource {
                     } else {
                         vec![ResourceAuthor {
                             id: hit.author_id,
-                            username: hit.author,
+                            username: hit.author.clone(),
                             avatar_url: None,
+                            profile_url: Some(format!("https://modrinth.com/user/{}", hit.author)),
                             role: "Owner".to_string(),
                             ordering: 0,
+                            is_owner: true,
                         }]
                     },
                     organization: match (hit.organization_id, hit.organization) {
@@ -548,6 +606,8 @@ impl ResourceSource for ModrinthSource {
                         primary_project_type(&hit.project_types),
                         hit.slug
                     ),
+                    links: Vec::new(),
+                    environment: map_environment(&hit.environment),
                     external_ids: None,
                     gallery: hit.gallery.unwrap_or_default(),
                     featured_gallery: hit.featured_gallery,
@@ -626,6 +686,8 @@ impl ResourceSource for ModrinthSource {
             follower_count: project.followers,
             categories: project.categories,
             web_url: format!("https://modrinth.com/{}/{}", primary_type, project.slug),
+            links: map_links(project.link_urls),
+            environment: map_environment(&project.environment),
             external_ids: None,
             gallery: project
                 .gallery
@@ -759,6 +821,8 @@ impl ResourceSource for ModrinthSource {
                     follower_count: p.followers,
                     categories: p.categories,
                     web_url: format!("https://modrinth.com/{}/{}", primary_type, p.slug),
+                    links: map_links(p.link_urls),
+                    environment: map_environment(&p.environment),
                     external_ids: None,
                     gallery: p
                         .gallery
@@ -951,7 +1015,8 @@ impl ResourceSource for ModrinthSource {
 #[cfg(test)]
 mod tests {
     use super::{
-        map_authors, project_type_filter, ModrinthSource, ModrinthTeamMember, ModrinthVersion,
+        map_authors, map_environment, map_links, project_type_filter, ModrinthProjectLink,
+        ModrinthSource, ModrinthTeamMember, ModrinthVersion,
     };
     use crate::models::resource::{
         DependencyType, ResourceChangelogFormat, ResourceChangelogStatus, ResourceType,
@@ -978,7 +1043,44 @@ mod tests {
 
         assert_eq!(authors.len(), 2);
         assert_eq!(authors[0].username, "Owner");
+        assert!(authors[0].is_owner);
         assert_eq!(authors[1].username, "Member");
+    }
+
+    #[test]
+    fn environment_values_normalize_to_supported_sides() {
+        let client = map_environment(&["client_only".to_string()]).unwrap();
+        assert!(client.client);
+        assert!(!client.server);
+
+        let both = map_environment(&["client_and_server".to_string()]).unwrap();
+        assert!(both.client);
+        assert!(both.server);
+        assert!(map_environment(&["unknown".to_string()]).is_none());
+    }
+
+    #[test]
+    fn links_keep_secure_urls_and_donation_metadata() {
+        let links = map_links(std::collections::HashMap::from([
+            (
+                "source".to_string(),
+                ModrinthProjectLink {
+                    platform: "source".to_string(),
+                    donation: false,
+                    url: "https://example.invalid/source".to_string(),
+                },
+            ),
+            (
+                "tip".to_string(),
+                ModrinthProjectLink {
+                    platform: "other".to_string(),
+                    donation: true,
+                    url: "http://example.invalid/tip".to_string(),
+                },
+            ),
+        ]));
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].label, "Source code");
     }
 
     #[test]

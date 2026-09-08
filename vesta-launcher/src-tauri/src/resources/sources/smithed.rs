@@ -1,7 +1,8 @@
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceType, ResourceVersion,
-    ResourceVersionDetails, ResourceVersionFile, SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
+    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceProjectLink,
+    ResourceType, ResourceVersion, ResourceVersionDetails, ResourceVersionFile, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use anyhow::{anyhow, Result};
@@ -70,7 +71,16 @@ struct SmithedDisplay {
     hidden: bool,
     #[serde(rename = "webPage")]
     web_page: Option<String>,
+    #[serde(default)]
+    urls: Option<SmithedUrls>,
     gallery: Option<SmithedGallery>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+struct SmithedUrls {
+    discord: Option<String>,
+    source: Option<String>,
+    homepage: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -221,6 +231,32 @@ impl SmithedSource {
             .timeout(Duration::from_secs(10))
             .build()
             .unwrap_or_else(|_| piston_lib::client::shared_client().clone())
+    }
+
+    fn author_avatar_url(id: &str) -> Option<String> {
+        (!id.is_empty()).then(|| format!("{}/users/{}/pfp", API_BASE, urlencoding::encode(id)))
+    }
+
+    fn map_links(display: &SmithedDisplay) -> Vec<ResourceProjectLink> {
+        let Some(urls) = display.urls.as_ref() else {
+            return Vec::new();
+        };
+        [
+            ("homepage", "Homepage", urls.homepage.as_deref()),
+            ("source", "Source code", urls.source.as_deref()),
+            ("discord", "Discord", urls.discord.as_deref()),
+        ]
+        .into_iter()
+        .filter_map(|(kind, label, url)| {
+            url.filter(|url| url.starts_with("https://"))
+                .map(|url| ResourceProjectLink {
+                    kind: kind.to_string(),
+                    label: label.to_string(),
+                    url: url.to_string(),
+                    donation: false,
+                })
+        })
+        .collect()
     }
 
     fn map_sort(sort_by: Option<&str>) -> &'static str {
@@ -720,9 +756,10 @@ impl SmithedSource {
             .unwrap_or_else(|| hit.id.clone());
         let name = display
             .name
+            .clone()
             .or(hit.display_name)
             .unwrap_or_else(|| raw_id.clone());
-        let summary = display.description.unwrap_or_default();
+        let summary = display.description.clone().unwrap_or_default();
         let downloads = meta
             .stats
             .as_ref()
@@ -740,6 +777,7 @@ impl SmithedSource {
             Self::gallery_urls(&raw_id, Some(gallery_doc_id), display.gallery.as_ref());
         let featured_gallery = gallery.first().cloned();
         gallery.truncate(1);
+        let links = Self::map_links(&display);
 
         // Prefer Typesense-denormalized owner names from `scope=owner` so browse
         // does not need N× /users/{id} round-trips (those payloads embed pfps).
@@ -757,6 +795,12 @@ impl SmithedSource {
             })
             .or_else(|| meta.owner.clone().filter(|value| !value.is_empty()))
             .unwrap_or_else(|| "Unknown".to_string());
+        let owner_id = hit
+            .owner
+            .as_ref()
+            .and_then(|owner| owner.id.clone())
+            .or_else(|| meta.owner.clone())
+            .unwrap_or_default();
 
         Some(ResourceProject {
             id: raw_id.clone(),
@@ -770,15 +814,29 @@ impl SmithedSource {
             authors: if author == "Unknown" {
                 Vec::new()
             } else {
-                vec![author]
+                vec![author.clone()]
             },
-            author_details: Vec::new(),
+            author_details: if owner_id.is_empty() || author == "Unknown" {
+                Vec::new()
+            } else {
+                vec![ResourceAuthor {
+                    id: owner_id.clone(),
+                    username: author,
+                    avatar_url: Self::author_avatar_url(&owner_id),
+                    profile_url: None,
+                    role: "Owner".to_string(),
+                    ordering: 0,
+                    is_owner: true,
+                }]
+            },
             organization: None,
             project_types: vec![resource_type],
             download_count: downloads,
             follower_count: 0,
             categories: data.categories.unwrap_or_default(),
             web_url: format!("{}/{}", WEB_BASE, raw_id),
+            links,
+            environment: None,
             external_ids: Some(HashMap::from([(
                 "smithed_doc_id".to_string(),
                 meta.doc_id.unwrap_or(hit.id),
@@ -1027,14 +1085,34 @@ impl SmithedSource {
 
         let owner_id = meta.owner.clone().unwrap_or_default();
         let mut authors = Vec::new();
+        let mut author_details = Vec::new();
         let author = if owner_id.is_empty() {
             "Unknown".to_string()
         } else {
             let display = self.fetch_user_display_name(&owner_id).await;
             authors.push(display.clone());
-            for contributor in meta.contributors.unwrap_or_default() {
+            author_details.push(ResourceAuthor {
+                id: owner_id.clone(),
+                username: display.clone(),
+                avatar_url: Self::author_avatar_url(&owner_id),
+                profile_url: None,
+                role: "Owner".to_string(),
+                ordering: 0,
+                is_owner: true,
+            });
+            for contributor in meta.contributors.clone().unwrap_or_default() {
                 if contributor != owner_id {
-                    authors.push(self.fetch_user_display_name(&contributor).await);
+                    let display = self.fetch_user_display_name(&contributor).await;
+                    authors.push(display.clone());
+                    author_details.push(ResourceAuthor {
+                        id: contributor.clone(),
+                        username: display,
+                        avatar_url: Self::author_avatar_url(&contributor),
+                        profile_url: None,
+                        role: "Contributor".to_string(),
+                        ordering: author_details.len() as i64,
+                        is_owner: false,
+                    });
                 }
             }
             display
@@ -1059,6 +1137,7 @@ impl SmithedSource {
             Self::gallery_urls(&raw_id, Some(gallery_doc_id), pack.display.gallery.as_ref());
         let icon_url = pack.display.icon.clone();
         let featured_gallery = gallery.first().cloned();
+        let links = Self::map_links(&pack.display);
 
         Ok(ResourceProject {
             id: raw_id.clone(),
@@ -1070,13 +1149,15 @@ impl SmithedSource {
             icon_url,
             author,
             authors,
-            author_details: Vec::new(),
+            author_details,
             organization: None,
             project_types: vec![resource_type],
             download_count: downloads,
             follower_count: 0,
             categories: pack.categories,
             web_url: format!("{}/{}", WEB_BASE, raw_id),
+            links,
+            environment: None,
             external_ids: Some({
                 let mut ids = HashMap::from([(
                     "smithed_doc_id".to_string(),
@@ -1455,6 +1536,7 @@ mod tests {
                     icon: Some("https://example.invalid/icon.png".to_string()),
                     hidden: false,
                     web_page: None,
+                    urls: None,
                     gallery: None,
                 }),
                 categories: Some(vec!["Magic".to_string()]),
@@ -1512,6 +1594,7 @@ mod tests {
                     icon: None,
                     hidden: false,
                     web_page: None,
+                    urls: None,
                     gallery: None,
                 }),
                 categories: None,
@@ -1542,6 +1625,7 @@ mod tests {
                     icon: None,
                     hidden: false,
                     web_page: None,
+                    urls: None,
                     gallery: Some(SmithedGallery::Items(vec![
                         SmithedGalleryItem {
                             item_type: Some("file".to_string()),
