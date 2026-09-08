@@ -16,7 +16,7 @@ use tokio::sync::RwLock;
 
 const API_BASE: &str = "https://api.smithed.dev/v2";
 const WEB_BASE: &str = "https://smithed.dev/packs";
-const MODRINTH_API: &str = "https://api.modrinth.com/v2";
+const MODRINTH_API: &str = "https://api.modrinth.com/v3";
 /// Public Firebase Storage bucket used by Smithed for uploaded gallery files.
 const GALLERY_CDN_BASE: &str =
     "https://firebasestorage.googleapis.com/v0/b/mc-smithed.appspot.com/o";
