@@ -409,6 +409,10 @@ const ResourceBrowser: Component<{
 				resources.setType(props.resourceType);
 				isInitializedFromProps = true;
 			}
+			if (props.activeSource !== undefined) {
+				resources.setSource(props.activeSource);
+				isInitializedFromProps = true;
+			}
 			if (props.gameVersion !== undefined) {
 				resources.setGameVersion(
 					props.gameVersion === "All versions" ? null : props.gameVersion,
@@ -436,10 +440,6 @@ const ResourceBrowser: Component<{
 					name: props.creatorName,
 					icon_url: props.creatorIconUrl || null,
 				});
-				isInitializedFromProps = true;
-			}
-			if (props.activeSource !== undefined) {
-				resources.setSource(props.activeSource);
 				isInitializedFromProps = true;
 			}
 			if (props.sortBy !== undefined) {
