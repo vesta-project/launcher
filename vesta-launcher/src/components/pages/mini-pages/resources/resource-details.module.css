@@ -432,6 +432,11 @@
 	flex-shrink: 0;
 }
 
+.creator-avatar-source {
+	background: color-mix(in srgb, #f16436 14%, var(--surface-high));
+	color: #f16436;
+}
+
 .creator-avatar {
 	object-fit: cover;
 }
@@ -477,7 +482,69 @@
 	color: var(--text-primary);
 }
 
-.project-link-row svg {
+.project-link-main {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	gap: 8px;
+}
+
+.project-link-main > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.project-link-icon {
+	display: grid;
+	width: 16px;
+	height: 16px;
+	place-items: center;
+	flex-shrink: 0;
+}
+
+.project-link-icon-code {
+	color: #9b87f5;
+}
+
+.project-link-icon-discord {
+	color: #5865f2;
+}
+
+.project-link-icon-issues {
+	color: #e06c75;
+}
+
+.project-link-icon-kofi {
+	color: #ff6433;
+}
+
+.project-link-icon-patreon {
+	color: #ff424d;
+}
+
+.project-link-icon-website,
+.project-link-icon-wiki {
+	color: #4aa3df;
+}
+
+.project-link-icon-donation {
+	color: #df7390;
+}
+
+.project-link-icon-modrinth {
+	color: #1bd96a;
+}
+
+.project-link-icon-curseforge {
+	color: #f16436;
+}
+
+.project-link-icon-smithed {
+	color: #a87bec;
+}
+
+.project-link-row > svg {
 	flex-shrink: 0;
 	opacity: 0.65;
 }

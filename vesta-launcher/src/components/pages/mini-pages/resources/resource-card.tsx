@@ -5,6 +5,7 @@ import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import {
 	primaryResourceOwner,
+	type ResourceCreatorFilter,
 	type ResourceProject,
 	type ResourceVersion,
 	resources,
@@ -173,6 +174,59 @@ const ResourceCard: Component<{
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
 	const primaryOwner = createMemo(() => primaryResourceOwner(props.project));
+	const primaryOwnerFilter = createMemo<ResourceCreatorFilter | null>(() => {
+		if (props.project.organization) {
+			return {
+				kind: "organization",
+				id: props.project.organization.id,
+				name: props.project.organization.name,
+				icon_url: props.project.organization.icon_url,
+			};
+		}
+		const owner =
+			props.project.author_details?.find((author) => author.is_owner) ??
+			props.project.author_details?.[0];
+		if (!owner?.id) return null;
+		return {
+			kind: "author",
+			id: owner.id,
+			name: owner.username,
+			icon_url: owner.avatar_url,
+		};
+	});
+
+	const handleCreatorFilter = (event: MouseEvent) => {
+		event.stopPropagation();
+		const creator = primaryOwnerFilter();
+		if (!creator) return;
+		resources.setSource(props.project.source);
+		resources.setCreator(creator);
+		resources.setOffset(0);
+		activeRouter()?.updateQuery("activeSource", props.project.source);
+		activeRouter()?.updateQuery("creatorKind", creator.kind);
+		activeRouter()?.updateQuery("creatorId", creator.id);
+		activeRouter()?.updateQuery("creatorName", creator.name);
+		activeRouter()?.updateQuery(
+			"creatorIconUrl",
+			creator.icon_url || undefined,
+		);
+	};
+
+	const creatorAttribution = () => (
+		<Show
+			when={primaryOwnerFilter()}
+			fallback={<span>by {primaryOwner().name}</span>}
+		>
+			<button
+				class={styles["card-author-button"]}
+				type="button"
+				onClick={handleCreatorFilter}
+				aria-label={`Filter by ${primaryOwner().name}`}
+			>
+				by {primaryOwner().name}
+			</button>
+		</Show>
+	);
 	const installType = () => resources.state.resourceType;
 	const isInstalled = createMemo(() => {
 		if (installType() === "datapack") return false;
@@ -703,9 +757,7 @@ const ResourceCard: Component<{
 						</div>
 						<div class={styles["card-title-area"]}>
 							<h3 class={styles["card-title"]}>{props.project.name}</h3>
-							<span class={styles["card-author"]}>
-								by {primaryOwner().name}
-							</span>
+							<span class={styles["card-author"]}>{creatorAttribution()}</span>
 							<div class={styles["card-stats"]}>
 								<span class={styles["card-stats-item"]}>
 									{props.project.download_count.toLocaleString()}
@@ -767,7 +819,7 @@ const ResourceCard: Component<{
 						<div class={styles["card-list-header-left"]}>
 							<span class={styles["card-list-name"]}>{props.project.name}</span>
 							<span class={styles["card-list-meta"]}>
-								<span>by {primaryOwner().name}</span>
+								{creatorAttribution()}
 								<span>·</span>
 								<span>
 									{props.project.download_count.toLocaleString()}{" "}
