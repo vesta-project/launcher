@@ -438,9 +438,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 							role="group"
 							aria-label="Environment"
 						>
-							<button
-								class={styles["environment-filter-option"]}
-								classList={{ [styles.active]: resources.state.client }}
+							<Badge
+								as="button"
+								variant="theme"
+								clickable
+								active={resources.state.client}
 								aria-pressed={resources.state.client}
 								onClick={() => {
 									resources.setClient(!resources.state.client);
@@ -449,13 +451,14 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 										resources.state.client || null,
 									);
 								}}
-								type="button"
 							>
 								Client
-							</button>
-							<button
-								class={styles["environment-filter-option"]}
-								classList={{ [styles.active]: resources.state.server }}
+							</Badge>
+							<Badge
+								as="button"
+								variant="theme"
+								clickable
+								active={resources.state.server}
 								aria-pressed={resources.state.server}
 								onClick={() => {
 									resources.setServer(!resources.state.server);
@@ -464,10 +467,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 										resources.state.server || null,
 									);
 								}}
-								type="button"
 							>
 								Server
-							</button>
+							</Badge>
 						</div>
 					</div>
 				</Show>
@@ -566,7 +568,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 												<For each={group.items}>
 													{(cat) => (
 														<Badge
+															as="button"
 															variant="theme"
+															clickable
 															class={
 																styles["resource-tag"] +
 																" " +

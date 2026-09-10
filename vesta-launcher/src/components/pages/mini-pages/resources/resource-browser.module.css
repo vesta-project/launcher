@@ -608,32 +608,6 @@
 	gap: 6px;
 }
 
-.environment-filter-option {
-	height: 30px;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	background: var(--surface-medium);
-	color: var(--text-secondary);
-	font: inherit;
-	font-size: 12px;
-	cursor: default;
-}
-
-.environment-filter-option:hover {
-	border-color: var(--border-strong);
-	color: var(--text-primary);
-}
-
-.environment-filter-option.active {
-	border-color: var(--accent-primary);
-	background: color-mix(
-		in srgb,
-		var(--accent-primary) 14%,
-		var(--surface-medium)
-	);
-	color: var(--text-primary);
-}
-
 /* ===== Results Info Bar ===== */
 .resource-results-info {
 	padding: 8px 20px;

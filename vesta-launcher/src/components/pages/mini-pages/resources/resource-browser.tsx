@@ -5,7 +5,10 @@ import ErrorIcon from "@assets/icons/status/error.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
-import { getSourceDescriptor } from "@resources/source-catalog";
+import {
+	getSourceDescriptor,
+	supportsEnvironmentFilters,
+} from "@resources/source-catalog";
 import { type Instance, instancesState } from "@stores/instances";
 import {
 	type ResourceCreatorFilter,
@@ -427,12 +430,24 @@ const ResourceBrowser: Component<{
 				);
 				isInitializedFromProps = true;
 			}
+			const canRestoreEnvironment = supportsEnvironmentFilters(
+				resources.state.activeSource,
+				resources.state.resourceType,
+			);
 			if (props.client !== undefined) {
-				resources.setClient(routeBoolean(props.client));
+				const client = routeBoolean(props.client) && canRestoreEnvironment;
+				resources.setClient(client);
+				if (!client && routeBoolean(props.client)) {
+					activeRouter()?.updateQuery("client", null);
+				}
 				isInitializedFromProps = true;
 			}
 			if (props.server !== undefined) {
-				resources.setServer(routeBoolean(props.server));
+				const server = routeBoolean(props.server) && canRestoreEnvironment;
+				resources.setServer(server);
+				if (!server && routeBoolean(props.server)) {
+					activeRouter()?.updateQuery("server", null);
+				}
 				isInitializedFromProps = true;
 			}
 			if (props.creatorKind && props.creatorId && props.creatorName) {
