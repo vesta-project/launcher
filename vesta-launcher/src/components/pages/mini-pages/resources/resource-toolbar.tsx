@@ -49,9 +49,28 @@ export function ResourceToolbar(props: {
 					onChange={(v: string | null) => {
 						if (!v) return;
 						batch(() => {
+							const previousSource = resources.state.activeSource;
 							resources.setType(v as any);
 							resources.setOffset(0);
 							activeRouter()?.updateQuery("resourceType", v);
+							activeRouter()?.updateQuery(
+								"activeSource",
+								resources.state.activeSource,
+							);
+							if (!resources.state.client)
+								activeRouter()?.updateQuery("client", null);
+							if (!resources.state.server)
+								activeRouter()?.updateQuery("server", null);
+							if (previousSource !== resources.state.activeSource) {
+								for (const key of [
+									"creatorKind",
+									"creatorId",
+									"creatorName",
+									"creatorIconUrl",
+								]) {
+									activeRouter()?.updateQuery(key, null);
+								}
+							}
 						});
 					}}
 					optionValue={(v) => v}
@@ -132,9 +151,25 @@ export function ResourceToolbar(props: {
 								}}
 								onClick={() => {
 									batch(() => {
+										const sourceChanged =
+											source.id !== resources.state.activeSource;
 										resources.setSource(source.id);
 										resources.setOffset(0);
 										activeRouter()?.updateQuery("activeSource", source.id);
+										if (!resources.state.client)
+											activeRouter()?.updateQuery("client", null);
+										if (!resources.state.server)
+											activeRouter()?.updateQuery("server", null);
+										if (sourceChanged) {
+											for (const key of [
+												"creatorKind",
+												"creatorId",
+												"creatorName",
+												"creatorIconUrl",
+											]) {
+												activeRouter()?.updateQuery(key, null);
+											}
+										}
 									});
 								}}
 								title={source.label}

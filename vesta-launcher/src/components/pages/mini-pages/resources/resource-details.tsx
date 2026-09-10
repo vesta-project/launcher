@@ -1,7 +1,14 @@
+import DiscordIcon from "@assets/branding/services/discord.svg";
+import KofiIcon from "@assets/branding/services/kofi.svg";
+import PatreonIcon from "@assets/branding/services/patreon.svg";
 import DownloadIcon from "@assets/icons/actions/download.svg";
 import ExternalLinkIcon from "@assets/icons/actions/external-link.svg";
+import CodeIcon from "@assets/icons/content/code.svg";
+import GlobeIcon from "@assets/icons/content/globe.svg";
 import HeartIcon from "@assets/icons/content/heart.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
 import BellIcon from "@assets/icons/status/bell.svg";
+import BugIcon from "@assets/icons/status/bug.svg";
 import InfoIcon from "@assets/icons/status/info.svg";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
@@ -16,8 +23,10 @@ import {
 } from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
 import {
+	type ResourceCreatorFilter,
 	type ResourceDependency,
 	type ResourceProject,
+	type ResourceProjectLink,
 	type ResourceType,
 	type ResourceVersion,
 	type ResourceVersionDetails,
@@ -118,6 +127,48 @@ interface ProjectCacheEntry {
 }
 const projectCache = new Map<string, ProjectCacheEntry>();
 const PROJECT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+type ProjectLinkVisualKind =
+	| "code"
+	| "discord"
+	| "issues"
+	| "kofi"
+	| "patreon"
+	| "project"
+	| "website"
+	| "wiki"
+	| "donation"
+	| "link";
+
+function getProjectLinkVisualKind(
+	link: ResourceProjectLink,
+): ProjectLinkVisualKind {
+	if (link.kind === "project") return "project";
+	const identity = `${link.kind} ${link.label} ${link.url}`.toLowerCase();
+	if (identity.includes("discord")) return "discord";
+	if (identity.includes("ko-fi") || identity.includes("kofi")) return "kofi";
+	if (identity.includes("patreon")) return "patreon";
+	if (identity.includes("issue") || identity.includes("bug")) return "issues";
+	if (identity.includes("wiki") || identity.includes("documentation")) {
+		return "wiki";
+	}
+	if (
+		identity.includes("source") ||
+		identity.includes("github") ||
+		identity.includes("gitlab")
+	) {
+		return "code";
+	}
+	if (
+		identity.includes("homepage") ||
+		identity.includes("website") ||
+		identity.includes("docs")
+	) {
+		return "website";
+	}
+	if (link.donation) return "donation";
+	return "link";
+}
 
 const getProjectCacheKey = (platform: SourcePlatform, id: string) =>
 	`${platform}:${id}`;
@@ -682,6 +733,134 @@ const ResourceDetailsPage: Component<{
 		resources.setSource(p.source);
 		resources.setQuery("");
 		activeRouter()?.navigate("/resources");
+	};
+
+	const handleBrowseByCreator = (creator: ResourceCreatorFilter) => {
+		const p = project();
+		if (!p) return;
+
+		resources.setSource(p.source);
+		resources.setType(installType());
+		resources.setQuery("");
+		resources.setCategories([]);
+		resources.setGameVersion(null);
+		resources.setLoader(null);
+		resources.setClient(false);
+		resources.setServer(false);
+		resources.setInstance(null);
+		resources.setCreator(creator);
+		activeRouter()?.navigate("/resources", {
+			activeSource: p.source,
+			resourceType: installType(),
+			creatorKind: creator.kind,
+			creatorId: creator.id,
+			creatorName: creator.name,
+			creatorIconUrl: creator.icon_url || undefined,
+		});
+	};
+
+	const projectCreators = createMemo(() => {
+		const p = project();
+		if (!p) return [];
+		const creators: Array<{
+			filter: ResourceCreatorFilter;
+			role: string;
+			owner: boolean;
+		}> = [];
+		if (p.organization) {
+			creators.push({
+				filter: {
+					kind: "organization",
+					id: p.organization.id,
+					name: p.organization.name,
+					icon_url: p.organization.icon_url,
+				},
+				role: "Organization",
+				owner: true,
+			});
+		}
+		const authors = [...(p.author_details ?? [])].sort(
+			(a, b) =>
+				Number(Boolean(b.is_owner)) - Number(Boolean(a.is_owner)) ||
+				a.ordering - b.ordering,
+		);
+		for (const author of authors) {
+			creators.push({
+				filter: {
+					kind: "author",
+					id: author.id,
+					name: author.username,
+					icon_url: author.avatar_url,
+				},
+				role: author.is_owner ? "Owner" : author.role || "Member",
+				owner: Boolean(author.is_owner),
+			});
+		}
+		if (authors.length === 0 && p.author) {
+			creators.push({
+				filter: {
+					kind: "author",
+					id: "",
+					name: p.author,
+					icon_url: null,
+				},
+				role: p.organization ? "Owner" : "Author",
+				owner: !p.organization,
+			});
+		}
+		return creators;
+	});
+
+	const projectLinks = createMemo(() => {
+		const p = project();
+		if (!p) return [];
+		const source = getSourceDescriptor(p.source);
+		const links: ResourceProjectLink[] = [
+			{
+				kind: "project",
+				label: `View on ${source?.label ?? p.source}`,
+				url: p.web_url,
+				donation: false,
+			},
+			...(p.links ?? []),
+		];
+		const seen = new Set<string>();
+		return links.filter(
+			(link) => link.url && !seen.has(link.url) && seen.add(link.url),
+		);
+	});
+
+	const projectLinkIcon = (link: ResourceProjectLink) => {
+		const kind = getProjectLinkVisualKind(link);
+		const iconProps = { width: "16", height: "16" };
+		if (kind === "project") {
+			const descriptor = getSourceDescriptor(project()?.source ?? "modrinth");
+			const SourceIcon = descriptor?.Icon;
+			return SourceIcon ? (
+				<SourceIcon {...iconProps} />
+			) : (
+				<GlobeIcon {...iconProps} />
+			);
+		}
+		switch (kind) {
+			case "code":
+				return <CodeIcon {...iconProps} />;
+			case "discord":
+				return <DiscordIcon {...iconProps} />;
+			case "issues":
+				return <BugIcon {...iconProps} />;
+			case "kofi":
+				return <KofiIcon {...iconProps} />;
+			case "patreon":
+				return <PatreonIcon {...iconProps} />;
+			case "website":
+			case "wiki":
+				return <GlobeIcon {...iconProps} />;
+			case "donation":
+				return <HeartIcon {...iconProps} />;
+			default:
+				return <LinkIcon {...iconProps} />;
+		}
 	};
 
 	const [peerProjectLookup] = createResource(
@@ -2535,37 +2714,6 @@ const ResourceDetailsPage: Component<{
 				</div>
 			</section>
 
-			<section class={styles["sidebar-section"]}>
-				<div class={styles["sidebar-section-heading"]}>
-					<InfoIcon width={16} height={16} />
-					<h3>Project details</h3>
-				</div>
-				<div class={styles["sidebar-info-list"]}>
-					<Show when={project()?.published_at}>
-						<div class={styles["sidebar-info-row"]}>
-							<span class={styles["field-label"]}>Published</span>
-							<span
-								class={styles["sidebar-info-value"]}
-								title={`Published ${formatDate(project()?.published_at || "")}`}
-							>
-								{formatDate(project()?.published_at || "")}
-							</span>
-						</div>
-					</Show>
-					<Show when={project()?.updated_at}>
-						<div class={styles["sidebar-info-row"]}>
-							<span class={styles["field-label"]}>Updated</span>
-							<span
-								class={styles["sidebar-info-value"]}
-								title={`Updated ${formatDate(project()?.updated_at || "")}`}
-							>
-								{formatDate(project()?.updated_at || "")}
-							</span>
-						</div>
-					</Show>
-				</div>
-			</section>
-
 			<section
 				class={`${styles["sidebar-section"]} ${styles["recent-versions-section"]} ${styles["hide-mobile"]}`}
 			>
@@ -2598,6 +2746,121 @@ const ResourceDetailsPage: Component<{
 								/>
 							)}
 						</For>
+					</Show>
+				</div>
+			</section>
+
+			<Show when={projectCreators().length > 0}>
+				<section class={styles["sidebar-section"]}>
+					<div class={styles["sidebar-section-heading"]}>
+						<h3>Creators</h3>
+					</div>
+					<div class={styles["creator-list"]}>
+						<For each={projectCreators()}>
+							{(creator) => (
+								<button
+									class={styles["creator-row"]}
+									disabled={!creator.filter.id}
+									onClick={() => handleBrowseByCreator(creator.filter)}
+									type="button"
+									title={
+										creator.filter.id
+											? `Browse projects by ${creator.filter.name}`
+											: creator.filter.name
+									}
+								>
+									<span class={styles["creator-avatar-shell"]}>
+										<span class={styles["creator-avatar-fallback"]}>
+											{creator.filter.name.charAt(0).toUpperCase()}
+										</span>
+										<Show when={creator.filter.icon_url}>
+											<img
+												class={styles["creator-avatar"]}
+												src={creator.filter.icon_url || ""}
+												alt=""
+												onError={(event) => {
+													event.currentTarget.hidden = true;
+												}}
+											/>
+										</Show>
+									</span>
+									<span class={styles["creator-copy"]}>
+										<span class={styles["creator-name"]}>
+											{creator.filter.name}
+										</span>
+										<span class={styles["creator-role"]}>{creator.role}</span>
+									</span>
+								</button>
+							)}
+						</For>
+					</div>
+				</section>
+			</Show>
+
+			<Show when={projectLinks().length > 0}>
+				<section class={styles["sidebar-section"]}>
+					<div class={styles["sidebar-section-heading"]}>
+						<LinkIcon width={16} height={16} />
+						<h3>Links</h3>
+					</div>
+					<div class={styles["project-link-list"]}>
+						<For each={projectLinks()}>
+							{(link) => {
+								const visualKind = getProjectLinkVisualKind(link);
+								return (
+									<button
+										class={styles["project-link-row"]}
+										onClick={() => openExternal(link.url)}
+										type="button"
+									>
+										<span class={styles["project-link-main"]}>
+											<span
+												class={`${styles["project-link-icon"]} ${styles[`project-link-icon-${visualKind}`]} ${
+													visualKind === "project"
+														? styles[`project-link-icon-${project()?.source}`]
+														: ""
+												}`}
+											>
+												{projectLinkIcon(link)}
+											</span>
+											<span>{link.label}</span>
+										</span>
+										<ExternalLinkIcon width={13} height={13} />
+									</button>
+								);
+							}}
+						</For>
+					</div>
+				</section>
+			</Show>
+
+			<section class={styles["sidebar-section"]}>
+				<div class={styles["sidebar-section-heading"]}>
+					<InfoIcon width={16} height={16} />
+					<h3>Project details</h3>
+				</div>
+				<div class={styles["sidebar-info-list"]}>
+					<Show when={project()?.published_at}>
+						<div class={styles["sidebar-info-row"]}>
+							<span class={styles["field-label"]}>Published</span>
+							<span
+								class={styles["sidebar-info-value"]}
+								title={`Published ${formatDate(project()?.published_at || "")}`}
+							>
+								{formatDate(project()?.published_at || "")}
+							</span>
+						</div>
+					</Show>
+					<Show when={project()?.updated_at}>
+						<div class={styles["sidebar-info-row"]}>
+							<span class={styles["field-label"]}>Updated</span>
+							<span
+								class={styles["sidebar-info-value"]}
+								title={`Updated ${formatDate(project()?.updated_at || "")}`}
+							>
+								{formatDate(project()?.updated_at || "")}
+							</span>
+						</div>
 					</Show>
 				</div>
 			</section>
@@ -2699,17 +2962,6 @@ const ResourceDetailsPage: Component<{
 													>
 														<div class={styles["project-meta-row"]}>
 															<div class={styles["meta-stats"]}>
-																<span class={styles["meta-item"]}>
-																	By{" "}
-																	{project()?.authors &&
-																	(project()?.authors?.length ?? 0) > 0
-																		? project()?.authors?.join(", ")
-																		: project()?.author}
-																	<Show when={project()?.organization?.name}>
-																		{" · "}
-																		{project()?.organization?.name}
-																	</Show>
-																</span>
 																<Show
 																	when={(project()?.download_count ?? 0) > 0}
 																>

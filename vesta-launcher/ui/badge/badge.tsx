@@ -4,9 +4,11 @@ import {
 	Show,
 	splitProps,
 } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import styles from "./badge.module.css";
 
 export interface BadgeProps extends ComponentProps<"div"> {
+	as?: "div" | "button";
 	variant?:
 		| "default"
 		| "secondary"
@@ -27,6 +29,7 @@ export interface BadgeProps extends ComponentProps<"div"> {
 
 export const Badge: Component<BadgeProps> = (p) => {
 	const [local, others] = splitProps(p, [
+		"as",
 		"variant",
 		"round",
 		"pill",
@@ -40,7 +43,9 @@ export const Badge: Component<BadgeProps> = (p) => {
 	const variant = () => local.variant || "default";
 
 	return (
-		<div
+		<Dynamic
+			component={local.as || "div"}
+			type={local.as === "button" ? "button" : undefined}
 			class={`${styles.badge} ${local.class || ""}`}
 			classList={{
 				[styles[`badge--variant-${variant()}`]]: true,
@@ -57,6 +62,6 @@ export const Badge: Component<BadgeProps> = (p) => {
 				<span class={styles["badge__dot"]} />
 			</Show>
 			{p.children}
-		</div>
+		</Dynamic>
 	);
 };

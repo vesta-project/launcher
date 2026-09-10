@@ -82,9 +82,7 @@
 
 .field-label {
 	font-size: 11px;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.4px;
+	font-weight: 500;
 	color: var(--text-secondary);
 	flex-shrink: 0;
 }
@@ -388,7 +386,170 @@
 	margin: 0;
 	color: var(--text-primary);
 	font-size: 13px;
-	font-weight: 700;
+	font-weight: 600;
+}
+
+.creator-list,
+.project-link-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.creator-row,
+.project-link-row {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	border: 0;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	text-align: left;
+	cursor: default;
+}
+
+.creator-row {
+	gap: 9px;
+	padding: 5px;
+}
+
+.creator-row:not(:disabled):hover,
+.project-link-row:hover {
+	background: var(--surface-medium);
+}
+
+.creator-row:disabled {
+	opacity: 1;
+}
+
+.creator-avatar-shell,
+.creator-avatar,
+.creator-avatar-fallback {
+	width: 30px;
+	height: 30px;
+	border-radius: 7px;
+	flex-shrink: 0;
+}
+
+.creator-avatar-shell {
+	position: relative;
+	overflow: hidden;
+}
+
+.creator-avatar {
+	position: absolute;
+	inset: 0;
+	object-fit: cover;
+}
+
+.creator-avatar-fallback {
+	display: grid;
+	place-items: center;
+	background: hsl(var(--color__primary-hue) 42% 50%);
+	color: var(--text-on-accent);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.creator-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 1px;
+}
+
+.creator-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.creator-role {
+	color: var(--text-tertiary);
+	font-size: 10px;
+}
+
+.project-link-row {
+	justify-content: space-between;
+	gap: 8px;
+	padding: 7px 8px;
+	color: var(--text-secondary);
+	font-size: 12px;
+}
+
+.project-link-row:hover {
+	color: var(--text-primary);
+}
+
+.project-link-main {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	gap: 8px;
+}
+
+.project-link-main > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.project-link-icon {
+	display: grid;
+	width: 16px;
+	height: 16px;
+	place-items: center;
+	flex-shrink: 0;
+}
+
+.project-link-icon-code {
+	color: #9b87f5;
+}
+
+.project-link-icon-discord {
+	color: #5865f2;
+}
+
+.project-link-icon-issues {
+	color: #e06c75;
+}
+
+.project-link-icon-kofi {
+	color: #ff6433;
+}
+
+.project-link-icon-patreon {
+	color: #ff424d;
+}
+
+.project-link-icon-website,
+.project-link-icon-wiki {
+	color: #4aa3df;
+}
+
+.project-link-icon-donation {
+	color: #df7390;
+}
+
+.project-link-icon-modrinth {
+	color: #1bd96a;
+}
+
+.project-link-icon-curseforge {
+	color: #f16436;
+}
+
+.project-link-icon-smithed {
+	color: #a87bec;
+}
+
+.project-link-row > svg {
+	flex-shrink: 0;
+	opacity: 0.65;
 }
 
 .sidebar-section-heading button {
@@ -1256,9 +1417,7 @@
 .focus-section-heading span {
 	color: var(--text-muted);
 	font-size: 10px;
-	font-weight: 700;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
+	font-weight: 500;
 }
 
 .focus-section-heading h2,
@@ -1433,8 +1592,7 @@
 .focus-dependency-group h4 {
 	margin-bottom: 6px;
 	font-size: 11px;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
+	font-weight: 500;
 }
 
 .focus-dependency-group--required h4 {

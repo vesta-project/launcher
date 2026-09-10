@@ -1,15 +1,16 @@
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceChangelogFormat,
-    ResourceChangelogStatus, ResourceDependency, ResourceProject, ResourceType, ResourceVersion,
-    ResourceVersionDetails, ResourceVersionFile, SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceAuthor, ResourceCategory, ResourceChangelogFormat,
+    ResourceChangelogStatus, ResourceCreatorFilter, ResourceCreatorKind, ResourceDependency,
+    ResourceProject, ResourceProjectLink, ResourceType, ResourceVersion, ResourceVersionDetails,
+    ResourceVersionFile, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use futures::{stream, StreamExt};
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -21,6 +22,14 @@ const MODRINTH_API: &str = "https://api.modrinth.com/v3";
 const GALLERY_CDN_BASE: &str =
     "https://firebasestorage.googleapis.com/v0/b/mc-smithed.appspot.com/o";
 const MAX_DESCRIPTION_BYTES: usize = 256 * 1024;
+const DESCRIPTION_HOSTS: &[&str] = &[
+    "cdn.discordapp.com",
+    "gist.githubusercontent.com",
+    "github.com",
+    "gitlab.com",
+    "modrinth.com",
+    "raw.githubusercontent.com",
+];
 
 const PACK_CATEGORIES: &[&str] = &[
     "Extensive",
@@ -70,7 +79,16 @@ struct SmithedDisplay {
     hidden: bool,
     #[serde(rename = "webPage")]
     web_page: Option<String>,
+    #[serde(default)]
+    urls: Option<SmithedUrls>,
     gallery: Option<SmithedGallery>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+struct SmithedUrls {
+    discord: Option<String>,
+    source: Option<String>,
+    homepage: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -220,7 +238,33 @@ impl SmithedSource {
             }))
             .timeout(Duration::from_secs(10))
             .build()
-            .unwrap_or_else(|_| piston_lib::client::shared_client().clone())
+            .expect("failed to build Smithed description client")
+    }
+
+    fn author_avatar_url(id: &str) -> Option<String> {
+        (!id.is_empty()).then(|| format!("{}/users/{}/pfp", API_BASE, urlencoding::encode(id)))
+    }
+
+    fn map_links(display: &SmithedDisplay) -> Vec<ResourceProjectLink> {
+        let Some(urls) = display.urls.as_ref() else {
+            return Vec::new();
+        };
+        [
+            ("homepage", "Homepage", urls.homepage.as_deref()),
+            ("source", "Source code", urls.source.as_deref()),
+            ("discord", "Discord", urls.discord.as_deref()),
+        ]
+        .into_iter()
+        .filter_map(|(kind, label, url)| {
+            url.filter(|url| url.starts_with("https://"))
+                .map(|url| ResourceProjectLink {
+                    kind: kind.to_string(),
+                    label: label.to_string(),
+                    url: url.to_string(),
+                    donation: false,
+                })
+        })
+        .collect()
     }
 
     fn map_sort(sort_by: Option<&str>) -> &'static str {
@@ -720,9 +764,10 @@ impl SmithedSource {
             .unwrap_or_else(|| hit.id.clone());
         let name = display
             .name
+            .clone()
             .or(hit.display_name)
             .unwrap_or_else(|| raw_id.clone());
-        let summary = display.description.unwrap_or_default();
+        let summary = display.description.clone().unwrap_or_default();
         let downloads = meta
             .stats
             .as_ref()
@@ -740,6 +785,7 @@ impl SmithedSource {
             Self::gallery_urls(&raw_id, Some(gallery_doc_id), display.gallery.as_ref());
         let featured_gallery = gallery.first().cloned();
         gallery.truncate(1);
+        let links = Self::map_links(&display);
 
         // Prefer Typesense-denormalized owner names from `scope=owner` so browse
         // does not need N× /users/{id} round-trips (those payloads embed pfps).
@@ -757,6 +803,12 @@ impl SmithedSource {
             })
             .or_else(|| meta.owner.clone().filter(|value| !value.is_empty()))
             .unwrap_or_else(|| "Unknown".to_string());
+        let owner_id = hit
+            .owner
+            .as_ref()
+            .and_then(|owner| owner.id.clone())
+            .or_else(|| meta.owner.clone())
+            .unwrap_or_default();
 
         Some(ResourceProject {
             id: raw_id.clone(),
@@ -770,15 +822,29 @@ impl SmithedSource {
             authors: if author == "Unknown" {
                 Vec::new()
             } else {
-                vec![author]
+                vec![author.clone()]
             },
-            author_details: Vec::new(),
+            author_details: if owner_id.is_empty() || author == "Unknown" {
+                Vec::new()
+            } else {
+                vec![ResourceAuthor {
+                    id: owner_id.clone(),
+                    username: author,
+                    avatar_url: Self::author_avatar_url(&owner_id),
+                    profile_url: None,
+                    role: "Owner".to_string(),
+                    ordering: 0,
+                    is_owner: true,
+                }]
+            },
             organization: None,
             project_types: vec![resource_type],
             download_count: downloads,
             follower_count: 0,
             categories: data.categories.unwrap_or_default(),
             web_url: format!("{}/{}", WEB_BASE, raw_id),
+            links,
+            environment: None,
             external_ids: Some(HashMap::from([(
                 "smithed_doc_id".to_string(),
                 meta.doc_id.unwrap_or(hit.id),
@@ -904,61 +970,24 @@ impl SmithedSource {
         Ok(body)
     }
 
-    #[cfg(test)]
-    fn looks_like_url(value: &str) -> bool {
-        let lower = value.trim().to_ascii_lowercase();
-        lower.starts_with("https://") || lower.starts_with("http://")
-    }
-
-    fn host_is_blocked(host: &str) -> bool {
-        let host = host
-            .trim()
-            .trim_matches(|c| c == '[' || c == ']')
-            .to_ascii_lowercase();
-        if host == "localhost"
-            || host == "metadata.google.internal"
-            || host.ends_with(".localhost")
-            || host.ends_with(".local")
-        {
-            return true;
-        }
-        host.parse::<IpAddr>().is_ok_and(Self::ip_is_blocked)
-    }
-
-    fn ip_is_blocked(ip: IpAddr) -> bool {
-        match ip {
-            IpAddr::V4(v4) => {
-                v4.is_loopback()
-                    || v4.is_private()
-                    || v4.is_link_local()
-                    || v4.is_unspecified()
-                    || v4.is_broadcast()
-            }
-            IpAddr::V6(v6) => {
-                let first = v6.segments()[0];
-                v6.is_loopback()
-                    || v6.is_unspecified()
-                    || (first & 0xfe00) == 0xfc00
-                    || (first & 0xffc0) == 0xfe80
-                    || v6
-                        .to_ipv4_mapped()
-                        .is_some_and(|mapped| Self::ip_is_blocked(IpAddr::V4(mapped)))
-            }
-        }
+    fn secure_description_url(value: &str) -> Option<url::Url> {
+        let url = url::Url::parse(value.trim()).ok()?;
+        (url.scheme() == "https"
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none())
+        .then_some(url)
     }
 
     fn is_safe_description_url(value: &str) -> bool {
-        let Ok(url) = url::Url::parse(value.trim()) else {
+        let Some(url) = Self::secure_description_url(value) else {
             return false;
         };
-        if url.scheme() != "https" {
-            return false;
-        }
-        if !url.username().is_empty() || url.password().is_some() {
-            return false;
-        }
-        url.host_str()
-            .is_some_and(|host| !Self::host_is_blocked(host))
+        url.host_str().is_some_and(|host| {
+            DESCRIPTION_HOSTS
+                .iter()
+                .any(|allowed| host.eq_ignore_ascii_case(allowed))
+        })
     }
 
     async fn resolve_description(&self, display: &SmithedDisplay) -> Option<String> {
@@ -997,14 +1026,18 @@ impl SmithedSource {
                         url,
                         err
                     );
-                    match summary {
+                    Some(match summary {
                         Some(summary) => {
-                            Some(format!("{summary}\n\n[Read full description]({url})"))
+                            format!("{summary}\n\n[Read full description]({url})")
                         }
-                        None => Some(format!("[Read full description]({url})")),
-                    }
+                        None => format!("[Read full description]({url})"),
+                    })
                 }
             },
+            Some(url) if Self::secure_description_url(url).is_some() => Some(match summary {
+                Some(summary) => format!("{summary}\n\n[Read full description]({url})"),
+                None => format!("[Read full description]({url})"),
+            }),
             Some(inline) => Some(inline.to_string()),
             None => summary,
         }
@@ -1027,14 +1060,34 @@ impl SmithedSource {
 
         let owner_id = meta.owner.clone().unwrap_or_default();
         let mut authors = Vec::new();
+        let mut author_details = Vec::new();
         let author = if owner_id.is_empty() {
             "Unknown".to_string()
         } else {
             let display = self.fetch_user_display_name(&owner_id).await;
             authors.push(display.clone());
-            for contributor in meta.contributors.unwrap_or_default() {
+            author_details.push(ResourceAuthor {
+                id: owner_id.clone(),
+                username: display.clone(),
+                avatar_url: Self::author_avatar_url(&owner_id),
+                profile_url: None,
+                role: "Owner".to_string(),
+                ordering: 0,
+                is_owner: true,
+            });
+            for contributor in meta.contributors.clone().unwrap_or_default() {
                 if contributor != owner_id {
-                    authors.push(self.fetch_user_display_name(&contributor).await);
+                    let display = self.fetch_user_display_name(&contributor).await;
+                    authors.push(display.clone());
+                    author_details.push(ResourceAuthor {
+                        id: contributor.clone(),
+                        username: display,
+                        avatar_url: Self::author_avatar_url(&contributor),
+                        profile_url: None,
+                        role: "Contributor".to_string(),
+                        ordering: author_details.len() as i64,
+                        is_owner: false,
+                    });
                 }
             }
             display
@@ -1059,6 +1112,7 @@ impl SmithedSource {
             Self::gallery_urls(&raw_id, Some(gallery_doc_id), pack.display.gallery.as_ref());
         let icon_url = pack.display.icon.clone();
         let featured_gallery = gallery.first().cloned();
+        let links = Self::map_links(&pack.display);
 
         Ok(ResourceProject {
             id: raw_id.clone(),
@@ -1070,13 +1124,15 @@ impl SmithedSource {
             icon_url,
             author,
             authors,
-            author_details: Vec::new(),
+            author_details,
             organization: None,
             project_types: vec![resource_type],
             download_count: downloads,
             follower_count: 0,
             categories: pack.categories,
             web_url: format!("{}/{}", WEB_BASE, raw_id),
+            links,
+            environment: None,
             external_ids: Some({
                 let mut ids = HashMap::from([(
                     "smithed_doc_id".to_string(),
@@ -1094,11 +1150,144 @@ impl SmithedSource {
             updated_at: Self::millis_to_rfc3339(meta.stats.as_ref().and_then(|s| s.updated)),
         })
     }
+
+    async fn search_creator_projects(
+        &self,
+        query: &SearchQuery,
+        creator: &ResourceCreatorFilter,
+    ) -> Result<SearchResponse> {
+        if creator.kind != ResourceCreatorKind::Author {
+            return Ok(SearchResponse {
+                hits: Vec::new(),
+                total_hits: 0,
+            });
+        }
+        let url = format!(
+            "{API_BASE}/users/{}/packs",
+            urlencoding::encode(&creator.id)
+        );
+        let ids: Vec<String> = self
+            .client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        let text = query.text.as_deref().unwrap_or("").trim().to_lowercase();
+        let categories = query.categories.clone();
+        let game_version = query.game_version.clone();
+        let resource_type = query.resource_type;
+        // Pack metadata is required for filtering and sorting. Delay description
+        // and contributor enrichment until the requested page is known.
+        let mut projects = stream::iter(ids)
+            .map(|id| {
+                let text = text.clone();
+                let categories = categories.clone();
+                let game_version = game_version.clone();
+                async move {
+                    let (pack, meta) = self.fetch_pack_data(&id).await.ok()?;
+                    if !text.is_empty()
+                        && !pack
+                            .display
+                            .name
+                            .as_deref()
+                            .unwrap_or(&id)
+                            .to_lowercase()
+                            .contains(&text)
+                        && !pack
+                            .display
+                            .description
+                            .as_deref()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&text)
+                    {
+                        return None;
+                    }
+                    if categories.as_ref().is_some_and(|categories| {
+                        !categories.iter().all(|category| {
+                            pack.categories
+                                .iter()
+                                .any(|value| value.eq_ignore_ascii_case(category))
+                        })
+                    }) {
+                        return None;
+                    }
+                    if game_version.as_ref().is_some_and(|version| {
+                        !pack
+                            .versions
+                            .iter()
+                            .any(|candidate| candidate.supports.contains(version))
+                    }) {
+                        return None;
+                    }
+                    let trending = meta
+                        .stats
+                        .as_ref()
+                        .and_then(|stats| stats.downloads.as_ref())
+                        .and_then(|downloads| downloads.past_week)
+                        .unwrap_or(0);
+                    Some((id, pack, meta, trending))
+                }
+            })
+            .buffer_unordered(8)
+            .filter_map(async move |project| project)
+            .collect::<Vec<_>>()
+            .await;
+
+        let sort = Self::map_sort(query.sort_by.as_deref());
+        match sort {
+            "downloads" => projects.sort_by_key(|(_, _, meta, _)| {
+                std::cmp::Reverse(
+                    meta.stats
+                        .as_ref()
+                        .and_then(|stats| stats.downloads.as_ref())
+                        .and_then(|downloads| downloads.total)
+                        .unwrap_or(0),
+                )
+            }),
+            "newest" => projects.sort_by_key(|(_, _, meta, _)| {
+                std::cmp::Reverse(meta.stats.as_ref().and_then(|stats| stats.updated))
+            }),
+            "trending" => projects.sort_by_key(|(_, _, _, score)| std::cmp::Reverse(*score)),
+            _ => projects.sort_by(|(a_id, a, _, _), (b_id, b, _, _)| {
+                a.display
+                    .name
+                    .as_deref()
+                    .unwrap_or(a_id)
+                    .cmp(b.display.name.as_deref().unwrap_or(b_id))
+            }),
+        }
+        if query.sort_order.as_deref() == Some("asc") && matches!(sort, "downloads" | "newest") {
+            projects.reverse();
+        }
+        let total_hits = projects.len() as u64;
+        let hits = stream::iter(
+            projects
+                .into_iter()
+                .skip(query.offset as usize)
+                .take(query.limit as usize),
+        )
+        .map(|(id, pack, meta, _)| async move {
+            self.map_pack_project(&id, pack, meta, Some(resource_type))
+                .await
+                .ok()
+        })
+        .buffered(8)
+        .filter_map(async move |project| project)
+        .collect::<Vec<_>>()
+        .await;
+        Ok(SearchResponse { hits, total_hits })
+    }
 }
 
 #[async_trait]
 impl ResourceSource for SmithedSource {
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
+        if let Some(creator) = query.creator.clone() {
+            return self.search_creator_projects(&query, &creator).await;
+        }
         match query.resource_type {
             ResourceType::DataPack => {}
             _ => {
@@ -1455,6 +1644,7 @@ mod tests {
                     icon: Some("https://example.invalid/icon.png".to_string()),
                     hidden: false,
                     web_page: None,
+                    urls: None,
                     gallery: None,
                 }),
                 categories: Some(vec!["Magic".to_string()]),
@@ -1512,6 +1702,7 @@ mod tests {
                     icon: None,
                     hidden: false,
                     web_page: None,
+                    urls: None,
                     gallery: None,
                 }),
                 categories: None,
@@ -1542,6 +1733,7 @@ mod tests {
                     icon: None,
                     hidden: false,
                     web_page: None,
+                    urls: None,
                     gallery: Some(SmithedGallery::Items(vec![
                         SmithedGalleryItem {
                             item_type: Some("file".to_string()),
@@ -1605,11 +1797,16 @@ mod tests {
     }
 
     #[test]
-    fn looks_like_url_detects_http_endpoints() {
-        assert!(SmithedSource::looks_like_url(
+    fn secure_description_urls_require_https_without_credentials() {
+        assert!(SmithedSource::secure_description_url(
             "https://raw.githubusercontent.com/example/README.md"
-        ));
-        assert!(!SmithedSource::looks_like_url("Just some markdown text"));
+        )
+        .is_some());
+        assert!(SmithedSource::secure_description_url("Just some markdown text").is_none());
+        assert!(SmithedSource::secure_description_url("http://example.com/README.md").is_none());
+        assert!(
+            SmithedSource::secure_description_url("https://user:pass@example.com/readme").is_none()
+        );
     }
 
     #[test]
@@ -1635,6 +1832,32 @@ mod tests {
         assert!(!SmithedSource::is_safe_description_url(
             "https://user:pass@example.com/readme"
         ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://attacker.example/readme"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://raw.githubusercontent.com.attacker.example/readme"
+        ));
+        assert!(SmithedSource::is_safe_description_url(
+            "https://github.com/Smithed-MC/Libraries/blob/main/README.md?raw=true"
+        ));
+    }
+
+    #[tokio::test]
+    async fn unlisted_description_hosts_keep_the_summary_and_external_link() {
+        let source = SmithedSource::new();
+        let description = source
+            .resolve_description(&SmithedDisplay {
+                description: Some("Pack summary".to_string()),
+                web_page: Some("https://example.com/README.md".to_string()),
+                ..Default::default()
+            })
+            .await;
+
+        assert_eq!(
+            description.as_deref(),
+            Some("Pack summary\n\n[Read full description](https://example.com/README.md)")
+        );
     }
 
     #[test]

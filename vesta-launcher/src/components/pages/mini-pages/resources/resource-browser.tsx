@@ -5,9 +5,13 @@ import ErrorIcon from "@assets/icons/status/error.svg";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
-import { getSourceDescriptor } from "@resources/source-catalog";
+import {
+	getSourceDescriptor,
+	supportsEnvironmentFilters,
+} from "@resources/source-catalog";
 import { type Instance, instancesState } from "@stores/instances";
 import {
+	type ResourceCreatorFilter,
 	type ResourceProject,
 	type ResourceVersion,
 	resources,
@@ -64,6 +68,12 @@ const ResourceBrowser: Component<{
 	resourceType?: any;
 	gameVersion?: string;
 	loader?: string;
+	client?: boolean | string;
+	server?: boolean | string;
+	creatorKind?: ResourceCreatorFilter["kind"];
+	creatorId?: string;
+	creatorName?: string;
+	creatorIconUrl?: string;
 	activeSource?: any;
 	sortBy?: string;
 	sortOrder?: string;
@@ -76,6 +86,8 @@ const ResourceBrowser: Component<{
 	expandedCategoryGroups?: string[];
 	router?: MiniRouter;
 }> = (props) => {
+	const routeBoolean = (value: boolean | string | undefined) =>
+		value === true || value === "true";
 	const activeRouter = createMemo(() => props.router || router());
 	let debounceTimer: number | undefined;
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
@@ -402,6 +414,10 @@ const ResourceBrowser: Component<{
 				resources.setType(props.resourceType);
 				isInitializedFromProps = true;
 			}
+			if (props.activeSource !== undefined) {
+				resources.setSource(props.activeSource);
+				isInitializedFromProps = true;
+			}
 			if (props.gameVersion !== undefined) {
 				resources.setGameVersion(
 					props.gameVersion === "All versions" ? null : props.gameVersion,
@@ -414,8 +430,33 @@ const ResourceBrowser: Component<{
 				);
 				isInitializedFromProps = true;
 			}
-			if (props.activeSource !== undefined) {
-				resources.setSource(props.activeSource);
+			const canRestoreEnvironment = supportsEnvironmentFilters(
+				resources.state.activeSource,
+				resources.state.resourceType,
+			);
+			if (props.client !== undefined) {
+				const client = routeBoolean(props.client) && canRestoreEnvironment;
+				resources.setClient(client);
+				if (!client && routeBoolean(props.client)) {
+					activeRouter()?.updateQuery("client", null);
+				}
+				isInitializedFromProps = true;
+			}
+			if (props.server !== undefined) {
+				const server = routeBoolean(props.server) && canRestoreEnvironment;
+				resources.setServer(server);
+				if (!server && routeBoolean(props.server)) {
+					activeRouter()?.updateQuery("server", null);
+				}
+				isInitializedFromProps = true;
+			}
+			if (props.creatorKind && props.creatorId && props.creatorName) {
+				resources.setCreator({
+					kind: props.creatorKind,
+					id: props.creatorId,
+					name: props.creatorName,
+					icon_url: props.creatorIconUrl || null,
+				});
 				isInitializedFromProps = true;
 			}
 			if (props.sortBy !== undefined) {
@@ -468,6 +509,12 @@ const ResourceBrowser: Component<{
 			resourceType: resources.state.resourceType,
 			gameVersion: resources.state.gameVersion,
 			loader: resources.state.loader,
+			client: resources.state.client,
+			server: resources.state.server,
+			creatorKind: resources.state.creator?.kind,
+			creatorId: resources.state.creator?.id,
+			creatorName: resources.state.creator?.name,
+			creatorIconUrl: resources.state.creator?.icon_url,
 			activeSource: resources.state.activeSource,
 			sortBy: resources.state.sortBy,
 			sortOrder: resources.state.sortOrder,
@@ -526,6 +573,9 @@ const ResourceBrowser: Component<{
 		resources.state.resourceType;
 		resources.state.gameVersion;
 		resources.state.loader;
+		resources.state.client;
+		resources.state.server;
+		resources.state.creator;
 		resources.state.categories;
 		resources.state.sortBy;
 		resources.state.sortOrder;
@@ -694,6 +744,9 @@ const ResourceBrowser: Component<{
 											resources.state.categories.length > 0 ||
 											resources.state.gameVersion ||
 											resources.state.loader ||
+											resources.state.client ||
+											resources.state.server ||
+											resources.state.creator ||
 											resources.state.selectedInstanceId
 										}
 									>
@@ -704,6 +757,16 @@ const ResourceBrowser: Component<{
 												activeRouter()?.updateQuery("selectedInstanceId", null);
 												activeRouter()?.updateQuery("gameVersion", null);
 												activeRouter()?.updateQuery("loader", null);
+												activeRouter()?.updateQuery("client", null);
+												activeRouter()?.updateQuery("server", null);
+												for (const key of [
+													"creatorKind",
+													"creatorId",
+													"creatorName",
+													"creatorIconUrl",
+												]) {
+													activeRouter()?.updateQuery(key, null);
+												}
 												activeRouter()?.updateQuery("categories", []);
 												activeRouter()?.updateQuery("query", "");
 											}}

@@ -1,6 +1,7 @@
 import {
 	firstSourceForResourceType,
 	getSourceDescriptor,
+	supportsEnvironmentFilters,
 } from "@resources/source-catalog";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -28,13 +29,34 @@ export type ResourceAuthor = {
 	id: string;
 	username: string;
 	avatar_url: string | null;
+	profile_url?: string | null;
 	role: string;
 	ordering: number;
+	is_owner?: boolean;
 };
 
 export type ResourceOrganization = {
 	id: string;
 	slug: string;
+	name: string;
+	icon_url: string | null;
+};
+
+export type ResourceProjectLink = {
+	kind: string;
+	label: string;
+	url: string;
+	donation: boolean;
+};
+
+export type ResourceEnvironment = {
+	client: boolean;
+	server: boolean;
+};
+
+export type ResourceCreatorFilter = {
+	kind: "author" | "organization";
+	id: string;
 	name: string;
 	icon_url: string | null;
 };
@@ -56,12 +78,34 @@ export type ResourceProject = {
 	follower_count: number;
 	categories: string[];
 	web_url: string;
+	links?: ResourceProjectLink[];
+	environment?: ResourceEnvironment | null;
 	external_ids?: Record<string, string>;
 	gallery: string[];
 	featured_gallery?: string | null;
 	published_at: string | null;
 	updated_at: string | null;
 };
+
+export function primaryResourceOwner(project: ResourceProject): {
+	name: string;
+	iconUrl: string | null;
+	kind: "author" | "organization";
+} {
+	if (project.organization) {
+		return {
+			name: project.organization.name,
+			iconUrl: project.organization.icon_url,
+			kind: "organization",
+		};
+	}
+	const owner = project.author_details?.find((author) => author.is_owner);
+	return {
+		name: owner?.username || project.author || project.authors[0] || "Unknown",
+		iconUrl: owner?.avatar_url || null,
+		kind: "author",
+	};
+}
 
 export type SearchResponse = {
 	hits: ResourceProject[];
@@ -165,6 +209,9 @@ type ResourceStoreState = {
 	limit: number;
 	gameVersion: string | null;
 	loader: string | null;
+	client: boolean;
+	server: boolean;
+	creator: ResourceCreatorFilter | null;
 	categories: string[];
 	availableCategories: ResourceCategory[];
 	expandedCategoryGroups: string[];
@@ -201,6 +248,9 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	limit: 20,
 	gameVersion: null,
 	loader: null,
+	client: false,
+	server: false,
+	creator: null,
 	categories: [],
 	availableCategories: [],
 	expandedCategoryGroups: [],
@@ -324,6 +374,9 @@ function currentSearchCacheKey() {
 		limit: resourceStore.limit,
 		gameVersion: normalizedSearchValue(resourceStore.gameVersion),
 		loader: normalizedSearchValue(resourceStore.loader),
+		client: resourceStore.client,
+		server: resourceStore.server,
+		creator: resourceStore.creator,
 		categories: [...resourceStore.categories].sort(),
 		sortBy: normalizedSearchValue(resourceStore.sortBy),
 		sortOrder: resourceStore.sortOrder || "desc",
@@ -342,12 +395,16 @@ export const resources = {
 	setQuery: (q: string) => setResourceStore("query", q),
 	setSource: (s: SourcePlatform) => {
 		const descriptor = getSourceDescriptor(s);
+		const sourceChanged = s !== resourceStore.activeSource;
 		setResourceStore("reconcilingCategories", true);
 		setResourceStore("activeSource", s);
 		setResourceStore("availableCategories", []);
 		setResourceStore("sortBy", descriptor?.defaultSort ?? "relevance");
 		setResourceStore("categories", []);
 		setResourceStore("offset", 0);
+		if (sourceChanged) {
+			setResourceStore("creator", null);
+		}
 
 		if (
 			descriptor &&
@@ -358,6 +415,9 @@ export const resources = {
 			if (fallbackType !== "mod") {
 				setResourceStore("loader", null);
 			}
+		}
+		if (!supportsEnvironmentFilters(s, resourceStore.resourceType)) {
+			setResourceStore({ client: false, server: false });
 		}
 
 		resources.fetchCategories();
@@ -375,9 +435,15 @@ export const resources = {
 		const active = getSourceDescriptor(resourceStore.activeSource);
 		if (active && !active.supportedResourceTypes.includes(t)) {
 			const fallback = firstSourceForResourceType(t);
+			if (fallback.id !== resourceStore.activeSource) {
+				setResourceStore("creator", null);
+			}
 			setResourceStore("activeSource", fallback.id);
 			setResourceStore("sortBy", fallback.defaultSort);
 			setResourceStore("categories", []);
+		}
+		if (!supportsEnvironmentFilters(resourceStore.activeSource, t)) {
+			setResourceStore({ client: false, server: false });
 		}
 
 		resources.fetchCategories();
@@ -427,6 +493,18 @@ export const resources = {
 	setLoader: (l: string | null) => {
 		const normalized = l?.toLowerCase() ?? null;
 		setResourceStore("loader", normalized);
+		setResourceStore("offset", 0);
+	},
+	setClient: (client: boolean) => {
+		setResourceStore("client", client);
+		setResourceStore("offset", 0);
+	},
+	setServer: (server: boolean) => {
+		setResourceStore("server", server);
+		setResourceStore("offset", 0);
+	},
+	setCreator: (creator: ResourceCreatorFilter | null) => {
+		setResourceStore("creator", creator);
 		setResourceStore("offset", 0);
 	},
 	setCategories: (c: string[]) => {
@@ -539,6 +617,9 @@ export const resources = {
 			categories: [],
 			gameVersion: null,
 			loader: null,
+			client: false,
+			server: false,
+			creator: null,
 			selectedInstanceId: null,
 			installedResources: [],
 			offset: 0,
@@ -613,6 +694,9 @@ export const resources = {
 					limit: resourceStore.limit,
 					game_version: resourceStore.gameVersion,
 					loader: resourceStore.loader,
+					client: resourceStore.client,
+					server: resourceStore.server,
+					creator: resourceStore.creator,
 					categories:
 						resourceStore.categories.length > 0
 							? resourceStore.categories

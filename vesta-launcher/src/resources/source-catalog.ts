@@ -19,6 +19,7 @@ export type SourceDescriptor = {
 	supportsHashLookup: boolean;
 	peerPlatforms: SourcePlatform[];
 	multiArtifactVersions: boolean;
+	environmentResourceTypes: ResourceType[];
 };
 
 /**
@@ -49,6 +50,7 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		supportsHashLookup: true,
 		peerPlatforms: ["curseforge"],
 		multiArtifactVersions: false,
+		environmentResourceTypes: ["mod", "modpack"],
 	},
 	{
 		id: "curseforge",
@@ -76,6 +78,7 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		supportsHashLookup: true,
 		peerPlatforms: ["modrinth"],
 		multiArtifactVersions: false,
+		environmentResourceTypes: [],
 	},
 	{
 		id: "smithed",
@@ -92,6 +95,7 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		supportsHashLookup: false,
 		peerPlatforms: [],
 		multiArtifactVersions: true,
+		environmentResourceTypes: [],
 	},
 ];
 
@@ -119,4 +123,15 @@ export function isContentSourcePlatform(
 	value: string,
 ): value is SourcePlatform {
 	return RESOURCE_SOURCES.some((source) => source.id === value);
+}
+
+export function supportsEnvironmentFilters(
+	source: SourcePlatform,
+	resourceType: ResourceType,
+): boolean {
+	return Boolean(
+		getSourceDescriptor(source)?.environmentResourceTypes.includes(
+			resourceType,
+		),
+	);
 }
