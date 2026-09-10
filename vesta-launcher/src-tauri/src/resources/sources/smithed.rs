@@ -970,22 +970,19 @@ impl SmithedSource {
         Ok(body)
     }
 
-    #[cfg(test)]
-    fn looks_like_url(value: &str) -> bool {
-        let lower = value.trim().to_ascii_lowercase();
-        lower.starts_with("https://") || lower.starts_with("http://")
+    fn secure_description_url(value: &str) -> Option<url::Url> {
+        let url = url::Url::parse(value.trim()).ok()?;
+        (url.scheme() == "https"
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none())
+        .then_some(url)
     }
 
     fn is_safe_description_url(value: &str) -> bool {
-        let Ok(url) = url::Url::parse(value.trim()) else {
+        let Some(url) = Self::secure_description_url(value) else {
             return false;
         };
-        if url.scheme() != "https" {
-            return false;
-        }
-        if !url.username().is_empty() || url.password().is_some() {
-            return false;
-        }
         url.host_str().is_some_and(|host| {
             DESCRIPTION_HOSTS
                 .iter()
@@ -1029,14 +1026,18 @@ impl SmithedSource {
                         url,
                         err
                     );
-                    match summary {
+                    Some(match summary {
                         Some(summary) => {
-                            Some(format!("{summary}\n\n[Read full description]({url})"))
+                            format!("{summary}\n\n[Read full description]({url})")
                         }
-                        None => Some(format!("[Read full description]({url})")),
-                    }
+                        None => format!("[Read full description]({url})"),
+                    })
                 }
             },
+            Some(url) if Self::secure_description_url(url).is_some() => Some(match summary {
+                Some(summary) => format!("{summary}\n\n[Read full description]({url})"),
+                None => format!("[Read full description]({url})"),
+            }),
             Some(inline) => Some(inline.to_string()),
             None => summary,
         }
@@ -1177,6 +1178,8 @@ impl SmithedSource {
         let categories = query.categories.clone();
         let game_version = query.game_version.clone();
         let resource_type = query.resource_type;
+        // Pack metadata is required for filtering and sorting. Delay description
+        // and contributor enrichment until the requested page is known.
         let mut projects = stream::iter(ids)
             .map(|id| {
                 let text = text.clone();
@@ -1225,10 +1228,7 @@ impl SmithedSource {
                         .and_then(|stats| stats.downloads.as_ref())
                         .and_then(|downloads| downloads.past_week)
                         .unwrap_or(0);
-                    self.map_pack_project(&id, pack, meta, Some(resource_type))
-                        .await
-                        .ok()
-                        .map(|project| (project, trending))
+                    Some((id, pack, meta, trending))
                 }
             })
             .buffer_unordered(8)
@@ -1238,23 +1238,46 @@ impl SmithedSource {
 
         let sort = Self::map_sort(query.sort_by.as_deref());
         match sort {
-            "downloads" => {
-                projects.sort_by_key(|(project, _)| std::cmp::Reverse(project.download_count))
-            }
-            "newest" => projects.sort_by(|(a, _), (b, _)| b.updated_at.cmp(&a.updated_at)),
-            "trending" => projects.sort_by_key(|(_, score)| std::cmp::Reverse(*score)),
-            _ => projects.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name)),
+            "downloads" => projects.sort_by_key(|(_, _, meta, _)| {
+                std::cmp::Reverse(
+                    meta.stats
+                        .as_ref()
+                        .and_then(|stats| stats.downloads.as_ref())
+                        .and_then(|downloads| downloads.total)
+                        .unwrap_or(0),
+                )
+            }),
+            "newest" => projects.sort_by_key(|(_, _, meta, _)| {
+                std::cmp::Reverse(meta.stats.as_ref().and_then(|stats| stats.updated))
+            }),
+            "trending" => projects.sort_by_key(|(_, _, _, score)| std::cmp::Reverse(*score)),
+            _ => projects.sort_by(|(a_id, a, _, _), (b_id, b, _, _)| {
+                a.display
+                    .name
+                    .as_deref()
+                    .unwrap_or(a_id)
+                    .cmp(b.display.name.as_deref().unwrap_or(b_id))
+            }),
         }
         if query.sort_order.as_deref() == Some("asc") && matches!(sort, "downloads" | "newest") {
             projects.reverse();
         }
         let total_hits = projects.len() as u64;
-        let hits = projects
-            .into_iter()
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
-            .map(|(project, _)| project)
-            .collect();
+        let hits = stream::iter(
+            projects
+                .into_iter()
+                .skip(query.offset as usize)
+                .take(query.limit as usize),
+        )
+        .map(|(id, pack, meta, _)| async move {
+            self.map_pack_project(&id, pack, meta, Some(resource_type))
+                .await
+                .ok()
+        })
+        .buffered(8)
+        .filter_map(async move |project| project)
+        .collect::<Vec<_>>()
+        .await;
         Ok(SearchResponse { hits, total_hits })
     }
 }
@@ -1774,11 +1797,16 @@ mod tests {
     }
 
     #[test]
-    fn looks_like_url_detects_http_endpoints() {
-        assert!(SmithedSource::looks_like_url(
+    fn secure_description_urls_require_https_without_credentials() {
+        assert!(SmithedSource::secure_description_url(
             "https://raw.githubusercontent.com/example/README.md"
-        ));
-        assert!(!SmithedSource::looks_like_url("Just some markdown text"));
+        )
+        .is_some());
+        assert!(SmithedSource::secure_description_url("Just some markdown text").is_none());
+        assert!(SmithedSource::secure_description_url("http://example.com/README.md").is_none());
+        assert!(
+            SmithedSource::secure_description_url("https://user:pass@example.com/readme").is_none()
+        );
     }
 
     #[test]
@@ -1813,6 +1841,23 @@ mod tests {
         assert!(SmithedSource::is_safe_description_url(
             "https://github.com/Smithed-MC/Libraries/blob/main/README.md?raw=true"
         ));
+    }
+
+    #[tokio::test]
+    async fn unlisted_description_hosts_keep_the_summary_and_external_link() {
+        let source = SmithedSource::new();
+        let description = source
+            .resolve_description(&SmithedDisplay {
+                description: Some("Pack summary".to_string()),
+                web_page: Some("https://example.com/README.md".to_string()),
+                ..Default::default()
+            })
+            .await;
+
+        assert_eq!(
+            description.as_deref(),
+            Some("Pack summary\n\n[Read full description](https://example.com/README.md)")
+        );
     }
 
     #[test]

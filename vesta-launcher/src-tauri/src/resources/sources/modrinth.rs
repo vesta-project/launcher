@@ -507,6 +507,7 @@ impl ModrinthSource {
 
         match query.sort_by.as_deref().unwrap_or("relevance") {
             "downloads" => projects.sort_by_key(|project| std::cmp::Reverse(project.downloads)),
+            "follows" => projects.sort_by_key(|project| std::cmp::Reverse(project.followers)),
             "newest" | "date_created" => projects.sort_by(|a, b| b.published.cmp(&a.published)),
             "updated" | "date_modified" => projects.sort_by(|a, b| b.updated.cmp(&a.updated)),
             _ if text.is_empty() => projects.sort_by(|a, b| a.name.cmp(&b.name)),
@@ -515,7 +516,14 @@ impl ModrinthSource {
         if query.sort_order.as_deref() == Some("asc")
             && matches!(
                 query.sort_by.as_deref(),
-                Some("downloads" | "newest" | "date_created" | "updated" | "date_modified")
+                Some(
+                    "downloads"
+                        | "follows"
+                        | "newest"
+                        | "date_created"
+                        | "updated"
+                        | "date_modified"
+                )
             )
         {
             projects.reverse();
