@@ -186,6 +186,10 @@ fn project_type_filter(resource_type: ResourceType) -> &'static str {
     }
 }
 
+fn supports_loader_filter(resource_type: ResourceType) -> bool {
+    matches!(resource_type, ResourceType::Mod | ResourceType::Modpack)
+}
+
 fn resource_type(value: &str) -> ResourceType {
     match value {
         "resourcepack" => ResourceType::ResourcePack,
@@ -478,13 +482,14 @@ impl ModrinthSource {
                     .game_version
                     .as_ref()
                     .is_none_or(|version| project.game_versions.contains(version))
-                && query.loader.as_ref().is_none_or(|loader| {
-                    project.loaders.iter().any(|value| {
-                        value.eq_ignore_ascii_case(loader)
-                            || (loader.eq_ignore_ascii_case("quilt")
-                                && value.eq_ignore_ascii_case("fabric"))
-                    })
-                })
+                && (!supports_loader_filter(query.resource_type)
+                    || query.loader.as_ref().is_none_or(|loader| {
+                        project.loaders.iter().any(|value| {
+                            value.eq_ignore_ascii_case(loader)
+                                || (loader.eq_ignore_ascii_case("quilt")
+                                    && value.eq_ignore_ascii_case("fabric"))
+                        })
+                    }))
                 && query.categories.as_ref().is_none_or(|categories| {
                     categories.iter().all(|category| {
                         project
@@ -576,9 +581,7 @@ impl ResourceSource for ModrinthSource {
 
         if let Some(loader) = query.loader {
             // Apply loader filter for mods and modpacks
-            if query.resource_type == ResourceType::Mod
-                || query.resource_type == ResourceType::Modpack
-            {
+            if supports_loader_filter(query.resource_type) {
                 if loader.to_lowercase() == "quilt" {
                     filters.push("(loaders IN [\"quilt\"] OR loaders IN [\"fabric\"])".to_string());
                 } else {
@@ -1116,7 +1119,8 @@ impl ResourceSource for ModrinthSource {
 mod tests {
     use super::{
         map_authors, map_environment, map_links, matches_resource_type, project_type_filter,
-        ModrinthProjectLink, ModrinthSource, ModrinthTeamMember, ModrinthVersion,
+        supports_loader_filter, ModrinthProjectLink, ModrinthSource, ModrinthTeamMember,
+        ModrinthVersion,
     };
     use crate::models::resource::{
         DependencyType, ResourceChangelogFormat, ResourceChangelogStatus, ResourceType,
@@ -1129,6 +1133,16 @@ mod tests {
             "all_project_types"
         );
         assert_eq!(project_type_filter(ResourceType::Mod), "project_types");
+    }
+
+    #[test]
+    fn loader_filters_only_apply_to_mods_and_modpacks() {
+        assert!(supports_loader_filter(ResourceType::Mod));
+        assert!(supports_loader_filter(ResourceType::Modpack));
+        assert!(!supports_loader_filter(ResourceType::DataPack));
+        assert!(!supports_loader_filter(ResourceType::ResourcePack));
+        assert!(!supports_loader_filter(ResourceType::Shader));
+        assert!(!supports_loader_filter(ResourceType::World));
     }
 
     #[test]

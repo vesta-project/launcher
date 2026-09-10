@@ -11,7 +11,6 @@ use futures::{stream, StreamExt};
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -23,6 +22,14 @@ const MODRINTH_API: &str = "https://api.modrinth.com/v3";
 const GALLERY_CDN_BASE: &str =
     "https://firebasestorage.googleapis.com/v0/b/mc-smithed.appspot.com/o";
 const MAX_DESCRIPTION_BYTES: usize = 256 * 1024;
+const DESCRIPTION_HOSTS: &[&str] = &[
+    "cdn.discordapp.com",
+    "gist.githubusercontent.com",
+    "github.com",
+    "gitlab.com",
+    "modrinth.com",
+    "raw.githubusercontent.com",
+];
 
 const PACK_CATEGORIES: &[&str] = &[
     "Extensive",
@@ -231,7 +238,7 @@ impl SmithedSource {
             }))
             .timeout(Duration::from_secs(10))
             .build()
-            .unwrap_or_else(|_| piston_lib::client::shared_client().clone())
+            .expect("failed to build Smithed description client")
     }
 
     fn author_avatar_url(id: &str) -> Option<String> {
@@ -969,43 +976,6 @@ impl SmithedSource {
         lower.starts_with("https://") || lower.starts_with("http://")
     }
 
-    fn host_is_blocked(host: &str) -> bool {
-        let host = host
-            .trim()
-            .trim_matches(|c| c == '[' || c == ']')
-            .to_ascii_lowercase();
-        if host == "localhost"
-            || host == "metadata.google.internal"
-            || host.ends_with(".localhost")
-            || host.ends_with(".local")
-        {
-            return true;
-        }
-        host.parse::<IpAddr>().is_ok_and(Self::ip_is_blocked)
-    }
-
-    fn ip_is_blocked(ip: IpAddr) -> bool {
-        match ip {
-            IpAddr::V4(v4) => {
-                v4.is_loopback()
-                    || v4.is_private()
-                    || v4.is_link_local()
-                    || v4.is_unspecified()
-                    || v4.is_broadcast()
-            }
-            IpAddr::V6(v6) => {
-                let first = v6.segments()[0];
-                v6.is_loopback()
-                    || v6.is_unspecified()
-                    || (first & 0xfe00) == 0xfc00
-                    || (first & 0xffc0) == 0xfe80
-                    || v6
-                        .to_ipv4_mapped()
-                        .is_some_and(|mapped| Self::ip_is_blocked(IpAddr::V4(mapped)))
-            }
-        }
-    }
-
     fn is_safe_description_url(value: &str) -> bool {
         let Ok(url) = url::Url::parse(value.trim()) else {
             return false;
@@ -1016,8 +986,11 @@ impl SmithedSource {
         if !url.username().is_empty() || url.password().is_some() {
             return false;
         }
-        url.host_str()
-            .is_some_and(|host| !Self::host_is_blocked(host))
+        url.host_str().is_some_and(|host| {
+            DESCRIPTION_HOSTS
+                .iter()
+                .any(|allowed| host.eq_ignore_ascii_case(allowed))
+        })
     }
 
     async fn resolve_description(&self, display: &SmithedDisplay) -> Option<String> {
@@ -1830,6 +1803,15 @@ mod tests {
         ));
         assert!(!SmithedSource::is_safe_description_url(
             "https://user:pass@example.com/readme"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://attacker.example/readme"
+        ));
+        assert!(!SmithedSource::is_safe_description_url(
+            "https://raw.githubusercontent.com.attacker.example/readme"
+        ));
+        assert!(SmithedSource::is_safe_description_url(
+            "https://github.com/Smithed-MC/Libraries/blob/main/README.md?raw=true"
         ));
     }
 
