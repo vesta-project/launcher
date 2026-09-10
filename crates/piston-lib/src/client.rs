@@ -2,6 +2,8 @@ use reqwest::Client;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+const VESTA_USER_AGENT: &str = concat!("VestaLauncher/", env!("CARGO_PKG_VERSION"));
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProxyConfig {
     pub enabled: bool,
@@ -21,7 +23,7 @@ fn base_client_builder() -> reqwest::ClientBuilder {
         .pool_max_idle_per_host(8)
         .tcp_keepalive(Some(Duration::from_secs(30)))
         .timeout(Duration::from_secs(120))
-        .user_agent("VestaLauncher/1.0")
+        .user_agent(VESTA_USER_AGENT)
         .redirect(reqwest::redirect::Policy::limited(10))
 }
 
@@ -159,7 +161,7 @@ pub fn build_reqwest12_client_with_proxy(
         .pool_max_idle_per_host(8)
         .tcp_keepalive(Some(Duration::from_secs(30)))
         .timeout(Duration::from_secs(120))
-        .user_agent("VestaLauncher/1.0");
+        .user_agent(VESTA_USER_AGENT);
 
     if let Some(raw_url) = proxy_url.map(str::trim).filter(|url| !url.is_empty()) {
         builder = builder.proxy(reqwest12::Proxy::all(raw_url)?);

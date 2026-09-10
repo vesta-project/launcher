@@ -461,10 +461,7 @@ pub async fn test_proxy_connection(input: ProxyTestInput) -> Result<ProxyTestRes
                 redact_proxy_test_message(&e.to_string(), proxy_url.as_deref())
             )
         })?;
-    let endpoints = [
-        "https://api.modrinth.com/v2/tag/game_version",
-        "https://aka.ms",
-    ];
+    let endpoints = ["https://api.modrinth.com/v3/tag/loader", "https://aka.ms"];
     let timeout = std::time::Duration::from_secs(8);
     let mut last_error: Option<(String, String)> = None;
 

@@ -42,6 +42,23 @@ const MAX_SUMMARY_CACHE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const MAX_SUMMARY_CACHE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_MANIFEST_MATCH_ARCHIVE_DOWNLOADS: usize = 30;
 const MAX_MANIFEST_MATCH_RESULTS: usize = 2;
+const MODRINTH_API_V3: &str = "https://api.modrinth.com/v3";
+const MODRINTH_LEGACY_API_V2: &str = "https://api.modrinth.com/v2";
+
+fn modrinth_api_version_id(url: &str) -> Option<String> {
+    [
+        "api.modrinth.com/v3/version/",
+        "api.modrinth.com/v2/version/",
+    ]
+    .into_iter()
+    .find_map(|marker| {
+        url.split(marker)
+            .nth(1)
+            .and_then(|value| value.split('?').next())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    })
+}
 
 #[derive(Clone, Debug)]
 struct ModpackArchiveCacheEntry {
@@ -570,10 +587,8 @@ async fn get_modrinth_match_by_file_hash(
         }
     }
 
-    let url = format!(
-        "https://api.modrinth.com/v2/version_file/{}?algorithm={}",
-        hash, algorithm
-    );
+    // v3 has no hash lookup equivalent yet.
+    let url = format!("{MODRINTH_LEGACY_API_V2}/version_file/{hash}?algorithm={algorithm}");
     let response = match piston_lib::client::shared_client().get(&url).send().await {
         Ok(response) => response,
         Err(err) => {
@@ -1329,12 +1344,8 @@ async fn resolve_modpack_resource(client: &reqwest::Client, url: &str) -> (Strin
         let mut slug = None;
 
         // 1. Try to extract Version ID or Slug from various Modrinth URL patterns
-        if url.contains("api.modrinth.com/v2/version/") {
-            target_version_id = url
-                .split("api.modrinth.com/v2/version/")
-                .nth(1)
-                .and_then(|s| s.split('?').next())
-                .map(|s| s.to_string());
+        if let Some(api_version_id) = modrinth_api_version_id(url) {
+            target_version_id = Some(api_version_id);
         } else if url.contains("cdn.modrinth.com/data/") {
             target_version_id = url
                 .split("/versions/")
@@ -1374,7 +1385,7 @@ async fn resolve_modpack_resource(client: &reqwest::Client, url: &str) -> (Strin
 
         // 2. Obtain Version Data
         let version_json = if let Some(vid) = target_version_id {
-            let ver_api_url = format!("https://api.modrinth.com/v2/version/{}", vid);
+            let ver_api_url = format!("{MODRINTH_API_V3}/version/{vid}");
             client.get(&ver_api_url).send().await.ok().and_then(|r| {
                 if r.status().is_success() {
                     Some(r)
@@ -1383,7 +1394,7 @@ async fn resolve_modpack_resource(client: &reqwest::Client, url: &str) -> (Strin
                 }
             })
         } else if let Some(slug_str) = slug {
-            let versions_url = format!("https://api.modrinth.com/v2/project/{}/version", slug_str);
+            let versions_url = format!("{MODRINTH_API_V3}/project/{slug_str}/version");
             client.get(&versions_url).send().await.ok().and_then(|r| {
                 if r.status().is_success() {
                     Some(r)
@@ -1408,8 +1419,7 @@ async fn resolve_modpack_resource(client: &reqwest::Client, url: &str) -> (Strin
                     // Try to get icon_url if we don't have it (needed for direct version links)
                     if icon_url.is_none() {
                         if let Some(project_id) = v["project_id"].as_str() {
-                            let project_url =
-                                format!("https://api.modrinth.com/v2/project/{}", project_id);
+                            let project_url = format!("{MODRINTH_API_V3}/project/{project_id}");
                             if let Ok(p_resp) = client.get(&project_url).send().await {
                                 if let Ok(p_json) = p_resp.json::<serde_json::Value>().await {
                                     icon_url = p_json["icon_url"].as_str().map(|s| s.to_string());
@@ -1504,12 +1514,8 @@ pub async fn get_modpack_info_from_url(
         let mut version_id = None;
         let mut slug = None;
 
-        if url.contains("api.modrinth.com/v2/version/") {
-            version_id = url
-                .split("v2/version/")
-                .nth(1)
-                .and_then(|s| s.split('?').next())
-                .map(|s| s.to_string());
+        if let Some(api_version_id) = modrinth_api_version_id(&url) {
+            version_id = Some(api_version_id);
         } else if url.contains("cdn.modrinth.com/data/") {
             version_id = url
                 .split("/versions/")
@@ -1545,14 +1551,14 @@ pub async fn get_modpack_info_from_url(
 
         if version_id.is_some() || slug.is_some() {
             let version_obj = if let Some(vid) = version_id {
-                let v_url = format!("https://api.modrinth.com/v2/version/{}", vid);
+                let v_url = format!("{MODRINTH_API_V3}/version/{vid}");
                 if let Ok(r) = client.get(&v_url).send().await {
                     r.json::<serde_json::Value>().await.ok()
                 } else {
                     None
                 }
             } else if let Some(s) = slug {
-                let v_url = format!("https://api.modrinth.com/v2/project/{}/version", s);
+                let v_url = format!("{MODRINTH_API_V3}/project/{s}/version");
                 if let Ok(r) = client.get(&v_url).send().await {
                     if let Ok(arr) = r.json::<Vec<serde_json::Value>>().await {
                         arr.first().cloned()
@@ -1568,11 +1574,11 @@ pub async fn get_modpack_info_from_url(
 
             if let Some(v) = version_obj {
                 if let Some(pid) = v["project_id"].as_str() {
-                    let p_url = format!("https://api.modrinth.com/v2/project/{}", pid);
+                    let p_url = format!("{MODRINTH_API_V3}/project/{pid}");
                     if let Ok(p_resp) = client.get(&p_url).send().await {
                         if let Ok(p) = p_resp.json::<serde_json::Value>().await {
                             return Ok(ModpackInfo {
-                                name: p["title"].as_str().unwrap_or("Unknown Modpack").to_string(),
+                                name: p["name"].as_str().unwrap_or("Unknown Modpack").to_string(),
                                 description: Some(
                                     p["description"].as_str().unwrap_or("").to_string(),
                                 ),
@@ -2620,6 +2626,19 @@ mod tests {
             mods: Vec::new(),
             root_prefix: None,
         }
+    }
+
+    #[test]
+    fn extracts_version_ids_from_v2_and_v3_api_urls() {
+        assert_eq!(
+            modrinth_api_version_id("https://api.modrinth.com/v3/version/version-id?x=1")
+                .as_deref(),
+            Some("version-id")
+        );
+        assert_eq!(
+            modrinth_api_version_id("https://api.modrinth.com/v2/version/legacy-id").as_deref(),
+            Some("legacy-id")
+        );
     }
 
     fn write_zip(entries: &[(&str, &str)]) -> tempfile::NamedTempFile {

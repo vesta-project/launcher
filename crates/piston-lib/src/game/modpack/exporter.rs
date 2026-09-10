@@ -10,6 +10,9 @@ use zip::{write::FileOptions, ZipWriter};
 use crate::game::installer::types::ProgressReporter;
 use crate::game::modpack::types::ModpackFormat;
 
+// v3 does not currently expose hash-based download URLs.
+const MODRINTH_LEGACY_API_V2: &str = "https://api.modrinth.com/v2";
+
 fn calculate_hashes(path: &Path) -> Result<(String, String)> {
     let mut file = File::open(path)?;
     let mut sha1 = Sha1::new();
@@ -167,9 +170,9 @@ fn export_modrinth<W: Write + std::io::Seek>(
                                 downloads.push(json!(url));
                             }
 
-                            // Modrinth hash-based download
+                            // Modrinth v3 does not expose hash-based downloads yet.
                             downloads.push(json!(format!(
-                                "https://api.modrinth.com/v2/version_file/{}/download",
+                                "{MODRINTH_LEGACY_API_V2}/version_file/{}/download",
                                 sha1_hash
                             )));
 

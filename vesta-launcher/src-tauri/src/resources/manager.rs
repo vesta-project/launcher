@@ -629,17 +629,33 @@ impl ResourceManager {
     ) -> Result<SearchResponse> {
         let cache_key = format!("{:?}_{:?}", platform, query);
 
-        {
+        let stale_response = {
             let cache = self.search_cache.read().await;
             if let Some((resp, expiry)) = cache.get(&cache_key) {
                 if expiry > &chrono::Utc::now().naive_utc() {
                     return Ok(resp.clone());
                 }
+                Some(resp.clone())
+            } else {
+                None
             }
-        }
+        };
 
         let source = self.get_source(platform).await?;
-        let response = source.search(query).await?;
+        let response = match source.search(query).await {
+            Ok(response) => response,
+            Err(error) => match stale_response {
+                Some(stale) => {
+                    log::warn!(
+                        "[ResourceManager] Search refresh failed for {:?}; using stale cached results: {}",
+                        platform,
+                        error
+                    );
+                    return Ok(stale);
+                }
+                None => return Err(error),
+            },
+        };
 
         {
             let mut cache = self.search_cache.write().await;
@@ -786,23 +802,6 @@ impl ResourceManager {
                 if let Some(id) = external_ids.get(other_platform.as_str()) {
                     if let Ok(p) = self.get_project(other_platform, id).await {
                         return Ok(Some(p));
-                    }
-                }
-            }
-
-            if current.source == SourcePlatform::CurseForge
-                && other_platform == SourcePlatform::Modrinth
-            {
-                let facet_query = SearchQuery {
-                    facets: Some(vec![format!("curseforge_id:{}", current.id)]),
-                    resource_type: current.resource_type,
-                    limit: 1,
-                    ..Default::default()
-                };
-
-                if let Ok(results) = self.search(other_platform, facet_query).await {
-                    if let Some(hit) = results.hits.into_iter().next() {
-                        return Ok(Some(hit));
                     }
                 }
             }
