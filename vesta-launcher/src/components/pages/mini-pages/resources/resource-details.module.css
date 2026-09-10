@@ -432,11 +432,6 @@
 	flex-shrink: 0;
 }
 
-.creator-avatar-source {
-	background: color-mix(in srgb, #f16436 14%, var(--surface-high));
-	color: #f16436;
-}
-
 .creator-avatar {
 	object-fit: cover;
 }
@@ -444,8 +439,12 @@
 .creator-avatar-fallback {
 	display: grid;
 	place-items: center;
-	background: var(--surface-high);
-	color: var(--text-secondary);
+	background: color-mix(
+		in srgb,
+		var(--accent-primary) 22%,
+		var(--surface-highest)
+	);
+	color: var(--text-primary);
 	font-size: 12px;
 	font-weight: 600;
 }

@@ -1,7 +1,6 @@
 import DiscordIcon from "@assets/branding/services/discord.svg";
 import KofiIcon from "@assets/branding/services/kofi.svg";
 import PatreonIcon from "@assets/branding/services/patreon.svg";
-import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
 import DownloadIcon from "@assets/icons/actions/download.svg";
 import ExternalLinkIcon from "@assets/icons/actions/external-link.svg";
 import CodeIcon from "@assets/icons/content/code.svg";
@@ -2773,19 +2772,8 @@ const ResourceDetailsPage: Component<{
 									<Show
 										when={creator.filter.icon_url}
 										fallback={
-											<span
-												class={styles["creator-avatar-fallback"]}
-												classList={{
-													[styles["creator-avatar-source"]]:
-														project()?.source === "curseforge",
-												}}
-											>
-												<Show
-													when={project()?.source === "curseforge"}
-													fallback={creator.filter.name.charAt(0).toUpperCase()}
-												>
-													<CurseForgeIcon width="16" height="16" />
-												</Show>
+											<span class={styles["creator-avatar-fallback"]}>
+												{creator.filter.name.charAt(0).toUpperCase()}
 											</span>
 										}
 									>
