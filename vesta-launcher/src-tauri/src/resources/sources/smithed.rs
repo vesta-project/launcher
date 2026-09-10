@@ -1263,22 +1263,16 @@ impl SmithedSource {
             .collect::<Vec<_>>()
             .await;
 
-        match Self::map_sort(query.sort_by.as_deref()) {
-            "downloads" | "popularity" => {
+        let sort = Self::map_sort(query.sort_by.as_deref());
+        match sort {
+            "downloads" => {
                 projects.sort_by_key(|(project, _)| std::cmp::Reverse(project.download_count))
             }
-            "newest" | "updated" | "last_updated" => {
-                projects.sort_by(|(a, _), (b, _)| b.updated_at.cmp(&a.updated_at))
-            }
+            "newest" => projects.sort_by(|(a, _), (b, _)| b.updated_at.cmp(&a.updated_at)),
             "trending" => projects.sort_by_key(|(_, score)| std::cmp::Reverse(*score)),
             _ => projects.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name)),
         }
-        if query.sort_order.as_deref() == Some("asc")
-            && matches!(
-                query.sort_by.as_deref(),
-                Some("downloads" | "popularity" | "newest" | "updated" | "last_updated")
-            )
-        {
+        if query.sort_order.as_deref() == Some("asc") && matches!(sort, "downloads" | "newest") {
             projects.reverse();
         }
         let total_hits = projects.len() as u64;
