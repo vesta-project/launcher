@@ -2769,20 +2769,21 @@ const ResourceDetailsPage: Component<{
 											: creator.filter.name
 									}
 								>
-									<Show
-										when={creator.filter.icon_url}
-										fallback={
-											<span class={styles["creator-avatar-fallback"]}>
-												{creator.filter.name.charAt(0).toUpperCase()}
-											</span>
-										}
-									>
-										<img
-											class={styles["creator-avatar"]}
-											src={creator.filter.icon_url || ""}
-											alt=""
-										/>
-									</Show>
+									<span class={styles["creator-avatar-shell"]}>
+										<span class={styles["creator-avatar-fallback"]}>
+											{creator.filter.name.charAt(0).toUpperCase()}
+										</span>
+										<Show when={creator.filter.icon_url}>
+											<img
+												class={styles["creator-avatar"]}
+												src={creator.filter.icon_url || ""}
+												alt=""
+												onError={(event) => {
+													event.currentTarget.hidden = true;
+												}}
+											/>
+										</Show>
+									</span>
 									<span class={styles["creator-copy"]}>
 										<span class={styles["creator-name"]}>
 											{creator.filter.name}

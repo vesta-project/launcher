@@ -424,6 +424,7 @@
 	opacity: 1;
 }
 
+.creator-avatar-shell,
 .creator-avatar,
 .creator-avatar-fallback {
 	width: 30px;
@@ -432,7 +433,14 @@
 	flex-shrink: 0;
 }
 
+.creator-avatar-shell {
+	position: relative;
+	overflow: hidden;
+}
+
 .creator-avatar {
+	position: absolute;
+	inset: 0;
 	object-fit: cover;
 }
 
