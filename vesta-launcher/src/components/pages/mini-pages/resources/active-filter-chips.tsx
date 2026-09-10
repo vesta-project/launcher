@@ -176,6 +176,9 @@ export function ActiveFilterChips(props: { router?: any }) {
 									class={styles["filter-chip-icon"]}
 									src={chip.iconUrl || ""}
 									alt=""
+									onError={(event) => {
+										event.currentTarget.hidden = true;
+									}}
 								/>
 							</Show>
 							<Show when={chip.kind}>
