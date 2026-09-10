@@ -58,7 +58,6 @@ pub async fn exit_check(
     match piston_lib::game::launcher::get_running_instances().await {
         Ok(instances) => {
             if !instances.is_empty() {
-                response.can_exit = false;
                 response.running_instances = instances.into_iter().map(|i| i.instance_id).collect();
             }
         }
