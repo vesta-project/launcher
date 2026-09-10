@@ -287,8 +287,6 @@ impl ModrinthSource {
     }
 
     fn map_version(v: ModrinthVersion, preferred_hash: Option<&str>) -> Result<ResourceVersion> {
-        use crate::models::resource::ResourceVersionFile;
-
         let selected_file = preferred_hash
             .and_then(|hash| v.files.iter().find(|file| file.hashes.sha1 == hash))
             .or_else(|| v.files.iter().find(|file| file.primary))
@@ -301,22 +299,6 @@ impl ModrinthSource {
             })
             .or_else(|| v.files.first())
             .ok_or_else(|| anyhow!("Modrinth version {} has no files", v.id))?;
-
-        let files = v
-            .files
-            .iter()
-            .map(|file| ResourceVersionFile {
-                url: file.url.clone(),
-                file_name: file.filename.clone(),
-                hash: file.hashes.sha1.clone(),
-                file_size: file.size,
-                role: if std::ptr::eq(file, selected_file) {
-                    "primary".to_string()
-                } else {
-                    "alternate".to_string()
-                },
-            })
-            .collect();
 
         Ok(ResourceVersion {
             id: v.id,
@@ -354,7 +336,9 @@ impl ModrinthSource {
             published_at: Some(v.date_published),
             download_count: v.downloads,
             file_size: selected_file.size,
-            files,
+            // Modrinth files are alternatives, not companion artifacts. Keep
+            // installation on the selected file represented above.
+            files: Vec::new(),
         })
     }
 
@@ -989,13 +973,22 @@ mod tests {
             "version_number": "1.2.3",
             "game_versions": ["1.21.1"],
             "loaders": ["fabric"],
-            "files": [{
-                "url": "https://example.invalid/file.jar",
-                "filename": "file.jar",
-                "hashes": { "sha1": "abc123" },
-                "primary": true,
-                "size": 4096
-            }],
+            "files": [
+                {
+                    "url": "https://example.invalid/file.jar",
+                    "filename": "file.jar",
+                    "hashes": { "sha1": "abc123" },
+                    "primary": true,
+                    "size": 4096
+                },
+                {
+                    "url": "https://example.invalid/file-sources.jar",
+                    "filename": "file-sources.jar",
+                    "hashes": { "sha1": "def456" },
+                    "primary": false,
+                    "size": 2048
+                }
+            ],
             "version_type": "release",
             "dependencies": [{
                 "version_id": "dependency-version",
@@ -1017,6 +1010,7 @@ mod tests {
         );
         assert_eq!(details.version.download_count, Some(42));
         assert_eq!(details.version.file_size, Some(4096));
+        assert!(details.version.files.is_empty());
         assert_eq!(
             details.version.dependencies[0].dependency_type,
             DependencyType::Required
