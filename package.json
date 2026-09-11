@@ -12,6 +12,9 @@
   },
 	"scripts": {
 		"assets:inline-svg-audit": "bun run scripts/generate-inline-svg-audit.ts",
+		"embed-skins": "bun run scripts/embed-skins.ts",
+		"embed-skins:retag": "bun run scripts/embed-skins.ts --retag",
+		"embed-skins:extract": "bun run scripts/extract-embedded-skins.ts",
 		"check": "cd vesta-launcher && bun run check",
 		"format": "cd vesta-launcher && bun run format",
 		"typecheck": "cd vesta-launcher && bun run typecheck",

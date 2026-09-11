@@ -465,6 +465,8 @@ pub async fn apply_preset_skin(
     texture_url: String,
     variant: String,
     category: Option<String>,
+    name: Option<String>,
+    pack_id: Option<String>,
 ) -> Result<(), String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let normalized_uuid = account_uuid.replace("-", "");
@@ -522,20 +524,26 @@ pub async fn apply_preset_skin(
 
     let texture_key = compute_texture_key(&file_bytes);
 
-    // Attempt to find a name from the texture url or category
-    let skin_name = if let Some(cat) = &category {
-        format!(
-            "{}: {}",
-            cat,
-            texture_url.split('/').next_back().unwrap_or("preset")
-        )
-    } else {
-        texture_url
-            .split('/')
-            .next_back()
-            .unwrap_or("preset")
-            .to_string()
-    };
+    // Attempt to find a name from explicit args, pack, or texture url
+    let skin_name = name.unwrap_or_else(|| {
+        if let Some(cat) = &category {
+            format!(
+                "{}: {}",
+                cat,
+                texture_url.split('/').next_back().unwrap_or("preset")
+            )
+        } else {
+            texture_url
+                .split('/')
+                .next_back()
+                .unwrap_or("preset")
+                .to_string()
+        }
+    });
+
+    let history_source = pack_id
+        .or(category)
+        .unwrap_or_else(|| "preset".to_string());
 
     let new_history = NewAccountSkinHistory {
         account_uuid: normalized_uuid.clone(),
@@ -543,7 +551,7 @@ pub async fn apply_preset_skin(
         name: skin_name,
         variant: variant.clone(),
         image_data,
-        source: category.unwrap_or_else(|| "preset".to_string()),
+        source: history_source,
     };
 
     diesel::insert_into(account_skin_history::table)

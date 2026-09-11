@@ -50,6 +50,9 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 				return null;
 			}
 		},
+		// Avoid suspending into ancestor Suspense (e.g. settings tab) when
+		// avatars mount inside dropdowns/portals — that remounts the whole page.
+		{ initialValue: null },
 	);
 
 	createEffect(() => {

@@ -182,3 +182,4 @@ dist
 /target/
 **/target/**
 vesta-launcher/src-tauri/binaries/
+.skin-packs-cache/
