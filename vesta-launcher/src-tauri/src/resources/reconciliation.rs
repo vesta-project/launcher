@@ -52,11 +52,15 @@ impl PreparedResourceCandidate {
         if renamed {
             let enable = path.to_string_lossy().ends_with(".disabled");
             path = ledger::toggled_path(&path, enable);
-            if !self.sha1.as_ref().is_some_and(|hash| {
+        }
+        // Always re-verify content when a hash is known. Size+mtime alone can miss
+        // same-size replacements within one second on coarse filesystems.
+        if (renamed || self.sha1.is_some())
+            && !self.sha1.as_ref().is_some_and(|hash| {
                 calculate_sha1(&path).is_ok_and(|current| current.eq_ignore_ascii_case(hash))
-            }) {
-                return false;
-            }
+            })
+        {
+            return false;
         }
         let Ok(metadata) = std::fs::metadata(&path) else {
             return false;
@@ -729,6 +733,37 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         assert!(!prepared.refresh_path());
         std::fs::write(&disabled, b"unrelated").unwrap();
+        assert!(!prepared.refresh_path());
+    }
+
+    #[test]
+    fn refresh_path_rejects_same_size_in_place_content_replacement() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("mods/example.jar");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"mod!").unwrap();
+        let metadata = std::fs::metadata(&path).unwrap();
+        let mut prepared = PreparedResourceCandidate {
+            candidate: ResourceCandidate {
+                path: path.clone(),
+                provenance: None,
+                preferred_platform: None,
+                resolved: None,
+            },
+            sha1: Some(calculate_sha1(&path).unwrap()),
+            curseforge_fingerprint: None,
+            metadata: (
+                metadata.len() as i64,
+                metadata
+                    .modified()
+                    .unwrap()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64,
+            ),
+        };
+        std::fs::write(&path, b"new!").unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 4);
         assert!(!prepared.refresh_path());
     }
 

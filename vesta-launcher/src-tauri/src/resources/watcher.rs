@@ -138,6 +138,23 @@ impl ResourceWatcher {
             );
         }
 
+        {
+            let mut watchers = self.watchers.lock().await;
+            // Insert before the worker starts so identity checks cannot treat a
+            // brand-new registration as permanently stale during lock delay.
+            if watchers.contains_key(&db_id) {
+                return Ok(());
+            }
+            watchers.insert(
+                db_id,
+                WatcherRegistration {
+                    identity,
+                    watcher,
+                    worker: None,
+                },
+            );
+        }
+
         let worker = tauri::async_runtime::spawn(async move {
             while let Some(first_event) = rx.recv().await {
                 let mut events = vec![first_event];
@@ -201,20 +218,15 @@ impl ResourceWatcher {
 
         {
             let mut watchers = self.watchers.lock().await;
-            // Double-check after watcher creation to avoid duplicate registration races.
-            if watchers.contains_key(&db_id) {
-                drop(watcher);
-                worker.abort();
-                return Ok(());
+            match watchers.get_mut(&db_id) {
+                Some(registration) if registration.identity == identity => {
+                    registration.worker = Some(worker);
+                }
+                _ => {
+                    worker.abort();
+                    return Ok(());
+                }
             }
-            watchers.insert(
-                db_id,
-                WatcherRegistration {
-                    identity,
-                    watcher,
-                    worker: Some(worker),
-                },
-            );
         }
 
         // Initial scan after watcher registration so worker tasks don't block on is_watched checks.
