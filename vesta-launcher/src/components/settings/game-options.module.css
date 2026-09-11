@@ -1,0 +1,102 @@
+.editor {
+	padding: 20px 24px;
+	color: var(--text-primary);
+}
+.header,
+.actions,
+.filters {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.header {
+	justify-content: space-between;
+	flex-wrap: wrap;
+	margin-bottom: 12px;
+}
+.header h3 {
+	margin: 0;
+	font-size: 15px;
+}
+.header p {
+	margin: 4px 0 0;
+	font-size: 12px;
+	color: var(--text-secondary);
+}
+.filters {
+	flex-wrap: wrap;
+	margin-bottom: 10px;
+}
+.filters input {
+	flex: 1;
+	min-width: 140px;
+}
+.count {
+	font-size: 12px;
+	color: var(--text-secondary);
+}
+.rows {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+	gap: 0 24px;
+}
+.row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 148px;
+	align-items: center;
+	gap: 12px;
+	padding: 7px 0;
+	border-bottom: 1px solid var(--border-subtle);
+	min-height: 44px;
+	box-sizing: border-box;
+}
+.name {
+	min-width: 0;
+	font-size: 13px;
+	overflow-wrap: anywhere;
+}
+.name small {
+	display: block;
+	color: var(--text-secondary);
+	font-size: 10px;
+}
+.row[data-dirty="true"] .name {
+	color: var(--accent-primary);
+}
+.editor input,
+.editor select,
+.editor button {
+	color: inherit;
+	background: var(--card-background);
+	border: 1px solid var(--border-subtle);
+	border-radius: 5px;
+	padding: 6px 8px;
+	font: inherit;
+	font-size: 12px;
+	min-width: 0;
+}
+.editor input:focus-visible,
+.editor select:focus-visible,
+.editor button:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
+}
+.editor button {
+	cursor: pointer;
+}
+.editor :disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.error {
+	color: var(--destructive);
+	font-size: 13px;
+}
+@media (max-width: 480px) {
+	.editor {
+		padding: 16px;
+	}
+	.actions {
+		flex-wrap: wrap;
+	}
+}
