@@ -40,8 +40,13 @@ impl fmt::Display for MinecraftSkinVariant {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum SkinSource {
-    /// A default skin provided by Mojang.
+    /// A default skin provided by Mojang (builtin character or event pack).
     Default {
+        /// Stable pack identifier (e.g. `minecon_earth_2017`, `defaults`).
+        pack_id: Option<Arc<str>>,
+        /// Human-readable pack name shown in the UI.
+        pack_name: Option<Arc<str>>,
+        /// Deprecated alias of `pack_name` for older clients; prefer `pack_name`.
         category: Option<Arc<str>>,
         /// For some default skins, we have both slim and classic textures.
         slim_texture: Option<Arc<str>>,

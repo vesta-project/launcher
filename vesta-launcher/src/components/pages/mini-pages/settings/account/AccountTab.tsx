@@ -1,10 +1,10 @@
 ﻿import PlusIcon from "@assets/icons/actions/add.svg";
 // Assets
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
-import CapeIcon from "@assets/icons/content/cape-icon.svg";
 import ViewIcon from "@assets/icons/content/search.svg";
 import SkinIcon from "@assets/icons/content/skin-icon.svg";
 import CheckIcon from "@assets/icons/controls/check.svg";
+import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -41,6 +41,7 @@ import {
 	onCleanup,
 	onMount,
 	Show,
+	Suspense,
 } from "solid-js";
 import pageStyles from "../settings-page.module.css";
 import styles from "./AccountTab.module.css";
@@ -65,6 +66,17 @@ interface SkinSource {
 	slim_texture?: string;
 	texture?: string;
 	url?: string;
+	pack_id?: string;
+	pack_name?: string;
+	/** Legacy alias of pack_name */
+	category?: string;
+}
+
+interface SkinPackGroup {
+	packId: string;
+	packName: string;
+	skins: Skin[];
+	isDefaults: boolean;
 }
 
 interface Skin {
@@ -219,7 +231,10 @@ export function AccountSettingsTab() {
 	const [skinHistory, setSkinHistory] = createSignal<SkinHistory[]>([]);
 	const [capes, setCapes] = createSignal<Cape[]>([]);
 	const [saving, setSaving] = createSignal(false);
-	const [browseTab, setBrowseTab] = createSignal("recent");
+	const [browseTab, setBrowseTab] = createSignal("yours");
+	const [collapsedPacks, setCollapsedPacks] = createSignal<Record<string, boolean>>(
+		{},
+	);
 	const [viewerSrc, setViewerSrc] = createSignal<string | null>(null);
 	const [compactActionMode, setCompactActionMode] = createSignal(false);
 	const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
@@ -384,12 +399,18 @@ export function AccountSettingsTab() {
 
 	onMount(loadData);
 
+	const normalizeAccountUuid = (uuid?: string | null) =>
+		(uuid || "").replace(/-/g, "").toLowerCase();
+
 	onMount(() => {
 		// Listen for external active account changes (e.g. from Sidebar)
 		const unsubscribe = onConfigUpdate(async (field) => {
 			if (field === "active_account_uuid") {
 				const active = (await getActiveAccount()) as any as Account;
-				if (active?.uuid !== activeAccount()?.uuid) {
+				if (
+					normalizeAccountUuid(active?.uuid) !==
+					normalizeAccountUuid(activeAccount()?.uuid)
+				) {
 					await loadData();
 				}
 			}
@@ -541,39 +562,59 @@ export function AccountSettingsTab() {
 		return false;
 	};
 
-	const skinHistoryCategories = createMemo(() => {
-		const categories = new Set<string>();
+	const PACK_ORDER: Record<string, number> = {
+		defaults: 0,
+		minecon_earth_2017: 10,
+		builders_and_biomes: 20,
+		striding_hero: 30,
+		garden_awakens: 40,
+		chase_the_skies: 50,
+		copper_age: 60,
+		mounts_of_mayhem: 70,
+		tiny_takeover: 80,
+		chaos_cubed: 90,
+		dungeons_hero: 100,
+		dungeons_ii_hero: 110,
+		other_events: 1000,
+	};
+
+	const getPackId = (source: SkinSource): string => {
+		return source.pack_id || source.pack_name || source.category || "other";
+	};
+
+	const getPackName = (source: SkinSource): string => {
+		return source.pack_name || source.category || toTitleCase(getPackId(source));
+	};
+
+	const skinPackGroups = createMemo((): SkinPackGroup[] => {
+		const groups = new Map<string, SkinPackGroup>();
+
 		for (const skin of skins()) {
-			const cat = (skin.source as any).category;
-			if (cat) {
-				categories.add(cat);
+			if (skin.source?.type !== "default") continue;
+			const packId = getPackId(skin.source);
+			const packName = getPackName(skin.source);
+			const existing = groups.get(packId);
+			if (existing) {
+				existing.skins.push(skin);
+			} else {
+				groups.set(packId, {
+					packId,
+					packName,
+					skins: [skin],
+					isDefaults: packId === "defaults",
+				});
 			}
 		}
-		// Also include categories from history that aren't in defaults
-		for (const item of skinHistory()) {
-			if (
-				item.source &&
-				item.source !== "mojang" &&
-				item.source !== "history" &&
-				item.source !== "local"
-			) {
-				categories.add(item.source);
-			}
-		}
-		return Array.from(categories).sort();
+
+		return Array.from(groups.values()).sort((a, b) => {
+			const orderA = PACK_ORDER[a.packId] ?? 500;
+			const orderB = PACK_ORDER[b.packId] ?? 500;
+			if (orderA !== orderB) return orderA - orderB;
+			return a.packName.localeCompare(b.packName, undefined, {
+				sensitivity: "base",
+			});
+		});
 	});
-
-	const defaultCategories = createMemo(() =>
-		skinHistoryCategories().filter(
-			(category) => !category.toLowerCase().includes("event"),
-		),
-	);
-
-	const eventCategories = createMemo(() =>
-		skinHistoryCategories().filter((category) =>
-			category.toLowerCase().includes("event"),
-		),
-	);
 
 	const filteredRecentHistory = createMemo(() => {
 		const defaultTextureKeys = new Set(
@@ -585,7 +626,7 @@ export function AccountSettingsTab() {
 		let duplicateCount = 0;
 
 		const filtered = skinHistory().filter((item) => {
-			// Hide if it matches a preset (don't duplicate preset in recent)
+			// Hide if it matches a preset (don't duplicate preset in Your skins)
 			if (defaultTextureKeys.has(item.texture_key)) return false;
 
 			if (seenHistoryTextureKeys.has(item.texture_key)) {
@@ -595,14 +636,17 @@ export function AccountSettingsTab() {
 
 			seenHistoryTextureKeys.add(item.texture_key);
 
-			// Don't show in "Recent" if it belongs to a known category (it will show there instead)
+			const source = (item.source || "").toLowerCase();
+			// Keep user-owned sources only; pack_id / pack_name history stays under Presets
 			if (
-				item.source &&
-				item.source !== "mojang" &&
-				item.source !== "history" &&
-				item.source !== "custom" &&
-				item.source !== "local" &&
-				item.source !== "preset"
+				source &&
+				source !== "mojang" &&
+				source !== "history" &&
+				source !== "custom" &&
+				source !== "local" &&
+				source !== "preset" &&
+				source !== "uploaded" &&
+				!source.startsWith("temp")
 			) {
 				return false;
 			}
@@ -749,7 +793,20 @@ export function AccountSettingsTab() {
 		setSaving(true);
 		try {
 			if (previewSkinUrl() !== (active.skin_url || "")) {
-				if (previewSkinUrl().startsWith("data:")) {
+				const skin = activeSkin();
+				const isBuiltinDefault = skin?.source?.type === "default";
+
+				if (isBuiltinDefault && skin) {
+					const source = skin.source;
+					await invoke("apply_preset_skin", {
+						accountUuid: active.uuid,
+						textureUrl: previewSkinUrl(),
+						variant: previewVariant(),
+						category: source.pack_name || source.category || "Preset",
+						name: skin.name || undefined,
+						packId: source.pack_id || undefined,
+					});
+				} else if (previewSkinUrl().startsWith("data:")) {
 					const accountName = getAccountDisplayName(active);
 					await invoke("upload_account_skin", {
 						accountUuid: active.uuid,
@@ -763,9 +820,12 @@ export function AccountSettingsTab() {
 						textureUrl: previewSkinUrl(),
 						variant: previewVariant(),
 						category:
-							(activeSkin()?.source as any)?.category ||
-							activeSkin()?.source.type ||
+							skin?.source?.pack_name ||
+							skin?.source?.category ||
+							skin?.source?.type ||
 							"Preset",
+						name: skin?.name || undefined,
+						packId: skin?.source?.pack_id || undefined,
 					});
 				}
 			}
@@ -839,6 +899,9 @@ export function AccountSettingsTab() {
 	};
 
 	const selectAccount = async (acc: Account) => {
+		if (normalizeAccountUuid(acc.uuid) === normalizeAccountUuid(activeAccount()?.uuid)) {
+			return;
+		}
 		setActiveAccount(acc);
 		await persistActiveAccount(acc.uuid);
 		await loadData();
@@ -864,19 +927,32 @@ export function AccountSettingsTab() {
 			optionTextValue="uuid"
 			itemComponent={(props) => (
 				<SelectItem item={props.item} class={styles.accountSelectItem}>
-					<div class={styles.accountSelectOption}>
-						<ResourceAvatar
-							name={getAccountDisplayName(props.item.rawValue)}
-							playerUuid={props.item.rawValue.uuid}
-							size={20}
-							shape="square"
-						/>
-						<div class={styles.accountSelectText}>
-							<span class={styles.accountSelectName}>
-								{getAccountDisplayName(props.item.rawValue)}
-							</span>
+					<Suspense
+						fallback={
+							<div class={styles.accountSelectOption}>
+								<div class={styles.accountSelectAvatarFallback} />
+								<div class={styles.accountSelectText}>
+									<span class={styles.accountSelectName}>
+										{getAccountDisplayName(props.item.rawValue)}
+									</span>
+								</div>
+							</div>
+						}
+					>
+						<div class={styles.accountSelectOption}>
+							<ResourceAvatar
+								name={getAccountDisplayName(props.item.rawValue)}
+								playerUuid={props.item.rawValue.uuid}
+								size={20}
+								shape="square"
+							/>
+							<div class={styles.accountSelectText}>
+								<span class={styles.accountSelectName}>
+									{getAccountDisplayName(props.item.rawValue)}
+								</span>
+							</div>
 						</div>
-					</div>
+					</Suspense>
 				</SelectItem>
 			)}
 		>
@@ -919,115 +995,104 @@ export function AccountSettingsTab() {
 		setPreviewCapeId(snapshot.capeId);
 	};
 
-	const renderSkinCategorySection = (category: string) => {
-		const categorySkins = () => {
-			const defaults = skins().filter(
-				(s) => (s.source as any).category === category,
-			);
-			const historyPresets = skinHistory()
-				.filter((h) => h.source === category)
-				.map(
-					(h) =>
-						({
-							texture_key: h.texture_key,
-							name: h.name,
-							source: {
-								type: h.source,
-								classic_texture: h.image_data,
-								slim_texture: h.image_data,
-							},
-						}) as any as Skin,
-				);
+	const renderSkinTile = (skin: Skin) => {
+		const classicTexture = getSkinTexture(skin, "classic");
+		const preferredTexture =
+			getSkinTexture(skin, previewVariant()) || classicTexture;
 
-			const combined = [...defaults];
-			const seenTextureKeys = new Set<string>();
-
-			for (const existing of combined) {
-				if (existing.texture_key) {
-					seenTextureKeys.add(existing.texture_key);
-				}
-			}
-
-			for (const h of historyPresets) {
-				if (!h.texture_key || seenTextureKeys.has(h.texture_key)) {
-					continue;
-				}
-
-				seenTextureKeys.add(h.texture_key);
-
-				combined.push(h);
-			}
-			return combined;
-		};
+		const isSelected = createMemo(() => {
+			return isSkinSelected(preferredTexture, skin.texture_key);
+		});
 
 		return (
-			<Show when={categorySkins().length > 0}>
-				<section class={styles.contentCard}>
-					<div class={styles.cardHeader}>
-						<SkinIcon width="20" style="color: var(--primary)" />
-						<h2 class={styles.cardTitle} style="text-transform: capitalize;">
-							{category} Outfits
-						</h2>
+			<Tooltip placement="top">
+				<TooltipTrigger as="div">
+					<div
+						class={styles.skinItem}
+						classList={{
+							[styles.selected]: isSelected(),
+						}}
+						onClick={() => handlePreviewSkin(skin)}
+					>
+						<SkinPortrait
+							src={preferredTexture}
+							variant={previewVariant()}
+						/>
+						<Tooltip>
+							<TooltipTrigger
+								as="button"
+								class={styles.viewRawButton}
+								onClick={(e) => {
+									e.stopPropagation();
+									setViewerSrc(preferredTexture);
+								}}
+								aria-label="View raw texture"
+							>
+								<ViewIcon width="16" />
+							</TooltipTrigger>
+							<TooltipContent>View raw texture</TooltipContent>
+						</Tooltip>
+						<Show when={isSelected()}>
+							<span class={styles.selectedBadge}>
+								<CheckIcon />
+							</span>
+						</Show>
 					</div>
-					<div class={styles.presetsGrid}>
-						<For each={categorySkins()}>
-							{(skin) => {
-								const classicTexture = getSkinTexture(skin, "classic");
-								const preferredTexture =
-									getSkinTexture(skin, previewVariant()) || classicTexture;
+				</TooltipTrigger>
+				<TooltipContent>
+					{formatTooltipName(skin.name || "Default Skin", skin.source?.type)}
+				</TooltipContent>
+			</Tooltip>
+		);
+	};
 
-								const isSelected = createMemo(() => {
-									return isSkinSelected(preferredTexture, skin.texture_key);
-								});
+	const isPackCollapsed = (packId: string) => !!collapsedPacks()[packId];
 
-								return (
-									<Tooltip placement="top">
-										<TooltipTrigger as="div">
-											<div
-												class={styles.skinItem}
-												classList={{
-													[styles.selected]: isSelected(),
-												}}
-												onClick={() => handlePreviewSkin(skin)}
-											>
-												<SkinPortrait
-													src={preferredTexture}
-													variant={
-														(skin.source as any)?.variant || previewVariant()
-													}
-												/>
-												<Tooltip>
-													<TooltipTrigger
-														as="button"
-														class={styles.viewRawButton}
-														onClick={(e) => {
-															e.stopPropagation();
-															setViewerSrc(preferredTexture);
-														}}
-														aria-label="View raw texture"
-													>
-														<ViewIcon width="16" />
-													</TooltipTrigger>
-													<TooltipContent>View raw texture</TooltipContent>
-												</Tooltip>
-												<Show when={isSelected()}>
-													<span class={styles.selectedBadge}>
-														<CheckIcon />
-													</span>
-												</Show>
-											</div>
-										</TooltipTrigger>
-										<TooltipContent>
-											{formatTooltipName(
-												skin.name || "Default Skin",
-												(skin.source as any)?.type,
-											)}
-										</TooltipContent>
-									</Tooltip>
-								);
-							}}
-						</For>
-					</div>
+	const togglePackCollapsed = (packId: string) => {
+		setCollapsedPacks((prev) => ({
+			...prev,
+			[packId]: !prev[packId],
+		}));
+	};
+
+	const renderPackSection = (pack: SkinPackGroup) => {
+		const collapsed = () => isPackCollapsed(pack.packId);
+
+		return (
+			<Show when={pack.skins.length > 0}>
+				<section
+					class={`${styles.contentCard} ${styles.packSection}`}
+					classList={{
+						[styles.packSectionDefaults]: pack.isDefaults,
+						[styles.packSectionCollapsed]: collapsed(),
+					}}
+				>
+					<button
+						type="button"
+						class={styles.packHeader}
+						onClick={() => togglePackCollapsed(pack.packId)}
+						aria-expanded={!collapsed()}
+					>
+						<div class={styles.packHeaderText}>
+							<h2 class={styles.packTitle}>{pack.packName}</h2>
+							<span class={styles.packMeta}>
+								{pack.skins.length}{" "}
+								{pack.skins.length === 1 ? "skin" : "skins"}
+							</span>
+						</div>
+						<span
+							class={styles.packChevron}
+							classList={{ [styles.packChevronCollapsed]: collapsed() }}
+							aria-hidden="true"
+						>
+							<ChevronDownIcon width="16" height="16" />
+						</span>
+					</button>
+					<Show when={!collapsed()}>
+						<div class={styles.presetsGrid}>
+							<For each={pack.skins}>{(skin) => renderSkinTile(skin)}</For>
+						</div>
+					</Show>
 				</section>
 			</Show>
 		);
@@ -1039,11 +1104,10 @@ export function AccountSettingsTab() {
 		>
 			<div class={styles.container}>
 				<Show
-					when={activeAccount()}
+					when={Boolean(activeAccount())}
 					fallback={<div class={styles.noAccount}>No account connected</div>}
 				>
-					{(active) => (
-						<>
+					<>
 							<Show when={isNarrowLayout()}>
 								<div class={styles.viewToolbar}>
 									<Show
@@ -1143,21 +1207,15 @@ export function AccountSettingsTab() {
 											<TabsIndicator />
 											<TabsTrigger
 												class={styles.browseTabsTrigger}
-												value="recent"
+												value="yours"
 											>
-												Recent
+												Your skins
 											</TabsTrigger>
 											<TabsTrigger
 												class={styles.browseTabsTrigger}
-												value="defaults"
+												value="presets"
 											>
-												Default
-											</TabsTrigger>
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="events"
-											>
-												Events
+												Presets
 											</TabsTrigger>
 											<TabsTrigger
 												class={styles.browseTabsTrigger}
@@ -1168,85 +1226,105 @@ export function AccountSettingsTab() {
 										</TabsList>
 									</div>
 
-									<TabsContent value="recent" class={styles.browseTabsContent}>
+									<TabsContent value="yours" class={styles.browseTabsContent}>
 										<section class={styles.contentCard}>
 											<div class={styles.cardHeader}>
-												<h2 class={styles.cardTitle}>Recent Skins</h2>
+												<h2 class={styles.cardTitle}>Your skins</h2>
+												<button
+													type="button"
+													class={styles.headerUploadButton}
+													onClick={handleUploadSkin}
+												>
+													<PlusIcon width="14" height="14" />
+													<span>Add skin</span>
+												</button>
 											</div>
-											<div class={styles.presetsGrid}>
-												<For each={filteredRecentHistory()}>
-													{(item) => {
-														const selected = createMemo(() =>
-															isSkinSelected(item.image_data, item.texture_key),
-														);
-														return (
-															<Tooltip>
-																<TooltipTrigger as="div">
-																	<div
-																		class={styles.skinItem}
-																		classList={{
-																			[styles.selected]: selected(),
-																		}}
-																		onClick={() => handlePreviewHistory(item)}
-																	>
-																		<SkinPortrait
-																			src={item.image_data}
-																			variant={item.variant}
-																		/>
-																		<Tooltip placement="top">
-																			<TooltipTrigger
-																				as="button"
-																				class={styles.viewRawButton}
-																				onClick={(e) => {
-																					e.stopPropagation();
-																					setViewerSrc(item.image_data);
-																				}}
-																				aria-label="View raw texture"
-																			>
-																				<ViewIcon width="16" />
-																			</TooltipTrigger>
-																			<TooltipContent>
-																				View raw texture
-																			</TooltipContent>
-																		</Tooltip>
-																		<Show when={selected()}>
-																			<span class={styles.selectedBadge}>
-																				✓
-																			</span>
-																		</Show>
-																	</div>
-																</TooltipTrigger>
-																<TooltipContent>
-																	{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
-																</TooltipContent>
-															</Tooltip>
-														);
-													}}
-												</For>
-											</div>
+
+											<Show
+												when={filteredRecentHistory().length > 0}
+												fallback={
+													<div class={styles.emptyState}>
+														<p class={styles.emptyStateTitle}>
+															No custom skins yet
+														</p>
+														<p class={styles.emptyStateBody}>
+															Upload a PNG to start building your skin history.
+															Preset characters live under Presets.
+														</p>
+													</div>
+												}
+											>
+												<div class={styles.presetsGrid}>
+													<For each={filteredRecentHistory()}>
+														{(item) => {
+															const selected = createMemo(() =>
+																isSkinSelected(
+																	item.image_data,
+																	item.texture_key,
+																),
+															);
+															return (
+																<Tooltip>
+																	<TooltipTrigger as="div">
+																		<div
+																			class={styles.skinItem}
+																			classList={{
+																				[styles.selected]: selected(),
+																			}}
+																			onClick={() => handlePreviewHistory(item)}
+																		>
+																			<SkinPortrait
+																				src={item.image_data}
+																				variant={item.variant}
+																			/>
+																			<Tooltip placement="top">
+																				<TooltipTrigger
+																					as="button"
+																					class={styles.viewRawButton}
+																					onClick={(e) => {
+																						e.stopPropagation();
+																						setViewerSrc(item.image_data);
+																					}}
+																					aria-label="View raw texture"
+																				>
+																					<ViewIcon width="16" />
+																				</TooltipTrigger>
+																				<TooltipContent>
+																					View raw texture
+																				</TooltipContent>
+																			</Tooltip>
+																			<Show when={selected()}>
+																				<span class={styles.selectedBadge}>
+																					<CheckIcon />
+																				</span>
+																			</Show>
+																		</div>
+																	</TooltipTrigger>
+																	<TooltipContent>
+																		{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
+																	</TooltipContent>
+																</Tooltip>
+															);
+														}}
+													</For>
+												</div>
+											</Show>
 										</section>
 									</TabsContent>
 
 									<TabsContent
-										value="defaults"
-										class={styles.browseTabsContent}
+										value="presets"
+										class={`${styles.browseTabsContent} ${styles.presetsBrowse}`}
 									>
-										<For each={defaultCategories()}>
-											{(category) => renderSkinCategorySection(category)}
-										</For>
-									</TabsContent>
-
-									<TabsContent value="events" class={styles.browseTabsContent}>
-										<For each={eventCategories()}>
-											{(category) => renderSkinCategorySection(category)}
+										<For each={skinPackGroups()}>
+											{(pack) => renderPackSection(pack)}
 										</For>
 									</TabsContent>
 
 									<TabsContent value="capes" class={styles.browseTabsContent}>
 										<section class={styles.contentCard}>
 											<div class={styles.cardHeader}>
-												<CapeIcon width="20" style="color: var(--primary)" />
-												<h2 class={styles.cardTitle}>Capes & Accessories</h2>
+												<h2 class={styles.cardTitle}>Capes</h2>
 											</div>
 											<div class={styles.capesGrid}>
 												<button
@@ -1418,7 +1496,6 @@ export function AccountSettingsTab() {
 								</section>
 							</aside>
 						</>
-					)}
 				</Show>
 				<ImageViewer
 					src={viewerSrc()}
