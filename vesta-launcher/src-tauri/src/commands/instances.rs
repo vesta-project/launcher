@@ -1210,6 +1210,13 @@ pub async fn update_instance(
         instance_data.id
     );
 
+    let manager = app_handle.state::<TaskManager>();
+    let _guard = manager
+        .acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(
+            instance_data.id,
+        )])
+        .await;
+
     let mut final_instance = instance_data.clone();
 
     // Handle Icon: If it's a base64 data URL, convert to icon_data and set icon_path to reflect it's stored
