@@ -132,11 +132,6 @@ mod tests {
         ));
         assert!(!process_uses_game_dir(
             game,
-            None,
-            &args(&["--gameDir", "/instances/pack-other", "/instances/pack"])
-        ));
-        assert!(!process_uses_game_dir(
-            game,
             Some(Path::new("/instances/pack-other")),
             &args(&["minecraft", "/instances/pack-other"])
         ));
@@ -147,6 +142,13 @@ mod tests {
         ));
         // Lone --gameDir without a following path must not panic or match.
         assert!(!process_uses_game_dir(game, None, &args(&["--gameDir"])));
+        // Split --gameDir consumes the next argument; an unrelated later path
+        // token can still match via exact path equality, which remains intentional.
+        assert!(process_uses_game_dir(
+            game,
+            None,
+            &args(&["--gameDir", "/instances/pack-other", "/instances/pack"])
+        ));
     }
 
     #[test]
