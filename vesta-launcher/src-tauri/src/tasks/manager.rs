@@ -207,6 +207,11 @@ pub trait Task: Send + Sync {
     fn ready(&self, _ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         Box::pin(async { Ok(()) })
     }
+    /// Called when the task is discarded before `run` (cancel during conflict
+    /// locks, readiness failure, or cancel while waiting for a worker permit).
+    fn on_abandoned(&self, _app: &AppHandle) -> BoxFuture<'static, ()> {
+        Box::pin(async {})
+    }
     /// Execute task work.
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>>;
 }
@@ -522,6 +527,7 @@ impl TaskManager {
                             p_tokens.lock().unwrap().remove(&key_clone);
                         }
                         active_tasks.lock().unwrap().remove(&key_clone);
+                        task.on_abandoned(&app).await;
                         return;
                     }
 
@@ -585,6 +591,7 @@ impl TaskManager {
                             p_tokens.lock().unwrap().remove(&key_clone);
                         }
                         active_tasks.lock().unwrap().remove(&key_clone);
+                        task.on_abandoned(&app).await;
                         return;
                     }
 
@@ -604,6 +611,7 @@ impl TaskManager {
                                 p_tokens.lock().unwrap().remove(&key_clone);
                             }
                             active_tasks.lock().unwrap().remove(&key_clone);
+                            task.on_abandoned(&app).await;
                             return;
                         }
                     };
@@ -658,6 +666,7 @@ impl TaskManager {
                             p_tokens.lock().unwrap().remove(&key_clone);
                         }
                         active_tasks.lock().unwrap().remove(&key_clone);
+                        task.on_abandoned(&app).await;
                         drop(permit);
                         return;
                     }

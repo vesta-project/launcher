@@ -97,16 +97,19 @@ impl Task for UpdateModpackTask {
     }
 
     fn ready(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
+        let game_dir = self.game_dir.clone();
+
+        Box::pin(async move { Self::wait_for_instance_exit(&game_dir, &ctx).await })
+    }
+
+    fn on_abandoned(&self, app: &tauri::AppHandle) -> futures::future::BoxFuture<'static, ()> {
         let instance_id = self.instance_id;
         let game_dir = self.game_dir.clone();
-        let app_handle = ctx.app_handle.clone();
-
+        let app_handle = app.clone();
         Box::pin(async move {
-            if let Err(error) = Self::wait_for_instance_exit(&game_dir, &ctx).await {
-                crate::modpack::update::rollback_start(&app_handle, instance_id, &game_dir);
-                return Err(error);
-            }
-            Ok(())
+            // begin() already wrote pending/status before submit; discard must restore them
+            // so cancellation before run does not leave the Instance stuck installing.
+            crate::modpack::update::rollback_start(&app_handle, instance_id, &game_dir);
         })
     }
 
