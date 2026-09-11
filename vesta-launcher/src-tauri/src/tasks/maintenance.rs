@@ -32,6 +32,11 @@ impl CloneInstanceTask {
 }
 
 impl Task for CloneInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.source_id,
+        )]
+    }
     fn name(&self) -> String {
         "Duplicate Instance".to_string()
     }
@@ -407,6 +412,11 @@ impl ResetInstanceTask {
 }
 
 impl Task for ResetInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance_id,
+        )]
+    }
     fn name(&self) -> String {
         "Resetting Instance".to_string()
     }
@@ -497,6 +507,11 @@ impl RepairInstanceTask {
 }
 
 impl Task for RepairInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance_id,
+        )]
+    }
     fn name(&self) -> String {
         "Repairing Instance".to_string()
     }
@@ -879,6 +894,11 @@ impl DeleteInstanceTask {
 }
 
 impl Task for DeleteInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance_id,
+        )]
+    }
     fn name(&self) -> String {
         "Deleting Instance".to_string()
     }
