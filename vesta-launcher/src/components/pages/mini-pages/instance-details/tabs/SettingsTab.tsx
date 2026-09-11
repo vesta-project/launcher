@@ -10,7 +10,6 @@ import {
 	SettingsField,
 	useSandboxHostSupport,
 } from "@components/settings";
-import { GameOptionsEditor } from "@components/settings/GameOptionsEditor";
 import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 import panelStyles from "@components/settings/settings.module.css";
 import { instanceDefaults } from "@stores/settings";
@@ -234,7 +233,6 @@ export const SettingsTab = (p: SettingsTabProps) => {
 			</div>
 
 			<div class={panelStyles["settings-panel"]}>
-				<GameOptionsEditor instanceId={p.instance.id} disabled={p.isInstalling} />
 				<SettingsCard header="Java Configuration">
 					<SettingsField
 						label="Java Executable"

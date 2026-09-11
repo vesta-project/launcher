@@ -6,6 +6,7 @@ export const INSTANCE_TABS = [
 	"crash",
 	"versioning",
 	"settings",
+	"game",
 ] as const;
 
 export type InstanceTab = (typeof INSTANCE_TABS)[number];

@@ -6,9 +6,31 @@ import {
 	cleanup,
 } from "@solidjs/testing-library";
 import { invoke } from "@tauri-apps/api/core";
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { GameOptionsEditor } from "./GameOptionsEditor";
+import {
+	GameOptionsEditor,
+	createGameOptionsEditor,
+} from "./GameOptionsEditor";
+
+import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
+
+function EditorHarness(props: { instanceId: number }) {
+	const state = createGameOptionsEditor(props);
+	return (
+		<>
+			<GameOptionsEditor state={state} />
+			<FloatingSaveFooter
+				show={state.dirtyCount() > 0}
+				isSaving={state.saving()}
+				onSave={() => {
+					void state.save().catch(() => {});
+				}}
+				onCancel={state.discard}
+			/>
+		</>
+	);
+}
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("~/localization", () => ({ t: (key: string) => key }));
@@ -41,13 +63,13 @@ it("keeps unsupported numeric values visible while editing another key", async (
 			? catalog
 			: { ...snapshot, values: { ...snapshot.values, fov: "legacy-value" } },
 	);
-	render(() => <GameOptionsEditor instanceId={7} />);
+	render(() => <EditorHarness instanceId={7} />);
 	const fov = await screen.findByRole("textbox", { name: "game-options-fov" });
 	expect((fov as HTMLInputElement).value).toBe("legacy-value");
 	fireEvent.input(screen.getByRole("textbox", { name: "mod.custom" }), {
 		target: { value: "new" },
 	});
-	fireEvent.submit(screen.getByRole("form"));
+	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 	await waitFor(() =>
 		expect(invoke).toHaveBeenCalledWith("save_instance_game_options", {
 			instanceId: 7,
@@ -57,14 +79,14 @@ it("keeps unsupported numeric values visible while editing another key", async (
 });
 
 it("sends only edited keys, converts FOV degrees, and hides protected keys", async () => {
-	render(() => <GameOptionsEditor instanceId={7} />);
-	const input = await screen.findByRole("spinbutton", {
+	render(() => <EditorHarness instanceId={7} />);
+	const input = await screen.findByRole("textbox", {
 		name: "game-options-fov",
 	});
 	expect((input as HTMLInputElement).value).toBe("70");
 	expect(screen.queryByLabelText("version")).toBeNull();
 	fireEvent.input(input, { target: { value: "90" } });
-	fireEvent.submit(screen.getByRole("form"));
+	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 	await waitFor(() =>
 		expect(invoke).toHaveBeenCalledWith("save_instance_game_options", {
 			instanceId: 7,
@@ -74,11 +96,11 @@ it("sends only edited keys, converts FOV degrees, and hides protected keys", asy
 });
 
 it("retains custom edits when saving fails and requires discard before reload", async () => {
-	render(() => <GameOptionsEditor instanceId={7} />);
+	render(() => <EditorHarness instanceId={7} />);
 	const custom = await screen.findByRole("textbox", { name: "mod.custom" });
 	fireEvent.input(custom, { target: { value: "changed" } });
 	vi.mocked(invoke).mockRejectedValueOnce(new Error("Close the game"));
-	fireEvent.submit(screen.getByRole("form"));
+	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 	await screen.findByRole("alert");
 	expect((custom as HTMLInputElement).value).toBe("changed");
 	expect(
@@ -88,7 +110,7 @@ it("retains custom edits when saving fails and requires discard before reload", 
 			}) as HTMLButtonElement
 		).disabled,
 	).toBe(true);
-	fireEvent.click(screen.getByRole("button", { name: "game-options-discard" }));
+	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 	expect((custom as HTMLInputElement).value).toBe("keep");
 });
 
@@ -103,16 +125,50 @@ it("does not publish an old instance response into a newly selected instance", a
 		return Promise.resolve({ ...snapshot, values: { fov: "0.5" } });
 	});
 	const [id, setId] = createSignal(1);
-	render(() => <GameOptionsEditor instanceId={id()} />);
+	render(() => <EditorHarness instanceId={id()} />);
 	setId(2);
-	await screen.findByRole("spinbutton", { name: "game-options-fov" });
+	await screen.findByRole("textbox", { name: "game-options-fov" });
 	finishOld(snapshot);
 	await Promise.resolve();
 	expect(
 		(
-			screen.getByRole("spinbutton", {
+			screen.getByRole("textbox", {
 				name: "game-options-fov",
 			}) as HTMLInputElement
 		).value,
 	).toBe("90");
+});
+
+it("keeps the shared footer dirty while the Game tab is unmounted", async () => {
+	const [visible, setVisible] = createSignal(true);
+	function Page() {
+		const state = createGameOptionsEditor({ instanceId: 7 });
+		return (
+			<>
+				<Show when={visible()}>
+					<GameOptionsEditor state={state} />
+				</Show>
+				<FloatingSaveFooter
+					show={state.dirtyCount() > 0}
+					onSave={() => {
+						void state.save();
+					}}
+					onCancel={state.discard}
+				/>
+			</>
+		);
+	}
+	render(() => <Page />);
+	fireEvent.input(await screen.findByRole("textbox", { name: "mod.custom" }), {
+		target: { value: "new" },
+	});
+	setVisible(false);
+	expect(screen.getByRole("button", { name: "Save Changes" })).toBeTruthy();
+	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+	setVisible(true);
+	expect(
+		(screen.getByRole("textbox", { name: "mod.custom" }) as HTMLInputElement)
+			.value,
+	).toBe("keep");
+	expect(screen.queryByRole("button", { name: "Save Changes" })).toBeNull();
 });

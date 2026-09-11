@@ -9,6 +9,15 @@ import {
 } from "solid-js";
 import { t } from "~/localization";
 import styles from "./game-options.module.css";
+import Button from "@ui/button/button";
+import { TextFieldRoot, TextFieldInput } from "@ui/text-field/text-field";
+import {
+	Select,
+	SelectTrigger,
+	SelectValue,
+	SelectContent,
+	SelectItem,
+} from "@ui/select/select";
 
 interface Snapshot {
 	revision: string;
@@ -29,8 +38,8 @@ const protectedKeys = new Set([
 	"incompatibleResourcePacks",
 ]);
 
-export function GameOptionsEditor(props: {
-	instanceId: number;
+export function createGameOptionsEditor(props: {
+	instanceId: number | undefined;
 	disabled?: boolean;
 }) {
 	const [snapshot, setSnapshot] = createSignal<Snapshot>();
@@ -98,12 +107,14 @@ export function GameOptionsEditor(props: {
 			if (request === generation) setLoading(false);
 		}
 	}
+	const currentId = createMemo(() => props.instanceId);
 	createEffect(() => {
-		const id = props.instanceId;
+		const id = currentId();
+		generation++;
 		setSnapshot(undefined);
 		setChanges({});
 		setSaving(false);
-		void load(id);
+		if (id !== undefined) void load(id);
 	});
 	function change(key: string, next: string) {
 		setNotice("");
@@ -118,10 +129,11 @@ export function GameOptionsEditor(props: {
 			return result;
 		});
 	}
-	async function save(event: SubmitEvent) {
-		event.preventDefault();
+	async function save() {
 		const current = snapshot();
-		if (!current || busy() || !dirtyCount()) return;
+		if (!dirtyCount()) return;
+		if (!current || loading() || saving())
+			throw new Error("Game options are still loading or saving");
 		const request = generation;
 		setSaving(true);
 		setError("");
@@ -136,65 +148,119 @@ export function GameOptionsEditor(props: {
 			setNotice(t("game-options-saved"));
 		} catch (failure) {
 			if (request === generation) setError(String(failure));
+			throw failure;
 		} finally {
 			if (request === generation) setSaving(false);
 		}
 	}
-	return (
-		<form
-			class={styles.editor}
-			onSubmit={save}
-			noValidate
-			aria-label={t("game-options-title")}
+	return {
+		snapshot,
+		loading,
+		saving,
+		error,
+		notice,
+		query,
+		setQuery,
+		category,
+		setCategory,
+		dirtyCount,
+		busy,
+		value,
+		label,
+		categories,
+		filtered,
+		change,
+		save,
+		reload: () => props.instanceId !== undefined && load(props.instanceId),
+		discard: () => {
+			setChanges({});
+			setNotice("");
+		},
+	};
+}
+
+export function GameOptionsEditor(props: {
+	state: ReturnType<typeof createGameOptionsEditor>;
+}) {
+	const {
+		snapshot,
+		loading,
+		saving,
+		error,
+		notice,
+		query,
+		setQuery,
+		category,
+		setCategory,
+		dirtyCount,
+		busy,
+		value,
+		label,
+		categories,
+		filtered,
+		change,
+		reload,
+	} = props.state;
+	const picker = (
+		options: string[],
+		selected: string,
+		onChange: (value: string) => void,
+		name: string,
+		display: (value: string) => string,
+	) => (
+		<Select
+			options={options}
+			value={selected}
+			onChange={(v) => {
+				if (v !== null) onChange(v);
+			}}
+			disabled={busy()}
+			itemComponent={(p) => (
+				<SelectItem item={p.item}>{display(p.item.rawValue)}</SelectItem>
+			)}
 		>
+			<SelectTrigger aria-label={name}>
+				<SelectValue<string>>
+					{(s) => display(s.selectedOption() ?? selected)}
+				</SelectValue>
+			</SelectTrigger>
+			<SelectContent />
+		</Select>
+	);
+	return (
+		<section class={styles.editor} aria-label={t("game-options-title")}>
 			<header class={styles.header}>
 				<div>
 					<h3>{t("game-options-title")}</h3>
 					<p>{t("game-options-description")}</p>
 				</div>
-				<div class={styles.actions}>
-					<button
-						type="button"
-						disabled={loading() || saving() || dirtyCount() > 0}
-						onClick={() => void load(props.instanceId)}
-					>
-						{t("game-options-reload")}
-					</button>
-					<button
-						type="button"
-						disabled={busy() || !dirtyCount()}
-						onClick={() => {
-							setChanges({});
-							setNotice("");
-						}}
-					>
-						{t("game-options-discard")}
-					</button>
-					<button type="submit" disabled={busy() || !dirtyCount()}>
-						{saving() ? t("game-options-saving") : t("game-options-save")}
-					</button>
-				</div>
+				<Button
+					disabled={loading() || saving() || dirtyCount() > 0}
+					onClick={() => void reload()}
+				>
+					{t("game-options-reload")}
+				</Button>
 			</header>
 			<div class={styles.filters}>
-				<input
-					type="search"
-					aria-label={t("game-options-search")}
-					placeholder={t("game-options-search")}
-					value={query()}
-					onInput={(e) => setQuery(e.currentTarget.value)}
-				/>
-				<select
-					aria-label={t("game-options-category")}
-					value={category()}
-					onChange={(e) => setCategory(e.currentTarget.value)}
-				>
-					<option value="all">{t("game-options-all")}</option>
-					<For each={categories()}>
-						{(item) => (
-							<option value={item}>{t(`game-options-category-${item}`)}</option>
-						)}
-					</For>
-				</select>
+				<TextFieldRoot>
+					<TextFieldInput
+						type="search"
+						aria-label={t("game-options-search")}
+						placeholder={t("game-options-search")}
+						value={query()}
+						onInput={(e) =>
+							setQuery((e.currentTarget as HTMLInputElement).value)
+						}
+					/>
+				</TextFieldRoot>
+				{picker(
+					["all", ...categories()],
+					category(),
+					setCategory,
+					t("game-options-category"),
+					(v) =>
+						t(v === "all" ? "game-options-all" : `game-options-category-${v}`),
+				)}
 				<span class={styles.count} aria-live="polite">
 					{t("game-options-count", { count: dirtyCount() })}
 				</span>
@@ -218,10 +284,7 @@ export function GameOptionsEditor(props: {
 					<div class={styles.rows}>
 						<For each={filtered()}>
 							{(row) => (
-								<label
-									class={styles.row}
-									data-dirty={Object.hasOwn(changes(), row.key)}
-								>
+								<div class={styles.row}>
 									<span class={styles.name}>
 										{label(row)}
 										<Show when={row.labelId}>
@@ -231,63 +294,60 @@ export function GameOptionsEditor(props: {
 									<Show
 										when={row.kind === "boolean"}
 										fallback={
-											<input
-												aria-label={label(row)}
-												disabled={busy()}
-												type={
-													row.kind === "number" &&
-													(value(row.key) === "" ||
-														Number.isFinite(Number(value(row.key))))
-														? "number"
-														: "text"
-												}
-												min={row.key === "fov" ? 30 : (row.min ?? undefined)}
-												max={row.key === "fov" ? 110 : (row.max ?? undefined)}
-												step="any"
-												placeholder={t("game-options-unset")}
-												value={
-													row.key === "fov" &&
-													value(row.key) !== "" &&
-													Number.isFinite(Number(value(row.key)))
-														? 70 + 40 * Number(value(row.key))
-														: value(row.key)
-												}
-												onInput={(e) =>
-													change(
-														row.key,
+											<TextFieldRoot>
+												<TextFieldInput
+													aria-label={label(row)}
+													disabled={busy()}
+													type="text"
+													inputMode={row.kind === "number" ? "decimal" : "text"}
+													placeholder={t("game-options-unset")}
+													value={
 														row.key === "fov" &&
-															e.currentTarget.value !== "" &&
-															Number.isFinite(Number(e.currentTarget.value))
-															? String(
-																	(Number(e.currentTarget.value) - 70) / 40,
+														value(row.key) !== "" &&
+														Number.isFinite(Number(value(row.key)))
+															? String(70 + 40 * Number(value(row.key)))
+															: value(row.key)
+													}
+													onInput={(e) =>
+														change(
+															row.key,
+															row.key === "fov" &&
+																(e.currentTarget as HTMLInputElement).value !==
+																	"" &&
+																Number.isFinite(
+																	Number(
+																		(e.currentTarget as HTMLInputElement).value,
+																	),
 																)
-															: e.currentTarget.value,
-													)
-												}
-											/>
+																? String(
+																		(Number(
+																			(e.currentTarget as HTMLInputElement)
+																				.value,
+																		) -
+																			70) /
+																			40,
+																	)
+																: (e.currentTarget as HTMLInputElement).value,
+														)
+													}
+												/>
+											</TextFieldRoot>
 										}
 									>
-										<select
-											aria-label={label(row)}
-											disabled={busy()}
-											value={value(row.key)}
-											onChange={(e) => change(row.key, e.currentTarget.value)}
-										>
-											<Show
-												when={
-													value(row.key) !== "true" &&
-													value(row.key) !== "false"
-												}
-											>
-												<option value={value(row.key)}>
-													{value(row.key) || t("game-options-unset")}
-												</option>
-											</Show>
-											<option value="true">{t("game-options-on")}</option>
-											<option value="false">{t("game-options-off")}</option>
-										</select>
+										{picker(
+											[...new Set([value(row.key), "true", "false"])],
+											value(row.key),
+											(v) => change(row.key, v),
+											label(row),
+											(v) =>
+												v === "true"
+													? t("game-options-on")
+													: v === "false"
+														? t("game-options-off")
+														: v || t("game-options-unset"),
+										)}
 									</Show>
-								</label>
+								</div>
 							)}
 						</For>
 					</div>
@@ -296,6 +356,6 @@ export function GameOptionsEditor(props: {
 					</Show>
 				</Show>
 			</Show>
-		</form>
+		</section>
 	);
 }
