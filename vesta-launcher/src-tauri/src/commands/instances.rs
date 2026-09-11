@@ -1563,6 +1563,16 @@ pub async fn launch_instance(
     app_handle: tauri::AppHandle,
     instance_data: Instance,
 ) -> Result<(), String> {
+    let task_manager = app_handle.state::<crate::tasks::manager::TaskManager>();
+    let _play_guard = task_manager
+        .acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(
+            instance_data.id,
+        )])
+        .await;
+
+    // Reload under launch/update exclusion. Caller snapshots can lag behind an
+    // in-flight update that already marked the Instance installing.
+    let instance_data = get_instance(instance_data.id)?;
     if matches!(
         instance_data.installation_status.as_deref(),
         Some("installing") | Some("interrupted")

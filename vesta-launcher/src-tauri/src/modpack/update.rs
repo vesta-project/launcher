@@ -75,6 +75,9 @@ impl FinishedUpdate {
         )
         .map_err(|error| format!("Failed to reconcile updated resource ownership: {error}"))?;
 
+        crate::resources::watcher::resolve_override_conflicts(app_handle, instance_id, true)
+            .map_err(|error| format!("Failed to resolve updated pack overrides: {error}"))?;
+
         log::info!(
             "[modpack-update] Ledger reconciled after durable update commit: {} missing/obsolete rows pruned, {} provenance refreshed",
             pruned_missing,
@@ -91,8 +94,7 @@ impl FinishedUpdate {
             self.prepared,
             "modpack-update-enrichment",
         );
-        let _ = app_handle.emit("core://instance-updated", self.processed.clone());
-        let _ = app_handle.emit("core://instance-installed", self.processed);
+        let _ = app_handle.emit("core://instance-updated", self.processed);
     }
 }
 

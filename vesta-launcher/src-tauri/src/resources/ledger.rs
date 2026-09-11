@@ -201,25 +201,469 @@ pub fn set_enabled(resource_id: i32, enabled: bool) -> Result<()> {
     let resource = ir_dsl::installed_resource
         .filter(ir_dsl::id.eq(resource_id))
         .first::<InstalledResource>(&mut conn)?;
+    set_enabled_with_conn(&mut conn, &resource, enabled)?;
+    Ok(())
+}
+
+fn set_enabled_with_conn(
+    conn: &mut SqliteConnection,
+    resource: &InstalledResource,
+    enabled: bool,
+) -> Result<()> {
     let current_path = PathBuf::from(&resource.local_path);
 
-    if !current_path.exists() {
-        diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-            .execute(&mut conn)?;
-        anyhow::bail!("File not found on disk. The entry has been removed from the database.");
+    match current_path.try_exists() {
+        Ok(false) => {
+            diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
+                .execute(conn)?;
+            anyhow::bail!("File not found on disk. The entry has been removed from the database.");
+        }
+        Ok(true) => {}
+        Err(error) => {
+            anyhow::bail!(
+                "Cannot change enabled state for {}: {error}",
+                current_path.display()
+            );
+        }
     }
 
     let new_path = toggled_path(&current_path, enabled);
-    if new_path != current_path {
-        std::fs::rename(&current_path, &new_path)?;
+    let renamed = new_path != current_path;
+    if renamed {
+        rename_file_no_replace(&current_path, &new_path).map_err(|error| {
+            anyhow::anyhow!(
+                "Cannot change enabled state to {}: {error}",
+                new_path.display()
+            )
+        })?;
     }
-    diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-        .set((
-            ir_dsl::local_path.eq(normalize_path(&new_path)),
-            ir_dsl::is_enabled.eq(enabled),
-        ))
-        .execute(&mut conn)?;
+    if let Err(error) =
+        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
+            .set((
+                ir_dsl::local_path.eq(normalize_path(&new_path)),
+                ir_dsl::is_enabled.eq(enabled),
+            ))
+            .execute(conn)
+    {
+        if renamed {
+            if let Err(compensation) = rename_file_no_replace(&new_path, &current_path) {
+                return Err(anyhow::anyhow!(
+                    "{error}. Automatic filesystem compensation failed while restoring {}: {compensation}",
+                    current_path.display()
+                ));
+            }
+        }
+        return Err(error.into());
+    }
     Ok(())
+}
+
+/// One planned enable/disable mutation for [`apply_enablement_batch`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EnablementChange {
+    pub resource_id: i32,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EnablementBatchResult {
+    pub attempted: usize,
+    pub changed: usize,
+}
+
+#[derive(Debug, Clone)]
+struct PlannedEnablementRename {
+    resource_id: i32,
+    enabled: bool,
+    from: PathBuf,
+    to: PathBuf,
+}
+
+/// Applies several enable/disable renames as one Ledger publication.
+///
+/// Filesystem renames are not covered by the database transaction. This Interface
+/// preflights collisions, disables before enabling, writes row facts in one
+/// transaction, and compensates completed renames in reverse order when the
+/// database write fails. Failed compensation is reported with recovery paths.
+pub fn apply_enablement_batch(
+    instance_id: i32,
+    changes: &[EnablementChange],
+) -> Result<EnablementBatchResult> {
+    if changes.is_empty() {
+        return Ok(EnablementBatchResult::default());
+    }
+
+    let mut conn = get_vesta_conn()?;
+    apply_enablement_batch_with_conn(&mut conn, instance_id, changes)
+}
+
+fn apply_enablement_batch_with_conn(
+    conn: &mut SqliteConnection,
+    instance_id: i32,
+    changes: &[EnablementChange],
+) -> Result<EnablementBatchResult> {
+    let mut ordered = changes.to_vec();
+    ordered.sort_by_key(|change| change.enabled); // false (disable) first
+
+    let mut seen = HashSet::new();
+    let mut planned = Vec::with_capacity(ordered.len());
+    let mut reserved_destinations = HashSet::new();
+
+    for change in ordered {
+        if !seen.insert(change.resource_id) {
+            anyhow::bail!(
+                "Duplicate enablement change for resource {}",
+                change.resource_id
+            );
+        }
+        let resource = ir_dsl::installed_resource
+            .filter(ir_dsl::id.eq(change.resource_id))
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .first::<InstalledResource>(conn)
+            .optional()?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Resource {} does not belong to instance {}",
+                    change.resource_id,
+                    instance_id
+                )
+            })?;
+
+        let current_path = PathBuf::from(&resource.local_path);
+        match current_path.try_exists() {
+            Ok(false) => {
+                diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
+                    .execute(conn)?;
+                anyhow::bail!(
+                    "File not found on disk for resource {}. The entry has been removed from the database.",
+                    resource.id
+                );
+            }
+            Ok(true) => {}
+            Err(error) => {
+                anyhow::bail!(
+                    "Cannot change enabled state for {}: {error}",
+                    current_path.display()
+                );
+            }
+        }
+
+        let new_path = toggled_path(&current_path, change.enabled);
+        if new_path == current_path && resource.is_enabled == change.enabled {
+            continue;
+        }
+        if new_path != current_path {
+            let destination = normalize_path(&new_path);
+            anyhow::ensure!(
+                !reserved_destinations.contains(&destination),
+                "Cannot change enabled state: {} is targeted by multiple enablement changes",
+                new_path.display()
+            );
+            reserved_destinations.insert(destination);
+            planned.push(PlannedEnablementRename {
+                resource_id: resource.id,
+                enabled: change.enabled,
+                from: current_path,
+                to: new_path,
+            });
+        } else {
+            planned.push(PlannedEnablementRename {
+                resource_id: resource.id,
+                enabled: change.enabled,
+                from: current_path.clone(),
+                to: current_path,
+            });
+        }
+    }
+
+    let attempted = planned.len();
+    if attempted == 0 {
+        return Ok(EnablementBatchResult::default());
+    }
+
+    // Expand same-stem swaps (and other destination/source cycles) through temps so
+    // disable-first can vacate destinations before final placement.
+    let steps = expand_enablement_rename_steps(&planned)?;
+    preflight_enablement_steps(&steps)?;
+
+    let mut completed = Vec::new();
+    for step in &steps {
+        if let Err(error) = rename_file_no_replace(&step.from, &step.to) {
+            if let Err(compensation) = compensate_enablement_renames(&completed) {
+                return Err(anyhow::anyhow!(
+                    "Cannot change enabled state to {}: {error}. Automatic filesystem compensation failed: {compensation}. Recover by restoring the reported paths.",
+                    step.to.display()
+                ));
+            }
+            return Err(anyhow::anyhow!(
+                "Cannot change enabled state to {}: {error}",
+                step.to.display()
+            ));
+        }
+        completed.push((step.to.clone(), step.from.clone()));
+    }
+
+    let db_result = conn.transaction::<usize, anyhow::Error, _>(|conn| {
+        // Stage through unique temporary paths so same-stem swaps do not violate
+        // the local_path UNIQUE constraint mid-transaction.
+        for rename in &planned {
+            if rename.from == rename.to {
+                continue;
+            }
+            let staging = format!(
+                "__vesta_enablement_staging_{}_{}",
+                rename.resource_id,
+                uuid::Uuid::new_v4()
+            );
+            let affected = diesel::update(
+                ir_dsl::installed_resource.filter(ir_dsl::id.eq(rename.resource_id)),
+            )
+            .set(ir_dsl::local_path.eq(staging))
+            .execute(conn)?;
+            anyhow::ensure!(
+                affected == 1,
+                "Resource {} was deleted while applying enablement batch",
+                rename.resource_id
+            );
+        }
+        for rename in &planned {
+            let affected = diesel::update(
+                ir_dsl::installed_resource.filter(ir_dsl::id.eq(rename.resource_id)),
+            )
+            .set((
+                ir_dsl::local_path.eq(normalize_path(&rename.to)),
+                ir_dsl::is_enabled.eq(rename.enabled),
+            ))
+            .execute(conn)?;
+            anyhow::ensure!(
+                affected == 1,
+                "Resource {} was deleted while applying enablement batch",
+                rename.resource_id
+            );
+        }
+        Ok(planned.len())
+    });
+
+    match db_result {
+        Ok(changed) => Ok(EnablementBatchResult { attempted, changed }),
+        Err(error) => {
+            if let Err(compensation) = compensate_enablement_renames(&completed) {
+                return Err(anyhow::anyhow!(
+                    "{error}. Automatic filesystem compensation failed: {compensation}. Recover by restoring the reported paths."
+                ));
+            }
+            Err(error)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct EnablementRenameStep {
+    from: PathBuf,
+    to: PathBuf,
+}
+
+fn expand_enablement_rename_steps(
+    planned: &[PlannedEnablementRename],
+) -> Result<Vec<EnablementRenameStep>> {
+    let sources = planned
+        .iter()
+        .filter(|rename| rename.from != rename.to)
+        .map(|rename| normalize_path(&rename.from))
+        .collect::<HashSet<_>>();
+    let mut steps = Vec::new();
+    let mut delayed_finals = Vec::new();
+
+    for rename in planned {
+        if rename.from == rename.to {
+            continue;
+        }
+        let destination = normalize_path(&rename.to);
+        let destination_is_later_source = sources.contains(&destination);
+        let destination_exists = rename.to.try_exists().unwrap_or(false);
+        if destination_exists && destination_is_later_source {
+            let temp = temporary_enablement_path(&rename.from);
+            steps.push(EnablementRenameStep {
+                from: rename.from.clone(),
+                to: temp.clone(),
+            });
+            delayed_finals.push(EnablementRenameStep {
+                from: temp,
+                to: rename.to.clone(),
+            });
+        } else {
+            steps.push(EnablementRenameStep {
+                from: rename.from.clone(),
+                to: rename.to.clone(),
+            });
+        }
+    }
+    steps.extend(delayed_finals);
+    Ok(steps)
+}
+
+fn preflight_enablement_steps(steps: &[EnablementRenameStep]) -> Result<()> {
+    let mut vacated = HashSet::new();
+    let mut reserved = HashSet::new();
+    for step in steps {
+        let from = normalize_path(&step.from);
+        let to = normalize_path(&step.to);
+        anyhow::ensure!(
+            !reserved.contains(&to),
+            "Cannot change enabled state: {} is targeted by multiple enablement renames",
+            step.to.display()
+        );
+        let exists = match step.to.try_exists() {
+            Ok(exists) => exists,
+            Err(error) => {
+                anyhow::bail!(
+                    "Cannot inspect enablement destination {}: {error}",
+                    step.to.display()
+                );
+            }
+        };
+        anyhow::ensure!(
+            !exists || vacated.contains(&to),
+            "Cannot change enabled state: {} already exists",
+            step.to.display()
+        );
+        reserved.insert(to);
+        vacated.insert(from);
+    }
+    Ok(())
+}
+
+fn temporary_enablement_path(path: &Path) -> PathBuf {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("resource");
+    parent.join(format!(
+        ".{file_name}.vesta-enablement-{}",
+        uuid::Uuid::new_v4()
+    ))
+}
+
+fn compensate_enablement_renames(completed: &[(PathBuf, PathBuf)]) -> Result<()> {
+    let mut failures = Vec::new();
+    for (from, to) in completed.iter().rev() {
+        if let Err(error) = rename_file_no_replace(from, to) {
+            failures.push(format!("{} -> {}: {error}", from.display(), to.display()));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(failures.join("; "))
+    }
+}
+
+fn rename_file_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let source = CString::new(source.as_os_str().as_bytes())
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+        let destination = CString::new(destination.as_os_str().as_bytes())
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+        // SAFETY: both C strings live for the duration of the call and contain no NUL bytes.
+        let result = unsafe {
+            libc::renameatx_np(
+                libc::AT_FDCWD,
+                source.as_ptr(),
+                libc::AT_FDCWD,
+                destination.as_ptr(),
+                libc::RENAME_EXCL,
+            )
+        };
+        return if result == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        };
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let source_c = CString::new(source.as_os_str().as_bytes())
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+        let destination_c = CString::new(destination.as_os_str().as_bytes())
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+        // SAFETY: both C strings live for the duration of the call and contain no NUL bytes.
+        let result = unsafe {
+            libc::renameat2(
+                libc::AT_FDCWD,
+                source_c.as_ptr(),
+                libc::AT_FDCWD,
+                destination_c.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        };
+        if result == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        // Some kernels/filesystems reject RENAME_NOREPLACE with ENOSYS or EINVAL.
+        // Fall back to a best-effort exists-check + rename that still refuses
+        // known collisions, rather than failing every enablement rename.
+        match error.raw_os_error() {
+            Some(libc::ENOSYS) | Some(libc::EINVAL) => {
+                rename_file_no_replace_best_effort(source, destination)
+            }
+            _ => Err(error),
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        let source = source
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        let destination = destination
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        // MoveFileW refuses to overwrite an existing destination.
+        // SAFETY: both buffers are NUL-terminated wide strings that outlive the call.
+        let ok = unsafe {
+            windows_sys::Win32::Storage::FileSystem::MoveFileW(
+                source.as_ptr(),
+                destination.as_ptr(),
+            )
+        };
+        if ok != 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        rename_file_no_replace_best_effort(source, destination)
+    }
+}
+
+fn rename_file_no_replace_best_effort(source: &Path, destination: &Path) -> std::io::Result<()> {
+    match destination.try_exists() {
+        Ok(true) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} already exists", destination.display()),
+            ));
+        }
+        Ok(false) => {}
+        Err(error) => return Err(error),
+    }
+    std::fs::rename(source, destination)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -270,7 +714,7 @@ fn disable_resource_with_conn(
                 disabled_path.display()
             );
         }
-        std::fs::rename(&current_path, &disabled_path)?;
+        rename_file_no_replace(&current_path, &disabled_path)?;
     }
 
     if let Err(error) =
@@ -282,7 +726,12 @@ fn disable_resource_with_conn(
             .execute(conn)
     {
         if renamed {
-            let _ = std::fs::rename(&disabled_path, &current_path);
+            if let Err(compensation) = rename_file_no_replace(&disabled_path, &current_path) {
+                return Err(anyhow::anyhow!(
+                    "{error}. Automatic filesystem compensation failed while restoring {}: {compensation}",
+                    current_path.display()
+                ));
+            }
         }
         return Err(error.into());
     }
@@ -1291,9 +1740,11 @@ fn resource_type_for_path(path: &Path) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_modpack_provenance_with_conn, disable_resource_with_conn, record_download_with_conn,
-        record_many_with_conn, remove_missing_in_folder_with_conn, remove_resource_rows_with_conn,
-        toggled_path, DownloadLedgerEntry, InstalledResourceFact, ResourceProvenance,
+        apply_enablement_batch_with_conn, apply_modpack_provenance_with_conn,
+        disable_resource_with_conn, record_download_with_conn, record_many_with_conn,
+        remove_missing_in_folder_with_conn, remove_resource_rows_with_conn, set_enabled_with_conn,
+        toggled_path, DownloadLedgerEntry, EnablementChange, InstalledResourceFact,
+        ResourceProvenance,
     };
     use crate::models::resource::{ReleaseType, ResourceVersion, SourcePlatform};
     use diesel::connection::SimpleConnection;
@@ -1456,6 +1907,36 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn absent_resource_root_cleanup_is_scoped_and_preserves_other_roots() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+        use crate::utils::instance_helpers::normalize_path;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        let resourcepacks = temp.path().join("resourcepacks");
+        std::fs::create_dir(&resourcepacks).unwrap();
+        let kept = resourcepacks.join("kept.zip");
+        std::fs::write(&kept, b"pack").unwrap();
+        let missing = mods.join("gone.jar");
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![discovered(1, &missing), discovered(1, &kept)],
+        )
+        .unwrap();
+
+        assert_eq!(
+            remove_missing_in_folder_with_conn(&mut conn, 1, &mods).unwrap(),
+            1
+        );
+        let rows = installed_dsl::installed_resource
+            .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].local_path, normalize_path(&kept));
     }
 
     #[test]
@@ -1753,5 +2234,221 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn set_enabled_compensates_rename_when_db_update_fails() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let path = mods.join("example.jar");
+        std::fs::write(&path, b"jar").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(&mut conn, vec![discovered(1, &path)]).unwrap();
+        let row = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        conn.batch_execute("DROP TABLE installed_resource;")
+            .expect("break ledger writes");
+        let _ = set_enabled_with_conn(&mut conn, &row, false);
+        assert!(path.exists(), "filesystem rename must be compensated");
+        assert!(!toggled_path(&path, false).exists());
+    }
+
+    #[test]
+    fn enablement_batch_disables_before_enabling_and_persists_paths() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let custom = mods.join("custom.jar");
+        let bundled_disabled = mods.join("bundled.jar.disabled");
+        std::fs::write(&custom, b"custom").unwrap();
+        std::fs::write(&bundled_disabled, b"bundled").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![discovered(1, &custom), discovered(1, &bundled_disabled)],
+        )
+        .unwrap();
+        let rows = installed_dsl::installed_resource
+            .order(installed_dsl::id.asc())
+            .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        let custom_id = rows[0].id;
+        let bundled_id = rows[1].id;
+
+        let result = apply_enablement_batch_with_conn(
+            &mut conn,
+            1,
+            &[
+                EnablementChange {
+                    resource_id: bundled_id,
+                    enabled: true,
+                },
+                EnablementChange {
+                    resource_id: custom_id,
+                    enabled: false,
+                },
+            ],
+        )
+        .unwrap();
+        assert_eq!(result.changed, 2);
+
+        let after = installed_dsl::installed_resource
+            .order(installed_dsl::id.asc())
+            .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert!(!custom.exists());
+        assert!(toggled_path(&custom, false).exists());
+        assert!(!bundled_disabled.exists());
+        assert!(mods.join("bundled.jar").exists());
+        assert!(!after[0].is_enabled);
+        assert!(after[0].local_path.ends_with(".disabled"));
+        assert!(after[1].is_enabled);
+        assert!(after[1].local_path.ends_with("bundled.jar"));
+    }
+
+    #[test]
+    fn enablement_batch_swaps_same_stem_disabled_bundled_and_enabled_custom() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let custom = mods.join("foo.jar");
+        let bundled_disabled = mods.join("foo.jar.disabled");
+        std::fs::write(&custom, b"custom").unwrap();
+        std::fs::write(&bundled_disabled, b"bundled").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![discovered(1, &custom), discovered(1, &bundled_disabled)],
+        )
+        .unwrap();
+        let rows = installed_dsl::installed_resource
+            .order(installed_dsl::id.asc())
+            .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        let custom_id = rows[0].id;
+        let bundled_id = rows[1].id;
+
+        apply_enablement_batch_with_conn(
+            &mut conn,
+            1,
+            &[
+                EnablementChange {
+                    resource_id: bundled_id,
+                    enabled: true,
+                },
+                EnablementChange {
+                    resource_id: custom_id,
+                    enabled: false,
+                },
+            ],
+        )
+        .unwrap();
+
+        let after = installed_dsl::installed_resource
+            .order(installed_dsl::id.asc())
+            .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert!(mods.join("foo.jar").exists());
+        assert!(mods.join("foo.jar.disabled").exists());
+        assert_eq!(std::fs::read(mods.join("foo.jar")).unwrap(), b"bundled");
+        assert_eq!(
+            std::fs::read(mods.join("foo.jar.disabled")).unwrap(),
+            b"custom"
+        );
+        assert!(!after[0].is_enabled);
+        assert!(after[0].local_path.ends_with("foo.jar.disabled"));
+        assert!(after[1].is_enabled);
+        assert!(after[1].local_path.ends_with("foo.jar"));
+    }
+
+    #[test]
+    fn enablement_batch_preflight_rejects_existing_destination() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+        use crate::utils::instance_helpers::normalize_path;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let custom = mods.join("custom.jar");
+        let pre_existing = mods.join("custom.jar.disabled");
+        std::fs::write(&custom, b"custom").unwrap();
+        std::fs::write(&pre_existing, b"stale").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(&mut conn, vec![discovered(1, &custom)]).unwrap();
+        let row = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        let err = apply_enablement_batch_with_conn(
+            &mut conn,
+            1,
+            &[EnablementChange {
+                resource_id: row.id,
+                enabled: false,
+            }],
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("already exists"));
+        assert!(custom.exists());
+        assert!(pre_existing.exists());
+        let after = installed_dsl::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert!(after.is_enabled);
+        assert_eq!(after.local_path, normalize_path(&custom));
+    }
+
+    #[test]
+    fn enablement_batch_preflight_rejects_blocked_enable_destination() {
+        use crate::schema::installed_resource::dsl as installed_dsl;
+
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        let loser = mods.join("loser.jar");
+        let winner = mods.join("winner.jar.disabled");
+        let blocked = mods.join("winner.jar");
+        std::fs::write(&loser, b"loser").unwrap();
+        std::fs::write(&winner, b"winner").unwrap();
+        std::fs::write(&blocked, b"blocked").unwrap();
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![discovered(1, &loser), discovered(1, &winner)],
+        )
+        .unwrap();
+        let rows = installed_dsl::installed_resource
+            .order(installed_dsl::id.asc())
+            .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+
+        let err = apply_enablement_batch_with_conn(
+            &mut conn,
+            1,
+            &[
+                EnablementChange {
+                    resource_id: rows[1].id,
+                    enabled: true,
+                },
+                EnablementChange {
+                    resource_id: rows[0].id,
+                    enabled: false,
+                },
+            ],
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("already exists"));
+        assert!(loser.exists());
+        assert!(winner.exists());
+        assert!(blocked.exists());
     }
 }

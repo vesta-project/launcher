@@ -1,10 +1,9 @@
 use std::path::PathBuf;
 
 use crate::notifications::models::NotificationContext;
-use crate::tasks::manager::{Task, TaskContext};
-use tauri::Manager;
-
 use crate::sync::safeguards;
+use crate::tasks::manager::{instance_play_conflict_key, Task, TaskContext};
+use tauri::Manager;
 
 pub struct UpdateModpackTask {
     pub instance_id: i32,
@@ -26,6 +25,28 @@ impl UpdateModpackTask {
             new_version_id,
             game_dir,
         }
+    }
+
+    async fn wait_for_instance_exit(game_dir: &PathBuf, ctx: &TaskContext) -> Result<(), String> {
+        let mut cancel = ctx.cancel_rx.clone();
+        while safeguards::check_instance_not_running(game_dir).is_err() {
+            ctx.update_description(
+                "Update queued — close Minecraft for this instance to continue, or cancel."
+                    .to_string(),
+            );
+            if *cancel.borrow() {
+                return Err("Update cancelled".to_string());
+            }
+            tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {},
+                _ = cancel.changed() => {
+                    if *cancel.borrow() {
+                        return Err("Update cancelled".to_string());
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -53,6 +74,10 @@ impl Task for UpdateModpackTask {
         true
     }
 
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![instance_play_conflict_key(self.instance_id)]
+    }
+
     fn starting_description(&self) -> String {
         format!("Preparing the modpack update for ‘{}’…", self.instance_name)
     }
@@ -71,6 +96,23 @@ impl Task for UpdateModpackTask {
         )
     }
 
+    fn ready(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
+        let game_dir = self.game_dir.clone();
+
+        Box::pin(async move { Self::wait_for_instance_exit(&game_dir, &ctx).await })
+    }
+
+    fn on_abandoned(&self, app: &tauri::AppHandle) -> futures::future::BoxFuture<'static, ()> {
+        let instance_id = self.instance_id;
+        let game_dir = self.game_dir.clone();
+        let app_handle = app.clone();
+        Box::pin(async move {
+            // begin() already wrote pending/status before submit; discard must restore them
+            // so cancellation before run does not leave the Instance stuck installing.
+            crate::modpack::update::rollback_start(&app_handle, instance_id, &game_dir);
+        })
+    }
+
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
         let instance_id = self.instance_id;
         let new_version_id = self.new_version_id.clone();
@@ -87,6 +129,15 @@ impl Task for UpdateModpackTask {
                 instance_id,
                 game_dir.clone(),
             );
+
+            // Revalidate under exclusion after the worker permit is held. External
+            // Java launches can still appear later; readiness cannot close that OS
+            // boundary, so planning and apply re-check live process state.
+            if let Err(error) = Self::wait_for_instance_exit(&game_dir, &ctx).await {
+                let _ = status_guard.recover_failure();
+                return Err(error);
+            }
+
             let watcher_handle = app_handle.clone();
             let resume_game_dir = game_dir.clone();
             if let Err(pause_error) = watcher_handle
@@ -118,12 +169,6 @@ impl Task for UpdateModpackTask {
                     .first(&mut conn)
                     .map_err(|e| format!("Instance not found: {}", e))?;
 
-                // ─── Safeguard: ensure Minecraft is not running ──────────────
-                ctx.update_description("Checking that Minecraft is not running...".to_string());
-                if let Err(e) = safeguards::check_instance_not_running(&game_dir) {
-                    return Err(format!("{}", e));
-                }
-
                 // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
                 let mut plan = crate::modpack::engine::plan(
                     &app_handle,
@@ -133,6 +178,21 @@ impl Task for UpdateModpackTask {
                     &ctx,
                 )
                 .await?;
+
+                if safeguards::check_instance_not_running(&game_dir).is_err() {
+                    // A process appeared after the audit. Discard the plan, wait,
+                    // and recompute so live mutation never races a late launch.
+                    Self::wait_for_instance_exit(&game_dir, &ctx).await?;
+                    plan = crate::modpack::engine::plan(
+                        &app_handle,
+                        &inst,
+                        &game_dir,
+                        &new_version_id,
+                        &ctx,
+                    )
+                    .await?;
+                    safeguards::check_instance_not_running(&game_dir).map_err(|e| e.to_string())?;
+                }
 
                 let total_actions = plan.actions.actionable_count();
                 let already_up_to_date = plan.actions.is_empty() && total_actions == 0;
@@ -144,6 +204,7 @@ impl Task for UpdateModpackTask {
                     plan.actions.corrupted_configs.len(),
                 );
 
+                safeguards::check_instance_not_running(&game_dir).map_err(|e| e.to_string())?;
                 let outcome =
                     crate::modpack::engine::apply(&app_handle, &game_dir, &mut plan, &ctx).await?;
                 let skipped_deletions = outcome.skipped_deletions;

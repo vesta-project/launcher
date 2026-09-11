@@ -91,7 +91,13 @@ pub async fn plan(
         Some(0),
         Some(6),
     );
+    let scan_started = std::time::Instant::now();
     let current_hashes = manifest::hash_current_directory(game_dir, &old_manifest);
+    log::info!(
+        "[modpack-update] Current-file audit: {} paths in {:?}",
+        current_hashes.len(),
+        scan_started.elapsed()
+    );
 
     ctx.update_full(
         20,
@@ -211,7 +217,7 @@ pub async fn apply(
 
     let rollback = RollbackSnapshot::capture(
         game_dir,
-        rollback_paths(&plan.actions, &removable_paths),
+        rollback_paths(game_dir, &plan.actions, &removable_paths),
         rotations,
     )
     .map_err(|error| format!("Failed to prepare update rollback: {}", error))?;
@@ -257,21 +263,38 @@ pub async fn apply(
     })
 }
 
-fn rollback_paths(actions: &ActionTree, removable_paths: &HashSet<String>) -> Vec<String> {
+fn rollback_paths(
+    game_dir: &Path,
+    actions: &ActionTree,
+    removable_paths: &HashSet<String>,
+) -> Vec<String> {
     let mut paths = Vec::new();
     for action in &actions.actions {
         match action {
-            SyncAction::Add { path, .. }
-            | SyncAction::Update { path, .. }
-            | SyncAction::Merge { path, .. } => paths.push(path.clone()),
-            SyncAction::Remove { path, .. } if removable_paths.contains(path) => {
+            SyncAction::Add { path, .. } | SyncAction::Merge { path, .. } => {
                 paths.push(path.clone())
+            }
+            SyncAction::Update { path, .. } => {
+                paths.push(path.clone());
+                // Hashing accepts the disabled path as C. Preserve that exact file
+                // in the journal before installing N at the enabled path.
+                if let Some(current) =
+                    piston_lib::game::modpack::manifest::resolve_mod_path_on_disk(game_dir, path)
+                {
+                    if let Ok(relative) = current.strip_prefix(game_dir) {
+                        let relative = relative.to_string_lossy().replace('\\', "/");
+                        if relative != *path {
+                            paths.push(relative);
+                        }
+                    }
+                }
             }
             SyncAction::Remove { .. } => {}
             SyncAction::RotateWorld { .. } => {}
             SyncAction::Skip { .. } => {}
         }
     }
+    paths.extend(removable_paths.iter().cloned());
     paths.push(ModpackManifest::FILE_NAME.to_string());
     paths
 }
@@ -287,8 +310,17 @@ fn removable_paths(
             path, last_hash, ..
         } = action
         {
-            if safeguards::can_delete_if_unchanged(game_dir, path, last_hash.as_deref())? {
-                removable.insert(path.clone());
+            let actual =
+                piston_lib::game::modpack::manifest::resolve_mod_path_on_disk(game_dir, path)
+                    .and_then(|current| {
+                        current
+                            .strip_prefix(game_dir)
+                            .ok()
+                            .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+                    })
+                    .unwrap_or_else(|| path.clone());
+            if safeguards::can_delete_if_unchanged(game_dir, &actual, last_hash.as_deref())? {
+                removable.insert(actual);
             } else {
                 skipped += 1;
             }
@@ -577,6 +609,78 @@ async fn fetch_target_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removed_disabled_mod_is_journaled_only_if_unchanged() {
+        let temp = tempfile::tempdir().unwrap();
+        let game = temp.path();
+        std::fs::create_dir(game.join("mods")).unwrap();
+        let disabled = game.join("mods/a.jar.disabled");
+        std::fs::write(&disabled, b"old").unwrap();
+        let mut actions = ActionTree::default();
+        actions.add_action(SyncAction::Remove {
+            path: "mods/a.jar".into(),
+            reason: crate::sync::action_tree::RemoveReason::AuthorRemoved,
+            last_hash: Some(crate::sync::hash_util::hash_file_on_disk(&disabled).unwrap()),
+        });
+        let (removable, skipped) = removable_paths(game, &actions).unwrap();
+        assert_eq!(skipped, 0);
+        assert!(removable.contains("mods/a.jar.disabled"));
+        let snapshot = RollbackSnapshot::capture(
+            game,
+            rollback_paths(game, &actions, &removable),
+            Vec::<RollbackRotation>::new(),
+        )
+        .unwrap();
+        assert!(!disabled.exists());
+        snapshot.restore().unwrap();
+        assert_eq!(std::fs::read(&disabled).unwrap(), b"old");
+        std::fs::write(&disabled, b"user modified").unwrap();
+        let (removable, skipped) = removable_paths(game, &actions).unwrap();
+        assert_eq!(skipped, 1);
+        assert!(removable.is_empty());
+    }
+
+    #[test]
+    fn replacing_disabled_mod_journals_both_paths_for_commit_and_rollback() {
+        for restore in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let game = temp.path();
+            std::fs::create_dir(game.join("mods")).unwrap();
+            std::fs::write(game.join("mods/a.jar.disabled"), b"old").unwrap();
+            let mut actions = ActionTree::default();
+            actions.add_action(SyncAction::Update {
+                path: "mods/a.jar".into(),
+                source: FileSource::ZipOverride {
+                    relative_path: "mods/a.jar".into(),
+                },
+                old_hash: None,
+                new_hash: None,
+            });
+            let staging = StagingDir::new(game).unwrap();
+            staging.write_staged("mods/a.jar", b"new").unwrap();
+            let snapshot = RollbackSnapshot::capture(
+                game,
+                rollback_paths(game, &actions, &HashSet::new()),
+                Vec::<RollbackRotation>::new(),
+            )
+            .unwrap();
+            staging.commit().unwrap();
+            assert!(!game.join("mods/a.jar.disabled").exists());
+            assert_eq!(std::fs::read(game.join("mods/a.jar")).unwrap(), b"new");
+            if restore {
+                snapshot.restore().unwrap();
+                assert!(!game.join("mods/a.jar").exists());
+                assert_eq!(
+                    std::fs::read(game.join("mods/a.jar.disabled")).unwrap(),
+                    b"old"
+                );
+            } else {
+                snapshot.finalize().unwrap();
+                assert!(!game.join("mods/a.jar.disabled").exists());
+            }
+        }
+    }
 
     #[test]
     fn rollback_rotation_maps_world_paths_without_copying_them() {

@@ -541,9 +541,7 @@ pub async fn apply_preset_skin(
         }
     });
 
-    let history_source = pack_id
-        .or(category)
-        .unwrap_or_else(|| "preset".to_string());
+    let history_source = pack_id.or(category).unwrap_or_else(|| "preset".to_string());
 
     let new_history = NewAccountSkinHistory {
         account_uuid: normalized_uuid.clone(),

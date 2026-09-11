@@ -73,11 +73,23 @@ enrichment Task. Resource and Versioning loads may repeat this repair safely:
 absent rows are removed, real duplicates are re-evaluated, and ambiguous
 physical disabled files are preserved.
 
-Duplicate resolution ranks same-provider project releases by provider order;
-equal or unavailable rankings prefer the bundled copy. Cross-provider copies
-are related only by exact file hash or persisted peer evidence and prefer the
-bundled copy. A losing file is marked disabled only after its rename succeeds;
-missing files are pruned instead of acquiring a synthetic `.disabled` path.
+Duplicate resolution prefers the bundled copy without provider release ranking.
+A pack version switch also considers disabled bundled mods against enabled
+custom duplicates and applies the resulting enablement changes through a Ledger
+batch Interface: destinations are preflighted, losers are disabled before
+winners are enabled, row facts commit in one database transaction, and
+completed renames are compensated in reverse on database failure. Failed
+compensation reports recovery paths; the database transaction alone is not
+described as atomic filesystem/database publication. Ordinary repair respects a
+disabled bundled copy. Cross-provider copies are related only by exact file
+hash or persisted peer evidence. Updates emit only `core://instance-updated`;
+enrichment validates prepared candidates on the blocking pool, follows verified
+enabled/disabled renames, and skips stale prepared files before publishing
+facts. A losing file is marked disabled only after its rename succeeds; missing
+files are pruned instead of acquiring a synthetic `.disabled` path. Watcher
+registrations carry an identity so unwatch/replacement waits until the previous
+worker can no longer publish, and full scans reconcile absent instance resource
+roots without enumerating unreadable directories.
 
 ## Consequences
 

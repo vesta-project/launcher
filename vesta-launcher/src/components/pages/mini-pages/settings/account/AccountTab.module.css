@@ -598,7 +598,9 @@
 	font-size: 12px;
 	font-weight: 700;
 	flex-shrink: 0;
-	transition: background 0.2s ease, border-color 0.2s ease;
+	transition:
+		background 0.2s ease,
+		border-color 0.2s ease;
 	cursor: default;
 }
 
