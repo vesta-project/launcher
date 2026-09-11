@@ -5,6 +5,7 @@ pub mod auth;
 mod commands;
 pub mod discord;
 pub mod game_options;
+mod game_options_file;
 mod instance;
 mod launcher_import;
 mod localization;
@@ -136,6 +137,9 @@ fn main() {
             }
         }))
         .invoke_handler(tauri::generate_handler![
+            commands::game_options::get_game_options_catalog,
+            commands::game_options::get_instance_game_options,
+            commands::game_options::save_instance_game_options,
             launch_window,
             utils::windows::prime_mini_window,
             utils::windows::preload_mini_window_route,
