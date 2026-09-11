@@ -232,9 +232,9 @@ export function AccountSettingsTab() {
 	const [capes, setCapes] = createSignal<Cape[]>([]);
 	const [saving, setSaving] = createSignal(false);
 	const [browseTab, setBrowseTab] = createSignal("yours");
-	const [collapsedPacks, setCollapsedPacks] = createSignal<Record<string, boolean>>(
-		{},
-	);
+	const [collapsedPacks, setCollapsedPacks] = createSignal<
+		Record<string, boolean>
+	>({});
 	const [viewerSrc, setViewerSrc] = createSignal<string | null>(null);
 	const [compactActionMode, setCompactActionMode] = createSignal(false);
 	const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
@@ -583,7 +583,9 @@ export function AccountSettingsTab() {
 	};
 
 	const getPackName = (source: SkinSource): string => {
-		return source.pack_name || source.category || toTitleCase(getPackId(source));
+		return (
+			source.pack_name || source.category || toTitleCase(getPackId(source))
+		);
 	};
 
 	const skinPackGroups = createMemo((): SkinPackGroup[] => {
@@ -899,7 +901,10 @@ export function AccountSettingsTab() {
 	};
 
 	const selectAccount = async (acc: Account) => {
-		if (normalizeAccountUuid(acc.uuid) === normalizeAccountUuid(activeAccount()?.uuid)) {
+		if (
+			normalizeAccountUuid(acc.uuid) ===
+			normalizeAccountUuid(activeAccount()?.uuid)
+		) {
 			return;
 		}
 		setActiveAccount(acc);
@@ -1014,10 +1019,7 @@ export function AccountSettingsTab() {
 						}}
 						onClick={() => handlePreviewSkin(skin)}
 					>
-						<SkinPortrait
-							src={preferredTexture}
-							variant={previewVariant()}
-						/>
+						<SkinPortrait src={preferredTexture} variant={previewVariant()} />
 						<Tooltip>
 							<TooltipTrigger
 								as="button"
@@ -1076,8 +1078,7 @@ export function AccountSettingsTab() {
 						<div class={styles.packHeaderText}>
 							<h2 class={styles.packTitle}>{pack.packName}</h2>
 							<span class={styles.packMeta}>
-								{pack.skins.length}{" "}
-								{pack.skins.length === 1 ? "skin" : "skins"}
+								{pack.skins.length} {pack.skins.length === 1 ? "skin" : "skins"}
 							</span>
 						</div>
 						<span
@@ -1108,294 +1109,15 @@ export function AccountSettingsTab() {
 					fallback={<div class={styles.noAccount}>No account connected</div>}
 				>
 					<>
-							<Show when={isNarrowLayout()}>
-								<div class={styles.viewToolbar}>
-									<Show
-										when={!isDirty()}
-										fallback={
-											<div class={styles.toolbarActions}>
-												<button
-													type="button"
-													class={styles.toolbarRevertButton}
-													disabled={saving()}
-													onClick={revertChanges}
-												>
-													Revert
-												</button>
-												<button
-													type="button"
-													class={styles.toolbarSaveButton}
-													disabled={saving()}
-													onClick={handleSave}
-												>
-													<Show when={saving()}>
-														<RefreshIcon width="14" class="spin" />
-													</Show>
-													{saving() ? "Syncing..." : "Apply"}
-												</button>
-											</div>
-										}
-									>
-										<div class={styles.toolbarAccountSwitcher}>
-											{renderAccountSwitcher(styles.toolbarAccountSelect)}
-										</div>
-									</Show>
-
-									<div class={styles.narrowViewToggle}>
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={styles.narrowViewIcon}
-												classList={{
-													[styles.active]: narrowView() === "browse",
-												}}
-												onClick={() => setNarrowView("browse")}
-												aria-label="Browse skins"
-											>
-												<ViewIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>Browse skins</TooltipContent>
-										</Tooltip>
-
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={styles.narrowViewIcon}
-												classList={{
-													[styles.active]: narrowView() === "preview",
-												}}
-												onClick={() => setNarrowView("preview")}
-												aria-label="Preview"
-											>
-												<SkinIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>Preview</TooltipContent>
-										</Tooltip>
-
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
-												onClick={handleUploadSkin}
-												aria-label="Upload custom skin"
-											>
-												<PlusIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>Upload custom skin</TooltipContent>
-										</Tooltip>
-									</div>
-								</div>
-							</Show>
-
-							<div
-								class={styles.leftSection}
-								classList={{
-									[styles.hiddenOnNarrow]:
-										isNarrowLayout() && narrowView() !== "browse",
-								}}
-							>
-								<Tabs
-									value={browseTab()}
-									onChange={setBrowseTab}
-									class={styles.browseTabs}
-								>
-									<div class={styles.browseTabsHeader}>
-										<TabsList class={styles.browseTabsList}>
-											<TabsIndicator />
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="yours"
-											>
-												Your skins
-											</TabsTrigger>
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="presets"
-											>
-												Presets
-											</TabsTrigger>
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="capes"
-											>
-												Capes
-											</TabsTrigger>
-										</TabsList>
-									</div>
-
-									<TabsContent value="yours" class={styles.browseTabsContent}>
-										<section class={styles.contentCard}>
-											<div class={styles.cardHeader}>
-												<h2 class={styles.cardTitle}>Your skins</h2>
-												<button
-													type="button"
-													class={styles.headerUploadButton}
-													onClick={handleUploadSkin}
-												>
-													<PlusIcon width="14" height="14" />
-													<span>Add skin</span>
-												</button>
-											</div>
-
-											<Show
-												when={filteredRecentHistory().length > 0}
-												fallback={
-													<div class={styles.emptyState}>
-														<p class={styles.emptyStateTitle}>
-															No custom skins yet
-														</p>
-														<p class={styles.emptyStateBody}>
-															Upload a PNG to start building your skin history.
-															Preset characters live under Presets.
-														</p>
-													</div>
-												}
-											>
-												<div class={styles.presetsGrid}>
-													<For each={filteredRecentHistory()}>
-														{(item) => {
-															const selected = createMemo(() =>
-																isSkinSelected(
-																	item.image_data,
-																	item.texture_key,
-																),
-															);
-															return (
-																<Tooltip>
-																	<TooltipTrigger as="div">
-																		<div
-																			class={styles.skinItem}
-																			classList={{
-																				[styles.selected]: selected(),
-																			}}
-																			onClick={() => handlePreviewHistory(item)}
-																		>
-																			<SkinPortrait
-																				src={item.image_data}
-																				variant={item.variant}
-																			/>
-																			<Tooltip placement="top">
-																				<TooltipTrigger
-																					as="button"
-																					class={styles.viewRawButton}
-																					onClick={(e) => {
-																						e.stopPropagation();
-																						setViewerSrc(item.image_data);
-																					}}
-																					aria-label="View raw texture"
-																				>
-																					<ViewIcon width="16" />
-																				</TooltipTrigger>
-																				<TooltipContent>
-																					View raw texture
-																				</TooltipContent>
-																			</Tooltip>
-																			<Show when={selected()}>
-																				<span class={styles.selectedBadge}>
-																					<CheckIcon />
-																				</span>
-																			</Show>
-																		</div>
-																	</TooltipTrigger>
-																	<TooltipContent>
-																		{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
-																	</TooltipContent>
-																</Tooltip>
-															);
-														}}
-													</For>
-												</div>
-											</Show>
-										</section>
-									</TabsContent>
-
-									<TabsContent
-										value="presets"
-										class={`${styles.browseTabsContent} ${styles.presetsBrowse}`}
-									>
-										<For each={skinPackGroups()}>
-											{(pack) => renderPackSection(pack)}
-										</For>
-									</TabsContent>
-
-									<TabsContent value="capes" class={styles.browseTabsContent}>
-										<section class={styles.contentCard}>
-											<div class={styles.cardHeader}>
-												<h2 class={styles.cardTitle}>Capes</h2>
-											</div>
-											<div class={styles.capesGrid}>
-												<button
-													class={styles.capeItem}
-													classList={{
-														[styles.selected]: !previewCapeId(),
-													}}
-													onClick={() => handlePreviewCape(null)}
-												>
-													<span class={styles.noneLabel}>NONE</span>
-													<Show when={!previewCapeId()}>
-														<span class={styles.selectedBadge}>
-															<CheckIcon />
-														</span>
-													</Show>
-												</button>
-												<For each={capes()}>
-													{(cape) => {
-														const isSelected = createMemo(
-															() => previewCapeId() === cape.id,
-														);
-
-														return (
-															<Tooltip>
-																<TooltipTrigger
-																	as="button"
-																	class={styles.capeItem}
-																	style={{
-																		"background-image": `url(${cape.url})`,
-																	}}
-																	classList={{
-																		[styles.selected]: isSelected(),
-																	}}
-																	onClick={() => handlePreviewCape(cape)}
-																	aria-label={cape.name}
-																>
-																	<Show when={isSelected()}>
-																		<span class={styles.selectedBadge}>
-																			<CheckIcon />
-																		</span>
-																	</Show>
-																</TooltipTrigger>
-																<TooltipContent>{cape.name}</TooltipContent>
-															</Tooltip>
-														);
-													}}
-												</For>
-											</div>
-										</section>
-									</TabsContent>
-								</Tabs>
-							</div>
-
-							<aside
-								class={styles.visualizerSidebar}
-								classList={{
-									[styles.hiddenOnNarrow]:
-										isNarrowLayout() && narrowView() !== "preview",
-								}}
-							>
-								<Show when={isDirty() && !isNarrowLayout()}>
-									<section
-										class={styles.actionCard}
-										classList={{
-											[styles.compactActionCard]: compactActionMode(),
-										}}
-									>
-										<div class={styles.actionButtonsRow}>
+						<Show when={isNarrowLayout()}>
+							<div class={styles.viewToolbar}>
+								<Show
+									when={!isDirty()}
+									fallback={
+										<div class={styles.toolbarActions}>
 											<button
 												type="button"
-												class={styles.revertButton}
+												class={styles.toolbarRevertButton}
 												disabled={saving()}
 												onClick={revertChanges}
 											>
@@ -1403,99 +1125,369 @@ export function AccountSettingsTab() {
 											</button>
 											<button
 												type="button"
-												class={styles.saveButton}
+												class={styles.toolbarSaveButton}
 												disabled={saving()}
 												onClick={handleSave}
 											>
 												<Show when={saving()}>
-													<RefreshIcon width="18" class="spin" />
+													<RefreshIcon width="14" class="spin" />
 												</Show>
-												{saving() ? "Syncing..." : "Apply Changes"}
+												{saving() ? "Syncing..." : "Apply"}
 											</button>
 										</div>
-									</section>
-								</Show>
-
-								<Show when={!isDirty() && !isNarrowLayout()}>
-									<section>
-										{renderAccountSwitcher(styles.accountSwitcherSelect)}
-									</section>
-								</Show>
-
-								<section class={styles.visualizerCard}>
-									<Show when={!isNarrowLayout()}>
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
-												onClick={handleUploadSkin}
-												aria-label="Upload custom skin"
-											>
-												<PlusIcon width="18" />
-											</TooltipTrigger>
-											<TooltipContent>Upload custom skin</TooltipContent>
-										</Tooltip>
-									</Show>
-
-									<div class={styles.visualizerWrapper}>
-										<SkinView3d
-											skinUrl={previewSkinUrl() || undefined}
-											capeUrl={previewCapeUrl() || ""}
-											model={previewVariant()}
-											animation="walking"
-											animationSpeed={0.5}
-											enableZoom={false}
-										/>
+									}
+								>
+									<div class={styles.toolbarAccountSwitcher}>
+										{renderAccountSwitcher(styles.toolbarAccountSelect)}
 									</div>
+								</Show>
 
-									<div class={styles.modelToggle}>
+								<div class={styles.narrowViewToggle}>
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={styles.narrowViewIcon}
+											classList={{
+												[styles.active]: narrowView() === "browse",
+											}}
+											onClick={() => setNarrowView("browse")}
+											aria-label="Browse skins"
+										>
+											<ViewIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>Browse skins</TooltipContent>
+									</Tooltip>
+
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={styles.narrowViewIcon}
+											classList={{
+												[styles.active]: narrowView() === "preview",
+											}}
+											onClick={() => setNarrowView("preview")}
+											aria-label="Preview"
+										>
+											<SkinIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>Preview</TooltipContent>
+									</Tooltip>
+
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
+											onClick={handleUploadSkin}
+											aria-label="Upload custom skin"
+										>
+											<PlusIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>Upload custom skin</TooltipContent>
+									</Tooltip>
+								</div>
+							</div>
+						</Show>
+
+						<div
+							class={styles.leftSection}
+							classList={{
+								[styles.hiddenOnNarrow]:
+									isNarrowLayout() && narrowView() !== "browse",
+							}}
+						>
+							<Tabs
+								value={browseTab()}
+								onChange={setBrowseTab}
+								class={styles.browseTabs}
+							>
+								<div class={styles.browseTabsHeader}>
+									<TabsList class={styles.browseTabsList}>
+										<TabsIndicator />
+										<TabsTrigger class={styles.browseTabsTrigger} value="yours">
+											Your skins
+										</TabsTrigger>
+										<TabsTrigger
+											class={styles.browseTabsTrigger}
+											value="presets"
+										>
+											Presets
+										</TabsTrigger>
+										<TabsTrigger class={styles.browseTabsTrigger} value="capes">
+											Capes
+										</TabsTrigger>
+									</TabsList>
+								</div>
+
+								<TabsContent value="yours" class={styles.browseTabsContent}>
+									<section class={styles.contentCard}>
+										<div class={styles.cardHeader}>
+											<h2 class={styles.cardTitle}>Your skins</h2>
+											<button
+												type="button"
+												class={styles.headerUploadButton}
+												onClick={handleUploadSkin}
+											>
+												<PlusIcon width="14" height="14" />
+												<span>Add skin</span>
+											</button>
+										</div>
+
+										<Show
+											when={filteredRecentHistory().length > 0}
+											fallback={
+												<div class={styles.emptyState}>
+													<p class={styles.emptyStateTitle}>
+														No custom skins yet
+													</p>
+													<p class={styles.emptyStateBody}>
+														Upload a PNG to start building your skin history.
+														Preset characters live under Presets.
+													</p>
+												</div>
+											}
+										>
+											<div class={styles.presetsGrid}>
+												<For each={filteredRecentHistory()}>
+													{(item) => {
+														const selected = createMemo(() =>
+															isSkinSelected(item.image_data, item.texture_key),
+														);
+														return (
+															<Tooltip>
+																<TooltipTrigger as="div">
+																	<div
+																		class={styles.skinItem}
+																		classList={{
+																			[styles.selected]: selected(),
+																		}}
+																		onClick={() => handlePreviewHistory(item)}
+																	>
+																		<SkinPortrait
+																			src={item.image_data}
+																			variant={item.variant}
+																		/>
+																		<Tooltip placement="top">
+																			<TooltipTrigger
+																				as="button"
+																				class={styles.viewRawButton}
+																				onClick={(e) => {
+																					e.stopPropagation();
+																					setViewerSrc(item.image_data);
+																				}}
+																				aria-label="View raw texture"
+																			>
+																				<ViewIcon width="16" />
+																			</TooltipTrigger>
+																			<TooltipContent>
+																				View raw texture
+																			</TooltipContent>
+																		</Tooltip>
+																		<Show when={selected()}>
+																			<span class={styles.selectedBadge}>
+																				<CheckIcon />
+																			</span>
+																		</Show>
+																	</div>
+																</TooltipTrigger>
+																<TooltipContent>
+																	{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
+																</TooltipContent>
+															</Tooltip>
+														);
+													}}
+												</For>
+											</div>
+										</Show>
+									</section>
+								</TabsContent>
+
+								<TabsContent
+									value="presets"
+									class={`${styles.browseTabsContent} ${styles.presetsBrowse}`}
+								>
+									<For each={skinPackGroups()}>
+										{(pack) => renderPackSection(pack)}
+									</For>
+								</TabsContent>
+
+								<TabsContent value="capes" class={styles.browseTabsContent}>
+									<section class={styles.contentCard}>
+										<div class={styles.cardHeader}>
+											<h2 class={styles.cardTitle}>Capes</h2>
+										</div>
+										<div class={styles.capesGrid}>
+											<button
+												class={styles.capeItem}
+												classList={{
+													[styles.selected]: !previewCapeId(),
+												}}
+												onClick={() => handlePreviewCape(null)}
+											>
+												<span class={styles.noneLabel}>NONE</span>
+												<Show when={!previewCapeId()}>
+													<span class={styles.selectedBadge}>
+														<CheckIcon />
+													</span>
+												</Show>
+											</button>
+											<For each={capes()}>
+												{(cape) => {
+													const isSelected = createMemo(
+														() => previewCapeId() === cape.id,
+													);
+
+													return (
+														<Tooltip>
+															<TooltipTrigger
+																as="button"
+																class={styles.capeItem}
+																style={{
+																	"background-image": `url(${cape.url})`,
+																}}
+																classList={{
+																	[styles.selected]: isSelected(),
+																}}
+																onClick={() => handlePreviewCape(cape)}
+																aria-label={cape.name}
+															>
+																<Show when={isSelected()}>
+																	<span class={styles.selectedBadge}>
+																		<CheckIcon />
+																	</span>
+																</Show>
+															</TooltipTrigger>
+															<TooltipContent>{cape.name}</TooltipContent>
+														</Tooltip>
+													);
+												}}
+											</For>
+										</div>
+									</section>
+								</TabsContent>
+							</Tabs>
+						</div>
+
+						<aside
+							class={styles.visualizerSidebar}
+							classList={{
+								[styles.hiddenOnNarrow]:
+									isNarrowLayout() && narrowView() !== "preview",
+							}}
+						>
+							<Show when={isDirty() && !isNarrowLayout()}>
+								<section
+									class={styles.actionCard}
+									classList={{
+										[styles.compactActionCard]: compactActionMode(),
+									}}
+								>
+									<div class={styles.actionButtonsRow}>
 										<button
 											type="button"
-											class={styles.toggleBtn}
-											classList={{
-												[styles.active]: previewVariant() === "classic",
-											}}
-											onClick={() => {
-												setPreviewVariant("classic");
-												const skin = activeSkin();
-												if (
-													skin &&
-													skin.source?.type === "default" &&
-													skin.source.classic_texture &&
-													skin.source.slim_texture
-												) {
-													setPreviewSkinUrl(getSkinTexture(skin, "classic"));
-												}
-											}}
+											class={styles.revertButton}
+											disabled={saving()}
+											onClick={revertChanges}
 										>
-											Classic
+											Revert
 										</button>
 										<button
 											type="button"
-											class={styles.toggleBtn}
-											classList={{
-												[styles.active]: previewVariant() === "slim",
-											}}
-											onClick={() => {
-												setPreviewVariant("slim");
-												const skin = activeSkin();
-												if (
-													skin &&
-													skin.source?.type === "default" &&
-													skin.source.classic_texture &&
-													skin.source.slim_texture
-												) {
-													setPreviewSkinUrl(getSkinTexture(skin, "slim"));
-												}
-											}}
+											class={styles.saveButton}
+											disabled={saving()}
+											onClick={handleSave}
 										>
-											Slim
+											<Show when={saving()}>
+												<RefreshIcon width="18" class="spin" />
+											</Show>
+											{saving() ? "Syncing..." : "Apply Changes"}
 										</button>
 									</div>
 								</section>
-							</aside>
-						</>
+							</Show>
+
+							<Show when={!isDirty() && !isNarrowLayout()}>
+								<section>
+									{renderAccountSwitcher(styles.accountSwitcherSelect)}
+								</section>
+							</Show>
+
+							<section class={styles.visualizerCard}>
+								<Show when={!isNarrowLayout()}>
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
+											onClick={handleUploadSkin}
+											aria-label="Upload custom skin"
+										>
+											<PlusIcon width="18" />
+										</TooltipTrigger>
+										<TooltipContent>Upload custom skin</TooltipContent>
+									</Tooltip>
+								</Show>
+
+								<div class={styles.visualizerWrapper}>
+									<SkinView3d
+										skinUrl={previewSkinUrl() || undefined}
+										capeUrl={previewCapeUrl() || ""}
+										model={previewVariant()}
+										animation="walking"
+										animationSpeed={0.5}
+										enableZoom={false}
+									/>
+								</div>
+
+								<div class={styles.modelToggle}>
+									<button
+										type="button"
+										class={styles.toggleBtn}
+										classList={{
+											[styles.active]: previewVariant() === "classic",
+										}}
+										onClick={() => {
+											setPreviewVariant("classic");
+											const skin = activeSkin();
+											if (
+												skin &&
+												skin.source?.type === "default" &&
+												skin.source.classic_texture &&
+												skin.source.slim_texture
+											) {
+												setPreviewSkinUrl(getSkinTexture(skin, "classic"));
+											}
+										}}
+									>
+										Classic
+									</button>
+									<button
+										type="button"
+										class={styles.toggleBtn}
+										classList={{
+											[styles.active]: previewVariant() === "slim",
+										}}
+										onClick={() => {
+											setPreviewVariant("slim");
+											const skin = activeSkin();
+											if (
+												skin &&
+												skin.source?.type === "default" &&
+												skin.source.classic_texture &&
+												skin.source.slim_texture
+											) {
+												setPreviewSkinUrl(getSkinTexture(skin, "slim"));
+											}
+										}}
+									>
+										Slim
+									</button>
+								</div>
+							</section>
+						</aside>
+					</>
 				</Show>
 				<ImageViewer
 					src={viewerSrc()}

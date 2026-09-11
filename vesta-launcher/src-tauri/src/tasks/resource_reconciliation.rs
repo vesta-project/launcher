@@ -62,12 +62,8 @@ impl Task for ResourceEnrichmentTask {
                 reconcile_prepared_candidates(&app_handle, instance_id, candidates, &reason)
                     .await
                     .map_err(|error| error.to_string())?;
-            crate::resources::watcher::resolve_override_conflicts(
-                &app_handle,
-                instance_id,
-                reason == "modpack-update-enrichment",
-            )
-            .map_err(|error| error.to_string())?;
+            crate::resources::watcher::resolve_override_conflicts(&app_handle, instance_id, false)
+                .map_err(|error| error.to_string())?;
             ctx.update_full(
                 crate::notifications::models::PROGRESS_INDETERMINATE,
                 format!(
