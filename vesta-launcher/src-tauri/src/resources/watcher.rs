@@ -1,13 +1,15 @@
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::SourcePlatform;
 pub use crate::resources::ledger::ResourceProvenance;
-use crate::resources::ResourceManager;
 use crate::schema::installed_resource::dsl as ir_dsl;
 use anyhow::Result;
 use notify::{Config, Event, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
@@ -87,11 +89,13 @@ impl ResourceWatcher {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
+        let overflowed = Arc::new(AtomicBool::new(false));
+        let queue_overflowed = overflowed.clone();
         let mut watcher = notify::RecommendedWatcher::new(
             move |res: notify::Result<Event>| {
                 if let Ok(event) = res {
                     if tx.try_send(event).is_err() {
-                        log::debug!("[ResourceWatcher] Event queue full, dropping event");
+                        queue_overflowed.store(true, Ordering::Release);
                     }
                 }
             },
@@ -131,9 +135,8 @@ impl ResourceWatcher {
         tauri::async_runtime::spawn(async move {
             while let Some(first_event) = rx.recv().await {
                 let mut events = vec![first_event];
-                while let Ok(Some(event)) =
-                    tokio::time::timeout(Duration::from_millis(180), rx.recv()).await
-                {
+                let deadline = tokio::time::Instant::now() + Duration::from_millis(180);
+                while let Ok(Some(event)) = tokio::time::timeout_at(deadline, rx.recv()).await {
                     events.push(event);
                 }
                 // Check if still watched before handling
@@ -142,8 +145,18 @@ impl ResourceWatcher {
                     w.contains_key(&db_id)
                 };
                 if is_watched {
+                    let missed_events = overflowed.swap(false, Ordering::AcqRel);
                     let topology_changed = handle_events(&app_handle, db_id, events).await;
-                    if topology_changed {
+                    if missed_events {
+                        if let Err(error) = app_handle
+                            .state::<ResourceWatcher>()
+                            .refresh_instance(db_id, game_path.to_string_lossy().into_owned())
+                            .await
+                        {
+                            log::warn!("[ResourceWatcher] Overflow reconciliation failed: {error}");
+                        }
+                    }
+                    if topology_changed || missed_events {
                         if let Some(watcher) = watchers_ptr.lock().await.get_mut(&db_id) {
                             for datapacks in world_datapack_directories(&game_path) {
                                 if let Err(error) =
@@ -531,7 +544,16 @@ fn is_resource_file(path: &Path) -> bool {
 }
 
 pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i32) -> Result<()> {
-    use crate::models::resource::SourcePlatform;
+    resolve_override_conflicts(app, instance_id, false)
+}
+
+/// Version switches also reconsider disabled bundled copies. Ordinary scans respect
+/// an explicitly disabled pack copy so users can opt into a custom replacement.
+pub fn resolve_override_conflicts(
+    app: &AppHandle,
+    instance_id: i32,
+    pack_switched: bool,
+) -> Result<()> {
     use crate::notifications::manager::NotificationManager;
     use crate::notifications::models::{CreateNotificationInput, NotificationType};
     use crate::utils::db::get_vesta_conn;
@@ -542,15 +564,14 @@ pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i3
         let mut conn = get_vesta_conn()?;
         ir_dsl::installed_resource
             .filter(ir_dsl::instance_id.eq(instance_id))
-            .filter(ir_dsl::remote_id.ne(""))
-            .filter(ir_dsl::platform.eq_any(vec!["modrinth", "curseforge"]))
+            .filter(ir_dsl::resource_type.eq("mod"))
             .load::<InstalledResource>(&mut conn)?
     };
 
     let mut groups: Vec<Vec<InstalledResource>> = Vec::new();
     let enabled = resources
         .iter()
-        .filter(|resource| resource.is_enabled)
+        .filter(|resource| conflict_candidate_enabled(resource, pack_switched))
         .cloned()
         .collect::<Vec<_>>();
 
@@ -590,31 +611,8 @@ pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i3
     }
 
     let mut to_disable: Vec<(InstalledResource, InstalledResource)> = Vec::new();
-    let rm = app.state::<ResourceManager>();
-
     for group in groups {
-        let same_provider_project = group.iter().all(|resource| {
-            resource.platform == group[0].platform && resource.remote_id == group[0].remote_id
-        });
-        let ranks = if same_provider_project {
-            match SourcePlatform::from_str_id(&group[0].platform) {
-                Some(platform) => rm
-                    .get_versions(platform, &group[0].remote_id, true, None, None)
-                    .await
-                    .ok()
-                    .map(|versions| {
-                        versions
-                            .into_iter()
-                            .enumerate()
-                            .map(|(index, version)| (version.id, index))
-                            .collect::<HashMap<_, _>>()
-                    }),
-                None => None,
-            }
-        } else {
-            None
-        };
-        let winner_id = choose_duplicate_winner(&group, same_provider_project, ranks.as_ref());
+        let winner_id = choose_duplicate_winner(&group);
         let Some(winner) = group
             .iter()
             .find(|resource| resource.id == winner_id)
@@ -622,9 +620,12 @@ pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i3
         else {
             continue;
         };
+        if !winner.is_enabled {
+            crate::resources::ledger::set_enabled(winner.id, true)?;
+        }
         for loser in group
             .into_iter()
-            .filter(|resource| resource.id != winner_id)
+            .filter(|resource| resource.id != winner_id && resource.is_enabled)
         {
             if !to_disable.iter().any(|(queued, _)| queued.id == loser.id) {
                 to_disable.push((loser, winner.clone()));
@@ -750,49 +751,26 @@ fn cross_provider_peer_matches(
     )
 }
 
-fn choose_duplicate_winner(
-    resources: &[InstalledResource],
-    same_provider_project: bool,
-    provider_ranks: Option<&HashMap<String, usize>>,
-) -> i32 {
-    let bundled = resources
+fn conflict_candidate_enabled(resource: &InstalledResource, pack_switched: bool) -> bool {
+    resource.is_enabled || (pack_switched && resource.source_kind == "modpack")
+}
+
+fn choose_duplicate_winner(resources: &[InstalledResource]) -> i32 {
+    resources
         .iter()
         .filter(|resource| resource.source_kind == "modpack")
         .min_by_key(|resource| resource.id)
-        .expect("duplicate groups always include a bundled resource");
-
-    if !same_provider_project {
-        return bundled.id;
-    }
-
-    let Some(ranks) = provider_ranks else {
-        return bundled.id;
-    };
-    if resources
-        .iter()
-        .any(|resource| !ranks.contains_key(&resource.remote_version_id))
-    {
-        return bundled.id;
-    }
-
-    resources
-        .iter()
-        .min_by_key(|resource| {
-            (
-                ranks[&resource.remote_version_id],
-                usize::from(resource.source_kind != "modpack"),
-                resource.id,
-            )
-        })
-        .map(|resource| resource.id)
-        .unwrap_or(bundled.id)
+        .expect("duplicate groups always include a bundled resource")
+        .id
 }
 
 #[cfg(test)]
 mod world_datapack_event_tests {
-    use super::{choose_duplicate_winner, duplicate_candidate, world_ref_for_datapack_path};
+    use super::{
+        choose_duplicate_winner, conflict_candidate_enabled, duplicate_candidate,
+        world_ref_for_datapack_path,
+    };
     use crate::models::installed_resource::InstalledResource;
-    use std::collections::HashMap;
     use std::path::Path;
 
     fn resource(
@@ -828,28 +806,43 @@ mod world_datapack_event_tests {
     }
 
     #[test]
-    fn newest_provider_release_wins_same_project_duplicates() {
+    fn switch_reconsiders_disabled_pack_but_not_disabled_custom() {
+        let mut bundled = resource(1, "modrinth", "project", "old", "modpack", None);
+        let mut custom = resource(2, "modrinth", "project", "new", "custom", None);
+        bundled.is_enabled = false;
+        assert!(!conflict_candidate_enabled(&bundled, false));
+        assert!(conflict_candidate_enabled(&bundled, true));
+        assert!(conflict_candidate_enabled(&custom, true));
+        assert_eq!(choose_duplicate_winner(&[custom.clone(), bundled]), 1);
+        custom.is_enabled = false;
+        assert!(!conflict_candidate_enabled(&custom, true));
+    }
+
+    #[test]
+    fn selected_pack_wins_when_custom_is_older() {
+        let bundled = resource(2, "modrinth", "project", "new", "modpack", None);
+        let custom = resource(1, "modrinth", "project", "old", "custom", None);
+        assert_eq!(choose_duplicate_winner(&[custom, bundled]), 2);
+    }
+
+    #[test]
+    fn selected_pack_wins_even_when_custom_is_newer() {
         let bundled = resource(1, "modrinth", "project", "old", "modpack", None);
         let custom = resource(2, "modrinth", "project", "new", "custom", None);
-        let ranks = HashMap::from([("new".to_string(), 0), ("old".to_string(), 1)]);
 
-        assert_eq!(
-            choose_duplicate_winner(&[bundled, custom], true, Some(&ranks)),
-            2
-        );
+        assert_eq!(choose_duplicate_winner(&[bundled, custom]), 1);
     }
 
     #[test]
     fn equal_or_unknown_versions_prefer_the_bundled_copy() {
         let bundled = resource(1, "modrinth", "project", "same", "modpack", None);
         let custom = resource(2, "modrinth", "project", "same", "custom", None);
-        let ranks = HashMap::from([("same".to_string(), 0)]);
 
         assert_eq!(
-            choose_duplicate_winner(&[bundled.clone(), custom.clone()], true, Some(&ranks)),
+            choose_duplicate_winner(&[bundled.clone(), custom.clone()]),
             1
         );
-        assert_eq!(choose_duplicate_winner(&[bundled, custom], true, None), 1);
+        assert_eq!(choose_duplicate_winner(&[bundled, custom]), 1);
     }
 
     #[test]
@@ -882,10 +875,7 @@ mod world_datapack_event_tests {
         assert!(duplicate_candidate(&bundled, &identical, false));
         assert!(!duplicate_candidate(&bundled, &different, false));
         assert!(duplicate_candidate(&bundled, &different, true));
-        assert_eq!(
-            choose_duplicate_winner(&[bundled, identical], false, None),
-            1
-        );
+        assert_eq!(choose_duplicate_winner(&[bundled, identical]), 1);
     }
 
     #[test]

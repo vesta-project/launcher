@@ -87,6 +87,23 @@ impl Task for UpdateModpackTask {
                 instance_id,
                 game_dir.clone(),
             );
+            // Keep observing live game changes while this cancellable update waits.
+            let mut cancel = ctx.cancel_rx.clone();
+            while safeguards::check_instance_not_running(&game_dir).is_err() {
+                ctx.update_description(
+                    "Update queued — close Minecraft for this instance to continue, or cancel."
+                        .to_string(),
+                );
+                if *cancel.borrow() {
+                    return Err("Update cancelled".to_string());
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {},
+                    _ = cancel.changed() => {
+                        if *cancel.borrow() { return Err("Update cancelled".to_string()); }
+                    }
+                }
+            }
             let watcher_handle = app_handle.clone();
             let resume_game_dir = game_dir.clone();
             if let Err(pause_error) = watcher_handle
@@ -117,12 +134,6 @@ impl Task for UpdateModpackTask {
                     .find(instance_id)
                     .first(&mut conn)
                     .map_err(|e| format!("Instance not found: {}", e))?;
-
-                // ─── Safeguard: ensure Minecraft is not running ──────────────
-                ctx.update_description("Checking that Minecraft is not running...".to_string());
-                if let Err(e) = safeguards::check_instance_not_running(&game_dir) {
-                    return Err(format!("{}", e));
-                }
 
                 // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
                 let mut plan = crate::modpack::engine::plan(

@@ -5,11 +5,7 @@ use std::path::Path;
 /// Java/Minecraft process. Returns Ok(()) if safe to proceed, or an error
 /// describing why the update is blocked.
 pub fn check_instance_not_running(game_dir: &Path) -> Result<()> {
-    let game_dir_str = game_dir.to_string_lossy().to_lowercase();
-
-    // Use sysinfo to enumerate all processes
-    let mut system = sysinfo::System::new_all();
-    system.refresh_all();
+    let system = sysinfo::System::new_all();
 
     let java_processes: Vec<String> = system
         .processes()
@@ -18,34 +14,39 @@ pub fn check_instance_not_running(game_dir: &Path) -> Result<()> {
             let name = proc.name().to_string_lossy().to_lowercase();
             name.contains("java") || name.contains("javaw")
         })
-        .filter(|(_, proc)| {
-            // Check if this process has the game directory open
-            // We check the process's CWD and command line
-            let cwd = proc
-                .cwd()
-                .map(|p| p.to_string_lossy().to_lowercase())
-                .unwrap_or_default();
-            let cmd: String = proc
-                .cmd()
-                .iter()
-                .map(|s| s.to_string_lossy())
-                .collect::<Vec<_>>()
-                .join(" ")
-                .to_lowercase();
-
-            cwd.contains(&game_dir_str) || cmd.contains(&game_dir_str) || cmd.contains("minecraft")
-        })
+        .filter(|(_, proc)| process_uses_game_dir(game_dir, proc.cwd(), proc.cmd()))
         .map(|(pid, proc)| format!("{} ({})", proc.name().to_string_lossy(), pid))
         .collect();
 
     if !java_processes.is_empty() {
         anyhow::bail!(
-            "Cannot update while Minecraft is running. Running processes: {}",
+            "Minecraft for this instance is still running. Running processes: {}",
             java_processes.join(", ")
         );
     }
 
     Ok(())
+}
+
+// Match complete path arguments (including --gameDir=...), never arbitrary
+// substrings or the word "minecraft", which also match unrelated instances.
+fn process_uses_game_dir(game_dir: &Path, cwd: Option<&Path>, args: &[std::ffi::OsString]) -> bool {
+    fn same_path(left: &Path, right: &Path) -> bool {
+        let left = left.canonicalize().unwrap_or_else(|_| left.to_path_buf());
+        let right = right.canonicalize().unwrap_or_else(|_| right.to_path_buf());
+        if cfg!(windows) {
+            left.to_string_lossy()
+                .eq_ignore_ascii_case(&right.to_string_lossy())
+        } else {
+            left == right
+        }
+    }
+    cwd.is_some_and(|cwd| same_path(cwd, game_dir))
+        || args.iter().any(|arg| {
+            let arg = arg.to_string_lossy();
+            let path = arg.strip_prefix("--gameDir=").unwrap_or(&arg);
+            same_path(Path::new(path), game_dir)
+        })
 }
 
 /// Normalize a file path to lowercase for case-insensitive comparison.
@@ -87,6 +88,38 @@ pub fn can_delete_if_unchanged(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn process_matching_is_scoped_to_exact_instance_paths() {
+        let game = Path::new("/instances/pack");
+        let args = |values: &[&str]| {
+            values
+                .iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>()
+        };
+        assert!(process_uses_game_dir(game, Some(game), &[]));
+        assert!(process_uses_game_dir(
+            game,
+            None,
+            &args(&["--gameDir", "/instances/pack"])
+        ));
+        assert!(process_uses_game_dir(
+            game,
+            None,
+            &args(&["--gameDir=/instances/pack"])
+        ));
+        assert!(!process_uses_game_dir(
+            game,
+            Some(Path::new("/instances/pack-other")),
+            &args(&["minecraft", "/instances/pack-other"])
+        ));
+        assert!(!process_uses_game_dir(
+            game,
+            None,
+            &args(&["net.minecraft.client.main.Main"])
+        ));
+    }
 
     #[test]
     fn test_normalize_path() {

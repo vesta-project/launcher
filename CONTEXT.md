@@ -237,8 +237,13 @@ Resource Ledger before publishing the new Instance version: missing rows and
 obsolete bundled files are pruned, surviving manifest rows receive the new
 provenance version, and new local rows are published. Read-only hashing may run
 before the journal commit, but no Ledger mutation crosses that boundary.
-Provider enrichment remains a silent background Task that starts from those
-coherent local facts. Duplicate resolution retains losing user-owned files only
+Known bundled/custom duplicates are resolved before the completion event:
+selected pack versions win on both upgrade and downgrade, including disabled
+bundled copies with enabled custom duplicates. No provider release ranking is
+needed. Provider enrichment remains a silent background Task that starts from
+those coherent local facts and follows verified enabled/disabled renames.
+Updates wait cancellably for the instance's running game to exit before planning
+or pausing its watcher, then publish only `core://instance-updated`. Duplicate resolution retains losing user-owned files only
 after a successful disabled-file rename; missing synthetic rows are pruned on
 the next Resource/Versioning repair load.
 

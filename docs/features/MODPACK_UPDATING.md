@@ -131,14 +131,25 @@ The entire sequence is staged before application to prevent half-updated, corrup
 2. Overwrite `modpack_manifest.json` with $N$'s contents.
 3. Update the instance's `modpack_version_id` in the database.
 4. Wipe `.update_stage/`.
-5. Emit `core://instance-installed` event to refresh the UI.
+5. Reconcile local resource ownership and bundled/custom conflicts, then emit one `core://instance-updated` event. Provider metadata enrichment continues silently in the background.
 
 ---
 
 ## Technical Safeguards
 
-### Instance Lockout
-Before any update begins, the engine checks the OS process tree for Java processes. If a Java process is found with the game directory in its command line or working directory, the update is blocked entirely. This prevents file corruption from simultaneous access.
+### Update While Minecraft Is Running
+An update waits in its cancellable task until Minecraft for that instance exits. The task explains that closing Minecraft will continue the update; the user can cancel instead. The watcher remains attached while waiting, and planning and file changes begin only after exit. Java process matching uses the exact game directory in a working directory or command argument, including `--gameDir=...`; another Minecraft instance does not delay this update. This is an in-session queue: restarting Vesta clears an unapplied pending update through normal recovery.
+
+### Selected Pack Precedence
+Upgrades and downgrades use the same rule: the selected pack's bundled mod wins over a custom duplicate, regardless of provider release age. Local conflict resolution runs after durable commit and ownership reconciliation, before the completion event. A disabled bundled copy is reconsidered when switching pack versions and enabled when it has an enabled custom duplicate; the custom file is retained disabled. Ordinary resource scans respect explicitly disabled bundled copies, allowing users to choose a custom replacement after the update.
+
+Enabled duplicate groups prefer bundled copies without provider version-list requests. Same-provider project identity, exact hashes, or persisted cross-provider peer evidence establish duplicates. Previously unknown cross-provider identity can still be discovered by background enrichment and resolved then.
+
+### Disabled Paths
+When the current tracked mod exists only at its `.disabled` path, replacement journals both that physical path and the new enabled destination. Commit leaves the selected pack file enabled; rollback restores the previous disabled file. Removal also resolves the physical disabled path and retains hash-based protection for user edits. Existing ambiguous enabled/disabled pairs are preserved rather than overwritten by enable/disable operations.
+
+### Update Responsiveness
+The current-file content audit remains necessary for three-way user-edit protection and logs its path count and duration. Conflict selection no longer requests provider release rankings. Watcher bursts have a bounded debounce window; queue overflow triggers a reconciliation scan. Enrichment follows verified enabled/disabled renames and skips disappeared or changed files, preventing stale prepared paths from recreating missing rows.
 
 ### Case Normalization
 All file paths in both manifests are forced to lowercase during comparison loops. This prevents duplicate mod files on case-sensitive filesystems (Linux/macOS) when a modpack author changes casing (e.g., `JEI.jar` → `jei.jar`).

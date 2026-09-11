@@ -211,6 +211,11 @@ pub fn set_enabled(resource_id: i32, enabled: bool) -> Result<()> {
 
     let new_path = toggled_path(&current_path, enabled);
     if new_path != current_path {
+        anyhow::ensure!(
+            !new_path.exists(),
+            "Cannot change enabled state: {} already exists",
+            new_path.display()
+        );
         std::fs::rename(&current_path, &new_path)?;
     }
     diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))

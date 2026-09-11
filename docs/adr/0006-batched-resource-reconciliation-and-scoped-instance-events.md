@@ -73,10 +73,13 @@ enrichment Task. Resource and Versioning loads may repeat this repair safely:
 absent rows are removed, real duplicates are re-evaluated, and ambiguous
 physical disabled files are preserved.
 
-Duplicate resolution ranks same-provider project releases by provider order;
-equal or unavailable rankings prefer the bundled copy. Cross-provider copies
-are related only by exact file hash or persisted peer evidence and prefer the
-bundled copy. A losing file is marked disabled only after its rename succeeds;
+Duplicate resolution prefers the bundled copy without provider release ranking.
+A pack version switch also considers disabled bundled mods against enabled
+custom duplicates, enabling the pack copy before completion. Ordinary repair
+respects a disabled bundled copy. Cross-provider copies are related only by
+exact file hash or persisted peer evidence. Updates emit only
+`core://instance-updated`; enrichment follows verified enabled/disabled renames
+and skips stale prepared files before publishing facts. A losing file is marked disabled only after its rename succeeds;
 missing files are pruned instead of acquiring a synthetic `.disabled` path.
 
 ## Consequences

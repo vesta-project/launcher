@@ -43,6 +43,38 @@ pub(crate) struct PreparedResourceCandidate {
     metadata: (i64, i64),
 }
 
+impl PreparedResourceCandidate {
+    /// Enrichment may outlive an enable/disable rename. Follow only the same
+    /// content; skip missing files and files with changed size or modification time.
+    fn refresh_path(&mut self) -> bool {
+        let mut path = self.candidate.path.clone();
+        let renamed = !path.is_file();
+        if renamed {
+            let enable = path.to_string_lossy().ends_with(".disabled");
+            path = ledger::toggled_path(&path, enable);
+            if !self.sha1.as_ref().is_some_and(|hash| {
+                calculate_sha1(&path).is_ok_and(|current| current.eq_ignore_ascii_case(hash))
+            }) {
+                return false;
+            }
+        }
+        let Ok(metadata) = std::fs::metadata(&path) else {
+            return false;
+        };
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_secs() as i64)
+            .unwrap_or(0);
+        if !metadata.is_file() || (metadata.len() as i64, modified) != self.metadata {
+            return false;
+        }
+        self.candidate.path = path;
+        true
+    }
+}
+
 #[derive(Debug, Clone)]
 struct DiscoveredResourceCandidate {
     candidate: ResourceCandidate,
@@ -387,9 +419,10 @@ pub async fn reconcile_candidates(
 pub(crate) async fn reconcile_prepared_candidates(
     app: &AppHandle,
     instance_id: i32,
-    locals: Vec<PreparedResourceCandidate>,
+    mut locals: Vec<PreparedResourceCandidate>,
     reason: &str,
 ) -> Result<ReconciliationSummary> {
+    locals.retain_mut(PreparedResourceCandidate::refresh_path);
     let attempted = locals.len();
     if attempted == 0 {
         return Ok(ReconciliationSummary::default());
@@ -445,7 +478,10 @@ pub(crate) async fn reconcile_prepared_candidates(
     let mut seen_refs = HashSet::new();
     let mut identified = 0;
 
-    for local in locals {
+    for mut local in locals {
+        if !local.refresh_path() {
+            continue;
+        }
         let known_resolution = local.candidate.resolved.clone();
         let modrinth_match = local
             .sha1
@@ -636,6 +672,46 @@ pub fn unresolved_candidates_for_instance(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enrichment_follows_disabled_renames_without_resurrecting_missing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mod.jar");
+        std::fs::write(&path, b"mod").unwrap();
+        let metadata = std::fs::metadata(&path).unwrap();
+        let mut prepared = PreparedResourceCandidate {
+            candidate: ResourceCandidate {
+                path: path.clone(),
+                provenance: None,
+                preferred_platform: None,
+                resolved: None,
+            },
+            sha1: Some(calculate_sha1(&path).unwrap()),
+            curseforge_fingerprint: None,
+            metadata: (
+                metadata.len() as i64,
+                metadata
+                    .modified()
+                    .unwrap()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64,
+            ),
+        };
+        let disabled = ledger::toggled_path(&path, false);
+        std::fs::rename(&path, &disabled).unwrap();
+        assert!(prepared.refresh_path());
+        assert_eq!(prepared.candidate.path, disabled);
+        std::fs::rename(&disabled, &path).unwrap();
+        assert!(prepared.refresh_path());
+        assert_eq!(prepared.candidate.path, path);
+        std::fs::write(&path, b"different content").unwrap();
+        assert!(!prepared.refresh_path());
+        std::fs::remove_file(&path).unwrap();
+        assert!(!prepared.refresh_path());
+        std::fs::write(&disabled, b"unrelated").unwrap();
+        assert!(!prepared.refresh_path());
+    }
 
     #[test]
     fn canonical_platform_selection_honors_pack_source_and_falls_back() {
