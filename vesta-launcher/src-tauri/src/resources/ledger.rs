@@ -389,7 +389,12 @@ fn apply_enablement_batch_with_conn(
     let mut completed = Vec::new();
     for step in &steps {
         if let Err(error) = rename_file_no_replace(&step.from, &step.to) {
-            let _ = compensate_enablement_renames(&completed);
+            if let Err(compensation) = compensate_enablement_renames(&completed) {
+                return Err(anyhow::anyhow!(
+                    "Cannot change enabled state to {}: {error}. Automatic filesystem compensation failed: {compensation}. Recover by restoring the reported paths.",
+                    step.to.display()
+                ));
+            }
             return Err(anyhow::anyhow!(
                 "Cannot change enabled state to {}: {error}",
                 step.to.display()
@@ -585,36 +590,80 @@ fn rename_file_no_replace(source: &Path, destination: &Path) -> std::io::Result<
         use std::ffi::CString;
         use std::os::unix::ffi::OsStrExt;
 
-        let source = CString::new(source.as_os_str().as_bytes())
+        let source_c = CString::new(source.as_os_str().as_bytes())
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
-        let destination = CString::new(destination.as_os_str().as_bytes())
+        let destination_c = CString::new(destination.as_os_str().as_bytes())
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
         // SAFETY: both C strings live for the duration of the call and contain no NUL bytes.
         let result = unsafe {
             libc::renameat2(
                 libc::AT_FDCWD,
-                source.as_ptr(),
+                source_c.as_ptr(),
                 libc::AT_FDCWD,
-                destination.as_ptr(),
+                destination_c.as_ptr(),
                 libc::RENAME_NOREPLACE,
             )
         };
-        return if result == 0 {
+        if result == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        // Some kernels/filesystems reject RENAME_NOREPLACE with ENOSYS or EINVAL.
+        // Fall back to a best-effort exists-check + rename that still refuses
+        // known collisions, rather than failing every enablement rename.
+        match error.raw_os_error() {
+            Some(libc::ENOSYS) | Some(libc::EINVAL) => {
+                rename_file_no_replace_best_effort(source, destination)
+            }
+            _ => Err(error),
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        let source = source
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        let destination = destination
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        // MoveFileW refuses to overwrite an existing destination.
+        // SAFETY: both buffers are NUL-terminated wide strings that outlive the call.
+        let ok = unsafe {
+            windows_sys::Win32::Storage::FileSystem::MoveFileW(
+                source.as_ptr(),
+                destination.as_ptr(),
+            )
+        };
+        if ok != 0 {
             Ok(())
         } else {
             Err(std::io::Error::last_os_error())
-        };
+        }
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
-        if destination.exists() {
+        rename_file_no_replace_best_effort(source, destination)
+    }
+}
+
+fn rename_file_no_replace_best_effort(source: &Path, destination: &Path) -> std::io::Result<()> {
+    match destination.try_exists() {
+        Ok(true) => {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 format!("{} already exists", destination.display()),
             ));
         }
-        std::fs::rename(source, destination)
+        Ok(false) => {}
+        Err(error) => return Err(error),
     }
+    std::fs::rename(source, destination)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
