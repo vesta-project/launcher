@@ -33,6 +33,13 @@ impl Task for ImportResourceResyncTask {
         Some(format!("import_resync_instance_{}", self.instance_id))
     }
 
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance_id,
+            Some(self.instance_name.clone()),
+        ))
+    }
+
     fn cancellable(&self) -> bool {
         true
     }

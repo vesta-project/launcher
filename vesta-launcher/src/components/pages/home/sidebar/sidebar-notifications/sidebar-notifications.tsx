@@ -132,6 +132,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 									notification_type={notification.notification_type}
 									dismissible={notification.dismissible}
 									actions={notification.actions}
+									metadata={notification.metadata}
 									created_at={notification.created_at}
 									onAction={(actionId, payload) =>
 										invokeNotificationAction(

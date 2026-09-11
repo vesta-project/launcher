@@ -288,7 +288,11 @@ pub(crate) fn publish_recovery_required_notification(
         progress: None,
         current_step: None,
         total_steps: None,
-        metadata: None,
+        metadata: crate::notifications::models::NotificationContext::instance(
+            instance_id,
+            Some(instance_name),
+        )
+        .metadata(),
         show_on_completion: None,
     });
 }
@@ -338,7 +342,11 @@ pub fn publish_recovery_complete_notification(
         progress: None,
         current_step: None,
         total_steps: None,
-        metadata: None,
+        metadata: crate::notifications::models::NotificationContext::instance(
+            instance_id,
+            Some(instance_name),
+        )
+        .metadata(),
         show_on_completion: None,
     });
 }

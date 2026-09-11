@@ -1574,6 +1574,7 @@ pub async fn launch_instance(
         return Err(format!("Cannot launch while instance is busy ({})", op));
     }
 
+    let notification_instance_id = instance_data.id;
     let instance_id = instance_data.slug();
     let _launch_guard = LaunchInProgressGuard::acquire(instance_id.clone()).await?;
 
@@ -1696,6 +1697,7 @@ pub async fn launch_instance(
     if offline_launch {
         crate::instance::launch_preparation::notify_offline_launch(
             &app_handle,
+            notification_instance_id,
             &prepared_instance_name,
         );
     }

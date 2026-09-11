@@ -40,6 +40,13 @@ impl Task for CloneInstanceTask {
         Some(format!("clone_instance_{}", self.source_id))
     }
 
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.source_id,
+            None,
+        ))
+    }
+
     fn cancellable(&self) -> bool {
         false
     }
@@ -408,6 +415,13 @@ impl Task for ResetInstanceTask {
         Some(format!("reset_instance_{}", self.instance_id))
     }
 
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance_id,
+            None,
+        ))
+    }
+
     fn cancellable(&self) -> bool {
         false
     }
@@ -489,6 +503,13 @@ impl Task for RepairInstanceTask {
 
     fn id(&self) -> Option<String> {
         Some(format!("repair_instance_{}", self.instance_id))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance_id,
+            None,
+        ))
     }
 
     fn cancellable(&self) -> bool {
@@ -864,6 +885,13 @@ impl Task for DeleteInstanceTask {
 
     fn id(&self) -> Option<String> {
         Some(format!("delete_instance_{}", self.instance_id))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance_id,
+            None,
+        ))
     }
 
     fn cancellable(&self) -> bool {

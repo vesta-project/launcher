@@ -8,6 +8,7 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { getInstanceSlug } from "@utils/instances";
 import { openInstanceTab } from "@utils/launch-intents";
+import { createNotification } from "@utils/notifications";
 import { simulateUpdateProcess } from "@utils/updater";
 import { createSignal, For, onMount, Show } from "solid-js";
 import styles from "../settings-page.module.css";
@@ -68,6 +69,42 @@ export function DeveloperSettingsTab() {
 		} finally {
 			setBusyScenario(null);
 		}
+	};
+
+	const showNotificationPreview = async (severity: "warning" | "error") => {
+		const instance =
+			instancesState.instances.find(
+				(item) => getInstanceSlug(item) === selectedSlug(),
+			) ?? instancesState.instances[0];
+		const instanceName = instance?.name ?? "Example Instance";
+
+		await createNotification({
+			client_key: `developer_notification_preview_${severity}`,
+			title:
+				severity === "warning"
+					? "Update recovery required"
+					: "Modpack update failed",
+			description:
+				severity === "warning"
+					? `The previous version of ‘${instanceName}’ could not be fully restored. Reopen the instance to resume recovery and inspect the affected files.`
+					: `Failed to update the modpack for instance ‘${instanceName}’: the release archive could not be downloaded after several attempts.`,
+			severity,
+			notification_type: "patient",
+			dismissible: true,
+			metadata: {
+				context: instance
+					? {
+							kind: "instance",
+							id: String(instance.id),
+							label: instance.name,
+						}
+					: {
+							kind: "channel",
+							label: "Developer preview",
+							source: "launcher",
+						},
+			},
+		});
 	};
 
 	return (
@@ -211,6 +248,32 @@ export function DeveloperSettingsTab() {
 								}}
 							>
 								Simulate Discovery
+							</LauncherButton>
+						}
+					/>
+				</SettingsCard>
+
+				<SettingsCard header="Notification Testing">
+					<SettingsField
+						label="Warning notification"
+						description="Create a saved warning notification using the selected crash target or first instance"
+						headerRight={
+							<LauncherButton
+								onClick={() => void showNotificationPreview("warning")}
+							>
+								Test Warning
+							</LauncherButton>
+						}
+					/>
+					<SettingsField
+						label="Error notification"
+						description="Create a saved error notification using the selected crash target or first instance"
+						headerRight={
+							<LauncherButton
+								type="destructive"
+								onClick={() => void showNotificationPreview("error")}
+							>
+								Test Error
 							</LauncherButton>
 						}
 					/>

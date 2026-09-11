@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::notifications::models::NotificationContext;
 use crate::tasks::manager::{Task, TaskContext};
 use tauri::Manager;
 
@@ -7,14 +8,21 @@ use crate::sync::safeguards;
 
 pub struct UpdateModpackTask {
     pub instance_id: i32,
+    pub instance_name: String,
     pub new_version_id: String,
     pub game_dir: PathBuf,
 }
 
 impl UpdateModpackTask {
-    pub fn new(instance_id: i32, new_version_id: String, game_dir: PathBuf) -> Self {
+    pub fn new(
+        instance_id: i32,
+        instance_name: String,
+        new_version_id: String,
+        game_dir: PathBuf,
+    ) -> Self {
         Self {
             instance_id,
+            instance_name,
             new_version_id,
             game_dir,
         }
@@ -30,6 +38,13 @@ impl Task for UpdateModpackTask {
         Some(format!("update_modpack_{}", self.instance_id))
     }
 
+    fn notification_context(&self) -> Option<NotificationContext> {
+        Some(NotificationContext::instance(
+            self.instance_id,
+            Some(self.instance_name.clone()),
+        ))
+    }
+
     fn cancellable(&self) -> bool {
         true
     }
@@ -39,11 +54,21 @@ impl Task for UpdateModpackTask {
     }
 
     fn starting_description(&self) -> String {
-        "Preparing modpack update...".to_string()
+        format!("Preparing the modpack update for ‘{}’…", self.instance_name)
     }
 
     fn completion_description(&self) -> String {
-        "Modpack updated successfully".to_string()
+        format!(
+            "Updated the modpack for ‘{}’ successfully.",
+            self.instance_name
+        )
+    }
+
+    fn failure_description(&self, error: &str) -> String {
+        format!(
+            "Failed to update the modpack for instance ‘{}’: {}",
+            self.instance_name, error
+        )
     }
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {

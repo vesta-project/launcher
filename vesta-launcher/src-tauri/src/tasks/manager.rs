@@ -1,7 +1,7 @@
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{
-    CreateNotificationInput, NotificationAction, NotificationSeverity, NotificationType,
-    ProgressUpdate, PROGRESS_INDETERMINATE,
+    CreateNotificationInput, NotificationAction, NotificationContext, NotificationSeverity,
+    NotificationType, ProgressUpdate, PROGRESS_INDETERMINATE,
 };
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -147,6 +147,11 @@ pub trait Task: Send + Sync {
     fn id(&self) -> Option<String> {
         None
     }
+    /// Subject shown by notification UI. This stays presentation-only and does not
+    /// participate in task identity, locking, or persistence policy.
+    fn notification_context(&self) -> Option<NotificationContext> {
+        None
+    }
     fn cancellable(&self) -> bool {
         false
     }
@@ -183,6 +188,19 @@ pub trait Task: Send + Sync {
     /// Description shown on successful completion.
     fn completion_description(&self) -> String {
         "Completed successfully".to_string()
+    }
+    fn failure_description(&self, error: &str) -> String {
+        match self.notification_context() {
+            Some(context) if context.kind == "instance" => context
+                .label
+                .map(|label| format!("The task failed for instance ‘{}’: {}", label, error))
+                .unwrap_or_else(|| format!("The instance task failed: {}", error)),
+            Some(context) if context.kind == "resource" => context
+                .label
+                .map(|label| format!("The task failed for resource ‘{}’: {}", label, error))
+                .unwrap_or_else(|| format!("The resource task failed: {}", error)),
+            _ => format!("Failed: {}", error),
+        }
     }
     /// Execute task work.
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>>;
@@ -314,6 +332,7 @@ impl TaskManager {
                 log::info!("TaskManager: Received task: {}", task.name());
 
                 let task_name = task.name();
+                let notification_context = task.notification_context();
                 let is_cancellable = task.cancellable();
                 let is_pausable = task.pausable();
                 let notifications_enabled = task.show_notification();
@@ -392,7 +411,9 @@ impl TaskManager {
                             progress: Some(PROGRESS_INDETERMINATE), // Indeterminate until picked up
                             current_step: initial_current_step,
                             total_steps: initial_total_steps,
-                            metadata: None,
+                            metadata: notification_context
+                                .as_ref()
+                                .and_then(NotificationContext::metadata),
                             show_on_completion: Some(task.show_completion_notification()),
                         })
                         .map_err(|e| e.to_string())
@@ -480,7 +501,9 @@ impl TaskManager {
                                 progress: None,
                                 current_step: None,
                                 total_steps: None,
-                                metadata: None,
+                                metadata: notification_context
+                                    .as_ref()
+                                    .and_then(NotificationContext::metadata),
                                 show_on_completion: None,
                             }) {
                                 log::error!(
@@ -598,7 +621,7 @@ impl TaskManager {
                                 if let Err(err) = manager.create(CreateNotificationInput {
                                     client_key: Some(key_clone.clone()),
                                     title: Some(task_name),
-                                    description: Some(format!("Failed: {}", e)),
+                                    description: Some(task.failure_description(&e)),
                                     severity: Some("error".to_string()),
                                     notification_type: Some(NotificationType::Patient),
                                     dismissible: Some(true),
@@ -608,7 +631,9 @@ impl TaskManager {
                                     progress: None,
                                     current_step: None,
                                     total_steps: None,
-                                    metadata: None,
+                                    metadata: notification_context
+                                        .as_ref()
+                                        .and_then(NotificationContext::metadata),
                                     show_on_completion: Some(true),
                                 }) {
                                     log::error!(

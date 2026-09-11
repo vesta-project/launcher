@@ -194,7 +194,11 @@ pub fn publish_interrupted_notifications(
                 progress: None,
                 current_step: None,
                 total_steps: None,
-                metadata: None,
+                metadata: crate::notifications::models::NotificationContext::instance(
+                    interrupted.id,
+                    Some(interrupted.name.clone()),
+                )
+                .metadata(),
                 show_on_completion: None,
             }) {
                 log::error!(

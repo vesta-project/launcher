@@ -757,7 +757,11 @@ fn notify_login_required(app_handle: &tauri::AppHandle, account_type: &str) {
     }
 }
 
-pub(crate) fn notify_offline_launch(app_handle: &tauri::AppHandle, instance_name: &str) {
+pub(crate) fn notify_offline_launch(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    instance_name: &str,
+) {
     if let Some(nm) = app_handle.try_state::<crate::notifications::manager::NotificationManager>() {
         let _ = nm.create(crate::notifications::models::CreateNotificationInput {
             client_key: None,
@@ -772,7 +776,11 @@ pub(crate) fn notify_offline_launch(app_handle: &tauri::AppHandle, instance_name
             progress: None,
             current_step: None,
             total_steps: None,
-            metadata: None,
+            metadata: crate::notifications::models::NotificationContext::instance(
+                instance_id,
+                Some(instance_name.to_string()),
+            )
+            .metadata(),
             show_on_completion: None,
         });
     }

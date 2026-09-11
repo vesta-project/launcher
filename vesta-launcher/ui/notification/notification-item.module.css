@@ -34,6 +34,7 @@
 }
 
 .iconWrapper {
+	position: relative;
 	flex-shrink: 0;
 	width: 32px;
 	height: 32px;
@@ -50,6 +51,69 @@
 	fill: var(--primary-accent);
 }
 
+.contextIcon {
+	width: 20px;
+	height: 20px;
+	fill: var(--primary-accent);
+}
+
+.subjectImage {
+	width: 100%;
+	height: 100%;
+	border-radius: 8px;
+	object-fit: cover;
+}
+
+.statusBadge {
+	position: absolute;
+	right: -5px;
+	bottom: -5px;
+	display: grid;
+	width: 16px;
+	height: 16px;
+	place-items: center;
+	border: 2px solid var(--surface-raised);
+	border-radius: 5px;
+}
+
+.statusBadgeWarning {
+	color: contrast-color(var(--semantic-warning));
+	background: var(--semantic-warning);
+}
+
+.statusBadgeError {
+	color: contrast-color(var(--semantic-error));
+	background: var(--semantic-error);
+}
+
+.statusBadgeError::before,
+.statusBadgeError::after {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 8px;
+	height: 2px;
+	border-radius: 999px;
+	background: currentcolor;
+	content: "";
+}
+
+.statusBadgeError::before {
+	transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.statusBadgeError::after {
+	transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.statusBadgeWarningMark {
+	display: block;
+	font-size: 9px;
+	font-weight: 900;
+	line-height: 1;
+	transform: translate(0.5px, -0.5px);
+}
+
 .iconWarning {
 	fill: var(--semantic-warning);
 }
@@ -63,19 +127,20 @@
 	min-width: 0; /* Allow text truncate */
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 0;
 }
 
 .header {
 	display: flex;
 	justify-content: space-between;
-	align-items: baseline;
+	align-items: flex-start;
 	gap: 8px;
 	position: relative;
 }
 
 .title {
 	font-size: var(--font-xsmall);
+	line-height: 1;
 	font-weight: 700;
 	color: var(--text-primary);
 	white-space: normal;
@@ -88,6 +153,7 @@
 .headerActions {
 	position: relative;
 	display: flex;
+	height: 16px;
 	align-items: center;
 	justify-content: flex-end;
 	min-width: 40px; /* Ensure space for timestamp or button */
@@ -95,6 +161,8 @@
 
 .timestamp {
 	font-size: 10px;
+	line-height: 1;
+	transform: translateY(-4px);
 	color: var(--text-tertiary);
 	flex-shrink: 0;
 	transition: opacity 0.15s ease;
@@ -107,6 +175,7 @@
 
 .dismissBtn {
 	position: absolute;
+	top: 0;
 	right: 0;
 	width: 16px;
 	height: 16px;
@@ -129,6 +198,11 @@
 	pointer-events: auto;
 }
 
+.descriptionRegion {
+	position: relative;
+	line-height: 1.4;
+}
+
 .description {
 	font-size: 11px;
 	color: var(--text-secondary);
@@ -136,6 +210,56 @@
 	margin: 0;
 	user-select: text;
 	cursor: text;
+	overflow-wrap: anywhere;
+}
+
+.descriptionRegion:not(.descriptionRegionCollapsed) .description {
+	display: inline;
+}
+
+.descriptionCollapsed {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+}
+
+.descriptionToggle {
+	display: inline;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--text-secondary);
+	font: inherit;
+	font-size: 11px;
+	line-height: 1.4;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.descriptionRegion:not(.descriptionRegionCollapsed) .descriptionToggle {
+	margin-left: 4px;
+}
+
+.descriptionRegionCollapsed .description {
+	padding-right: 34px;
+}
+
+.descriptionRegionCollapsed .descriptionToggle {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+}
+
+.descriptionToggle:hover {
+	color: var(--text-primary);
+}
+
+.descriptionToggle:focus-visible {
+	border-radius: 2px;
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
 }
 
 .progressWrapper {

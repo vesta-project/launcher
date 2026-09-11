@@ -227,6 +227,13 @@ impl Task for InstallModpackTask {
         format!("Install Modpack {}", self.instance.name)
     }
 
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance.id,
+            Some(self.instance.name.clone()),
+        ))
+    }
+
     fn starting_description(&self) -> String {
         format!("Preparing to install modpack: {}", self.instance.name)
     }

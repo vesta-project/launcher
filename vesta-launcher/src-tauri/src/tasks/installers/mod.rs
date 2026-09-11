@@ -58,6 +58,13 @@ impl Task for InstallInstanceTask {
         Some(format!("install_instance_{}", self.instance.id))
     }
 
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance.id,
+            Some(self.instance.name.clone()),
+        ))
+    }
+
     fn cancellable(&self) -> bool {
         true
     }

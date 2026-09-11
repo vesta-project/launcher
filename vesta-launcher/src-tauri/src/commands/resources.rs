@@ -1571,7 +1571,9 @@ pub async fn install_resource(
     // Main resource
 
     // Fetch and cache main project metadata (including icon)
+    let mut project_icon_url = None;
     if let Ok(project) = resource_manager.get_project(platform, &project_id).await {
+        project_icon_url = project.icon_url.clone();
         let _ = resource_manager
             .cache_project_metadata(platform, &project)
             .await;
@@ -1582,6 +1584,7 @@ pub async fn install_resource(
         platform,
         project_id,
         project_name: project_name.clone(),
+        project_icon_url,
         version,
         resource_type: install_type,
         dependency_for: None,
@@ -1648,6 +1651,7 @@ pub async fn install_resource(
             platform: dep_project.source,
             project_id: dep_project.id.clone(),
             project_name: dep_project.name,
+            project_icon_url: dep_project.icon_url,
             version: dep_version,
             resource_type: dep_project.resource_type,
             dependency_for: Some(project_name.clone()),
