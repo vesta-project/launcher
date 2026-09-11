@@ -75,6 +75,27 @@ impl PreparedResourceCandidate {
     }
 }
 
+async fn refresh_prepared_candidates(
+    locals: Vec<PreparedResourceCandidate>,
+) -> Vec<PreparedResourceCandidate> {
+    stream::iter(locals.into_iter().map(|mut local| async move {
+        tokio::task::spawn_blocking(move || {
+            if local.refresh_path() {
+                Some(local)
+            } else {
+                None
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }))
+    .buffer_unordered(6)
+    .filter_map(|candidate| async move { candidate })
+    .collect()
+    .await
+}
+
 #[derive(Debug, Clone)]
 struct DiscoveredResourceCandidate {
     candidate: ResourceCandidate,
@@ -419,10 +440,10 @@ pub async fn reconcile_candidates(
 pub(crate) async fn reconcile_prepared_candidates(
     app: &AppHandle,
     instance_id: i32,
-    mut locals: Vec<PreparedResourceCandidate>,
+    locals: Vec<PreparedResourceCandidate>,
     reason: &str,
 ) -> Result<ReconciliationSummary> {
-    locals.retain_mut(PreparedResourceCandidate::refresh_path);
+    let locals = refresh_prepared_candidates(locals).await;
     let attempted = locals.len();
     if attempted == 0 {
         return Ok(ReconciliationSummary::default());
@@ -472,16 +493,14 @@ pub(crate) async fn reconcile_prepared_candidates(
         (HashMap::new(), HashMap::new())
     };
 
+    let locals = refresh_prepared_candidates(locals).await;
     let mut facts = Vec::with_capacity(locals.len());
     let mut peer_records = Vec::new();
     let mut metadata_refs = Vec::new();
     let mut seen_refs = HashSet::new();
     let mut identified = 0;
 
-    for mut local in locals {
-        if !local.refresh_path() {
-            continue;
-        }
+    for local in locals {
         let known_resolution = local.candidate.resolved.clone();
         let modrinth_match = local
             .sha1

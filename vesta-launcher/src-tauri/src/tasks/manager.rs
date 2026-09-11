@@ -202,6 +202,11 @@ pub trait Task: Send + Sync {
             _ => format!("Failed: {}", error),
         }
     }
+    /// Cancellable preparation that must not consume a global worker permit.
+    /// Task Manager runs this after conflict locks and before permit acquisition.
+    fn ready(&self, _ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
+        Box::pin(async { Ok(()) })
+    }
     /// Execute task work.
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>>;
 }
@@ -222,6 +227,12 @@ pub fn saves_conflict_key(instance_id: i32) -> String {
 
 pub fn resourcepacks_conflict_key(instance_id: i32) -> String {
     format!("resourcepacks:{instance_id}")
+}
+
+/// Shared launch/update exclusion for one Instance. Held across cancellable
+/// readiness waits so a launch cannot start Java while an update is queued.
+pub fn instance_play_conflict_key(instance_id: i32) -> String {
+    format!("instance-play:{instance_id}")
 }
 
 fn normalize_conflict_keys<I, S>(keys: I) -> Vec<String>
@@ -460,8 +471,125 @@ impl TaskManager {
                     );
                     let _conflict_guard = conflicts.acquire(conflict_keys).await;
 
-                    // Resource locks are acquired before a worker permit so tasks waiting on
-                    // another mutation do not consume the global concurrency allowance.
+                    let mut ctx = TaskContext {
+                        app_handle: app.clone(),
+                        notification_id: key_clone.clone(),
+                        notifications_enabled,
+                        cancel_rx: rx.clone(),
+                        pause_rx: pause_rx.clone(),
+                        progress_channel: progress_channel.clone(),
+                    };
+
+                    // Check if cancelled while waiting for conflict locks.
+                    if *ctx.cancel_rx.borrow() {
+                        if notifications_enabled {
+                            let manager = app.state::<NotificationManager>();
+                            if let Err(e) = manager.create(CreateNotificationInput {
+                                client_key: Some(key_clone.clone()),
+                                title: Some(task_name.clone()),
+                                description: Some("Task cancelled.".to_string()),
+                                severity: Some("warning".to_string()),
+                                notification_type: Some(NotificationType::Patient),
+                                dismissible: Some(true),
+                                persist: Some(true),
+                                silent: Some(false),
+                                actions: None,
+                                progress: None,
+                                current_step: None,
+                                total_steps: None,
+                                metadata: notification_context
+                                    .as_ref()
+                                    .and_then(NotificationContext::metadata),
+                                show_on_completion: None,
+                            }) {
+                                log::error!(
+                                    "Failed to create task-cancel notification for {}: {}",
+                                    key_clone,
+                                    e
+                                );
+                            }
+                        }
+                        if let Some(task_id) = task.id() {
+                            if task_id.starts_with("download_") || task_id.starts_with("download|")
+                            {
+                                let _ = app.emit("resource-install-error", task_id);
+                            }
+                        }
+                        if is_cancellable {
+                            tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        if is_pausable {
+                            p_tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        active_tasks.lock().unwrap().remove(&key_clone);
+                        return;
+                    }
+
+                    // Readiness runs under conflict exclusion but before a worker permit
+                    // so long waits (for example, Minecraft exit) do not stall unrelated work.
+                    log::info!("TaskManager: Running readiness for task: {}", task_name);
+                    if let Err(ready_error) = task.ready(ctx.clone()).await {
+                        log::error!("Task readiness failed: {}", ready_error);
+                        if let Some(ref channel) = ctx.progress_channel {
+                            let _ = channel.send(ProgressUpdate::Finished {
+                                success: false,
+                                message: Some(ready_error.to_string()),
+                            });
+                        }
+                        if let Some(task_id) = task.id() {
+                            if task_id.starts_with("download_") || task_id.starts_with("download|")
+                            {
+                                let _ = app.emit("resource-install-error", task_id);
+                            }
+                        }
+                        if notifications_enabled {
+                            let manager = app.state::<NotificationManager>();
+                            let cancelled = ready_error.to_ascii_lowercase().contains("cancel");
+                            if let Err(err) = manager.create(CreateNotificationInput {
+                                client_key: Some(key_clone.clone()),
+                                title: Some(task_name.clone()),
+                                description: Some(if cancelled {
+                                    "Task cancelled.".to_string()
+                                } else {
+                                    task.failure_description(&ready_error)
+                                }),
+                                severity: Some(if cancelled {
+                                    "warning".to_string()
+                                } else {
+                                    "error".to_string()
+                                }),
+                                notification_type: Some(NotificationType::Patient),
+                                dismissible: Some(true),
+                                persist: Some(true),
+                                silent: Some(false),
+                                actions: None,
+                                progress: None,
+                                current_step: None,
+                                total_steps: None,
+                                metadata: notification_context
+                                    .as_ref()
+                                    .and_then(NotificationContext::metadata),
+                                show_on_completion: Some(!cancelled),
+                            }) {
+                                log::error!(
+                                    "Failed to create task-readiness notification for {}: {}",
+                                    key_clone,
+                                    err
+                                );
+                            }
+                        }
+                        if is_cancellable {
+                            tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        if is_pausable {
+                            p_tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        active_tasks.lock().unwrap().remove(&key_clone);
+                        return;
+                    }
+
+                    // Resource locks and readiness complete before a worker permit so tasks
+                    // waiting on another mutation or game exit do not consume concurrency.
                     log::info!(
                         "TaskManager: Waiting for worker permit for task: {}",
                         task_name
@@ -485,12 +613,12 @@ impl TaskManager {
                     );
 
                     // Check if cancelled while waiting
-                    if *rx.borrow() {
+                    if *ctx.cancel_rx.borrow() {
                         if notifications_enabled {
                             let manager = app.state::<NotificationManager>();
                             if let Err(e) = manager.create(CreateNotificationInput {
                                 client_key: Some(key_clone.clone()),
-                                title: Some(task_name),
+                                title: Some(task_name.clone()),
                                 description: Some("Task cancelled.".to_string()),
                                 severity: Some("warning".to_string()),
                                 notification_type: Some(NotificationType::Patient),
@@ -534,14 +662,7 @@ impl TaskManager {
                         return;
                     }
 
-                    let ctx = TaskContext {
-                        app_handle: app.clone(),
-                        notification_id: key_clone.clone(),
-                        notifications_enabled,
-                        cancel_rx: rx,
-                        pause_rx,
-                        progress_channel,
-                    };
+                    ctx.progress_channel = progress_channel;
 
                     log::info!("TaskManager: Executing task: {}", task_name);
                     // Update initial progress to 0 and starting description.

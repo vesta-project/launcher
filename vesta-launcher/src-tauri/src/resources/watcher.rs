@@ -5,9 +5,10 @@ use crate::schema::installed_resource::dsl as ir_dsl;
 use anyhow::Result;
 use notify::{Config, Event, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
 use tauri::{AppHandle, Emitter, Manager};
@@ -32,10 +33,22 @@ pub struct ScanProgressSnapshot {
     pub failed: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WatcherToken {
+    db_id: i32,
+    identity: u64,
+}
+
+struct WatcherRegistration {
+    identity: u64,
+    watcher: notify::RecommendedWatcher,
+    worker: Option<tauri::async_runtime::JoinHandle<()>>,
+}
+
 pub struct ResourceWatcher {
     app_handle: AppHandle,
-    // Map of db_id -> watcher
-    watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>,
+    watchers: Arc<Mutex<HashMap<i32, WatcherRegistration>>>,
+    next_identity: AtomicU64,
 }
 
 pub fn modpack_provenance_for_instance(instance_id: i32) -> Result<ResourceProvenance> {
@@ -47,6 +60,7 @@ impl ResourceWatcher {
         Self {
             app_handle,
             watchers: Arc::new(Mutex::new(HashMap::new())),
+            next_identity: AtomicU64::new(1),
         }
     }
 
@@ -83,6 +97,8 @@ impl ResourceWatcher {
 
         let game_path = PathBuf::from(&game_dir);
         let folders_to_watch = ["mods", "resourcepacks", "shaderpacks"];
+        let identity = self.next_identity.fetch_add(1, Ordering::Relaxed);
+        let token = WatcherToken { db_id, identity };
 
         let app_handle = self.app_handle.clone();
         let watchers_ptr = self.watchers.clone();
@@ -122,64 +138,84 @@ impl ResourceWatcher {
             );
         }
 
-        {
-            let mut watchers = self.watchers.lock().await;
-            // Double-check after watcher creation to avoid duplicate registration races.
-            if watchers.contains_key(&db_id) {
-                return Ok(());
-            }
-            watchers.insert(db_id, watcher);
-        }
-
-        // Handle events in a separate task
-        tauri::async_runtime::spawn(async move {
+        let worker = tauri::async_runtime::spawn(async move {
             while let Some(first_event) = rx.recv().await {
                 let mut events = vec![first_event];
                 let deadline = tokio::time::Instant::now() + Duration::from_millis(180);
                 while let Ok(Some(event)) = tokio::time::timeout_at(deadline, rx.recv()).await {
                     events.push(event);
                 }
-                // Check if still watched before handling
-                let is_watched = {
-                    let w = watchers_ptr.lock().await;
-                    w.contains_key(&db_id)
-                };
-                if is_watched {
-                    let missed_events = overflowed.swap(false, Ordering::AcqRel);
-                    let topology_changed = handle_events(&app_handle, db_id, events).await;
-                    if missed_events {
-                        if let Err(error) = app_handle
-                            .state::<ResourceWatcher>()
-                            .refresh_instance(db_id, game_path.to_string_lossy().into_owned())
-                            .await
-                        {
-                            log::warn!("[ResourceWatcher] Overflow reconciliation failed: {error}");
-                        }
-                    }
-                    if topology_changed || missed_events {
-                        if let Some(watcher) = watchers_ptr.lock().await.get_mut(&db_id) {
-                            for datapacks in world_datapack_directories(&game_path) {
-                                if let Err(error) =
-                                    watcher.watch(&datapacks, RecursiveMode::NonRecursive)
-                                {
-                                    log::debug!(
-                                        "[ResourceWatcher] World datapack watch unchanged for {:?}: {}",
-                                        datapacks,
-                                        error
-                                    );
-                                }
-                            }
-                        }
-                    }
-                } else {
+                if !registration_is_current(&watchers_ptr, token).await {
                     log::debug!(
-                        "[ResourceWatcher] Dropping event for db_id {} as it is no longer watched",
-                        db_id
+                        "[ResourceWatcher] Dropping queued work for stale registration {}/{}",
+                        token.db_id,
+                        token.identity
                     );
                     break;
                 }
+
+                let missed_events = overflowed.swap(false, Ordering::AcqRel);
+                let Some(topology_changed) =
+                    handle_events(&app_handle, token, &watchers_ptr, events).await
+                else {
+                    break;
+                };
+                if !registration_is_current(&watchers_ptr, token).await {
+                    break;
+                }
+                if missed_events {
+                    if let Err(error) = app_handle
+                        .state::<ResourceWatcher>()
+                        .refresh_instance(db_id, game_path.to_string_lossy().into_owned())
+                        .await
+                    {
+                        log::warn!("[ResourceWatcher] Overflow reconciliation failed: {error}");
+                    }
+                    if !registration_is_current(&watchers_ptr, token).await {
+                        break;
+                    }
+                }
+                if topology_changed || missed_events {
+                    let mut watchers = watchers_ptr.lock().await;
+                    let Some(registration) = watchers.get_mut(&db_id) else {
+                        break;
+                    };
+                    if registration.identity != identity {
+                        break;
+                    }
+                    for datapacks in world_datapack_directories(&game_path) {
+                        if let Err(error) = registration
+                            .watcher
+                            .watch(&datapacks, RecursiveMode::NonRecursive)
+                        {
+                            log::debug!(
+                                "[ResourceWatcher] World datapack watch unchanged for {:?}: {}",
+                                datapacks,
+                                error
+                            );
+                        }
+                    }
+                }
             }
         });
+
+        {
+            let mut watchers = self.watchers.lock().await;
+            // Double-check after watcher creation to avoid duplicate registration races.
+            if watchers.contains_key(&db_id) {
+                drop(watcher);
+                worker.abort();
+                return Ok(());
+            }
+            watchers.insert(
+                db_id,
+                WatcherRegistration {
+                    identity,
+                    watcher,
+                    worker: Some(worker),
+                },
+            );
+        }
 
         // Initial scan after watcher registration so worker tasks don't block on is_watched checks.
         if initial_scan {
@@ -189,10 +225,19 @@ impl ResourceWatcher {
         Ok(())
     }
 
-    /// Stop watching an instance's resource folders
+    /// Stop watching an instance's resource folders.
+    ///
+    /// Returns only after the previous worker can no longer publish stale rows.
     pub async fn unwatch_instance(&self, db_id: i32) -> anyhow::Result<()> {
-        let mut watchers = self.watchers.lock().await;
-        if watchers.remove(&db_id).is_some() {
+        let removed = {
+            let mut watchers = self.watchers.lock().await;
+            watchers.remove(&db_id)
+        };
+        if let Some(mut registration) = removed {
+            drop(registration.watcher);
+            if let Some(worker) = registration.worker.take() {
+                let _ = worker.await;
+            }
             log::info!("[ResourceWatcher] Unwatched instance ID: {}", db_id);
         }
         Ok(())
@@ -207,8 +252,7 @@ impl ResourceWatcher {
     }
 
     pub async fn stop_watching(&self, db_id: i32) {
-        let mut watchers = self.watchers.lock().await;
-        watchers.remove(&db_id);
+        let _ = self.unwatch_instance(db_id).await;
     }
 
     /// Attaches non-recursive watches for datapack directories belonging to
@@ -219,11 +263,14 @@ impl ResourceWatcher {
         game_dir: impl AsRef<Path>,
     ) -> anyhow::Result<()> {
         let mut watchers = self.watchers.lock().await;
-        let Some(watcher) = watchers.get_mut(&db_id) else {
+        let Some(registration) = watchers.get_mut(&db_id) else {
             return Ok(());
         };
         for datapacks in world_datapack_directories(game_dir.as_ref()) {
-            if let Err(error) = watcher.watch(&datapacks, RecursiveMode::NonRecursive) {
+            if let Err(error) = registration
+                .watcher
+                .watch(&datapacks, RecursiveMode::NonRecursive)
+            {
                 log::debug!(
                     "[ResourceWatcher] World datapack watch unchanged for {:?}: {}",
                     datapacks,
@@ -250,24 +297,37 @@ impl ResourceWatcher {
         let game_path = PathBuf::from(&game_dir);
         let folders_to_watch = ["mods", "resourcepacks", "shaderpacks"];
         let mut paths = Vec::new();
-        let mut existing_folders = Vec::new();
+        let mut cleanup_folders = Vec::new();
         for folder in folders_to_watch {
             let folder_path = game_path.join(folder);
-            if !folder_path.exists() {
-                continue;
+            match classify_instance_resource_root(&folder_path) {
+                ResourceRootState::ReadableDirectory => {
+                    cleanup_folders.push(folder_path.clone());
+                    paths.extend(
+                        WalkDir::new(&folder_path)
+                            .max_depth(1)
+                            .into_iter()
+                            .filter_map(|entry| entry.ok())
+                            .filter(|entry| {
+                                entry.file_type().is_file() && is_resource_file(entry.path())
+                            })
+                            .map(|entry| entry.path().to_path_buf()),
+                    );
+                }
+                ResourceRootState::Absent => {
+                    // Deleted roots still need scoped Ledger cleanup.
+                    cleanup_folders.push(folder_path);
+                }
+                ResourceRootState::Unreadable => {
+                    log::warn!(
+                        "[ResourceWatcher] Preserving Ledger rows for unreadable root {:?}",
+                        folder_path
+                    );
+                }
             }
-            existing_folders.push(folder_path.clone());
-            paths.extend(
-                WalkDir::new(&folder_path)
-                    .max_depth(1)
-                    .into_iter()
-                    .filter_map(|entry| entry.ok())
-                    .filter(|entry| entry.file_type().is_file() && is_resource_file(entry.path()))
-                    .map(|entry| entry.path().to_path_buf()),
-            );
         }
         for folder_path in world_datapack_directories(&game_path) {
-            existing_folders.push(folder_path.clone());
+            cleanup_folders.push(folder_path.clone());
             paths.extend(
                 WalkDir::new(&folder_path)
                     .max_depth(1)
@@ -289,7 +349,7 @@ impl ResourceWatcher {
             });
         }
         let mut removed = 0;
-        for folder in existing_folders {
+        for folder in cleanup_folders {
             removed += self
                 .cleanup_missing_resources(db_id, &folder)
                 .await
@@ -333,6 +393,32 @@ impl ResourceWatcher {
     }
 }
 
+async fn registration_is_current(
+    watchers: &Mutex<HashMap<i32, WatcherRegistration>>,
+    token: WatcherToken,
+) -> bool {
+    let watchers = watchers.lock().await;
+    watchers
+        .get(&token.db_id)
+        .is_some_and(|registration| registration.identity == token.identity)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResourceRootState {
+    ReadableDirectory,
+    Absent,
+    Unreadable,
+}
+
+fn classify_instance_resource_root(path: &Path) -> ResourceRootState {
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_dir() => ResourceRootState::ReadableDirectory,
+        Ok(_) => ResourceRootState::Unreadable,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => ResourceRootState::Absent,
+        Err(_) => ResourceRootState::Unreadable,
+    }
+}
+
 fn preferred_platform_for_instance(instance_id: i32) -> Option<SourcePlatform> {
     use crate::models::instance::Instance;
     use crate::schema::instance::dsl as instance_dsl;
@@ -369,9 +455,15 @@ fn instance_name_for_log(instance_id: i32) -> String {
         .unwrap_or_else(|| "unknown instance".to_string())
 }
 
-async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool {
+async fn handle_events(
+    app: &AppHandle,
+    token: WatcherToken,
+    watchers: &Mutex<HashMap<i32, WatcherRegistration>>,
+    events: Vec<Event>,
+) -> Option<bool> {
     use notify::EventKind;
 
+    let db_id = token.db_id;
     let mut changed = HashSet::new();
     let mut removed = HashSet::new();
     let mut world_topology_changed = false;
@@ -423,6 +515,9 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
         }
     }
     changed.retain(|path| !removed.contains(path));
+    if !registration_is_current(watchers, token).await {
+        return None;
+    }
     if !changed.is_empty() {
         let candidates = crate::resources::reconciliation::candidates_from_paths(
             changed,
@@ -443,10 +538,16 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
                 error
             );
         }
+        if !registration_is_current(watchers, token).await {
+            return None;
+        }
     }
 
     let mut removed_any = false;
     for path in removed {
+        if !registration_is_current(watchers, token).await {
+            return None;
+        }
         let removed_world = path
             .parent()
             .and_then(Path::file_name)
@@ -465,6 +566,9 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
                 error
             ),
         }
+    }
+    if !registration_is_current(watchers, token).await {
+        return None;
     }
     if removed_any {
         let _ =
@@ -492,7 +596,7 @@ async fn handle_events(app: &AppHandle, db_id: i32, events: Vec<Event>) -> bool 
             "datapack-filesystem",
         );
     }
-    world_topology_changed
+    Some(world_topology_changed)
 }
 
 fn world_ref_for_datapack_path(
@@ -611,6 +715,8 @@ pub fn resolve_override_conflicts(
     }
 
     let mut to_disable: Vec<(InstalledResource, InstalledResource)> = Vec::new();
+    let mut enablement_changes: Vec<crate::resources::ledger::EnablementChange> = Vec::new();
+    let mut queued_ids = HashSet::new();
     for group in groups {
         let winner_id = choose_duplicate_winner(&group);
         let Some(winner) = group
@@ -620,20 +726,29 @@ pub fn resolve_override_conflicts(
         else {
             continue;
         };
-        if !winner.is_enabled {
-            crate::resources::ledger::set_enabled(winner.id, true)?;
+        if !winner.is_enabled && queued_ids.insert(winner.id) {
+            enablement_changes.push(crate::resources::ledger::EnablementChange {
+                resource_id: winner.id,
+                enabled: true,
+            });
         }
         for loser in group
             .into_iter()
             .filter(|resource| resource.id != winner_id && resource.is_enabled)
         {
             if !to_disable.iter().any(|(queued, _)| queued.id == loser.id) {
+                if queued_ids.insert(loser.id) {
+                    enablement_changes.push(crate::resources::ledger::EnablementChange {
+                        resource_id: loser.id,
+                        enabled: false,
+                    });
+                }
                 to_disable.push((loser, winner.clone()));
             }
         }
     }
 
-    if to_disable.is_empty() {
+    if enablement_changes.is_empty() {
         if pruned_missing > 0 {
             crate::resources::reconciliation::emit_rows_changed(
                 app,
@@ -644,19 +759,18 @@ pub fn resolve_override_conflicts(
         return Ok(());
     }
 
+    crate::resources::ledger::apply_enablement_batch(instance_id, &enablement_changes)?;
+
     let mut disabled: Vec<String> = Vec::new();
     for (loser, winner) in to_disable {
-        let result = crate::resources::ledger::disable_resource(instance_id, loser.id)?;
-        if result.disabled {
-            disabled.push(format!(
-                "{} ({} {} → {} {})",
-                loser.display_name,
-                owner_label(&loser),
-                loser.current_version,
-                owner_label(&winner),
-                winner.current_version
-            ));
-        }
+        disabled.push(format!(
+            "{} ({} {} → {} {})",
+            loser.display_name,
+            owner_label(&loser),
+            loser.current_version,
+            owner_label(&winner),
+            winner.current_version
+        ));
     }
 
     crate::resources::reconciliation::emit_rows_changed(
@@ -767,8 +881,8 @@ fn choose_duplicate_winner(resources: &[InstalledResource]) -> i32 {
 #[cfg(test)]
 mod world_datapack_event_tests {
     use super::{
-        choose_duplicate_winner, conflict_candidate_enabled, duplicate_candidate,
-        world_ref_for_datapack_path,
+        choose_duplicate_winner, classify_instance_resource_root, conflict_candidate_enabled,
+        duplicate_candidate, world_ref_for_datapack_path, ResourceRootState,
     };
     use crate::models::installed_resource::InstalledResource;
     use std::path::Path;
@@ -916,5 +1030,26 @@ mod world_datapack_event_tests {
             Path::new("/instances/example/saves/My World/data/foo"),
         )
         .is_none());
+    }
+
+    #[test]
+    fn classifies_absent_and_readable_resource_roots() {
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        assert_eq!(
+            classify_instance_resource_root(&mods),
+            ResourceRootState::Absent
+        );
+        std::fs::create_dir(&mods).unwrap();
+        assert_eq!(
+            classify_instance_resource_root(&mods),
+            ResourceRootState::ReadableDirectory
+        );
+        let file_root = temp.path().join("resourcepacks");
+        std::fs::write(&file_root, b"not-a-dir").unwrap();
+        assert_eq!(
+            classify_instance_resource_root(&file_root),
+            ResourceRootState::Unreadable
+        );
     }
 }
