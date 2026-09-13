@@ -20,6 +20,7 @@ mod sentry_init;
 mod setup;
 mod startup;
 mod sync;
+mod settings_sync;
 mod tasks;
 pub mod utils;
 pub mod worlds;
@@ -155,6 +156,8 @@ fn main() {
             commands::keybindings::set_keybinding,
             commands::keybindings::clear_keybinding,
             commands::keybindings::reset_keybinding,
+            settings_sync::get_settings_sync,
+            settings_sync::save_settings_sync,
             commands::app::open_app_config_dir,
             commands::app::open_app_runtime_storage_dir,
             commands::app::clear_cache,

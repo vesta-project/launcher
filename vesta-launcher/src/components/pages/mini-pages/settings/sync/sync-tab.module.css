@@ -1,0 +1,270 @@
+.error {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 0;
+	padding: 12px 24px;
+	border-bottom: 1px solid
+		color-mix(in srgb, var(--border-subtle) 50%, transparent);
+	color: var(--text-primary);
+	font-size: var(--font-xsmall);
+}
+
+.loading {
+	margin: 0;
+	padding: 20px 8px;
+	color: var(--text-secondary);
+	font-size: var(--font-small);
+	text-align: center;
+}
+
+.categories,
+.members {
+	display: flex;
+	flex-direction: column;
+	margin-inline-start: -8px;
+}
+
+.heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 20px;
+	margin: 0 0 12px -8px;
+}
+
+.headingTitle {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 1rem;
+	font-weight: 650;
+	line-height: 1.3;
+}
+
+.back {
+	flex: 0 0 auto;
+	margin: 0 0 0 -6px;
+	gap: 6px;
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 40px;
+	padding: 4px 0;
+}
+
+.row + .row {
+	border-top: 1px solid
+		color-mix(in srgb, var(--border-subtle) 45%, transparent);
+}
+
+.category {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 1;
+	min-width: 0;
+	min-height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.category:hover {
+	background: color-mix(in srgb, var(--surface-overlay) 70%, transparent);
+}
+
+.category:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
+}
+
+.mark {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	flex: 0 0 auto;
+	border: 1px solid var(--border-subtle);
+	border-radius: 7px;
+	background: var(--surface-raised);
+	color: var(--text-secondary);
+}
+
+.mark svg {
+	width: 15px;
+	height: 15px;
+	display: block;
+	color: currentColor;
+}
+
+.markFilled svg {
+	fill: currentColor;
+}
+
+.copy {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.title {
+	overflow: hidden;
+	color: var(--text-primary);
+	font-size: var(--font-small);
+	font-weight: 650;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.meta {
+	overflow: hidden;
+	color: var(--text-secondary);
+	font-size: 11px;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.actions {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+}
+
+.icon {
+	width: 14px;
+	height: 14px;
+	display: block;
+	color: currentColor;
+}
+
+.filters {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0 0 8px -8px;
+}
+
+.scopeToggle :global(.v-toggle-group__item) {
+	gap: 6px;
+}
+
+.search {
+	position: relative;
+	margin: 0 0 8px -8px;
+}
+
+.filters .search {
+	flex: 1;
+	min-width: min(100%, 160px);
+	margin: 0;
+}
+
+.searchIcon {
+	position: absolute;
+	top: 50%;
+	left: 10px;
+	width: 14px;
+	height: 14px;
+	transform: translateY(-50%);
+	color: var(--text-secondary);
+	pointer-events: none;
+}
+
+.searchInput {
+	padding-left: 32px;
+}
+
+.instanceIcon,
+.instanceFallback {
+	width: 28px;
+	height: 28px;
+	flex: 0 0 auto;
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+}
+
+.instanceIcon {
+	background-position: center;
+	background-size: cover;
+}
+
+.instanceFallback {
+	display: grid;
+	place-items: center;
+	background: hsl(var(--color__primary-hue) 40% 30%);
+	color: #fff;
+	font-size: 12px;
+	font-weight: 650;
+}
+
+.bulkRow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 0 12px;
+}
+
+.hint {
+	flex: 1;
+	margin: 8px 0 0;
+	color: var(--text-secondary);
+	font-size: var(--font-xsmall);
+	line-height: 1.4;
+}
+
+.empty {
+	margin: 8px 0 0;
+	color: var(--text-secondary);
+	font-size: var(--font-xsmall);
+}
+
+.srOnly {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+.sharedControl {
+	gap: 8px;
+}
+
+.squareToggle {
+	flex-shrink: 0;
+}
+
+.bulkToggle {
+	flex-shrink: 0;
+}
+
+.filters .bulkToggle {
+	margin-left: auto;
+}
+
+.squareToggle :global(.v-toggle-group__item--icon-only) {
+	width: 32px;
+	height: 32px;
+	min-height: 32px;
+	padding: 0;
+}
