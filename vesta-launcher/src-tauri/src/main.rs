@@ -4,6 +4,7 @@
 pub mod auth;
 mod commands;
 pub mod discord;
+pub mod game_options;
 mod game_options_file;
 mod instance;
 mod launcher_import;
