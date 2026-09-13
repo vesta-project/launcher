@@ -5,6 +5,9 @@ pub enum FileClass {
     Binary,
     /// Structured text files that support key-value delta merging
     Text,
+    /// The user-owned Minecraft options document. It is handed to
+    /// `settings_sync`; the pack sync engine must never treat it as a blob.
+    Options,
 }
 
 /// Classify a file path into one of the three sync categories.
@@ -17,6 +20,10 @@ pub fn classify(path: &str) -> FileClass {
     }
 
     // Tracked structured text configs
+    if lower == "options.txt" {
+        return FileClass::Options;
+    }
+
     if is_config_text(&lower) {
         return FileClass::Text;
     }
@@ -42,8 +49,7 @@ fn is_config_text(lower_path: &str) -> bool {
         || lower_path.ends_with(".txt");
 
     // options.txt and servers.dat are user files, not pack configs
-    let is_user_file = lower_path == "options.txt"
-        || lower_path == "servers.dat"
+    let is_user_file = lower_path == "servers.dat"
         || lower_path == "optionsof.txt"
         || lower_path == "hotbar.nbt";
 
@@ -89,7 +95,7 @@ mod tests {
 
     #[test]
     fn test_classify_user_files_not_text() {
-        assert_eq!(classify("options.txt"), FileClass::Binary);
+        assert_eq!(classify("options.txt"), FileClass::Options);
         assert_eq!(classify("servers.dat"), FileClass::Binary);
     }
 
