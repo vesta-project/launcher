@@ -7,11 +7,7 @@ import {
 } from "@solidjs/testing-library";
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import {
-	categories,
-	gameOptionKeys,
-	type Snapshot,
-} from "~/settings-sync/model";
+import { categories, type Snapshot } from "~/settings-sync/model";
 import { SyncSettingsTab } from "./SyncTab";
 
 vi.mock("@tauri-apps/api/core", async (original) => ({
@@ -51,6 +47,7 @@ vi.mock("@ui/slider/slider", () => {
 		disabled?: boolean;
 		"aria-label"?: string;
 		onChange?: (value: number[]) => void;
+		onChangeEnd?: (value: number[]) => void;
 	}) {
 		return (
 			<input
@@ -65,6 +62,7 @@ vi.mock("@ui/slider/slider", () => {
 				onInput={(event) => {
 					const next = Number((event.currentTarget as HTMLInputElement).value);
 					props.onChange?.([next]);
+					props.onChangeEnd?.([next]);
 				}}
 			/>
 		);
@@ -76,6 +74,17 @@ vi.mock("@ui/slider/slider", () => {
 		SliderThumb: () => null,
 	};
 });
+const gameOptionKeys = [
+	"fov",
+	"fullscreen",
+	"bobView",
+	"invertYMouse",
+	"mouseSensitivity",
+	"soundCategory_master",
+	"soundCategory_music",
+	"lang",
+	"renderDistance",
+];
 let state: Snapshot[];
 beforeEach(() => {
 	const computedStyle = window.getComputedStyle.bind(window);
@@ -90,8 +99,8 @@ beforeEach(() => {
 	vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
 	state = categories.map((category) => ({
 		category,
-		gameOptionValues: {
-			fov: "0.5",
+		sharedValues: {
+			fov: "90",
 			fullscreen: "false",
 			bobView: "true",
 			invertYMouse: "false",
@@ -99,7 +108,17 @@ beforeEach(() => {
 			soundCategory_master: "1",
 			soundCategory_music: "0.5",
 			lang: "en_us",
+			renderDistance: "12",
 		},
+		catalog: gameOptionKeys.map((key) => ({
+			key,
+			category: "video",
+			labelId: "sync-option-" + key,
+			kind: key === "fov" ? ("decimal" as const) : ("text" as const),
+			min: 30,
+			max: 110,
+			step: 1,
+		})),
 		revision: 0,
 		preferences: { enabled: false, sourceInstanceId: null, instanceIds: [] },
 	}));
@@ -113,9 +132,9 @@ beforeEach(() => {
 				...current,
 				...args,
 				revision: args.revision + 1,
-				gameOptionValues: {
-					...current?.gameOptionValues,
-					...args.gameOptionChanges,
+				sharedValues: {
+					...current?.sharedValues,
+					...args.changes,
 				},
 			};
 			state = state.map((item) =>
@@ -149,7 +168,7 @@ it("enables servers immediately without asking for a source", async () => {
 		await screen.findByRole("switch", { name: "sync-servers-title" }),
 	);
 	await waitFor(() =>
-		expect(state[1].preferences).toEqual({
+		expect(state.find((s) => s.category === "servers")!.preferences).toEqual({
 			enabled: true,
 			sourceInstanceId: null,
 			instanceIds: [],
@@ -210,16 +229,16 @@ it("selects individual options and all or none without changing membership", asy
 		screen.getByRole("button", { name: "sync-option-label sync-option-fov" }),
 	);
 	await waitFor(() =>
-		expect(state[0].preferences.gameOptionKeys).toEqual(
+		expect(state[0].preferences.selectedKeys).toEqual(
 			gameOptionKeys.filter((key) => key !== "fov"),
 		),
 	);
 	fireEvent.click(screen.getByRole("button", { name: "sync-all" }));
 	await waitFor(() =>
-		expect(state[0].preferences.gameOptionKeys).toEqual(gameOptionKeys),
+		expect(state[0].preferences.selectedKeys).toEqual(gameOptionKeys),
 	);
 	fireEvent.click(screen.getByRole("button", { name: "sync-unsync-all" }));
-	await waitFor(() => expect(state[0].preferences.gameOptionKeys).toEqual([]));
+	await waitFor(() => expect(state[0].preferences.selectedKeys).toEqual([]));
 	expect(state[0].preferences.instanceIds).toEqual([1]);
 	expect(state[0].preferences.enabled).toBe(true);
 });
@@ -231,14 +250,14 @@ it("keeps the prior selection when saving fails", async () => {
 	vi.mocked(invoke).mockRejectedValueOnce(new Error("Changed elsewhere"));
 	fireEvent.click(screen.getByRole("button", { name: "sync-unsync-all" }));
 	expect(await screen.findByRole("alert")).toBeTruthy();
-	expect(state[0].preferences.gameOptionKeys ?? gameOptionKeys).toEqual(
+	expect(state[0].preferences.selectedKeys ?? gameOptionKeys).toEqual(
 		gameOptionKeys,
 	);
 });
 
 it("saves a shared value in its native format and keeps absent values unavailable", async () => {
 	state[0].preferences.enabled = true;
-	delete state[0].gameOptionValues?.lang;
+	delete state[0].sharedValues?.lang;
 	render(() => <SyncSettingsTab />);
 	await openSharedOptions();
 	const fov = screen.getByRole("slider", {
@@ -246,26 +265,28 @@ it("saves a shared value in its native format and keeps absent values unavailabl
 	});
 	fireEvent.input(fov, { target: { value: "100" } });
 	fireEvent.blur(fov);
-	await waitFor(() => expect(state[0].gameOptionValues?.fov).toBe("0.75"));
+	await waitFor(() => expect(state[0].sharedValues?.fov).toBe("100"));
 	expect(
-		screen
-			.getByRole("textbox", { name: "sync-value-label sync-option-language" })
-			.hasAttribute("disabled"),
-	).toBe(true);
+		screen.queryByRole("textbox", {
+			name: "sync-value-label sync-option-lang",
+		}),
+	).toBeNull();
 });
 
-it("can prepare all instance memberships while sync is paused", async () => {
+it("freezes instance membership while sync is paused", async () => {
 	render(() => <SyncSettingsTab />);
 	fireEvent.click(
 		await screen.findByRole("button", {
 			name: "sync-edit sync-gameOptions-title",
 		}),
 	);
-	fireEvent.click(screen.getByRole("button", { name: "sync-all-instances" }));
-	await waitFor(() => expect(state[0].preferences.instanceIds).toEqual([1, 2]));
-	expect(state[0].preferences.enabled).toBe(false);
-	fireEvent.click(screen.getByRole("button", { name: "sync-unsync-all" }));
-	await waitFor(() => expect(state[0].preferences.instanceIds).toEqual([]));
+	const all = screen.getByRole("button", { name: "sync-all-instances" });
+	const one = screen.getByRole("button", { name: "sync-instance-label Local" });
+	expect(all.hasAttribute("disabled")).toBe(true);
+	expect(one.hasAttribute("disabled")).toBe(true);
+	fireEvent.click(all);
+	fireEvent.click(one);
+	expect(state[0].preferences.instanceIds).toEqual([]);
 });
 
 it("seeds defaults once, then tracks membership without showing a source", async () => {
@@ -307,4 +328,46 @@ it("seeds defaults once, then tracks membership without showing a source", async
 			await screen.findByRole("switch", { name: "sync-gameOptions-title" })
 		).getAttribute("aria-checked"),
 	).toBe("true");
+});
+
+it("keybinds asks for an owner and uses the shared recorder", async () => {
+	state[1].sharedValues = { "key_key.forward": "key.keyboard.w" };
+	render(() => <SyncSettingsTab />);
+	fireEvent.click(
+		await screen.findByRole("switch", { name: "sync-keybinds-title" }),
+	);
+	expect(await screen.findByRole("dialog")).toBeTruthy();
+	fireEvent.click(screen.getByText("Source"));
+	await waitFor(() => expect(state[1].preferences.sourceInstanceId).toBe(1));
+	await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	fireEvent.click(
+		screen.getByRole("button", { name: "sync-edit sync-keybinds-title" }),
+	);
+	fireEvent.click(screen.getByRole("button", { name: "sync-edit-shared" }));
+	fireEvent.click(
+		await screen.findByRole("button", {
+			name: "game-options-key-change Forward",
+		}),
+	);
+	fireEvent.keyDown(window, { code: "KeyQ", key: "q" });
+	await waitFor(() =>
+		expect(state[1].sharedValues?.["key_key.forward"]).toBe("key.keyboard.q"),
+	);
+	fireEvent.click(
+		screen.getByRole("button", { name: "game-options-key-change Forward" }),
+	);
+	fireEvent.mouseDown(window, { button: 2 });
+	await waitFor(() =>
+		expect(state[1].sharedValues?.["key_key.forward"]).toBe("key.mouse.right"),
+	);
+	expect(state[0].preferences.enabled).toBe(false);
+});
+it("resource packs remain preferences only and need no owner", async () => {
+	render(() => <SyncSettingsTab />);
+	fireEvent.click(
+		await screen.findByRole("switch", { name: "sync-resourcePacks-title" }),
+	);
+	await waitFor(() => expect(state[3].preferences.enabled).toBe(true));
+	expect(state[3].preferences.sourceInstanceId).toBeNull();
+	expect(screen.queryByRole("dialog")).toBeNull();
 });

@@ -1,11 +1,9 @@
-import EditIcon from "@assets/icons/actions/edit.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
 import { SettingsCard, SettingsField } from "@components/settings";
 import LauncherButton from "@ui/button/button";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { t } from "~/localization";
 import styles from "../pages/mini-pages/settings/keyboard/keyboard-tab.module.css";
-import optionStyles from "./game-options.module.css";
 
 export interface GameKeybindingRow {
 	key: string;
@@ -73,12 +71,15 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 	const [recording, setRecording] = createSignal<string>();
 	const [status, setStatus] = createSignal("");
 	const bindings = () =>
-		props.state.rows().filter(
-			(row) => row.category === "keybindings" || row.category === "keybinds",
-		);
+		props.state
+			.rows()
+			.filter(
+				(row) => row.category === "keybindings" || row.category === "keybinds",
+			);
 	const supported = (key: string) => {
 		const value = props.state.value(key);
 		return (
+			/^-?\d+$/.test(value) ||
 			value === "" ||
 			value === "key.keyboard.unknown" ||
 			/^key\.(keyboard|mouse)\./.test(value)
@@ -122,6 +123,21 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 			setRecording(undefined);
 			setStatus("");
 		};
+		const captureMouse = (event: MouseEvent) => {
+			const key = recording();
+			if (!key || props.state.busy()) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			const name =
+				["left", "middle", "right"][event.button] ?? String(event.button + 1);
+			void props.state.change(key, `key.mouse.${name}`);
+			setRecording(undefined);
+			setStatus("");
+		};
+		window.addEventListener("mousedown", captureMouse, true);
+		onCleanup(() =>
+			window.removeEventListener("mousedown", captureMouse, true),
+		);
 		window.addEventListener("keydown", capture, true);
 		onCleanup(() => window.removeEventListener("keydown", capture, true));
 	});
@@ -132,7 +148,6 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 	return (
 		<SettingsCard
 			header={t("sync-keybinds-page-title")}
-			headerIcon={<EditIcon class={optionStyles.icon} />}
 			subHeader={t("game-options-key-help")}
 			headerRight={
 				<div class={styles.recordingHelp} aria-label={t("sync-keybinds-help")}>
@@ -195,14 +210,16 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 													setRecording(next);
 													setStatus(
 														next
-														? t("game-options-key-recording")
-														: t("game-options-key-cancelled"),
+															? t("game-options-key-recording")
+															: t("game-options-key-cancelled"),
 													);
 												}}
 											>
 												<Show
 													when={!isRecording()}
-													fallback={<span>{t("game-options-key-recording")}</span>}
+													fallback={
+														<span>{t("game-options-key-recording")}</span>
+													}
 												>
 													<kbd>{display(row.key)}</kbd>
 												</Show>
@@ -215,9 +232,14 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 													!supported(row.key) ||
 													(props.selected !== undefined && !isSelected())
 												}
-												aria-label={t("game-options-key-clear", { key: name() })}
+												aria-label={t("game-options-key-clear", {
+													key: name(),
+												})}
 												onClick={() => {
-													void props.state.change(row.key, "key.keyboard.unknown");
+													void props.state.change(
+														row.key,
+														"key.keyboard.unknown",
+													);
 													setRecording(undefined);
 												}}
 											>
@@ -227,7 +249,9 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 												<button
 													type="button"
 													class={styles.selection}
-													aria-label={t("sync-option-label", { option: name() })}
+													aria-label={t("sync-option-label", {
+														option: name(),
+													})}
 													aria-pressed={isSelected()}
 													disabled={props.state.busy()}
 													onClick={() =>

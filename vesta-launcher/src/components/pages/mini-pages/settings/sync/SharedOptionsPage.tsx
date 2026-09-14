@@ -27,13 +27,7 @@ import {
 } from "@ui/switch/switch";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
-import {
-	type Component,
-	createMemo,
-	createSignal,
-	For,
-	Show,
-} from "solid-js";
+import { type Component, createMemo, createSignal, For, Show } from "solid-js";
 import { t } from "~/localization";
 import {
 	type GameOptionChoice,
@@ -84,7 +78,10 @@ function decimalPlaces(step: number): number {
 	return decimal < 0 ? 0 : text.length - decimal - 1;
 }
 
-function serializeNumber(value: number, step: number | null | undefined): string {
+function serializeNumber(
+	value: number,
+	step: number | null | undefined,
+): string {
 	if (!Number.isFinite(value)) return "";
 	const places = step === null || step === undefined ? 12 : decimalPlaces(step);
 	return String(Number(value.toFixed(Math.min(12, places))));
@@ -96,6 +93,7 @@ function ValueControl(props: {
 	disabled: boolean;
 	onSave: (value: string) => Promise<boolean>;
 }) {
+	const [dragValue, setDragValue] = createSignal<number>();
 	const ariaLabel = () =>
 		t("sync-value-label", { option: labelForOption(props.option) });
 	const kind = () => props.option.kind;
@@ -115,14 +113,19 @@ function ValueControl(props: {
 
 	return (
 		<Show
-			when={kind() === "boolean" && (props.value === "true" || props.value === "false")}
+			when={
+				kind() === "boolean" &&
+				(props.value === "true" || props.value === "false")
+			}
 			fallback={
 				<Show
 					when={kind() === "enum" && choices().length > 0}
 					fallback={
 						<Show
 							when={
-								(kind() === "integer" || kind() === "decimal" || kind() === "number") &&
+								(kind() === "integer" ||
+									kind() === "decimal" ||
+									kind() === "number") &&
 								numericRange() !== undefined &&
 								numberValue() !== null
 							}
@@ -138,26 +141,31 @@ function ValueControl(props: {
 											void props.onSave(
 												(event.currentTarget as HTMLInputElement).value,
 											)
-									}
+										}
 									/>
 								</TextFieldRoot>
 							}
 						>
 							<div class={styles.valueSliderControl}>
 								<span class={styles.valueLabel}>
-									{props.value ?? t("sync-value-missing")}
+									{dragValue() ?? props.value ?? t("sync-value-missing")}
 								</span>
 								<Slider
-									value={[numberValue() as number]}
+									value={[dragValue() ?? (numberValue() as number)]}
 									minValue={numericRange()?.min}
 									maxValue={numericRange()?.max}
 									step={props.option.step ?? (kind() === "integer" ? 1 : 0.01)}
 									disabled={props.disabled}
 									aria-label={ariaLabel()}
-									onChange={(next) => {
+									onChange={(next) => setDragValue(next[0])}
+									onChangeEnd={(next) => {
 										if (props.disabled || next[0] === undefined) return;
 										const value = serializeNumber(next[0], props.option.step);
-										if (value !== props.value) void props.onSave(value);
+										if (value !== props.value) {
+											void props
+												.onSave(value)
+												.finally(() => setDragValue(undefined));
+										} else setDragValue(undefined);
 									}}
 								>
 									<SliderTrack>
@@ -175,7 +183,9 @@ function ValueControl(props: {
 						onChange={(value) => value !== null && void props.onSave(value)}
 						optionValue={(value) => value}
 						optionTextValue={(value) => {
-							const choice = choices().find((item) => choiceValue(item) === value);
+							const choice = choices().find(
+								(item) => choiceValue(item) === value,
+							);
 							return choice ? choiceLabel(choice) : value;
 						}}
 						itemComponent={(itemProps) => {
@@ -200,7 +210,7 @@ function ValueControl(props: {
 									const choice = choices().find(
 										(item) => choiceValue(item) === selected,
 									);
-									return choice ? choiceLabel(choice) : selected ?? "";
+									return choice ? choiceLabel(choice) : (selected ?? "");
 								}}
 							</SelectValue>
 						</SelectTrigger>
@@ -212,7 +222,9 @@ function ValueControl(props: {
 			<Switch
 				checked={props.value === "true"}
 				disabled={props.disabled}
-				onCheckedChange={(checked) => void props.onSave(String(checked))}
+				onCheckedChange={(checked: boolean) =>
+					void props.onSave(String(checked))
+				}
 			>
 				<SwitchLabel class={styles.srOnly}>{ariaLabel()}</SwitchLabel>
 				<SwitchControl>
@@ -225,7 +237,9 @@ function ValueControl(props: {
 
 function optionRows(snapshot: Snapshot): OptionRow[] {
 	const values = snapshot.sharedValues ?? {};
-	const known = new Map((snapshot.catalog ?? []).map((entry) => [entry.key, entry]));
+	const known = new Map(
+		(snapshot.catalog ?? []).map((entry) => [entry.key, entry]),
+	);
 	for (const key of Object.keys(values)) {
 		if (!known.has(key)) {
 			known.set(key, {
@@ -269,7 +283,7 @@ export function SharedOptionsPage(props: {
 		const present = new Set(rows().map((row) => row.category));
 		return [
 			"all",
-			...([...present].filter((category) => category !== "custom").sort()),
+			...[...present].filter((category) => category !== "custom").sort(),
 			...(present.has("custom") ? ["custom"] : []),
 		];
 	});

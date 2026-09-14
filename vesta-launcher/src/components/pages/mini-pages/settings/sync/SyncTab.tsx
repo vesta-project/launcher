@@ -39,17 +39,20 @@ import {
 import { t } from "~/localization";
 import {
 	type Category,
+	sourceCategories,
 	categories,
 	type Preferences,
 	type Snapshot,
 } from "~/settings-sync/model";
 import pageStyles from "../settings-page.module.css";
+import { SharedKeybindsPage } from "./SharedKeybindsPage";
 import { SharedOptionsPage } from "./SharedOptionsPage";
 import { SquareToggle } from "./SquareToggle";
 import styles from "./sync-tab.module.css";
 
 const categoryIcons: Record<Category, Component<{ class?: string }>> = {
 	gameOptions: GearIcon,
+	keybinds: GearIcon,
 	servers: GlobeIcon,
 	resourcePacks: LayersIcon,
 };
@@ -182,7 +185,7 @@ export function SyncSettingsTab() {
 				category,
 				revision: current.revision,
 				preferences,
-				gameOptionChanges,
+				changes: gameOptionChanges,
 			});
 			mutate((previous) =>
 				previous?.map((item) => (item.category === category ? next : item)),
@@ -203,7 +206,7 @@ export function SyncSettingsTab() {
 	const toggle = (category: Category, enabled: boolean) => {
 		if (
 			enabled &&
-			category === "gameOptions" &&
+			sourceCategories.includes(category) &&
 			!snapshot(category)?.initialized
 		)
 			setPicking(category);
@@ -213,10 +216,9 @@ export function SyncSettingsTab() {
 				void save(category, {
 					...current.preferences,
 					enabled,
-					sourceInstanceId:
-						category === "gameOptions"
-							? current.preferences.sourceInstanceId
-							: null,
+					sourceInstanceId: sourceCategories.includes(category)
+						? current.preferences.sourceInstanceId
+						: null,
 				});
 		}
 	};
@@ -320,7 +322,7 @@ export function SyncSettingsTab() {
 											);
 										return (
 											<>
-												<Show when={category() === "gameOptions"}>
+												<Show when={sourceCategories.includes(category())}>
 													<SettingsCard>
 														<DetailHeading
 															title={title(category())}
@@ -360,12 +362,12 @@ export function SyncSettingsTab() {
 												</Show>
 												<SettingsCard
 													header={
-														category() === "gameOptions"
+														sourceCategories.includes(category())
 															? t("sync-instances")
 															: undefined
 													}
 												>
-													<Show when={category() !== "gameOptions"}>
+													<Show when={!sourceCategories.includes(category())}>
 														<DetailHeading
 															title={title(category())}
 															checked={current()?.preferences.enabled ?? false}
@@ -385,12 +387,18 @@ export function SyncSettingsTab() {
 															class={styles.bulkToggle}
 															variant="outline"
 															size="sm"
-															disabled={busy() || !available().length}
+															disabled={
+																busy() ||
+																!available().length ||
+																!current()?.preferences.enabled
+															}
 															onClick={() =>
 																update(category(), {
 																	instanceIds: allLinked()
 																		? []
-																		: available().map((instance) => instance.id),
+																		: available().map(
+																				(instance) => instance.id,
+																			),
 																})
 															}
 														>
@@ -443,7 +451,10 @@ export function SyncSettingsTab() {
 																				name: instance.name,
 																			})}
 																			pressed={linked()}
-																			disabled={busy()}
+																			disabled={
+																				busy() ||
+																				!current()?.preferences.enabled
+																			}
 																			iconOnly
 																			onChange={(pressed) => {
 																				const next = current();
@@ -478,16 +489,30 @@ export function SyncSettingsTab() {
 								</Show>
 							}
 						>
-							<Show when={snapshot("gameOptions")}>
+							<Show when={snapshot(editing() ?? "gameOptions")}>
 								{(current) => (
-									<SharedOptionsPage
-										snapshot={current()}
-										busy={busy()}
-										onBack={() => setSharedPage(false)}
-										onSave={(preferences, changes) =>
-											save("gameOptions", preferences, changes)
+									<Show
+										when={editing() === "keybinds"}
+										fallback={
+											<SharedOptionsPage
+												snapshot={current()}
+												busy={busy()}
+												onBack={() => setSharedPage(false)}
+												onSave={(preferences, changes) =>
+													save(editing() ?? "gameOptions", preferences, changes)
+												}
+											/>
 										}
-									/>
+									>
+										<SharedKeybindsPage
+											snapshot={current()}
+											busy={busy()}
+											onBack={() => setSharedPage(false)}
+											onSave={(preferences, changes) =>
+												save("keybinds", preferences, changes)
+											}
+										/>
+									</Show>
 								)}
 							</Show>
 						</Show>

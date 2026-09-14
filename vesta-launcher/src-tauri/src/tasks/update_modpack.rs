@@ -206,7 +206,7 @@ impl Task for UpdateModpackTask {
 
                 safeguards::check_instance_not_running(&game_dir).map_err(|e| e.to_string())?;
                 let outcome =
-                    crate::modpack::engine::apply(&app_handle, &game_dir, &mut plan, &ctx).await?;
+                    crate::modpack::engine::apply(&app_handle, &game_dir, instance_id, &mut plan, &ctx).await?;
                 let skipped_deletions = outcome.skipped_deletions;
                 let preserved_worlds = outcome.preserved_worlds;
 
@@ -259,6 +259,7 @@ impl Task for UpdateModpackTask {
                     )),
                     };
                 }
+                crate::settings_sync::pack_update::restore(instance_id).await;
                 if let Err(reconciliation_error) =
                     finished.publish_local_facts(&app_handle, instance_id)
                 {

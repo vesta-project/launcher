@@ -7,7 +7,10 @@ export const categories = [
 ] as const;
 export type Category = (typeof categories)[number];
 
-export const sourceCategories: readonly Category[] = ["gameOptions", "keybinds"];
+export const sourceCategories: readonly Category[] = [
+	"gameOptions",
+	"keybinds",
+];
 
 export interface Preferences {
 	enabled: boolean;
@@ -33,8 +36,8 @@ export interface GameOptionChoice {
 }
 
 /**
- * Metadata comes from the Rust catalog. Values stay as their options-file
- * strings; this type only describes how the settings page should render them.
+ * Metadata and editor encodings come from the Rust catalog.
+ * The backend converts editor values to the physical options-file encoding.
  */
 export interface GameOptionMetadata {
 	key: string;
@@ -58,7 +61,7 @@ export interface Snapshot {
 	category: Category;
 	revision: number;
 	preferences: Preferences;
-	/** Shared values use their native options-file representation. */
+	/** Editor values for game options; native key names for keybindings. */
 	sharedValues?: Record<string, string>;
 	/** Present for game options; keybinds use the same sharedValues shape. */
 	catalog?: GameOptionMetadata[];

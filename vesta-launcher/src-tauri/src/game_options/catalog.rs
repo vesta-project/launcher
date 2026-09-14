@@ -20,7 +20,11 @@ pub enum ValueKind {
 pub enum SettingEditor {
     Boolean,
     UnboundedInteger,
-    Integer { min: i64, max: i64, step: i64 },
+    Integer {
+        min: i64,
+        max: i64,
+        step: i64,
+    },
     UnboundedDecimal,
     Decimal {
         min: f64,
@@ -198,7 +202,7 @@ const GRAPHICS: &[&str] = &["fast", "fancy", "fabulous", "custom"];
 const GRAPHICS_BACKEND: &[&str] = &["default", "opengl", "vulkan"];
 const PARTICLES: &[&str] = &["0", "1", "2"];
 const CLOUDS: &[&str] = &["false", "fast", "true"];
-const AMBIENT_OCCLUSION: &[&str] = &["false", "true", "0", "1", "2", "3"];
+const AMBIENT_OCCLUSION: &[&str] = &["false", "true", "0", "1", "2"];
 const ATTACK_INDICATOR: &[&str] = &["0", "1", "2"];
 const CHAT_VISIBILITY: &[&str] = &["0", "1", "2"];
 const NARRATOR: &[&str] = &["0", "1", "2", "3"];
@@ -398,20 +402,8 @@ pub const CATALOG: &[SupportedSetting] = &[
         "video"
     ),
     boolean!("view_bobbing", ["bobView"], None, None, "video"),
-    boolean!(
-        "vsync",
-        ["enableVsync"],
-        Some("1.3.1"),
-        None,
-        "video"
-    ),
-    boolean!(
-        "fullscreen",
-        ["fullscreen"],
-        Some("1.3.1"),
-        None,
-        "video"
-    ),
+    boolean!("vsync", ["enableVsync"], Some("1.3.1"), None, "video"),
+    boolean!("fullscreen", ["fullscreen"], Some("1.3.1"), None, "video"),
     boolean!(
         "exclusive_fullscreen",
         ["exclusiveFullscreen"],
@@ -580,14 +572,7 @@ pub const CATALOG: &[SupportedSetting] = &[
         Some("1.19.3"),
         "video"
     ),
-    boolean!(
-        "use_vbo",
-        ["useVbo"],
-        Some("1.8"),
-        Some("1.13.2"),
-        "video"
-    ),
-
+    boolean!("use_vbo", ["useVbo"], Some("1.8"), Some("1.13.2"), "video"),
     // Sound.
     boolean!(
         "directional_audio",
@@ -735,7 +720,6 @@ pub const CATALOG: &[SupportedSetting] = &[
         0.01,
         Some("percent")
     ),
-
     // Controls.
     decimal!(
         "sensitivity",
@@ -756,13 +740,7 @@ pub const CATALOG: &[SupportedSetting] = &[
         None,
         "controls"
     ),
-    boolean!(
-        "auto_jump",
-        ["autoJump"],
-        Some("1.10"),
-        None,
-        "controls"
-    ),
+    boolean!("auto_jump", ["autoJump"], Some("1.10"), None, "controls"),
     boolean!(
         "toggle_crouch",
         ["toggleCrouch"],
@@ -882,7 +860,6 @@ pub const CATALOG: &[SupportedSetting] = &[
         None,
         "controls"
     ),
-
     // Chat.
     enumeration!(
         "chat_visibility",
@@ -1042,7 +1019,6 @@ pub const CATALOG: &[SupportedSetting] = &[
         None,
         "chat"
     ),
-
     // Accessibility.
     enumeration!(
         "narrator",
@@ -1203,7 +1179,6 @@ pub const CATALOG: &[SupportedSetting] = &[
         None,
         "accessibility"
     ),
-
     // Language and account-facing settings.
     setting(
         "language",
@@ -1245,13 +1220,7 @@ pub const CATALOG: &[SupportedSetting] = &[
         "skin"
     ),
     boolean!("hat", ["modelPart_hat"], Some("1.8"), None, "skin"),
-    boolean!(
-        "jacket",
-        ["modelPart_jacket"],
-        Some("1.8"),
-        None,
-        "skin"
-    ),
+    boolean!("jacket", ["modelPart_jacket"], Some("1.8"), None, "skin"),
     boolean!(
         "left_sleeve",
         ["modelPart_left_sleeve"],
@@ -1342,9 +1311,7 @@ pub fn setting_by_id(id: &str) -> Option<&'static SupportedSetting> {
 
 /// Lookup by a physical options.txt key, including documented aliases.
 pub fn setting_by_file_key(key: &str) -> Option<&'static SupportedSetting> {
-    CATALOG
-        .iter()
-        .find(|setting| setting.keys.contains(&key))
+    CATALOG.iter().find(|setting| setting.keys.contains(&key))
 }
 
 /// Compatibility name used by the local game-options editor.
@@ -1369,9 +1336,9 @@ fn valid_key(key: &str) -> bool {
         && !key.starts_with('#')
         && !key.starts_with("//")
         && !key.starts_with('\u{feff}')
-        && !key
-            .chars()
-            .any(|character| character.is_control() || character.is_whitespace() || character == ':')
+        && !key.chars().any(|character| {
+            character.is_control() || character.is_whitespace() || character == ':'
+        })
 }
 
 pub fn is_never_sync(key: &str) -> bool {
@@ -1428,15 +1395,11 @@ fn validate_setting(setting: &SupportedSetting, value: &str) -> Result<(), &'sta
     let valid = match setting.encoding {
         ValueEncoding::Bool => matches!(value, "true" | "false"),
         ValueEncoding::Integer => match setting.editor {
-            SettingEditor::Integer { min, max, .. } => {
-                valid_integer(value, Some(min), Some(max))
-            }
+            SettingEditor::Integer { min, max, .. } => valid_integer(value, Some(min), Some(max)),
             _ => valid_integer(value, None, None),
         },
         ValueEncoding::Decimal => match setting.editor {
-            SettingEditor::Decimal { min, max, .. } => {
-                valid_number(value, Some(min), Some(max))
-            }
+            SettingEditor::Decimal { min, max, .. } => valid_number(value, Some(min), Some(max)),
             _ => valid_number(value, None, None),
         },
         ValueEncoding::Enum(values) | ValueEncoding::QuotedEnum(values) => {
@@ -1447,7 +1410,7 @@ fn validate_setting(setting: &SupportedSetting, value: &str) -> Result<(), &'sta
         ValueEncoding::GuiScale => valid_integer(value, Some(0), None),
         ValueEncoding::Graphics => {
             enum_contains(GRAPHICS, value)
-                || matches!(unquoted(value), "0" | "1" | "2" | "3" | "true" | "false")
+                || matches!(unquoted(value), "0" | "1" | "2" | "true" | "false")
         }
         ValueEncoding::AmbientOcclusion => enum_contains(AMBIENT_OCCLUSION, value),
         ValueEncoding::Clouds => enum_contains(CLOUDS, value),
@@ -1488,7 +1451,22 @@ pub fn validate_keybind(key: &str, value: &str) -> Result<(), &'static str> {
     if !is_syncable_keybind(key) {
         return Err("This keybinding is protected or is not a keybinding option");
     }
-    single_line(value)
+    single_line(value)?;
+    let named = value
+        .strip_prefix("key.keyboard.")
+        .or_else(|| value.strip_prefix("key.mouse."));
+    if value.parse::<i32>().is_ok()
+        || named.is_some_and(|name| {
+            !name.is_empty()
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        })
+    {
+        Ok(())
+    } else {
+        Err("Use a named keyboard/mouse binding or a legacy numeric code")
+    }
 }
 
 /// The editor-facing representation of a raw value. Only FOV changes units;
@@ -1496,6 +1474,14 @@ pub fn validate_keybind(key: &str, value: &str) -> Result<(), &'static str> {
 pub fn decode_for_editor(key: &str, raw: &str) -> Result<String, &'static str> {
     let setting = definition(key).ok_or("Unknown catalogued option")?;
     match setting.encoding {
+        ValueEncoding::QuotedEnum(_) => Ok(unquoted(raw).to_owned()),
+        ValueEncoding::Graphics => Ok(match raw {
+            "0" | "false" => "fast",
+            "1" | "true" => "fancy",
+            "2" => "fabulous",
+            _ => unquoted(raw),
+        }
+        .to_owned()),
         ValueEncoding::Fov => {
             let raw = raw.parse::<f64>().map_err(|_| "FOV must be numeric")?;
             if !raw.is_finite() || !(-1.0..=1.0).contains(&raw) {
@@ -1512,6 +1498,27 @@ pub fn decode_for_editor(key: &str, raw: &str) -> Result<String, &'static str> {
 pub fn encode_from_editor(key: &str, editor_value: &str) -> Result<String, &'static str> {
     let setting = definition(key).ok_or("Unknown catalogued option")?;
     match setting.encoding {
+        ValueEncoding::Graphics => {
+            let value = unquoted(editor_value);
+            let raw = match key {
+                "fancyGraphics" => match value {
+                    "fast" => "false",
+                    "fancy" => "true",
+                    _ => return Err("This release only supports Fast or Fancy graphics"),
+                }
+                .to_owned(),
+                "graphicsMode" => match value {
+                    "fast" => "0",
+                    "fancy" => "1",
+                    "fabulous" => "2",
+                    _ => return Err("Unsupported graphics mode"),
+                }
+                .to_owned(),
+                _ => format!("\"{value}\""),
+            };
+            validate(key, &raw)?;
+            Ok(raw)
+        }
         ValueEncoding::Fov => {
             let degrees = editor_value
                 .parse::<f64>()
@@ -1653,7 +1660,8 @@ mod tests {
         assert!(validate("preferredGraphicsBackend", "opengl").is_ok());
         assert!(validate("particles", "4").is_err());
         assert!(validate("ao", "true").is_ok());
-        assert!(validate("ao", "3").is_ok());
+        assert!(validate("ao", "2").is_ok());
+        assert!(validate("ao", "3").is_err());
     }
 
     #[test]
@@ -1672,7 +1680,10 @@ mod tests {
         assert!(!setting_available_for_version(render_distance, "1.6.4"));
         assert!(setting_available_for_version(difficulty, "1.7.2"));
         assert!(!setting_available_for_version(difficulty, "1.8"));
-        assert!(!setting_available_for_version(render_distance, "not-a-version"));
+        assert!(!setting_available_for_version(
+            render_distance,
+            "not-a-version"
+        ));
         assert!(!setting_available_for_version(render_distance, "25w44a"));
         assert!(setting_available_for_key("renderDistance", "1.20.1"));
     }
@@ -1680,7 +1691,10 @@ mod tests {
     #[test]
     fn aliases_resolve_to_one_stable_setting() {
         assert_eq!(definition("sound").unwrap().id, "master_volume");
-        assert_eq!(definition("soundCategory_master").unwrap().id, "master_volume");
+        assert_eq!(
+            definition("soundCategory_master").unwrap().id,
+            "master_volume"
+        );
         assert_eq!(definition("clouds").unwrap().id, "clouds");
         assert_eq!(category("key_key.forward"), "keybindings");
         assert_eq!(category("mod.someOption"), "custom");

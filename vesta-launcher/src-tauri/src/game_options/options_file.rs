@@ -1,3 +1,6 @@
+//! Lossless UTF-8 parsing and structural patches. File adapters must validate
+//! category keys and values before calling `patched`; this parser cannot decide
+//! ownership. Encoding detection is deferred until a non-UTF-8 install needs it.
 use std::collections::BTreeMap;
 
 /// UTF-8 options document. Untouched lines retain their exact bytes.

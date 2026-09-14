@@ -3,8 +3,10 @@
 //! This module owns the settings bundles persisted by the launcher. The
 //! modpack synchroniser only classifies `options.txt` as an Options file and
 //! hands it here; it must not merge or replace this state itself.
+mod bundle;
 pub(crate) mod game_options;
 pub(crate) mod keybinds;
+pub(crate) mod pack_update;
 
 use crate::utils::db::{get_config_conn, get_vesta_conn};
 use diesel::prelude::*;
@@ -50,7 +52,7 @@ pub(crate) struct Preferences {
     pub enabled: bool,
     pub source_instance_id: Option<i32>,
     pub instance_ids: Vec<i32>,
-    #[serde(default, alias = "gameOptionKeys", alias = "selectedGameOptions")]
+    #[serde(default)]
     pub selected_keys: Option<Vec<String>>,
 }
 
@@ -70,9 +72,8 @@ pub(crate) struct Snapshot {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(crate) struct SharedBundle {
-    /// The key is a stable setting id when the catalog provides one and the
-    /// physical options key for an unknown extra. Values remain raw strings so
-    /// a version adapter can decide how to encode them on write.
+    /// Seeded physical options keys and their raw values. Catalog metadata
+    /// supplies stable setting identities and known physical aliases.
     pub values: BTreeMap<String, SharedValue>,
     /// Last values written to each instance. A missing entry means the
     /// instance has never followed this bundle and therefore must not be
@@ -115,10 +116,7 @@ pub(crate) fn empty_snapshot(category: Category) -> Snapshot {
     }
 }
 
-pub(crate) fn read(
-    conn: &mut SqliteConnection,
-    category: Category,
-) -> Result<Snapshot, String> {
+pub(crate) fn read(conn: &mut SqliteConnection, category: Category) -> Result<Snapshot, String> {
     let row = diesel::sql_query("SELECT revision, state FROM settings_sync WHERE category = ?")
         .bind::<Text, _>(category.key())
         .get_result::<PreferenceRow>(conn)
@@ -209,19 +207,11 @@ pub(crate) fn validate_preferences(
     // Membership and per-setting selection are frozen while the category is
     // off. The one exception is the off -> on setup transition, where the
     // owner and initial followers arrive in the same request.
-    if !previous.enabled && !next.enabled
+    if !next.enabled
         && (previous.instance_ids != next.instance_ids
             || previous.selected_keys != next.selected_keys)
     {
         return Err("Enable this sync category before changing membership.".into());
-    }
-    if next.enabled && !previous.enabled {
-        let source = next
-            .source_instance_id
-            .ok_or("Choose a source instance before enabling sync.")?;
-        if !next.instance_ids.contains(&source) {
-            return Err("The source instance must follow this category.".into());
-        }
     }
     if next
         .source_instance_id
@@ -229,8 +219,11 @@ pub(crate) fn validate_preferences(
     {
         return Err("The source instance must follow this category.".into());
     }
-    if !matches!(category, Category::GameOptions)
-        && next.selected_keys.as_ref().is_some_and(|keys| !keys.is_empty())
+    if !matches!(category, Category::GameOptions | Category::Keybinds)
+        && next
+            .selected_keys
+            .as_ref()
+            .is_some_and(|keys| !keys.is_empty())
     {
         return Err("This sync category does not support per-setting selection.".into());
     }
@@ -242,7 +235,10 @@ pub(crate) fn validate_preferences(
         return Err("Too many selected settings.".into());
     }
     if let Some(keys) = &next.selected_keys {
-        if keys.iter().any(|key| key.trim().is_empty() || key.len() > 512) {
+        if keys
+            .iter()
+            .any(|key| key.trim().is_empty() || key.len() > 512)
+        {
             return Err("Selected setting names must be non-empty and bounded.".into());
         }
         let mut unique = keys.clone();
@@ -264,11 +260,10 @@ fn available_instance_ids() -> Result<Vec<i32>, String> {
         .map_err(|error| error.to_string())
 }
 
-fn populate_snapshot(snapshot: &mut Snapshot) -> Result<(), String> {
-    let mut conn = get_config_conn().map_err(|error| error.to_string())?;
+fn populate_snapshot(conn: &mut SqliteConnection, snapshot: &mut Snapshot) -> Result<(), String> {
     match snapshot.category {
-        Category::GameOptions => game_options::populate(&mut conn, snapshot),
-        Category::Keybinds => keybinds::populate(&mut conn, snapshot),
+        Category::GameOptions => game_options::populate(conn, snapshot),
+        Category::Keybinds => keybinds::populate(conn, snapshot),
         Category::Servers | Category::ResourcePacks => Ok(()),
     }
 }
@@ -280,15 +275,14 @@ pub fn get_settings_sync() -> Result<Vec<Snapshot>, String> {
         .into_iter()
         .map(|category| {
             let mut snapshot = read(&mut conn, category)?;
-            populate_snapshot(&mut snapshot)?;
+            populate_snapshot(&mut conn, &mut snapshot)?;
             Ok(snapshot)
         })
         .collect()
 }
 
 /// Save settings and (for file-backed categories) update the shared bundle in
-/// one guarded operation. The optional names keep the command compatible with
-/// the staged UI while it moves from the old game-only name to `changes`.
+/// one guarded operation. `changes` contains values in the editor encoding.
 #[tauri::command]
 pub async fn save_settings_sync(
     app: tauri::AppHandle,
@@ -296,18 +290,13 @@ pub async fn save_settings_sync(
     revision: i64,
     preferences: Preferences,
     changes: Option<BTreeMap<String, String>>,
-    shared_changes: Option<BTreeMap<String, String>>,
-    game_option_changes: Option<BTreeMap<String, String>>,
 ) -> Result<Snapshot, String> {
     let available = available_instance_ids()?;
     let mut conn = get_config_conn().map_err(|error| error.to_string())?;
     let previous = read(&mut conn, category)?.preferences;
     validate_preferences(category, &previous, &preferences, &available)?;
     drop(conn);
-    let values = changes
-        .or(shared_changes)
-        .or(game_option_changes)
-        .unwrap_or_default();
+    let values = changes.unwrap_or_default();
 
     let mut snapshot = match category {
         Category::GameOptions => {
@@ -321,7 +310,8 @@ pub async fn save_settings_sync(
             save_preferences(&mut conn, category, revision, preferences)?
         }
     };
-    populate_snapshot(&mut snapshot)?;
+    let mut conn = get_config_conn().map_err(|error| error.to_string())?;
+    populate_snapshot(&mut conn, &mut snapshot)?;
     Ok(snapshot)
 }
 
@@ -330,6 +320,17 @@ mod tests {
     use super::*;
     use diesel::connection::SimpleConnection;
 
+    #[test]
+    fn prefs_only_categories_enable_without_an_owner() {
+        for category in [Category::Servers, Category::ResourcePacks] {
+            let next = Preferences {
+                enabled: true,
+                instance_ids: vec![1],
+                ..Default::default()
+            };
+            validate_preferences(category, &Preferences::default(), &next, &[1]).unwrap();
+        }
+    }
     #[test]
     fn categories_default_off_and_membership_is_frozen_while_off() {
         let mut conn = SqliteConnection::establish(":memory:").unwrap();

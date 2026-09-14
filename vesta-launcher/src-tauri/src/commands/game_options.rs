@@ -41,7 +41,9 @@ pub fn get_game_options_catalog() -> Vec<CatalogEntry> {
         .collect()
 }
 
-fn directory(instance: &crate::models::instance::Instance) -> Result<std::path::PathBuf, String> {
+pub(crate) fn directory(
+    instance: &crate::models::instance::Instance,
+) -> Result<std::path::PathBuf, String> {
     let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
     let data = crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
     let root = crate::utils::instance_helpers::resolve_instances_root(
