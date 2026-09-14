@@ -126,6 +126,12 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 		const captureMouse = (event: MouseEvent) => {
 			const key = recording();
 			if (!key || props.state.busy()) return;
+			// Controls switch/cancel recording; their click is not a game binding.
+			if (
+				event.target instanceof Element &&
+				event.target.closest("button, input, a, [role=button]")
+			)
+				return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			const name =

@@ -8,6 +8,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { categories, type Snapshot } from "~/settings-sync/model";
+import { GameKeybindings } from "@components/settings/GameKeybindings";
 import { SyncSettingsTab } from "./SyncTab";
 
 vi.mock("@tauri-apps/api/core", async (original) => ({
@@ -370,4 +371,43 @@ it("resource packs remain preferences only and need no owner", async () => {
 	await waitFor(() => expect(state[3].preferences.enabled).toBe(true));
 	expect(state[3].preferences.sourceInstanceId).toBeNull();
 	expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("switching or cancelling a recorder does not bind the control click", () => {
+	const change = vi.fn();
+	render(() => (
+		<GameKeybindings
+			state={{
+				rows: () => [
+					{ key: "forward", category: "keybinds" },
+					{ key: "back", category: "keybinds" },
+				],
+				value: () => "key.keyboard.w",
+				label: (row) => row.key,
+				busy: () => false,
+				change,
+			}}
+		/>
+	));
+	const forward = screen.getByRole("button", {
+		name: "game-options-key-change forward",
+	});
+	const back = screen.getByRole("button", {
+		name: "game-options-key-change back",
+	});
+	fireEvent.click(forward);
+	fireEvent.mouseDown(back, { button: 0 });
+	fireEvent.click(back);
+	expect(change).not.toHaveBeenCalled();
+	fireEvent.keyDown(window, { code: "KeyS", key: "s" });
+	expect(change).toHaveBeenCalledWith("back", "key.keyboard.s");
+	change.mockClear();
+	fireEvent.click(forward);
+	fireEvent.mouseDown(forward, { button: 0 });
+	fireEvent.click(forward);
+	expect(change).not.toHaveBeenCalled();
+	expect(forward.getAttribute("aria-pressed")).toBe("false");
+	fireEvent.click(forward);
+	fireEvent.mouseDown(window, { button: 0 });
+	expect(change).toHaveBeenCalledWith("forward", "key.mouse.left");
 });

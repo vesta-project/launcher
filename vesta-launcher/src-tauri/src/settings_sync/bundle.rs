@@ -240,6 +240,43 @@ async fn instance(id: i32) -> Result<(String, std::path::PathBuf), String> {
         crate::commands::game_options::directory(&instance)?,
     ))
 }
+async fn read_file(dir: &Path) -> Result<game_options_file::Snapshot, String> {
+    let dir = dir.to_owned();
+    tauri::async_runtime::spawn_blocking(move || game_options_file::load(&dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+// Keep blocking file and database writes off the async worker. Callers retain
+// the play guard and SERIAL until this operation completes.
+async fn apply_file(
+    category: Category,
+    id: i32,
+    dir: std::path::PathBuf,
+    version: String,
+    prefs: Preferences,
+    shared: SharedBundle,
+    current: game_options_file::Snapshot,
+) -> Result<SharedBundle, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut conn = get_config_conn().map_err(|e| e.to_string())?;
+        let mut shared = shared;
+        apply(
+            &mut conn,
+            category,
+            id,
+            &dir,
+            &version,
+            &prefs,
+            &mut shared,
+            current,
+        )?;
+        Ok(shared)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 pub(super) async fn reconcile(category: Category, id: i32, import: bool) -> Result<(), String> {
     let _serial = SERIAL.lock().await;
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
@@ -248,22 +285,16 @@ pub(super) async fn reconcile(category: Category, id: i32, import: bool) -> Resu
         return Ok(());
     }
     let (version, dir) = instance(id).await?;
-    let current = game_options_file::load(&dir)?;
+    let current = read_file(&dir).await?;
     let mut shared = load(&mut conn, category)?;
     if import {
         capture(category, &mut shared, &prefs, id, &version, &current.values);
         store(&mut conn, category, &shared)?;
     }
-    apply(
-        &mut conn,
-        category,
-        id,
-        &dir,
-        &version,
-        &prefs,
-        &mut shared,
-        current,
-    )
+    drop(conn);
+    apply_file(category, id, dir, version, prefs, shared, current)
+        .await
+        .map(|_| ())
 }
 fn apply(
     conn: &mut SqliteConnection,
@@ -329,7 +360,7 @@ async fn propagate(app: &tauri::AppHandle, category: Category) -> Vec<String> {
         {
             let result = async {
                 let (version, dir) = instance(id).await?;
-                let current = game_options_file::load(&dir)?;
+                let current = read_file(&dir).await?;
                 Ok::<_, String>((version, dir, current))
             }
             .await;
@@ -342,18 +373,21 @@ async fn propagate(app: &tauri::AppHandle, category: Category) -> Vec<String> {
             }
         }
         store(&mut conn, category, &shared)?;
+        drop(conn);
         for (id, version, dir, current) in captured {
-            if let Err(e) = apply(
-                &mut conn,
+            match apply_file(
                 category,
                 id,
-                &dir,
-                &version,
-                &prefs,
-                &mut shared,
+                dir,
+                version,
+                prefs.clone(),
+                shared.clone(),
                 current,
-            ) {
-                pending.push(format!("Instance {id}: {e}"));
+            )
+            .await
+            {
+                Ok(updated) => shared = updated,
+                Err(e) => pending.push(format!("Instance {id}: {e}")),
             }
         }
         Ok(())
@@ -363,6 +397,33 @@ async fn propagate(app: &tauri::AppHandle, category: Category) -> Vec<String> {
         pending.push(e);
     }
     pending
+}
+fn edit_shared(
+    category: Category,
+    shared: &mut SharedBundle,
+    changes: Values,
+) -> Result<(), String> {
+    for (key, value) in changes {
+        let entry = shared
+            .values
+            .get_mut(&key)
+            .ok_or("Setting is not in the seeded bundle")?;
+        let raw = if category == Category::GameOptions && catalog::definition(&key).is_some() {
+            catalog::encode_from_editor(&key, &value).map_err(str::to_owned)?
+        } else {
+            value
+        };
+        if !valid(category, &entry.key, &raw) {
+            return Err("Invalid shared value".into());
+        }
+        entry.value = raw;
+        // An explicit edit wins over changes made against older applied values,
+        // including followers that are busy now and reconcile after exit.
+        for baseline in shared.applied.values_mut() {
+            baseline.remove(&key);
+        }
+    }
+    Ok(())
 }
 fn seed_owner(prefs: &Preferences, shared: &SharedBundle) -> Result<Option<i32>, String> {
     if prefs.enabled && shared.values.is_empty() {
@@ -404,7 +465,7 @@ pub(super) async fn configure(
         }
         if let Some(id) = seed_owner(&prefs, &shared)? {
             let (version, dir) = instance(id).await?;
-            shared = seed(category, &game_options_file::load(&dir)?.values, &version);
+            shared = seed(category, &read_file(&dir).await?.values, &version);
             if shared.values.is_empty() {
                 return Err("Owner has no supported settings; launch it once first".into());
             }
@@ -416,21 +477,7 @@ pub(super) async fn configure(
         {
             return Err("Selected setting is not in the seeded bundle".into());
         }
-        for (key, value) in changes {
-            let entry = shared
-                .values
-                .get_mut(&key)
-                .ok_or("Setting is not in the seeded bundle")?;
-            let raw = if category == Category::GameOptions && catalog::definition(&key).is_some() {
-                catalog::encode_from_editor(&key, &value).map_err(str::to_owned)?
-            } else {
-                value
-            };
-            if !valid(category, &entry.key, &raw) {
-                return Err("Invalid shared value".into());
-            }
-            entry.value = raw;
-        }
+        edit_shared(category, &mut shared, changes)?;
         persist(&mut conn, category, revision, prefs, shared)?
     };
     drop(source_guard);
@@ -465,6 +512,49 @@ mod tests {
         .unwrap();
         c
     }
+    #[test]
+    fn explicit_edits_win_over_stale_followers_including_busy_instances() {
+        for (category, key, old, local, edited) in [
+            (Category::GameOptions, "renderDistance", "12", "16", "20"),
+            (
+                Category::Keybinds,
+                "key_key.forward",
+                "key.keyboard.w",
+                "key.keyboard.e",
+                "key.keyboard.q",
+            ),
+        ] {
+            let initial = Values::from([(key.into(), old.into())]);
+            let mut shared = seed(category, &initial, "1.21.1");
+            shared.applied.insert(1, initial.clone());
+            shared.applied.insert(2, initial);
+            edit_shared(
+                category,
+                &mut shared,
+                Values::from([(key.into(), edited.into())]),
+            )
+            .unwrap();
+            let mut conn = connection();
+            store(&mut conn, category, &shared).unwrap();
+            let mut shared = load(&mut conn, category).unwrap();
+            let prefs = Preferences {
+                enabled: true,
+                instance_ids: vec![1, 2],
+                ..Default::default()
+            };
+            let stale = Values::from([(key.into(), local.into())]);
+            // First propagation and the later exit of a previously busy follower.
+            for id in [1, 2] {
+                capture(category, &mut shared, &prefs, id, "1.21.1", &stale);
+                assert_eq!(shared.values[key].value, edited);
+                assert_eq!(
+                    patch(category, &shared, &prefs, "1.21.1", &stale)[key],
+                    edited
+                );
+            }
+        }
+    }
+
     #[test]
     fn first_enable_requires_owner_but_reenable_keeps_existing_bundle() {
         let mut prefs = Preferences {

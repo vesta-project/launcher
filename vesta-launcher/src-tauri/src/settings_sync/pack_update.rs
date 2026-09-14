@@ -76,14 +76,20 @@ pub(crate) async fn prepare(staging: &StagingDir, dir: &Path, id: i32) -> Result
         .write_staged("options.txt", &bytes)
         .map_err(|e| e.to_string())
 }
-pub(crate) async fn restore(id: i32) {
+pub(crate) async fn restore(id: i32) -> Result<(), String> {
+    let mut failures = Vec::new();
     for result in [
         super::game_options::restore_after_pack_update(id).await,
         super::keybinds::restore_after_pack_update(id).await,
     ] {
         if let Err(error) = result {
-            log::warn!("Settings sync after pack update: {error}");
+            failures.push(error);
         }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
     }
 }
 #[cfg(test)]
