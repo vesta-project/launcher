@@ -42,7 +42,7 @@ fn is_link(metadata: &fs::Metadata) -> bool {
     }
 }
 
-fn checked_path(directory: &Path) -> Result<PathBuf, String> {
+pub(crate) fn checked_path(directory: &Path) -> Result<PathBuf, String> {
     if !directory.is_absolute()
         || directory
             .components()

@@ -41,37 +41,51 @@ pub(crate) fn merge(current: &[u8], incoming: &[u8]) -> Result<Vec<u8>, String> 
     }
     Ok(merged.as_bytes().to_vec())
 }
+
+fn prepared_bytes(current: &[u8], incoming: &[u8], active: bool) -> Result<Vec<u8>, String> {
+    if active {
+        merge(current, incoming)
+    } else {
+        Ok(current.to_vec())
+    }
+}
+
 pub(crate) async fn prepare(staging: &StagingDir, dir: &Path, id: i32) -> Result<(), String> {
     let _serial = bundle::SERIAL.lock().await;
     let staged = staging
         .staged_path("options.txt")
         .map_err(|e| e.to_string())?;
-    let current = crate::game_options_file::load(dir)?;
-    if !current.exists {
+    let local_path = crate::game_options_file::checked_path(dir)?;
+    let Some(local) = crate::game_options_file::read_bytes(&local_path)? else {
         return Ok(());
-    }
-    let local = crate::game_options_file::read_bytes(&dir.join("options.txt"))?
-        .ok_or("Local options disappeared during update")?;
+    };
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
-    let version = crate::commands::instances::get_instance(id)?.minecraft_version;
-    let mut active = false;
+    let mut active_categories = Vec::new();
     for category in [Category::GameOptions, Category::Keybinds] {
         let prefs = super::read(&mut conn, category)?.preferences;
         if prefs.enabled && prefs.instance_ids.contains(&id) {
-            active = true;
+            active_categories.push((category, prefs));
+        }
+    }
+    let active = !active_categories.is_empty();
+    if active {
+        let version = crate::commands::instances::get_instance(id)?.minecraft_version;
+        let document = OptionsDocument::parse(&local).map_err(str::to_owned)?;
+        let values: BTreeMap<String, String> = document
+            .values()
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .collect();
+        for (category, prefs) in active_categories {
             let mut shared = bundle::load(&mut conn, category)?;
-            bundle::capture(category, &mut shared, &prefs, id, &version, &current.values);
+            bundle::capture(category, &mut shared, &prefs, id, &version, &values);
             bundle::store(&mut conn, category, &shared)?;
         }
     }
     let Some(incoming) = crate::game_options_file::read_bytes(&staged)? else {
         return Ok(());
     };
-    let bytes = if active {
-        merge(&local, &incoming)?
-    } else {
-        local
-    };
+    let bytes = prepared_bytes(&local, &incoming, active)?;
     staging
         .write_staged("options.txt", &bytes)
         .map_err(|e| e.to_string())
@@ -106,5 +120,26 @@ mod tests {
         assert!(text
             .starts_with("# local\r\nversion:2\r\nfov:0.5\r\nkey_key.forward:17\r\ncustom:keep"));
         assert!(text.contains("renderDistance:12"));
+    }
+
+    #[test]
+    fn pack_merge_preserves_cr_only_boundaries() {
+        let merged = merge(
+            b"version:1\rfov:0.5\rcustom:keep\r",
+            b"version:2\rfov:0\rrenderDistance:12\r",
+        )
+        .unwrap();
+
+        assert_eq!(
+            merged,
+            b"version:2\rfov:0.5\rcustom:keep\rrenderDistance:12\r"
+        );
+    }
+
+    #[test]
+    fn inactive_pack_prepare_preserves_non_utf8_bytes() {
+        let current = [0xff, 0x00, b'\r', 0xfe];
+        let incoming = [0xfd, b'\n'];
+        assert_eq!(prepared_bytes(&current, &incoming, false).unwrap(), current);
     }
 }
