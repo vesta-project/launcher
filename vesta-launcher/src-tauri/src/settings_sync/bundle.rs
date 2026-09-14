@@ -75,7 +75,14 @@ pub(super) fn seed(category: Category, values: &Values, version: &str) -> Shared
     SharedBundle {
         values: values
             .iter()
-            .filter(|(k, v)| eligible(category, k, version) && valid(category, k, v))
+            .filter(|(k, v)| {
+                eligible(category, k, version)
+                    && match category {
+                        Category::GameOptions => catalog::validate_observed(k, v).is_ok(),
+                        Category::Keybinds => valid(category, k, v),
+                        _ => false,
+                    }
+            })
             .map(|(k, v)| {
                 (
                     k.clone(),
@@ -210,19 +217,7 @@ pub(super) fn populate(conn: &mut SqliteConnection, snapshot: &mut Snapshot) -> 
                 *value = decoded;
             }
         }
-        snapshot.catalog = catalog::CATALOG.iter().flat_map(|s| s.keys.iter().map(move |key| {
-            use catalog::SettingEditor::*;
-            let (kind,min,max,step,values) = match s.editor {
-                Boolean => ("boolean",None,None,None,vec![]),
-                Integer{min,max,step} => ("integer",Some(min as f64),Some(max as f64),Some(step as f64),vec![]),
-                Decimal{min,max,step,..} => ("decimal",Some(min),Some(max),Some(step),vec![]),
-                Enum(values) => ("enum",None,None,None,values.to_vec()),
-                Language => ("language",None,None,None,vec![]),
-                UnboundedInteger => ("integer",None,None,Some(1.0),vec![]),
-                UnboundedDecimal => ("decimal",None,None,None,vec![]),
-            };
-            serde_json::json!({"id":s.id,"key":key,"keys":s.keys,"since":s.since,"until":s.until,"category":s.category,"kind":kind,"min":min,"max":max,"step":step,"values":values})
-        })).collect();
+        snapshot.catalog = catalog::editor_metadata();
     }
     Ok(())
 }
@@ -409,7 +404,7 @@ fn edit_shared(
             .get_mut(&key)
             .ok_or("Setting is not in the seeded bundle")?;
         let raw = if category == Category::GameOptions && catalog::definition(&key).is_some() {
-            catalog::encode_from_editor(&key, &value).map_err(str::to_owned)?
+            catalog::encode_for_existing(&key, &value, &entry.value).map_err(str::to_owned)?
         } else {
             value
         };
@@ -512,6 +507,30 @@ mod tests {
         .unwrap();
         c
     }
+    #[test]
+    fn seed_keeps_observed_catalog_outliers_visible_without_writing_them() {
+        let values = Values::from([
+            ("renderDistance".into(), "81".into()),
+            ("fov".into(), "0.75".into()),
+            ("extraFlag".into(), "true".into()),
+        ]);
+        let shared = seed(Category::GameOptions, &values, "1.21.1");
+        assert_eq!(shared.values.len(), 3);
+        let target = Values::from([
+            ("renderDistance".into(), "12".into()),
+            ("fov".into(), "0".into()),
+        ]);
+        let changes = patch(
+            Category::GameOptions,
+            &shared,
+            &Preferences::default(),
+            "1.21.1",
+            &target,
+        );
+        assert!(!changes.contains_key("renderDistance"));
+        assert_eq!(changes["fov"], "0.75");
+    }
+
     #[test]
     fn explicit_edits_win_over_stale_followers_including_busy_instances() {
         for (category, key, old, local, edited) in [

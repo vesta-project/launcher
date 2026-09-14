@@ -1469,12 +1469,14 @@ pub fn validate_keybind(key: &str, value: &str) -> Result<(), &'static str> {
     }
 }
 
-/// The editor-facing representation of a raw value. Only FOV changes units;
-/// other settings retain their file representation (including quoted enums).
+/// Editor values use readable FOV units and unquoted enum choices.
 pub fn decode_for_editor(key: &str, raw: &str) -> Result<String, &'static str> {
     let setting = definition(key).ok_or("Unknown catalogued option")?;
     match setting.encoding {
-        ValueEncoding::QuotedEnum(_) => Ok(unquoted(raw).to_owned()),
+        ValueEncoding::QuotedEnum(_)
+        | ValueEncoding::Enum(_)
+        | ValueEncoding::Clouds
+        | ValueEncoding::AmbientOcclusion => Ok(unquoted(raw).to_owned()),
         ValueEncoding::Graphics => Ok(match raw {
             "0" | "false" => "fast",
             "1" | "true" => "fancy",
@@ -1537,6 +1539,17 @@ pub fn encode_from_editor(key: &str, editor_value: &str) -> Result<String, &'sta
             validate(key, editor_value)?;
             Ok(editor_value.to_owned())
         }
+    }
+}
+
+/// Preserve the observed quoting convention instead of changing a follower's
+/// file representation when the user selects a new enum value.
+pub fn encode_for_existing(key: &str, value: &str, previous: &str) -> Result<String, &'static str> {
+    let encoded = encode_from_editor(key, value)?;
+    if previous.starts_with('"') && previous.ends_with('"') {
+        Ok(format!("\"{}\"", unquoted(&encoded)))
+    } else {
+        Ok(unquoted(&encoded).to_owned())
     }
 }
 
@@ -1665,6 +1678,26 @@ mod tests {
     }
 
     #[test]
+    fn enum_edits_keep_observed_quotes() {
+        assert_eq!(
+            decode_for_editor("renderClouds", "\"true\"").unwrap(),
+            "true"
+        );
+        assert_eq!(
+            encode_for_existing("renderClouds", "fast", "\"true\"").unwrap(),
+            "\"fast\""
+        );
+        assert_eq!(
+            encode_for_existing("renderClouds", "fast", "true").unwrap(),
+            "fast"
+        );
+        assert_eq!(
+            encode_for_existing("mainHand", "left", "\"right\"").unwrap(),
+            "\"left\""
+        );
+    }
+
+    #[test]
     fn fov_codec_uses_degrees_without_losing_raw_precision() {
         assert_eq!(decode_for_editor("fov", "0.75").unwrap(), "100");
         assert_eq!(encode_from_editor("fov", "100").unwrap(), "0.75");
@@ -1699,4 +1732,21 @@ mod tests {
         assert_eq!(category("key_key.forward"), "keybindings");
         assert_eq!(category("mod.someOption"), "custom");
     }
+}
+
+/// Shared and instance editors use the same control metadata.
+pub fn editor_metadata() -> Vec<serde_json::Value> {
+    CATALOG.iter().flat_map(|s| s.keys.iter().map(move |key| {
+            use SettingEditor::*;
+            let (kind,min,max,step,values) = match s.editor {
+                Boolean => ("boolean",None,None,None,vec![]),
+                Integer{min,max,step} => ("integer",Some(min as f64),Some(max as f64),Some(step as f64),vec![]),
+                Decimal{min,max,step,..} => ("decimal",Some(min),Some(max),Some(step),vec![]),
+                Enum(values) => ("enum",None,None,None,values.to_vec()),
+                Language => ("language",None,None,None,vec![]),
+                UnboundedInteger => ("integer",None,None,Some(1.0),vec![]),
+                UnboundedDecimal => ("decimal",None,None,None,vec![]),
+            };
+            serde_json::json!({"id":s.id,"key":key,"keys":s.keys,"since":s.since,"until":s.until,"category":s.category,"kind":kind,"min":min,"max":max,"step":step,"values":values})
+        })).collect()
 }
