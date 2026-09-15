@@ -1,3 +1,7 @@
+import {
+	GameOptionsEditor,
+	createGameOptionsEditor,
+} from "@components/settings/GameOptionsEditor";
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
@@ -421,6 +425,9 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		return normalizeInstanceTab(params?.activeTab as string | undefined);
 	});
+	const showingGameOptions = createMemo(
+		() => activeRouter()?.currentParams.get()?.settingsPage === "game-options",
+	);
 	const selectedWorldDirectory = createMemo(() => {
 		const value = activeRouter()?.currentParams.get()?.world;
 		return typeof value === "string" && value.length > 0 ? value : null;
@@ -848,7 +855,21 @@ export default function InstanceDetails(
 		sandbox: isSandboxDirty(),
 	});
 
-	const isDirty = createMemo(() => isInstanceEditDirty(currentEditDirty()));
+	const gameOptions = createGameOptionsEditor({
+		get instanceId() {
+			return instance()?.id;
+		},
+		get disabled() {
+			return saving();
+		},
+		get enabled() {
+			return showingGameOptions();
+		},
+	});
+	const isDirty = createMemo(
+		() =>
+			isInstanceEditDirty(currentEditDirty()) || gameOptions.dirtyCount() > 0,
+	);
 
 	const modpackIconBase64 = useModpackIcon(() => {
 		const current = instance();
@@ -2675,8 +2696,11 @@ export default function InstanceDetails(
 		if (!inst) return;
 		setSaving(true);
 		try {
-			const fresh = await getInstance(inst.id);
-			await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
+			await gameOptions.save();
+			if (isInstanceEditDirty(currentEditDirty())) {
+				const fresh = await getInstance(inst.id);
+				await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
+			}
 			batch(() => {
 				// Clear temporary session icons once we've successfully saved to the backend
 				setCustomIconsThisSession([]);
@@ -2795,6 +2819,7 @@ export default function InstanceDetails(
 					class={styles["content-wrapper"]}
 					classList={{
 						[styles["content-wrapper--console"]]: activeTab() === "console",
+						[styles["content-wrapper--fill"]]: showingGameOptions(),
 					}}
 				>
 					<Show when={instance.loading && !instance.latest}>
@@ -3062,8 +3087,17 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="settings">
+										<Show when={showingGameOptions()}>
+											<GameOptionsEditor
+												state={gameOptions}
+												onBack={() => activeRouter()?.backwards()}
+											/>
+										</Show>
 										<Show
-											when={instanceTabLoader.visitedTabs().has("settings")}
+											when={
+												!showingGameOptions() &&
+												instanceTabLoader.visitedTabs().has("settings")
+											}
 										>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-settings"]}>
@@ -3152,6 +3186,13 @@ export default function InstanceDetails(
 														setSandboxExtraPaths={setSandboxExtraPaths}
 														inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
 														setIsSandboxDirty={setIsSandboxDirty}
+														onOpenGameOptions={() =>
+															activeRouter()?.updateQuery(
+																"settingsPage",
+																"game-options",
+																true,
+															)
+														}
 														invoke={invoke}
 														showToast={showToast}
 														isGuest={isGuest()}
@@ -3193,6 +3234,7 @@ export default function InstanceDetails(
 				onSave={handleSave}
 				isSaving={saving()}
 				onCancel={() => {
+					gameOptions.discard();
 					const i = inst();
 					if (!i) return;
 					batch(() => {

@@ -1,0 +1,30 @@
+.icon {
+	width: 14px;
+	height: 14px;
+	flex: 0 0 auto;
+	display: block;
+	color: currentColor;
+}
+
+.icon:not([fill="none"]) {
+	fill: currentColor;
+}
+
+.error,
+.notice {
+	margin: 0;
+	padding: 10px 16px;
+	border-bottom: 1px solid var(--border-subtle);
+	font-size: var(--font-xsmall);
+	line-height: 1.45;
+}
+
+.error {
+	background: hsl(var(--hue-error) 70% 52% / 0.12);
+	color: var(--text-primary);
+}
+
+.notice {
+	background: hsl(var(--hue-success) 60% 45% / 0.12);
+	color: var(--text-primary);
+}

@@ -8,7 +8,7 @@ export interface SettingsCardProps {
 	headerRight?: JSX.Element;
 	destructive?: boolean;
 	helpTopic?: string;
-	variant?: "default" | "compact" | "transparent" | "bordered";
+	variant?: "default" | "compact" | "transparent" | "bordered" | "fill";
 	children: JSX.Element;
 }
 
