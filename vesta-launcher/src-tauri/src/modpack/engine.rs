@@ -119,6 +119,7 @@ pub async fn plan(
 pub async fn apply(
     app_handle: &tauri::AppHandle,
     game_dir: &Path,
+    instance_id: i32,
     plan: &mut UpdatePlan,
     ctx: &TaskContext,
 ) -> Result<AppliedUpdate, String> {
@@ -203,6 +204,7 @@ pub async fn apply(
         }
     }
 
+    crate::settings_sync::pack_update::prepare(&staging, game_dir, instance_id).await?;
     let (removable_paths, skipped_deletions) =
         removable_paths(game_dir, &plan.actions).map_err(|error| error.to_string())?;
     let rotations = rollback_rotations(game_dir, &plan.actions)?;

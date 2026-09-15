@@ -15,6 +15,13 @@
 	text-align: center;
 }
 
+.icon {
+	width: 14px;
+	height: 14px;
+	display: block;
+	color: currentColor;
+}
+
 .recordingHelp {
 	display: flex;
 	align-items: center;
@@ -115,6 +122,40 @@
 .capture:hover:not(:disabled) {
 	border-color: var(--border-strong);
 	background: var(--surface-raised);
+}
+
+.selection {
+	display: inline-grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-base);
+	color: var(--text-secondary);
+	cursor: pointer;
+}
+
+.selection svg {
+	width: 15px;
+	height: 15px;
+}
+
+.selection[aria-pressed="true"] {
+	border-color: var(--accent-primary);
+	background: color-mix(in srgb, var(--accent-primary) 18%, var(--surface-base));
+	color: var(--accent-primary);
+}
+
+.selection:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.selection:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
 }
 
 .error {

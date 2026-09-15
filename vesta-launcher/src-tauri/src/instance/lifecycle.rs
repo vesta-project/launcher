@@ -553,6 +553,11 @@ pub(crate) async fn reconcile_finished_process(
         );
     }
 
+    let sync_app = app_handle.clone();
+    let sync_slug = run_state.instance_id.clone();
+    tauri::async_runtime::spawn(crate::settings_sync::game_options::after_exit(
+        sync_app, sync_slug,
+    ));
     Ok(outcome)
 }
 

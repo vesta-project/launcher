@@ -42,7 +42,7 @@ fn is_link(metadata: &fs::Metadata) -> bool {
     }
 }
 
-fn checked_path(directory: &Path) -> Result<PathBuf, String> {
+pub(crate) fn checked_path(directory: &Path) -> Result<PathBuf, String> {
     if !directory.is_absolute()
         || directory
             .components()
@@ -61,7 +61,7 @@ fn checked_path(directory: &Path) -> Result<PathBuf, String> {
     Ok(directory.join("options.txt"))
 }
 
-fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
+pub(crate) fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -135,7 +135,11 @@ pub fn save(directory: &Path, patch: Patch) -> Result<Snapshot, String> {
         return Err("Options patch exceeds the size limit".into());
     }
     for (key, value) in &patch.changes {
-        catalog::validate(key, value).map_err(err)?;
+        if catalog::is_syncable_keybind(key) {
+            catalog::validate_keybind(key, value).map_err(err)?;
+        } else {
+            catalog::validate(key, value).map_err(err)?;
+        }
     }
     let path = checked_path(directory)?;
     let before = read_bytes(&path)?;

@@ -206,7 +206,7 @@ impl Task for UpdateModpackTask {
 
                 safeguards::check_instance_not_running(&game_dir).map_err(|e| e.to_string())?;
                 let outcome =
-                    crate::modpack::engine::apply(&app_handle, &game_dir, &mut plan, &ctx).await?;
+                    crate::modpack::engine::apply(&app_handle, &game_dir, instance_id, &mut plan, &ctx).await?;
                 let skipped_deletions = outcome.skipped_deletions;
                 let preserved_worlds = outcome.preserved_worlds;
 
@@ -259,6 +259,8 @@ impl Task for UpdateModpackTask {
                     )),
                     };
                 }
+                let sync_result = crate::settings_sync::pack_update::restore(instance_id).await
+                    .map_err(|error| format!("The modpack update was committed, but shared settings could not be reapplied: {error}. Retry by launching the instance or saving Sync settings."));
                 if let Err(reconciliation_error) =
                     finished.publish_local_facts(&app_handle, instance_id)
                 {
@@ -281,7 +283,7 @@ impl Task for UpdateModpackTask {
                     );
                     status_guard.mark_success();
                     finished.publish(&app_handle, instance_id);
-                    return Ok(());
+                    return sync_result;
                 }
                 if let Err(cleanup_error) =
                     crate::sync::staging::RollbackSnapshot::cleanup_committed(&game_dir)
@@ -294,6 +296,7 @@ impl Task for UpdateModpackTask {
                 }
                 status_guard.mark_success();
                 finished.publish(&app_handle, instance_id);
+                sync_result?;
 
                 let skipped_msg = if skipped_deletions > 0 {
                     format!(" ({} user-modified files were kept)", skipped_deletions)
