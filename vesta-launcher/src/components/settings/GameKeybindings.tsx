@@ -67,6 +67,8 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 	onSelectionChange?: (key: string, selected: boolean) => void;
 	allSelected?: () => boolean;
 	onToggleAll?: () => void;
+	/** When true, skip the card title — the parent page already has one. */
+	embedded?: boolean;
 }) {
 	const [recording, setRecording] = createSignal<string>();
 	const [status, setStatus] = createSignal("");
@@ -100,6 +102,10 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 		const capture = (event: KeyboardEvent) => {
 			const key = recording();
 			if (!key) return;
+			if (props.state.busy() || (props.selected && !props.selected(key))) {
+				setRecording(undefined);
+				return;
+			}
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if (event.code === "Escape") {
@@ -125,7 +131,11 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 		};
 		const captureMouse = (event: MouseEvent) => {
 			const key = recording();
-			if (!key || props.state.busy()) return;
+			if (!key) return;
+			if (props.state.busy() || (props.selected && !props.selected(key))) {
+				setRecording(undefined);
+				return;
+			}
 			// Controls switch/cancel recording; their click is not a game binding.
 			if (
 				event.target instanceof Element &&
@@ -153,8 +163,7 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 
 	return (
 		<SettingsCard
-			header={t("sync-keybinds-page-title")}
-			subHeader={t("game-options-key-help")}
+			header={props.embedded ? undefined : t("sync-keybinds-page-title")}
 			headerRight={
 				<div class={styles.recordingHelp} aria-label={t("sync-keybinds-help")}>
 					<Show when={props.onToggleAll}>
@@ -167,15 +176,17 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 							{toggleLabel()}
 						</LauncherButton>
 					</Show>
-					<span>{t("sync-keybinds-recording-help")}</span>
-					<span class={styles.helpAction}>
-						<kbd>Esc</kbd>
-						{t("sync-keybinds-cancel")}
-					</span>
-					<span class={styles.helpAction}>
-						<kbd>⌫</kbd>
-						{t("sync-keybinds-clear")}
-					</span>
+					<Show when={recording()}>
+						<span>{t("sync-keybinds-recording-help")}</span>
+						<span class={styles.helpAction}>
+							<kbd>Esc</kbd>
+							{t("sync-keybinds-cancel")}
+						</span>
+						<span class={styles.helpAction}>
+							<kbd>⌫</kbd>
+							{t("sync-keybinds-clear")}
+						</span>
+					</Show>
 				</div>
 			}
 		>

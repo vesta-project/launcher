@@ -1,10 +1,10 @@
+import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import CodeIcon from "@assets/icons/content/code.svg";
 import CubeIcon from "@assets/icons/content/cube.svg";
 import LayersIcon from "@assets/icons/content/layers.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
 import MicIcon from "@assets/icons/security/mic.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
-import { SettingsCard } from "@components/settings";
 import Button from "@ui/button/button";
 import {
 	Select,
@@ -41,7 +41,7 @@ import { SquareToggle } from "./SquareToggle";
 import styles from "./sync-tab.module.css";
 
 type OptionScope = "all" | string;
-type OptionRow = GameOptionMetadata;
+export type OptionRow = GameOptionMetadata;
 
 const scopeIcons: Record<string, Component<{ class?: string }>> = {
 	video: CubeIcon,
@@ -50,7 +50,9 @@ const scopeIcons: Record<string, Component<{ class?: string }>> = {
 };
 
 function labelForOption(option: OptionRow): string {
-	return option.labelId ? t(option.labelId) : formatGameOptionName(option.key);
+	return option.labelId
+		? t(option.labelId)
+		: formatGameOptionName(option.id ?? option.key);
 }
 
 function labelForScope(scope: string): string {
@@ -64,8 +66,22 @@ function choiceValue(choice: string | GameOptionChoice): string {
 	return typeof choice === "string" ? choice : choice.value;
 }
 
-function choiceLabel(choice: string | GameOptionChoice): string {
-	if (typeof choice === "string") return choice;
+const enumLabels: Record<string, Record<string, string>> = {
+	particles: { "0": "all", "1": "decreased", "2": "minimal" },
+	attack_indicator: { "0": "off", "1": "crosshair", "2": "hotbar" },
+	chat_visibility: { "0": "shown", "1": "commands-only", "2": "hidden" },
+	narrator: { "0": "off", "1": "all", "2": "chat", "3": "system" },
+	difficulty: { "0": "peaceful", "1": "easy", "2": "normal", "3": "hard" },
+	ambient_occlusion: { "0": "off", "1": "minimal", "2": "maximum" },
+	clouds: { false: "off", fast: "fast", true: "fancy" },
+};
+function choiceLabel(choice: string | GameOptionChoice, id?: string): string {
+	if (typeof choice === "string") {
+		const label = id && enumLabels[id]?.[choice];
+		return label
+			? t(`sync-choice-${label}`)
+			: formatGameOptionName(choice.toLowerCase());
+	}
 	if (choice.labelId) return t(choice.labelId);
 	return choice.label || choice.value;
 }
@@ -87,11 +103,11 @@ function serializeNumber(
 	return String(Number(value.toFixed(Math.min(12, places))));
 }
 
-function ValueControl(props: {
+export function ValueControl(props: {
 	option: OptionRow;
 	value?: string;
 	disabled: boolean;
-	onSave: (value: string) => Promise<boolean>;
+	onSave: (value: string) => Promise<boolean> | boolean | void;
 }) {
 	const [dragValue, setDragValue] = createSignal<number>();
 	const ariaLabel = () =>
@@ -102,6 +118,9 @@ function ValueControl(props: {
 		const min = props.option.min;
 		const max = props.option.max;
 		if (typeof min !== "number" || typeof max !== "number" || min > max)
+			return undefined;
+		const observed = Number(props.value);
+		if (Number.isFinite(observed) && (observed < min || observed > max))
 			return undefined;
 		return { min, max };
 	};
@@ -133,7 +152,12 @@ function ValueControl(props: {
 								<TextFieldRoot class={styles.valueTextControl}>
 									<TextFieldInput
 										aria-label={ariaLabel()}
-										type="text"
+										type={
+											kind() === "integer" || kind() === "decimal"
+												? "number"
+												: "text"
+										}
+										step={props.option.step ?? "any"}
 										value={props.value ?? ""}
 										placeholder={t("sync-value-missing")}
 										disabled={props.disabled}
@@ -151,6 +175,7 @@ function ValueControl(props: {
 									{dragValue() ?? props.value ?? t("sync-value-missing")}
 								</span>
 								<Slider
+									class={styles.valueSlider}
 									value={[dragValue() ?? (numberValue() as number)]}
 									minValue={numericRange()?.min}
 									maxValue={numericRange()?.max}
@@ -162,15 +187,15 @@ function ValueControl(props: {
 										if (props.disabled || next[0] === undefined) return;
 										const value = serializeNumber(next[0], props.option.step);
 										if (value !== props.value) {
-											void props
-												.onSave(value)
-												.finally(() => setDragValue(undefined));
-										} else setDragValue(undefined);
+										Promise.resolve(props.onSave(value)).finally(() =>
+											setDragValue(undefined),
+										);
+									} else setDragValue(undefined);
 									}}
 								>
 									<SliderTrack>
 										<SliderFill />
-										<SliderThumb />
+										<SliderThumb aria-label={ariaLabel()} />
 									</SliderTrack>
 								</Slider>
 							</div>
@@ -186,7 +211,7 @@ function ValueControl(props: {
 							const choice = choices().find(
 								(item) => choiceValue(item) === value,
 							);
-							return choice ? choiceLabel(choice) : value;
+							return choice ? choiceLabel(choice, props.option.id) : value;
 						}}
 						itemComponent={(itemProps) => {
 							const choice = choices().find(
@@ -194,7 +219,9 @@ function ValueControl(props: {
 							);
 							return (
 								<SelectItem item={itemProps.item}>
-									{choice ? choiceLabel(choice) : itemProps.item.rawValue}
+									{choice
+										? choiceLabel(choice, props.option.id)
+										: itemProps.item.rawValue}
 								</SelectItem>
 							);
 						}}
@@ -210,7 +237,9 @@ function ValueControl(props: {
 									const choice = choices().find(
 										(item) => choiceValue(item) === selected,
 									);
-									return choice ? choiceLabel(choice) : (selected ?? "");
+									return choice
+										? choiceLabel(choice, props.option.id)
+										: (selected ?? "");
 								}}
 							</SelectValue>
 						</SelectTrigger>
@@ -245,17 +274,35 @@ function optionRows(snapshot: Snapshot): OptionRow[] {
 			known.set(key, {
 				key,
 				category: key.startsWith("key_") ? "keybinds" : "custom",
-				kind: "text",
+				kind:
+					values[key] === "true" || values[key] === "false"
+						? "boolean"
+						: /^-?\d+(?:\.\d+)?$/.test(values[key]) &&
+								Number.isFinite(Number(values[key]))
+							? Number.isInteger(Number(values[key]))
+								? "integer"
+								: "decimal"
+							: "text",
 			});
 		}
 	}
-	return [...known.values()].filter(
-		(entry) =>
-			values[entry.key] !== undefined &&
-			entry.category !== "keybindings" &&
-			entry.category !== "keybinds" &&
-			!entry.key.startsWith("key_"),
-	);
+	for (const [key, entry] of known) {
+		if (
+			entry.id === "ambient_occlusion" &&
+			["true", "false"].includes(values[key])
+		) {
+			known.set(key, { ...entry, kind: "boolean" });
+		}
+	}
+	return [...known.values()]
+		.filter(
+			(entry) =>
+				values[entry.key] !== undefined &&
+				entry.category !== "keybindings" &&
+				entry.category !== "keybinds" &&
+				!entry.key.startsWith("key_"),
+		)
+		.sort((a, b) => labelForOption(a).localeCompare(labelForOption(b)));
 }
 
 export function SharedOptionsPage(props: {
@@ -309,10 +356,18 @@ export function SharedOptionsPage(props: {
 	};
 
 	return (
-		<SettingsCard>
+		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<Button variant="ghost" size="sm" onClick={props.onBack}>
-					{t("sync-back")}
+				<Button
+					class={styles.back}
+					variant="ghost"
+					size="icon"
+					icon_only
+					aria-label={t("sync-back")}
+					tooltip_text={t("sync-back")}
+					onClick={props.onBack}
+				>
+					<BackIcon class={styles.icon} aria-hidden="true" />
 				</Button>
 				<h2 class={styles.headingTitle}>{t("sync-shared-page-title")}</h2>
 			</div>
@@ -368,11 +423,6 @@ export function SharedOptionsPage(props: {
 					{allSelected() ? t("sync-unsync-all") : t("sync-all")}
 				</Button>
 			</div>
-			<p class={styles.hint}>
-				{props.snapshot.preferences.enabled
-					? t("sync-shared-hint")
-					: t("sync-enable-to-edit")}
-			</p>
 			<div class={styles.optionRows}>
 				<For each={filtered()}>
 					{(option) => {
@@ -382,7 +432,6 @@ export function SharedOptionsPage(props: {
 							<div class={styles.optionRow}>
 								<div class={styles.optionName} title={option.key}>
 									<span>{labelForOption(option)}</span>
-									<small>{option.key}</small>
 								</div>
 								<div class={styles.optionControl}>
 									<ValueControl
@@ -415,6 +464,6 @@ export function SharedOptionsPage(props: {
 			<Show when={filtered().length === 0}>
 				<p class={styles.empty}>{t("sync-no-options")}</p>
 			</Show>
-		</SettingsCard>
+		</div>
 	);
 }

@@ -130,12 +130,14 @@ function DetailHeading(props: {
 		<div class={styles.heading}>
 			<Button
 				class={styles.back}
+				icon_only
+				aria-label={t("sync-back")}
+				tooltip_text={t("sync-back")}
 				variant="ghost"
-				size="sm"
+				size="icon"
 				onClick={props.onBack}
 			>
-				<BackIcon class={styles.icon} />
-				{t("sync-back")}
+				<BackIcon class={styles.icon} aria-hidden="true" />
 			</Button>
 			<h2 class={styles.headingTitle}>{props.title}</h2>
 			<Toggle
@@ -339,13 +341,6 @@ export function SyncSettingsTab() {
 																<span class={styles.title}>
 																	{t("sync-bundle-title")}
 																</span>
-																<span class={styles.meta}>
-																	{t(
-																		current()?.preferences.enabled
-																			? "sync-shared-entry-hint"
-																			: "sync-enable-to-edit",
-																	)}
-																</span>
 															</span>
 															<Button
 																variant="outline"
@@ -380,9 +375,6 @@ export function SyncSettingsTab() {
 													</Show>
 
 													<div class={styles.bulkRow}>
-														<span class={styles.hint}>
-															{t("sync-instances-hint")}
-														</span>
 														<Button
 															class={styles.bulkToggle}
 															variant="outline"

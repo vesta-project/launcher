@@ -40,6 +40,7 @@ export interface GameOptionChoice {
  * The backend converts editor values to the physical options-file encoding.
  */
 export interface GameOptionMetadata {
+	id?: string;
 	key: string;
 	category: string;
 	labelId?: string | null;

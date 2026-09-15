@@ -268,3 +268,118 @@
 	min-height: 32px;
 	padding: 0;
 }
+
+/* The scroll viewport reaches the panel edge; padding belongs inside it. */
+.sharedPage {
+	display: flex;
+	flex-direction: column;
+	height: clamp(280px, calc(100dvh - 200px), 800px);
+	min-width: 0;
+}
+.sharedPage .heading {
+	margin: 0;
+	padding: 16px 24px 12px;
+	box-sizing: border-box;
+}
+.sharedPage .filters {
+	margin: 0;
+	padding: 0 24px 12px;
+	border-bottom: 1px solid var(--border-subtle);
+}
+.optionRows {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 0 24px 16px;
+}
+.optionRow {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	min-height: 48px;
+	padding-block: 8px;
+}
+.optionRow + .optionRow {
+	border-top: 1px solid var(--border-subtle);
+}
+.optionName {
+	flex: 1;
+	min-width: 0;
+	color: var(--text-primary);
+	font-size: var(--font-small);
+	overflow-wrap: anywhere;
+}
+.optionControl {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 12px;
+	width: min(52%, 320px);
+	flex-shrink: 0;
+}
+.valueSliderControl {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex: 1;
+	min-width: 0;
+}
+.valueSlider {
+	flex: 1;
+	align-items: center;
+	min-width: 60px;
+	min-height: 28px;
+}
+.valueLabel {
+	min-width: 3.5ch;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--font-small);
+	color: var(--text-primary);
+}
+.valueTextControl,
+.valueSelect {
+	flex: 1;
+	min-width: 0;
+	width: 100%;
+}
+.sharedPage > .empty {
+	padding: 0 24px 16px;
+}
+
+.keybindsBody {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 0 24px 16px;
+	box-sizing: border-box;
+}
+
+.keybindsBody :global(.settings-card) {
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+
+.keybindsBody :global(.settings-card-header) {
+	margin: 0 0 8px;
+}
+
+.keybindsBody :global(.settings-card-content) {
+	padding: 0;
+}
+@media (max-width: 600px) {
+	.optionRows {
+		padding-inline: 16px;
+	}
+	.sharedPage .heading {
+		padding-inline: 16px;
+	}
+	.sharedPage .filters {
+		padding-inline: 16px;
+	}
+	.optionControl {
+		width: 52%;
+		gap: 8px;
+	}
+}

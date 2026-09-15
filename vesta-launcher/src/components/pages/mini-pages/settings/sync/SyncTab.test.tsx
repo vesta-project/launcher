@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { categories, type Snapshot } from "~/settings-sync/model";
 import { GameKeybindings } from "@components/settings/GameKeybindings";
+import { SharedOptionsPage } from "./SharedOptionsPage";
 import { SyncSettingsTab } from "./SyncTab";
 
 vi.mock("@tauri-apps/api/core", async (original) => ({
@@ -230,13 +231,15 @@ it("selects individual options and all or none without changing membership", asy
 		screen.getByRole("button", { name: "sync-option-label sync-option-fov" }),
 	);
 	await waitFor(() =>
-		expect(state[0].preferences.selectedKeys).toEqual(
-			gameOptionKeys.filter((key) => key !== "fov"),
+		expect([...(state[0].preferences.selectedKeys ?? [])].sort()).toEqual(
+			gameOptionKeys.filter((key) => key !== "fov").sort(),
 		),
 	);
 	fireEvent.click(screen.getByRole("button", { name: "sync-all" }));
 	await waitFor(() =>
-		expect(state[0].preferences.selectedKeys).toEqual(gameOptionKeys),
+		expect([...(state[0].preferences.selectedKeys ?? [])].sort()).toEqual(
+			[...gameOptionKeys].sort(),
+		),
 	);
 	fireEvent.click(screen.getByRole("button", { name: "sync-unsync-all" }));
 	await waitFor(() => expect(state[0].preferences.selectedKeys).toEqual([]));
@@ -410,4 +413,86 @@ it("switching or cancelling a recorder does not bind the control click", () => {
 	fireEvent.click(forward);
 	fireEvent.mouseDown(window, { button: 0 });
 	expect(change).toHaveBeenCalledWith("forward", "key.mouse.left");
+});
+
+it("uses native labels and boolean controls without repeated raw keys", () => {
+	const snapshot: Snapshot = {
+		category: "gameOptions",
+		revision: 1,
+		preferences: { enabled: true, instanceIds: [1], sourceInstanceId: null },
+		sharedValues: {
+			ao: "true",
+			extraFlag: "false",
+			soundCategory_master: "0.8",
+		},
+		catalog: [
+			{
+				id: "ambient_occlusion",
+				key: "ao",
+				category: "video",
+				kind: "enum",
+				values: ["true", "false", "0", "1", "2"],
+			},
+			{
+				id: "master_volume",
+				key: "soundCategory_master",
+				category: "sound",
+				kind: "decimal",
+				min: 0,
+				max: 1,
+				step: 0.01,
+			},
+		],
+	};
+	render(() => (
+		<SharedOptionsPage
+			snapshot={snapshot}
+			busy={false}
+			onBack={() => {}}
+			onSave={async () => true}
+		/>
+	));
+	expect(screen.getByText("Ambient occlusion")).toBeTruthy();
+	expect(
+		screen.getByRole("switch", { name: "sync-value-label Ambient occlusion" }),
+	).toBeTruthy();
+	expect(
+		screen.getByRole("switch", { name: "sync-value-label Extra flag" }),
+	).toBeTruthy();
+	expect(
+		screen.getByRole("slider", { name: "sync-value-label Master volume" }),
+	).toBeTruthy();
+	expect(screen.queryByText("soundCategory_master")).toBeNull();
+	const back = screen.getByRole("button", { name: "sync-back" });
+	expect(back.textContent).toBe("");
+});
+
+it("does not record keys or mouse buttons after a binding is unsynced", () => {
+	for (const event of ["keyboard", "delete", "mouse"]) {
+		let selected = true;
+		const change = vi.fn();
+		const view = render(() => (
+			<GameKeybindings
+				selected={() => selected}
+				state={{
+					rows: () => [{ key: "forward", category: "keybinds" }],
+					value: () => "key.keyboard.w",
+					label: (row) => row.key,
+					busy: () => false,
+					change,
+				}}
+			/>
+		));
+		fireEvent.click(
+			screen.getByRole("button", { name: "game-options-key-change forward" }),
+		);
+		selected = false;
+		if (event === "mouse") fireEvent.mouseDown(window, { button: 0 });
+		else
+			fireEvent.keyDown(window, {
+				code: event === "delete" ? "Delete" : "KeyS",
+			});
+		expect(change).not.toHaveBeenCalled();
+		view.unmount();
+	}
 });
