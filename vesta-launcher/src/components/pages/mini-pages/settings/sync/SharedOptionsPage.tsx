@@ -9,6 +9,7 @@ import MonitorIcon from "@assets/icons/content/monitor.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
 import SkinIcon from "@assets/icons/content/skin-icon.svg";
 import MicIcon from "@assets/icons/security/mic.svg";
+import WifiIcon from "@assets/icons/status/connection-lost.svg";
 import { SubpageBackButton } from "@components/settings/SubpageBackButton";
 import {
 	Select,
@@ -57,7 +58,7 @@ const scopeIcons: Record<string, Component<{ class?: string }>> = {
 	mouse: KeyboardIcon,
 	accessibility: AccessibilityIcon,
 	skin: SkinIcon,
-	online: GlobeIcon,
+	online: WifiIcon,
 	custom: CodeIcon,
 };
 
