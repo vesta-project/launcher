@@ -1,19 +1,18 @@
+import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import {
+	cleanup,
 	fireEvent,
 	render,
 	screen,
 	waitFor,
-	cleanup,
 } from "@solidjs/testing-library";
 import { invoke } from "@tauri-apps/api/core";
 import { createSignal, Show } from "solid-js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
-	GameOptionsEditor,
 	createGameOptionsEditor,
+	GameOptionsEditor,
 } from "./GameOptionsEditor";
-
-import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 
 function EditorHarness(props: { instanceId: number }) {
 	const state = createGameOptionsEditor(props);
@@ -24,7 +23,7 @@ function EditorHarness(props: { instanceId: number }) {
 				show={state.dirtyCount() > 0}
 				isSaving={state.saving()}
 				onSave={() => {
-					void state.save().catch(() => {});
+					void state.save().catch(() => undefined);
 				}}
 				onCancel={state.discard}
 			/>
@@ -32,27 +31,94 @@ function EditorHarness(props: { instanceId: number }) {
 	);
 }
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@tauri-apps/api/core")>()),
+	invoke: vi.fn(),
+}));
 vi.mock("~/localization", () => ({ t: (key: string) => key }));
+vi.mock("@ui/slider/slider", () => {
+	function Slider(props: {
+		value?: number[];
+		minValue?: number;
+		maxValue?: number;
+		step?: number;
+		disabled?: boolean;
+		"aria-label"?: string;
+		onChange?: (value: number[]) => void;
+		onChangeEnd?: (value: number[]) => void;
+		children?: unknown;
+	}) {
+		const input = document.createElement("input");
+		input.type = "number";
+		input.setAttribute("role", "spinbutton");
+		if (props["aria-label"])
+			input.setAttribute("aria-label", props["aria-label"]);
+		if (props.minValue !== undefined) input.min = String(props.minValue);
+		if (props.maxValue !== undefined) input.max = String(props.maxValue);
+		if (props.step !== undefined) input.step = String(props.step);
+		input.disabled = Boolean(props.disabled);
+		input.value = String(props.value?.[0] ?? "");
+		input.addEventListener("input", () => {
+			const next = Number(input.value);
+			props.onChange?.([next]);
+			props.onChangeEnd?.([next]);
+		});
+		return input;
+	}
+	return {
+		Slider,
+		SliderTrack: (props: { children?: unknown }) => props.children,
+		SliderFill: () => null,
+		SliderThumb: () => null,
+	};
+});
+vi.mock("@ui/switch/switch", () => {
+	function Switch(props: {
+		checked?: boolean;
+		disabled?: boolean;
+		onCheckedChange?: (checked: boolean) => void;
+	}) {
+		const input = document.createElement("input");
+		input.type = "checkbox";
+		input.setAttribute("role", "switch");
+		input.checked = Boolean(props.checked);
+		input.setAttribute("aria-checked", String(input.checked));
+		input.disabled = Boolean(props.disabled);
+		input.addEventListener("change", () => {
+			input.setAttribute("aria-checked", String(input.checked));
+			props.onCheckedChange?.(input.checked);
+		});
+		return input;
+	}
+	return {
+		Switch,
+		SwitchLabel: () => null,
+		SwitchControl: (props: { children?: unknown }) => props.children,
+		SwitchThumb: () => null,
+	};
+});
 const catalog = [
 	{
 		key: "fov",
+		id: "fov",
 		category: "video",
-		labelId: "game-options-fov",
-		kind: "number",
-		min: -1,
-		max: 1,
+		kind: "integer",
+		min: 30,
+		max: 110,
+		step: 1,
 	},
 ];
 const snapshot = {
 	revision: "original",
 	exists: true,
-	values: { fov: "0", "mod.custom": "keep", version: "1" },
+	values: { fov: "70", "mod.custom": "keep", version: "1" },
 };
 beforeEach(() => {
 	vi.mocked(invoke).mockReset();
-	vi.mocked(invoke).mockImplementation(async (command) =>
-		command === "get_game_options_catalog" ? catalog : snapshot,
+	vi.mocked(invoke).mockImplementation((command) =>
+		Promise.resolve(
+			command === "get_game_options_catalog" ? catalog : snapshot,
+		),
 	);
 });
 afterEach(cleanup);
@@ -73,6 +139,7 @@ it("keeps unsupported numeric values visible while editing another key", async (
 	await waitFor(() =>
 		expect(invoke).toHaveBeenCalledWith("save_instance_game_options", {
 			instanceId: 7,
+			editorValues: true,
 			patch: { revision: "original", changes: { "mod.custom": "new" } },
 		}),
 	);
@@ -80,7 +147,7 @@ it("keeps unsupported numeric values visible while editing another key", async (
 
 it("sends only edited keys, converts FOV degrees, and hides protected keys", async () => {
 	render(() => <EditorHarness instanceId={7} />);
-	const input = await screen.findByRole("slider", {
+	const input = await screen.findByRole("spinbutton", {
 		name: "game-options-fov",
 	});
 	expect((input as HTMLInputElement).value).toBe("70");
@@ -90,7 +157,8 @@ it("sends only edited keys, converts FOV degrees, and hides protected keys", asy
 	await waitFor(() =>
 		expect(invoke).toHaveBeenCalledWith("save_instance_game_options", {
 			instanceId: 7,
-			patch: { revision: "original", changes: { fov: "0.5" } },
+			editorValues: true,
+			patch: { revision: "original", changes: { fov: "90" } },
 		}),
 	);
 });
@@ -133,12 +201,12 @@ it("does not publish an old instance response into a newly selected instance", a
 	const [id, setId] = createSignal(1);
 	render(() => <EditorHarness instanceId={id()} />);
 	setId(2);
-	await screen.findByRole("slider", { name: "game-options-fov" });
+	await screen.findByRole("spinbutton", { name: "game-options-fov" });
 	finishOld(snapshot);
 	await Promise.resolve();
 	expect(
 		(
-			screen.getByRole("slider", {
+			screen.getByRole("spinbutton", {
 				name: "game-options-fov",
 			}) as HTMLInputElement
 		).value,
@@ -185,6 +253,7 @@ it("uses a switch for boolean settings and keeps custom labels readable", async 
 			? [
 					{
 						key: "fullscreen",
+						id: "fullscreen",
 						category: "video",
 						labelId: "game-options-fullscreen",
 						kind: "boolean",
@@ -192,7 +261,10 @@ it("uses a switch for boolean settings and keeps custom labels readable", async 
 						max: null,
 					},
 				]
-			: { ...snapshot, values: { fullscreen: "false", "mod.fastMode": "true" } },
+			: {
+					...snapshot,
+					values: { fullscreen: "false", "mod.fastMode": "true" },
+				},
 	);
 	render(() => <EditorHarness instanceId={7} />);
 	const toggle = await screen.findByRole("switch", {
