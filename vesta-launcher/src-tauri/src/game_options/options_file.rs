@@ -22,6 +22,40 @@ fn valid_key(key: &str) -> bool {
             .any(|c| c.is_control() || c.is_whitespace() || c == ':' || c == '\u{feff}')
 }
 
+fn lines(text: &str) -> Vec<&str> {
+    let bytes = text.as_bytes();
+    let mut result = Vec::new();
+    let mut start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'\r' {
+            index += usize::from(bytes.get(index + 1) == Some(&b'\n'));
+            result.push(&text[start..=index]);
+            start = index + 1;
+        } else if bytes[index] == b'\n' {
+            result.push(&text[start..=index]);
+            start = index + 1;
+        }
+        index += 1;
+    }
+    if start < text.len() {
+        result.push(&text[start..]);
+    }
+    result
+}
+
+fn line_ending(line: &str) -> &str {
+    if line.ends_with("\r\n") {
+        "\r\n"
+    } else if line.ends_with('\n') {
+        "\n"
+    } else if line.ends_with('\r') {
+        "\r"
+    } else {
+        ""
+    }
+}
+
 impl OptionsDocument {
     pub fn parse(bytes: &[u8]) -> Result<Self, &'static str> {
         let text = std::str::from_utf8(bytes).map_err(|_| "Options must use UTF-8 encoding")?;
@@ -45,9 +79,8 @@ impl OptionsDocument {
 
     /// Last duplicate wins, as it does when the game reads its options.
     pub fn values(&self) -> BTreeMap<&str, &str> {
-        self.0
-            .trim_start_matches('\u{feff}')
-            .split_inclusive('\n')
+        lines(self.0.trim_start_matches('\u{feff}'))
+            .into_iter()
             .filter_map(entry)
             .collect()
     }
@@ -61,9 +94,14 @@ impl OptionsDocument {
         }
         let bom = self.0.starts_with('\u{feff}');
         let body = self.0.strip_prefix('\u{feff}').unwrap_or(&self.0);
-        let mut lines: Vec<String> = body.split_inclusive('\n').map(str::to_owned).collect();
-        let newline = if body.contains("\r\n") { "\r\n" } else { "\n" };
-        let trailing_newline = body.ends_with('\n');
+        let mut lines: Vec<String> = lines(body).into_iter().map(str::to_owned).collect();
+        let newline = lines
+            .iter()
+            .map(|line| line_ending(line))
+            .find(|ending| !ending.is_empty())
+            .unwrap_or("\n")
+            .to_owned();
+        let trailing_newline = body.ends_with(['\n', '\r']);
         for (key, value) in changes {
             if let Some(index) = lines
                 .iter()
@@ -72,23 +110,17 @@ impl OptionsDocument {
                 if entry(&lines[index]).is_some_and(|(_, v)| v == value) {
                     continue;
                 }
-                let ending = if lines[index].ends_with("\r\n") {
-                    "\r\n"
-                } else if lines[index].ends_with('\n') {
-                    "\n"
-                } else {
-                    ""
-                };
+                let ending = line_ending(&lines[index]);
                 lines[index] = format!("{key}:{value}{ending}");
             } else {
                 if let Some(last) = lines.last_mut() {
-                    if !last.ends_with('\n') {
-                        last.push_str(newline);
+                    if line_ending(last).is_empty() {
+                        last.push_str(&newline);
                     }
                 }
                 lines.push(format!(
                     "{key}:{value}{}",
-                    if trailing_newline { newline } else { "" }
+                    if trailing_newline { &newline } else { "" }
                 ));
             }
         }
@@ -125,6 +157,7 @@ mod tests {
     fn appends_with_existing_newline_style_and_final_newline_policy() {
         for (input, expected) in [
             ("a:1\r\n", "a:1\r\nb:2\r\n"),
+            ("a:1\r", "a:1\rb:2\r"),
             ("a:1", "a:1\nb:2"),
             ("", "b:2"),
         ] {
@@ -142,6 +175,16 @@ mod tests {
             b"version:100\n"
         );
         assert!(OptionsDocument::empty(None).as_bytes().is_empty());
+    }
+
+    #[test]
+    fn preserves_standalone_carriage_return_lines() {
+        let doc = OptionsDocument::parse(b"a:1\rb:2").unwrap();
+        assert_eq!(doc.values()["b"], "2");
+        assert_eq!(
+            doc.patched(&patch("a", "3")).unwrap().as_bytes(),
+            b"a:3\rb:2"
+        );
     }
 
     #[test]
