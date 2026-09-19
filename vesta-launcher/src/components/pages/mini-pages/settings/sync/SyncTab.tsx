@@ -317,21 +317,7 @@ export function SyncSettingsTab() {
 										return (
 											<>
 												<Show when={sourceCategories.includes(category())}>
-													<SettingsCard
-														header={t("sync-bundle-title")}
-														headerRight={
-															<Button
-																variant="outline"
-																size="sm"
-																disabled={
-																	busy() || !current()?.preferences.enabled
-																}
-																onClick={() => setSharedPage(true)}
-															>
-																{t("sync-edit-shared")}
-															</Button>
-														}
-													>
+													<SettingsCard>
 														<DetailHeading
 															title={title(category())}
 															checked={current()?.preferences.enabled ?? false}
@@ -351,38 +337,41 @@ export function SyncSettingsTab() {
 													}
 													headerRight={
 														sourceCategories.includes(category()) ? (
-															<Button
-																color="primary"
-																variant="solid"
-																size="icon"
-																icon_only
-																aria-label={
-																	allLinked()
+															<div class={styles.headerActions}>
+																<Button
+																	variant="outline"
+																	size="sm"
+																	disabled={
+																		busy() || !current()?.preferences.enabled
+																	}
+																	onClick={() => setSharedPage(true)}
+																>
+																	{t("sync-edit-shared")}
+																</Button>
+																<Button
+																	variant="outline"
+																	size="sm"
+																	disabled={
+																		busy() ||
+																		!available().length ||
+																		!current()?.preferences.enabled
+																	}
+																	onClick={() =>
+																		update(category(), {
+																			instanceIds: allLinked()
+																				? []
+																				: available().map(
+																						(instance) => instance.id,
+																					),
+																		})
+																	}
+																>
+																	<LinkIcon class={styles.icon} />
+																	{allLinked()
 																		? t("sync-unlink-all-instances")
-																		: t("sync-link-all-instances")
-																}
-																tooltip_text={
-																	allLinked()
-																		? t("sync-unlink-all-instances")
-																		: t("sync-link-all-instances")
-																}
-																disabled={
-																	busy() ||
-																	!available().length ||
-																	!current()?.preferences.enabled
-																}
-																onClick={() =>
-																	update(category(), {
-																		instanceIds: allLinked()
-																			? []
-																			: available().map(
-																					(instance) => instance.id,
-																				),
-																	})
-																}
-															>
-																<LinkIcon class={styles.icon} />
-															</Button>
+																		: t("sync-link-all-instances")}
+																</Button>
+															</div>
 														) : undefined
 													}
 												>

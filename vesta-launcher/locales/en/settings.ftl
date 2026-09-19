@@ -50,7 +50,7 @@ sync-bundle-title = Shared options
 
 sync-edit = Edit { $category }
 
-sync-edit-shared = Edit shared options
+sync-edit-shared = Edit
 
 sync-enable-to-edit = Enable this category to edit shared values.
 
@@ -142,8 +142,8 @@ game-options-loading = Loading game options…
 game-options-missing = No game options file yet. Saving creates it with only your edits.
 game-options-unset = Not in file
 game-options-no-results = No matching game options.
-sync-link-all-instances = Make every instance follow
-sync-unlink-all-instances = Stop every instance following
+sync-link-all-instances = Link all
+sync-unlink-all-instances = Unlink all
 sync-keybinds-cancel = Cancel
 sync-keybinds-clear = Clear
 sync-keybinds-help = Keybinding controls
