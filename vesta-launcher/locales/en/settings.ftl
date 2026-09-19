@@ -25,6 +25,7 @@ settings-language-label = Launcher language
 settings-language-description = Choose the language used by Vesta. System default follows your operating system when a matching translation is available.
 
 game-options-title = Game options
+game-options-back = Back to instance settings
 game-options-description = Edit this instance’s game settings. Close the game before saving.
 game-options-reload = Reload
 game-options-discard = Discard edits

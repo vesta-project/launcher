@@ -64,6 +64,22 @@
 .filters > * {
 	min-width: 0;
 }
+.numericControl {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+.numericControl > :first-child {
+	flex: 1;
+	min-width: 80px;
+}
+.numericValue {
+	min-width: 4ch;
+	color: var(--text-secondary);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
 .filters > :first-child {
 	flex: 1;
 }

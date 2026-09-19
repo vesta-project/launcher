@@ -425,6 +425,9 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		return normalizeInstanceTab(params?.activeTab as string | undefined);
 	});
+	const showingGameOptions = createMemo(
+		() => activeRouter()?.currentParams.get()?.settingsPage === "game-options",
+	);
 	const selectedWorldDirectory = createMemo(() => {
 		const value = activeRouter()?.currentParams.get()?.world;
 		return typeof value === "string" && value.length > 0 ? value : null;
@@ -858,6 +861,9 @@ export default function InstanceDetails(
 		},
 		get disabled() {
 			return saving();
+		},
+		get enabled() {
+			return showingGameOptions();
 		},
 	});
 	const isDirty = createMemo(
@@ -2750,7 +2756,6 @@ export default function InstanceDetails(
 		tabs.push(
 			{ value: "versioning", label: "Version" },
 			{ value: "settings", label: "Settings" },
-			{ value: "game", label: "Game" },
 		);
 		return tabs;
 	});
@@ -2814,6 +2819,7 @@ export default function InstanceDetails(
 					class={styles["content-wrapper"]}
 					classList={{
 						[styles["content-wrapper--console"]]: activeTab() === "console",
+						[styles["content-wrapper--fill"]]: showingGameOptions(),
 					}}
 				>
 					<Show when={instance.loading && !instance.latest}>
@@ -3080,12 +3086,18 @@ export default function InstanceDetails(
 										</Show>
 									</TabsContent>
 
-									<TabsContent value="game">
-										<GameOptionsEditor state={gameOptions} />
-									</TabsContent>
-									<TabsContent value="settings">
-										<Show
-											when={instanceTabLoader.visitedTabs().has("settings")}
+					<TabsContent value="settings">
+						<Show when={showingGameOptions()}>
+							<GameOptionsEditor
+								state={gameOptions}
+								onBack={() => activeRouter()?.backwards()}
+							/>
+						</Show>
+						<Show
+							when={
+								!showingGameOptions() &&
+								instanceTabLoader.visitedTabs().has("settings")
+							}
 										>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-settings"]}>
@@ -3171,9 +3183,16 @@ export default function InstanceDetails(
 														sandboxWrapperNesting={sandboxWrapperNesting()}
 														setSandboxWrapperNesting={setSandboxWrapperNesting}
 														sandboxExtraPaths={sandboxExtraPaths()}
-														setSandboxExtraPaths={setSandboxExtraPaths}
-														inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
-														setIsSandboxDirty={setIsSandboxDirty}
+															setSandboxExtraPaths={setSandboxExtraPaths}
+															inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
+															setIsSandboxDirty={setIsSandboxDirty}
+															onOpenGameOptions={() =>
+																activeRouter()?.updateQuery(
+																	"settingsPage",
+																	"game-options",
+																	true,
+																)
+															}
 														invoke={invoke}
 														showToast={showToast}
 														isGuest={isGuest()}

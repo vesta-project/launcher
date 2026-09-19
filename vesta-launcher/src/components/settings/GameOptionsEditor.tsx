@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import {
 	createEffect,
 	createMemo,
@@ -18,6 +19,13 @@ import {
 	SelectContent,
 	SelectItem,
 } from "@ui/select/select";
+import {
+	Slider,
+	SliderFill,
+	SliderThumb,
+	SliderTrack,
+} from "@ui/slider/slider";
+import { formatGameOptionName } from "~/utils/game-option-label";
 
 interface Snapshot {
 	revision: string;
@@ -41,6 +49,7 @@ const protectedKeys = new Set([
 export function createGameOptionsEditor(props: {
 	instanceId: number | undefined;
 	disabled?: boolean;
+	enabled?: boolean;
 }) {
 	const [snapshot, setSnapshot] = createSignal<Snapshot>();
 	const [catalog, setCatalog] = createSignal<CatalogEntry[]>([]);
@@ -59,21 +68,24 @@ export function createGameOptionsEditor(props: {
 	const busy = () => loading() || saving() || props.disabled;
 	const value = (key: string) =>
 		changes()[key] ?? snapshot()?.values[key] ?? "";
-	const label = (row: CatalogEntry) => (row.labelId ? t(row.labelId) : row.key);
+	const label = (row: CatalogEntry) =>
+		row.labelId ? t(row.labelId) : formatGameOptionName(row.key);
 	const rows = createMemo(() => {
 		const known = new Map(catalog().map((row) => [row.key, row]));
 		for (const key of Object.keys(snapshot()?.values ?? {})) {
 			if (!known.has(key) && !protectedKeys.has(key))
 				known.set(key, {
 					key,
-					category: key.startsWith("key_") ? "keybindings" : "custom",
+					category: "custom",
 					labelId: "",
 					kind: "text",
 					min: null,
 					max: null,
 				});
 		}
-		return [...known.values()].filter((row) => !protectedKeys.has(row.key));
+		return [...known.values()].filter(
+			(row) => !protectedKeys.has(row.key) && !row.key.startsWith("key_"),
+		);
 	});
 	const categories = createMemo(() => [
 		...new Set(rows().map((row) => row.category)),
@@ -110,6 +122,7 @@ export function createGameOptionsEditor(props: {
 	const currentId = createMemo(() => props.instanceId);
 	createEffect(() => {
 		const id = currentId();
+		if (props.enabled === false) return;
 		generation++;
 		setSnapshot(undefined);
 		setChanges({});
@@ -181,6 +194,7 @@ export function createGameOptionsEditor(props: {
 
 export function GameOptionsEditor(props: {
 	state: ReturnType<typeof createGameOptionsEditor>;
+	onBack?: () => void;
 }) {
 	const {
 		snapshot,
@@ -227,9 +241,105 @@ export function GameOptionsEditor(props: {
 			<SelectContent />
 		</Select>
 	);
+	const valueEditor = (row: CatalogEntry) => {
+		if (row.kind === "boolean") {
+			return picker(
+				[...new Set([value(row.key), "true", "false"])],
+				value(row.key),
+				(next) => change(row.key, next),
+				label(row),
+				(next) =>
+					next === "true"
+						? t("game-options-on")
+						: next === "false"
+							? t("game-options-off")
+							: next || t("game-options-unset"),
+			);
+		}
+		if (row.kind === "number" && row.min !== null && row.max !== null) {
+			const raw = Number(value(row.key));
+			const hasValue = Number.isFinite(raw);
+			const min = row.key === "fov" ? 30 : row.min;
+			const max = row.key === "fov" ? 110 : row.max;
+			const step = max - min <= 1 ? 0.01 : 1;
+			const display = hasValue
+				? row.key === "fov"
+					? 70 + 40 * raw
+					: raw
+				: min;
+			return (
+				<div class={styles.numericControl}>
+					<Slider
+						value={[Math.min(max, Math.max(min, display))]}
+						minValue={min}
+						maxValue={max}
+						step={step}
+						onChange={(next) => {
+							const nextValue = next[0];
+							if (nextValue === undefined) return;
+							change(
+								row.key,
+								row.key === "fov"
+									? String((nextValue - 70) / 40)
+									: String(nextValue),
+							);
+						}}
+						disabled={busy()}
+					>
+						<SliderTrack>
+							<SliderFill />
+							<SliderThumb aria-label={label(row)} />
+						</SliderTrack>
+					</Slider>
+					<output class={styles.numericValue}>
+						{hasValue ? (step < 1 ? display.toFixed(2) : Math.round(display)) : "—"}
+						{row.key === "fov" ? "°" : ""}
+					</output>
+				</div>
+			);
+		}
+		const raw = value(row.key);
+		const display =
+			row.key === "fov" && raw !== "" && Number.isFinite(Number(raw))
+				? String(70 + 40 * Number(raw))
+				: raw;
+		return (
+			<TextFieldRoot>
+				<TextFieldInput
+					aria-label={label(row)}
+					disabled={busy()}
+					type="text"
+					inputMode={row.kind === "number" ? "decimal" : "text"}
+					placeholder={t("game-options-unset")}
+					value={display}
+					onInput={(event) => {
+						const next = (event.currentTarget as HTMLInputElement).value;
+						change(
+							row.key,
+							row.key === "fov" && next !== "" && Number.isFinite(Number(next))
+								? String((Number(next) - 70) / 40)
+								: next,
+						);
+					}}
+				/>
+			</TextFieldRoot>
+		);
+	};
 	return (
 		<section class={styles.editor} aria-label={t("game-options-title")}>
 			<header class={styles.header}>
+				<Show when={props.onBack}>
+					<Button
+						variant="ghost"
+						size="sm"
+						icon_only
+						aria-label={t("game-options-back")}
+						tooltip_text={t("game-options-back")}
+						onClick={props.onBack}
+					>
+						<BackIcon width={16} height={16} aria-hidden="true" />
+					</Button>
+				</Show>
 				<div>
 					<h3>{t("game-options-title")}</h3>
 					<p>{t("game-options-description")}</p>
@@ -287,66 +397,8 @@ export function GameOptionsEditor(props: {
 								<div class={styles.row}>
 									<span class={styles.name}>
 										{label(row)}
-										<Show when={row.labelId}>
-											<small>{row.key}</small>
-										</Show>
 									</span>
-									<Show
-										when={row.kind === "boolean"}
-										fallback={
-											<TextFieldRoot>
-												<TextFieldInput
-													aria-label={label(row)}
-													disabled={busy()}
-													type="text"
-													inputMode={row.kind === "number" ? "decimal" : "text"}
-													placeholder={t("game-options-unset")}
-													value={
-														row.key === "fov" &&
-														value(row.key) !== "" &&
-														Number.isFinite(Number(value(row.key)))
-															? String(70 + 40 * Number(value(row.key)))
-															: value(row.key)
-													}
-													onInput={(e) =>
-														change(
-															row.key,
-															row.key === "fov" &&
-																(e.currentTarget as HTMLInputElement).value !==
-																	"" &&
-																Number.isFinite(
-																	Number(
-																		(e.currentTarget as HTMLInputElement).value,
-																	),
-																)
-																? String(
-																		(Number(
-																			(e.currentTarget as HTMLInputElement)
-																				.value,
-																		) -
-																			70) /
-																			40,
-																	)
-																: (e.currentTarget as HTMLInputElement).value,
-														)
-													}
-												/>
-											</TextFieldRoot>
-										}
-									>
-										{picker(
-											[...new Set([value(row.key), "true", "false"])],
-											value(row.key),
-											(v) => change(row.key, v),
-											label(row),
-											(v) =>
-												v === "true"
-													? t("game-options-on")
-													: v === "false"
-														? t("game-options-off")
-														: v || t("game-options-unset"),
-										)}
-									</Show>
+									{valueEditor(row)}
 								</div>
 							)}
 						</For>
