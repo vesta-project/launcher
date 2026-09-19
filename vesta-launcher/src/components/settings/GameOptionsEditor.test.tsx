@@ -275,3 +275,26 @@ it("uses a switch for boolean settings and keeps custom labels readable", async 
 	fireEvent.click(toggle);
 	expect(toggle.getAttribute("aria-checked")).toBe("true");
 });
+
+
+it("does not render catalog aliases absent from the instance file", async () => {
+	vi.mocked(invoke).mockImplementation(async (command) =>
+		command === "get_game_options_catalog"
+			? [
+					...catalog,
+					{
+						key: "sound",
+						id: "master_volume",
+						category: "sound",
+						kind: "decimal",
+						min: 0,
+						max: 1,
+						step: 0.01,
+					},
+				]
+			: snapshot,
+	);
+	render(() => <EditorHarness instanceId={7} />);
+	await screen.findByRole("spinbutton", { name: "game-options-fov" });
+	expect(screen.queryByRole("spinbutton", { name: "Master volume" })).toBeNull();
+});

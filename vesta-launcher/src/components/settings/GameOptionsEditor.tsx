@@ -307,8 +307,13 @@ export function createGameOptionsEditor(props: {
 	const value = (key: string) =>
 		changes()[key] ?? snapshot()?.values[key] ?? "";
 	const rows = createMemo(() => {
-		const known = new Map(catalog().map((row) => [row.key, row]));
-		for (const key of Object.keys(snapshot()?.values ?? {})) {
+		const values = snapshot()?.values ?? {};
+		const known = new Map(
+			catalog()
+				.filter((row) => Object.prototype.hasOwnProperty.call(values, row.key))
+				.map((row) => [row.key, row]),
+		);
+		for (const key of Object.keys(values)) {
 			if (known.has(key) || protectedKeys.has(key)) continue;
 			const raw = snapshot()?.values[key] ?? "";
 			known.set(key, {

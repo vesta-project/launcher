@@ -1732,6 +1732,16 @@ mod tests {
         assert_eq!(category("key_key.forward"), "keybindings");
         assert_eq!(category("mod.someOption"), "custom");
     }
+
+    #[test]
+    fn legacy_graphics_metadata_only_offers_encodable_values() {
+        let metadata = editor_metadata();
+        let legacy = metadata
+            .iter()
+            .find(|entry| entry["key"] == "fancyGraphics")
+            .unwrap();
+        assert_eq!(legacy["values"], serde_json::json!(["fast", "fancy"]));
+    }
 }
 
 /// Shared and instance editors use the same control metadata.
@@ -1742,7 +1752,7 @@ pub fn editor_metadata() -> Vec<serde_json::Value> {
                 Boolean => ("boolean",None,None,None,vec![]),
                 Integer{min,max,step} => ("integer",Some(min as f64),Some(max as f64),Some(step as f64),vec![]),
                 Decimal{min,max,step,..} => ("decimal",Some(min),Some(max),Some(step),vec![]),
-                Enum(values) => ("enum",None,None,None,values.to_vec()),
+                Enum(values) => ("enum",None,None,None,if *key == "fancyGraphics" { vec!["fast", "fancy"] } else { values.to_vec() }),
                 Language => ("language",None,None,None,vec![]),
                 UnboundedInteger => ("integer",None,None,Some(1.0),vec![]),
                 UnboundedDecimal => ("decimal",None,None,None,vec![]),
