@@ -1,10 +1,10 @@
 import ReloadIcon from "@assets/icons/actions/reload.svg";
-import GearIcon from "@assets/icons/content/gear.svg";
-import GlobeIcon from "@assets/icons/content/globe.svg";
 import KeyboardIcon from "@assets/icons/content/keyboard.svg";
-import LayersIcon from "@assets/icons/content/layers.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
+import ResourcePackIcon from "@assets/icons/content/resource-pack.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
+import ServerIcon from "@assets/icons/content/server.svg";
+import SlidersIcon from "@assets/icons/content/sliders.svg";
 import InstanceSelectionDialog from "@components/instances/InstanceSelectionDialog";
 import { SettingsCard, SubpageBackButton } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
@@ -39,10 +39,10 @@ import {
 import { t } from "~/localization";
 import {
 	type Category,
-	sourceCategories,
 	categories,
 	type Preferences,
 	type Snapshot,
+	sourceCategories,
 } from "~/settings-sync/model";
 import pageStyles from "../settings-page.module.css";
 import { SharedKeybindsPage } from "./SharedKeybindsPage";
@@ -51,10 +51,10 @@ import { SquareToggle } from "./SquareToggle";
 import styles from "./sync-tab.module.css";
 
 const categoryIcons: Record<Category, Component<{ class?: string }>> = {
-	gameOptions: GearIcon,
+	gameOptions: SlidersIcon,
 	keybinds: KeyboardIcon,
-	servers: GlobeIcon,
-	resourcePacks: LayersIcon,
+	servers: ServerIcon,
+	resourcePacks: ResourcePackIcon,
 };
 
 const filledMarks = new Set<Category>(["gameOptions"]);
