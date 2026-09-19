@@ -223,12 +223,14 @@ pub(super) fn populate(conn: &mut SqliteConnection, snapshot: &mut Snapshot) -> 
 }
 async fn instance(id: i32) -> Result<(String, std::path::PathBuf), String> {
     let instance = crate::commands::instances::get_instance(id)?;
-    if instance.installation_status.as_deref() != Some("installed")
-        || piston_lib::game::launcher::is_instance_running(&instance.slug())
-            .await
-            .map_err(|e| e.to_string())?
+    if instance.installation_status.as_deref() != Some("installed") {
+        return Err("Instance is not ready for file sync.".into());
+    }
+    if piston_lib::game::launcher::is_instance_running(&instance.slug())
+        .await
+        .map_err(|e| e.to_string())?
     {
-        return Err("Instance is busy; sync will retry after exit or before launch.".into());
+        return Err("Instance is running.".into());
     }
     Ok((
         instance.minecraft_version.clone(),

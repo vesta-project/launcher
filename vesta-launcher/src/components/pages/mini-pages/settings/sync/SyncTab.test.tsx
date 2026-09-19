@@ -235,13 +235,15 @@ it("selects individual options and all or none without changing membership", asy
 			gameOptionKeys.filter((key) => key !== "fov").sort(),
 		),
 	);
-	fireEvent.click(screen.getByRole("button", { name: "sync-all" }));
+	fireEvent.click(screen.getByRole("button", { name: "sync-link-all-options" }));
 	await waitFor(() =>
 		expect([...(state[0].preferences.selectedKeys ?? [])].sort()).toEqual(
 			[...gameOptionKeys].sort(),
 		),
 	);
-	fireEvent.click(screen.getByRole("button", { name: "sync-unsync-all" }));
+	fireEvent.click(
+		screen.getByRole("button", { name: "sync-unlink-all-options" }),
+	);
 	await waitFor(() => expect(state[0].preferences.selectedKeys).toEqual([]));
 	expect(state[0].preferences.instanceIds).toEqual([1]);
 	expect(state[0].preferences.enabled).toBe(true);
@@ -252,7 +254,9 @@ it("keeps the prior selection when saving fails", async () => {
 	render(() => <SyncSettingsTab />);
 	await openSharedOptions();
 	vi.mocked(invoke).mockRejectedValueOnce(new Error("Changed elsewhere"));
-	fireEvent.click(screen.getByRole("button", { name: "sync-unsync-all" }));
+	fireEvent.click(
+		screen.getByRole("button", { name: "sync-unlink-all-options" }),
+	);
 	expect(await screen.findByRole("alert")).toBeTruthy();
 	expect(state[0].preferences.selectedKeys ?? gameOptionKeys).toEqual(
 		gameOptionKeys,
@@ -284,7 +288,7 @@ it("freezes instance membership while sync is paused", async () => {
 			name: "sync-edit sync-gameOptions-title",
 		}),
 	);
-	const all = screen.getByRole("button", { name: "sync-all-instances" });
+	const all = screen.getByRole("button", { name: "sync-link-all-instances" });
 	const one = screen.getByRole("button", { name: "sync-instance-label Local" });
 	expect(all.hasAttribute("disabled")).toBe(true);
 	expect(one.hasAttribute("disabled")).toBe(true);

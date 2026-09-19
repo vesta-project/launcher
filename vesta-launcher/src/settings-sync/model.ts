@@ -48,6 +48,7 @@ export interface GameOptionMetadata {
 	min?: number | null;
 	max?: number | null;
 	step?: number | null;
+	unit?: string | null;
 	values?: Array<string | GameOptionChoice>;
 }
 

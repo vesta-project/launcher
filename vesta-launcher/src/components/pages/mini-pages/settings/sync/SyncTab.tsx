@@ -1,12 +1,12 @@
 import ReloadIcon from "@assets/icons/actions/reload.svg";
 import GearIcon from "@assets/icons/content/gear.svg";
 import GlobeIcon from "@assets/icons/content/globe.svg";
+import KeyboardIcon from "@assets/icons/content/keyboard.svg";
 import LayersIcon from "@assets/icons/content/layers.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import InstanceSelectionDialog from "@components/instances/InstanceSelectionDialog";
-import { SettingsCard } from "@components/settings";
+import { SettingsCard, SubpageBackButton } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	type Instance,
@@ -52,7 +52,7 @@ import styles from "./sync-tab.module.css";
 
 const categoryIcons: Record<Category, Component<{ class?: string }>> = {
 	gameOptions: GearIcon,
-	keybinds: GearIcon,
+	keybinds: KeyboardIcon,
 	servers: GlobeIcon,
 	resourcePacks: LayersIcon,
 };
@@ -128,17 +128,7 @@ function DetailHeading(props: {
 }) {
 	return (
 		<div class={styles.heading}>
-			<Button
-				class={styles.back}
-				icon_only
-				aria-label={t("sync-back")}
-				tooltip_text={t("sync-back")}
-				variant="ghost"
-				size="icon"
-				onClick={props.onBack}
-			>
-				<BackIcon class={styles.icon} aria-hidden="true" />
-			</Button>
+			<SubpageBackButton label={t("sync-back")} onClick={props.onBack} />
 			<h2 class={styles.headingTitle}>{props.title}</h2>
 			<Toggle
 				label={props.title}
@@ -192,7 +182,9 @@ export function SyncSettingsTab() {
 			mutate((previous) =>
 				previous?.map((item) => (item.category === category ? next : item)),
 			);
-			if (next.pending?.length) setError(next.pending.join("\n"));
+			// Running instances are deliberately deferred. They receive the bundle
+			// after exit or during their next launch preparation, so this does not
+			// need an error banner in the settings page.
 			return true;
 		} catch (failure) {
 			setError(String(failure));
@@ -375,16 +367,20 @@ export function SyncSettingsTab() {
 													</Show>
 
 													<div class={styles.bulkRow}>
-														<Button
-															class={styles.bulkToggle}
-															variant="outline"
-															size="sm"
+														<SquareToggle
+															label={
+																allLinked()
+																	? t("sync-unlink-all-instances")
+																	: t("sync-link-all-instances")
+															}
+															pressed={allLinked()}
+															iconOnly
 															disabled={
 																busy() ||
 																!available().length ||
 																!current()?.preferences.enabled
 															}
-															onClick={() =>
+														onChange={() =>
 																update(category(), {
 																	instanceIds: allLinked()
 																		? []
@@ -393,11 +389,9 @@ export function SyncSettingsTab() {
 																			),
 																})
 															}
-														>
-															{allLinked()
-																? t("sync-unsync-all")
-																: t("sync-all-instances")}
-														</Button>
+													>
+														<LinkIcon class={styles.icon} />
+													</SquareToggle>
 													</div>
 													<div class={styles.search}>
 														<SearchIcon
