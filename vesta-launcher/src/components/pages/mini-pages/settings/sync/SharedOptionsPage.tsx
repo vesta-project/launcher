@@ -1,11 +1,15 @@
+import AccessibilityIcon from "@assets/icons/content/accessibility.svg";
+import ChatIcon from "@assets/icons/content/chat.svg";
 import CodeIcon from "@assets/icons/content/code.svg";
-import CubeIcon from "@assets/icons/content/cube.svg";
+import GlobeIcon from "@assets/icons/content/globe.svg";
+import KeyboardIcon from "@assets/icons/content/keyboard.svg";
 import LayersIcon from "@assets/icons/content/layers.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
-import MicIcon from "@assets/icons/security/mic.svg";
+import MonitorIcon from "@assets/icons/content/monitor.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
+import SkinIcon from "@assets/icons/content/skin-icon.svg";
+import MicIcon from "@assets/icons/security/mic.svg";
 import { SubpageBackButton } from "@components/settings/SubpageBackButton";
-import Button from "@ui/button/button";
 import {
 	Select,
 	SelectContent,
@@ -44,8 +48,16 @@ type OptionScope = "all" | string;
 export type OptionRow = GameOptionMetadata;
 
 const scopeIcons: Record<string, Component<{ class?: string }>> = {
-	video: CubeIcon,
+	all: LayersIcon,
+	video: MonitorIcon,
 	sound: MicIcon,
+	language: GlobeIcon,
+	chat: ChatIcon,
+	controls: KeyboardIcon,
+	mouse: KeyboardIcon,
+	accessibility: AccessibilityIcon,
+	skin: SkinIcon,
+	online: GlobeIcon,
 	custom: CodeIcon,
 };
 
@@ -182,7 +194,7 @@ export function ValueControl(props: {
 	value?: string;
 	disabled: boolean;
 	placeholder?: string;
-	onSave: (value: string) => Promise<boolean> | boolean | void;
+	onSave: (value: string) => Promise<boolean> | boolean | undefined;
 }) {
 	const [dragValue, setDragValue] = createSignal<number>();
 	const ariaLabel = () =>
@@ -462,7 +474,7 @@ export function SharedOptionsPage(props: {
 				>
 					<For each={scopes()}>
 						{(entry) => {
-							const Icon = scopeIcons[entry] ?? LayersIcon;
+							const Icon = scopeIcons[entry] ?? CodeIcon;
 							return (
 								<ToggleGroupItem
 									value={entry}
@@ -478,7 +490,9 @@ export function SharedOptionsPage(props: {
 				</ToggleGroup>
 				<SquareToggle
 					label={
-						allSelected() ? t("sync-unlink-all-options") : t("sync-link-all-options")
+						allSelected()
+							? t("sync-unlink-all-options")
+							: t("sync-link-all-options")
 					}
 					pressed={allSelected()}
 					iconOnly
