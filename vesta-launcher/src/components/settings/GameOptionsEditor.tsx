@@ -309,6 +309,7 @@ export function GameOptionsEditor(props: {
 					? 70 + 40 * raw
 					: raw
 				: min;
+			const safeDisplay = Number.isFinite(display) ? display : min;
 			return (
 				<div class={styles.numericControl}>
 					<input
@@ -318,7 +319,7 @@ export function GameOptionsEditor(props: {
 						min={min}
 						max={max}
 						step={step}
-						value={Math.min(max, Math.max(min, display))}
+						value={Math.min(max, Math.max(min, safeDisplay))}
 						disabled={busy()}
 						onInput={(event) => {
 							const nextValue = Number(
@@ -333,7 +334,7 @@ export function GameOptionsEditor(props: {
 						}}
 					/>
 					<output class={styles.numericValue}>
-						{hasValue ? (step < 1 ? display.toFixed(2) : Math.round(display)) : "—"}
+						{hasValue ? (step < 1 ? safeDisplay.toFixed(2) : Math.round(safeDisplay)) : "—"}
 						{row.key === "fov" ? "°" : ""}
 					</output>
 				</div>
