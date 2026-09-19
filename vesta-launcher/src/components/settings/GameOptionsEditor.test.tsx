@@ -177,7 +177,10 @@ it("separates keybindings through the shared footer", async () => {
 	vi.mocked(invoke).mockImplementation(async (command) =>
 		command === "get_game_options_catalog"
 			? catalog
-			: { ...snapshot, values: { "key_key.forward": "key.keyboard.w" } },
+			: {
+					...snapshot,
+					values: { fov: "70", "key_key.forward": "key.keyboard.w" },
+				},
 	);
 	render(() => <EditorHarness instanceId={7} />);
 	await screen.findByRole("spinbutton", { name: "sync-value-label FOV" });

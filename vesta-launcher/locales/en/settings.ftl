@@ -42,7 +42,7 @@ game-options-key-unsupported = This key is not supported. Try another key or pre
 
 settings-tab-sync = Sync
 
-sync-all = Sync All
+sync-link-all-options = Share every option
 
 sync-back = Back
 
@@ -104,7 +104,7 @@ sync-source-hint = Used once to seed the shared starting values. After that, it 
 
 sync-source-title = Which instance is the owner?
 
-sync-unsync-all = Unsync All
+sync-unlink-all-options = Keep every option local
 
 sync-value-label = { $option } value
 
@@ -140,9 +140,10 @@ game-options-category-custom = Custom
 game-options-count = { $count } edited
 game-options-loading = Loading game options…
 game-options-missing = No game options file yet. Saving creates it with only your edits.
-game-options-unset = Game default
+game-options-unset = Not in file
 game-options-no-results = No matching game options.
-sync-all-instances = Follow on all instances
+sync-link-all-instances = Make every instance follow
+sync-unlink-all-instances = Stop every instance following
 sync-keybinds-cancel = Cancel
 sync-keybinds-clear = Clear
 sync-keybinds-help = Keybinding controls
@@ -164,6 +165,9 @@ sync-choice-commands-only = Commands only
 sync-choice-hidden = Hidden
 sync-choice-chat = Chat
 sync-choice-system = System
+sync-choice-narrator-all = Narrates all
+sync-choice-narrator-chat = Narrates chat
+sync-choice-narrator-system = Narrates system
 sync-choice-peaceful = Peaceful
 sync-choice-easy = Easy
 sync-choice-normal = Normal
@@ -171,3 +175,16 @@ sync-choice-hard = Hard
 sync-choice-maximum = Maximum
 sync-choice-fast = Fast
 sync-choice-fancy = Fancy
+sync-choice-threaded = Threaded
+sync-choice-semi-blocking = Semi-blocking
+sync-choice-fully-blocking = Fully blocking
+sync-choice-none = None
+sync-choice-rgss = RGSS
+sync-choice-anisotropic = Anisotropic
+sync-choice-2x = 2×
+sync-choice-4x = 4×
+sync-choice-8x = 8×
+sync-choice-high = High
+sync-choice-medium = Medium
+sync-choice-low = Low
+sync-choice-notification = Notification

@@ -99,10 +99,20 @@ export function createGameOptionsEditor(props: {
 		changes()[key] ?? snapshot()?.values[key] ?? "";
 	const rows = createMemo(() => {
 		const known = new Map(catalog().map((row) => [row.key, row]));
-		for (const key of Object.keys(snapshot()?.values ?? {})) {
-			if (known.has(key) || protectedKeys.has(key)) continue;
-			const raw = snapshot()?.values[key] ?? "";
-			known.set(key, {
+		const keys = new Set([
+			...Object.keys(snapshot()?.values ?? {}),
+			...Object.keys(changes()),
+		]);
+		const result: CatalogEntry[] = [];
+		for (const key of keys) {
+			if (protectedKeys.has(key)) continue;
+			const existing = known.get(key);
+			if (existing) {
+				result.push(existing);
+				continue;
+			}
+			const raw = changes()[key] ?? snapshot()?.values[key] ?? "";
+			result.push({
 				key,
 				category: key.startsWith("key_") ? "keybinds" : "custom",
 				kind:
@@ -115,7 +125,7 @@ export function createGameOptionsEditor(props: {
 							: "text",
 			});
 		}
-		return [...known.values()].filter((row) => !protectedKeys.has(row.key));
+		return result;
 	});
 	const categories = createMemo(() => {
 		const present = new Set(
@@ -399,6 +409,7 @@ export function GameOptionsEditor(props: {
 											option={row}
 											value={value(row.key)}
 											disabled={busy()}
+											placeholder={t("game-options-unset")}
 											onSave={(next) => {
 												change(row.key, next);
 											}}

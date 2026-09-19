@@ -1,6 +1,5 @@
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import { GameKeybindings } from "@components/settings/GameKeybindings";
-import Button from "@ui/button/button";
+import { SubpageBackButton } from "@components/settings/SubpageBackButton";
 import { t } from "~/localization";
 import {
 	selectedSharedKeys,
@@ -28,17 +27,7 @@ export function SharedKeybindsPage(props: {
 	return (
 		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<Button
-					class={styles.back}
-					variant="ghost"
-					size="icon"
-					icon_only
-					aria-label={t("sync-back")}
-					tooltip_text={t("sync-back")}
-					onClick={props.onBack}
-				>
-					<BackIcon class={styles.icon} aria-hidden="true" />
-				</Button>
+				<SubpageBackButton label={t("sync-back")} onClick={props.onBack} />
 				<h2 class={styles.headingTitle}>{t("sync-keybinds-page-title")}</h2>
 			</div>
 			<div class={styles.keybindsBody}>

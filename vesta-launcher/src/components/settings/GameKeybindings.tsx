@@ -159,7 +159,9 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 	});
 
 	const toggleLabel = () =>
-		props.allSelected?.() ? t("sync-unsync-all") : t("sync-all");
+		props.allSelected?.()
+			? t("sync-unlink-all-options")
+			: t("sync-link-all-options");
 
 	return (
 		<SettingsCard
@@ -168,12 +170,15 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 				<div class={styles.recordingHelp} aria-label={t("sync-keybinds-help")}>
 					<Show when={props.onToggleAll}>
 						<LauncherButton
-							variant="outline"
-							size="sm"
+							variant="ghost"
+							size="icon"
+							icon_only
+							aria-label={toggleLabel()}
+							tooltip_text={toggleLabel()}
 							disabled={props.state.busy()}
 							onClick={props.onToggleAll}
 						>
-							{toggleLabel()}
+							<LinkIcon aria-hidden="true" />
 						</LauncherButton>
 					</Show>
 					<Show when={recording()}>

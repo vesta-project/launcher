@@ -49,16 +49,18 @@
 .layout {
 	display: grid;
 	grid-template-columns: 160px minmax(0, 1fr);
-	gap: 24px;
+	gap: 0;
 	height: 100%;
 	min-height: 0;
 }
 
 .sidebar {
-	padding-right: 16px;
+	padding: 0 16px 16px 16px;
 	border-right: 1px solid var(--border-subtle);
 	min-height: 0;
-	overflow: hidden;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .search {
@@ -103,13 +105,14 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	padding: 0 0 16px;
 }
 
 .bulk {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 0 0 12px;
+	padding: 0 16px 12px;
 }
 
 .hint {
@@ -133,7 +136,7 @@
 	align-items: center;
 	gap: 12px;
 	min-height: 58px;
-	padding: 8px 0;
+	padding: 8px 16px;
 	border-top: 1px solid var(--border-subtle);
 }
 
@@ -167,16 +170,17 @@
 .value {
 	display: flex;
 	justify-content: flex-end;
+	align-items: center;
 	min-width: 0;
+	width: 100%;
 }
 
-.value > * {
-	width: 100%;
-	min-width: 0;
+.value > :global(*) {
+	margin-left: auto;
 }
 
 .empty {
-	margin: 8px 0 0;
+	margin: 8px 16px 0;
 	color: var(--text-secondary);
 	font-size: var(--font-xsmall);
 }
@@ -188,13 +192,14 @@
 	}
 
 	.sidebar {
-		padding: 0;
+		padding: 0 16px;
 		border: 0;
 		overflow: visible;
 	}
 
 	.content {
 		overflow: visible;
+		padding-bottom: 16px;
 	}
 
 	.nav {

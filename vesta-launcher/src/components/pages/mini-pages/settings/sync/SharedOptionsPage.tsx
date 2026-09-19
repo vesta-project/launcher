@@ -1,10 +1,10 @@
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import CodeIcon from "@assets/icons/content/code.svg";
 import CubeIcon from "@assets/icons/content/cube.svg";
 import LayersIcon from "@assets/icons/content/layers.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
 import MicIcon from "@assets/icons/security/mic.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
+import { SubpageBackButton } from "@components/settings/SubpageBackButton";
 import Button from "@ui/button/button";
 import {
 	Select,
@@ -70,43 +70,118 @@ const enumLabels: Record<string, Record<string, string>> = {
 	particles: { "0": "all", "1": "decreased", "2": "minimal" },
 	attack_indicator: { "0": "off", "1": "crosshair", "2": "hotbar" },
 	chat_visibility: { "0": "shown", "1": "commands-only", "2": "hidden" },
-	narrator: { "0": "off", "1": "all", "2": "chat", "3": "system" },
+	narrator: {
+		"0": "off",
+		"1": "narrator-all",
+		"2": "narrator-chat",
+		"3": "narrator-system",
+	},
 	difficulty: { "0": "peaceful", "1": "easy", "2": "normal", "3": "hard" },
-	ambient_occlusion: { "0": "off", "1": "minimal", "2": "maximum" },
+	ambient_occlusion: {
+		false: "off",
+		true: "maximum",
+		"0": "off",
+		"1": "minimal",
+		"2": "maximum",
+	},
 	clouds: { false: "off", fast: "fast", true: "fancy" },
+	prioritize_chunk_updates: {
+		"0": "threaded",
+		"1": "semi-blocking",
+		"2": "fully-blocking",
+	},
+	texture_filtering: { "0": "none", "1": "rgss", "2": "anisotropic" },
+	anisotropy: { "1": "2x", "2": "4x", "3": "8x" },
+	gl_debug_verbosity: {
+		"0": "none",
+		"1": "high",
+		"2": "medium",
+		"3": "low",
+		"4": "notification",
+	},
 };
 function choiceLabel(choice: string | GameOptionChoice, id?: string): string {
 	if (typeof choice === "string") {
 		const label = id && enumLabels[id]?.[choice];
 		return label
 			? t(`sync-choice-${label}`)
-			: formatGameOptionName(choice.toLowerCase());
+			: /^\d+$/.test(choice)
+				? choice
+				: formatGameOptionName(choice.toLowerCase());
 	}
 	if (choice.labelId) return t(choice.labelId);
 	return choice.label || choice.value;
 }
 
-function decimalPlaces(step: number): number {
+function decimalPlaces(step: number | null | undefined): number {
+	if (step === null || step === undefined) return 2;
 	const text = String(step);
 	const exponent = text.indexOf("e-");
-	if (exponent >= 0) return Number(text.slice(exponent + 2));
+	if (exponent >= 0) return Number(text.slice(exponent + 2)) || 2;
 	const decimal = text.indexOf(".");
 	return decimal < 0 ? 0 : text.length - decimal - 1;
 }
 
-function serializeNumber(
-	value: number,
-	step: number | null | undefined,
-): string {
-	if (!Number.isFinite(value)) return "";
-	const places = step === null || step === undefined ? 12 : decimalPlaces(step);
-	return String(Number(value.toFixed(Math.min(12, places))));
+function isPercent(option: OptionRow) {
+	return option.unit === "percent";
+}
+
+function displayPlaces(option: OptionRow) {
+	if (option.kind === "integer") return 0;
+	return Math.min(2, decimalPlaces(option.step ?? 0.01));
+}
+
+function toDisplay(option: OptionRow, stored: number) {
+	return isPercent(option) ? stored * 100 : stored;
+}
+
+function fromDisplay(option: OptionRow, display: number) {
+	return isPercent(option) ? display / 100 : display;
+}
+
+function displayRange(option: OptionRow, value?: string) {
+	const min = option.min;
+	const max = option.max;
+	if (typeof min !== "number" || typeof max !== "number" || min > max)
+		return undefined;
+	const observed = Number(value);
+	if (Number.isFinite(observed)) {
+		const storedMin = min;
+		const storedMax = max;
+		if (observed < storedMin || observed > storedMax) return undefined;
+	}
+	if (isPercent(option)) return { min: min * 100, max: max * 100 };
+	return { min, max };
+}
+
+function displayStep(option: OptionRow) {
+	const step = option.step ?? (option.kind === "integer" ? 1 : 0.01);
+	return isPercent(option) ? step * 100 : step;
+}
+
+function formatDisplay(option: OptionRow, display: number) {
+	if (!Number.isFinite(display)) return "";
+	const rounded = Number(display.toFixed(displayPlaces(option)));
+	if (isPercent(option)) return `${rounded}%`;
+	if (option.unit === "multiplier") return `${rounded}×`;
+	return String(rounded);
+}
+
+function serializeStored(option: OptionRow, display: number) {
+	if (!Number.isFinite(display)) return "";
+	const stored = fromDisplay(option, display);
+	const places = Math.min(
+		4,
+		Math.max(displayPlaces(option), decimalPlaces(option.step ?? 0.01)),
+	);
+	return String(Number(stored.toFixed(places)));
 }
 
 export function ValueControl(props: {
 	option: OptionRow;
 	value?: string;
 	disabled: boolean;
+	placeholder?: string;
 	onSave: (value: string) => Promise<boolean> | boolean | void;
 }) {
 	const [dragValue, setDragValue] = createSignal<number>();
@@ -114,21 +189,18 @@ export function ValueControl(props: {
 		t("sync-value-label", { option: labelForOption(props.option) });
 	const kind = () => props.option.kind;
 	const choices = () => props.option.values ?? [];
-	const numericRange = () => {
-		const min = props.option.min;
-		const max = props.option.max;
-		if (typeof min !== "number" || typeof max !== "number" || min > max)
-			return undefined;
-		const observed = Number(props.value);
-		if (Number.isFinite(observed) && (observed < min || observed > max))
-			return undefined;
-		return { min, max };
-	};
-	const numberValue = () => {
+	const range = () => displayRange(props.option, props.value);
+	const storedNumber = () => {
 		if (props.value === undefined || props.value.trim() === "") return null;
 		const value = Number(props.value);
 		return Number.isFinite(value) ? value : null;
 	};
+	const displayNumber = () => {
+		const stored = storedNumber();
+		return stored === null ? null : toDisplay(props.option, stored);
+	};
+	const shown = () => dragValue() ?? displayNumber();
+	const placeholder = () => props.placeholder ?? t("sync-value-missing");
 
 	return (
 		<Show
@@ -145,21 +217,22 @@ export function ValueControl(props: {
 								(kind() === "integer" ||
 									kind() === "decimal" ||
 									kind() === "number") &&
-								numericRange() !== undefined &&
-								numberValue() !== null
+								range() !== undefined &&
+								displayNumber() !== null
 							}
 							fallback={
 								<TextFieldRoot class={styles.valueTextControl}>
 									<TextFieldInput
 										aria-label={ariaLabel()}
 										type={
-											kind() === "integer" || kind() === "decimal"
+											(kind() === "integer" || kind() === "decimal") &&
+											storedNumber() !== null
 												? "number"
 												: "text"
 										}
 										step={props.option.step ?? "any"}
 										value={props.value ?? ""}
-										placeholder={t("sync-value-missing")}
+										placeholder={placeholder()}
 										disabled={props.disabled}
 										onChange={(event) =>
 											void props.onSave(
@@ -172,25 +245,25 @@ export function ValueControl(props: {
 						>
 							<div class={styles.valueSliderControl}>
 								<span class={styles.valueLabel}>
-									{dragValue() ?? props.value ?? t("sync-value-missing")}
+									{formatDisplay(props.option, shown() as number)}
 								</span>
 								<Slider
 									class={styles.valueSlider}
-									value={[dragValue() ?? (numberValue() as number)]}
-									minValue={numericRange()?.min}
-									maxValue={numericRange()?.max}
-									step={props.option.step ?? (kind() === "integer" ? 1 : 0.01)}
+									value={[shown() as number]}
+									minValue={range()?.min}
+									maxValue={range()?.max}
+									step={displayStep(props.option)}
 									disabled={props.disabled}
 									aria-label={ariaLabel()}
 									onChange={(next) => setDragValue(next[0])}
 									onChangeEnd={(next) => {
 										if (props.disabled || next[0] === undefined) return;
-										const value = serializeNumber(next[0], props.option.step);
+										const value = serializeStored(props.option, next[0]);
 										if (value !== props.value) {
-										Promise.resolve(props.onSave(value)).finally(() =>
-											setDragValue(undefined),
-										);
-									} else setDragValue(undefined);
+											Promise.resolve(props.onSave(value)).finally(() =>
+												setDragValue(undefined),
+											);
+										} else setDragValue(undefined);
 									}}
 								>
 									<SliderTrack>
@@ -202,64 +275,69 @@ export function ValueControl(props: {
 						</Show>
 					}
 				>
-					<Select<string>
-						options={choices().map(choiceValue)}
-						value={props.value}
-						onChange={(value) => value !== null && void props.onSave(value)}
-						optionValue={(value) => value}
-						optionTextValue={(value) => {
-							const choice = choices().find(
-								(item) => choiceValue(item) === value,
-							);
-							return choice ? choiceLabel(choice, props.option.id) : value;
-						}}
-						itemComponent={(itemProps) => {
-							const choice = choices().find(
-								(item) => choiceValue(item) === itemProps.item.rawValue,
-							);
-							return (
-								<SelectItem item={itemProps.item}>
-									{choice
-										? choiceLabel(choice, props.option.id)
-										: itemProps.item.rawValue}
-								</SelectItem>
-							);
-						}}
-					>
-						<SelectTrigger
-							aria-label={ariaLabel()}
-							disabled={props.disabled}
-							class={styles.valueSelect}
+					<div class={styles.valueControl}>
+						<Select<string>
+							options={choices().map(choiceValue)}
+							value={props.value}
+							onChange={(value) => value !== null && void props.onSave(value)}
+							optionValue={(value) => value}
+							optionTextValue={(value) => {
+								const choice = choices().find(
+									(item) => choiceValue(item) === value,
+								);
+								return choice ? choiceLabel(choice, props.option.id) : value;
+							}}
+							itemComponent={(itemProps) => {
+								const choice = choices().find(
+									(item) => choiceValue(item) === itemProps.item.rawValue,
+								);
+								return (
+									<SelectItem item={itemProps.item}>
+										{choice
+											? choiceLabel(choice, props.option.id)
+											: itemProps.item.rawValue}
+									</SelectItem>
+								);
+							}}
 						>
-							<SelectValue<string>>
-								{(state) => {
-									const selected = state.selectedOption();
-									const choice = choices().find(
-										(item) => choiceValue(item) === selected,
-									);
-									return choice
-										? choiceLabel(choice, props.option.id)
-										: (selected ?? "");
-								}}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent />
-					</Select>
+							<SelectTrigger
+								aria-label={ariaLabel()}
+								disabled={props.disabled}
+								class={styles.valueSelect}
+							>
+								<SelectValue<string>>
+									{(state) => {
+										const selected = state.selectedOption();
+										const choice = choices().find(
+											(item) => choiceValue(item) === selected,
+										);
+										return choice
+											? choiceLabel(choice, props.option.id)
+											: (selected ?? "");
+									}}
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent />
+						</Select>
+					</div>
 				</Show>
 			}
 		>
-			<Switch
-				checked={props.value === "true"}
-				disabled={props.disabled}
-				onCheckedChange={(checked: boolean) =>
-					void props.onSave(String(checked))
-				}
-			>
-				<SwitchLabel class={styles.srOnly}>{ariaLabel()}</SwitchLabel>
-				<SwitchControl>
-					<SwitchThumb />
-				</SwitchControl>
-			</Switch>
+			<div class={styles.valueControl}>
+				<Switch
+					checked={props.value === "true"}
+					disabled={props.disabled}
+					aria-label={ariaLabel()}
+					onCheckedChange={(checked: boolean) =>
+						void props.onSave(String(checked))
+					}
+				>
+					<SwitchLabel class={styles.srOnly}>{ariaLabel()}</SwitchLabel>
+					<SwitchControl>
+						<SwitchThumb />
+					</SwitchControl>
+				</Switch>
+			</div>
 		</Show>
 	);
 }
@@ -358,17 +436,7 @@ export function SharedOptionsPage(props: {
 	return (
 		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<Button
-					class={styles.back}
-					variant="ghost"
-					size="icon"
-					icon_only
-					aria-label={t("sync-back")}
-					tooltip_text={t("sync-back")}
-					onClick={props.onBack}
-				>
-					<BackIcon class={styles.icon} aria-hidden="true" />
-				</Button>
+				<SubpageBackButton label={t("sync-back")} onClick={props.onBack} />
 				<h2 class={styles.headingTitle}>{t("sync-shared-page-title")}</h2>
 			</div>
 			<div class={styles.filters}>
@@ -408,20 +476,22 @@ export function SharedOptionsPage(props: {
 						}}
 					</For>
 				</ToggleGroup>
-				<Button
-					class={styles.bulkToggle}
-					variant="outline"
-					size="sm"
+				<SquareToggle
+					label={
+						allSelected() ? t("sync-unlink-all-options") : t("sync-link-all-options")
+					}
+					pressed={allSelected()}
+					iconOnly
 					disabled={disabled() || availableKeys().length === 0}
-					onClick={() =>
+					onChange={() =>
 						void props.onSave({
 							...props.snapshot.preferences,
 							selectedKeys: allSelected() ? [] : availableKeys(),
 						})
 					}
 				>
-					{allSelected() ? t("sync-unsync-all") : t("sync-all")}
-				</Button>
+					<LinkIcon class={styles.icon} />
+				</SquareToggle>
 			</div>
 			<div class={styles.optionRows}>
 				<For each={filtered()}>

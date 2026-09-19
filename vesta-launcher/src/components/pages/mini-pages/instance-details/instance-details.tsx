@@ -426,7 +426,9 @@ export default function InstanceDetails(
 		return normalizeInstanceTab(params?.activeTab as string | undefined);
 	});
 	const showingGameOptions = createMemo(
-		() => activeRouter()?.currentParams.get()?.settingsPage === "game-options",
+		() =>
+			activeTab() === "settings" &&
+			activeRouter()?.currentParams.get()?.settingsPage === "game-options",
 	);
 	const selectedWorldDirectory = createMemo(() => {
 		const value = activeRouter()?.currentParams.get()?.world;
@@ -2761,7 +2763,7 @@ export default function InstanceDetails(
 	});
 
 	const handleTabChange = (tab: TabType) => {
-		if (tab === activeTab()) return;
+		if (tab === activeTab() && !showingGameOptions()) return;
 		if (tab === "resources") {
 			const instanceId = instance()?.id;
 			if (instanceId) {
@@ -2769,6 +2771,11 @@ export default function InstanceDetails(
 					instanceId,
 				});
 			}
+		}
+		// Leaving nested settings pages via the sidebar must clear them; otherwise
+		// settingsPage=game-options keeps fill layout / editor state on other tabs.
+		if (activeRouter()?.currentParams.get()?.settingsPage != null) {
+			activeRouter()?.updateQuery("settingsPage", null);
 		}
 		instanceTabLoader.prepare(tab);
 		setSelectedTab(tab);
@@ -2881,6 +2888,7 @@ export default function InstanceDetails(
 												<OverviewTab
 													instance={inst()}
 													instanceSlug={slug()}
+													active={activeTab() === "home"}
 													installedResources={installedResources() || []}
 													knownUpdateCount={
 														updatesKnown()

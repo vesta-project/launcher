@@ -1,10 +1,10 @@
 import SearchIcon from "@assets/icons/content/search.svg";
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import Button from "@ui/button/button";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { For, Show, type JSX } from "solid-js";
 import { SettingsCard } from "./settings-card";
 import styles from "./option-browser.module.css";
+import { SubpageBackButton } from "./SubpageBackButton";
 
 export function OptionBrowser(props: {
 	label: string;
@@ -26,17 +26,10 @@ export function OptionBrowser(props: {
 		<section class={styles.browser} aria-label={props.label}>
 			<div class={styles.heading}>
 				<Show when={props.onBack}>
-					<Button
-						class={styles.back}
-						variant="ghost"
-						size="icon"
-						icon_only={true}
-						aria-label={props.backLabel}
-						tooltip_text={props.backLabel}
+					<SubpageBackButton
+						label={props.backLabel}
 						onClick={props.onBack}
-					>
-						<BackIcon class={styles.icon} />
-					</Button>
+					/>
 				</Show>
 				<h2 class={styles.title}>{props.title}</h2>
 			</div>
