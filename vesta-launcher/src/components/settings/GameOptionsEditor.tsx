@@ -13,6 +13,12 @@ import styles from "./game-options.module.css";
 import Button from "@ui/button/button";
 import { TextFieldRoot, TextFieldInput } from "@ui/text-field/text-field";
 import {
+	Switch,
+	SwitchControl,
+	SwitchLabel,
+	SwitchThumb,
+} from "@ui/switch/switch";
+import {
 	Select,
 	SelectTrigger,
 	SelectValue,
@@ -237,17 +243,20 @@ export function GameOptionsEditor(props: {
 	);
 	const valueEditor = (row: CatalogEntry) => {
 		if (row.kind === "boolean") {
-			return picker(
-				[...new Set([value(row.key), "true", "false"])],
-				value(row.key),
-				(next) => change(row.key, next),
-				label(row),
-				(next) =>
-					next === "true"
-						? t("game-options-on")
-						: next === "false"
-							? t("game-options-off")
-							: next || t("game-options-unset"),
+			return (
+				<Switch
+					checked={value(row.key) === "true"}
+					disabled={busy()}
+					aria-label={label(row)}
+					onCheckedChange={(checked: boolean) =>
+						change(row.key, checked ? "true" : "false")
+					}
+				>
+					<SwitchControl>
+						<SwitchThumb />
+					</SwitchControl>
+					<SwitchLabel class={styles.visuallyHidden}>{label(row)}</SwitchLabel>
+				</Switch>
 			);
 		}
 		const textEditor = () => {

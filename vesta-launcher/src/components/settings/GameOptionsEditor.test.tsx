@@ -178,3 +178,28 @@ it("keeps the shared footer dirty while the editor page is unmounted", async () 
 	).toBe("keep");
 	expect(screen.queryByRole("button", { name: "Save Changes" })).toBeNull();
 });
+
+it("uses a switch for boolean settings and keeps custom labels readable", async () => {
+	vi.mocked(invoke).mockImplementation(async (command) =>
+		command === "get_game_options_catalog"
+			? [
+					{
+						key: "fullscreen",
+						category: "video",
+						labelId: "game-options-fullscreen",
+						kind: "boolean",
+						min: null,
+						max: null,
+					},
+				]
+			: { ...snapshot, values: { fullscreen: "false", "mod.fastMode": "true" } },
+	);
+	render(() => <EditorHarness instanceId={7} />);
+	const toggle = await screen.findByRole("switch", {
+		name: "game-options-fullscreen",
+	});
+	expect(toggle.getAttribute("aria-checked")).toBe("false");
+	expect(screen.getByRole("textbox", { name: "Mod fast mode" })).toBeTruthy();
+	fireEvent.click(toggle);
+	expect(toggle.getAttribute("aria-checked")).toBe("true");
+});
