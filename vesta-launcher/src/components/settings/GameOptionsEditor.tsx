@@ -19,12 +19,6 @@ import {
 	SelectContent,
 	SelectItem,
 } from "@ui/select/select";
-import {
-	Slider,
-	SliderFill,
-	SliderThumb,
-	SliderTrack,
-} from "@ui/slider/slider";
 import { formatGameOptionName } from "~/utils/game-option-label";
 
 interface Snapshot {
@@ -256,9 +250,48 @@ export function GameOptionsEditor(props: {
 							: next || t("game-options-unset"),
 			);
 		}
+		const textEditor = () => {
+			const raw = value(row.key);
+			const display =
+				row.key === "fov" && raw !== "" && Number.isFinite(Number(raw))
+					? String(70 + 40 * Number(raw))
+					: raw;
+			return (
+				<TextFieldRoot>
+					<TextFieldInput
+						aria-label={label(row)}
+						disabled={busy()}
+						type="text"
+						inputMode={row.kind === "number" ? "decimal" : "text"}
+						placeholder={t("game-options-unset")}
+						value={display}
+						onInput={(event) => {
+							const next = (event.currentTarget as HTMLInputElement).value;
+							change(
+								row.key,
+								row.key === "fov" &&
+									next !== "" &&
+									Number.isFinite(Number(next))
+									? String((Number(next) - 70) / 40)
+									: next,
+							);
+						}}
+					/>
+				</TextFieldRoot>
+			);
+		};
 		if (row.kind === "number" && row.min !== null && row.max !== null) {
-			const raw = Number(value(row.key));
-			const hasValue = Number.isFinite(raw);
+			const rawText = value(row.key);
+			const raw = Number(rawText);
+			const hasValue = rawText !== "" && Number.isFinite(raw);
+			const storedMin = row.key === "fov" ? -1 : row.min;
+			const storedMax = row.key === "fov" ? 1 : row.max;
+			if (
+				rawText !== "" &&
+				(!hasValue || raw < storedMin || raw > storedMax)
+			) {
+				return textEditor();
+			}
 			const min = row.key === "fov" ? 30 : row.min;
 			const max = row.key === "fov" ? 110 : row.max;
 			const step = max - min <= 1 ? 0.01 : 1;
@@ -269,14 +302,19 @@ export function GameOptionsEditor(props: {
 				: min;
 			return (
 				<div class={styles.numericControl}>
-					<Slider
-						value={[Math.min(max, Math.max(min, display))]}
-						minValue={min}
-						maxValue={max}
+					<input
+						class={styles.numericSlider}
+						aria-label={label(row)}
+						type="range"
+						min={min}
+						max={max}
 						step={step}
-						onChange={(next) => {
-							const nextValue = next[0];
-							if (nextValue === undefined) return;
+						value={Math.min(max, Math.max(min, display))}
+						disabled={busy()}
+						onInput={(event) => {
+							const nextValue = Number(
+								(event.currentTarget as HTMLInputElement).value,
+							);
 							change(
 								row.key,
 								row.key === "fov"
@@ -284,13 +322,7 @@ export function GameOptionsEditor(props: {
 									: String(nextValue),
 							);
 						}}
-						disabled={busy()}
-					>
-						<SliderTrack>
-							<SliderFill />
-							<SliderThumb aria-label={label(row)} />
-						</SliderTrack>
-					</Slider>
+					/>
 					<output class={styles.numericValue}>
 						{hasValue ? (step < 1 ? display.toFixed(2) : Math.round(display)) : "—"}
 						{row.key === "fov" ? "°" : ""}
@@ -298,32 +330,7 @@ export function GameOptionsEditor(props: {
 				</div>
 			);
 		}
-		const raw = value(row.key);
-		const display =
-			row.key === "fov" && raw !== "" && Number.isFinite(Number(raw))
-				? String(70 + 40 * Number(raw))
-				: raw;
-		return (
-			<TextFieldRoot>
-				<TextFieldInput
-					aria-label={label(row)}
-					disabled={busy()}
-					type="text"
-					inputMode={row.kind === "number" ? "decimal" : "text"}
-					placeholder={t("game-options-unset")}
-					value={display}
-					onInput={(event) => {
-						const next = (event.currentTarget as HTMLInputElement).value;
-						change(
-							row.key,
-							row.key === "fov" && next !== "" && Number.isFinite(Number(next))
-								? String((Number(next) - 70) / 40)
-								: next,
-						);
-					}}
-				/>
-			</TextFieldRoot>
-		);
+		return textEditor();
 	};
 	return (
 		<section class={styles.editor} aria-label={t("game-options-title")}>

@@ -66,7 +66,7 @@ it("keeps unsupported numeric values visible while editing another key", async (
 	render(() => <EditorHarness instanceId={7} />);
 	const fov = await screen.findByRole("textbox", { name: "game-options-fov" });
 	expect((fov as HTMLInputElement).value).toBe("legacy-value");
-	fireEvent.input(screen.getByRole("textbox", { name: "mod.custom" }), {
+	fireEvent.input(screen.getByRole("textbox", { name: "Mod custom" }), {
 		target: { value: "new" },
 	});
 	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
@@ -80,7 +80,7 @@ it("keeps unsupported numeric values visible while editing another key", async (
 
 it("sends only edited keys, converts FOV degrees, and hides protected keys", async () => {
 	render(() => <EditorHarness instanceId={7} />);
-	const input = await screen.findByRole("textbox", {
+	const input = await screen.findByRole("slider", {
 		name: "game-options-fov",
 	});
 	expect((input as HTMLInputElement).value).toBe("70");
@@ -97,12 +97,15 @@ it("sends only edited keys, converts FOV degrees, and hides protected keys", asy
 
 it("retains custom edits when saving fails and requires discard before reload", async () => {
 	render(() => <EditorHarness instanceId={7} />);
-	const custom = await screen.findByRole("textbox", { name: "mod.custom" });
+	const custom = await screen.findByRole("textbox", { name: "Mod custom" });
 	fireEvent.input(custom, { target: { value: "changed" } });
 	vi.mocked(invoke).mockRejectedValueOnce(new Error("Close the game"));
 	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 	await screen.findByRole("alert");
-	expect((custom as HTMLInputElement).value).toBe("changed");
+	expect(
+		(screen.getByRole("textbox", { name: "Mod custom" }) as HTMLInputElement)
+			.value,
+	).toBe("changed");
 	expect(
 		(
 			screen.getByRole("button", {
@@ -111,7 +114,10 @@ it("retains custom edits when saving fails and requires discard before reload", 
 		).disabled,
 	).toBe(true);
 	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-	expect((custom as HTMLInputElement).value).toBe("keep");
+	expect(
+		(screen.getByRole("textbox", { name: "Mod custom" }) as HTMLInputElement)
+			.value,
+	).toBe("keep");
 });
 
 it("does not publish an old instance response into a newly selected instance", async () => {
@@ -127,19 +133,19 @@ it("does not publish an old instance response into a newly selected instance", a
 	const [id, setId] = createSignal(1);
 	render(() => <EditorHarness instanceId={id()} />);
 	setId(2);
-	await screen.findByRole("textbox", { name: "game-options-fov" });
+	await screen.findByRole("slider", { name: "game-options-fov" });
 	finishOld(snapshot);
 	await Promise.resolve();
 	expect(
 		(
-			screen.getByRole("textbox", {
+			screen.getByRole("slider", {
 				name: "game-options-fov",
 			}) as HTMLInputElement
 		).value,
 	).toBe("90");
 });
 
-it("keeps the shared footer dirty while the Game tab is unmounted", async () => {
+it("keeps the shared footer dirty while the editor page is unmounted", async () => {
 	const [visible, setVisible] = createSignal(true);
 	function Page() {
 		const state = createGameOptionsEditor({ instanceId: 7 });
@@ -159,7 +165,7 @@ it("keeps the shared footer dirty while the Game tab is unmounted", async () => 
 		);
 	}
 	render(() => <Page />);
-	fireEvent.input(await screen.findByRole("textbox", { name: "mod.custom" }), {
+	fireEvent.input(await screen.findByRole("textbox", { name: "Mod custom" }), {
 		target: { value: "new" },
 	});
 	setVisible(false);
@@ -167,7 +173,7 @@ it("keeps the shared footer dirty while the Game tab is unmounted", async () => 
 	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 	setVisible(true);
 	expect(
-		(screen.getByRole("textbox", { name: "mod.custom" }) as HTMLInputElement)
+		(screen.getByRole("textbox", { name: "Mod custom" }) as HTMLInputElement)
 			.value,
 	).toBe("keep");
 	expect(screen.queryByRole("button", { name: "Save Changes" })).toBeNull();
