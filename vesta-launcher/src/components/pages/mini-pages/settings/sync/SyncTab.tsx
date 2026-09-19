@@ -317,23 +317,9 @@ export function SyncSettingsTab() {
 										return (
 											<>
 												<Show when={sourceCategories.includes(category())}>
-													<SettingsCard>
-														<DetailHeading
-															title={title(category())}
-															checked={current()?.preferences.enabled ?? false}
-															disabled={busy()}
-															onBack={() => setEditing(undefined)}
-															onToggle={(enabled) =>
-																toggle(category(), enabled)
-															}
-														/>
-
-														<div class={styles.row}>
-															<span class={styles.copy}>
-																<span class={styles.title}>
-																	{t("sync-bundle-title")}
-																</span>
-															</span>
+													<SettingsCard
+														header={t("sync-bundle-title")}
+														headerRight={
 															<Button
 																variant="outline"
 																size="sm"
@@ -344,7 +330,17 @@ export function SyncSettingsTab() {
 															>
 																{t("sync-edit-shared")}
 															</Button>
-														</div>
+														}
+													>
+														<DetailHeading
+															title={title(category())}
+															checked={current()?.preferences.enabled ?? false}
+															disabled={busy()}
+															onBack={() => setEditing(undefined)}
+															onToggle={(enabled) =>
+																toggle(category(), enabled)
+															}
+														/>
 													</SettingsCard>
 												</Show>
 												<SettingsCard
@@ -352,6 +348,42 @@ export function SyncSettingsTab() {
 														sourceCategories.includes(category())
 															? t("sync-instances")
 															: undefined
+													}
+													headerRight={
+														sourceCategories.includes(category()) ? (
+															<Button
+																color="primary"
+																variant="solid"
+																size="icon"
+																icon_only
+																aria-label={
+																	allLinked()
+																		? t("sync-unlink-all-instances")
+																		: t("sync-link-all-instances")
+																}
+																tooltip_text={
+																	allLinked()
+																		? t("sync-unlink-all-instances")
+																		: t("sync-link-all-instances")
+																}
+																disabled={
+																	busy() ||
+																	!available().length ||
+																	!current()?.preferences.enabled
+																}
+																onClick={() =>
+																	update(category(), {
+																		instanceIds: allLinked()
+																			? []
+																			: available().map(
+																					(instance) => instance.id,
+																				),
+																	})
+																}
+															>
+																<LinkIcon class={styles.icon} />
+															</Button>
+														) : undefined
 													}
 												>
 													<Show when={!sourceCategories.includes(category())}>
@@ -366,33 +398,6 @@ export function SyncSettingsTab() {
 														/>
 													</Show>
 
-													<div class={styles.bulkRow}>
-														<SquareToggle
-															label={
-																allLinked()
-																	? t("sync-unlink-all-instances")
-																	: t("sync-link-all-instances")
-															}
-															pressed={allLinked()}
-															iconOnly
-															disabled={
-																busy() ||
-																!available().length ||
-																!current()?.preferences.enabled
-															}
-														onChange={() =>
-																update(category(), {
-																	instanceIds: allLinked()
-																		? []
-																		: available().map(
-																				(instance) => instance.id,
-																			),
-																})
-															}
-													>
-														<LinkIcon class={styles.icon} />
-													</SquareToggle>
-													</div>
 													<div class={styles.search}>
 														<SearchIcon
 															class={styles.searchIcon}
