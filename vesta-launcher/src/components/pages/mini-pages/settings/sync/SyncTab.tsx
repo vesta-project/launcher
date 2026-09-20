@@ -58,6 +58,7 @@ const categoryIcons: Record<Category, Component<{ class?: string }>> = {
 };
 
 const filledMarks = new Set<Category>(["gameOptions"]);
+const unavailableCategories = new Set<Category>(["servers", "resourcePacks"]);
 
 function InstanceMark(props: { instance: Instance }) {
 	const iconPath = () => props.instance.iconPath || DEFAULT_ICONS[0];
@@ -154,6 +155,8 @@ export function SyncSettingsTab() {
 	const [busy, setBusy] = createSignal(false);
 	const [error, setError] = createSignal("");
 	const title = (category: Category) => t(`sync-${category}-title`);
+	const availableCategory = (category: Category) =>
+		!unavailableCategories.has(category);
 	const snapshot = (category: Category) =>
 		snapshots()?.find((item) => item.category === category);
 	const available = createMemo(() =>
@@ -268,6 +271,7 @@ export function SyncSettingsTab() {
 																aria-label={t("sync-edit", {
 																	category: title(category),
 																})}
+																disabled={!availableCategory(category)}
 																onClick={() => {
 																	setQuery("");
 																	setEditing(category);
@@ -292,7 +296,9 @@ export function SyncSettingsTab() {
 																		snapshot(category)?.preferences.enabled ??
 																		false
 																	}
-																	disabled={busy()}
+																	disabled={
+																		busy() || !availableCategory(category)
+																	}
 																	onChange={(enabled) =>
 																		toggle(category, enabled)
 																	}

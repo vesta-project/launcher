@@ -164,21 +164,21 @@ it("does not enable a category when source selection is cancelled", async () => 
 	expect(invoke).toHaveBeenCalledTimes(1);
 });
 
-it("enables servers immediately without asking for a source", async () => {
+it("keeps unfinished file categories unavailable", async () => {
 	render(() => <SyncSettingsTab />);
-	fireEvent.click(
-		await screen.findByRole("switch", { name: "sync-servers-title" }),
-	);
-	await waitFor(() =>
-		expect(state.find((s) => s.category === "servers")!.preferences).toEqual({
-			enabled: true,
-			sourceInstanceId: null,
-			instanceIds: [],
-		}),
-	);
-	expect(screen.queryByRole("dialog")).toBeNull();
+	const servers = await screen.findByRole("switch", { name: "sync-servers-title" });
+	const resourcePacks = screen.getByRole("switch", {
+		name: "sync-resourcePacks-title",
+	});
+	expect(servers).toHaveProperty("disabled", true);
+	expect(resourcePacks).toHaveProperty("disabled", true);
+	expect(screen.getByRole("button", { name: "sync-edit sync-servers-title" })).toHaveProperty("disabled", true);
+	expect(screen.getByRole("button", { name: "sync-edit sync-resourcePacks-title" })).toHaveProperty("disabled", true);
+	fireEvent.click(servers);
+	fireEvent.click(resourcePacks);
+	expect(state[2].preferences.enabled).toBe(false);
+	expect(state[3].preferences.enabled).toBe(false);
 });
-
 it("re-enables an initialized bundle without asking for its former source", async () => {
 	state[0] = { ...state[0], initialized: true };
 	render(() => <SyncSettingsTab />);
@@ -372,16 +372,6 @@ it("keybinds asks for an owner and uses the shared recorder", async () => {
 	);
 	expect(state[0].preferences.enabled).toBe(false);
 });
-it("resource packs remain preferences only and need no owner", async () => {
-	render(() => <SyncSettingsTab />);
-	fireEvent.click(
-		await screen.findByRole("switch", { name: "sync-resourcePacks-title" }),
-	);
-	await waitFor(() => expect(state[3].preferences.enabled).toBe(true));
-	expect(state[3].preferences.sourceInstanceId).toBeNull();
-	expect(screen.queryByRole("dialog")).toBeNull();
-});
-
 it("switching or cancelling a recorder does not bind the control click", () => {
 	const change = vi.fn();
 	render(() => (
