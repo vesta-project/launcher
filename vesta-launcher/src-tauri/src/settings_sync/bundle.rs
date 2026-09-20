@@ -96,7 +96,12 @@ pub(super) fn seed(category: Category, values: &Values, version: &str) -> Shared
         ..Default::default()
     }
 }
-fn selected(prefs: &Preferences, key: &str) -> bool {
+fn selected(category: Category, prefs: &Preferences, key: &str) -> bool {
+    // Unknown extras are the Custom tab: following instances collectively own
+    // that set, so they are always carried with the game-options bundle.
+    if category == Category::GameOptions && catalog::definition(key).is_none() {
+        return true;
+    }
     prefs
         .selected_keys
         .as_ref()
@@ -134,14 +139,16 @@ pub(super) fn patch(
         .values
         .iter()
         .filter_map(|(id, entry)| {
-            if !selected(prefs, id) || !eligible(category, &entry.key, version) {
+            if !selected(category, prefs, id) || !eligible(category, &entry.key, version) {
                 return None;
             }
             let key = target_key(entry, current).or_else(|| {
                 // Unknown extras are written only after the user explicitly selects
                 // them for the shared bundle. Catalogued values still require a
                 // version-appropriate line or alias already present on the follower.
-                catalog::definition(&entry.key).is_none().then_some(entry.key.as_str())
+                catalog::definition(&entry.key)
+                    .is_none()
+                    .then_some(entry.key.as_str())
             })?;
             // No guessed migration between historical boolean/numeric/quoted representations.
             if current
@@ -163,11 +170,27 @@ pub(super) fn capture(
     version: &str,
     current: &Values,
 ) {
+    if category == Category::GameOptions {
+        for (key, value) in current {
+            if catalog::definition(key).is_none()
+                && eligible(category, key, version)
+                && valid(category, key, value)
+            {
+                shared
+                    .values
+                    .entry(key.clone())
+                    .or_insert_with(|| SharedValue {
+                        key: key.clone(),
+                        value: value.clone(),
+                    });
+            }
+        }
+    }
     let Some(baseline) = shared.applied.get(&id) else {
         return;
     };
     for (setting_id, entry) in &mut shared.values {
-        if !selected(prefs, setting_id) || !eligible(category, &entry.key, version) {
+        if !selected(category, prefs, setting_id) || !eligible(category, &entry.key, version) {
             continue;
         }
         let Some(key) = target_key(entry, current) else {
@@ -203,7 +226,7 @@ pub(super) fn persist(
         .applied
         .retain(|id, _| prefs.enabled && prefs.instance_ids.contains(id));
     for values in shared.applied.values_mut() {
-        values.retain(|key, _| selected(&prefs, key));
+        values.retain(|key, _| selected(category, &prefs, key));
     }
     conn.transaction::<_, diesel::result::Error, _>(|conn| {
         let snapshot = super::save_preferences(conn, category, revision, prefs)
@@ -300,6 +323,15 @@ pub(super) async fn reconcile(category: Category, id: i32, import: bool) -> Resu
         .await
         .map(|_| ())
 }
+fn prune_missing_custom(shared: &mut SharedBundle, observed: &[&game_options_file::Snapshot]) {
+    shared.values.retain(|key, _| {
+        catalog::definition(key).is_some()
+            || observed
+                .iter()
+                .any(|snapshot| snapshot.values.contains_key(key))
+    });
+}
+
 fn apply(
     conn: &mut SqliteConnection,
     category: Category,
@@ -375,6 +407,13 @@ async fn propagate(app: &tauri::AppHandle, category: Category) -> Vec<String> {
                 }
                 Err(e) => pending.push(format!("Instance {id}: {e}")),
             }
+        }
+        if category == Category::GameOptions && captured.len() == prefs.instance_ids.len() {
+            let observed = captured
+                .iter()
+                .map(|(_, _, _, snapshot)| snapshot)
+                .collect::<Vec<_>>();
+            prune_missing_custom(&mut shared, &observed);
         }
         store(&mut conn, category, &shared)?;
         drop(conn);
@@ -581,6 +620,49 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn custom_values_grow_with_followers_and_prune_when_absent() {
+        let prefs = Preferences {
+            enabled: true,
+            instance_ids: vec![1, 2],
+            ..Default::default()
+        };
+        let mut shared = SharedBundle::default();
+        capture(
+            Category::GameOptions,
+            &mut shared,
+            &prefs,
+            1,
+            "1.21.1",
+            &Values::from([("mod.extra".into(), "enabled".into())]),
+        );
+        capture(
+            Category::GameOptions,
+            &mut shared,
+            &prefs,
+            2,
+            "1.21.1",
+            &Values::from([("other.extra".into(), "visible".into())]),
+        );
+        assert!(shared.values.contains_key("mod.extra"));
+        assert!(shared.values.contains_key("other.extra"));
+        let observed = [
+            game_options_file::Snapshot {
+                revision: String::new(),
+                exists: true,
+                values: Values::from([("fov".into(), "0".into())]),
+            },
+            game_options_file::Snapshot {
+                revision: String::new(),
+                exists: true,
+                values: Values::from([("fov".into(), "0".into())]),
+            },
+        ];
+        prune_missing_custom(&mut shared, &observed.iter().collect::<Vec<_>>());
+        assert!(!shared.values.contains_key("mod.extra"));
+        assert!(!shared.values.contains_key("other.extra"));
     }
 
     #[test]
