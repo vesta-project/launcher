@@ -151,7 +151,7 @@ sync-keybinds-page-title = Shared keybindings
 sync-keybinds-recording-help = Click a binding, then press a key or mouse button.
 sync-keybinds-title = Keybinds
 sync-scope-all = All settings
-sync-scope-custom = Other settings
+sync-scope-custom = Custom
 sync-scope-online = Online
 
 sync-choice-all = All
