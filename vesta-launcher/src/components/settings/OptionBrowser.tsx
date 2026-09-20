@@ -2,6 +2,7 @@ import SearchIcon from "@assets/icons/content/search.svg";
 import Button from "@ui/button/button";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { type Component, For, type JSX, Show } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import styles from "./option-browser.module.css";
 import { SubpageBackButton } from "./SubpageBackButton";
 import { SettingsCard } from "./settings-card";
@@ -64,7 +65,12 @@ export function OptionBrowser(props: {
 										class={styles.navButton}
 										onClick={() => props.onCategory(entry.id)}
 									>
-										{entry.label}
+										<Show when={entry.icon}>
+											{(Icon) => (
+												<Dynamic component={Icon()} class={styles.navIcon} />
+											)}
+										</Show>
+										<span>{entry.label}</span>
 									</Button>
 								)}
 							</For>

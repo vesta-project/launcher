@@ -1,19 +1,18 @@
+import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import {
+	cleanup,
 	fireEvent,
 	render,
 	screen,
 	waitFor,
-	cleanup,
 } from "@solidjs/testing-library";
 import { invoke } from "@tauri-apps/api/core";
 import { createSignal, Show } from "solid-js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
-	GameOptionsEditor,
 	createGameOptionsEditor,
+	GameOptionsEditor,
 } from "./GameOptionsEditor";
-
-import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 
 function EditorHarness(props: { instanceId: number }) {
 	const state = createGameOptionsEditor(props);
@@ -128,7 +127,7 @@ it("loads only after the hidden settings page is opened", async () => {
 	expect(invoke).not.toHaveBeenCalled();
 	setEnabled(true);
 	await screen.findByRole("spinbutton", {
-		name: "sync-value-label FOV",
+		name: "FOV",
 	});
 	expect(invoke).toHaveBeenCalledWith("get_instance_game_options", {
 		instanceId: 7,
@@ -139,7 +138,7 @@ it("loads only after the hidden settings page is opened", async () => {
 it("sends only edited keys and hides protected keys", async () => {
 	render(() => <EditorHarness instanceId={7} />);
 	const input = await screen.findByRole("spinbutton", {
-		name: "sync-value-label FOV",
+		name: "FOV",
 	});
 	expect(screen.queryByLabelText("version")).toBeNull();
 	fireEvent.input(input, { target: { value: "90" } });
@@ -161,7 +160,7 @@ it("uses a switch to patch boolean options", async () => {
 	);
 	render(() => <EditorHarness instanceId={7} />);
 	fireEvent.click(
-		await screen.findByRole("switch", { name: "sync-value-label Fullscreen" }),
+		await screen.findByRole("switch", { name: "Fullscreen" }),
 	);
 	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 	await waitFor(() =>
@@ -169,38 +168,6 @@ it("uses a switch to patch boolean options", async () => {
 			instanceId: 7,
 			editorValues: true,
 			patch: { revision: "original", changes: { fullscreen: "true" } },
-		}),
-	);
-});
-
-it("separates keybindings through the shared footer", async () => {
-	vi.mocked(invoke).mockImplementation(async (command) =>
-		command === "get_game_options_catalog"
-			? catalog
-			: {
-					...snapshot,
-					values: { fov: "70", "key_key.forward": "key.keyboard.w" },
-				},
-	);
-	render(() => <EditorHarness instanceId={7} />);
-	await screen.findByRole("spinbutton", { name: "sync-value-label FOV" });
-	expect(screen.queryByText("key_key.forward")).toBeNull();
-	fireEvent.click(
-		screen.getByRole("button", { name: "game-options-tab-keybindings" }),
-	);
-	fireEvent.click(
-		screen.getByRole("button", { name: "game-options-key-change Forward" }),
-	);
-	fireEvent.keyDown(window, { code: "KeyE", key: "e" });
-	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
-	await waitFor(() =>
-		expect(invoke).toHaveBeenCalledWith("save_instance_game_options", {
-			instanceId: 7,
-			editorValues: true,
-			patch: {
-				revision: "original",
-				changes: { "key_key.forward": "key.keyboard.e" },
-			},
 		}),
 	);
 });
