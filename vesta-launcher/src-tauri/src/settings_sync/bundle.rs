@@ -137,9 +137,16 @@ pub(super) fn patch(
             if !selected(prefs, id) || !eligible(category, &entry.key, version) {
                 return None;
             }
-            let key = target_key(entry, current)?;
+            let key = target_key(entry, current).or_else(|| {
+                // Unknown extras are written only after the user explicitly selects
+                // them for the shared bundle. Catalogued values still require a
+                // version-appropriate line or alias already present on the follower.
+                catalog::definition(&entry.key).is_none().then_some(entry.key.as_str())
+            })?;
             // No guessed migration between historical boolean/numeric/quoted representations.
-            if representation(&current[key]) != representation(&entry.value)
+            if current
+                .get(key)
+                .is_some_and(|value| representation(value) != representation(&entry.value))
                 || !valid(category, key, &entry.value)
             {
                 return None;
@@ -574,6 +581,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn selected_custom_options_are_added_to_followers() {
+        let shared = SharedBundle {
+            values: BTreeMap::from([(
+                "mod.custom_setting".into(),
+                SharedValue {
+                    key: "mod.custom_setting".into(),
+                    value: "enabled".into(),
+                },
+            )]),
+            ..Default::default()
+        };
+        let prefs = Preferences {
+            enabled: true,
+            selected_keys: Some(vec!["mod.custom_setting".into()]),
+            ..Default::default()
+        };
+        let patched = patch(
+            Category::GameOptions,
+            &shared,
+            &prefs,
+            "1.21.1",
+            &Values::from([("fov".into(), "0.5".into())]),
+        );
+        assert_eq!(patched["mod.custom_setting"], "enabled");
     }
 
     #[test]
