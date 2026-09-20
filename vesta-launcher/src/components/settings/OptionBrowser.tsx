@@ -1,9 +1,9 @@
 import SearchIcon from "@assets/icons/content/search.svg";
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
 import Button from "@ui/button/button";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
-import { For, type JSX, Show } from "solid-js";
+import { type Component, For, type JSX, Show } from "solid-js";
 import styles from "./option-browser.module.css";
+import { SubpageBackButton } from "./SubpageBackButton";
 import { SettingsCard } from "./settings-card";
 
 export function OptionBrowser(props: {
@@ -15,7 +15,11 @@ export function OptionBrowser(props: {
 	categoriesLabel: string;
 	query: string;
 	onQuery: (value: string) => void;
-	categories: { id: string; label: string }[];
+	categories: {
+		id: string;
+		label: string;
+		icon?: Component<{ class?: string }>;
+	}[];
 	category: string;
 	onCategory: (id: string) => void;
 	hint?: JSX.Element;
@@ -26,21 +30,11 @@ export function OptionBrowser(props: {
 		<section class={styles.browser} aria-label={props.label}>
 			<div class={styles.heading}>
 				<Show when={props.onBack}>
-					<Button
-						class={styles.back}
-						variant="ghost"
-						size="icon"
-						icon_only={true}
-						aria-label={props.backLabel}
-						tooltip_text={props.backLabel}
-						onClick={props.onBack}
-					>
-						<BackIcon class={styles.icon} />
-					</Button>
+					<SubpageBackButton label={props.backLabel} onClick={props.onBack} />
 				</Show>
 				<h2 class={styles.title}>{props.title}</h2>
 			</div>
-			<SettingsCard class={styles.card}>
+			<SettingsCard variant="fill">
 				<div class={styles.layout}>
 					<aside class={styles.sidebar}>
 						<div class={styles.search}>

@@ -1,4 +1,14 @@
 import ReloadIcon from "@assets/icons/actions/reload.svg";
+import AccessibilityIcon from "@assets/icons/content/accessibility.svg";
+import ChatIcon from "@assets/icons/content/chat.svg";
+import CodeIcon from "@assets/icons/content/code.svg";
+import GlobeIcon from "@assets/icons/content/globe.svg";
+import KeyboardIcon from "@assets/icons/content/keyboard.svg";
+import LayersIcon from "@assets/icons/content/layers.svg";
+import MonitorIcon from "@assets/icons/content/monitor.svg";
+import SkinIcon from "@assets/icons/content/skin-icon.svg";
+import MicIcon from "@assets/icons/security/mic.svg";
+import WifiIcon from "@assets/icons/status/wifi.svg";
 import pageStyles from "@components/pages/mini-pages/settings/settings-page.module.css";
 import {
 	OptionBrowser,
@@ -63,10 +73,25 @@ type CatalogEntry = {
 	min?: number | null;
 	max?: number | null;
 	step?: number | null;
+	unit?: string | null;
 	values?: Array<
 		string | { value: string; labelId?: string | null; label?: string | null }
 	>;
 };
+
+const categoryIcons = {
+	all: LayersIcon,
+	video: MonitorIcon,
+	mouse: KeyboardIcon,
+	sound: MicIcon,
+	language: GlobeIcon,
+	chat: ChatIcon,
+	controls: KeyboardIcon,
+	accessibility: AccessibilityIcon,
+	skin: SkinIcon,
+	online: WifiIcon,
+	custom: CodeIcon,
+} satisfies Record<string, typeof CodeIcon>;
 
 const categoryOrder = [
 	"video",
@@ -96,23 +121,113 @@ function categoryLabel(category: string) {
 	return localized === key ? formatGameOptionName(category) : localized;
 }
 
+const knownLabels: Record<string, string> = {
+	fov: "game-options-fov",
+	fullscreen: "game-options-fullscreen",
+	view_bobbing: "game-options-view-bobbing",
+	invert_mouse: "game-options-invert-mouse",
+	sensitivity: "game-options-mouse-sensitivity",
+	master_volume: "game-options-master-volume",
+	music_volume: "game-options-music-volume",
+	language: "game-options-language",
+};
+
 function labelFor(row: CatalogEntry) {
-	return row.labelId ? t(row.labelId) : formatGameOptionName(row.id ?? row.key);
+	if (row.labelId) return t(row.labelId);
+	const messageId = row.id ? knownLabels[row.id] : undefined;
+	if (messageId) {
+		const localized = t(messageId);
+		if (localized !== messageId) return localized;
+	}
+	return formatGameOptionName(row.id ?? row.key);
 }
 
 function choiceValue(choice: string | { value: string }) {
 	return typeof choice === "string" ? choice : choice.value;
 }
 
+/** Minecraft stores several enums as bare integers; map them to readable labels. */
+const enumLabels: Record<string, Record<string, string>> = {
+	particles: {
+		"0": "game-options-choice-all",
+		"1": "game-options-choice-decreased",
+		"2": "game-options-choice-minimal",
+	},
+	attack_indicator: {
+		"0": "game-options-choice-off",
+		"1": "game-options-choice-crosshair",
+		"2": "game-options-choice-hotbar",
+	},
+	chat_visibility: {
+		"0": "game-options-choice-shown",
+		"1": "game-options-choice-commands-only",
+		"2": "game-options-choice-hidden",
+	},
+	narrator: {
+		"0": "game-options-choice-off",
+		"1": "game-options-choice-narrator-all",
+		"2": "game-options-choice-narrator-chat",
+		"3": "game-options-choice-narrator-system",
+	},
+	difficulty: {
+		"0": "game-options-choice-peaceful",
+		"1": "game-options-choice-easy",
+		"2": "game-options-choice-normal",
+		"3": "game-options-choice-hard",
+	},
+	ambient_occlusion: {
+		false: "game-options-choice-off",
+		true: "game-options-choice-maximum",
+		"0": "game-options-choice-off",
+		"1": "game-options-choice-minimal",
+		"2": "game-options-choice-maximum",
+	},
+	clouds: {
+		false: "game-options-choice-off",
+		fast: "game-options-choice-fast",
+		true: "game-options-choice-fancy",
+	},
+	prioritize_chunk_updates: {
+		"0": "game-options-choice-threaded",
+		"1": "game-options-choice-semi-blocking",
+		"2": "game-options-choice-fully-blocking",
+	},
+	texture_filtering: {
+		"0": "game-options-choice-none",
+		"1": "game-options-choice-rgss",
+		"2": "game-options-choice-anisotropic",
+	},
+	anisotropy: {
+		"1": "game-options-choice-2x",
+		"2": "game-options-choice-4x",
+		"3": "game-options-choice-8x",
+	},
+	gl_debug_verbosity: {
+		"0": "game-options-choice-none",
+		"1": "game-options-choice-high",
+		"2": "game-options-choice-medium",
+		"3": "game-options-choice-low",
+		"4": "game-options-choice-notification",
+	},
+};
+
 function choiceLabel(
 	choice:
 		| string
 		| { value: string; labelId?: string | null; label?: string | null },
+	optionId?: string,
 ) {
-	if (typeof choice === "string")
-		return formatGameOptionName(choice.toLowerCase());
-	if (choice.labelId) return t(choice.labelId);
-	return choice.label || choice.value;
+	if (typeof choice !== "string") {
+		if (choice.labelId) return t(choice.labelId);
+		return choice.label || choice.value;
+	}
+	const messageId = optionId ? enumLabels[optionId]?.[choice] : undefined;
+	if (messageId) {
+		const localized = t(messageId);
+		if (localized !== messageId) return localized;
+	}
+	if (/^\d+$/.test(choice)) return choice;
+	return formatGameOptionName(choice.toLowerCase());
 }
 
 function inferredCategory(key: string) {
@@ -150,13 +265,62 @@ function rowOrder(category: string) {
 function decimalPlaces(step: number | null | undefined) {
 	if (step === null || step === undefined) return 2;
 	const text = String(step);
+	const exponent = text.indexOf("e-");
+	if (exponent >= 0) return Number(text.slice(exponent + 2)) || 2;
 	const decimal = text.indexOf(".");
 	return decimal < 0 ? 0 : text.length - decimal - 1;
 }
 
-function serializeNumber(value: number, step: number | null | undefined) {
-	if (!Number.isFinite(value)) return "";
-	return String(Number(value.toFixed(Math.min(12, decimalPlaces(step)))));
+function isPercent(option: CatalogEntry) {
+	return option.unit === "percent";
+}
+
+/** Cap UI numbers at 2 decimal places for readability. */
+function displayPlaces(option: CatalogEntry) {
+	if (option.kind === "integer") return 0;
+	return Math.min(2, decimalPlaces(option.step ?? 0.01));
+}
+
+function toDisplay(option: CatalogEntry, stored: number) {
+	return isPercent(option) ? stored * 100 : stored;
+}
+
+function fromDisplay(option: CatalogEntry, display: number) {
+	return isPercent(option) ? display / 100 : display;
+}
+
+function displayRange(option: CatalogEntry) {
+	if (typeof option.min !== "number" || typeof option.max !== "number")
+		return undefined;
+	if (isPercent(option)) {
+		return { min: option.min * 100, max: option.max * 100 };
+	}
+	return { min: option.min, max: option.max };
+}
+
+function displayStep(option: CatalogEntry) {
+	const step =
+		option.step ??
+		(option.kind === "integer" ? 1 : isPercent(option) ? 0.01 : 0.01);
+	return isPercent(option) ? step * 100 : step;
+}
+
+function formatDisplay(option: CatalogEntry, display: number) {
+	if (!Number.isFinite(display)) return "";
+	const rounded = Number(display.toFixed(displayPlaces(option)));
+	if (isPercent(option)) return `${rounded}%`;
+	if (option.unit === "multiplier") return `${rounded}×`;
+	return String(rounded);
+}
+
+function serializeStored(option: CatalogEntry, display: number) {
+	if (!Number.isFinite(display)) return "";
+	const stored = fromDisplay(option, display);
+	const places = Math.min(
+		4,
+		Math.max(displayPlaces(option), decimalPlaces(option.step ?? 0.01)),
+	);
+	return String(Number(stored.toFixed(places)));
 }
 
 function ValueControl(props: {
@@ -167,14 +331,16 @@ function ValueControl(props: {
 }) {
 	const [dragValue, setDragValue] = createSignal<number>();
 	const label = () => labelFor(props.option);
-	const numericRange = () =>
-		typeof props.option.min === "number" && typeof props.option.max === "number"
-			? { min: props.option.min, max: props.option.max }
-			: undefined;
-	const numberValue = () => {
+	const range = () => displayRange(props.option);
+	const storedNumber = () => {
 		const value = Number(props.value);
 		return props.value.trim() !== "" && Number.isFinite(value) ? value : null;
 	};
+	const displayNumber = () => {
+		const stored = storedNumber();
+		return stored === null ? null : toDisplay(props.option, stored);
+	};
+	const shown = () => dragValue() ?? displayNumber();
 	return (
 		<Show
 			when={
@@ -188,15 +354,16 @@ function ValueControl(props: {
 						<Show
 							when={
 								["integer", "decimal", "number"].includes(props.option.kind) &&
-								numericRange() !== undefined &&
-								numberValue() !== null
+								range() !== undefined &&
+								displayNumber() !== null
 							}
 							fallback={
 								<TextFieldRoot class={styles.valueTextControl}>
 									<TextFieldInput
 										aria-label={label()}
 										type={
-											["integer", "decimal"].includes(props.option.kind)
+											["integer", "decimal"].includes(props.option.kind) &&
+											storedNumber() !== null
 												? "number"
 												: "text"
 										}
@@ -215,22 +382,19 @@ function ValueControl(props: {
 						>
 							<div class={styles.valueSliderControl}>
 								<span class={styles.valueLabel}>
-									{dragValue() ?? props.value}
+									{formatDisplay(props.option, shown() as number)}
 								</span>
 								<Slider
-									value={[dragValue() ?? (numberValue() as number)]}
-									minValue={numericRange()?.min}
-									maxValue={numericRange()?.max}
-									step={
-										props.option.step ??
-										(props.option.kind === "integer" ? 1 : 0.01)
-									}
+									value={[shown() as number]}
+									minValue={range()?.min}
+									maxValue={range()?.max}
+									step={displayStep(props.option)}
 									disabled={props.disabled}
 									aria-label={label()}
 									onChange={(next) => setDragValue(next[0])}
 									onChangeEnd={(next) => {
 										if (next[0] !== undefined) {
-											props.onSave(serializeNumber(next[0], props.option.step));
+											props.onSave(serializeStored(props.option, next[0]));
 										}
 										setDragValue(undefined);
 									}}
@@ -244,42 +408,66 @@ function ValueControl(props: {
 						</Show>
 					}
 				>
-					<Select<string>
-						options={(props.option.values ?? []).map(choiceValue)}
-						value={props.value}
-						onChange={(value) => value !== null && props.onSave(value)}
-						optionValue={(value) => value}
-						optionTextValue={(value) => value}
-						itemComponent={(itemProps) => (
-							<SelectItem item={itemProps.item}>
-								{choiceLabel(
+					<div class={styles.valueControl}>
+						<Select<string>
+							options={(props.option.values ?? []).map(choiceValue)}
+							value={props.value}
+							onChange={(value) => value !== null && props.onSave(value)}
+							optionValue={(value) => value}
+							optionTextValue={(value) =>
+								choiceLabel(
 									(props.option.values ?? []).find(
-										(choice) => choiceValue(choice) === itemProps.item.rawValue,
-									) ?? itemProps.item.rawValue,
-								)}
-							</SelectItem>
-						)}
-					>
-						<SelectTrigger aria-label={label()} disabled={props.disabled}>
-							<SelectValue<string>>
-								{(state) => state.selectedOption()}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent />
-					</Select>
+										(choice) => choiceValue(choice) === value,
+									) ?? value,
+									props.option.id,
+								)
+							}
+							itemComponent={(itemProps) => (
+								<SelectItem item={itemProps.item}>
+									{choiceLabel(
+										(props.option.values ?? []).find(
+											(choice) =>
+												choiceValue(choice) === itemProps.item.rawValue,
+										) ?? itemProps.item.rawValue,
+										props.option.id,
+									)}
+								</SelectItem>
+							)}
+						>
+							<SelectTrigger aria-label={label()} disabled={props.disabled}>
+								<SelectValue<string>>
+									{(state) =>
+										choiceLabel(
+											(props.option.values ?? []).find(
+												(choice) =>
+													choiceValue(choice) === state.selectedOption(),
+											) ??
+												state.selectedOption() ??
+												"",
+											props.option.id,
+										)
+									}
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent />
+						</Select>
+					</div>
 				</Show>
 			}
 		>
-			<Switch
-				checked={props.value === "true"}
-				disabled={props.disabled}
-				onCheckedChange={(checked: boolean) => props.onSave(String(checked))}
-			>
-				<SwitchLabel class={styles.srOnly}>{label()}</SwitchLabel>
-				<SwitchControl>
-					<SwitchThumb />
-				</SwitchControl>
-			</Switch>
+			<div class={styles.valueControl}>
+				<Switch
+					checked={props.value === "true"}
+					disabled={props.disabled}
+					aria-label={label()}
+					onCheckedChange={(checked: boolean) => props.onSave(String(checked))}
+				>
+					<SwitchLabel class={styles.srOnly}>{label()}</SwitchLabel>
+					<SwitchControl>
+						<SwitchThumb />
+					</SwitchControl>
+				</Switch>
+			</div>
 		</Show>
 	);
 }
@@ -307,16 +495,21 @@ export function createGameOptionsEditor(props: {
 	const value = (key: string) =>
 		changes()[key] ?? snapshot()?.values[key] ?? "";
 	const rows = createMemo(() => {
-		const values = snapshot()?.values ?? {};
-		const known = new Map(
-			catalog()
-				.filter((row) => Object.prototype.hasOwnProperty.call(values, row.key))
-				.map((row) => [row.key, row]),
-		);
-		for (const key of Object.keys(values)) {
-			if (known.has(key) || protectedKeys.has(key)) continue;
-			const raw = snapshot()?.values[key] ?? "";
-			known.set(key, {
+		const known = new Map(catalog().map((row) => [row.key, row]));
+		const keys = new Set([
+			...Object.keys(snapshot()?.values ?? {}),
+			...Object.keys(changes()),
+		]);
+		const result: CatalogEntry[] = [];
+		for (const key of keys) {
+			if (protectedKeys.has(key) || key.startsWith("key_")) continue;
+			const existing = known.get(key);
+			if (existing) {
+				result.push(existing);
+				continue;
+			}
+			const raw = changes()[key] ?? snapshot()?.values[key] ?? "";
+			result.push({
 				key,
 				category: inferredCategory(key),
 				kind:
@@ -329,17 +522,13 @@ export function createGameOptionsEditor(props: {
 							: "text",
 			});
 		}
-		return [...known.values()]
-			.filter(
-				(row) => !protectedKeys.has(row.key) && !row.key.startsWith("key_"),
-			)
-			.sort(
-				(left, right) =>
-					rowOrder(left.category) - rowOrder(right.category) ||
-					labelFor(left).localeCompare(labelFor(right), undefined, {
-						sensitivity: "base",
-					}),
-			);
+		return result.sort(
+			(left, right) =>
+				rowOrder(left.category) - rowOrder(right.category) ||
+				labelFor(left).localeCompare(labelFor(right), undefined, {
+					sensitivity: "base",
+				}),
+		);
 	});
 	const categories = createMemo(() => {
 		const present = new Set(rows().map((row) => row.category));
@@ -487,10 +676,11 @@ export function GameOptionsEditor(props: {
 		rows,
 	} = props.state;
 	const nav = createMemo(() => [
-		{ id: "all", label: categoryLabel("all") },
+		{ id: "all", label: categoryLabel("all"), icon: categoryIcons.all },
 		...categories().map((entry) => ({
 			id: entry,
 			label: categoryLabel(entry),
+			icon: categoryIcons[entry] ?? categoryIcons.custom,
 		})),
 	]);
 	const optionRows = createMemo(() =>
