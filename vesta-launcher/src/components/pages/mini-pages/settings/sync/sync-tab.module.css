@@ -263,7 +263,7 @@
 .sharedPage {
 	display: flex;
 	flex-direction: column;
-	height: clamp(280px, calc(100dvh - 200px), 800px);
+	max-height: clamp(280px, calc(100dvh - 200px), 800px);
 	min-width: 0;
 }
 .sharedPage .heading {
