@@ -452,103 +452,109 @@ export function SharedOptionsPage(props: {
 				<SubpageBackButton label={t("sync-back")} onClick={props.onBack} />
 				<h2 class={styles.headingTitle}>{t("sync-shared-page-title")}</h2>
 			</div>
-			<div class={styles.filters}>
-				<div class={styles.search}>
-					<SearchIcon class={styles.searchIcon} aria-hidden="true" />
-					<TextFieldRoot>
-						<TextFieldInput
-							class={styles.searchInput}
-							type="search"
-							value={query()}
-							aria-label={t("sync-search-options")}
-							placeholder={t("sync-search-options")}
-							onInput={(event) =>
-								setQuery((event.currentTarget as HTMLInputElement).value)
-							}
-						/>
-					</TextFieldRoot>
-				</div>
-				<ToggleGroup
-					class={styles.scopeToggle}
-					value={scope()}
-					onChange={(value) => value && setScope(value)}
-				>
-					<For each={scopes()}>
-						{(entry) => {
-							const Icon = scopeIcons[entry] ?? CodeIcon;
-							return (
-								<ToggleGroupItem
-									value={entry}
-									size="sm"
-									icon_only
-									aria-label={labelForScope(entry)}
-								>
-									<Icon class={styles.icon} />
-								</ToggleGroupItem>
-							);
-						}}
-					</For>
-				</ToggleGroup>
-				<SquareToggle
-					label={
-						allSelected()
-							? t("sync-unlink-all-options")
-							: t("sync-link-all-options")
-					}
-					pressed={allSelected()}
-					iconOnly
-					disabled={disabled() || availableKeys().length === 0}
-					onChange={() =>
-						void props.onSave({
-							...props.snapshot.preferences,
-							selectedKeys: allSelected() ? [] : availableKeys(),
-						})
-					}
-				>
-					<LinkIcon class={styles.icon} />
-				</SquareToggle>
-			</div>
-			<div class={styles.optionRows}>
-				<For each={filtered()}>
-					{(option) => {
-						const linked = () => selected().includes(option.key);
-						const value = () => props.snapshot.sharedValues?.[option.key];
-						return (
-							<div class={styles.optionRow}>
-								<div class={styles.optionName} title={option.key}>
-									<span>{labelForOption(option)}</span>
-								</div>
-								<div class={styles.optionControl}>
-									<ValueControl
-										option={option}
-										value={value()}
-										disabled={disabled() || !linked()}
-										onSave={(next) =>
-											props.onSave(props.snapshot.preferences, {
-												[option.key]: next,
-											})
-										}
-									/>
-									<SquareToggle
-										label={t("sync-option-label", {
-											option: labelForOption(option),
-										})}
-										pressed={linked()}
-										disabled={disabled()}
-										iconOnly
-										onChange={(next) => updateSelection(option.key, next)}
+			<div class={styles.sharedLayout}>
+				<aside class={styles.sharedSidebar}>
+					<div class={styles.search}>
+						<SearchIcon class={styles.searchIcon} aria-hidden="true" />
+						<TextFieldRoot>
+							<TextFieldInput
+								class={styles.searchInput}
+								type="search"
+								value={query()}
+								aria-label={t("sync-search-options")}
+								placeholder={t("sync-search-options")}
+								onInput={(event) =>
+									setQuery((event.currentTarget as HTMLInputElement).value)
+								}
+							/>
+						</TextFieldRoot>
+					</div>
+					<ToggleGroup
+						class={styles.scopeToggle}
+						value={scope()}
+						onChange={(value) => value && setScope(value)}
+					>
+						<For each={scopes()}>
+							{(entry) => {
+								const Icon = scopeIcons[entry] ?? CodeIcon;
+								return (
+									<ToggleGroupItem
+										value={entry}
+										size="sm"
+										aria-label={labelForScope(entry)}
 									>
-										<LinkIcon class={styles.icon} />
-									</SquareToggle>
-								</div>
-							</div>
-						);
-					}}
-				</For>
+										<Icon class={styles.icon} />
+										<span>{labelForScope(entry)}</span>
+									</ToggleGroupItem>
+								);
+							}}
+						</For>
+					</ToggleGroup>
+				</aside>
+				<div class={styles.sharedContent}>
+					<div class={styles.sharedActions}>
+						<SquareToggle
+							label={
+								allSelected()
+									? t("sync-unlink-all-options")
+									: t("sync-link-all-options")
+							}
+							pressed={allSelected()}
+							iconOnly
+							disabled={disabled() || availableKeys().length === 0}
+							onChange={() =>
+								void props.onSave({
+									...props.snapshot.preferences,
+									selectedKeys: allSelected() ? [] : availableKeys(),
+								})
+							}
+						>
+							<LinkIcon class={styles.icon} />
+						</SquareToggle>
+					</div>
+					<div class={styles.optionRows}>
+						<For each={filtered()}>
+							{(option) => {
+								const linked = () => selected().includes(option.key);
+								const value = () => props.snapshot.sharedValues?.[option.key];
+								return (
+									<div class={styles.optionRow}>
+										<div class={styles.optionName} title={option.key}>
+											<span>{labelForOption(option)}</span>
+										</div>
+										<div class={styles.optionControl}>
+											<ValueControl
+												option={option}
+												value={value()}
+												disabled={disabled() || !linked()}
+												onSave={(next) =>
+													props.onSave(props.snapshot.preferences, {
+														[option.key]: next,
+													})
+												}
+											/>
+											<SquareToggle
+												label={t("sync-option-label", {
+													option: labelForOption(option),
+												})}
+												pressed={linked()}
+												disabled={disabled()}
+												iconOnly
+												onChange={(next) => updateSelection(option.key, next)}
+											>
+												<LinkIcon class={styles.icon} />
+											</SquareToggle>
+										</div>
+									</div>
+								);
+							}}
+						</For>
+					</div>
+					<Show when={filtered().length === 0}>
+						<p class={styles.empty}>{t("sync-no-options")}</p>
+					</Show>
+				</div>
 			</div>
-			<Show when={filtered().length === 0}>
-				<p class={styles.empty}>{t("sync-no-options")}</p>
-			</Show>
 		</div>
 	);
 }
