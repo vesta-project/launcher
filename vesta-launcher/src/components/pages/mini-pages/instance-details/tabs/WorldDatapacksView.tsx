@@ -5,7 +5,7 @@ import ReloadIcon from "@assets/icons/actions/reload.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import PackIcon from "@assets/icons/content/layers.svg";
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
+import { SubpageBackButton } from "@components/settings/SubpageBackButton";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
 import type {
@@ -451,17 +451,10 @@ export const WorldDatapacksView: Component<{
 			aria-label={`Datapacks in ${props.world.displayName}`}
 		>
 			<header class={styles["context-rail"]}>
-				<Button
-					size="sm"
-					variant="ghost"
-					icon_only
-					class={styles.back}
-					aria-label="Back to worlds"
-					tooltip_text="Back to worlds"
+				<SubpageBackButton
+					label="Back to worlds"
 					onClick={props.onBack}
-				>
-					<BackIcon />
-				</Button>
+				/>
 				<WorldIcon
 					class={styles["context-icon"]}
 					src={props.world.iconDataUrl}

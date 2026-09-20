@@ -32,8 +32,9 @@
 .valueSliderControl {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 12px;
-	flex: 1;
+	width: 100%;
 	min-width: 0;
 }
 
@@ -44,16 +45,32 @@
 }
 
 .valueLabel {
-	min-width: 3.5ch;
+	min-width: 4.5ch;
 	text-align: right;
 	font-variant-numeric: tabular-nums;
 	font-size: var(--font-small);
 	color: var(--text-primary);
+	white-space: nowrap;
 }
 
 .valueTextControl {
 	width: 100%;
 	min-width: 0;
+}
+
+.valueControl {
+	display: inline-flex;
+	justify-content: flex-end;
+	align-items: center;
+	width: fit-content;
+	max-width: 100%;
+	margin-left: auto;
+}
+
+.valueControl :global([class*="select__trigger"]) {
+	width: auto;
+	min-width: 7.5rem;
+	max-width: 100%;
 }
 
 .srOnly {

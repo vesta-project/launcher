@@ -35,7 +35,10 @@ vi.mock("@tauri-apps/api/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@tauri-apps/api/core")>()),
 	invoke: vi.fn(),
 }));
-vi.mock("~/localization", () => ({ t: (key: string) => key }));
+vi.mock("~/localization", () => ({
+	t: (key: string, params?: Record<string, string | number>) =>
+		params ? `${key} ${Object.values(params).join(" ")}` : key,
+}));
 vi.mock("@ui/slider/slider", () => {
 	function Slider(props: {
 		value?: number[];
@@ -48,22 +51,23 @@ vi.mock("@ui/slider/slider", () => {
 		onChangeEnd?: (value: number[]) => void;
 		children?: unknown;
 	}) {
-		const input = document.createElement("input");
-		input.type = "number";
-		input.setAttribute("role", "spinbutton");
-		if (props["aria-label"])
-			input.setAttribute("aria-label", props["aria-label"]);
-		if (props.minValue !== undefined) input.min = String(props.minValue);
-		if (props.maxValue !== undefined) input.max = String(props.maxValue);
-		if (props.step !== undefined) input.step = String(props.step);
-		input.disabled = Boolean(props.disabled);
-		input.value = String(props.value?.[0] ?? "");
-		input.addEventListener("input", () => {
-			const next = Number(input.value);
-			props.onChange?.([next]);
-			props.onChangeEnd?.([next]);
-		});
-		return input;
+		return (
+			<input
+				type="number"
+				role="spinbutton"
+				aria-label={props["aria-label"]}
+				min={props.minValue}
+				max={props.maxValue}
+				step={props.step}
+				disabled={props.disabled}
+				value={props.value?.[0] ?? ""}
+				onInput={(event) => {
+					const next = Number((event.currentTarget as HTMLInputElement).value);
+					props.onChange?.([next]);
+					props.onChangeEnd?.([next]);
+				}}
+			/>
+		);
 	}
 	return {
 		Slider,
@@ -76,19 +80,25 @@ vi.mock("@ui/switch/switch", () => {
 	function Switch(props: {
 		checked?: boolean;
 		disabled?: boolean;
+		"aria-label"?: string;
 		onCheckedChange?: (checked: boolean) => void;
+		children?: unknown;
 	}) {
-		const input = document.createElement("input");
-		input.type = "checkbox";
-		input.setAttribute("role", "switch");
-		input.checked = Boolean(props.checked);
-		input.setAttribute("aria-checked", String(input.checked));
-		input.disabled = Boolean(props.disabled);
-		input.addEventListener("change", () => {
-			input.setAttribute("aria-checked", String(input.checked));
-			props.onCheckedChange?.(input.checked);
-		});
-		return input;
+		return (
+			<input
+				type="checkbox"
+				role="switch"
+				aria-label={props["aria-label"]}
+				aria-checked={Boolean(props.checked)}
+				checked={Boolean(props.checked)}
+				disabled={Boolean(props.disabled)}
+				onChange={(event) => {
+					props.onCheckedChange?.(
+						(event.currentTarget as HTMLInputElement).checked,
+					);
+				}}
+			/>
+		);
 	}
 	return {
 		Switch,
@@ -97,6 +107,7 @@ vi.mock("@ui/switch/switch", () => {
 		SwitchThumb: () => null,
 	};
 });
+
 const catalog = [
 	{
 		key: "fov",
@@ -113,6 +124,7 @@ const snapshot = {
 	exists: true,
 	values: { fov: "70", "mod.custom": "keep", version: "1" },
 };
+
 beforeEach(() => {
 	vi.mocked(invoke).mockReset();
 	vi.mocked(invoke).mockImplementation((command) =>
@@ -130,7 +142,7 @@ it("keeps unsupported numeric values visible while editing another key", async (
 			: { ...snapshot, values: { ...snapshot.values, fov: "legacy-value" } },
 	);
 	render(() => <EditorHarness instanceId={7} />);
-	const fov = await screen.findByRole("textbox", { name: "game-options-fov" });
+	const fov = await screen.findByRole("textbox", { name: "FOV" });
 	expect((fov as HTMLInputElement).value).toBe("legacy-value");
 	fireEvent.input(screen.getByRole("textbox", { name: "Mod custom" }), {
 		target: { value: "new" },
@@ -148,7 +160,7 @@ it("keeps unsupported numeric values visible while editing another key", async (
 it("sends only edited keys, converts FOV degrees, and hides protected keys", async () => {
 	render(() => <EditorHarness instanceId={7} />);
 	const input = await screen.findByRole("spinbutton", {
-		name: "game-options-fov",
+		name: "FOV",
 	});
 	expect((input as HTMLInputElement).value).toBe("70");
 	expect(screen.queryByLabelText("version")).toBeNull();
@@ -196,20 +208,16 @@ it("does not publish an old instance response into a newly selected instance", a
 			return new Promise((resolve) => {
 				finishOld = resolve;
 			});
-		return Promise.resolve({ ...snapshot, values: { fov: "0.5" } });
+		return Promise.resolve({ ...snapshot, values: { fov: "90" } });
 	});
 	const [id, setId] = createSignal(1);
 	render(() => <EditorHarness instanceId={id()} />);
 	setId(2);
-	await screen.findByRole("spinbutton", { name: "game-options-fov" });
+	await screen.findByRole("spinbutton", { name: "FOV" });
 	finishOld(snapshot);
 	await Promise.resolve();
 	expect(
-		(
-			screen.getByRole("spinbutton", {
-				name: "game-options-fov",
-			}) as HTMLInputElement
-		).value,
+		(screen.getByRole("spinbutton", { name: "FOV" }) as HTMLInputElement).value,
 	).toBe("90");
 });
 
@@ -271,11 +279,10 @@ it("uses a switch for boolean settings and keeps custom labels readable", async 
 		name: "game-options-fullscreen",
 	});
 	expect(toggle.getAttribute("aria-checked")).toBe("false");
-	expect(screen.getByRole("textbox", { name: "Mod fast mode" })).toBeTruthy();
+	expect(screen.getByRole("switch", { name: "Mod fast mode" })).toBeTruthy();
 	fireEvent.click(toggle);
 	expect(toggle.getAttribute("aria-checked")).toBe("true");
 });
-
 
 it("does not render catalog aliases absent from the instance file", async () => {
 	vi.mocked(invoke).mockImplementation(async (command) =>
@@ -295,6 +302,44 @@ it("does not render catalog aliases absent from the instance file", async () => 
 			: snapshot,
 	);
 	render(() => <EditorHarness instanceId={7} />);
-	await screen.findByRole("spinbutton", { name: "game-options-fov" });
+	await screen.findByRole("spinbutton", { name: "FOV" });
 	expect(screen.queryByRole("spinbutton", { name: "Master volume" })).toBeNull();
+});
+
+it("shows percent options as 0-100 and rounds to two decimals", async () => {
+	vi.mocked(invoke).mockImplementation(async (command) =>
+		command === "get_game_options_catalog"
+			? [
+					{
+						key: "chatOpacity",
+						id: "chat_opacity",
+						category: "chat",
+						kind: "decimal",
+						min: 0,
+						max: 1,
+						step: 0.01,
+						unit: "percent",
+					},
+				]
+			: {
+					revision: "original",
+					exists: true,
+					values: { chatOpacity: "0.4375" },
+				},
+	);
+	render(() => <EditorHarness instanceId={7} />);
+	const slider = await screen.findByRole("spinbutton", {
+		name: "Chat opacity",
+	});
+	expect((slider as HTMLInputElement).value).toBe("43.75");
+	expect(screen.getByText("43.75%")).toBeTruthy();
+	fireEvent.input(slider, { target: { value: "50" } });
+	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+	await waitFor(() =>
+		expect(invoke).toHaveBeenCalledWith("save_instance_game_options", {
+			instanceId: 7,
+			editorValues: true,
+			patch: { revision: "original", changes: { chatOpacity: "0.5" } },
+		}),
+	);
 });

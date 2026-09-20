@@ -9,9 +9,9 @@ pub fn get_game_options_catalog() -> Vec<serde_json::Value> {
 }
 
 fn editor_snapshot(mut snapshot: Snapshot) -> Snapshot {
-    snapshot
-        .values
-        .retain(|key, _| catalog::is_syncable_key(key) || catalog::is_syncable_keybind(key));
+    // Keybinds have a separate editor. Everything else in options.txt stays
+    // visible here — including machine-local keys that sync must never copy.
+    snapshot.values.retain(|key, _| !key.starts_with("key_"));
     for (key, value) in &mut snapshot.values {
         if let Ok(decoded) = catalog::decode_for_editor(key, value) {
             *value = decoded;
@@ -26,12 +26,17 @@ fn save_editor(directory: &std::path::Path, mut patch: Patch) -> Result<Snapshot
         return Err("Options changed on disk. Reload before saving.".into());
     }
     for (key, value) in &mut patch.changes {
-        let previous = current
-            .values
-            .get(key)
-            .ok_or_else(|| format!("Option {key} is no longer present. Reload before saving."))?;
+        if key.starts_with("key_") || key.is_empty() {
+            return Err(format!("Cannot edit option {key} here"));
+        }
+        if value.is_empty() || value.chars().any(|c| matches!(c, '\n' | '\r' | '\0')) {
+            return Err("Option values must be a non-empty single line".into());
+        }
         if catalog::definition(key).is_some() {
-            *value = catalog::encode_for_existing(key, value, previous)?.to_owned();
+            *value = match current.values.get(key) {
+                Some(previous) => catalog::encode_for_existing(key, value, previous)?.to_owned(),
+                None => catalog::encode_from_editor(key, value)?.to_owned(),
+            };
         }
     }
     game_options_file::save(directory, patch).map(editor_snapshot)
@@ -145,11 +150,24 @@ mod tests {
             }
         )
         .is_err());
-        assert!(save_editor(
+        // Absent catalogued keys can be appended from the instance editor.
+        let with_gamma = save_editor(
             &dir,
             Patch {
                 revision: saved.revision,
-                changes: BTreeMap::from([("gamma".into(), "0.5".into())])
+                changes: BTreeMap::from([("gamma".into(), "0.5".into())]),
+            },
+        )
+        .unwrap();
+        assert_eq!(with_gamma.values["gamma"], "0.5");
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("gamma:0.5"));
+        assert!(save_editor(
+            &dir,
+            Patch {
+                revision: with_gamma.revision,
+                changes: BTreeMap::from([("key_key.forward".into(), "key.keyboard.w".into())]),
             }
         )
         .is_err());
