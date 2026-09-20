@@ -263,7 +263,6 @@
 .sharedPage {
 	display: flex;
 	flex-direction: column;
-	max-height: clamp(280px, calc(100dvh - 200px), 800px);
 	min-width: 0;
 }
 .sharedPage .heading {
@@ -322,9 +321,6 @@
 	flex: 0 0 auto;
 }
 .optionRows {
-	flex: 1;
-	min-height: 0;
-	overflow-y: auto;
 	padding: 0 24px 16px;
 }
 .optionRow {
