@@ -36,14 +36,14 @@
 
 .layout {
 	display: grid;
-	grid-template-columns: 56px minmax(0, 1fr);
+	grid-template-columns: 180px minmax(0, 1fr);
 	gap: 0;
 	height: 100%;
 	min-height: 0;
 }
 
 .sidebar {
-	padding: 12px 8px;
+	padding: 12px;
 	border-right: 1px solid var(--border-subtle);
 	min-height: 0;
 	overflow-x: hidden;
@@ -74,26 +74,15 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	align-items: center;
-	gap: 4px;
+	gap: 2px;
 }
 
 .navButton {
-	justify-content: center;
-	width: 36px;
-	height: 32px;
+	justify-content: flex-start;
+	gap: 8px;
 	min-height: 32px;
-	padding: 0;
+	padding: 5px 8px;
 	border-radius: 6px;
-}
-
-.navButton span {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	clip-path: inset(50%);
-	white-space: nowrap;
 }
 
 .navIcon {
@@ -206,6 +195,37 @@
 	font-size: var(--font-xsmall);
 }
 
+@media (max-width: 880px) and (min-width: 761px) {
+	.layout {
+		grid-template-columns: 56px minmax(0, 1fr);
+	}
+
+	.sidebar {
+		padding-inline: 8px;
+	}
+
+	.nav {
+		align-items: center;
+	}
+
+	.navButton {
+		justify-content: center;
+		width: 36px;
+		height: 32px;
+		min-height: 32px;
+		padding: 0;
+	}
+
+	.navButton span {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+}
+
 @media (max-width: 760px) {
 	.layout {
 		grid-template-columns: 1fr;
@@ -224,6 +244,23 @@
 		justify-content: flex-start;
 		flex-wrap: nowrap;
 		overflow-x: auto;
+	}
+
+	.navButton {
+		justify-content: center;
+		width: 36px;
+		height: 32px;
+		min-height: 32px;
+		padding: 0;
+	}
+
+	.navButton span {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	.toolbar {
