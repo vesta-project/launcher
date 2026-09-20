@@ -271,10 +271,49 @@
 	padding: 16px 24px 12px;
 	box-sizing: border-box;
 }
-.sharedPage .filters {
+.sharedLayout {
+	display: grid;
+	grid-template-columns: 176px minmax(0, 1fr);
+	flex: 1;
+	min-height: 0;
+	border-top: 1px solid var(--border-subtle);
+}
+.sharedSidebar {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 0;
+	padding: 14px 12px 16px 24px;
+	border-right: 1px solid var(--border-subtle);
+	overflow-y: auto;
+}
+.sharedSidebar .search {
 	margin: 0;
-	padding: 0 24px 12px;
-	border-bottom: 1px solid var(--border-subtle);
+}
+.scopeToggle {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 2px;
+}
+.scopeToggle :global(.v-toggle-group__item) {
+	justify-content: flex-start;
+	gap: 8px;
+	min-height: 30px;
+	padding: 5px 8px;
+	border-radius: 6px;
+	font-size: var(--font-xsmall);
+}
+.sharedContent {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+.sharedActions {
+	display: flex;
+	justify-content: flex-end;
+	padding: 10px 24px 6px;
 }
 .optionRows {
 	flex: 1;
@@ -353,7 +392,7 @@
 	min-width: 7.5rem;
 	max-width: 100%;
 }
-.sharedPage > .empty {
+.sharedContent > .empty {
 	padding: 0 24px 16px;
 }
 
@@ -385,7 +424,24 @@
 	.sharedPage .heading {
 		padding-inline: 16px;
 	}
-	.sharedPage .filters {
+	.sharedLayout {
+		grid-template-columns: 1fr;
+	}
+	.sharedSidebar {
+		padding: 12px 16px 8px;
+		border-right: 0;
+		border-bottom: 1px solid var(--border-subtle);
+		overflow: visible;
+	}
+	.scopeToggle {
+		flex-direction: row;
+		overflow-x: auto;
+		padding-bottom: 2px;
+	}
+	.scopeToggle :global(.v-toggle-group__item) {
+		flex: 0 0 auto;
+	}
+	.sharedActions {
 		padding-inline: 16px;
 	}
 	.optionControl {
