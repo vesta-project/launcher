@@ -494,16 +494,11 @@ export function SharedOptionsPage(props: {
 						</div>
 
 						<div class={styles.sharedActions}>
-							<SquareToggle
-								label={
-									allSelected()
-										? t("sync-unlink-all-options")
-										: t("sync-link-all-options")
-								}
-								pressed={allSelected()}
-								iconOnly
+							<Button
+								variant="outline"
+								size="sm"
 								disabled={disabled() || availableKeys().length === 0}
-								onChange={() =>
+								onClick={() =>
 									void props.onSave({
 										...props.snapshot.preferences,
 										selectedKeys: allSelected() ? [] : availableKeys(),
@@ -511,7 +506,10 @@ export function SharedOptionsPage(props: {
 								}
 							>
 								<LinkIcon class={styles.icon} />
-							</SquareToggle>
+								{allSelected()
+									? t("sync-unlink-all-options")
+									: t("sync-link-all-options")}
+							</Button>
 						</div>
 					</div>
 					<div class={styles.optionRows}>
