@@ -454,21 +454,6 @@ export function SharedOptionsPage(props: {
 			</div>
 			<div class={styles.sharedLayout}>
 				<aside class={styles.sharedSidebar}>
-					<div class={styles.search}>
-						<SearchIcon class={styles.searchIcon} aria-hidden="true" />
-						<TextFieldRoot>
-							<TextFieldInput
-								class={styles.searchInput}
-								type="search"
-								value={query()}
-								aria-label={t("sync-search-options")}
-								placeholder={t("sync-search-options")}
-								onInput={(event) =>
-									setQuery((event.currentTarget as HTMLInputElement).value)
-								}
-							/>
-						</TextFieldRoot>
-					</div>
 					<ToggleGroup
 						class={styles.scopeToggle}
 						value={scope()}
@@ -481,10 +466,10 @@ export function SharedOptionsPage(props: {
 									<ToggleGroupItem
 										value={entry}
 										size="sm"
+										icon_only
 										aria-label={labelForScope(entry)}
 									>
 										<Icon class={styles.icon} />
-										<span>{labelForScope(entry)}</span>
 									</ToggleGroupItem>
 								);
 							}}
@@ -492,25 +477,43 @@ export function SharedOptionsPage(props: {
 					</ToggleGroup>
 				</aside>
 				<div class={styles.sharedContent}>
-					<div class={styles.sharedActions}>
-						<SquareToggle
-							label={
-								allSelected()
-									? t("sync-unlink-all-options")
-									: t("sync-link-all-options")
-							}
-							pressed={allSelected()}
-							iconOnly
-							disabled={disabled() || availableKeys().length === 0}
-							onChange={() =>
-								void props.onSave({
-									...props.snapshot.preferences,
-									selectedKeys: allSelected() ? [] : availableKeys(),
-								})
-							}
-						>
-							<LinkIcon class={styles.icon} />
-						</SquareToggle>
+					<div class={styles.sharedToolbar}>
+						<div class={styles.search}>
+							<SearchIcon class={styles.searchIcon} aria-hidden="true" />
+							<TextFieldRoot>
+								<TextFieldInput
+									class={styles.searchInput}
+									type="search"
+									value={query()}
+									aria-label={t("sync-search-options")}
+									placeholder={t("sync-search-options")}
+									onInput={(event) =>
+										setQuery((event.currentTarget as HTMLInputElement).value)
+									}
+								/>
+							</TextFieldRoot>
+						</div>
+
+						<div class={styles.sharedActions}>
+							<SquareToggle
+								label={
+									allSelected()
+										? t("sync-unlink-all-options")
+										: t("sync-link-all-options")
+								}
+								pressed={allSelected()}
+								iconOnly
+								disabled={disabled() || availableKeys().length === 0}
+								onChange={() =>
+									void props.onSave({
+										...props.snapshot.preferences,
+										selectedKeys: allSelected() ? [] : availableKeys(),
+									})
+								}
+							>
+								<LinkIcon class={styles.icon} />
+							</SquareToggle>
+						</div>
 					</div>
 					<div class={styles.optionRows}>
 						<For each={filtered()}>
