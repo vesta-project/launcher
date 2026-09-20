@@ -11,6 +11,7 @@ import SkinIcon from "@assets/icons/content/skin-icon.svg";
 import MicIcon from "@assets/icons/security/mic.svg";
 import WifiIcon from "@assets/icons/status/wifi.svg";
 import { SubpageBackButton } from "@components/settings/SubpageBackButton";
+import Button from "@ui/button/button";
 import {
 	Select,
 	SelectContent,
@@ -31,7 +32,6 @@ import {
 	SwitchThumb,
 } from "@ui/switch/switch";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
-import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { type Component, createMemo, createSignal, For, Show } from "solid-js";
 import { t } from "~/localization";
 import {
@@ -454,27 +454,26 @@ export function SharedOptionsPage(props: {
 			</div>
 			<div class={styles.sharedLayout}>
 				<aside class={styles.sharedSidebar}>
-					<ToggleGroup
-						class={styles.scopeToggle}
-						value={scope()}
-						onChange={(value) => value && setScope(value)}
-					>
+					<nav class={styles.scopeTabs} aria-label={t("sync-search-options")}>
 						<For each={scopes()}>
 							{(entry) => {
 								const Icon = scopeIcons[entry] ?? CodeIcon;
 								return (
-									<ToggleGroupItem
-										value={entry}
+									<Button
+										variant="ghost"
 										size="sm"
-										icon_only
+										aria-pressed={scope() === entry && !query()}
 										aria-label={labelForScope(entry)}
+										class={styles.scopeTab}
+										onClick={() => setScope(entry)}
 									>
 										<Icon class={styles.icon} />
-									</ToggleGroupItem>
+										<span>{labelForScope(entry)}</span>
+									</Button>
 								);
 							}}
 						</For>
-					</ToggleGroup>
+					</nav>
 				</aside>
 				<div class={styles.sharedContent}>
 					<div class={styles.sharedToolbar}>
