@@ -1,10 +1,10 @@
 import SearchIcon from "@assets/icons/content/search.svg";
 import Button from "@ui/button/button";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
-import { For, Show, type JSX } from "solid-js";
-import { SettingsCard } from "./settings-card";
+import { type Component, For, type JSX, Show } from "solid-js";
 import styles from "./option-browser.module.css";
 import { SubpageBackButton } from "./SubpageBackButton";
+import { SettingsCard } from "./settings-card";
 
 export function OptionBrowser(props: {
 	label: string;
@@ -15,7 +15,11 @@ export function OptionBrowser(props: {
 	categoriesLabel: string;
 	query: string;
 	onQuery: (value: string) => void;
-	categories: { id: string; label: string }[];
+	categories: {
+		id: string;
+		label: string;
+		icon?: Component<{ class?: string }>;
+	}[];
 	category: string;
 	onCategory: (id: string) => void;
 	hint?: JSX.Element;
@@ -26,10 +30,7 @@ export function OptionBrowser(props: {
 		<section class={styles.browser} aria-label={props.label}>
 			<div class={styles.heading}>
 				<Show when={props.onBack}>
-					<SubpageBackButton
-						label={props.backLabel}
-						onClick={props.onBack}
-					/>
+					<SubpageBackButton label={props.backLabel} onClick={props.onBack} />
 				</Show>
 				<h2 class={styles.title}>{props.title}</h2>
 			</div>
@@ -58,9 +59,7 @@ export function OptionBrowser(props: {
 								{(entry) => (
 									<Button
 										variant="ghost"
-										aria-pressed={
-											props.category === entry.id && !props.query
-										}
+										aria-pressed={props.category === entry.id && !props.query}
 										aria-label={entry.label}
 										class={styles.navButton}
 										onClick={() => props.onCategory(entry.id)}
