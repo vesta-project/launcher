@@ -38,23 +38,6 @@ export function OptionBrowser(props: {
 			<SettingsCard variant="fill">
 				<div class={styles.layout}>
 					<aside class={styles.sidebar}>
-						<div class={styles.search}>
-							<SearchIcon class={styles.searchIcon} aria-hidden="true" />
-							<TextFieldRoot>
-								<TextFieldInput
-									class={styles.searchInput}
-									type="search"
-									value={props.query}
-									aria-label={props.searchLabel}
-									placeholder={props.searchLabel}
-									onInput={(event) =>
-										props.onQuery(
-											(event.currentTarget as HTMLInputElement).value,
-										)
-									}
-								/>
-							</TextFieldRoot>
-						</div>
 						<nav aria-label={props.categoriesLabel} class={styles.nav}>
 							<For each={props.categories}>
 								{(entry) => (
@@ -77,14 +60,33 @@ export function OptionBrowser(props: {
 						</nav>
 					</aside>
 					<div class={styles.content}>
-						<Show when={props.hint || props.actions}>
-							<div class={styles.bulk}>
-								<div class={styles.hint}>{props.hint}</div>
-								<Show when={props.actions}>
-									<div class={styles.actions}>{props.actions}</div>
-								</Show>
+						<div class={styles.toolbar}>
+							<div class={styles.search}>
+								<SearchIcon class={styles.searchIcon} aria-hidden="true" />
+								<TextFieldRoot>
+									<TextFieldInput
+										class={styles.searchInput}
+										type="search"
+										value={props.query}
+										aria-label={props.searchLabel}
+										placeholder={props.searchLabel}
+										onInput={(event) =>
+											props.onQuery(
+												(event.currentTarget as HTMLInputElement).value,
+											)
+										}
+									/>
+								</TextFieldRoot>
 							</div>
-						</Show>
+							<Show when={props.hint || props.actions}>
+								<div class={styles.bulk}>
+									<div class={styles.hint}>{props.hint}</div>
+									<Show when={props.actions}>
+										<div class={styles.actions}>{props.actions}</div>
+									</Show>
+								</div>
+							</Show>
+						</div>
 						{props.children}
 					</div>
 				</div>

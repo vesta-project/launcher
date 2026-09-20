@@ -36,14 +36,14 @@
 
 .layout {
 	display: grid;
-	grid-template-columns: 176px minmax(0, 1fr);
+	grid-template-columns: 56px minmax(0, 1fr);
 	gap: 0;
 	height: 100%;
 	min-height: 0;
 }
 
 .sidebar {
-	padding: 0 16px 16px 16px;
+	padding: 12px 8px;
 	border-right: 1px solid var(--border-subtle);
 	min-height: 0;
 	overflow-x: hidden;
@@ -74,22 +74,31 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
+	align-items: center;
 	gap: 4px;
-	margin-top: 12px;
 }
 
 .navButton {
-	justify-content: flex-start;
-	gap: 8px;
-	min-height: 30px;
-	padding: 5px 8px;
+	justify-content: center;
+	width: 36px;
+	height: 32px;
+	min-height: 32px;
+	padding: 0;
 	border-radius: 6px;
-	font-size: var(--font-xsmall);
+}
+
+.navButton span {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .navIcon {
-	width: 14px;
-	height: 14px;
+	width: 16px;
+	height: 16px;
 	flex: 0 0 auto;
 	color: currentColor;
 }
@@ -108,11 +117,23 @@
 	padding: 0 0 16px;
 }
 
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 16px 8px;
+}
+
+.toolbar .search {
+	flex: 1;
+	min-width: 0;
+}
+
 .bulk {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 0 16px 12px;
+	padding: 0;
 }
 
 .hint {
@@ -185,16 +206,28 @@
 	font-size: var(--font-xsmall);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
 	.layout {
 		grid-template-columns: 1fr;
 		gap: 12px;
 	}
 
 	.sidebar {
-		padding: 0 16px;
+		padding: 8px 16px;
 		border: 0;
+		border-bottom: 1px solid var(--border-subtle);
 		overflow: visible;
+	}
+
+	.nav {
+		flex-direction: row;
+		justify-content: flex-start;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+	}
+
+	.toolbar {
+		padding-inline: 16px;
 	}
 
 	.content {
@@ -202,10 +235,6 @@
 		padding-bottom: 16px;
 	}
 
-	.nav {
-		flex-direction: row;
-		flex-wrap: wrap;
-	}
 
 	.row,
 	.rowTrailing {
