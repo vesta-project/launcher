@@ -477,3 +477,8 @@
 		gap: 8px;
 	}
 }
+
+.category:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
