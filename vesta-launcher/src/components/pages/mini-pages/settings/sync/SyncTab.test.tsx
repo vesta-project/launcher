@@ -1,3 +1,4 @@
+import { GameKeybindings } from "@components/settings/GameKeybindings";
 import {
 	cleanup,
 	fireEvent,
@@ -8,7 +9,6 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { categories, type Snapshot } from "~/settings-sync/model";
-import { GameKeybindings } from "@components/settings/GameKeybindings";
 import { SharedOptionsPage } from "./SharedOptionsPage";
 import { SyncSettingsTab } from "./SyncTab";
 
@@ -235,14 +235,16 @@ it("selects individual options and all or none without changing membership", asy
 			gameOptionKeys.filter((key) => key !== "fov").sort(),
 		),
 	);
-	fireEvent.click(screen.getByRole("button", { name: "sync-link-all-options" }));
+	fireEvent.click(
+		screen.getByRole("button", { name: "sync-link-all-instances" }),
+	);
 	await waitFor(() =>
 		expect([...(state[0].preferences.selectedKeys ?? [])].sort()).toEqual(
 			[...gameOptionKeys].sort(),
 		),
 	);
 	fireEvent.click(
-		screen.getByRole("button", { name: "sync-unlink-all-options" }),
+		screen.getByRole("button", { name: "sync-unlink-all-instances" }),
 	);
 	await waitFor(() => expect(state[0].preferences.selectedKeys).toEqual([]));
 	expect(state[0].preferences.instanceIds).toEqual([1]);
@@ -255,7 +257,7 @@ it("keeps the prior selection when saving fails", async () => {
 	await openSharedOptions();
 	vi.mocked(invoke).mockRejectedValueOnce(new Error("Changed elsewhere"));
 	fireEvent.click(
-		screen.getByRole("button", { name: "sync-unlink-all-options" }),
+		screen.getByRole("button", { name: "sync-unlink-all-instances" }),
 	);
 	expect(await screen.findByRole("alert")).toBeTruthy();
 	expect(state[0].preferences.selectedKeys ?? gameOptionKeys).toEqual(
