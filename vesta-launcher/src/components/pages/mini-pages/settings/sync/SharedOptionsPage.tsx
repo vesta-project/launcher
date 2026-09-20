@@ -408,14 +408,18 @@ export function SharedOptionsPage(props: {
 	const [scope, setScope] = createSignal<OptionScope>("all");
 	const [query, setQuery] = createSignal("");
 	const rows = createMemo(() => optionRows(props.snapshot));
-	const availableKeys = createMemo(() => rows().map((row) => row.key));
+	const selectableKeys = createMemo(() =>
+		rows()
+			.filter((row) => row.category !== "custom")
+			.map((row) => row.key),
+	);
 	const selected = createMemo(() =>
-		selectedSharedKeys(props.snapshot.preferences, availableKeys()),
+		selectedSharedKeys(props.snapshot.preferences, selectableKeys()),
 	);
 	const allSelected = createMemo(
 		() =>
-			availableKeys().length > 0 &&
-			availableKeys().every((key) => selected().includes(key)),
+			selectableKeys().length > 0 &&
+			selectableKeys().every((key) => selected().includes(key)),
 	);
 	const scopes = createMemo(() => {
 		const present = new Set(rows().map((row) => row.category));
@@ -497,11 +501,11 @@ export function SharedOptionsPage(props: {
 							<Button
 								variant="outline"
 								size="sm"
-								disabled={disabled() || availableKeys().length === 0}
+								disabled={disabled() || selectableKeys().length === 0}
 								onClick={() =>
 									void props.onSave({
 										...props.snapshot.preferences,
-										selectedKeys: allSelected() ? [] : availableKeys(),
+										selectedKeys: allSelected() ? [] : selectableKeys(),
 									})
 								}
 							>
@@ -515,7 +519,9 @@ export function SharedOptionsPage(props: {
 					<div class={styles.optionRows}>
 						<For each={filtered()}>
 							{(option) => {
-								const linked = () => selected().includes(option.key);
+								const linked = () =>
+									option.category === "custom" ||
+									selected().includes(option.key);
 								const value = () => props.snapshot.sharedValues?.[option.key];
 								return (
 									<div class={styles.optionRow}>
@@ -533,17 +539,19 @@ export function SharedOptionsPage(props: {
 													})
 												}
 											/>
-											<SquareToggle
-												label={t("sync-option-label", {
-													option: labelForOption(option),
-												})}
-												pressed={linked()}
-												disabled={disabled()}
-												iconOnly
-												onChange={(next) => updateSelection(option.key, next)}
-											>
-												<LinkIcon class={styles.icon} />
-											</SquareToggle>
+											<Show when={option.category !== "custom"}>
+												<SquareToggle
+													label={t("sync-option-label", {
+														option: labelForOption(option),
+													})}
+													pressed={linked()}
+													disabled={disabled()}
+													iconOnly
+													onChange={(next) => updateSelection(option.key, next)}
+												>
+													<LinkIcon class={styles.icon} />
+												</SquareToggle>
+											</Show>
 										</div>
 									</div>
 								);
