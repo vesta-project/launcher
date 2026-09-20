@@ -507,8 +507,8 @@ export function SharedOptionsPage(props: {
 							>
 								<LinkIcon class={styles.icon} />
 								{allSelected()
-									? t("sync-unlink-all-options")
-									: t("sync-link-all-options")}
+									? t("sync-unlink-all-instances")
+									: t("sync-link-all-instances")}
 							</Button>
 						</div>
 					</div>
