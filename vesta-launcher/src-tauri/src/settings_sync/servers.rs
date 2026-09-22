@@ -228,20 +228,28 @@ fn capture(bundle: &mut ServerBundle, instance_id: i32, current: &ServerDat) {
         .filter_map(|entry| synced(entry).ok())
         .map(|server| (server.id.clone(), server))
         .collect::<BTreeMap<_, _>>();
-    if let Some(applied) = bundle.applied.get(&instance_id) {
-        for (id, baseline) in applied {
-            match current.get(id) {
-                None => {
-                    bundle.servers.remove(id);
-                }
-                Some(server) if server != baseline => {
-                    bundle.servers.insert(id.clone(), server.clone());
-                }
-                _ => {}
+    let applied = bundle
+        .applied
+        .get(&instance_id)
+        .cloned()
+        .unwrap_or_default();
+    for (id, baseline) in &applied {
+        match current.get(id) {
+            None => {
+                bundle.servers.remove(id);
             }
+            Some(server) if server != baseline => {
+                bundle.servers.insert(id.clone(), server.clone());
+            }
+            _ => {}
         }
     }
     for server in current.into_values() {
+        // An unchanged previously-applied entry may be absent from the shared
+        // set because another instance removed it while this one was busy.
+        if applied.contains_key(&server.id) {
+            continue;
+        }
         match bundle.servers.entry(server.id.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert(server);
@@ -789,6 +797,25 @@ mod tests {
         );
         assert!(!bundle.servers.contains_key(&first.id));
         assert_eq!(bundle.servers[&second.id], second);
+    }
+
+    #[test]
+    fn capture_does_not_resurrect_a_removed_server_from_a_busy_follower() {
+        let removed = server("Removed", "removed.example.test");
+        let mut bundle = ServerBundle {
+            applied: BTreeMap::from([(1, BTreeMap::from([(removed.id.clone(), removed.clone())]))]),
+            ..Default::default()
+        };
+
+        capture(
+            &mut bundle,
+            1,
+            &ServerDat {
+                servers: vec![entry(&removed)],
+            },
+        );
+
+        assert!(!bundle.servers.contains_key(&removed.id));
     }
 
     #[test]
