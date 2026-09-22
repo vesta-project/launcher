@@ -144,7 +144,11 @@
 
 .selection[aria-pressed="true"] {
 	border-color: var(--accent-primary);
-	background: color-mix(in srgb, var(--accent-primary) 18%, var(--surface-base));
+	background: color-mix(
+		in srgb,
+		var(--accent-primary) 18%,
+		var(--surface-base)
+	);
 	color: var(--accent-primary);
 }
 
