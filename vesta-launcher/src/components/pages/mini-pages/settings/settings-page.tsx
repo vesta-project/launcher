@@ -48,6 +48,12 @@ const KeyboardSettingsModule = createPreloadableLazyComponent(() =>
 		default: module.KeyboardSettingsTab,
 	})),
 );
+const SyncSettingsModule = createPreloadableLazyComponent(() =>
+	import("./sync/SyncTab").then((module) => ({
+		default: module.SyncSettingsTab,
+	})),
+);
+const SyncSettingsTab = SyncSettingsModule.Component;
 const InstanceDefaultsModule = createPreloadableLazyComponent(() =>
 	import("./defaults/DefaultsTab").then((module) => ({
 		default: module.InstanceDefaultsTab,
@@ -124,6 +130,13 @@ const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
 		loadingMessageId: "settings-keyboard-loading",
 		preload: KeyboardSettingsModule.preload,
 		render: () => <KeyboardSettingsTab />,
+	},
+	{
+		value: "sync",
+		labelMessageId: "settings-tab-sync",
+		loadingMessageId: "settings-generic-loading",
+		preload: SyncSettingsModule.preload,
+		render: () => <SyncSettingsTab />,
 	},
 	{
 		value: "defaults",

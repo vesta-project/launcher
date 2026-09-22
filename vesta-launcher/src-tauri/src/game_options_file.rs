@@ -4,12 +4,14 @@ use crate::game_options::{catalog, options_file::OptionsDocument};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 const MAX_BYTES: u64 = 1024 * 1024;
 const MAX_CHANGES: usize = 4096;
+
+fn err(error: impl std::fmt::Display) -> String {
+    error.to_string()
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,78 +28,12 @@ pub struct Patch {
     pub changes: BTreeMap<String, String>,
 }
 
-fn err(error: impl std::fmt::Display) -> String {
-    error.to_string()
+pub(crate) fn checked_path(directory: &Path) -> Result<PathBuf, String> {
+    crate::instance_file::checked_path(directory, "options.txt")
 }
 
-fn is_link(metadata: &fs::Metadata) -> bool {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        metadata.file_attributes() & 0x400 != 0
-    }
-    #[cfg(not(windows))]
-    {
-        metadata.file_type().is_symlink()
-    }
-}
-
-fn checked_path(directory: &Path) -> Result<PathBuf, String> {
-    if !directory.is_absolute()
-        || directory
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return Err("Game directory must be an absolute path without parent traversal".into());
-    }
-    for ancestor in directory.ancestors() {
-        let metadata = fs::symlink_metadata(ancestor).map_err(err)?;
-        if is_link(&metadata) || !metadata.is_dir() {
-            return Err(
-                "Linked game directories are not supported by the game-options editor".into(),
-            );
-        }
-    }
-    Ok(directory.join("options.txt"))
-}
-
-fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(err(error)),
-    };
-    if is_link(&metadata) || !metadata.is_file() {
-        return Err("Options must be a regular file, not a link".into());
-    }
-    if metadata.len() > MAX_BYTES {
-        return Err("Options file exceeds the 1 MiB limit".into());
-    }
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.custom_flags(0x00200000); // FILE_FLAG_OPEN_REPARSE_POINT
-    }
-    let file = options.open(path).map_err(err)?;
-    let opened = file.metadata().map_err(err)?;
-    if is_link(&opened) || !opened.is_file() {
-        return Err("Options must be a regular file".into());
-    }
-    let mut bytes = Vec::new();
-    file.take(MAX_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(err)?;
-    if bytes.len() as u64 > MAX_BYTES {
-        return Err("Options file exceeds the 1 MiB limit".into());
-    }
-    Ok(Some(bytes))
+pub(crate) fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    crate::instance_file::read(path, MAX_BYTES, "Options file")
 }
 
 fn revision(bytes: Option<&[u8]>) -> String {
@@ -135,7 +71,11 @@ pub fn save(directory: &Path, patch: Patch) -> Result<Snapshot, String> {
         return Err("Options patch exceeds the size limit".into());
     }
     for (key, value) in &patch.changes {
-        catalog::validate(key, value).map_err(err)?;
+        if catalog::is_syncable_keybind(key) {
+            catalog::validate_keybind(key, value).map_err(err)?;
+        } else {
+            catalog::validate(key, value).map_err(err)?;
+        }
     }
     let path = checked_path(directory)?;
     let before = read_bytes(&path)?;
@@ -152,34 +92,21 @@ pub fn save(directory: &Path, patch: Patch) -> Result<Snapshot, String> {
     }
 
     // Stage beside the destination so publication cannot cross filesystems.
-    let mut temporary = tempfile::NamedTempFile::new_in(directory).map_err(err)?;
-    if before.is_some() {
-        temporary
-            .as_file()
-            .set_permissions(fs::metadata(&path).map_err(err)?.permissions())
-            .map_err(err)?;
-    }
-    temporary.write_all(updated.as_bytes()).map_err(err)?;
-    temporary.as_file().sync_all().map_err(err)?;
-    checked_path(directory)?;
-    if read_bytes(&path)? != before {
-        return Err("Options changed on disk. Reload before saving.".into());
-    }
-    if before.is_some() {
-        temporary.persist(&path).map_err(err)?;
-    } else {
-        temporary.persist_noclobber(&path).map_err(err)?;
-    }
-    #[cfg(unix)]
-    File::open(directory)
-        .and_then(|file| file.sync_all())
-        .map_err(err)?;
+    crate::instance_file::replace(
+        directory,
+        &path,
+        before.as_deref(),
+        updated.as_bytes(),
+        MAX_BYTES,
+        "Options file",
+    )?;
     snapshot(Some(updated.as_bytes()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     fn patch(revision: String, key: &str, value: &str) -> Patch {
         Patch {
             revision,
