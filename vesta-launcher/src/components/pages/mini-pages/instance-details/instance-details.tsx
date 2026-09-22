@@ -3098,7 +3098,9 @@ export default function InstanceDetails(
 										<Show when={showingGameOptions()}>
 											<GameOptionsEditor
 												state={gameOptions}
-												onBack={() => activeRouter()?.backwards()}
+												onBack={() =>
+													activeRouter()?.updateQuery("settingsPage", null)
+												}
 											/>
 										</Show>
 										<Show
