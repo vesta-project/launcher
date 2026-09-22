@@ -20,6 +20,7 @@
 	background: hsl(0deg 0% 100% / 8%);
 	color: var(--text-primary);
 	opacity: 0.86;
+	cursor: pointer;
 	transition:
 		background 0.18s ease,
 		opacity 0.18s ease,

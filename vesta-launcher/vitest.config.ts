@@ -8,6 +8,16 @@ export default defineConfig({
 	test: {
 		environment: "jsdom",
 		globals: true,
+		server: {
+			deps: {
+				inline: [
+					"solid-js",
+					"solid-js/web",
+					"solid-js/store",
+					"@solidjs/testing-library",
+				],
+			},
+		},
 		alias: [
 			{
 				find: "@components",
@@ -41,5 +51,12 @@ export default defineConfig({
 	},
 	resolve: {
 		conditions: ["development", "browser"],
+		dedupe: ["solid-js", "solid-js/web", "solid-js/store"],
+	},
+	ssr: {
+		resolve: {
+			conditions: ["development", "browser"],
+		},
+		noExternal: ["solid-js", "solid-js/web", "solid-js/store"],
 	},
 });

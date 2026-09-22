@@ -7,6 +7,10 @@ import {
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import {
+	createGameOptionsEditor,
+	GameOptionsEditor,
+} from "@components/settings/GameOptionsEditor";
+import {
 	normalizeSandboxPreset,
 	normalizeSandboxWrapperNesting,
 	type SandboxPresetValue,
@@ -421,6 +425,11 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		return normalizeInstanceTab(params?.activeTab as string | undefined);
 	});
+	const showingGameOptions = createMemo(
+		() =>
+			activeTab() === "settings" &&
+			activeRouter()?.currentParams.get()?.settingsPage === "game-options",
+	);
 	const selectedWorldDirectory = createMemo(() => {
 		const value = activeRouter()?.currentParams.get()?.world;
 		return typeof value === "string" && value.length > 0 ? value : null;
@@ -848,7 +857,21 @@ export default function InstanceDetails(
 		sandbox: isSandboxDirty(),
 	});
 
-	const isDirty = createMemo(() => isInstanceEditDirty(currentEditDirty()));
+	const gameOptions = createGameOptionsEditor({
+		get instanceId() {
+			return instance()?.id;
+		},
+		get disabled() {
+			return saving();
+		},
+		get enabled() {
+			return showingGameOptions();
+		},
+	});
+	const isDirty = createMemo(
+		() =>
+			isInstanceEditDirty(currentEditDirty()) || gameOptions.dirtyCount() > 0,
+	);
 
 	const modpackIconBase64 = useModpackIcon(() => {
 		const current = instance();
@@ -2675,8 +2698,11 @@ export default function InstanceDetails(
 		if (!inst) return;
 		setSaving(true);
 		try {
-			const fresh = await getInstance(inst.id);
-			await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
+			await gameOptions.save();
+			if (isInstanceEditDirty(currentEditDirty())) {
+				const fresh = await getInstance(inst.id);
+				await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
+			}
 			batch(() => {
 				// Clear temporary session icons once we've successfully saved to the backend
 				setCustomIconsThisSession([]);
@@ -2737,7 +2763,7 @@ export default function InstanceDetails(
 	});
 
 	const handleTabChange = (tab: TabType) => {
-		if (tab === activeTab()) return;
+		if (tab === activeTab() && !showingGameOptions()) return;
 		if (tab === "resources") {
 			const instanceId = instance()?.id;
 			if (instanceId) {
@@ -2745,6 +2771,11 @@ export default function InstanceDetails(
 					instanceId,
 				});
 			}
+		}
+		// Leaving nested settings pages via the sidebar must clear them; otherwise
+		// settingsPage=game-options keeps fill layout / editor state on other tabs.
+		if (activeRouter()?.currentParams.get()?.settingsPage != null) {
+			activeRouter()?.updateQuery("settingsPage", null);
 		}
 		instanceTabLoader.prepare(tab);
 		setSelectedTab(tab);
@@ -2795,6 +2826,7 @@ export default function InstanceDetails(
 					class={styles["content-wrapper"]}
 					classList={{
 						[styles["content-wrapper--console"]]: activeTab() === "console",
+						[styles["content-wrapper--fill"]]: showingGameOptions(),
 					}}
 				>
 					<Show when={instance.loading && !instance.latest}>
@@ -2856,6 +2888,7 @@ export default function InstanceDetails(
 												<OverviewTab
 													instance={inst()}
 													instanceSlug={slug()}
+													active={activeTab() === "home"}
 													installedResources={installedResources() || []}
 													knownUpdateCount={
 														updatesKnown()
@@ -3062,8 +3095,19 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="settings">
+										<Show when={showingGameOptions()}>
+											<GameOptionsEditor
+												state={gameOptions}
+												onBack={() =>
+													activeRouter()?.updateQuery("settingsPage", null)
+												}
+											/>
+										</Show>
 										<Show
-											when={instanceTabLoader.visitedTabs().has("settings")}
+											when={
+												!showingGameOptions() &&
+												instanceTabLoader.visitedTabs().has("settings")
+											}
 										>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-settings"]}>
@@ -3152,6 +3196,13 @@ export default function InstanceDetails(
 														setSandboxExtraPaths={setSandboxExtraPaths}
 														inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
 														setIsSandboxDirty={setIsSandboxDirty}
+														onOpenGameOptions={() =>
+															activeRouter()?.updateQuery(
+																"settingsPage",
+																"game-options",
+																true,
+															)
+														}
 														invoke={invoke}
 														showToast={showToast}
 														isGuest={isGuest()}
@@ -3193,6 +3244,7 @@ export default function InstanceDetails(
 				onSave={handleSave}
 				isSaving={saving()}
 				onCancel={() => {
+					gameOptions.discard();
 					const i = inst();
 					if (!i) return;
 					batch(() => {
