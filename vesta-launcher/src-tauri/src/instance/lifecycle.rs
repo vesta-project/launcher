@@ -555,9 +555,10 @@ pub(crate) async fn reconcile_finished_process(
 
     let sync_app = app_handle.clone();
     let sync_slug = run_state.instance_id.clone();
-    tauri::async_runtime::spawn(crate::settings_sync::game_options::after_exit(
-        sync_app, sync_slug,
-    ));
+    tauri::async_runtime::spawn(async move {
+        crate::settings_sync::game_options::after_exit(sync_app.clone(), sync_slug.clone()).await;
+        crate::settings_sync::servers::after_exit(&sync_app, sync_slug).await;
+    });
     Ok(outcome)
 }
 

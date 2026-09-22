@@ -93,6 +93,14 @@ sync-search = Search instances
 sync-search-options = Search options
 
 sync-servers-title = Servers
+sync-servers-shared = Synced servers
+sync-server-add = Add server
+sync-server-add-title = Add synced server
+sync-server-name = Name
+sync-server-address = Address
+sync-server-remove = Remove { $server }
+sync-server-empty = No synced servers.
+sync-server-cancel = Cancel
 
 sync-shared-entry-hint = Choose individual options and their shared values.
 

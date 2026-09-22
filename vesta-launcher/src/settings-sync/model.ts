@@ -67,4 +67,12 @@ export interface Snapshot {
 	sharedValues?: Record<string, string>;
 	/** Present for game options; keybinds use the same sharedValues shape. */
 	catalog?: GameOptionMetadata[];
+	servers?: SyncedServer[];
+}
+
+export interface SyncedServer {
+	id: string;
+	name: string;
+	address: string;
+	icon?: string | null;
 }

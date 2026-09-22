@@ -7,6 +7,7 @@ pub mod discord;
 pub mod game_options;
 mod game_options_file;
 mod instance;
+mod instance_file;
 mod launcher_import;
 mod localization;
 mod logging;
@@ -17,10 +18,10 @@ mod notifications;
 pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod sentry_init;
+mod settings_sync;
 mod setup;
 mod startup;
 mod sync;
-mod settings_sync;
 mod tasks;
 pub mod utils;
 pub mod worlds;
@@ -158,6 +159,8 @@ fn main() {
             commands::keybindings::reset_keybinding,
             settings_sync::get_settings_sync,
             settings_sync::save_settings_sync,
+            settings_sync::servers::add_synced_server,
+            settings_sync::servers::remove_synced_server,
             commands::app::open_app_config_dir,
             commands::app::open_app_runtime_storage_dir,
             commands::app::clear_cache,
