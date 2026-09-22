@@ -2,9 +2,9 @@ import { GameKeybindings } from "@components/settings/GameKeybindings";
 import { SubpageBackButton } from "@components/settings/SubpageBackButton";
 import { t } from "~/localization";
 import {
-	selectedSharedKeys,
 	type Preferences,
 	type Snapshot,
+	selectedSharedKeys,
 } from "~/settings-sync/model";
 import { formatGameOptionName } from "~/utils/game-option-label";
 import styles from "./sync-tab.module.css";
