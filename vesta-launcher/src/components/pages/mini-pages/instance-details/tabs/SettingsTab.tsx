@@ -124,6 +124,7 @@ interface SettingsTabProps {
 	setSandboxExtraPaths: (v: string[]) => void;
 	inheritedSandboxExtraPaths: string[];
 	setIsSandboxDirty: (v: boolean) => void;
+	onOpenGameOptions: () => void;
 
 	handleSave: () => void;
 	saving: () => boolean;
@@ -233,6 +234,16 @@ export const SettingsTab = (p: SettingsTabProps) => {
 			</div>
 
 			<div class={panelStyles["settings-panel"]}>
+				<SettingsCard header="Game options">
+					<SettingsField
+						label="Minecraft options"
+						description="Edit the options saved by this instance."
+					>
+						<Button variant="outline" onClick={p.onOpenGameOptions}>
+							Edit game options
+						</Button>
+					</SettingsField>
+				</SettingsCard>
 				<SettingsCard header="Java Configuration">
 					<SettingsField
 						label="Java Executable"

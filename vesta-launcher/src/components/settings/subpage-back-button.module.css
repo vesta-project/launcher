@@ -38,7 +38,6 @@
 
 .button:disabled {
 	opacity: 0.3;
-	cursor: not-allowed;
 }
 
 .button:focus-visible {
@@ -52,6 +51,16 @@
 	display: block;
 	flex-shrink: 0;
 	fill: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.button {
+		transition: none;
+	}
+
+	.button:active:not(:disabled) {
+		transform: none;
+	}
 }
 
 .heading {

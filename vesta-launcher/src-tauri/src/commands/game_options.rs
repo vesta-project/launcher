@@ -9,9 +9,10 @@ pub fn get_game_options_catalog() -> Vec<serde_json::Value> {
 }
 
 fn editor_snapshot(mut snapshot: Snapshot) -> Snapshot {
+    // Only expose keys accepted by the file adapter; keybinds have their own editor.
     snapshot
         .values
-        .retain(|key, _| catalog::is_syncable_key(key) || catalog::is_syncable_keybind(key));
+        .retain(|key, _| catalog::is_syncable_key(key));
     for (key, value) in &mut snapshot.values {
         if let Ok(decoded) = catalog::decode_for_editor(key, value) {
             *value = decoded;
@@ -26,12 +27,17 @@ fn save_editor(directory: &std::path::Path, mut patch: Patch) -> Result<Snapshot
         return Err("Options changed on disk. Reload before saving.".into());
     }
     for (key, value) in &mut patch.changes {
-        let previous = current
-            .values
-            .get(key)
-            .ok_or_else(|| format!("Option {key} is no longer present. Reload before saving."))?;
+        if key.starts_with("key_") || key.is_empty() {
+            return Err(format!("Cannot edit option {key} here"));
+        }
+        if value.is_empty() || value.chars().any(|c| matches!(c, '\n' | '\r' | '\0')) {
+            return Err("Option values must be a non-empty single line".into());
+        }
         if catalog::definition(key).is_some() {
-            *value = catalog::encode_for_existing(key, value, previous)?.to_owned();
+            *value = match current.values.get(key) {
+                Some(previous) => catalog::encode_for_existing(key, value, previous)?.to_owned(),
+                None => catalog::encode_from_editor(key, value)?.to_owned(),
+            };
         }
     }
     game_options_file::save(directory, patch).map(editor_snapshot)
@@ -108,6 +114,21 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
     #[test]
+    fn editor_hides_keys_the_file_adapter_rejects() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().canonicalize().unwrap();
+        std::fs::write(
+            dir.join("options.txt"),
+            "soundDevice:test\nlastServer:local\nstartedCleanly:true\ngamma:0.5\ncustomValue:yes\n",
+        )
+        .unwrap();
+        let snapshot = editor_snapshot(game_options_file::load(&dir).unwrap());
+        assert_eq!(snapshot.values.len(), 2);
+        assert!(snapshot.values.contains_key("gamma"));
+        assert!(snapshot.values.contains_key("customValue"));
+    }
+
+    #[test]
     fn editor_round_trip_preserves_encoding_and_rejects_stale_edits() {
         let temp = tempfile::tempdir().unwrap();
         let dir = temp.path().canonicalize().unwrap();
@@ -120,6 +141,7 @@ mod tests {
         let snapshot = editor_snapshot(game_options_file::load(&dir).unwrap());
         assert_eq!(snapshot.values["fov"], "100");
         assert_eq!(snapshot.values["renderClouds"], "true");
+        assert!(!snapshot.values.contains_key("key_key.forward"));
         let old_revision = snapshot.revision.clone();
         let saved = save_editor(
             &dir,
@@ -145,11 +167,24 @@ mod tests {
             }
         )
         .is_err());
-        assert!(save_editor(
+        // Absent catalogued keys can be appended from the instance editor.
+        let with_gamma = save_editor(
             &dir,
             Patch {
                 revision: saved.revision,
-                changes: BTreeMap::from([("gamma".into(), "0.5".into())])
+                changes: BTreeMap::from([("gamma".into(), "0.5".into())]),
+            },
+        )
+        .unwrap();
+        assert_eq!(with_gamma.values["gamma"], "0.5");
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("gamma:0.5"));
+        assert!(save_editor(
+            &dir,
+            Patch {
+                revision: with_gamma.revision,
+                changes: BTreeMap::from([("key_key.forward".into(), "key.keyboard.w".into())]),
             }
         )
         .is_err());

@@ -214,6 +214,8 @@ const MUSIC_FREQUENCY: &[&str] = &["DEFAULT", "FREQUENT", "CONSTANT"];
 const INACTIVITY_FPS_LIMIT: &[&str] = &["afk", "minimized"];
 const PRIORITIZE_CHUNK_UPDATES: &[&str] = &["0", "1", "2"];
 const TEXTURE_FILTERING: &[&str] = &["0", "1", "2"];
+const GL_DEBUG_VERBOSITY: &[&str] = &["0", "1", "2", "3", "4"];
+const ANISOTROPY: &[&str] = &["1", "2", "3"];
 
 /// The settings Vesta must never copy between instances. These values describe
 /// machine state, session state, pack ownership, or startup bookkeeping.
@@ -516,15 +518,14 @@ pub const CATALOG: &[SupportedSetting] = &[
         TEXTURE_FILTERING,
         ValueEncoding::Enum(TEXTURE_FILTERING)
     ),
-    integer!(
+    enumeration!(
         "anisotropy",
         ["maxAnisotropyBit"],
         Some("1.21.11"),
         None,
         "video",
-        1,
-        3,
-        1
+        ANISOTROPY,
+        ValueEncoding::Enum(ANISOTROPY)
     ),
     boolean!("vignette", ["vignette"], Some("1.21.11"), None, "video"),
     integer!(
@@ -1302,6 +1303,22 @@ pub const CATALOG: &[SupportedSetting] = &[
         SHARE_PRESENCE,
         ValueEncoding::QuotedEnum(SHARE_PRESENCE)
     ),
+    enumeration!(
+        "gl_debug_verbosity",
+        ["glDebugVerbosity"],
+        Some("1.13"),
+        None,
+        "video",
+        GL_DEBUG_VERBOSITY,
+        ValueEncoding::Enum(GL_DEBUG_VERBOSITY)
+    ),
+    boolean!(
+        "sync_chunk_writes",
+        ["syncChunkWrites"],
+        Some("1.16"),
+        None,
+        "video"
+    ),
 ];
 
 /// Lookup by stable catalog identity.
@@ -1732,21 +1749,31 @@ mod tests {
         assert_eq!(category("key_key.forward"), "keybindings");
         assert_eq!(category("mod.someOption"), "custom");
     }
+
+    #[test]
+    fn legacy_graphics_metadata_only_offers_encodable_values() {
+        let metadata = editor_metadata();
+        let legacy = metadata
+            .iter()
+            .find(|entry| entry["key"] == "fancyGraphics")
+            .unwrap();
+        assert_eq!(legacy["values"], serde_json::json!(["fast", "fancy"]));
+    }
 }
 
 /// Shared and instance editors use the same control metadata.
 pub fn editor_metadata() -> Vec<serde_json::Value> {
     CATALOG.iter().flat_map(|s| s.keys.iter().map(move |key| {
             use SettingEditor::*;
-            let (kind,min,max,step,values) = match s.editor {
-                Boolean => ("boolean",None,None,None,vec![]),
-                Integer{min,max,step} => ("integer",Some(min as f64),Some(max as f64),Some(step as f64),vec![]),
-                Decimal{min,max,step,..} => ("decimal",Some(min),Some(max),Some(step),vec![]),
-                Enum(values) => ("enum",None,None,None,values.to_vec()),
-                Language => ("language",None,None,None,vec![]),
-                UnboundedInteger => ("integer",None,None,Some(1.0),vec![]),
-                UnboundedDecimal => ("decimal",None,None,None,vec![]),
+            let (kind,min,max,step,values,unit) = match s.editor {
+                Boolean => ("boolean",None,None,None,vec![],None),
+                Integer{min,max,step} => ("integer",Some(min as f64),Some(max as f64),Some(step as f64),vec![],None),
+                Decimal{min,max,step,unit} => ("decimal",Some(min),Some(max),Some(step),vec![],unit),
+                Enum(values) => ("enum",None,None,None,if *key == "fancyGraphics" { vec!["fast", "fancy"] } else { values.to_vec() },None),
+                Language => ("language",None,None,None,vec![],None),
+                UnboundedInteger => ("integer",None,None,Some(1.0),vec![],None),
+                UnboundedDecimal => ("decimal",None,None,None,vec![],None),
             };
-            serde_json::json!({"id":s.id,"key":key,"keys":s.keys,"since":s.since,"until":s.until,"category":s.category,"kind":kind,"min":min,"max":max,"step":step,"values":values})
+            serde_json::json!({"id":s.id,"key":key,"keys":s.keys,"since":s.since,"until":s.until,"category":s.category,"kind":kind,"min":min,"max":max,"step":step,"values":values,"unit":unit})
         })).collect()
 }
