@@ -220,17 +220,19 @@ it("enables server sync without an owner and manages the shared list", async () 
 		screen.getByRole("button", { name: "sync-edit sync-servers-title" }),
 	);
 	expect(screen.getByText("sync-server-empty")).toBeTruthy();
-	fireEvent.click(screen.getByRole("button", { name: "sync-server-add" }));
-	fireEvent.input(screen.getByLabelText("sync-server-name"), {
+	fireEvent.click(
+		screen.getByRole("button", { name: "sync-link-all-instances" }),
+	);
+	await waitFor(() => expect(state[2].preferences.instanceIds).toEqual([1, 2]));
+	fireEvent.click(screen.getByRole("button", { name: "common-add" }));
+	fireEvent.input(screen.getByLabelText("common-name"), {
 		target: { value: "Test server" },
 	});
-	fireEvent.input(screen.getByLabelText("sync-server-address"), {
+	fireEvent.input(screen.getByLabelText("common-address"), {
 		target: { value: "play.example.test" },
 	});
 	const dialog = screen.getByRole("dialog");
-	fireEvent.click(
-		within(dialog).getByRole("button", { name: "sync-server-add" }),
-	);
+	fireEvent.click(within(dialog).getByRole("button", { name: "common-add" }));
 	await waitFor(() => expect(state[2].servers).toHaveLength(1));
 	expect(screen.getByText("play.example.test")).toBeTruthy();
 	fireEvent.click(
@@ -255,7 +257,7 @@ async function openSharedOptions() {
 			name: "sync-edit sync-gameOptions-title",
 		}),
 	);
-	fireEvent.click(screen.getByRole("button", { name: "sync-edit-shared" }));
+	fireEvent.click(screen.getByRole("button", { name: "common-edit" }));
 }
 
 it("keeps shared editing on its own page and unavailable while sync is off", async () => {
@@ -267,7 +269,7 @@ it("keeps shared editing on its own page and unavailable while sync is off", asy
 	);
 	expect(
 		screen
-			.getByRole("button", { name: "sync-edit-shared" })
+			.getByRole("button", { name: "common-edit" })
 			.hasAttribute("disabled"),
 	).toBe(true);
 	expect(
@@ -375,7 +377,7 @@ it("seeds defaults once, then tracks membership without showing a source", async
 	fireEvent.click(
 		screen.getByRole("button", { name: "sync-edit sync-gameOptions-title" }),
 	);
-	expect(screen.getByRole("button", { name: "sync-back" })).toBeTruthy();
+	expect(screen.getByRole("button", { name: "common-back" })).toBeTruthy();
 	expect(screen.queryByText("sync-source-badge")).toBeNull();
 	expect(
 		screen.queryByRole("button", { name: "sync-choose-source" }),
@@ -412,7 +414,7 @@ it("keybinds asks for an owner and uses the shared recorder", async () => {
 	fireEvent.click(
 		screen.getByRole("button", { name: "sync-edit sync-keybinds-title" }),
 	);
-	fireEvent.click(screen.getByRole("button", { name: "sync-edit-shared" }));
+	fireEvent.click(screen.getByRole("button", { name: "common-edit" }));
 	fireEvent.click(
 		await screen.findByRole("button", {
 			name: "game-options-key-change Forward",
@@ -518,7 +520,7 @@ it("uses native labels and boolean controls without repeated raw keys", () => {
 		screen.getByRole("slider", { name: "sync-value-label Master volume" }),
 	).toBeTruthy();
 	expect(screen.queryByText("soundCategory_master")).toBeNull();
-	const back = screen.getByRole("button", { name: "sync-back" });
+	const back = screen.getByRole("button", { name: "common-back" });
 	expect(back.textContent).toBe("");
 });
 

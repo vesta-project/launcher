@@ -142,7 +142,7 @@ function DetailHeading(props: {
 }) {
 	return (
 		<div class={styles.heading}>
-			<SubpageBackButton label={t("sync-back")} onClick={props.onBack} />
+			<SubpageBackButton label={t("common-back")} onClick={props.onBack} />
 			<h2 class={styles.headingTitle}>{props.title}</h2>
 			<Toggle
 				label={props.title}
@@ -290,7 +290,7 @@ export function SyncSettingsTab() {
 					<div role="alert" class={styles.error}>
 						<span>{error() || String(snapshots.error)}</span>
 						<Button
-															variant="outline"
+							variant="outline"
 							size="sm"
 							disabled={busy()}
 							onClick={() => {
@@ -405,7 +405,7 @@ export function SyncSettingsTab() {
 																	class={styles.icon}
 																	aria-hidden="true"
 																/>
-																{t("sync-server-add")}
+																{t("common-add")}
 															</Button>
 														}
 													>
@@ -475,8 +475,10 @@ export function SyncSettingsTab() {
 												<SettingsCard
 													header={t("sync-instances")}
 													headerRight={
-														sourceCategories.includes(category()) ? (
-															<div class={styles.headerActions}>
+														<div class={styles.headerActions}>
+															<Show
+																when={sourceCategories.includes(category())}
+															>
 																<Button
 																	variant="outline"
 																	size="sm"
@@ -485,33 +487,33 @@ export function SyncSettingsTab() {
 																	}
 																	onClick={() => setSharedPage(true)}
 																>
-																	{t("sync-edit-shared")}
+																	{t("common-edit")}
 																</Button>
-																<Button
-																	variant="outline"
-																	size="sm"
-																	disabled={
-																		busy() ||
-																		!available().length ||
-																		!current()?.preferences.enabled
-																	}
-																	onClick={() =>
-																		update(category(), {
-																			instanceIds: allLinked()
-																				? []
-																				: available().map(
-																						(instance) => instance.id,
-																					),
-																		})
-																	}
-																>
-																	<LinkIcon class={styles.icon} />
-																	{allLinked()
-																		? t("sync-unlink-all-instances")
-																		: t("sync-link-all-instances")}
-																</Button>
-															</div>
-														) : undefined
+															</Show>
+															<Button
+																variant="outline"
+																size="sm"
+																disabled={
+																	busy() ||
+																	!available().length ||
+																	!current()?.preferences.enabled
+																}
+																onClick={() =>
+																	update(category(), {
+																		instanceIds: allLinked()
+																			? []
+																			: available().map(
+																					(instance) => instance.id,
+																				),
+																	})
+																}
+															>
+																<LinkIcon class={styles.icon} />
+																{allLinked()
+																	? t("sync-unlink-all-instances")
+																	: t("sync-link-all-instances")}
+															</Button>
+														</div>
 													}
 												>
 													<div class={styles.search}>
@@ -667,11 +669,11 @@ export function SyncSettingsTab() {
 						}}
 					>
 						<TextFieldRoot value={serverName()} onChange={setServerName}>
-							<TextFieldLabel>{t("sync-server-name")}</TextFieldLabel>
+							<TextFieldLabel>{t("common-name")}</TextFieldLabel>
 							<TextFieldInput autofocus />
 						</TextFieldRoot>
 						<TextFieldRoot value={serverAddress()} onChange={setServerAddress}>
-							<TextFieldLabel>{t("sync-server-address")}</TextFieldLabel>
+							<TextFieldLabel>{t("common-address")}</TextFieldLabel>
 							<TextFieldInput />
 						</TextFieldRoot>
 						<DialogFooter>
@@ -681,7 +683,7 @@ export function SyncSettingsTab() {
 								disabled={busy()}
 								onClick={() => setServerDialogOpen(false)}
 							>
-								{t("sync-server-cancel")}
+								{t("common-cancel")}
 							</Button>
 							<Button
 								type="submit"
@@ -690,7 +692,7 @@ export function SyncSettingsTab() {
 									busy() || !serverName().trim() || !serverAddress().trim()
 								}
 							>
-								{t("sync-server-add")}
+								{t("common-add")}
 							</Button>
 						</DialogFooter>
 					</form>

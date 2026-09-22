@@ -185,7 +185,7 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 						<span>{t("sync-keybinds-recording-help")}</span>
 						<span class={styles.helpAction}>
 							<kbd>Esc</kbd>
-							{t("sync-keybinds-cancel")}
+							{t("common-cancel")}
 						</span>
 						<span class={styles.helpAction}>
 							<kbd>⌫</kbd>
