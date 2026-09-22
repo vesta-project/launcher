@@ -602,9 +602,14 @@ export function createGameOptionsEditor(props: {
 	}
 	async function save() {
 		const current = snapshot();
-		if (!dirtyCount()) return;
+		if (!dirtyCount()) return true;
 		if (!current || loading() || saving())
 			throw new Error("Game options are still loading or saving");
+		if (Object.values(changes()).some((next) => next.trim() === "")) {
+			const failure = new Error(t("game-options-empty-value"));
+			setError(failure.message);
+			throw failure;
+		}
 		const request = generation;
 		setSaving(true);
 		setError("");
@@ -614,10 +619,11 @@ export function createGameOptionsEditor(props: {
 				editorValues: true,
 				patch: { revision: current.revision, changes: changes() },
 			});
-			if (request !== generation) return;
+			if (request !== generation) return false;
 			setSnapshot(next);
 			setChanges({});
 			setNotice(t("game-options-saved"));
+			return true;
 		} catch (failure) {
 			if (request === generation) setError(String(failure));
 			throw failure;

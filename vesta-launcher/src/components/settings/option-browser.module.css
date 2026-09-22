@@ -229,6 +229,7 @@
 @media (max-width: 760px) {
 	.layout {
 		grid-template-columns: 1fr;
+		grid-template-rows: auto minmax(0, 1fr);
 		gap: 12px;
 	}
 
@@ -268,7 +269,8 @@
 	}
 
 	.content {
-		overflow: visible;
+		overflow-x: hidden;
+		overflow-y: auto;
 		padding-bottom: 16px;
 	}
 

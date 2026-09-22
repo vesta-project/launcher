@@ -20,7 +20,6 @@
 	background: hsl(0deg 0% 100% / 8%);
 	color: var(--text-primary);
 	opacity: 0.86;
-	cursor: pointer;
 	transition:
 		background 0.18s ease,
 		opacity 0.18s ease,
@@ -39,7 +38,6 @@
 
 .button:disabled {
 	opacity: 0.3;
-	cursor: not-allowed;
 }
 
 .button:focus-visible {
@@ -53,6 +51,16 @@
 	display: block;
 	flex-shrink: 0;
 	fill: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.button {
+		transition: none;
+	}
+
+	.button:active:not(:disabled) {
+		transform: none;
+	}
 }
 
 .heading {

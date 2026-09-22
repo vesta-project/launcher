@@ -80,7 +80,9 @@ export function OptionBrowser(props: {
 							</div>
 							<Show when={props.hint || props.actions}>
 								<div class={styles.bulk}>
-									<div class={styles.hint}>{props.hint}</div>
+									<div class={styles.hint} role="status" aria-live="polite">
+										{props.hint}
+									</div>
 									<Show when={props.actions}>
 										<div class={styles.actions}>{props.actions}</div>
 									</Show>

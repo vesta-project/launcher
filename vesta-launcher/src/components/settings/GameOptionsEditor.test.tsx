@@ -200,6 +200,40 @@ it("retains custom edits when saving fails and requires discard before reload", 
 	).toBe("keep");
 });
 
+it("shows an initial-load failure and leaves reload available", async () => {
+	vi.mocked(invoke).mockImplementation((command) =>
+		command === "get_game_options_catalog"
+			? Promise.reject(new Error("Catalog unavailable"))
+			: Promise.resolve(snapshot),
+	);
+	render(() => <EditorHarness instanceId={7} />);
+	expect((await screen.findByRole("alert")).textContent).toContain(
+		"Catalog unavailable",
+	);
+	expect(
+		(
+			screen.getByRole("button", {
+				name: "game-options-reload",
+			}) as HTMLButtonElement
+		).disabled,
+	).toBe(false);
+});
+
+it("rejects an empty custom value before calling the backend", async () => {
+	render(() => <EditorHarness instanceId={7} />);
+	const custom = await screen.findByRole("textbox", { name: "Mod custom" });
+	fireEvent.input(custom, { target: { value: "" } });
+	fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+	expect((await screen.findByRole("alert")).textContent).toContain(
+		"game-options-empty-value",
+	);
+	expect(
+		vi
+			.mocked(invoke)
+			.mock.calls.some(([command]) => command === "save_instance_game_options"),
+	).toBe(false);
+});
+
 it("does not publish an old instance response into a newly selected instance", async () => {
 	let finishOld!: (result: unknown) => void;
 	vi.mocked(invoke).mockImplementation((command, args) => {
@@ -219,6 +253,38 @@ it("does not publish an old instance response into a newly selected instance", a
 	expect(
 		(screen.getByRole("spinbutton", { name: "FOV" }) as HTMLInputElement).value,
 	).toBe("90");
+});
+
+it("reports a pending save as cancelled after switching instances", async () => {
+	let finishSave!: (result: unknown) => void;
+	vi.mocked(invoke).mockImplementation((command) => {
+		if (command === "get_game_options_catalog") return Promise.resolve(catalog);
+		if (command === "save_instance_game_options")
+			return new Promise((resolve) => {
+				finishSave = resolve;
+			});
+		return Promise.resolve(snapshot);
+	});
+	const [id, setId] = createSignal(1);
+	let state!: ReturnType<typeof createGameOptionsEditor>;
+	render(() => {
+		state = createGameOptionsEditor({
+			get instanceId() {
+				return id();
+			},
+		});
+		return <GameOptionsEditor state={state} />;
+	});
+	fireEvent.input(await screen.findByRole("textbox", { name: "Mod custom" }), {
+		target: { value: "changed" },
+	});
+	const save = state.save();
+	setId(2);
+	finishSave({
+		...snapshot,
+		values: { ...snapshot.values, "mod.custom": "changed" },
+	});
+	await expect(save).resolves.toBe(false);
 });
 
 it("keeps the shared footer dirty while the editor page is unmounted", async () => {

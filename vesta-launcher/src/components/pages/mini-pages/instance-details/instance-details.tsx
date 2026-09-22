@@ -2696,13 +2696,18 @@ export default function InstanceDetails(
 	const handleSave = async () => {
 		const inst = instance();
 		if (!inst) return;
+		const instanceId = inst.id;
+		const editDraft = currentEditDraft();
+		const editDirty = currentEditDirty();
 		setSaving(true);
 		try {
-			await gameOptions.save();
-			if (isInstanceEditDirty(currentEditDirty())) {
-				const fresh = await getInstance(inst.id);
-				await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
+			const optionsSaved = await gameOptions.save();
+			if (!optionsSaved || instance()?.id !== instanceId) return;
+			if (isInstanceEditDirty(editDirty)) {
+				const fresh = await getInstance(instanceId);
+				await updateInstance(applyInstanceEditDraft(fresh, editDraft));
 			}
+			if (instance()?.id !== instanceId) return;
 			batch(() => {
 				// Clear temporary session icons once we've successfully saved to the backend
 				setCustomIconsThisSession([]);
@@ -2722,8 +2727,9 @@ export default function InstanceDetails(
 			await refetch();
 		} catch (e) {
 			console.error("Failed to save instance settings:", e);
+		} finally {
+			setSaving(false);
 		}
-		setSaving(false);
 	};
 
 	// Icon path is now handled by the IconPicker component directly
