@@ -50,6 +50,11 @@ impl InstallInstanceTask {
 }
 
 impl Task for InstallInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance.id,
+        )]
+    }
     fn name(&self) -> String {
         format!("Install {}", self.instance.name)
     }
