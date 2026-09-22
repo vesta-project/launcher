@@ -275,13 +275,17 @@ fn populate_snapshot(conn: &mut SqliteConnection, snapshot: &mut Snapshot) -> Re
 }
 
 #[tauri::command]
-pub fn get_settings_sync() -> Result<Vec<Snapshot>, String> {
+pub async fn get_settings_sync(app: tauri::AppHandle) -> Result<Vec<Snapshot>, String> {
+    let server_pending = servers::refresh(&app).await;
     let mut conn = get_config_conn().map_err(|error| error.to_string())?;
     Category::ALL
         .into_iter()
         .map(|category| {
             let mut snapshot = read(&mut conn, category)?;
             populate_snapshot(&mut conn, &mut snapshot)?;
+            if category == Category::Servers {
+                snapshot.pending = server_pending.clone();
+            }
             Ok(snapshot)
         })
         .collect()

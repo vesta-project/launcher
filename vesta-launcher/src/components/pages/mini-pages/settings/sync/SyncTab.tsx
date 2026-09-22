@@ -290,7 +290,7 @@ export function SyncSettingsTab() {
 					<div role="alert" class={styles.error}>
 						<span>{error() || String(snapshots.error)}</span>
 						<Button
-							variant="ghost"
+															variant="outline"
 							size="sm"
 							disabled={busy()}
 							onClick={() => {

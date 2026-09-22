@@ -3,11 +3,11 @@ use super::{bundle::SERIAL, Category, Preferences, Snapshot};
 use crate::tasks::manager::{instance_play_conflict_key, TaskManager};
 use crate::utils::db::get_config_conn;
 use diesel::{prelude::*, sql_types::Text};
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::io::{Read, Write};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
@@ -84,8 +84,14 @@ fn validate_server(name: &str, address: &str) -> Result<(), String> {
     Ok(())
 }
 
+const PNG_DATA_URL_PREFIX: &str = "data:image/png;base64,";
+
 fn visible_icon(icon: Option<String>) -> Option<String> {
-    icon.filter(|value| value.len() <= 512 * 1024 && value.starts_with("data:image/png;base64,"))
+    icon.and_then(|value| {
+        let encoded = value.strip_prefix(PNG_DATA_URL_PREFIX).unwrap_or(&value);
+        (!encoded.is_empty() && encoded.len() <= 512 * 1024)
+            .then(|| format!("{PNG_DATA_URL_PREFIX}{encoded}"))
+    })
 }
 
 fn synced(entry: &ServerEntry) -> Result<SyncedServer, String> {
@@ -102,7 +108,11 @@ fn entry(server: &SyncedServer) -> ServerEntry {
     ServerEntry {
         name: server.name.clone(),
         ip: server.address.clone(),
-        icon: server.icon.clone(),
+        icon: server.icon.as_ref().map(|icon| {
+            icon.strip_prefix(PNG_DATA_URL_PREFIX)
+                .unwrap_or(icon)
+                .to_owned()
+        }),
         accept_textures: None,
         extra: HashMap::new(),
     }
@@ -187,13 +197,9 @@ fn read_file(directory: &Path) -> Result<FileSnapshot, String> {
 
 fn write_file(directory: &Path, before: &FileSnapshot, document: &ServerDat) -> Result<(), String> {
     let raw = fastnbt::to_bytes(document).map_err(|error| error.to_string())?;
-    let updated = if before.compressed || before.bytes.is_none() {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&raw).map_err(|error| error.to_string())?;
-        encoder.finish().map_err(|error| error.to_string())?
-    } else {
-        raw
-    };
+    // Minecraft expects servers.dat to use uncompressed NBT. Compressed input
+    // is still accepted so an older preview file is repaired on the next sync.
+    let updated = raw;
     let path = crate::instance_file::checked_path(directory, "servers.dat")?;
     crate::instance_file::replace(
         directory,
@@ -229,7 +235,30 @@ fn capture(bundle: &mut ServerBundle, instance_id: i32, current: &ServerDat) {
         .iter()
         .filter_map(|entry| synced(entry).ok())
     {
-        bundle.servers.entry(server.id.clone()).or_insert(server);
+        match bundle.servers.entry(server.id.clone()) {
+            Entry::Vacant(entry) => {
+                entry.insert(server);
+            }
+            Entry::Occupied(mut entry) if entry.get().icon.is_none() && server.icon.is_some() => {
+                entry.get_mut().icon = server.icon;
+            }
+            Entry::Occupied(_) => {}
+        }
+    }
+}
+
+fn enrich_icons(bundle: &mut ServerBundle, current: &ServerDat) {
+    for server in current
+        .servers
+        .iter()
+        .filter_map(|entry| synced(entry).ok())
+        .filter(|server| server.icon.is_some())
+    {
+        if let Some(shared) = bundle.servers.get_mut(&server.id) {
+            if shared.icon.is_none() {
+                shared.icon = server.icon;
+            }
+        }
     }
 }
 
@@ -295,7 +324,7 @@ fn apply_one(
     current: FileSnapshot,
 ) -> Result<(), String> {
     let (updated, applied) = merge(bundle, id, &current.document);
-    if updated != current.document {
+    if current.compressed || updated != current.document {
         write_file(directory, &current, &updated)?;
     }
     bundle.applied.insert(id, applied);
@@ -348,6 +377,7 @@ async fn reconcile_all(
             {
                 Ok((directory, current)) => {
                     let first_follow = !bundle.known_instances.contains(&id);
+                    enrich_icons(&mut bundle, &current.document);
                     if capture_id == Some(id) || (import_new_followers && first_follow) {
                         capture(&mut bundle, id, &current.document);
                     }
@@ -371,6 +401,10 @@ async fn reconcile_all(
         pending.push(error);
     }
     pending
+}
+
+pub(crate) async fn refresh(app: &tauri::AppHandle) -> Vec<String> {
+    reconcile_all(app, None, false).await
 }
 
 pub(crate) fn populate(conn: &mut SqliteConnection, snapshot: &mut Snapshot) -> Result<(), String> {
@@ -533,7 +567,26 @@ mod tests {
         };
         let missing = read_file(&directory).unwrap();
         write_file(&directory, &missing, &document).unwrap();
+        assert_eq!(std::fs::read(directory.join("servers.dat")).unwrap()[0], 10);
         assert_eq!(read_file(&directory).unwrap().document, document);
+    }
+
+    #[test]
+    fn server_icons_are_exposed_as_data_urls_and_stored_as_raw_base64() {
+        let raw_icon = "iVBORw0KGgo=";
+        let source = ServerEntry {
+            name: "Icon server".into(),
+            ip: "icon.example.test".into(),
+            icon: Some(raw_icon.into()),
+            accept_textures: None,
+            extra: HashMap::new(),
+        };
+        let synced = synced(&source).unwrap();
+        assert_eq!(
+            synced.icon.as_deref(),
+            Some("data:image/png;base64,iVBORw0KGgo=")
+        );
+        assert_eq!(entry(&synced).icon.as_deref(), Some(raw_icon));
     }
 
     #[test]
@@ -578,6 +631,28 @@ mod tests {
         );
         assert!(!bundle.servers.contains_key(&first.id));
         assert_eq!(bundle.servers[&second.id], second);
+    }
+
+    #[test]
+    fn capture_adds_an_icon_discovered_on_another_follower() {
+        let mut shared = server("Shared", "play.example.test");
+        let mut with_icon = shared.clone();
+        with_icon.icon = Some("data:image/png;base64,iVBORw0KGgo=".into());
+        let mut bundle = ServerBundle {
+            servers: BTreeMap::from([(shared.id.clone(), shared.clone())]),
+            ..Default::default()
+        };
+
+        capture(
+            &mut bundle,
+            2,
+            &ServerDat {
+                servers: vec![entry(&with_icon)],
+            },
+        );
+
+        shared.icon = with_icon.icon;
+        assert_eq!(bundle.servers[&shared.id], shared);
     }
 
     #[test]
