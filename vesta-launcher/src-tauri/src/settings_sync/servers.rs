@@ -14,6 +14,7 @@ use tauri::Manager;
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 const MAX_DECOMPRESSED_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SERVERS: usize = 10_000;
+const MAX_BUNDLE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -123,16 +124,25 @@ fn load_bundle(conn: &mut SqliteConnection) -> Result<ServerBundle, String> {
         .get_result::<Row>(conn)
         .optional()
         .map_err(|error| error.to_string())?
-        .map(|row| serde_json::from_str(&row.state).map_err(|error| error.to_string()))
+        .map(|row| {
+            if row.state.len() > MAX_BUNDLE_BYTES {
+                return Err("The shared server list exceeds the size limit.".into());
+            }
+            serde_json::from_str(&row.state).map_err(|error| error.to_string())
+        })
         .unwrap_or_else(|| Ok(ServerBundle::default()))
 }
 
 fn store_bundle(conn: &mut SqliteConnection, bundle: &ServerBundle) -> Result<(), String> {
+    let state = serde_json::to_string(bundle).map_err(|error| error.to_string())?;
+    if state.len() > MAX_BUNDLE_BYTES {
+        return Err("The shared server list exceeds the size limit.".into());
+    }
     diesel::sql_query(
         "INSERT INTO shared_servers (id, state) VALUES (1, ?)
          ON CONFLICT(id) DO UPDATE SET state = excluded.state",
     )
-    .bind::<Text, _>(serde_json::to_string(bundle).map_err(|error| error.to_string())?)
+    .bind::<Text, _>(state)
     .execute(conn)
     .map_err(|error| error.to_string())?;
     Ok(())
@@ -212,29 +222,26 @@ fn write_file(directory: &Path, before: &FileSnapshot, document: &ServerDat) -> 
 }
 
 fn capture(bundle: &mut ServerBundle, instance_id: i32, current: &ServerDat) {
+    let current = current
+        .servers
+        .iter()
+        .filter_map(|entry| synced(entry).ok())
+        .map(|server| (server.id.clone(), server))
+        .collect::<BTreeMap<_, _>>();
     if let Some(applied) = bundle.applied.get(&instance_id) {
         for (id, baseline) in applied {
-            let found = current
-                .servers
-                .iter()
-                .filter_map(|entry| synced(entry).ok())
-                .find(|server| &server.id == id);
-            match found {
+            match current.get(id) {
                 None => {
                     bundle.servers.remove(id);
                 }
-                Some(server) if &server != baseline => {
-                    bundle.servers.insert(id.clone(), server);
+                Some(server) if server != baseline => {
+                    bundle.servers.insert(id.clone(), server.clone());
                 }
                 _ => {}
             }
         }
     }
-    for server in current
-        .servers
-        .iter()
-        .filter_map(|entry| synced(entry).ok())
-    {
+    for server in current.into_values() {
         match bundle.servers.entry(server.id.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert(server);
@@ -289,7 +296,9 @@ fn merge(
             .find(|entry| server_id(&entry.ip) == *id)
         {
             Some(existing) if previous.contains_key(id) => {
-                *existing = entry(shared);
+                existing.name = shared.name.clone();
+                existing.ip = shared.address.clone();
+                existing.icon = entry(shared).icon;
                 applied.insert(id.clone(), shared.clone());
             }
             Some(_) => {}
@@ -303,7 +312,10 @@ fn merge(
 }
 
 async fn instance_directory(id: i32) -> Result<PathBuf, String> {
-    let instance = crate::commands::instances::get_instance(id)?;
+    let instance =
+        tauri::async_runtime::spawn_blocking(move || crate::commands::instances::get_instance(id))
+            .await
+            .map_err(|error| error.to_string())??;
     if instance.installation_status.as_deref() != Some("installed") {
         return Err("Instance is not ready for server sync.".into());
     }
@@ -314,6 +326,18 @@ async fn instance_directory(id: i32) -> Result<PathBuf, String> {
         return Err("Instance is running.".into());
     }
     crate::commands::game_options::directory(&instance)
+}
+
+async fn preferences() -> Result<Preferences, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        super::read(
+            &mut *get_config_conn().map_err(|error| error.to_string())?,
+            Category::Servers,
+        )
+        .map(|snapshot| snapshot.preferences)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 fn apply_one(
@@ -331,6 +355,42 @@ fn apply_one(
     store_bundle(conn, bundle)
 }
 
+fn reconcile_files(
+    prefs: Preferences,
+    ready: Vec<(i32, PathBuf)>,
+    capture_id: Option<i32>,
+    import_new_followers: bool,
+) -> Result<Vec<String>, String> {
+    let mut pending = Vec::new();
+    let mut conn = get_config_conn().map_err(|error| error.to_string())?;
+    let mut bundle = load_bundle(&mut conn)?;
+    bundle
+        .applied
+        .retain(|id, _| prefs.instance_ids.contains(id));
+    let mut files = Vec::new();
+    for (id, directory) in ready {
+        match read_file(&directory) {
+            Ok(current) => {
+                let first_follow = !bundle.known_instances.contains(&id);
+                enrich_icons(&mut bundle, &current.document);
+                if capture_id == Some(id) || (import_new_followers && first_follow) {
+                    capture(&mut bundle, id, &current.document);
+                }
+                bundle.known_instances.insert(id);
+                files.push((id, directory, current));
+            }
+            Err(error) => pending.push(format!("Instance {id}: {error}")),
+        }
+    }
+    store_bundle(&mut conn, &bundle)?;
+    for (id, directory, current) in files {
+        if let Err(error) = apply_one(&mut conn, &mut bundle, id, &directory, current) {
+            pending.push(format!("Instance {id}: {error}"));
+        }
+    }
+    Ok(pending)
+}
+
 async fn reconcile_all(
     app: &tauri::AppHandle,
     capture_id: Option<i32>,
@@ -338,11 +398,7 @@ async fn reconcile_all(
 ) -> Vec<String> {
     let mut pending = Vec::new();
     let result = async {
-        let prefs = super::read(
-            &mut *get_config_conn().map_err(|error| error.to_string())?,
-            Category::Servers,
-        )?
-        .preferences;
+        let prefs = preferences().await?;
         if !prefs.enabled {
             return Ok::<(), String>(());
         }
@@ -364,35 +420,26 @@ async fn reconcile_all(
             }
         }
         let _serial = SERIAL.lock().await;
-        let mut conn = get_config_conn().map_err(|error| error.to_string())?;
-        let mut bundle = load_bundle(&mut conn)?;
-        bundle
-            .applied
-            .retain(|id, _| prefs.instance_ids.contains(id));
-        let mut files = Vec::new();
+        let prefs = preferences().await?;
+        if !prefs.enabled {
+            return Ok::<(), String>(());
+        }
+        ready.retain(|id| prefs.instance_ids.contains(id));
+        let mut directories = Vec::new();
         for id in ready {
-            match instance_directory(id)
-                .await
-                .and_then(|directory| read_file(&directory).map(|current| (directory, current)))
-            {
-                Ok((directory, current)) => {
-                    let first_follow = !bundle.known_instances.contains(&id);
-                    enrich_icons(&mut bundle, &current.document);
-                    if capture_id == Some(id) || (import_new_followers && first_follow) {
-                        capture(&mut bundle, id, &current.document);
-                    }
-                    bundle.known_instances.insert(id);
-                    files.push((id, directory, current));
+            match instance_directory(id).await {
+                Ok(directory) => directories.push((id, directory)),
+                Err(error) => {
+                    pending.push(format!("Instance {id}: {error}"));
                 }
-                Err(error) => pending.push(format!("Instance {id}: {error}")),
             }
         }
-        store_bundle(&mut conn, &bundle)?;
-        for (id, directory, current) in files {
-            if let Err(error) = apply_one(&mut conn, &mut bundle, id, &directory, current) {
-                pending.push(format!("Instance {id}: {error}"));
-            }
-        }
+        let file_pending = tauri::async_runtime::spawn_blocking(move || {
+            reconcile_files(prefs, directories, capture_id, import_new_followers)
+        })
+        .await
+        .map_err(|error| error.to_string())??;
+        pending.extend(file_pending);
         drop(guards);
         Ok(())
     }
@@ -419,19 +466,21 @@ pub(crate) async fn configure(
     revision: i64,
     preferences: Preferences,
 ) -> Result<Snapshot, String> {
-    let mut snapshot = super::save_preferences(
-        &mut *get_config_conn().map_err(|error| error.to_string())?,
-        Category::Servers,
-        revision,
-        preferences,
-    )?;
-    if !snapshot.preferences.enabled {
-        let _serial = SERIAL.lock().await;
+    let serial = SERIAL.lock().await;
+    let mut snapshot = tauri::async_runtime::spawn_blocking(move || {
         let mut conn = get_config_conn().map_err(|error| error.to_string())?;
-        let mut bundle = load_bundle(&mut conn)?;
-        bundle.applied.clear();
-        store_bundle(&mut conn, &bundle)?;
-    }
+        let snapshot =
+            super::save_preferences(&mut conn, Category::Servers, revision, preferences)?;
+        if !snapshot.preferences.enabled {
+            let mut bundle = load_bundle(&mut conn)?;
+            bundle.applied.clear();
+            store_bundle(&mut conn, &bundle)?;
+        }
+        Ok::<_, String>(snapshot)
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    drop(serial);
     snapshot.pending = reconcile_all(app, None, true).await;
     populate(
         &mut *get_config_conn().map_err(|error| error.to_string())?,
@@ -511,23 +560,35 @@ pub(crate) async fn remove_synced_server(
 
 pub(crate) async fn apply_under_play_guard(id: i32) -> Result<(), String> {
     let _serial = SERIAL.lock().await;
-    let mut conn = get_config_conn().map_err(|error| error.to_string())?;
-    let prefs = super::read(&mut conn, Category::Servers)?.preferences;
+    let prefs = preferences().await?;
     if !prefs.enabled || !prefs.instance_ids.contains(&id) {
         return Ok(());
     }
     let directory = instance_directory(id).await?;
-    let current = read_file(&directory)?;
-    let mut bundle = load_bundle(&mut conn)?;
-    capture(&mut bundle, id, &current.document);
-    apply_one(&mut conn, &mut bundle, id, &directory, current)
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut conn = get_config_conn().map_err(|error| error.to_string())?;
+        let current = read_file(&directory)?;
+        let mut bundle = load_bundle(&mut conn)?;
+        capture(&mut bundle, id, &current.document);
+        apply_one(&mut conn, &mut bundle, id, &directory, current)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 pub(crate) async fn after_exit(app: &tauri::AppHandle, slug: String) {
-    let id = match crate::commands::instances::get_instance_by_slug(slug) {
-        Ok(instance) => instance.id,
-        Err(error) => {
+    let resolved = tauri::async_runtime::spawn_blocking(move || {
+        crate::commands::instances::get_instance_by_slug(slug)
+    })
+    .await;
+    let id = match resolved {
+        Ok(Ok(instance)) => instance.id,
+        Ok(Err(error)) => {
             log::warn!("Server sync could not resolve exited instance: {error}");
+            return;
+        }
+        Err(error) => {
+            log::warn!("Server sync task failed: {error}");
             return;
         }
     };
@@ -611,6 +672,61 @@ mod tests {
         bundle.servers.clear();
         let (removed, _) = merge(&bundle, 2, &written);
         assert!(removed.servers.is_empty());
+    }
+
+    #[test]
+    fn merge_preserves_instance_owned_server_fields() {
+        let before = server("Before", "play.example.test");
+        let after = server("After", "play.example.test");
+        let mut local = entry(&before);
+        local.accept_textures = Some(1);
+        local.extra.insert("hidden".into(), fastnbt::Value::Byte(1));
+        let bundle = ServerBundle {
+            servers: BTreeMap::from([(after.id.clone(), after.clone())]),
+            applied: BTreeMap::from([(1, BTreeMap::from([(before.id.clone(), before)]))]),
+            ..Default::default()
+        };
+
+        let (updated, _) = merge(
+            &bundle,
+            1,
+            &ServerDat {
+                servers: vec![local],
+            },
+        );
+
+        assert_eq!(updated.servers[0].name, "After");
+        assert_eq!(updated.servers[0].accept_textures, Some(1));
+        assert_eq!(
+            updated.servers[0].extra.get("hidden"),
+            Some(&fastnbt::Value::Byte(1))
+        );
+    }
+
+    #[test]
+    fn store_rejects_an_oversized_shared_bundle() {
+        let mut conn = SqliteConnection::establish(":memory:").unwrap();
+        conn.batch_execute(include_str!(
+            "../../migrations/config/2026-09-22-000000_shared_servers/up.sql"
+        ))
+        .unwrap();
+        let oversized = ServerBundle {
+            servers: BTreeMap::from([(
+                "large".into(),
+                SyncedServer {
+                    id: "large".into(),
+                    name: "Large".into(),
+                    address: "large.example.test".into(),
+                    icon: Some("x".repeat(MAX_BUNDLE_BYTES)),
+                },
+            )]),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            store_bundle(&mut conn, &oversized).unwrap_err(),
+            "The shared server list exceeds the size limit."
+        );
     }
 
     #[test]

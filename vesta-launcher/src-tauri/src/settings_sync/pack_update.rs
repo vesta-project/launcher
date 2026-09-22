@@ -51,26 +51,36 @@ fn prepared_bytes(current: &[u8], incoming: &[u8], active: bool) -> Result<Vec<u
 }
 
 pub(crate) async fn prepare(staging: &StagingDir, dir: &Path, id: i32) -> Result<(), String> {
-    let _serial = bundle::SERIAL.lock().await;
     let staged = staging
         .staged_path("options.txt")
         .map_err(|e| e.to_string())?;
     let local_path = crate::game_options_file::checked_path(dir)?;
-    let Some(local) = crate::game_options_file::read_bytes(&local_path)? else {
+    let files = tauri::async_runtime::spawn_blocking(move || {
+        let local = crate::game_options_file::read_bytes(&local_path)?;
+        let incoming = crate::game_options_file::read_bytes(&staged)?;
+        Ok::<_, String>((local, incoming))
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let (Some(local), Some(incoming)) = files else {
         return Ok(());
     };
-    let mut conn = get_config_conn().map_err(|e| e.to_string())?;
-    let mut active_categories = Vec::new();
-    for category in [Category::GameOptions, Category::Keybinds] {
-        let prefs = super::read(&mut conn, category)?.preferences;
-        if prefs.enabled && prefs.instance_ids.contains(&id) {
-            active_categories.push((category, prefs));
+    let serial = bundle::SERIAL.lock().await;
+    let capture_source = local.clone();
+    let active = tauri::async_runtime::spawn_blocking(move || {
+        let mut conn = get_config_conn().map_err(|e| e.to_string())?;
+        let mut active_categories = Vec::new();
+        for category in [Category::GameOptions, Category::Keybinds] {
+            let prefs = super::read(&mut conn, category)?.preferences;
+            if prefs.enabled && prefs.instance_ids.contains(&id) {
+                active_categories.push((category, prefs));
+            }
         }
-    }
-    let active = !active_categories.is_empty();
-    if active {
+        if active_categories.is_empty() {
+            return Ok::<_, String>(false);
+        }
         let version = crate::commands::instances::get_instance(id)?.minecraft_version;
-        let document = OptionsDocument::parse(&local).map_err(str::to_owned)?;
+        let document = OptionsDocument::parse(&capture_source).map_err(str::to_owned)?;
         let values: BTreeMap<String, String> = document
             .values()
             .into_iter()
@@ -81,14 +91,20 @@ pub(crate) async fn prepare(staging: &StagingDir, dir: &Path, id: i32) -> Result
             bundle::capture(category, &mut shared, &prefs, id, &version, &values);
             bundle::store(&mut conn, category, &shared)?;
         }
-    }
-    let Some(incoming) = crate::game_options_file::read_bytes(&staged)? else {
-        return Ok(());
-    };
-    let bytes = prepared_bytes(&local, &incoming, active)?;
-    staging
-        .write_staged("options.txt", &bytes)
-        .map_err(|e| e.to_string())
+        Ok(true)
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    drop(serial);
+    let staging = staging.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = prepared_bytes(&local, &incoming, active)?;
+        staging
+            .write_staged("options.txt", &bytes)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 pub(crate) async fn restore(id: i32) -> Result<(), String> {
     let mut failures = Vec::new();
