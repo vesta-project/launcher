@@ -49,9 +49,8 @@ fn is_config_text(lower_path: &str) -> bool {
         || lower_path.ends_with(".txt");
 
     // options.txt and servers.dat are user files, not pack configs
-    let is_user_file = lower_path == "servers.dat"
-        || lower_path == "optionsof.txt"
-        || lower_path == "hotbar.nbt";
+    let is_user_file =
+        lower_path == "servers.dat" || lower_path == "optionsof.txt" || lower_path == "hotbar.nbt";
 
     in_config_dir || (has_config_ext && !is_user_file)
 }

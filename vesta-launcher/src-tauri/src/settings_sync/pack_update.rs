@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path};
 pub(crate) fn plan(path: &str, source: Option<FileSource>) -> SyncAction {
     match source {
         Some(source) => SyncAction::Update {
-            path: path.into(),
+            path: "options.txt".into(),
             source,
             old_hash: None,
             new_hash: None,
@@ -55,9 +55,10 @@ pub(crate) async fn prepare(staging: &StagingDir, dir: &Path, id: i32) -> Result
         .staged_path("options.txt")
         .map_err(|e| e.to_string())?;
     let local_path = crate::game_options_file::checked_path(dir)?;
+    let staged_read = staged.clone();
     let files = tauri::async_runtime::spawn_blocking(move || {
         let local = crate::game_options_file::read_bytes(&local_path)?;
-        let incoming = crate::game_options_file::read_bytes(&staged)?;
+        let incoming = crate::game_options_file::read_bytes(&staged_read)?;
         Ok::<_, String>((local, incoming))
     })
     .await
@@ -96,12 +97,9 @@ pub(crate) async fn prepare(staging: &StagingDir, dir: &Path, id: i32) -> Result
     .await
     .map_err(|error| error.to_string())??;
     drop(serial);
-    let staging = staging.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let bytes = prepared_bytes(&local, &incoming, active)?;
-        staging
-            .write_staged("options.txt", &bytes)
-            .map_err(|e| e.to_string())
+        std::fs::write(staged, bytes).map_err(|e| e.to_string())
     })
     .await
     .map_err(|error| error.to_string())?
@@ -125,6 +123,20 @@ pub(crate) async fn restore(id: i32) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn options_destination_is_canonical_but_source_keeps_manifest_case() {
+        let action = plan(
+            "Options.txt",
+            Some(FileSource::ZipOverride {
+                relative_path: "Options.txt".into(),
+            }),
+        );
+        assert!(
+            matches!(action, SyncAction::Update { path, source: FileSource::ZipOverride { relative_path }, .. }
+            if path == "options.txt" && relative_path == "Options.txt")
+        );
+    }
+
     #[test]
     fn pack_keeps_unsynced_and_other_category_lines() {
         let merged = merge(

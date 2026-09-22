@@ -348,11 +348,32 @@ fn apply_one(
     current: FileSnapshot,
 ) -> Result<(), String> {
     let (updated, applied) = merge(bundle, id, &current.document);
-    if current.compressed || updated != current.document {
+    let mut next = bundle.clone();
+    next.applied.insert(id, applied);
+    let serialized = serde_json::to_vec(&next).map_err(|error| error.to_string())?;
+    if serialized.len() > MAX_BUNDLE_BYTES {
+        return Err("The shared server list exceeds the size limit.".into());
+    }
+    let changed = current.compressed || updated != current.document;
+    if changed {
         write_file(directory, &current, &updated)?;
     }
-    bundle.applied.insert(id, applied);
-    store_bundle(conn, bundle)
+    if let Err(error) = store_bundle(conn, &next) {
+        if changed {
+            // Restore the previous entries if their new baseline could not be saved.
+            // A previously absent file becomes an empty list, never an untracked import.
+            let written = FileSnapshot {
+                bytes: Some(fastnbt::to_bytes(&updated).map_err(|error| error.to_string())?),
+                compressed: false,
+                document: updated,
+            };
+            write_file(directory, &written, &current.document)
+                .map_err(|rollback| format!("{error}; restoring server list failed: {rollback}"))?;
+        }
+        return Err(error);
+    }
+    *bundle = next;
+    Ok(())
 }
 
 fn reconcile_files(
@@ -701,6 +722,27 @@ mod tests {
             updated.servers[0].extra.get("hidden"),
             Some(&fastnbt::Value::Byte(1))
         );
+    }
+
+    #[test]
+    fn failed_baseline_save_restores_local_servers() {
+        // Missing table makes persistence fail after the file has been written.
+        let mut conn = SqliteConnection::establish(":memory:").unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().canonicalize().unwrap();
+        let local = ServerDat {
+            servers: vec![entry(&server("Local", "local.test"))],
+        };
+        std::fs::write(dir.join("servers.dat"), fastnbt::to_bytes(&local).unwrap()).unwrap();
+        let shared = server("Shared", "shared.test");
+        let mut bundle = ServerBundle {
+            servers: BTreeMap::from([(shared.id.clone(), shared)]),
+            ..Default::default()
+        };
+        let current = read_file(&dir).unwrap();
+        assert!(apply_one(&mut conn, &mut bundle, 1, &dir, current).is_err());
+        assert_eq!(read_file(&dir).unwrap().document, local);
+        assert!(!bundle.applied.contains_key(&1));
     }
 
     #[test]

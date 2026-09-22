@@ -446,7 +446,6 @@ fn remove_path_if_exists(path: &Path) -> Result<()> {
 /// Manages the `.update_stage/` temporary directory used for atomic updates.
 /// All new files are downloaded and prepared here, then atomically moved
 /// into the game directory only after all operations succeed.
-#[derive(Clone)]
 pub struct StagingDir {
     /// The staging directory path (game_dir/.update_stage/)
     root: PathBuf,
