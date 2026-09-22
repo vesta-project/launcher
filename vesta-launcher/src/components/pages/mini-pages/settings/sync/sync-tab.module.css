@@ -55,12 +55,20 @@
 	align-items: center;
 	gap: 10px;
 	min-height: 40px;
-	padding: 4px 0;
+	margin-inline: -8px;
+	padding: 4px 8px;
+	border-radius: 8px;
+	transition: background-color 160ms ease;
 }
 
 .row + .row {
 	border-top: 1px solid
 		color-mix(in srgb, var(--border-subtle) 45%, transparent);
+}
+
+.row:hover,
+.row:focus-within {
+	background: color-mix(in srgb, var(--surface-overlay) 70%, transparent);
 }
 
 .category {
@@ -77,10 +85,6 @@
 	color: inherit;
 	text-align: left;
 	cursor: pointer;
-}
-
-.category:hover {
-	background: color-mix(in srgb, var(--surface-overlay) 70%, transparent);
 }
 
 .category:focus-visible {

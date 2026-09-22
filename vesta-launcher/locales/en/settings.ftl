@@ -44,13 +44,9 @@ settings-tab-sync = Sync
 
 sync-link-all-options = Share every option
 
-sync-back = Back
-
 sync-bundle-title = Shared options
 
 sync-edit = Edit { $category }
-
-sync-edit-shared = Edit
 
 sync-enable-to-edit = Enable this category to edit shared values.
 
@@ -94,13 +90,9 @@ sync-search-options = Search options
 
 sync-servers-title = Servers
 sync-servers-shared = Synced servers
-sync-server-add = Add server
 sync-server-add-title = Add synced server
-sync-server-name = Name
-sync-server-address = Address
 sync-server-remove = Remove { $server }
 sync-server-empty = No synced servers.
-sync-server-cancel = Cancel
 
 sync-shared-entry-hint = Choose individual options and their shared values.
 
@@ -122,7 +114,6 @@ game-options-key-cancelled = Recording cancelled.
 game-options-key-cleared = Keybinding cleared.
 game-options-title = Game options
 game-options-description = Edit this instance’s Minecraft options.txt settings. Close the game before saving.
-game-options-back = Back
 game-options-reload = Reload
 game-options-open-file = Open options.txt
 game-options-discard = Discard edits
@@ -152,7 +143,6 @@ game-options-unset = Not in file
 game-options-no-results = No matching game options.
 sync-link-all-instances = Link all
 sync-unlink-all-instances = Unlink all
-sync-keybinds-cancel = Cancel
 sync-keybinds-clear = Clear
 sync-keybinds-help = Keybinding controls
 sync-keybinds-page-title = Shared keybindings

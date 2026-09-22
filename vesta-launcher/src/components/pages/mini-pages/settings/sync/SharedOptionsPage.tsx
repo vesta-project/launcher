@@ -453,7 +453,7 @@ export function SharedOptionsPage(props: {
 	return (
 		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<SubpageBackButton label={t("sync-back")} onClick={props.onBack} />
+				<SubpageBackButton label={t("common-back")} onClick={props.onBack} />
 				<h2 class={styles.headingTitle}>{t("sync-shared-page-title")}</h2>
 			</div>
 			<div class={styles.sharedLayout}>
