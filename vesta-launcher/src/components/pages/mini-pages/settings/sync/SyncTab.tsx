@@ -1,3 +1,5 @@
+import AddIcon from "@assets/icons/actions/add.svg";
+import DeleteIcon from "@assets/icons/actions/delete.svg";
 import ReloadIcon from "@assets/icons/actions/reload.svg";
 import KeyboardIcon from "@assets/icons/content/keyboard.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
@@ -17,12 +19,23 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@ui/dialog/dialog";
+import {
 	Switch,
 	SwitchControl,
 	SwitchLabel,
 	SwitchThumb,
 } from "@ui/switch/switch";
-import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
+import {
+	TextFieldInput,
+	TextFieldLabel,
+	TextFieldRoot,
+} from "@ui/text-field/text-field";
 import {
 	createAnimatedIconPreview,
 	iconBackgroundStyle,
@@ -58,7 +71,7 @@ const categoryIcons: Record<Category, Component<{ class?: string }>> = {
 };
 
 const filledMarks = new Set<Category>(["gameOptions"]);
-const unavailableCategories = new Set<Category>(["servers", "resourcePacks"]);
+const unavailableCategories = new Set<Category>(["resourcePacks"]);
 
 function InstanceMark(props: { instance: Instance }) {
 	const iconPath = () => props.instance.iconPath || DEFAULT_ICONS[0];
@@ -154,6 +167,9 @@ export function SyncSettingsTab() {
 	const [query, setQuery] = createSignal("");
 	const [busy, setBusy] = createSignal(false);
 	const [error, setError] = createSignal("");
+	const [serverDialogOpen, setServerDialogOpen] = createSignal(false);
+	const [serverName, setServerName] = createSignal("");
+	const [serverAddress, setServerAddress] = createSignal("");
 	const title = (category: Category) => t(`sync-${category}-title`);
 	const availableCategory = (category: Category) =>
 		!unavailableCategories.has(category);
@@ -225,6 +241,48 @@ export function SyncSettingsTab() {
 		const count = current.preferences.instanceIds.length;
 		return count ? t("sync-linked", { count }) : "";
 	};
+	async function addServer() {
+		const current = snapshot("servers");
+		if (!current || busy()) return;
+		setBusy(true);
+		setError("");
+		try {
+			const next = await invoke<Snapshot>("add_synced_server", {
+				revision: current.revision,
+				name: serverName(),
+				address: serverAddress(),
+			});
+			mutate((previous) =>
+				previous?.map((item) => (item.category === "servers" ? next : item)),
+			);
+			setServerDialogOpen(false);
+			setServerName("");
+			setServerAddress("");
+		} catch (failure) {
+			setError(String(failure));
+		} finally {
+			setBusy(false);
+		}
+	}
+	async function removeServer(serverId: string) {
+		const current = snapshot("servers");
+		if (!current || busy()) return;
+		setBusy(true);
+		setError("");
+		try {
+			const next = await invoke<Snapshot>("remove_synced_server", {
+				revision: current.revision,
+				serverId,
+			});
+			mutate((previous) =>
+				previous?.map((item) => (item.category === "servers" ? next : item)),
+			);
+		} catch (failure) {
+			setError(String(failure));
+		} finally {
+			setBusy(false);
+		}
+	}
 	return (
 		<div class={pageStyles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
@@ -322,25 +380,100 @@ export function SyncSettingsTab() {
 											);
 										return (
 											<>
-												<Show when={sourceCategories.includes(category())}>
-													<SettingsCard>
-														<DetailHeading
-															title={title(category())}
-															checked={current()?.preferences.enabled ?? false}
-															disabled={busy()}
-															onBack={() => setEditing(undefined)}
-															onToggle={(enabled) =>
-																toggle(category(), enabled)
-															}
-														/>
+												<SettingsCard>
+													<DetailHeading
+														title={title(category())}
+														checked={current()?.preferences.enabled ?? false}
+														disabled={busy()}
+														onBack={() => setEditing(undefined)}
+														onToggle={(enabled) => toggle(category(), enabled)}
+													/>
+												</SettingsCard>
+												<Show when={category() === "servers"}>
+													<SettingsCard
+														header={t("sync-servers-shared")}
+														headerRight={
+															<Button
+																variant="outline"
+																size="sm"
+																disabled={
+																	busy() || !current()?.preferences.enabled
+																}
+																onClick={() => setServerDialogOpen(true)}
+															>
+																<AddIcon
+																	class={styles.icon}
+																	aria-hidden="true"
+																/>
+																{t("sync-server-add")}
+															</Button>
+														}
+													>
+														<div class={styles.serverList}>
+															<For each={current()?.servers ?? []}>
+																{(server) => (
+																	<div class={styles.serverRow}>
+																		<Show
+																			when={server.icon}
+																			fallback={
+																				<div
+																					class={styles.serverFallback}
+																					aria-hidden="true"
+																				>
+																					<ServerIcon />
+																				</div>
+																			}
+																		>
+																			{(icon) => (
+																				<img
+																					class={styles.serverIcon}
+																					src={icon()}
+																					alt=""
+																				/>
+																			)}
+																		</Show>
+																		<span class={styles.copy}>
+																			<span class={styles.title}>
+																				{server.name}
+																			</span>
+																			<span class={styles.meta}>
+																				{server.address}
+																			</span>
+																		</span>
+																		<Button
+																			variant="ghost"
+																			size="icon"
+																			icon_only
+																			color="destructive"
+																			disabled={busy()}
+																			aria-label={t("sync-server-remove", {
+																				server: server.name,
+																			})}
+																			tooltip_text={t("sync-server-remove", {
+																				server: server.name,
+																			})}
+																			onClick={() =>
+																				void removeServer(server.id)
+																			}
+																		>
+																			<DeleteIcon
+																				class={styles.icon}
+																				aria-hidden="true"
+																			/>
+																		</Button>
+																	</div>
+																)}
+															</For>
+															<Show when={!current()?.servers?.length}>
+																<p class={styles.empty}>
+																	{t("sync-server-empty")}
+																</p>
+															</Show>
+														</div>
 													</SettingsCard>
 												</Show>
 												<SettingsCard
-													header={
-														sourceCategories.includes(category())
-															? t("sync-instances")
-															: undefined
-													}
+													header={t("sync-instances")}
 													headerRight={
 														sourceCategories.includes(category()) ? (
 															<div class={styles.headerActions}>
@@ -381,18 +514,6 @@ export function SyncSettingsTab() {
 														) : undefined
 													}
 												>
-													<Show when={!sourceCategories.includes(category())}>
-														<DetailHeading
-															title={title(category())}
-															checked={current()?.preferences.enabled ?? false}
-															disabled={busy()}
-															onBack={() => setEditing(undefined)}
-															onToggle={(enabled) =>
-																toggle(category(), enabled)
-															}
-														/>
-													</Show>
-
 													<div class={styles.search}>
 														<SearchIcon
 															class={styles.searchIcon}
@@ -530,6 +651,51 @@ export function SyncSettingsTab() {
 						setPicking(undefined);
 				}}
 			/>
+			<Dialog
+				open={serverDialogOpen()}
+				onOpenChange={(open) => !busy() && setServerDialogOpen(open)}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>{t("sync-server-add-title")}</DialogTitle>
+					</DialogHeader>
+					<form
+						class={styles.serverForm}
+						onSubmit={(event) => {
+							event.preventDefault();
+							void addServer();
+						}}
+					>
+						<TextFieldRoot value={serverName()} onChange={setServerName}>
+							<TextFieldLabel>{t("sync-server-name")}</TextFieldLabel>
+							<TextFieldInput autofocus />
+						</TextFieldRoot>
+						<TextFieldRoot value={serverAddress()} onChange={setServerAddress}>
+							<TextFieldLabel>{t("sync-server-address")}</TextFieldLabel>
+							<TextFieldInput />
+						</TextFieldRoot>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								disabled={busy()}
+								onClick={() => setServerDialogOpen(false)}
+							>
+								{t("sync-server-cancel")}
+							</Button>
+							<Button
+								type="submit"
+								color="primary"
+								disabled={
+									busy() || !serverName().trim() || !serverAddress().trim()
+								}
+							>
+								{t("sync-server-add")}
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

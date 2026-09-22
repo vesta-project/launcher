@@ -7,6 +7,7 @@ mod bundle;
 pub(crate) mod game_options;
 pub(crate) mod keybinds;
 pub(crate) mod pack_update;
+pub(crate) mod servers;
 
 use crate::utils::db::{get_config_conn, get_vesta_conn};
 use diesel::prelude::*;
@@ -65,6 +66,7 @@ pub(crate) struct Snapshot {
     pub pending: Vec<String>,
     pub initialized: bool,
     pub shared_values: BTreeMap<String, String>,
+    pub servers: Vec<servers::SyncedServer>,
     /// Metadata is populated by the game-options catalog. Keeping it on the
     /// command response avoids a second, divergent catalog in the frontend.
     pub catalog: Vec<serde_json::Value>,
@@ -112,6 +114,7 @@ pub(crate) fn empty_snapshot(category: Category) -> Snapshot {
         pending: Vec::new(),
         initialized: false,
         shared_values: BTreeMap::new(),
+        servers: Vec::new(),
         catalog: Vec::new(),
     }
 }
@@ -131,6 +134,7 @@ pub(crate) fn read(conn: &mut SqliteConnection, category: Category) -> Result<Sn
             pending: Vec::new(),
             initialized: false,
             shared_values: BTreeMap::new(),
+            servers: Vec::new(),
             catalog: Vec::new(),
         }),
         None => Ok(empty_snapshot(category)),
@@ -181,6 +185,7 @@ pub(crate) fn save_preferences(
         pending: Vec::new(),
         initialized: false,
         shared_values: BTreeMap::new(),
+        servers: Vec::new(),
         catalog: Vec::new(),
     })
 }
@@ -264,7 +269,8 @@ fn populate_snapshot(conn: &mut SqliteConnection, snapshot: &mut Snapshot) -> Re
     match snapshot.category {
         Category::GameOptions => game_options::populate(conn, snapshot),
         Category::Keybinds => keybinds::populate(conn, snapshot),
-        Category::Servers | Category::ResourcePacks => Ok(()),
+        Category::Servers => servers::populate(conn, snapshot),
+        Category::ResourcePacks => Ok(()),
     }
 }
 
@@ -305,7 +311,8 @@ pub async fn save_settings_sync(
         Category::Keybinds => {
             keybinds::configure(&app, revision, previous, preferences, values).await?
         }
-        Category::Servers | Category::ResourcePacks => {
+        Category::Servers => servers::configure(&app, revision, preferences).await?,
+        Category::ResourcePacks => {
             let mut conn = get_config_conn().map_err(|error| error.to_string())?;
             save_preferences(&mut conn, category, revision, preferences)?
         }

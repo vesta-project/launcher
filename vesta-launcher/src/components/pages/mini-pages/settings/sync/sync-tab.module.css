@@ -482,3 +482,52 @@
 	cursor: default;
 	opacity: 0.5;
 }
+
+.serverList {
+	display: flex;
+	flex-direction: column;
+}
+
+.serverRow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+	padding-block: 4px;
+}
+
+.serverRow + .serverRow {
+	border-top: 1px solid var(--border-subtle);
+}
+
+.serverIcon,
+.serverFallback {
+	width: 32px;
+	height: 32px;
+	flex: 0 0 auto;
+	border-radius: 6px;
+}
+
+.serverIcon {
+	object-fit: cover;
+}
+
+.serverFallback {
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--border-subtle);
+	background: var(--surface-raised);
+	color: var(--text-secondary);
+}
+
+.serverFallback svg {
+	width: 16px;
+	height: 16px;
+	fill: currentColor;
+}
+
+.serverForm {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}

@@ -5,6 +5,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@solidjs/testing-library";
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -101,6 +102,7 @@ beforeEach(() => {
 	vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
 	state = categories.map((category) => ({
 		category,
+		servers: [],
 		sharedValues: {
 			fov: "90",
 			fullscreen: "false",
@@ -144,6 +146,36 @@ beforeEach(() => {
 			);
 			return Promise.resolve(next);
 		}
+		if (command === "add_synced_server") {
+			const current = state[2];
+			const next = {
+				...current,
+				revision: current.revision + 1,
+				servers: [
+					...(current.servers ?? []),
+					{
+						id: "server-1",
+						name: args.name,
+						address: args.address,
+						icon: null,
+					},
+				],
+			};
+			state[2] = next;
+			return Promise.resolve(next);
+		}
+		if (command === "remove_synced_server") {
+			const current = state[2];
+			const next = {
+				...current,
+				revision: current.revision + 1,
+				servers: current.servers?.filter(
+					(server) => server.id !== args.serverId,
+				),
+			};
+			state[2] = next;
+			return Promise.resolve(next);
+		}
 		throw new Error("Unexpected file command: " + command);
 	});
 });
@@ -164,20 +196,47 @@ it("does not enable a category when source selection is cancelled", async () => 
 	expect(invoke).toHaveBeenCalledTimes(1);
 });
 
-it("keeps unfinished file categories unavailable", async () => {
+it("keeps resource-pack sync unavailable", async () => {
 	render(() => <SyncSettingsTab />);
-	const servers = await screen.findByRole("switch", { name: "sync-servers-title" });
-	const resourcePacks = screen.getByRole("switch", {
+	const resourcePacks = await screen.findByRole("switch", {
 		name: "sync-resourcePacks-title",
 	});
-	expect(servers).toHaveProperty("disabled", true);
 	expect(resourcePacks).toHaveProperty("disabled", true);
-	expect(screen.getByRole("button", { name: "sync-edit sync-servers-title" })).toHaveProperty("disabled", true);
-	expect(screen.getByRole("button", { name: "sync-edit sync-resourcePacks-title" })).toHaveProperty("disabled", true);
-	fireEvent.click(servers);
+	expect(
+		screen.getByRole("button", { name: "sync-edit sync-resourcePacks-title" }),
+	).toHaveProperty("disabled", true);
 	fireEvent.click(resourcePacks);
-	expect(state[2].preferences.enabled).toBe(false);
 	expect(state[3].preferences.enabled).toBe(false);
+});
+
+it("enables server sync without an owner and manages the shared list", async () => {
+	render(() => <SyncSettingsTab />);
+	fireEvent.click(
+		await screen.findByRole("switch", { name: "sync-servers-title" }),
+	);
+	await waitFor(() => expect(state[2].preferences.enabled).toBe(true));
+	expect(screen.queryByRole("dialog")).toBeNull();
+	fireEvent.click(
+		screen.getByRole("button", { name: "sync-edit sync-servers-title" }),
+	);
+	expect(screen.getByText("sync-server-empty")).toBeTruthy();
+	fireEvent.click(screen.getByRole("button", { name: "sync-server-add" }));
+	fireEvent.input(screen.getByLabelText("sync-server-name"), {
+		target: { value: "Test server" },
+	});
+	fireEvent.input(screen.getByLabelText("sync-server-address"), {
+		target: { value: "play.example.test" },
+	});
+	const dialog = screen.getByRole("dialog");
+	fireEvent.click(
+		within(dialog).getByRole("button", { name: "sync-server-add" }),
+	);
+	await waitFor(() => expect(state[2].servers).toHaveLength(1));
+	expect(screen.getByText("play.example.test")).toBeTruthy();
+	fireEvent.click(
+		screen.getByRole("button", { name: "sync-server-remove Test server" }),
+	);
+	await waitFor(() => expect(state[2].servers).toEqual([]));
 });
 it("re-enables an initialized bundle without asking for its former source", async () => {
 	state[0] = { ...state[0], initialized: true };
@@ -444,7 +503,7 @@ it("uses native labels and boolean controls without repeated raw keys", () => {
 		<SharedOptionsPage
 			snapshot={snapshot}
 			busy={false}
-			onBack={() => {}}
+			onBack={vi.fn()}
 			onSave={async () => true}
 		/>
 	));

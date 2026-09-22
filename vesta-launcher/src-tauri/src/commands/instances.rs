@@ -1594,6 +1594,7 @@ pub async fn launch_instance(
     let notification_instance_id = instance_data.id;
     crate::settings_sync::game_options::apply_under_play_guard(instance_data.id).await?;
     crate::settings_sync::keybinds::apply_under_play_guard(instance_data.id).await?;
+    crate::settings_sync::servers::apply_under_play_guard(instance_data.id).await?;
     let instance_id = instance_data.slug();
     let _launch_guard = LaunchInProgressGuard::acquire(instance_id.clone()).await?;
 
