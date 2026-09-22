@@ -10,7 +10,12 @@ export default defineConfig({
 		globals: true,
 		server: {
 			deps: {
-				inline: ["solid-js", "solid-js/web", "solid-js/store", "@solidjs/testing-library"],
+				inline: [
+					"solid-js",
+					"solid-js/web",
+					"solid-js/store",
+					"@solidjs/testing-library",
+				],
 			},
 		},
 		alias: [

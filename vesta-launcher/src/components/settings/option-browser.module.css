@@ -272,7 +272,6 @@
 		padding-bottom: 16px;
 	}
 
-
 	.row,
 	.rowTrailing {
 		grid-template-columns: minmax(0, 1fr) minmax(96px, 140px);

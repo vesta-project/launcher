@@ -1,7 +1,3 @@
-import {
-	GameOptionsEditor,
-	createGameOptionsEditor,
-} from "@components/settings/GameOptionsEditor";
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
 import {
@@ -10,6 +6,10 @@ import {
 } from "@components/page-sidebar/page-sidebar";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import {
+	createGameOptionsEditor,
+	GameOptionsEditor,
+} from "@components/settings/GameOptionsEditor";
 import {
 	normalizeSandboxPreset,
 	normalizeSandboxWrapperNesting,
@@ -3094,18 +3094,18 @@ export default function InstanceDetails(
 										</Show>
 									</TabsContent>
 
-					<TabsContent value="settings">
-						<Show when={showingGameOptions()}>
-							<GameOptionsEditor
-								state={gameOptions}
-								onBack={() => activeRouter()?.backwards()}
-							/>
-						</Show>
-						<Show
-							when={
-								!showingGameOptions() &&
-								instanceTabLoader.visitedTabs().has("settings")
-							}
+									<TabsContent value="settings">
+										<Show when={showingGameOptions()}>
+											<GameOptionsEditor
+												state={gameOptions}
+												onBack={() => activeRouter()?.backwards()}
+											/>
+										</Show>
+										<Show
+											when={
+												!showingGameOptions() &&
+												instanceTabLoader.visitedTabs().has("settings")
+											}
 										>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-settings"]}>
@@ -3191,16 +3191,16 @@ export default function InstanceDetails(
 														sandboxWrapperNesting={sandboxWrapperNesting()}
 														setSandboxWrapperNesting={setSandboxWrapperNesting}
 														sandboxExtraPaths={sandboxExtraPaths()}
-															setSandboxExtraPaths={setSandboxExtraPaths}
-															inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
-															setIsSandboxDirty={setIsSandboxDirty}
-															onOpenGameOptions={() =>
-																activeRouter()?.updateQuery(
-																	"settingsPage",
-																	"game-options",
-																	true,
-																)
-															}
+														setSandboxExtraPaths={setSandboxExtraPaths}
+														inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
+														setIsSandboxDirty={setIsSandboxDirty}
+														onOpenGameOptions={() =>
+															activeRouter()?.updateQuery(
+																"settingsPage",
+																"game-options",
+																true,
+															)
+														}
 														invoke={invoke}
 														showToast={showToast}
 														isGuest={isGuest()}

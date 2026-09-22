@@ -1,4 +1,16 @@
-const ACRONYMS = new Set(["ao", "fov", "fps", "gui", "gl", "gpu", "cpu", "ui", "rgb", "msaa", "vbo"]);
+const ACRONYMS = new Set([
+	"ao",
+	"fov",
+	"fps",
+	"gui",
+	"gl",
+	"gpu",
+	"cpu",
+	"ui",
+	"rgb",
+	"msaa",
+	"vbo",
+]);
 
 /** Format a physical options.txt key for display without changing the key. */
 export function formatGameOptionName(key: string): string {

@@ -451,10 +451,7 @@ export const WorldDatapacksView: Component<{
 			aria-label={`Datapacks in ${props.world.displayName}`}
 		>
 			<header class={styles["context-rail"]}>
-				<SubpageBackButton
-					label="Back to worlds"
-					onClick={props.onBack}
-				/>
+				<SubpageBackButton label="Back to worlds" onClick={props.onBack} />
 				<WorldIcon
 					class={styles["context-icon"]}
 					src={props.world.iconDataUrl}

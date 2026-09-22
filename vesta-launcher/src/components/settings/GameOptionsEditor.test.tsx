@@ -303,7 +303,9 @@ it("does not render catalog aliases absent from the instance file", async () => 
 	);
 	render(() => <EditorHarness instanceId={7} />);
 	await screen.findByRole("spinbutton", { name: "FOV" });
-	expect(screen.queryByRole("spinbutton", { name: "Master volume" })).toBeNull();
+	expect(
+		screen.queryByRole("spinbutton", { name: "Master volume" }),
+	).toBeNull();
 });
 
 it("shows percent options as 0-100 and rounds to two decimals", async () => {
