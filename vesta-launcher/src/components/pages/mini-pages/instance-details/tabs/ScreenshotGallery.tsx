@@ -23,7 +23,15 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
-import { createResource, createSignal, For, Show, Suspense } from "solid-js";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	Show,
+	Suspense,
+} from "solid-js";
 import styles from "./ScreenshotGallery.module.css";
 
 interface Screenshot {
@@ -35,6 +43,8 @@ interface Screenshot {
 
 interface ScreenshotGalleryProps {
 	instanceIdSlug: string;
+	/** When false, close the lightbox so a portaled dialog cannot outlive the tab. */
+	active?: boolean;
 }
 
 export function ScreenshotGallery(props: ScreenshotGalleryProps) {
@@ -44,6 +54,13 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 	);
 	const [selectedScreenshot, setSelectedScreenshot] =
 		createSignal<Screenshot | null>(null);
+
+	createEffect(() => {
+		if (props.active === false) {
+			setSelectedScreenshot(null);
+		}
+	});
+	onCleanup(() => setSelectedScreenshot(null));
 
 	const [screenshots, { mutate, refetch }] = createResource(
 		() => props.instanceIdSlug,
