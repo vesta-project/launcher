@@ -96,6 +96,11 @@ fn visible_icon(icon: Option<String>) -> Option<String> {
 }
 
 fn synced(entry: &ServerEntry) -> Result<SyncedServer, String> {
+    // Minecraft keeps recent/hidden servers in servers.dat too. They are not
+    // saved multiplayer entries and must not stand in for a visible shared one.
+    if matches!(entry.extra.get("hidden"), Some(fastnbt::Value::Byte(value)) if *value != 0) {
+        return Err("Hidden server".into());
+    }
     validate_server(&entry.name, &entry.ip)?;
     Ok(SyncedServer {
         id: server_id(&entry.ip),
@@ -263,15 +268,12 @@ fn capture(bundle: &mut ServerBundle, instance_id: i32, current: &ServerDat) {
 }
 
 fn enrich_icons(bundle: &mut ServerBundle, current: &ServerDat) {
-    for server in current
-        .servers
-        .iter()
-        .filter_map(|entry| synced(entry).ok())
-        .filter(|server| server.icon.is_some())
-    {
-        if let Some(shared) = bundle.servers.get_mut(&server.id) {
+    for entry in &current.servers {
+        // A hidden recent entry may still have a useful icon for a server
+        // already in the shared list, even though it is never imported.
+        if let Some(shared) = bundle.servers.get_mut(&server_id(&entry.ip)) {
             if shared.icon.is_none() {
-                shared.icon = server.icon;
+                shared.icon = visible_icon(entry.icon.clone());
             }
         }
     }
@@ -301,7 +303,7 @@ fn merge(
         match updated
             .servers
             .iter_mut()
-            .find(|entry| server_id(&entry.ip) == *id)
+            .find(|entry| synced(entry).is_ok_and(|server| server.id == *id))
         {
             Some(existing) if previous.contains_key(id) => {
                 existing.name = shared.name.clone();
@@ -704,12 +706,59 @@ mod tests {
     }
 
     #[test]
+    fn hidden_recent_server_does_not_mask_a_shared_server() {
+        let shared = server("Saved", "play.example.test");
+        let mut hidden = entry(&shared);
+        hidden
+            .extra
+            .insert("hidden".into(), fastnbt::Value::Byte(1));
+        let original = ServerDat {
+            servers: vec![hidden.clone()],
+        };
+        let mut bundle = ServerBundle::default();
+
+        capture(&mut bundle, 1, &original);
+        assert!(bundle.servers.is_empty());
+        bundle.servers.insert(shared.id.clone(), shared.clone());
+        let (updated, applied) = merge(&bundle, 1, &original);
+        assert_eq!(updated.servers.len(), 2);
+        assert_eq!(updated.servers[0], hidden);
+        assert_eq!(synced(&updated.servers[1]).unwrap(), shared);
+        assert_eq!(applied.len(), 1);
+
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().canonicalize().unwrap();
+        let missing = read_file(&directory).unwrap();
+        write_file(&directory, &missing, &original).unwrap();
+        let before = read_file(&directory).unwrap();
+        write_file(&directory, &before, &updated).unwrap();
+        let on_disk = read_file(&directory).unwrap();
+        assert_eq!(on_disk.document, updated);
+        assert_eq!(
+            on_disk
+                .document
+                .servers
+                .iter()
+                .filter(|entry| synced(entry).is_ok())
+                .count(),
+            1
+        );
+
+        bundle.servers.clear();
+        bundle.applied.insert(1, applied);
+        let (after_unsync, _) = merge(&bundle, 1, &updated);
+        assert_eq!(after_unsync, original);
+    }
+
+    #[test]
     fn merge_preserves_instance_owned_server_fields() {
         let before = server("Before", "play.example.test");
         let after = server("After", "play.example.test");
         let mut local = entry(&before);
         local.accept_textures = Some(1);
-        local.extra.insert("hidden".into(), fastnbt::Value::Byte(1));
+        local
+            .extra
+            .insert("customField".into(), fastnbt::Value::Byte(1));
         let bundle = ServerBundle {
             servers: BTreeMap::from([(after.id.clone(), after.clone())]),
             applied: BTreeMap::from([(1, BTreeMap::from([(before.id.clone(), before)]))]),
@@ -727,7 +776,7 @@ mod tests {
         assert_eq!(updated.servers[0].name, "After");
         assert_eq!(updated.servers[0].accept_textures, Some(1));
         assert_eq!(
-            updated.servers[0].extra.get("hidden"),
+            updated.servers[0].extra.get("customField"),
             Some(&fastnbt::Value::Byte(1))
         );
     }
