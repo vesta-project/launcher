@@ -27,7 +27,7 @@ export function SharedKeybindsPage(props: {
 	return (
 		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<SubpageBackButton label={t("common-back")} onClick={props.onBack} />
+				<SubpageBackButton label={t("generic-action-back")} onClick={props.onBack} />
 				<h2 class={styles.headingTitle}>{t("sync-keybinds-page-title")}</h2>
 			</div>
 			<div class={styles.keybindsBody}>

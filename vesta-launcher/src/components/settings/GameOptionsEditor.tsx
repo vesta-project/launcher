@@ -115,8 +115,8 @@ const protectedKeys = new Set([
 function categoryLabel(category: string) {
 	const key =
 		category === "all"
-			? "game-options-all"
-			: `game-options-category-${category}`;
+			? "generic-label-all"
+			: `generic-label-${category}`;
 	const localized = t(key);
 	return localized === key ? formatGameOptionName(category) : localized;
 }
@@ -129,7 +129,7 @@ const knownLabels: Record<string, string> = {
 	sensitivity: "game-options-mouse-sensitivity",
 	master_volume: "game-options-master-volume",
 	music_volume: "game-options-music-volume",
-	language: "game-options-language",
+	language: "generic-label-language",
 };
 
 function labelFor(row: CatalogEntry) {
@@ -149,65 +149,65 @@ function choiceValue(choice: string | { value: string }) {
 /** Minecraft stores several enums as bare integers; map them to readable labels. */
 const enumLabels: Record<string, Record<string, string>> = {
 	particles: {
-		"0": "game-options-choice-all",
-		"1": "game-options-choice-decreased",
-		"2": "game-options-choice-minimal",
+		"0": "generic-label-all",
+		"1": "generic-label-decreased",
+		"2": "generic-label-minimal",
 	},
 	attack_indicator: {
-		"0": "game-options-choice-off",
-		"1": "game-options-choice-crosshair",
-		"2": "game-options-choice-hotbar",
+		"0": "generic-label-off",
+		"1": "generic-label-crosshair",
+		"2": "generic-label-hotbar",
 	},
 	chat_visibility: {
-		"0": "game-options-choice-shown",
-		"1": "game-options-choice-commands-only",
-		"2": "game-options-choice-hidden",
+		"0": "generic-label-shown",
+		"1": "generic-label-commands-only",
+		"2": "generic-label-hidden",
 	},
 	narrator: {
-		"0": "game-options-choice-off",
-		"1": "game-options-choice-narrator-all",
-		"2": "game-options-choice-narrator-chat",
-		"3": "game-options-choice-narrator-system",
+		"0": "generic-label-off",
+		"1": "generic-label-narrator-all",
+		"2": "generic-label-narrator-chat",
+		"3": "generic-label-narrator-system",
 	},
 	difficulty: {
-		"0": "game-options-choice-peaceful",
-		"1": "game-options-choice-easy",
-		"2": "game-options-choice-normal",
-		"3": "game-options-choice-hard",
+		"0": "generic-label-peaceful",
+		"1": "generic-label-easy",
+		"2": "generic-label-normal",
+		"3": "generic-label-hard",
 	},
 	ambient_occlusion: {
-		false: "game-options-choice-off",
-		true: "game-options-choice-maximum",
-		"0": "game-options-choice-off",
-		"1": "game-options-choice-minimal",
-		"2": "game-options-choice-maximum",
+		false: "generic-label-off",
+		true: "generic-label-maximum",
+		"0": "generic-label-off",
+		"1": "generic-label-minimal",
+		"2": "generic-label-maximum",
 	},
 	clouds: {
-		false: "game-options-choice-off",
-		fast: "game-options-choice-fast",
-		true: "game-options-choice-fancy",
+		false: "generic-label-off",
+		fast: "generic-label-fast",
+		true: "generic-label-fancy",
 	},
 	prioritize_chunk_updates: {
-		"0": "game-options-choice-threaded",
-		"1": "game-options-choice-semi-blocking",
-		"2": "game-options-choice-fully-blocking",
+		"0": "generic-label-threaded",
+		"1": "generic-label-semi-blocking",
+		"2": "generic-label-fully-blocking",
 	},
 	texture_filtering: {
-		"0": "game-options-choice-none",
-		"1": "game-options-choice-rgss",
-		"2": "game-options-choice-anisotropic",
+		"0": "generic-label-none",
+		"1": "generic-label-rgss",
+		"2": "generic-label-anisotropic",
 	},
 	anisotropy: {
-		"1": "game-options-choice-2x",
-		"2": "game-options-choice-4x",
-		"3": "game-options-choice-8x",
+		"1": "generic-label-2x",
+		"2": "generic-label-4x",
+		"3": "generic-label-8x",
 	},
 	gl_debug_verbosity: {
-		"0": "game-options-choice-none",
-		"1": "game-options-choice-high",
-		"2": "game-options-choice-medium",
-		"3": "game-options-choice-low",
-		"4": "game-options-choice-notification",
+		"0": "generic-label-none",
+		"1": "generic-label-high",
+		"2": "generic-label-medium",
+		"3": "generic-label-low",
+		"4": "generic-label-notification",
 	},
 };
 
@@ -731,8 +731,8 @@ export function GameOptionsEditor(props: {
 					label={t("game-options-title")}
 					title={t("game-options-title")}
 					onBack={props.onBack}
-					backLabel={t("game-options-back")}
-					searchLabel={t("game-options-search")}
+					backLabel={t("generic-action-back")}
+					searchLabel={t("generic-action-search-options")}
 					categoriesLabel={t("game-options-category")}
 					query={query()}
 					onQuery={setQuery}
@@ -751,7 +751,7 @@ export function GameOptionsEditor(props: {
 							onClick={() => void reload()}
 						>
 							<ReloadIcon class={styles.icon} />
-							{t("game-options-reload")}
+							{t("generic-action-reload")}
 						</Button>
 					}
 				>

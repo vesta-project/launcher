@@ -189,7 +189,7 @@ it("retains custom edits when saving fails and requires discard before reload", 
 	expect(
 		(
 			screen.getByRole("button", {
-				name: "game-options-reload",
+				name: "generic-action-reload",
 			}) as HTMLButtonElement
 		).disabled,
 	).toBe(true);
@@ -213,7 +213,7 @@ it("shows an initial-load failure and leaves reload available", async () => {
 	expect(
 		(
 			screen.getByRole("button", {
-				name: "game-options-reload",
+				name: "generic-action-reload",
 			}) as HTMLButtonElement
 		).disabled,
 	).toBe(false);

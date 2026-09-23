@@ -69,8 +69,9 @@ function labelForOption(option: OptionRow): string {
 }
 
 function labelForScope(scope: string): string {
-	const localized = t(`sync-scope-${scope}`);
-	return localized === `sync-scope-${scope}`
+	const key = scope === "all" ? "sync-scope-all" : `generic-label-${scope}`;
+	const localized = t(key);
+	return localized === key
 		? formatGameOptionName(scope)
 		: localized;
 }
@@ -117,7 +118,7 @@ function choiceLabel(choice: string | GameOptionChoice, id?: string): string {
 	if (typeof choice === "string") {
 		const label = id && enumLabels[id]?.[choice];
 		return label
-			? t(`sync-choice-${label}`)
+			? t(`generic-label-${label}`)
 			: /^\d+$/.test(choice)
 				? choice
 				: formatGameOptionName(choice.toLowerCase());
@@ -453,12 +454,12 @@ export function SharedOptionsPage(props: {
 	return (
 		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<SubpageBackButton label={t("common-back")} onClick={props.onBack} />
+				<SubpageBackButton label={t("generic-action-back")} onClick={props.onBack} />
 				<h2 class={styles.headingTitle}>{t("sync-shared-page-title")}</h2>
 			</div>
 			<div class={styles.sharedLayout}>
 				<aside class={styles.sharedSidebar}>
-					<nav class={styles.scopeTabs} aria-label={t("sync-search-options")}>
+					<nav class={styles.scopeTabs} aria-label={t("generic-action-search-options")}>
 						<For each={scopes()}>
 							{(entry) => {
 								const Icon = scopeIcons[entry] ?? CodeIcon;
@@ -488,8 +489,8 @@ export function SharedOptionsPage(props: {
 									class={styles.searchInput}
 									type="search"
 									value={query()}
-									aria-label={t("sync-search-options")}
-									placeholder={t("sync-search-options")}
+									aria-label={t("generic-action-search-options")}
+									placeholder={t("generic-action-search-options")}
 									onInput={(event) =>
 										setQuery((event.currentTarget as HTMLInputElement).value)
 									}

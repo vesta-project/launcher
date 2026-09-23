@@ -142,7 +142,7 @@ function DetailHeading(props: {
 }) {
 	return (
 		<div class={styles.heading}>
-			<SubpageBackButton label={t("common-back")} onClick={props.onBack} />
+			<SubpageBackButton label={t("generic-action-back")} onClick={props.onBack} />
 			<h2 class={styles.headingTitle}>{props.title}</h2>
 			<Toggle
 				label={props.title}
@@ -299,7 +299,7 @@ export function SyncSettingsTab() {
 							}}
 						>
 							<ReloadIcon class={styles.icon} />
-							{t("sync-reload")}
+							{t("generic-action-reload")}
 						</Button>
 					</div>
 				</Show>
@@ -405,7 +405,7 @@ export function SyncSettingsTab() {
 																	class={styles.icon}
 																	aria-hidden="true"
 																/>
-																{t("common-add")}
+																{t("generic-action-add")}
 															</Button>
 														}
 													>
@@ -487,7 +487,7 @@ export function SyncSettingsTab() {
 																	}
 																	onClick={() => setSharedPage(true)}
 																>
-																	{t("common-edit")}
+																	{t("generic-action-edit")}
 																</Button>
 															</Show>
 															<Button
@@ -669,11 +669,11 @@ export function SyncSettingsTab() {
 						}}
 					>
 						<TextFieldRoot value={serverName()} onChange={setServerName}>
-							<TextFieldLabel>{t("common-name")}</TextFieldLabel>
+							<TextFieldLabel>{t("generic-label-name")}</TextFieldLabel>
 							<TextFieldInput autofocus />
 						</TextFieldRoot>
 						<TextFieldRoot value={serverAddress()} onChange={setServerAddress}>
-							<TextFieldLabel>{t("common-address")}</TextFieldLabel>
+							<TextFieldLabel>{t("generic-label-address")}</TextFieldLabel>
 							<TextFieldInput />
 						</TextFieldRoot>
 						<DialogFooter>
@@ -683,7 +683,7 @@ export function SyncSettingsTab() {
 								disabled={busy()}
 								onClick={() => setServerDialogOpen(false)}
 							>
-								{t("common-cancel")}
+								{t("generic-action-cancel")}
 							</Button>
 							<Button
 								type="submit"
@@ -692,7 +692,7 @@ export function SyncSettingsTab() {
 									busy() || !serverName().trim() || !serverAddress().trim()
 								}
 							>
-								{t("common-add")}
+								{t("generic-action-add")}
 							</Button>
 						</DialogFooter>
 					</form>
