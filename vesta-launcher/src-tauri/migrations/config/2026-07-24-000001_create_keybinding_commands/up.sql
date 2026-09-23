@@ -1,4 +1,4 @@
-CREATE TABLE keybinding_commands (
+CREATE TABLE IF NOT EXISTS keybinding_commands (
     command_id TEXT PRIMARY KEY NOT NULL,
     handler_id TEXT NOT NULL,
     label TEXT NOT NULL,
@@ -11,6 +11,6 @@ CREATE TABLE keybinding_commands (
     sort_order INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE UNIQUE INDEX keybinding_commands_current_chord_unique
+CREATE UNIQUE INDEX IF NOT EXISTS keybinding_commands_current_chord_unique
 ON keybinding_commands (current_chord)
 WHERE current_chord IS NOT NULL;

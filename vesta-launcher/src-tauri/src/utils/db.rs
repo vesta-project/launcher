@@ -252,3 +252,30 @@ pub fn get_config_pool() -> Result<DbPool, anyhow::Error> {
         .clone()
         .ok_or_else(|| anyhow::anyhow!("Config database pool not initialized"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel::migration::MigrationSource;
+    use std::collections::HashSet;
+
+    #[test]
+    fn embedded_migration_versions_are_unique() {
+        for (database, source) in [
+            ("config", &CONFIG_MIGRATIONS),
+            ("vesta", &VESTA_MIGRATIONS),
+        ] {
+            let migrations =
+                <EmbeddedMigrations as MigrationSource<diesel::sqlite::Sqlite>>::migrations(source)
+                    .unwrap();
+            let mut versions = HashSet::new();
+            for migration in migrations {
+                let version = migration.name().version().to_string();
+                assert!(
+                    versions.insert(version.clone()),
+                    "Duplicate {database} migration version: {version}"
+                );
+            }
+        }
+    }
+}
