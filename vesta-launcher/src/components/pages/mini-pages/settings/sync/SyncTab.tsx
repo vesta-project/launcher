@@ -72,6 +72,12 @@ const categoryIcons: Record<Category, Component<{ class?: string }>> = {
 
 const filledMarks = new Set<Category>(["gameOptions"]);
 const unavailableCategories = new Set<Category>(["resourcePacks"]);
+const categoryTitleIds: Record<Category, string> = {
+	gameOptions: "generic-label-game-options",
+	keybinds: "generic-label-keybinds",
+	servers: "generic-label-servers",
+	resourcePacks: "generic-label-resource-packs",
+};
 
 function InstanceMark(props: { instance: Instance }) {
 	const iconPath = () => props.instance.iconPath || DEFAULT_ICONS[0];
@@ -170,7 +176,7 @@ export function SyncSettingsTab() {
 	const [serverDialogOpen, setServerDialogOpen] = createSignal(false);
 	const [serverName, setServerName] = createSignal("");
 	const [serverAddress, setServerAddress] = createSignal("");
-	const title = (category: Category) => t(`sync-${category}-title`);
+	const title = (category: Category) => t(categoryTitleIds[category]);
 	const availableCategory = (category: Category) =>
 		!unavailableCategories.has(category);
 	const snapshot = (category: Category) =>

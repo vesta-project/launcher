@@ -28,14 +28,9 @@ settings-language-label = Launcher language
 settings-language-description = Choose the language used by Vesta. System default follows your operating system when a matching translation is available.
 
 # Shared settings sync.
-sync-link-all-options = Share every option
-sync-unlink-all-options = Keep every option local
 sync-bundle-title = Shared options
 sync-edit = Edit { $category }
 sync-enable-to-edit = Enable this category to edit shared values.
-sync-keybinds-title = Keybinds
-sync-servers-title = Servers
-sync-resourcePacks-title = Resource packs
 sync-instance-label = Sync with { $name }
 sync-instances = Instances
 sync-instances-hint = Instances that follow receive the shared values. Unsync to leave them as they are.
@@ -74,8 +69,6 @@ game-options-key-unbound = Unbound
 game-options-key-unsupported = This key is not supported. Try another key or press Escape to cancel.
 game-options-key-cancelled = Recording cancelled.
 game-options-key-cleared = Keybinding cleared.
-
-game-options-title = Game options
 game-options-description = Edit this instance’s game settings. Close the game before saving.
 game-options-discard = Discard edits
 game-options-save = Save game options

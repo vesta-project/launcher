@@ -728,8 +728,8 @@ export function GameOptionsEditor(props: {
 					</p>
 				</Show>
 				<OptionBrowser
-					label={t("game-options-title")}
-					title={t("game-options-title")}
+					label={t("generic-label-game-options")}
+					title={t("generic-label-game-options")}
 					onBack={props.onBack}
 					backLabel={t("generic-action-back")}
 					searchLabel={t("generic-action-search-options")}

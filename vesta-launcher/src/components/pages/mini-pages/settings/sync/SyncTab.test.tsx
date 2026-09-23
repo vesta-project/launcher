@@ -187,7 +187,7 @@ afterEach(() => {
 it("does not enable a category when source selection is cancelled", async () => {
 	render(() => <SyncSettingsTab />);
 	const toggle = await screen.findByRole("switch", {
-		name: "game-options-title",
+		name: "generic-label-game-options",
 	});
 	fireEvent.click(toggle);
 	const dialog = await screen.findByRole("dialog");
@@ -199,11 +199,13 @@ it("does not enable a category when source selection is cancelled", async () => 
 it("keeps resource-pack sync unavailable", async () => {
 	render(() => <SyncSettingsTab />);
 	const resourcePacks = await screen.findByRole("switch", {
-		name: "sync-resourcePacks-title",
+		name: "generic-label-resource-packs",
 	});
 	expect(resourcePacks).toHaveProperty("disabled", true);
 	expect(
-		screen.getByRole("button", { name: "sync-edit sync-resourcePacks-title" }),
+		screen.getByRole("button", {
+			name: "sync-edit generic-label-resource-packs",
+		}),
 	).toHaveProperty("disabled", true);
 	fireEvent.click(resourcePacks);
 	expect(state[3].preferences.enabled).toBe(false);
@@ -212,12 +214,12 @@ it("keeps resource-pack sync unavailable", async () => {
 it("enables server sync without an owner and manages the shared list", async () => {
 	render(() => <SyncSettingsTab />);
 	fireEvent.click(
-		await screen.findByRole("switch", { name: "sync-servers-title" }),
+		await screen.findByRole("switch", { name: "generic-label-servers" }),
 	);
 	await waitFor(() => expect(state[2].preferences.enabled).toBe(true));
 	expect(screen.queryByRole("dialog")).toBeNull();
 	fireEvent.click(
-		screen.getByRole("button", { name: "sync-edit sync-servers-title" }),
+		screen.getByRole("button", { name: "sync-edit generic-label-servers" }),
 	);
 	expect(screen.getByText("sync-server-empty")).toBeTruthy();
 	fireEvent.click(
@@ -244,7 +246,7 @@ it("re-enables an initialized bundle without asking for its former source", asyn
 	state[0] = { ...state[0], initialized: true };
 	render(() => <SyncSettingsTab />);
 	fireEvent.click(
-		await screen.findByRole("switch", { name: "game-options-title" }),
+		await screen.findByRole("switch", { name: "generic-label-game-options" }),
 	);
 	await waitFor(() => expect(state[0].preferences.enabled).toBe(true));
 	expect(state[0].preferences.sourceInstanceId).toBeNull();
@@ -254,7 +256,7 @@ it("re-enables an initialized bundle without asking for its former source", asyn
 async function openSharedOptions() {
 	fireEvent.click(
 		await screen.findByRole("button", {
-			name: "sync-edit game-options-title",
+			name: "sync-edit generic-label-game-options",
 		}),
 	);
 	fireEvent.click(screen.getByRole("button", { name: "generic-action-edit" }));
@@ -264,7 +266,7 @@ it("keeps shared editing on its own page and unavailable while sync is off", asy
 	render(() => <SyncSettingsTab />);
 	fireEvent.click(
 		await screen.findByRole("button", {
-			name: "sync-edit game-options-title",
+			name: "sync-edit generic-label-game-options",
 		}),
 	);
 	expect(
@@ -348,7 +350,7 @@ it("freezes instance membership while sync is paused", async () => {
 	render(() => <SyncSettingsTab />);
 	fireEvent.click(
 		await screen.findByRole("button", {
-			name: "sync-edit game-options-title",
+			name: "sync-edit generic-label-game-options",
 		}),
 	);
 	const all = screen.getByRole("button", { name: "sync-link-all-instances" });
@@ -363,7 +365,7 @@ it("freezes instance membership while sync is paused", async () => {
 it("seeds defaults once, then tracks membership without showing a source", async () => {
 	render(() => <SyncSettingsTab />);
 	fireEvent.click(
-		await screen.findByRole("switch", { name: "game-options-title" }),
+		await screen.findByRole("switch", { name: "generic-label-game-options" }),
 	);
 	fireEvent.click(await screen.findByRole("button", { name: /Source/ }));
 	await waitFor(() =>
@@ -375,7 +377,9 @@ it("seeds defaults once, then tracks membership without showing a source", async
 	);
 	await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 	fireEvent.click(
-		screen.getByRole("button", { name: "sync-edit game-options-title" }),
+		screen.getByRole("button", {
+			name: "sync-edit generic-label-game-options",
+		}),
 	);
 	expect(screen.getByRole("button", { name: "generic-action-back" })).toBeTruthy();
 	expect(screen.queryByText("sync-source-badge")).toBeNull();
@@ -396,7 +400,7 @@ it("seeds defaults once, then tracks membership without showing a source", async
 	render(() => <SyncSettingsTab />);
 	expect(
 		(
-			await screen.findByRole("switch", { name: "game-options-title" })
+			await screen.findByRole("switch", { name: "generic-label-game-options" })
 		).getAttribute("aria-checked"),
 	).toBe("true");
 });
@@ -405,14 +409,14 @@ it("keybinds asks for an owner and uses the shared recorder", async () => {
 	state[1].sharedValues = { "key_key.forward": "key.keyboard.w" };
 	render(() => <SyncSettingsTab />);
 	fireEvent.click(
-		await screen.findByRole("switch", { name: "sync-keybinds-title" }),
+		await screen.findByRole("switch", { name: "generic-label-keybinds" }),
 	);
 	expect(await screen.findByRole("dialog")).toBeTruthy();
 	fireEvent.click(screen.getByText("Source"));
 	await waitFor(() => expect(state[1].preferences.sourceInstanceId).toBe(1));
 	await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 	fireEvent.click(
-		screen.getByRole("button", { name: "sync-edit sync-keybinds-title" }),
+		screen.getByRole("button", { name: "sync-edit generic-label-keybinds" }),
 	);
 	fireEvent.click(screen.getByRole("button", { name: "generic-action-edit" }));
 	fireEvent.click(

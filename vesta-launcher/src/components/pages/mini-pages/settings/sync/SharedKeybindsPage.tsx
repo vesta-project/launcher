@@ -9,6 +9,46 @@ import {
 import { formatGameOptionName } from "~/utils/game-option-label";
 import styles from "./sync-tab.module.css";
 
+function keybindingGroup(key: string): string {
+	const name = key
+		.replace(/^key_key\./, "")
+		.replace(/^key_/, "")
+		.toLowerCase();
+	if (
+		["forward", "back", "left", "right", "jump", "sneak", "sprint"].includes(
+			name,
+		)
+	)
+		return "movement";
+	if (["attack", "use", "pickitem"].includes(name)) return "gameplay";
+	if (
+		[
+			"inventory",
+			"drop",
+			"swapoffhand",
+			"loadtoolbaractivator",
+			"savetoolbaractivator",
+		].includes(name) ||
+		/^hotbar\.\d+$/.test(name)
+	)
+		return "inventory";
+	if (["chat", "command", "playerlist", "socialinteractions"].includes(name))
+		return "multiplayer";
+	if (
+		[
+			"advancements",
+			"screenshot",
+			"toggleperspective",
+			"smoothcamera",
+			"fullscreen",
+			"spectatoroutlines",
+			"zoom",
+		].includes(name)
+	)
+		return "miscellaneous";
+	return "other";
+}
+
 export function SharedKeybindsPage(props: {
 	snapshot: Snapshot;
 	busy: boolean;
@@ -27,14 +67,22 @@ export function SharedKeybindsPage(props: {
 	return (
 		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<SubpageBackButton label={t("generic-action-back")} onClick={props.onBack} />
+				<SubpageBackButton
+					label={t("generic-action-back")}
+					onClick={props.onBack}
+				/>
 				<h2 class={styles.headingTitle}>{t("sync-keybinds-page-title")}</h2>
 			</div>
 			<div class={styles.keybindsBody}>
 				<GameKeybindings
 					embedded
 					state={{
-						rows: () => keys().map((key) => ({ key, category: "keybinds" })),
+						rows: () =>
+							keys().map((key) => ({
+								key,
+								category: "keybinds",
+								group: keybindingGroup(key),
+							})),
 						value: (key) => props.snapshot.sharedValues?.[key] ?? "",
 						label: (row) => formatGameOptionName(row.key),
 						busy: disabled,

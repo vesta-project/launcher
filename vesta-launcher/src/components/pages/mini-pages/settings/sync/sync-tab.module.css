@@ -270,7 +270,7 @@
 }
 .sharedPage .heading {
 	margin: 0;
-	padding: 16px 24px 12px;
+	padding: 20px 24px 12px;
 	box-sizing: border-box;
 }
 .sharedLayout {
@@ -405,23 +405,11 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: 0 24px 16px;
+	padding-bottom: 16px;
+	border-top: 1px solid var(--border-subtle);
 	box-sizing: border-box;
 }
 
-.keybindsBody :global(.settings-card) {
-	padding: 0;
-	border: 0;
-	background: transparent;
-}
-
-.keybindsBody :global(.settings-card-header) {
-	margin: 0 0 8px;
-}
-
-.keybindsBody :global(.settings-card-content) {
-	padding: 0;
-}
 @media (max-width: 880px) and (min-width: 601px) {
 	.sharedLayout {
 		grid-template-columns: 56px minmax(0, 1fr);

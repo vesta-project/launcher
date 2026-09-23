@@ -8,6 +8,7 @@ import styles from "../pages/mini-pages/settings/keyboard/keyboard-tab.module.cs
 export interface GameKeybindingRow {
 	key: string;
 	category: string;
+	group?: string;
 }
 
 export interface GameKeybindingsState<Row extends GameKeybindingRow> {
@@ -78,6 +79,31 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 			.filter(
 				(row) => row.category === "keybindings" || row.category === "keybinds",
 			);
+	const groupedBindings = () => {
+		const groups = new Map<string, Row[]>();
+		for (const row of bindings()) {
+			const group = row.group ?? "";
+			groups.set(group, [...(groups.get(group) ?? []), row]);
+		}
+		const order = [
+			"movement",
+			"gameplay",
+			"inventory",
+			"multiplayer",
+			"miscellaneous",
+			"other",
+		];
+		return [...groups.entries()]
+			.sort(([left], [right]) => {
+				const leftIndex = order.indexOf(left);
+				const rightIndex = order.indexOf(right);
+				if (leftIndex < 0 && rightIndex < 0) return left.localeCompare(right);
+				if (leftIndex < 0) return 1;
+				if (rightIndex < 0) return -1;
+				return leftIndex - rightIndex;
+			})
+			.map(([group, rows]) => ({ group, rows }));
+	};
 	const supported = (key: string) => {
 		const value = props.state.value(key);
 		return (
@@ -160,143 +186,135 @@ export function GameKeybindings<Row extends GameKeybindingRow>(props: {
 
 	const toggleLabel = () =>
 		props.allSelected?.()
-			? t("sync-unlink-all-options")
-			: t("sync-link-all-options");
+			? t("sync-unlink-all-instances")
+			: t("sync-link-all-instances");
+	const headerRight = () => (
+		<div class={styles.recordingHelp} aria-label={t("sync-keybinds-help")}>
+			<Show when={props.onToggleAll}>
+				<LauncherButton
+					variant="outline"
+					size="sm"
+					aria-label={toggleLabel()}
+					disabled={props.state.busy()}
+					onClick={props.onToggleAll}
+				>
+					<LinkIcon class={styles.icon} aria-hidden="true" />
+					{toggleLabel()}
+				</LauncherButton>
+			</Show>
+			<Show when={recording()}>
+				<span>{t("sync-keybinds-recording-help")}</span>
+				<span class={styles.helpAction}>
+					<kbd>Esc</kbd>
+					{t("generic-action-cancel")}
+				</span>
+			</Show>
+		</div>
+	);
 
 	return (
-		<SettingsCard
-			header={props.embedded ? undefined : t("sync-keybinds-page-title")}
-			headerRight={
-				<div class={styles.recordingHelp} aria-label={t("sync-keybinds-help")}>
-					<Show when={props.onToggleAll}>
-						<LauncherButton
-							variant="ghost"
-							size="icon"
-							icon_only
-							aria-label={toggleLabel()}
-							tooltip_text={toggleLabel()}
-							disabled={props.state.busy()}
-							onClick={props.onToggleAll}
-						>
-							<LinkIcon aria-hidden="true" />
-						</LauncherButton>
-					</Show>
-					<Show when={recording()}>
-						<span>{t("sync-keybinds-recording-help")}</span>
-						<span class={styles.helpAction}>
-							<kbd>Esc</kbd>
-							{t("generic-action-cancel")}
-						</span>
-						<span class={styles.helpAction}>
-							<kbd>⌫</kbd>
-							{t("sync-keybinds-clear")}
-						</span>
-					</Show>
-				</div>
-			}
-		>
-			<div class={styles.commands}>
-				<For each={bindings()}>
-					{(row) => {
-						const isRecording = () => recording() === row.key;
-						const name = () => props.state.label(row);
-						const isSelected = () => props.selected?.(row.key) ?? true;
-						return (
-							<div
-								class={styles.command}
-								classList={{ [styles.recording]: isRecording() }}
-							>
-								<SettingsField
-									label={name()}
-									description={
-										supported(row.key)
-											? undefined
-											: t("game-options-key-legacy")
-									}
-									headerRight={
-										<div class={styles.controls}>
-											<button
-												type="button"
-												class={styles.capture}
-												disabled={
-													props.state.busy() ||
-													!supported(row.key) ||
-													(props.selected !== undefined && !isSelected())
+		<>
+			<For each={groupedBindings()}>
+				{(group, groupIndex) => (
+					<SettingsCard
+						header={
+							group.group
+								? t(`generic-label-${group.group}`)
+								: props.embedded
+									? undefined
+									: t("sync-keybinds-page-title")
+						}
+						headerRight={groupIndex() === 0 ? headerRight() : undefined}
+					>
+						<div class={styles.commands}>
+							<For each={group.rows}>
+								{(row) => {
+									const isRecording = () => recording() === row.key;
+									const name = () => props.state.label(row);
+									const isSelected = () => props.selected?.(row.key) ?? true;
+									return (
+										<div
+											class={styles.command}
+											classList={{ [styles.recording]: isRecording() }}
+										>
+											<SettingsField
+												label={name()}
+												description={
+													supported(row.key)
+														? undefined
+														: t("game-options-key-legacy")
 												}
-												aria-label={t("game-options-key-change", {
-													key: name(),
-												})}
-												aria-pressed={isRecording()}
-												onClick={() => {
-													const next = isRecording() ? undefined : row.key;
-													setRecording(next);
-													setStatus(
-														next
-															? t("game-options-key-recording")
-															: t("game-options-key-cancelled"),
-													);
-												}}
-											>
-												<Show
-													when={!isRecording()}
-													fallback={
-														<span>{t("game-options-key-recording")}</span>
-													}
-												>
-													<kbd>{display(row.key)}</kbd>
-												</Show>
-											</button>
-											<LauncherButton
-												variant="ghost"
-												size="sm"
-												disabled={
-													props.state.busy() ||
-													!supported(row.key) ||
-													(props.selected !== undefined && !isSelected())
+												headerRight={
+													<div class={styles.controls}>
+														<button
+															type="button"
+															class={styles.capture}
+															disabled={
+																props.state.busy() ||
+																!supported(row.key) ||
+																(props.selected !== undefined && !isSelected())
+															}
+															aria-label={t("game-options-key-change", {
+																key: name(),
+															})}
+															aria-pressed={isRecording()}
+															onClick={() => {
+																const next = isRecording()
+																	? undefined
+																	: row.key;
+																setRecording(next);
+																setStatus(
+																	next
+																		? t("game-options-key-recording")
+																		: t("game-options-key-cancelled"),
+																);
+															}}
+														>
+															<Show
+																when={!isRecording()}
+																fallback={
+																	<span>{t("game-options-key-recording")}</span>
+																}
+															>
+																<kbd>{display(row.key)}</kbd>
+															</Show>
+														</button>
+														<Show when={props.onSelectionChange}>
+															<button
+																type="button"
+																class={styles.selection}
+																aria-label={t("sync-option-label", {
+																	option: name(),
+																})}
+																aria-pressed={isSelected()}
+																disabled={props.state.busy()}
+																onClick={() =>
+																	props.onSelectionChange?.(
+																		row.key,
+																		!isSelected(),
+																	)
+																}
+															>
+																<LinkIcon aria-hidden="true" />
+															</button>
+														</Show>
+													</div>
 												}
-												aria-label={t("game-options-key-clear", {
-													key: name(),
-												})}
-												onClick={() => {
-													void props.state.change(
-														row.key,
-														"key.keyboard.unknown",
-													);
-													setRecording(undefined);
-												}}
-											>
-												{t("game-options-key-clear")}
-											</LauncherButton>
-											<Show when={props.onSelectionChange}>
-												<button
-													type="button"
-													class={styles.selection}
-													aria-label={t("sync-option-label", {
-														option: name(),
-													})}
-													aria-pressed={isSelected()}
-													disabled={props.state.busy()}
-													onClick={() =>
-														props.onSelectionChange?.(row.key, !isSelected())
-													}
-												>
-													<LinkIcon aria-hidden="true" />
-												</button>
-											</Show>
+											/>
 										</div>
-									}
-								/>
-							</div>
-						);
-					}}
-				</For>
-			</div>
+									);
+								}}
+							</For>
+						</div>
+					</SettingsCard>
+				)}
+			</For>
 			<Show when={!bindings().length}>
-				<p>{t("game-options-key-empty")}</p>
+				<p class={styles.loading}>{t("game-options-key-empty")}</p>
 			</Show>
 			<p class={styles.srStatus} aria-live="polite" aria-atomic="true">
 				{status()}
 			</p>
-		</SettingsCard>
+		</>
 	);
 }
