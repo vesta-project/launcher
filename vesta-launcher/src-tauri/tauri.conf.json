@@ -61,10 +61,10 @@
 			"icons/icon.icns",
 			"icons/icon.ico"
 		],
-		"resources": [
-			"../resources/exit-handler/exit-handler.jar",
-			"icons/icon.png"
-		],
+		"resources": {
+			"../resources/exit-handler/exit-handler.jar": "exit-handler.jar",
+			"icons/icon.png": "icons/icon.png"
+		},
 		"fileAssociations": [
 			{
 				"ext": [

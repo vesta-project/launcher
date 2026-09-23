@@ -82,6 +82,22 @@ fn validate_windows_sandbox_launch_graph(
     Ok(())
 }
 
+// The exit supervisor must survive Vesta closing and persist the game's status.
+// Launching without it makes normal exits indistinguishable from early crashes.
+fn resolve_exit_handler(
+    resource_dir: Option<&Path>,
+    development_jar: Option<&Path>,
+) -> Result<PathBuf, String> {
+    resource_dir
+        .map(|dir| dir.join("exit-handler.jar"))
+        .filter(|path| path.is_file())
+        .or_else(|| development_jar.filter(|path| path.is_file()).map(Path::to_path_buf))
+        .ok_or_else(|| {
+            "Vesta's required exit-handler.jar is missing. Reinstall Vesta Launcher before launching an instance."
+                .to_string()
+        })
+}
+
 pub(crate) async fn prepare_instance_launch(
     app_handle: &tauri::AppHandle,
     instance_data: &Instance,
@@ -288,22 +304,16 @@ pub(crate) async fn prepare_instance_launch(
         }
     }
 
-    let exit_handler_jar = app_handle
-        .path()
-        .resource_dir()
-        .ok()
-        .map(|dir| dir.join("exit-handler.jar"))
-        .filter(|p| p.exists())
-        .or_else(|| {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .map(|p| {
-                    p.join("resources")
-                        .join("exit-handler")
-                        .join("exit-handler.jar")
-                })
-                .filter(|p| p.exists())
-        });
+    let resource_dir = app_handle.path().resource_dir().ok();
+    // A source checkout may supply the JAR during development, but must never
+    // conceal a missing resource in a packaged release.
+    let development_jar = cfg!(debug_assertions).then(|| {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../resources/exit-handler/exit-handler.jar")
+    });
+    let exit_handler_jar = Some(resolve_exit_handler(
+        resource_dir.as_deref(),
+        development_jar.as_deref(),
+    )?);
 
     let log_file = spec_data_dir
         .join("logs")
@@ -841,7 +851,58 @@ fn restore_installed_status(app_handle: &tauri::AppHandle, inst: &Instance) {
 mod tests {
     #[cfg(target_os = "windows")]
     use super::validate_windows_sandbox_launch_graph;
-    use super::{game_proxy_jvm_args, parse_user_jvm_args};
+    use super::{game_proxy_jvm_args, parse_user_jvm_args, resolve_exit_handler};
+
+    #[test]
+    fn exit_handler_packaging_matches_runtime_lookup_without_source_checkout() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../../tauri.conf.json")).unwrap();
+        let resources = config["bundle"]["resources"].as_object().unwrap();
+        let target = resources["../resources/exit-handler/exit-handler.jar"]
+            .as_str()
+            .unwrap();
+        let bundle = tempfile::tempdir().unwrap();
+        let bundled_jar = bundle.path().join(target);
+        std::fs::create_dir_all(bundled_jar.parent().unwrap()).unwrap();
+        std::fs::copy(
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../resources/exit-handler/exit-handler.jar"
+            ),
+            &bundled_jar,
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_exit_handler(Some(bundle.path()), None).unwrap(),
+            bundled_jar
+        );
+    }
+
+    #[test]
+    fn exit_handler_allows_development_fallback_but_prefers_bundle() {
+        let root = tempfile::tempdir().unwrap();
+        let development_jar = root.path().join("development.jar");
+        std::fs::write(&development_jar, b"development").unwrap();
+        assert_eq!(
+            resolve_exit_handler(Some(root.path()), Some(&development_jar)).unwrap(),
+            development_jar
+        );
+        let bundled_jar = root.path().join("exit-handler.jar");
+        std::fs::write(&bundled_jar, b"bundle").unwrap();
+        assert_eq!(
+            resolve_exit_handler(Some(root.path()), Some(&development_jar)).unwrap(),
+            bundled_jar
+        );
+    }
+
+    #[test]
+    fn exit_handler_rejects_missing_resource_and_directory() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(resolve_exit_handler(Some(root.path()), None).is_err());
+        assert!(resolve_exit_handler(None, None).is_err());
+        std::fs::create_dir(root.path().join("exit-handler.jar")).unwrap();
+        assert!(resolve_exit_handler(Some(root.path()), None).is_err());
+    }
 
     #[test]
     fn game_proxy_args_are_disabled_by_default() {
