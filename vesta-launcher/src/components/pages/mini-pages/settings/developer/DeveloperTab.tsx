@@ -107,6 +107,20 @@ export function DeveloperSettingsTab() {
 		});
 	};
 
+	const showGlobeNotificationPreview = async () => {
+		await createNotification({
+			client_key: "developer_notification_preview_globe",
+			title: "Globe Icon Preview",
+			description: "This notification uses the news source globe icon.",
+			severity: "info",
+			notification_type: "patient",
+			dismissible: true,
+			metadata: {
+				context: { kind: "channel", label: "News", source: "news" },
+			},
+		});
+	};
+
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
@@ -274,6 +288,17 @@ export function DeveloperSettingsTab() {
 								onClick={() => void showNotificationPreview("error")}
 							>
 								Test Error
+							</LauncherButton>
+						}
+					/>
+					<SettingsField
+						label="Globe icon"
+						description="Create a saved notification to preview the outlined news globe icon"
+						headerRight={
+							<LauncherButton
+								onClick={() => void showGlobeNotificationPreview()}
+							>
+								Test Globe
 							</LauncherButton>
 						}
 					/>

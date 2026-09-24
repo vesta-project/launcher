@@ -82,6 +82,7 @@
 }
 
 .gridItem .preview {
+	position: relative;
 	aspect-ratio: 16 / 9;
 	background: var(--surface-sunken);
 }
@@ -90,6 +91,52 @@
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
+}
+
+.copyButton {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid hsl(0deg 0% 100% / 24%);
+	border-radius: 7px;
+	background: hsl(0deg 0% 8% / 78%);
+	color: white;
+	opacity: 0;
+	cursor: pointer;
+	transition:
+		opacity 120ms ease,
+		background-color 120ms ease;
+}
+
+.copyButton svg {
+	width: 16px;
+	height: 16px;
+}
+
+.gridItem:hover .copyButton,
+.gridItem:focus-within .copyButton {
+	opacity: 1;
+}
+
+.copyButton:hover {
+	background: hsl(0deg 0% 0% / 92%);
+}
+
+.copyButton:focus-visible {
+	opacity: 1;
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
+}
+
+@media (hover: none) {
+	.copyButton {
+		opacity: 1;
+	}
 }
 
 .gridItem .details {

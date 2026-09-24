@@ -57,6 +57,11 @@
 	fill: var(--primary-accent);
 }
 
+.lineIcon {
+	fill: none;
+	stroke: var(--primary-accent);
+}
+
 .subjectImage {
 	width: 100%;
 	height: 100%;
@@ -200,13 +205,13 @@
 
 .descriptionRegion {
 	position: relative;
-	line-height: 1.4;
+	line-height: 1.25;
 }
 
 .description {
 	font-size: 11px;
 	color: var(--text-secondary);
-	line-height: 1.4;
+	line-height: 1.25;
 	margin: 0;
 	user-select: text;
 	cursor: text;
@@ -232,7 +237,7 @@
 	color: var(--text-secondary);
 	font: inherit;
 	font-size: 11px;
-	line-height: 1.4;
+	line-height: 1.25;
 	text-decoration: underline;
 	text-underline-offset: 2px;
 	cursor: pointer;

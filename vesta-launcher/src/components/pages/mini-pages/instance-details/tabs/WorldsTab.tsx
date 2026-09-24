@@ -5,9 +5,7 @@ import MoveIcon from "@assets/icons/actions/move.svg";
 import ReloadIcon from "@assets/icons/actions/reload.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
-import GridIcon from "@assets/icons/content/grid.svg";
 import DatapackIcon from "@assets/icons/content/layers.svg";
-import ListIcon from "@assets/icons/content/list.svg";
 import StorageIcon from "@assets/icons/content/storage.svg";
 import TimerIcon from "@assets/icons/content/timer.svg";
 import InstanceSelectionDialog, {
@@ -49,7 +47,6 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
-import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
 import { formatBytes } from "@utils/format-bytes";
 import {
@@ -65,7 +62,6 @@ import styles from "./WorldsTab.module.css";
 import { getWorldTransferWarnings } from "./world-transfer";
 
 type SortMode = "recency" | "name" | "size";
-type ViewMode = "grid" | "compact";
 type PendingTransfer = {
 	world: WorldSummary;
 	mode: Exclude<WorldTransferMode, "duplicate">;
@@ -180,7 +176,6 @@ export const WorldCard: Component<{
 						src={props.world.iconDataUrl}
 						name={props.world.displayName}
 					/>
-					<div class={styles["media-fade"]} aria-hidden="true" />
 					<Show when={props.world.levelStatus === "unreadable"}>
 						<Badge variant="error" class={styles["world-status"]}>
 							Unreadable
@@ -323,7 +318,6 @@ export const WorldsTab: Component<{
 	) => void;
 }> = (props) => {
 	const [sort, setSort] = createSignal<SortMode>("recency");
-	const [view, setView] = createSignal<ViewMode>("grid");
 	const [pending, setPending] = createSignal<PendingTransfer | null>(null);
 	const [busyWorld, setBusyWorld] = createSignal<string | null>(null);
 
@@ -475,28 +469,6 @@ export const WorldsTab: Component<{
 								</SelectTrigger>
 								<SelectContent />
 							</Select>
-							<ToggleGroup
-								value={view()}
-								onChange={(value) => value && setView(value as ViewMode)}
-								aria-label="World layout"
-							>
-								<ToggleGroupItem
-									value="grid"
-									icon_only
-									aria-label="Grid view"
-									title="Grid view"
-								>
-									<GridIcon />
-								</ToggleGroupItem>
-								<ToggleGroupItem
-									value="compact"
-									icon_only
-									aria-label="Compact view"
-									title="Compact view"
-								>
-									<ListIcon />
-								</ToggleGroupItem>
-							</ToggleGroup>
 							<Button
 								size="sm"
 								variant="ghost"
@@ -536,7 +508,7 @@ export const WorldsTab: Component<{
 									</div>
 								}
 							>
-								<div class={styles.worlds} data-view={view()}>
+								<div class={styles.worlds}>
 									<For each={worlds()}>
 										{(world) => {
 											const busy = () =>

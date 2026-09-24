@@ -170,7 +170,7 @@ export function NotificationItem(props: NotificationItemProps) {
 			case "news":
 			case "rss":
 			case "game":
-				return <GlobeIcon class={styles.contextIcon} />;
+				return <GlobeIcon class={clsx(styles.contextIcon, styles.lineIcon)} />;
 			case "launcher":
 				return <VestaIcon class={styles.contextIcon} />;
 			default:

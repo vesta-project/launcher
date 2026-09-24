@@ -1,8 +1,8 @@
+import CopyIcon from "@assets/icons/actions/copy.svg";
 import TrashIcon from "@assets/icons/actions/delete.svg";
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
-import CopyIcon from "@assets/icons/content/link.svg";
 import ListIcon from "@assets/icons/content/list.svg";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
@@ -260,6 +260,18 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 													alt={screenshot.name}
 													loading="lazy"
 												/>
+												<button
+													type="button"
+													class={styles.copyButton}
+													aria-label={`Copy ${screenshot.name} to clipboard`}
+													title="Copy to clipboard"
+													onClick={(event) => {
+														event.stopPropagation();
+														void handleCopy(screenshot);
+													}}
+												>
+													<CopyIcon aria-hidden="true" />
+												</button>
 											</div>
 											<div class={styles.details}>
 												<span class={styles.name}>{screenshot.name}</span>

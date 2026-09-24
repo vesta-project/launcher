@@ -238,11 +238,12 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					<SettingsField
 						label="Minecraft options"
 						description="Edit the options saved by this instance."
-					>
-						<Button variant="outline" onClick={p.onOpenGameOptions}>
-							Edit game options
-						</Button>
-					</SettingsField>
+						headerRight={
+							<Button variant="outline" onClick={p.onOpenGameOptions}>
+								Edit
+							</Button>
+						}
+					/>
 				</SettingsCard>
 				<SettingsCard header="Java Configuration">
 					<SettingsField

@@ -229,6 +229,7 @@ export function AccountSettingsTab() {
 	const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
 	const [skins, setSkins] = createSignal<Skin[]>([]);
 	const [skinHistory, setSkinHistory] = createSignal<SkinHistory[]>([]);
+	const [skinHistoryLoaded, setSkinHistoryLoaded] = createSignal(false);
 	const [capes, setCapes] = createSignal<Cape[]>([]);
 	const [saving, setSaving] = createSignal(false);
 	const [browseTab, setBrowseTab] = createSignal("yours");
@@ -262,6 +263,7 @@ export function AccountSettingsTab() {
 	);
 
 	const loadData = async () => {
+		setSkinHistoryLoaded(false);
 		try {
 			const accs = await invoke<Account[]>("get_accounts");
 			setAccounts(accs);
@@ -357,6 +359,7 @@ export function AccountSettingsTab() {
 							url: c.url,
 						})),
 					);
+					setSkinHistoryLoaded(true);
 
 					setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
 					setPreviewVariant(
@@ -390,7 +393,10 @@ export function AccountSettingsTab() {
 					setSkins(await invoke<Skin[]>("get_default_skins"));
 					setCapes([]);
 					setSkinHistory([]);
+					setSkinHistoryLoaded(true);
 				}
+			} else {
+				setSkinHistoryLoaded(true);
 			}
 		} catch (err) {
 			console.error("Failed to load account data:", err);
@@ -1238,15 +1244,13 @@ export function AccountSettingsTab() {
 										<Show
 											when={filteredRecentHistory().length > 0}
 											fallback={
-												<div class={styles.emptyState}>
-													<p class={styles.emptyStateTitle}>
-														No custom skins yet
-													</p>
-													<p class={styles.emptyStateBody}>
-														Upload a PNG to start building your skin history.
-														Preset characters live under Presets.
-													</p>
-												</div>
+												<Show when={skinHistoryLoaded()}>
+													<div class={styles.emptyState}>
+														<p class={styles.emptyStateTitle}>
+															No custom skins yet
+														</p>
+													</div>
+												</Show>
 											}
 										>
 											<div class={styles.presetsGrid}>
