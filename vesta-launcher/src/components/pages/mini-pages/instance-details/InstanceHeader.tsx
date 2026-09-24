@@ -36,7 +36,13 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 	const played = () => formatRelativeTime(props.instance.lastPlayed);
 	const playtime = () => {
 		const minutes = props.instance.totalPlaytimeMinutes ?? 0;
-		return `${Math.floor(minutes / 60)}h ${minutes % 60}m total`;
+		const hours = Math.floor(minutes / 60);
+		const days = Math.floor(hours / 24);
+		const remainingHours = hours % 24;
+		const remainingMinutes = minutes % 60;
+		return days > 0
+			? `${days}d ${remainingHours}h total`
+			: `${hours}h ${remainingMinutes}m total`;
 	};
 	const failureSummary = () => {
 		const reason = props.failureReason?.replace(/\s+/g, " ").trim();
