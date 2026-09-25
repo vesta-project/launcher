@@ -2281,6 +2281,12 @@
 	text-decoration: underline;
 }
 
+.youtube-watch-link {
+	display: inline-block;
+	margin-top: 8px;
+	font-size: 0.9em;
+}
+
 .description img {
 	max-width: 100%;
 	height: auto;

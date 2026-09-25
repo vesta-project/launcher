@@ -128,6 +128,45 @@ interface ProjectCacheEntry {
 const projectCache = new Map<string, ProjectCacheEntry>();
 const PROJECT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+function getYouTubeWatchUrl(source: string, baseUrl: string): string | null {
+	try {
+		const normalizedSource = source.startsWith("//")
+			? `https:${source}`
+			: source;
+		const url = new URL(normalizedSource, baseUrl);
+		const hostname = url.hostname.toLowerCase();
+		if (
+			![
+				"youtube.com",
+				"www.youtube.com",
+				"m.youtube.com",
+				"youtube-nocookie.com",
+				"www.youtube-nocookie.com",
+				"youtu.be",
+			].includes(hostname)
+		) {
+			return null;
+		}
+
+		const videoId =
+			(hostname === "youtu.be"
+				? url.pathname.split("/").filter(Boolean)[0]
+				: url.searchParams.get("v")) ??
+			url.pathname.match(/^\/(?:embed|shorts|live|v)\/([^/]+)/)?.[1];
+		if (!videoId || !/^[\w-]{11}$/.test(videoId)) return null;
+
+		const watchUrl = new URL("https://www.youtube.com/watch");
+		watchUrl.searchParams.set("v", videoId);
+		const start = url.searchParams.get("start") ?? url.searchParams.get("t");
+		const playlist = url.searchParams.get("list");
+		if (start) watchUrl.searchParams.set("t", start);
+		if (playlist) watchUrl.searchParams.set("list", playlist);
+		return watchUrl.toString();
+	} catch {
+		return null;
+	}
+}
+
 type ProjectLinkVisualKind =
 	| "code"
 	| "discord"
@@ -2155,6 +2194,21 @@ const ResourceDetailsPage: Component<{
 				el.setAttribute("src", upgraded);
 				if (tag === "img") {
 					el.setAttribute("loading", "lazy");
+				} else if (tag === "iframe") {
+					const watchUrl = getYouTubeWatchUrl(upgraded, window.location.href);
+					if (!watchUrl) continue;
+
+					// YouTube Error 153 requires a referrer; this policy sends only the
+					// embedding origin when the platform supports it.
+					el.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+
+					// Cross-origin player errors are unreadable here, so keep a direct
+					// watch-page fallback available.
+					const fallbackLink = doc.createElement("a");
+					fallbackLink.href = watchUrl;
+					fallbackLink.className = styles["youtube-watch-link"];
+					fallbackLink.textContent = "Playback blocked? Open video on YouTube";
+					el.after(fallbackLink);
 				}
 			}
 
