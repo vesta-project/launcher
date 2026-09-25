@@ -148,7 +148,10 @@ function DetailHeading(props: {
 }) {
 	return (
 		<div class={styles.heading}>
-			<SubpageBackButton label={t("generic-action-back")} onClick={props.onBack} />
+			<SubpageBackButton
+				label={t("generic-action-back")}
+				onClick={props.onBack}
+			/>
 			<h2 class={styles.headingTitle}>{props.title}</h2>
 			<Toggle
 				label={props.title}

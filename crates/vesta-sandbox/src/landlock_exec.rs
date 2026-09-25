@@ -234,10 +234,7 @@ fn apply_exec_allowlist_linux(paths: &[PathBuf]) -> Result<RestrictionStatus, La
 fn exec_rule_entries(path: &Path) -> Vec<(PathBuf, BitFlags<AccessFs>)> {
     let mut entries = Vec::new();
     if path.is_dir() {
-        entries.push((
-            path.to_path_buf(),
-            (AccessFs::Execute | AccessFs::Refer).into(),
-        ));
+        entries.push((path.to_path_buf(), AccessFs::Execute | AccessFs::Refer));
         return entries;
     }
 

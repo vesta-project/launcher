@@ -234,7 +234,9 @@ it("enables server sync without an owner and manages the shared list", async () 
 		target: { value: "play.example.test" },
 	});
 	const dialog = screen.getByRole("dialog");
-	fireEvent.click(within(dialog).getByRole("button", { name: "generic-action-add" }));
+	fireEvent.click(
+		within(dialog).getByRole("button", { name: "generic-action-add" }),
+	);
 	await waitFor(() => expect(state[2].servers).toHaveLength(1));
 	expect(screen.getByText("play.example.test")).toBeTruthy();
 	fireEvent.click(
@@ -381,7 +383,9 @@ it("seeds defaults once, then tracks membership without showing a source", async
 			name: "sync-edit generic-label-game-options",
 		}),
 	);
-	expect(screen.getByRole("button", { name: "generic-action-back" })).toBeTruthy();
+	expect(
+		screen.getByRole("button", { name: "generic-action-back" }),
+	).toBeTruthy();
 	expect(screen.queryByText("sync-source-badge")).toBeNull();
 	expect(
 		screen.queryByRole("button", { name: "sync-choose-source" }),

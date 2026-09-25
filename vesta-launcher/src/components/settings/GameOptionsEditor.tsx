@@ -114,9 +114,7 @@ const protectedKeys = new Set([
 
 function categoryLabel(category: string) {
 	const key =
-		category === "all"
-			? "generic-label-all"
-			: `generic-label-${category}`;
+		category === "all" ? "generic-label-all" : `generic-label-${category}`;
 	const localized = t(key);
 	return localized === key ? formatGameOptionName(category) : localized;
 }

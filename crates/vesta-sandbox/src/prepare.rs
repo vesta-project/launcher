@@ -32,7 +32,7 @@ pub fn prepare(
         if !crate::landlock_exec::landlock_available() {
             return Err(SandboxError::LandlockUnavailable);
         }
-        if !crate::landlock_exec::landlock_helper_path().is_some() {
+        if crate::landlock_exec::landlock_helper_path().is_none() {
             return Err(SandboxError::LandlockHelperNotFound);
         }
     }

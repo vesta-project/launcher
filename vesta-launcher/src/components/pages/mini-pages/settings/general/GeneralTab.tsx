@@ -146,7 +146,8 @@ export function GeneralSettingsTab() {
 		...getSupportedLocales().map((locale) => locale.code),
 	]);
 	const languageOptionLabel = (preference: string) => {
-		if (preference === SYSTEM_LANGUAGE) return t("generic-label-system-default");
+		if (preference === SYSTEM_LANGUAGE)
+			return t("generic-label-system-default");
 		const locale = getSupportedLocales().find(
 			(candidate) => candidate.code === preference,
 		);

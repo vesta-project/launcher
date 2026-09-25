@@ -71,9 +71,7 @@ function labelForOption(option: OptionRow): string {
 function labelForScope(scope: string): string {
 	const key = scope === "all" ? "sync-scope-all" : `generic-label-${scope}`;
 	const localized = t(key);
-	return localized === key
-		? formatGameOptionName(scope)
-		: localized;
+	return localized === key ? formatGameOptionName(scope) : localized;
 }
 
 function choiceValue(choice: string | GameOptionChoice): string {
@@ -454,12 +452,18 @@ export function SharedOptionsPage(props: {
 	return (
 		<div class={styles.sharedPage}>
 			<div class={styles.heading}>
-				<SubpageBackButton label={t("generic-action-back")} onClick={props.onBack} />
+				<SubpageBackButton
+					label={t("generic-action-back")}
+					onClick={props.onBack}
+				/>
 				<h2 class={styles.headingTitle}>{t("sync-shared-page-title")}</h2>
 			</div>
 			<div class={styles.sharedLayout}>
 				<aside class={styles.sharedSidebar}>
-					<nav class={styles.scopeTabs} aria-label={t("generic-action-search-options")}>
+					<nav
+						class={styles.scopeTabs}
+						aria-label={t("generic-action-search-options")}
+					>
 						<For each={scopes()}>
 							{(entry) => {
 								const Icon = scopeIcons[entry] ?? CodeIcon;

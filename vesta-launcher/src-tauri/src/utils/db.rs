@@ -261,10 +261,7 @@ mod tests {
 
     #[test]
     fn embedded_migration_versions_are_unique() {
-        for (database, source) in [
-            ("config", &CONFIG_MIGRATIONS),
-            ("vesta", &VESTA_MIGRATIONS),
-        ] {
+        for (database, source) in [("config", &CONFIG_MIGRATIONS), ("vesta", &VESTA_MIGRATIONS)] {
             let migrations =
                 <EmbeddedMigrations as MigrationSource<diesel::sqlite::Sqlite>>::migrations(source)
                     .unwrap();
