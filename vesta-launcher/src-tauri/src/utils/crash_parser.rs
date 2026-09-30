@@ -267,7 +267,7 @@ fn check_launch_crash(log_content: &str, log_file: &Path) -> Option<CrashDetails
         ));
     }
 
-    if log_content.contains("[main/ERROR]:") && !log_content.contains("[Render thread/ERROR]") {
+    if log_content.contains("[main/ERROR]:") && launch_failed_before_window(log_content) {
         let message = extract_line(log_content, &["[main/ERROR]:"])
             .unwrap_or_else(|| "Game failed before the window finished launching".to_string());
 
@@ -287,6 +287,28 @@ fn check_launch_crash(log_content: &str, log_file: &Path) -> Option<CrashDetails
     }
 
     None
+}
+
+/// True when log evidence suggests launch never reached an interactive game session.
+fn launch_failed_before_window(log_content: &str) -> bool {
+    if log_content.contains("[Render thread/ERROR]") {
+        return false;
+    }
+
+    const RUNNING_MARKERS: &[&str] = &[
+        "[Render thread/INFO]",
+        "OpenGL version",
+        "LWJGL version",
+        "Created:",
+        "Setting user:",
+        "Loaded ",
+        "MinecraftForge",
+        "Fabric Loader",
+    ];
+
+    !RUNNING_MARKERS
+        .iter()
+        .any(|marker| log_content.contains(marker))
 }
 
 /// Parse Fabric FormattedException mod-resolution failures
@@ -1132,6 +1154,12 @@ More details:
         let crash = check_launch_crash(log, &log_path()).expect("crash");
         assert_eq!(crash.category, "launch");
         assert_eq!(crash.crash_type, "launch_other");
+    }
+
+    #[test]
+    fn ignores_main_error_after_game_has_started() {
+        let log = "[main/INFO]: Setting user: steve\n[Render thread/INFO]: OpenGL version\n[main/ERROR]: Something non-fatal happened";
+        assert!(check_launch_crash(log, &log_path()).is_none());
     }
 
     #[test]

@@ -5,7 +5,6 @@ import {
 	createLibraryEntry,
 	futureEntryMatchesTarget,
 	handleNavigationBack,
-	handleNavigationForward,
 	isLibraryPath,
 	LIBRARY_PATH,
 	routeParamsMatch,
@@ -124,7 +123,9 @@ describe("library slot navigation", () => {
 		expect(pageViewerOpen()).toBe(false);
 		expect(router.canGoBack()).toBe(true);
 		expect(router.history.past[router.history.past.length - 1]?.params).toEqual(
-			{ id: 1 },
+			{
+				id: 1,
+			},
 		);
 
 		router.navigateFromLibrary("/instance", { id: 2 });
@@ -285,7 +286,9 @@ describe("library slot navigation", () => {
 		expect(router.canGoBack()).toBe(true);
 		expect(router.history.past).toHaveLength(pastBefore);
 		expect(router.history.past[router.history.past.length - 1]?.params).toEqual(
-			{ id: 1 },
+			{
+				id: 1,
+			},
 		);
 	});
 
@@ -373,8 +376,9 @@ describe("route-scoped reload", () => {
 		let reloads = 0;
 
 		router.navigate("/instance", { id: 1 });
-		router.registerReload(async () => {
+		router.registerReload(() => {
 			reloads += 1;
+			return Promise.resolve();
 		}, "/instance");
 
 		expect(router.canReload()).toBe(true);
@@ -402,7 +406,7 @@ describe("route-scoped reload", () => {
 
 		expect(canReload()).toBe(false);
 
-		router.registerReload(async () => {}, "/instance");
+		router.registerReload(() => Promise.resolve(), "/instance");
 		expect(canReload()).toBe(true);
 
 		router.navigate("/config");
@@ -415,7 +419,7 @@ describe("route-scoped reload", () => {
 		const { router } = createTestRouter();
 		router.navigate("/instance", { id: 1 });
 
-		const dispose = router.registerReload(async () => {}, "/instance");
+		const dispose = router.registerReload(() => Promise.resolve(), "/instance");
 		expect(router.canReload()).toBe(true);
 
 		dispose();

@@ -1,11 +1,11 @@
-import CopyIcon from "@assets/icons/actions/copy.svg";
 import CloseIcon from "@assets/icons/actions/close.svg";
+import CopyIcon from "@assets/icons/actions/copy.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
+import DownloadIcon from "@assets/icons/actions/external-link.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
 import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";
 import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
-import FolderIcon from "@assets/icons/content/folder.svg";
 import InfoIcon from "@assets/icons/status/info.svg";
-import DownloadIcon from "@assets/icons/actions/external-link.svg";
-import TrashIcon from "@assets/icons/actions/delete.svg";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import useEmblaCarousel from "embla-carousel-solid";

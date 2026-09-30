@@ -59,6 +59,20 @@ pub struct Instance {
     pub pre_launch_hook: Option<String>,
     pub wrapper_command: Option<String>,
     pub post_exit_hook: Option<String>,
+    #[serde(default = "default_use_global_sandbox")]
+    pub use_global_sandbox: bool,
+    pub sandbox_preset: Option<String>,
+    pub sandbox_wrapper_nesting: Option<String>,
+    #[serde(default = "default_sandbox_extra_paths")]
+    pub sandbox_extra_paths: String,
+}
+
+fn default_use_global_sandbox() -> bool {
+    true
+}
+
+fn default_sandbox_extra_paths() -> String {
+    "[]".to_string()
 }
 
 /// New instance (without id for insertion)
@@ -106,6 +120,10 @@ pub struct NewInstance {
     pub pre_launch_hook: Option<String>,
     pub wrapper_command: Option<String>,
     pub post_exit_hook: Option<String>,
+    pub use_global_sandbox: bool,
+    pub sandbox_preset: Option<String>,
+    pub sandbox_wrapper_nesting: Option<String>,
+    pub sandbox_extra_paths: String,
 }
 
 impl Default for Instance {
@@ -152,6 +170,10 @@ impl Default for Instance {
             pre_launch_hook: None,
             wrapper_command: None,
             post_exit_hook: None,
+            use_global_sandbox: true,
+            sandbox_preset: None,
+            sandbox_wrapper_nesting: None,
+            sandbox_extra_paths: "[]".to_string(),
         }
     }
 }
@@ -208,6 +230,10 @@ impl NewInstance {
         pre_launch_hook: Option<String>,
         wrapper_command: Option<String>,
         post_exit_hook: Option<String>,
+        use_global_sandbox: bool,
+        sandbox_preset: Option<String>,
+        sandbox_wrapper_nesting: Option<String>,
+        sandbox_extra_paths: String,
     ) -> Self {
         NewInstance {
             name,
@@ -250,6 +276,10 @@ impl NewInstance {
             pre_launch_hook,
             wrapper_command,
             post_exit_hook,
+            use_global_sandbox,
+            sandbox_preset,
+            sandbox_wrapper_nesting,
+            sandbox_extra_paths,
         }
     }
 }
@@ -297,6 +327,10 @@ impl Default for NewInstance {
             pre_launch_hook: None,
             wrapper_command: None,
             post_exit_hook: None,
+            use_global_sandbox: true,
+            sandbox_preset: None,
+            sandbox_wrapper_nesting: None,
+            sandbox_extra_paths: "[]".to_string(),
         }
     }
 }

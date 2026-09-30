@@ -4,6 +4,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 use tauri::tray::{MouseButton, MouseButtonState};
+#[cfg(not(target_os = "windows"))]
 use tauri::webview::Color;
 use tauri::Manager;
 
@@ -68,8 +69,10 @@ fn build_main_window(
             .disable_drag_drop_handler()
             .visible(false)
             .transparent(true)
-            .decorations(false)
-            .background_color(Color(20, 20, 20, 255));
+            .decorations(false);
+
+    #[cfg(not(target_os = "windows"))]
+    let builder = builder.background_color(Color(20, 20, 20, 255));
 
     #[cfg(target_os = "macos")]
     let builder = builder

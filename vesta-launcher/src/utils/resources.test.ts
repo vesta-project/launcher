@@ -32,12 +32,8 @@ describe("resource compatibility intent", () => {
 			getProjectCompatibilityForInstance(project, vanilla, "datapack").type,
 		).toBe("compatible");
 		expect(
-			getCompatibilityForInstance(
-				project,
-				datapackVersion,
-				vanilla,
-				"datapack",
-			).type,
+			getCompatibilityForInstance(project, datapackVersion, vanilla, "datapack")
+				.type,
 		).toBe("compatible");
 	});
 });

@@ -11,7 +11,6 @@ const WINDOWS_WINDOW_EFFECTS = [
 	"transparent",
 	"mica",
 	"acrylic",
-	"blur",
 ] as const;
 const FALLBACK_WINDOW_EFFECTS = ["none", "transparent"] as const;
 const FALLBACK_WINDOW_EFFECT = "none";

@@ -136,6 +136,34 @@
 	padding: 0;
 }
 
+.version-lookup-error {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 12px;
+	padding: 10px 12px;
+	border: 1px solid hsl(var(--color__error-hue) 55% 45% / 0.55);
+	border-radius: 8px;
+	background: hsl(var(--color__error-hue) 45% 20% / 0.22);
+	color: var(--text-primary);
+	font-size: 0.875rem;
+}
+
+.version-lookup-error button {
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	color: hsl(var(--color__error-hue) 80% 70%);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.version-lookup-error button:hover {
+	text-decoration: underline;
+}
+
 .form-section {
 	display: flex;
 	flex-direction: column;
@@ -1943,4 +1971,3 @@
 	font-size: 12px;
 	color: var(--text-error, #e57373);
 }
-

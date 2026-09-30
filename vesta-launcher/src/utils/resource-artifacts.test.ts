@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { ResourceVersion } from "@stores/resources";
+import { describe, expect, it } from "vitest";
 import {
 	artifactBundleSummary,
 	artifactRoleLabels,
@@ -33,10 +33,7 @@ describe("resource-artifacts", () => {
 		]);
 
 		expect(hasDatapackAndResourcePack(combined)).toBe(true);
-		expect(artifactRoleLabels(combined)).toEqual([
-			"Datapack",
-			"Resource pack",
-		]);
+		expect(artifactRoleLabels(combined)).toEqual(["Datapack", "Resource pack"]);
 		expect(artifactBundleSummary(combined)).toBe(
 			"Includes datapack & resource pack",
 		);

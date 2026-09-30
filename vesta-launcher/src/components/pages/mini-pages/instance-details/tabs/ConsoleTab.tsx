@@ -1,11 +1,11 @@
+import TrashIcon from "@assets/icons/actions/delete.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import HistoryIcon from "@assets/icons/content/history.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
-import TrashIcon from "@assets/icons/actions/delete.svg";
+import TerminalIcon from "@assets/icons/content/terminal.svg";
 import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";
 import ChevronUpIcon from "@assets/icons/controls/chevron-up.svg";
 import LiveIcon from "@assets/icons/status/live.svg";
-import TerminalIcon from "@assets/icons/content/terminal.svg";
 import {
 	CONSOLE_FILTER_LEVELS,
 	consoleStore,
@@ -27,13 +27,12 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
-import styles from "../instance-details.module.css";
 import {
 	formatLogFileMetadata,
 	getConsoleLogDisplay,
 } from "../console-log-display";
 import { t } from "~/localization";
-
+import styles from "../instance-details.module.css";
 interface ConsoleTabProps {
 	instanceSlug: string;
 	openLogsFolder: () => void;
@@ -441,8 +440,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								onClick={toggleScroll}
 								class={styles["scroll-btn-round"]}
 							>
-									<Show when={atBottom()} fallback={<ChevronDownIcon />}>
-										<ChevronUpIcon />
+								<Show when={atBottom()} fallback={<ChevronDownIcon />}>
+									<ChevronUpIcon />
 								</Show>
 							</Button>
 						</TooltipTrigger>

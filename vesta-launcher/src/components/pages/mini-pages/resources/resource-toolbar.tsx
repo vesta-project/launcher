@@ -16,8 +16,8 @@ import { TextField } from "@ui/text-field/text-field";
 import { t } from "~/localization";
 import { batch, createMemo, For, Show } from "solid-js";
 import {
-	activeBrowseFilterCount,
 	ActiveFilterChips,
+	activeBrowseFilterCount,
 	hasActiveBrowseFilters,
 } from "./active-filter-chips";
 import { FilterPopover } from "./filter-popover";
@@ -55,9 +55,28 @@ export function ResourceToolbar(props: {
 					onChange={(v: string | null) => {
 						if (!v) return;
 						batch(() => {
+							const previousSource = resources.state.activeSource;
 							resources.setType(v as any);
 							resources.setOffset(0);
 							activeRouter()?.updateQuery("resourceType", v);
+							activeRouter()?.updateQuery(
+								"activeSource",
+								resources.state.activeSource,
+							);
+							if (!resources.state.client)
+								activeRouter()?.updateQuery("client", null);
+							if (!resources.state.server)
+								activeRouter()?.updateQuery("server", null);
+							if (previousSource !== resources.state.activeSource) {
+								for (const key of [
+									"creatorKind",
+									"creatorId",
+									"creatorName",
+									"creatorIconUrl",
+								]) {
+									activeRouter()?.updateQuery(key, null);
+								}
+							}
 						});
 					}}
 					optionValue={(v) => v}
@@ -92,7 +111,9 @@ export function ResourceToolbar(props: {
 							onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) =>
 								props.onSearchInput(e.currentTarget.value)
 							}
-							onKeyDown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
+							onKeyDown={(
+								e: KeyboardEvent & { currentTarget: HTMLInputElement },
+							) => {
 								if (e.key === "Enter") {
 									e.preventDefault();
 									props.onSearchCommit?.(e.currentTarget.value);
@@ -133,9 +154,25 @@ export function ResourceToolbar(props: {
 								}}
 								onClick={() => {
 									batch(() => {
+										const sourceChanged =
+											source.id !== resources.state.activeSource;
 										resources.setSource(source.id);
 										resources.setOffset(0);
 										activeRouter()?.updateQuery("activeSource", source.id);
+										if (!resources.state.client)
+											activeRouter()?.updateQuery("client", null);
+										if (!resources.state.server)
+											activeRouter()?.updateQuery("server", null);
+										if (sourceChanged) {
+											for (const key of [
+												"creatorKind",
+												"creatorId",
+												"creatorName",
+												"creatorIconUrl",
+											]) {
+												activeRouter()?.updateQuery(key, null);
+											}
+										}
 									});
 								}}
 								title={source.label}

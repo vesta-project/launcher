@@ -1,8 +1,21 @@
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { createCollapsingHeaderController } from "@components/page-composition/collapsing-header";
-import { PageSidebar, type PageSidebarTab } from "@components/page-sidebar/page-sidebar";
+import {
+	PageSidebar,
+	type PageSidebarTab,
+} from "@components/page-sidebar/page-sidebar";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import {
+	createGameOptionsEditor,
+	GameOptionsEditor,
+} from "@components/settings/GameOptionsEditor";
+import {
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	type SandboxPresetValue,
+	type SandboxWrapperNestingValue,
+} from "@components/settings/sandbox-policy-ui";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
@@ -21,15 +34,25 @@ import {
 	setLaunching,
 	setRunning,
 } from "@stores/instances";
-import { isPinned as isPinnedInStore, pinning, pinPage, unpinPage } from "@stores/pinning";
+import {
+	isPinned as isPinnedInStore,
+	pinning,
+	pinPage,
+	unpinPage,
+} from "@stores/pinning";
 import {
 	type InstalledResource,
 	type ResourceProject,
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
+import { instanceDefaults } from "@stores/settings";
 import { useMinecraftVersions } from "@stores/versions";
-import type { WorldDatapackSummary, WorldRef, WorldSummary } from "@stores/worlds";
+import type {
+	WorldDatapackSummary,
+	WorldRef,
+	WorldSummary,
+} from "@stores/worlds";
 import {
 	createColumnHelper,
 	createSolidTable,
@@ -81,15 +104,22 @@ import {
 	startModpackUpdate,
 	unlinkInstance,
 	updateInstance,
-	updateInstanceModpackVersion,
 } from "@utils/instances";
 import { createMediaQuery } from "@utils/media-query";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
 import { createNonSuspendingLoader } from "@utils/non-suspending-loader";
-import { afterStablePaint, markPerformance, measurePerformance } from "@utils/performance-trace";
-import { createPreloadableLazyComponent, createRetainedTabLoader } from "@utils/preloadable-lazy";
+import {
+	afterStablePaint,
+	markPerformance,
+	measurePerformance,
+} from "@utils/performance-trace";
+import {
+	createPreloadableLazyComponent,
+	createRetainedTabLoader,
+} from "@utils/preloadable-lazy";
 import { requiresWorldTarget } from "@utils/resource-install-intent";
+import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -181,7 +211,10 @@ const instanceTabLoaders: Partial<Record<TabType, () => Promise<unknown>>> = {
 function InstanceTabLoading(props: { tabLabel: string }) {
 	return (
 		<div class={styles["instance-tab-loading"]} aria-live="polite">
-			<span class={styles["instance-tab-loading__spinner"]} data-essential-motion />
+			<span
+				class={styles["instance-tab-loading__spinner"]}
+				data-essential-motion
+			/>
 			<span>{t("instances-details-tab-loading", { tab: props.tabLabel })}</span>
 		</div>
 	);
@@ -222,6 +255,10 @@ interface InstanceDetailsProps {
 	initialPostExitHook?: string;
 	initialWrapperCommand?: string;
 	initialEnvironmentVariables?: string;
+	initialUseGlobalSandbox?: boolean;
+	initialSandboxPreset?: string;
+	initialSandboxWrapperNesting?: string;
+	initialSandboxExtraPaths?: string[];
 	_dirty?: Record<string, boolean>;
 }
 
@@ -282,8 +319,14 @@ const ResourceIcon = (props: {
 	return (
 		<div ref={wrapperRef} style="display: inline-flex; align-items: center;">
 			<Show
-				when={iconPreview.displaySource() && isNearViewport() ? iconPreview.displaySource() : false}
-				fallback={<div class={styles["res-icon-placeholder"]}>{displayChar()}</div>}
+				when={
+					iconPreview.displaySource() && isNearViewport()
+						? iconPreview.displaySource()
+						: false
+				}
+				fallback={
+					<div class={styles["res-icon-placeholder"]}>{displayChar()}</div>
+				}
 			>
 				{(url) => (
 					<img
@@ -383,25 +426,35 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		return normalizeInstanceTab(params?.activeTab as string | undefined);
 	});
+	const showingGameOptions = createMemo(
+		() =>
+			activeTab() === "settings" &&
+			activeRouter()?.currentParams.get()?.settingsPage === "game-options",
+	);
 	const selectedWorldDirectory = createMemo(() => {
 		const value = activeRouter()?.currentParams.get()?.world;
 		return typeof value === "string" && value.length > 0 ? value : null;
 	});
 	createEffect(() => {
-		const rawTab = activeRouter()?.currentParams.get()?.activeTab as string | undefined;
+		const rawTab = activeRouter()?.currentParams.get()?.activeTab as
+			| string
+			| undefined;
 		const canonicalTab = normalizeInstanceTab(rawTab);
 		if (rawTab && rawTab !== canonicalTab) {
 			activeRouter()?.updateQuery("activeTab", canonicalTab);
 		}
 	});
 	const isDesktopHeader = createMediaQuery("(min-width: 901px)");
-	const prefersReducedMotion = createMediaQuery("(prefers-reduced-motion: reduce)");
+	const prefersReducedMotion = createMediaQuery(
+		"(prefers-reduced-motion: reduce)",
+	);
 	const headerCollapse = createCollapsingHeaderController({
 		enabled: () => activeTab() === "home",
 		isDesktop: isDesktopHeader,
 		prefersReducedMotion,
 		cssDrivenProgress: () => false,
-		disabledProgress: () => (activeTab() !== "home" || !isDesktopHeader() ? 1 : 0),
+		disabledProgress: () =>
+			activeTab() !== "home" || !isDesktopHeader() ? 1 : 0,
 		classNames: {
 			compact: "instance-header-compact",
 			floating: "instance-header-floating",
@@ -422,7 +475,10 @@ export default function InstanceDetails(
 		if (key.startsWith("id:") && candidate.id === Number(key.slice(3))) {
 			return candidate;
 		}
-		if (key.startsWith("slug:") && getInstanceSlug(candidate) === key.slice(5)) {
+		if (
+			key.startsWith("slug:") &&
+			getInstanceSlug(candidate) === key.slice(5)
+		) {
 			return candidate;
 		}
 		return undefined;
@@ -457,12 +513,16 @@ export default function InstanceDetails(
 		return inst ? getInstanceSlug(inst) : "";
 	});
 
-	const isPinned = createMemo(() => (slug() ? isPinnedInStore("instance", slug()) : false));
+	const isPinned = createMemo(() =>
+		slug() ? isPinnedInStore("instance", slug()) : false,
+	);
 
 	const handlePin = async () => {
 		if (!slug()) return;
 		if (isPinned()) {
-			const pin = pinning.pins.find((p) => p.page_type === "instance" && p.target_id === slug());
+			const pin = pinning.pins.find(
+				(p) => p.page_type === "instance" && p.target_id === slug(),
+			);
 			if (pin) unpinPage(pin.id);
 		} else {
 			const inst = instance();
@@ -478,8 +538,10 @@ export default function InstanceDetails(
 		}
 	};
 
-	const [installedResources, { refetch: refetchInstalledResources, mutate: mutateResources }] =
-		createResource(
+	const [
+		installedResources,
+		{ refetch: refetchInstalledResources, mutate: mutateResources },
+	] = createResource(
 		() => instance()?.id,
 		async (instanceId) => {
 			if (!instanceId) return [];
@@ -489,11 +551,14 @@ export default function InstanceDetails(
 
 	// The overview is tab-specific so the home view keeps its minimal installed-row
 	// query. Hover/focus intent warms the same deduplicated cache before activation.
-	const [resourceOverview, { refetch: refetchResourceOverview }] = createResource(
+	const [resourceOverview, { refetch: refetchResourceOverview }] =
+		createResource(
 			() => {
 				const inst = instance();
 				const tab = activeTab();
-			return inst && (tab === "resources" || tab === "crash") ? inst.id : undefined;
+				return inst && (tab === "resources" || tab === "crash")
+					? inst.id
+					: undefined;
 			},
 			async (instanceId) => loadInstanceResourceOverview(instanceId),
 		);
@@ -513,14 +578,20 @@ export default function InstanceDetails(
 	const [projectRecords, setProjectRecords] = createStore<
 		Record<string, ResourceProjectOverviewRecord>
 	>({});
-	const mergeProjectMetadata = (key: string, record: ResourceProjectOverviewRecord) => {
+	const mergeProjectMetadata = (
+		key: string,
+		record: ResourceProjectOverviewRecord,
+	) => {
 		const current = projectRecords[key];
-		const retainedIcon = current?.icon_url?.startsWith("data:") ? current.icon_url : record.icon_url;
+		const retainedIcon = current?.icon_url?.startsWith("data:")
+			? current.icon_url
+			: record.icon_url;
 		setProjectRecords(key, {
 			...current,
 			...record,
 			icon_url: retainedIcon,
-			has_cached_icon: Boolean(retainedIcon?.startsWith("data:")) || record.has_cached_icon,
+			has_cached_icon:
+				Boolean(retainedIcon?.startsWith("data:")) || record.has_cached_icon,
 		});
 	};
 	const pendingIconRefs = new Map<string, ResourceProjectRef>();
@@ -559,12 +630,23 @@ export default function InstanceDetails(
 		}
 	};
 
-	const queueResourceIcon = (platform: string | null | undefined, id: string | null | undefined) => {
-		if ((platform !== "modrinth" && platform !== "curseforge" && platform !== "smithed") || !id) {
+	const queueResourceIcon = (
+		platform: string | null | undefined,
+		id: string | null | undefined,
+	) => {
+		if (
+			(platform !== "modrinth" &&
+				platform !== "curseforge" &&
+				platform !== "smithed") ||
+			!id
+		) {
 			return;
 		}
 		const key = `${platform}:${id}`;
-		if (requestedIconKeys.has(key) || projectRecords[key]?.icon_url?.startsWith("data:")) {
+		if (
+			requestedIconKeys.has(key) ||
+			projectRecords[key]?.icon_url?.startsWith("data:")
+		) {
 			return;
 		}
 		requestedIconKeys.add(key);
@@ -597,12 +679,15 @@ export default function InstanceDetails(
 		(installedResources() || []).filter(isModpackOwnedResource),
 	);
 
-	const customResources = createMemo(() => (installedResources() || []).filter(isCustomResource));
-
-	const [provenanceBackfillKeys, setProvenanceBackfillKeys] = createSignal<Record<string, boolean>>(
-		{},
+	const customResources = createMemo(() =>
+		(installedResources() || []).filter(isCustomResource),
 	);
-	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] = createSignal(false);
+
+	const [provenanceBackfillKeys, setProvenanceBackfillKeys] = createSignal<
+		Record<string, boolean>
+	>({});
+	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
+		createSignal(false);
 	const [worldUpdate, setWorldUpdate] = createSignal<{
 		project: ResourceProject;
 		version: ResourceVersion;
@@ -612,8 +697,12 @@ export default function InstanceDetails(
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
 	const [iconPath, setIconPath] = createSignal(props.initialIconPath || "");
-	const [minMemory, setMinMemory] = createSignal<number[]>([props.initialMinMemory || 2048]);
-	const [maxMemory, setMaxMemory] = createSignal<number[]>([props.initialMaxMemory || 4096]);
+	const [minMemory, setMinMemory] = createSignal<number[]>([
+		props.initialMinMemory || 2048,
+	]);
+	const [maxMemory, setMaxMemory] = createSignal<number[]>([
+		props.initialMaxMemory || 4096,
+	]);
 	const [javaArgs, setJavaArgs] = createSignal(props.initialJavaArgs || "");
 	const [javaPath, setJavaPath] = createSignal(props.initialJavaPath || "");
 	const [isCustomMode, setIsCustomMode] = createSignal(false);
@@ -622,18 +711,23 @@ export default function InstanceDetails(
 	const [useGlobalResolution, setUseGlobalResolution] = createSignal(
 		props.initialUseGlobalResolution ?? true,
 	);
-	const [gameWidth, setGameWidth] = createSignal(props.initialGameWidth || 1280);
-	const [gameHeight, setGameHeight] = createSignal(props.initialGameHeight || 720);
+	const [gameWidth, setGameWidth] = createSignal(
+		props.initialGameWidth || 1280,
+	);
+	const [gameHeight, setGameHeight] = createSignal(
+		props.initialGameHeight || 720,
+	);
 	const [useGlobalJavaArgs, setUseGlobalJavaArgs] = createSignal(
 		props.initialUseGlobalJavaArgs ?? true,
 	);
 	const [useGlobalJavaPath, setUseGlobalJavaPath] = createSignal(
 		props.initialUseGlobalJavaPath ?? true,
 	);
-	const [useGlobalHooks, setUseGlobalHooks] = createSignal(props.initialUseGlobalHooks ?? true);
-	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] = createSignal(
-		props.initialUseGlobalEnvironmentVariables ?? true,
+	const [useGlobalHooks, setUseGlobalHooks] = createSignal(
+		props.initialUseGlobalHooks ?? true,
 	);
+	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] =
+		createSignal(props.initialUseGlobalEnvironmentVariables ?? true);
 	const [useGlobalLauncherAction, setUseGlobalLauncherAction] = createSignal(
 		props.initialUseGlobalLauncherAction ?? true,
 	);
@@ -643,39 +737,87 @@ export default function InstanceDetails(
 		["stay-open", "minimize", "hide-to-tray", "quit"].includes(
 			props.initialLauncherActionOnLaunch || "",
 		)
-			? (props.initialLauncherActionOnLaunch as "stay-open" | "minimize" | "hide-to-tray" | "quit")
+			? (props.initialLauncherActionOnLaunch as
+					| "stay-open"
+					| "minimize"
+					| "hide-to-tray"
+					| "quit")
 			: "stay-open",
 	);
-	const [preLaunchHook, setPreLaunchHook] = createSignal(props.initialPreLaunchHook || "");
-	const [postExitHook, setPostExitHook] = createSignal(props.initialPostExitHook || "");
-	const [wrapperCommand, setWrapperCommand] = createSignal(props.initialWrapperCommand || "");
+	const [preLaunchHook, setPreLaunchHook] = createSignal(
+		props.initialPreLaunchHook || "",
+	);
+	const [postExitHook, setPostExitHook] = createSignal(
+		props.initialPostExitHook || "",
+	);
+	const [wrapperCommand, setWrapperCommand] = createSignal(
+		props.initialWrapperCommand || "",
+	);
 	const [environmentVariables, setEnvironmentVariables] = createSignal(
 		props.initialEnvironmentVariables || "",
 	);
+	const [useGlobalSandbox, setUseGlobalSandbox] = createSignal(
+		props.initialUseGlobalSandbox ?? true,
+	);
+	const [sandboxPreset, setSandboxPreset] = createSignal<SandboxPresetValue>(
+		normalizeSandboxPreset(props.initialSandboxPreset),
+	);
+	const [sandboxWrapperNesting, setSandboxWrapperNesting] =
+		createSignal<SandboxWrapperNestingValue>(
+			normalizeSandboxWrapperNesting(props.initialSandboxWrapperNesting),
+		);
+	const [sandboxExtraPaths, setSandboxExtraPaths] = createSignal<string[]>(
+		props.initialSandboxExtraPaths ??
+			parseSandboxExtraPaths(props.initialData?.sandboxExtraPaths),
+	);
+	const inheritedSandboxExtraPaths = createMemo(
+		() => instanceDefaults().default_sandbox_extra_paths ?? [],
+	);
 
 	// Dirty flags for settings
-	const [isNameDirty, setIsNameDirty] = createSignal(props._dirty?.name || false);
-	const [isIconDirty, setIsIconDirty] = createSignal(props._dirty?.icon || false);
-	const [isMinMemDirty, setIsMinMemDirty] = createSignal(props._dirty?.minMem || false);
-	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(props._dirty?.maxMem || false);
+	const [isNameDirty, setIsNameDirty] = createSignal(
+		props._dirty?.name || false,
+	);
+	const [isIconDirty, setIsIconDirty] = createSignal(
+		props._dirty?.icon || false,
+	);
+	const [isMinMemDirty, setIsMinMemDirty] = createSignal(
+		props._dirty?.minMem || false,
+	);
+	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(
+		props._dirty?.maxMem || false,
+	);
 	const [isJvmDirty, setIsJvmDirty] = createSignal(props._dirty?.jvm || false);
-	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(props._dirty?.javaPath || false);
-	const [isResolutionDirty, setIsResolutionDirty] = createSignal(props._dirty?.resolution || false);
-	const [isHooksDirty, setIsHooksDirty] = createSignal(props._dirty?.hooks || false);
+	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(
+		props._dirty?.javaPath || false,
+	);
+	const [isResolutionDirty, setIsResolutionDirty] = createSignal(
+		props._dirty?.resolution || false,
+	);
+	const [isHooksDirty, setIsHooksDirty] = createSignal(
+		props._dirty?.hooks || false,
+	);
 	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
 	const [isLaunchActionDirty, setIsLaunchActionDirty] = createSignal(
 		props._dirty?.launchAction || false,
 	);
+	const [isSandboxDirty, setIsSandboxDirty] = createSignal(
+		props._dirty?.sandbox || false,
+	);
 
 	const [saving, setSaving] = createSignal(false);
-	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<
+		string[]
+	>([]);
 
 	const inst = () => instance();
 	const isRunningGlobal = createMemo(() =>
 		Boolean(slug() ? instancesState.runningIds[slug()] : false),
 	);
 	const isLaunchingGlobal = createMemo(
-		() => (slug() ? instancesState.launchingIds[slug()] : false) && !isRunningGlobal(),
+		() =>
+			(slug() ? instancesState.launchingIds[slug()] : false) &&
+			!isRunningGlobal(),
 	);
 	const currentEditDraft = (): InstanceEditDraft => ({
 		name: name(),
@@ -697,6 +839,10 @@ export default function InstanceDetails(
 		postExitHook: postExitHook(),
 		wrapperCommand: wrapperCommand(),
 		environmentVariables: environmentVariables(),
+		useGlobalSandbox: useGlobalSandbox(),
+		sandboxPreset: sandboxPreset(),
+		sandboxWrapperNesting: sandboxWrapperNesting(),
+		sandboxExtraPaths: sandboxExtraPaths(),
 	});
 	const currentEditDirty = (): InstanceEditDirty => ({
 		name: isNameDirty(),
@@ -709,9 +855,24 @@ export default function InstanceDetails(
 		hooks: isHooksDirty(),
 		env: isEnvDirty(),
 		launchAction: isLaunchActionDirty(),
+		sandbox: isSandboxDirty(),
 	});
 
-	const isDirty = createMemo(() => isInstanceEditDirty(currentEditDirty()));
+	const gameOptions = createGameOptionsEditor({
+		get instanceId() {
+			return instance()?.id;
+		},
+		get disabled() {
+			return saving();
+		},
+		get enabled() {
+			return showingGameOptions();
+		},
+	});
+	const isDirty = createMemo(
+		() =>
+			isInstanceEditDirty(currentEditDirty()) || gameOptions.dirtyCount() > 0,
+	);
 
 	const modpackIconBase64 = useModpackIcon(() => {
 		const current = instance();
@@ -934,7 +1095,10 @@ export default function InstanceDetails(
 					instanceId: id,
 				})
 					.catch((e) => {
-						console.error("Failed to start fast modpack resource provenance backfill:", e);
+						console.error(
+							"Failed to start fast modpack resource provenance backfill:",
+							e,
+						);
 					})
 					.finally(() => {
 						setProvenanceBackfillKeys((prev) => ({ ...prev, [key]: true }));
@@ -950,7 +1114,8 @@ export default function InstanceDetails(
 	const [busy, setBusy] = createSignal(false);
 
 	const [activeAccount] = createResource<any, boolean>(
-		() => activeTab() === "versioning" || activeTab() === "settings" || undefined,
+		() =>
+			activeTab() === "versioning" || activeTab() === "settings" || undefined,
 		async () => {
 			try {
 				return await getActiveAccount();
@@ -965,7 +1130,8 @@ export default function InstanceDetails(
 	const instanceJavaSettings = createNonSuspendingLoader(
 		() => instance()?.id,
 		async (instanceId) => {
-			const [requiredJava, detectedJavas, managedJavas, globalJavaPaths] = await Promise.all([
+			const [requiredJava, detectedJavas, managedJavas, globalJavaPaths] =
+				await Promise.all([
 					invoke<number>("get_instance_required_java", { instanceId }),
 					invoke<any[]>("detect_java"),
 					invoke<any[]>("get_managed_javas"),
@@ -991,8 +1157,12 @@ export default function InstanceDetails(
 		const req = javaSettings.requiredJava;
 		if (!req) return [];
 
-		const global = javaSettings.globalJavaPaths.find((g) => g.major_version === req);
-		const globalPathSuffix = global ? `→ ${global.path}` : "(not set)";
+		const global = javaSettings.globalJavaPaths.find(
+			(g) => g.major_version === req,
+		);
+		const globalPathSuffix = global
+			? `→ ${global.path}`
+			: t("instances-extra-java-path-not-set");
 
 		const opts: any[] = [
 			{
@@ -1007,13 +1177,13 @@ export default function InstanceDetails(
 		const managedForVersion = managed.find((j) => j.major_version === req);
 		if (managedForVersion) {
 			opts.push({
-				label: t("app-services-managed-runtime"),
+				label: t("instances-extra-java-runtime-managed"),
 				description: managedForVersion.path,
 				value: managedForVersion.path,
 			});
 		} else {
 			opts.push({
-				label: t("app-services-managed-runtime"),
+				label: t("instances-extra-java-runtime-managed"),
 				description: t("instances-extra-java-runtime-download"),
 				value: `__download_${req}__`,
 			});
@@ -1023,7 +1193,7 @@ export default function InstanceDetails(
 			.filter((j) => j.major_version === req)
 			.forEach((j) => {
 				opts.push({
-					label: t("app-services-system-runtime"),
+					label: t("instances-extra-java-runtime-system"),
 					description: j.path,
 					value: j.path,
 				});
@@ -1150,7 +1320,9 @@ export default function InstanceDetails(
 
 		const confirmed = await dialogStore.confirm(
 			t("instances-extra-delete-resources-title"),
-			t("instances-extra-delete-selected-resources-confirm", { count: selectedCount }),
+			t("instances-extra-delete-selected-resources-confirm", {
+				count: selectedCount,
+			}),
 			{ severity: "warning", isDestructive: true },
 		);
 		if (!confirmed) return;
@@ -1195,7 +1367,9 @@ export default function InstanceDetails(
 			if (worldScopedSkipped > 0) {
 				showToast({
 					title: t("instances-extra-world-selection-required"),
-					description: t("instances-extra-world-selection-required-description", { count: worldScopedSkipped }),
+					description: t("instances-extra-world-selection-required-description", {
+						count: worldScopedSkipped,
+					}),
 					severity: "info",
 				});
 			}
@@ -1208,17 +1382,28 @@ export default function InstanceDetails(
 	};
 
 	// Resources Tab State
-	const [resourceTypeFilter, setResourceTypeFilter] = createSignal<string>("All");
+	const [resourceTypeFilter, setResourceTypeFilter] =
+		createSignal<string>(t("instances-details-resources-filter-all"));
 	const [resourceSearch, setResourceSearch] = createSignal("");
 	const [isCompactTable, setIsCompactTable] = createSignal(false);
-	const [modpackResourcesExpanded, setModpackResourcesExpanded] = createSignal(false);
-	const [overrideConflictConfirmed, setOverrideConflictConfirmed] = createSignal(false);
-	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>({});
+	const [modpackResourcesExpanded, setModpackResourcesExpanded] =
+		createSignal(false);
+	const [overrideConflictConfirmed, setOverrideConflictConfirmed] =
+		createSignal(false);
+	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>(
+		{},
+	);
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
 	const [updatesKnown, setUpdatesKnown] = createSignal(false);
-	const [rescanningResourceIds, setRescanningResourceIds] = createSignal<Set<number>>(new Set());
-	const [checkingPerResource, setCheckingPerResource] = createSignal<Set<number>>(new Set());
-	const [checkedPerResource, setCheckedPerResource] = createSignal<Set<number>>(new Set());
+	const [rescanningResourceIds, setRescanningResourceIds] = createSignal<
+		Set<number>
+	>(new Set());
+	const [checkingPerResource, setCheckingPerResource] = createSignal<
+		Set<number>
+	>(new Set());
+	const [checkedPerResource, setCheckedPerResource] = createSignal<Set<number>>(
+		new Set(),
+	);
 	const [totalRam, setTotalRam] = createSignal(16384);
 
 	let totalRamLoaded = false;
@@ -1235,10 +1420,13 @@ export default function InstanceDetails(
 	});
 
 	// Modpack versions for picker
-	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<string | null>(null);
+	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<
+		string | null
+	>(null);
 
 	const sharedMinecraftVersions = useMinecraftVersions();
-	const mcVersions = sharedMinecraftVersions.versions as typeof sharedMinecraftVersions.versions & {
+	const mcVersions =
+		sharedMinecraftVersions.versions as typeof sharedMinecraftVersions.versions & {
 			readonly loading: boolean;
 			readonly error: string | null;
 		};
@@ -1261,7 +1449,8 @@ export default function InstanceDetails(
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(false);
 	const [selectedLoader, setSelectedLoader] = createSignal("vanilla");
 	const [selectedLoaderVersion, setSelectedLoaderVersion] = createSignal("");
-	const [compatibilityInitialized, setCompatibilityInitialized] = createSignal(false);
+	const [compatibilityInitialized, setCompatibilityInitialized] =
+		createSignal(false);
 
 	const [modpackVersions, { mutate: mutateModpackVersions }] = createResource(
 		() => {
@@ -1275,7 +1464,10 @@ export default function InstanceDetails(
 		async (params) => {
 			if (!params.active || !params.id || !params.platform) return [];
 			try {
-				const vs = await resources.getVersions(params.platform as any, params.id);
+				const vs = await resources.getVersions(
+					params.platform as any,
+					params.id,
+				);
 				return vs;
 			} catch (e) {
 				console.error("Failed to fetch modpack versions:", e);
@@ -1313,14 +1505,26 @@ export default function InstanceDetails(
 		const inst = instance();
 		const versions = modpackVersions.latest;
 		if (!inst?.modpackId || !versions || versions.length === 0) return null;
-		const currentId = inst.modpackVersionId ? String(inst.modpackVersionId) : null;
-		return selectEligibleModpackUpdate(versions, currentId, inst.minecraftVersion);
+		const currentId = inst.modpackVersionId
+			? String(inst.modpackVersionId)
+			: null;
+		return selectEligibleModpackUpdate(
+			versions,
+			currentId,
+			inst.minecraftVersion,
+		);
 	});
 
 	const currentModpackVersion = createMemo(() => {
 		const inst = instance();
-		const currentId = inst?.modpackVersionId ? String(inst.modpackVersionId) : null;
-		return modpackVersions.latest?.find((version) => String(version.id) === currentId) || null;
+		const currentId = inst?.modpackVersionId
+			? String(inst.modpackVersionId)
+			: null;
+		return (
+			modpackVersions.latest?.find(
+				(version) => String(version.id) === currentId,
+			) || null
+		);
 	});
 
 	const searchableMcVersions = createMemo(() => {
@@ -1331,7 +1535,10 @@ export default function InstanceDetails(
 			? versions
 			: versions.filter((version) => version.stable);
 
-		if (selected && !visibleVersions.some((version) => version.id === selected)) {
+		if (
+			selected &&
+			!visibleVersions.some((version) => version.id === selected)
+		) {
 			const selectedMeta = versions.find((version) => version.id === selected);
 			if (selectedMeta) {
 				visibleVersions = [selectedMeta, ...visibleVersions];
@@ -1347,7 +1554,8 @@ export default function InstanceDetails(
 	const currentVersionSupportedLoaders = createMemo(() => {
 		const metadata = mcVersions();
 		const version = selectedMcVersion();
-		if (!metadata || !version) return [selectedLoader().toLowerCase() || "vanilla"];
+		if (!metadata || !version)
+			return [selectedLoader().toLowerCase() || "vanilla"];
 
 		const supported = getModloadersForGameVersion(metadata, version);
 		const current = selectedLoader().toLowerCase();
@@ -1368,7 +1576,9 @@ export default function InstanceDetails(
 		const selectedVersion = selectedLoaderVersion();
 		if (
 			selectedVersion &&
-			!loaderInfo.some((loaderVersion) => loaderVersion.version === selectedVersion)
+			!loaderInfo.some(
+				(loaderVersion) => loaderVersion.version === selectedVersion,
+			)
 		) {
 			loaderInfo = [{ version: selectedVersion, stable: true }, ...loaderInfo];
 		}
@@ -1399,7 +1609,9 @@ export default function InstanceDetails(
 					setIncludeSnapshots(currentMeta ? !currentMeta.stable : false);
 
 					if (inst.modpackId && !selectedModpackVersionId()) {
-						setSelectedModpackVersionId(inst.modpackVersionId ? String(inst.modpackVersionId) : null);
+						setSelectedModpackVersionId(
+							inst.modpackVersionId ? String(inst.modpackVersionId) : null,
+						);
 					}
 				});
 			}
@@ -1412,11 +1624,19 @@ export default function InstanceDetails(
 		const metadata = mcVersions();
 		const currentVersion = selectedMcVersion();
 
-		if (!inst || tab !== "versioning" || inst.modpackId || !metadata || !currentVersion) {
+		if (
+			!inst ||
+			tab !== "versioning" ||
+			inst.modpackId ||
+			!metadata ||
+			!currentVersion
+		) {
 			return;
 		}
 
-		const selectedMeta = metadata.game_versions.find((version) => version.id === currentVersion);
+		const selectedMeta = metadata.game_versions.find(
+			(version) => version.id === currentVersion,
+		);
 		if (!compatibilityInitialized() && selectedMeta && !selectedMeta.stable) {
 			if (!includeSnapshots()) {
 				setIncludeSnapshots(true);
@@ -1456,11 +1676,13 @@ export default function InstanceDetails(
 			}
 		});
 
-		const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(
+			resolved.adjustments,
+		);
 
 		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
 			showToast({
-				title: t("install-form-compatibility-adjusted"),
+				title: t("instances-extra-compatibility-adjusted"),
 				description: describeSelectionAdjustments(notifiableAdjustments),
 				severity: "info",
 			});
@@ -1479,7 +1701,9 @@ export default function InstanceDetails(
 
 		// Try to find a better match if we just have a loose ID
 		const match = vs.find(
-			(v) => String(v.id) === String(current) || String(v.version_number) === String(current),
+			(v) =>
+				String(v.id) === String(current) ||
+				String(v.version_number) === String(current),
 		);
 		if (match && String(match.id) !== current) {
 			setSelectedModpackVersionId(String(match.id));
@@ -1491,9 +1715,8 @@ export default function InstanceDetails(
 			if (fallbackId !== current) {
 				setSelectedModpackVersionId(fallbackId);
 				showToast({
-					title: t("install-versions-updated-title"),
-					description:
-						t("instances-extra-modpack-version-fallback"),
+					title: t("instances-extra-modpack-version-updated"),
+					description: t("instances-extra-modpack-version-fallback"),
 					severity: "info",
 				});
 			}
@@ -1536,11 +1759,29 @@ export default function InstanceDetails(
 					setUseGlobalLauncherAction(inst.useGlobalLauncherAction);
 					setLauncherActionOnLaunch(inst.launcherActionOnLaunch || "stay-open");
 				}
+				if (!isSandboxDirty()) {
+					setUseGlobalSandbox(inst.useGlobalSandbox ?? true);
+					setSandboxPreset(
+						normalizeSandboxPreset(
+							inst.sandboxPreset ?? instanceDefaults().default_sandbox_preset,
+						),
+					);
+					setSandboxWrapperNesting(
+						normalizeSandboxWrapperNesting(
+							inst.sandboxWrapperNesting ??
+								instanceDefaults().default_sandbox_wrapper_nesting,
+						),
+					);
+					setSandboxExtraPaths(parseSandboxExtraPaths(inst.sandboxExtraPaths));
+				}
 			});
 		}
 	});
 
-	const handleModpackVersionSelect = (versionId: string, version?: ModpackVersion) => {
+	const handleModpackVersionSelect = (
+		versionId: string,
+		version?: ModpackVersion,
+	) => {
 		setSelectedModpackVersionId(versionId);
 	};
 
@@ -1582,7 +1823,9 @@ export default function InstanceDetails(
 		const vid = selectedModpackVersionId();
 		if (!inst || !vid) return;
 
-		const targetVersion = modpackVersions()?.find((version) => String(version.id) === vid);
+		const targetVersion = modpackVersions()?.find(
+			(version) => String(version.id) === vid,
+		);
 		const nextMcVersion = targetVersion?.game_versions?.[0];
 
 		if (
@@ -1630,7 +1873,9 @@ export default function InstanceDetails(
 		const bundledResources = modpackOwnedResources();
 		const confirmed = await dialogStore.confirm(
 			t("instances-extra-delete-modpack-files-title"),
-			t("instances-extra-delete-modpack-files-confirm", { count: bundledResources.length }),
+			t("instances-extra-delete-modpack-files-confirm", {
+				count: bundledResources.length,
+			}),
 			{
 				severity: "warning",
 				okLabel: t("instances-extra-delete-modpack-files-action"),
@@ -1659,7 +1904,7 @@ export default function InstanceDetails(
 			console.error("Failed to delete modpack files and unlink:", e);
 			await refetchResources();
 			showToast({
-				title: t("app-services-delete-failed"),
+				title: t("instances-extra-modpack-delete-failed"),
 				description: t("instances-extra-modpack-delete-failed-description"),
 				severity: "error",
 			});
@@ -1698,11 +1943,13 @@ export default function InstanceDetails(
 					setSelectedLoaderVersion(nextLoaderVersion);
 				});
 
-				const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
+				const notifiableAdjustments = getNotifiableSelectionAdjustments(
+					resolved.adjustments,
+				);
 
 				if (notifiableAdjustments.length > 0) {
 					showToast({
-						title: t("install-form-compatibility-adjusted"),
+						title: t("instances-extra-compatibility-adjusted"),
 						description: describeSelectionAdjustments(notifiableAdjustments),
 						severity: "info",
 					});
@@ -1729,7 +1976,8 @@ export default function InstanceDetails(
 				...inst,
 				minecraftVersion: nextMcVersion,
 				modloader: nextLoader === "vanilla" ? null : nextLoader,
-				modloaderVersion: nextLoader === "vanilla" ? null : nextLoaderVersion || null,
+				modloaderVersion:
+					nextLoader === "vanilla" ? null : nextLoaderVersion || null,
 			});
 			await repairInstance(inst.id);
 			await refetch();
@@ -1747,10 +1995,13 @@ export default function InstanceDetails(
 		setCheckingUpdates(true);
 
 		try {
-			const result = await invoke<LightweightUpdateCheckResult>("check_instance_updates_lightweight", {
+			const result = await invoke<LightweightUpdateCheckResult>(
+				"check_instance_updates_lightweight",
+				{
 					instanceId: inst.id,
 					forceRefresh,
-			});
+				},
+			);
 
 			applyUpdateCheckResult(result);
 		} catch (e) {
@@ -1791,16 +2042,28 @@ export default function InstanceDetails(
 	let resourceMaintenanceGeneration = 0;
 	createEffect(
 		on(
-			() => [activeTab(), instance()?.id, resourceOverview.latest?.revision] as const,
+			() =>
+				[
+					activeTab(),
+					instance()?.id,
+					resourceOverview.latest?.revision,
+				] as const,
 			([tab, instanceId]) => {
 				const generation = ++resourceMaintenanceGeneration;
-				if ((tab !== "resources" && tab !== "crash") || !instanceId || !resourceOverview.latest) {
+				if (
+					(tab !== "resources" && tab !== "crash") ||
+					!instanceId ||
+					!resourceOverview.latest
+				) {
 					return;
 				}
 
 				const overview = resourceOverview.latest;
 				const cancelPaint = afterStablePaint(() => {
-					if (generation !== resourceMaintenanceGeneration || instance()?.id !== instanceId) {
+					if (
+						generation !== resourceMaintenanceGeneration ||
+						instance()?.id !== instanceId
+					) {
 						return;
 					}
 
@@ -1816,26 +2079,43 @@ export default function InstanceDetails(
 						{ instanceId },
 					);
 
-					if (tab === "resources" && overview.updateSnapshot?.isStale && !checkingUpdates()) {
+					if (
+						tab === "resources" &&
+						overview.updateSnapshot?.isStale &&
+						!checkingUpdates()
+					) {
 						void checkUpdates(false);
 					}
 
 					if (overview.missingProjectRefs.length > 0) {
-						void invoke<ResourceProjectOverviewRecord[]>("get_or_hydrate_resource_projects", {
+						void invoke<ResourceProjectOverviewRecord[]>(
+							"get_or_hydrate_resource_projects",
+							{
 								refs: overview.missingProjectRefs,
 								allowNetwork: true,
 								refreshStale: false,
-						})
+							},
+						)
 							.then((records) => {
-								if (generation === resourceMaintenanceGeneration && instance()?.id === instanceId) {
+								if (
+									generation === resourceMaintenanceGeneration &&
+									instance()?.id === instanceId
+								) {
 									batch(() => {
-										for (const [key, record] of Object.entries(projectRecordMap(records))) {
+										for (const [key, record] of Object.entries(
+											projectRecordMap(records),
+										)) {
 											mergeProjectMetadata(key, record);
 										}
 									});
 								}
 							})
-							.catch((error) => console.warn("Failed to hydrate background resource metadata:", error));
+							.catch((error) =>
+								console.warn(
+									"Failed to hydrate background resource metadata:",
+									error,
+								),
+							);
 					}
 				});
 
@@ -1859,7 +2139,10 @@ export default function InstanceDetails(
 		if (!inst) return;
 
 		try {
-			const project = await resources.getProject(resource.platform as any, resource.remote_id);
+			const project = await resources.getProject(
+				resource.platform as any,
+				resource.remote_id,
+			);
 			if (requiresWorldTarget(project, version)) {
 				if (!allowWorldPrompt) return false;
 				setWorldUpdate({ project, version, resourceId: resource.id });
@@ -1922,7 +2205,10 @@ export default function InstanceDetails(
 		);
 	};
 
-	const toggleResourceWithOverrides = async (resource: InstalledResource, enabled: boolean) => {
+	const toggleResourceWithOverrides = async (
+		resource: InstalledResource,
+		enabled: boolean,
+	) => {
 		const currentInstance = instance();
 		if (!currentInstance) return false;
 		const peers = enabled ? getOppositeActiveCopies(resource) : [];
@@ -1930,10 +2216,18 @@ export default function InstanceDetails(
 		if (peers.length > 0 && !overrideConflictConfirmed()) {
 			const confirmed = await dialogStore.confirm(
 				t("instances-extra-switch-active-resource-title"),
-				t("instances-extra-switch-active-resource-confirm", { name: resource.display_name, peers: peers.map((peer) => peer.display_name).join(", "), source: isModpackOwnedResource(resource) ? "custom resources" : "linked modpack" }),
+				t("instances-extra-switch-active-resource-confirm", {
+					name: resource.display_name,
+					peers: peers.map((peer) => peer.display_name).join(", "),
+					source: t(
+						isModpackOwnedResource(resource)
+							? "instances-extra-resource-source-custom"
+							: "instances-extra-resource-source-linked-modpack",
+					),
+				}),
 				{
 					okLabel: t("instances-extra-switch-active-resource-action"),
-					cancelLabel: t("shared-ui-cancel"),
+					cancelLabel: t("generic-action-cancel"),
 					severity: "warning",
 				},
 			);
@@ -1996,7 +2290,9 @@ export default function InstanceDetails(
 			id: "select",
 			size: 48, // Sync with CSS
 			header: ({ table }) => (
-				<div class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}>
+				<div
+					class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}
+				>
 					<Checkbox
 						class={styles["header-checkbox"]}
 						checked={table.getIsAllPageRowsSelected()}
@@ -2007,18 +2303,27 @@ export default function InstanceDetails(
 			),
 			cell: (info) => (
 				<div class={`${styles["col-selection-wrapper"]} v-col-selection`}>
-					<div class={styles["select-icon-container"]} onClick={(e: MouseEvent) => e.stopPropagation()}>
+					<div
+						class={styles["select-icon-container"]}
+						onClick={(e: MouseEvent) => e.stopPropagation()}
+					>
 						<ResourceIcon
 							record={
 								projectRecords[
-									getProjectRecordKey(info.row.original.platform, info.row.original.remote_id) || ""
+									getProjectRecordKey(
+										info.row.original.platform,
+										info.row.original.remote_id,
+									) || ""
 								]
 							}
 							name={info.row.original.display_name}
 							platform={info.row.original.platform}
 							projectId={info.row.original.remote_id}
 							onNearViewport={() =>
-								queueResourceIcon(info.row.original.platform, info.row.original.remote_id)
+								queueResourceIcon(
+									info.row.original.platform,
+									info.row.original.remote_id,
+								)
 							}
 						/>
 						<Checkbox
@@ -2032,10 +2337,11 @@ export default function InstanceDetails(
 			),
 		}),
 		columnHelper.accessor("display_name", {
-			header: t("instances-worlds-sort-name"),
+			header: t("generic-label-name"),
 			cell: (info) => {
 				const displayName = info.getValue();
-				const fileName = info.row.original.local_path.split(/[\\/]/).pop() ?? "";
+				const fileName =
+					info.row.original.local_path.split(/[\\/]/).pop() ?? "";
 				return (
 					<div class={styles["res-info-cell"]}>
 						<div class={styles["res-title-group"]}>
@@ -2058,14 +2364,21 @@ export default function InstanceDetails(
 		}),
 		columnHelper.accessor("current_version", {
 			header: t("instances-details-tab-version"),
-			cell: (info) => <span class={styles["col-version-text"]}>{info.getValue()}</span>,
+			cell: (info) => (
+				<span class={styles["col-version-text"]}>{info.getValue()}</span>
+			),
 		}),
 		columnHelper.accessor("is_enabled", {
 			header: () => (
-				<div style="text-align: center; width: 100%;">{t("instances-extra-resource-enabled")}</div>
+				<div style="text-align: center; width: 100%;">
+					{t("instances-extra-resource-enabled")}
+				</div>
 			),
 			cell: (info) => (
-				<div class={styles["col-enabled"]} onClick={(e: MouseEvent) => e.stopPropagation()}>
+				<div
+					class={styles["col-enabled"]}
+					onClick={(e: MouseEvent) => e.stopPropagation()}
+				>
 					<Switch
 						checked={info.getValue()}
 						onCheckedChange={(enabled: boolean) =>
@@ -2094,17 +2407,23 @@ export default function InstanceDetails(
 					currentVersion={info.row.original.current_version}
 					busy={busy()}
 					onMenuItemSelect={suppressRowNavigation}
-					onUpdate={handleUpdate}
+					onUpdate={async (resource, version) => {
+						await handleUpdate(resource, version);
+					}}
 					onDelete={async (resource) => {
 						if (
 							await dialogStore.confirm(
 								t("instances-extra-delete-resource-title"),
-								t("instances-extra-delete-resource-confirm", { name: resource.display_name }),
+								t("instances-extra-delete-resource-confirm", {
+									name: resource.display_name,
+								}),
 								{ severity: "warning", isDestructive: true },
 							)
 						) {
 							const previous = installedResources.latest;
-							mutateResources((prev) => prev?.filter((r) => r.id !== resource.id));
+							mutateResources((prev) =>
+								prev?.filter((r) => r.id !== resource.id),
+							);
 
 							try {
 								await invoke("delete_resource", {
@@ -2134,7 +2453,10 @@ export default function InstanceDetails(
 							);
 							applyUpdateCheckResult(result);
 						} catch (e) {
-							console.error(`Failed to check updates for ${resource.display_name}:`, e);
+							console.error(
+								`Failed to check updates for ${resource.display_name}:`,
+								e,
+							);
 						} finally {
 							setCheckingPerResource((prev) => {
 								const next = new Set(prev);
@@ -2207,7 +2529,11 @@ export default function InstanceDetails(
 		getFilteredRowModel: getFilteredRowModel(),
 		getRowId: (row) => row.id.toString(),
 		enableRowSelection: (row) =>
-			!(instance()?.modpackId && !modpackResourcesExpanded() && isModpackOwnedResource(row.original)),
+			!(
+				instance()?.modpackId &&
+				!modpackResourcesExpanded() &&
+				isModpackOwnedResource(row.original)
+			),
 	});
 
 	// Subscribe to console logs
@@ -2251,14 +2577,21 @@ export default function InstanceDetails(
 				status: "complete" | "partial";
 			}>("core://instance-resource-metadata-changed", (event) => {
 				const inst = instance();
-				if (inst && event.payload.instanceId === inst.id && event.payload.projectRefs.length > 0) {
-					void invoke<ResourceProjectOverviewRecord[]>("get_cached_resource_projects", {
-						refs: event.payload.projectRefs,
-					})
+				if (
+					inst &&
+					event.payload.instanceId === inst.id &&
+					event.payload.projectRefs.length > 0
+				) {
+					void invoke<ResourceProjectOverviewRecord[]>(
+						"get_cached_resource_projects",
+						{ refs: event.payload.projectRefs },
+					)
 						.then((records) => {
 							if (instance()?.id !== inst.id) return;
 							batch(() => {
-								for (const [key, record] of Object.entries(projectRecordMap(records))) {
+								for (const [key, record] of Object.entries(
+									projectRecordMap(records),
+								)) {
 									mergeProjectMetadata(key, record);
 								}
 							});
@@ -2300,7 +2633,10 @@ export default function InstanceDetails(
 		const currentSlug = slug();
 		const inst = instance();
 		if (!currentSlug || !inst) return undefined;
-		return getCrashDetails(currentSlug) || parseCrashDetails(inst.crashDetails, currentSlug);
+		return (
+			getCrashDetails(currentSlug) ||
+			parseCrashDetails(inst.crashDetails, currentSlug)
+		);
 	});
 
 	const primaryAction = createMemo(() => {
@@ -2322,7 +2658,13 @@ export default function InstanceDetails(
 	const handlePlay = async () => {
 		const inst = instance();
 		const currentSlug = slug();
-		if (!inst || !currentSlug || busy() || isLaunchingGlobal() || isRunningGlobal()) {
+		if (
+			!inst ||
+			!currentSlug ||
+			busy() ||
+			isLaunchingGlobal() ||
+			isRunningGlobal()
+		) {
 			return;
 		}
 
@@ -2375,10 +2717,18 @@ export default function InstanceDetails(
 	const handleSave = async () => {
 		const inst = instance();
 		if (!inst) return;
+		const instanceId = inst.id;
+		const editDraft = currentEditDraft();
+		const editDirty = currentEditDirty();
 		setSaving(true);
 		try {
-			const fresh = await getInstance(inst.id);
-			await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
+			const optionsSaved = await gameOptions.save();
+			if (!optionsSaved || instance()?.id !== instanceId) return;
+			if (isInstanceEditDirty(editDirty)) {
+				const fresh = await getInstance(instanceId);
+				await updateInstance(applyInstanceEditDraft(fresh, editDraft));
+			}
+			if (instance()?.id !== instanceId) return;
 			batch(() => {
 				// Clear temporary session icons once we've successfully saved to the backend
 				setCustomIconsThisSession([]);
@@ -2393,12 +2743,14 @@ export default function InstanceDetails(
 				setIsHooksDirty(false);
 				setIsEnvDirty(false);
 				setIsLaunchActionDirty(false);
+				setIsSandboxDirty(false);
 			});
 			await refetch();
 		} catch (e) {
 			console.error("Failed to save instance settings:", e);
+		} finally {
+			setSaving(false);
 		}
-		setSaving(false);
 	};
 
 	// Icon path is now handled by the IconPicker component directly
@@ -2442,7 +2794,7 @@ export default function InstanceDetails(
 	});
 
 	const handleTabChange = (tab: TabType) => {
-		if (tab === activeTab()) return;
+		if (tab === activeTab() && !showingGameOptions()) return;
 		if (tab === "resources") {
 			const instanceId = instance()?.id;
 			if (instanceId) {
@@ -2450,6 +2802,11 @@ export default function InstanceDetails(
 					instanceId,
 				});
 			}
+		}
+		// Leaving nested settings pages via the sidebar must clear them; otherwise
+		// settingsPage=game-options keeps fill layout / editor state on other tabs.
+		if (activeRouter()?.currentParams.get()?.settingsPage != null) {
+			activeRouter()?.updateQuery("settingsPage", null);
 		}
 		instanceTabLoader.prepare(tab);
 		setSelectedTab(tab);
@@ -2469,13 +2826,20 @@ export default function InstanceDetails(
 		if (tab === "worlds") {
 			const instanceId = instance()?.id;
 			if (instanceId) {
-				void import("@stores/worlds").then(({ listInstanceWorlds }) => listInstanceWorlds(instanceId));
+				void import("@stores/worlds").then(({ listInstanceWorlds }) =>
+					listInstanceWorlds(instanceId),
+				);
 			}
 		}
 	};
 
 	createEffect(() => {
-		if (!instance.loading && instance.latest && !currentCrash() && activeTab() === "crash") {
+		if (
+			!instance.loading &&
+			instance.latest &&
+			!currentCrash() &&
+			activeTab() === "crash"
+		) {
 			handleTabChange("home");
 		}
 	});
@@ -2493,6 +2857,7 @@ export default function InstanceDetails(
 					class={styles["content-wrapper"]}
 					classList={{
 						[styles["content-wrapper--console"]]: activeTab() === "console",
+						[styles["content-wrapper--fill"]]: showingGameOptions(),
 					}}
 				>
 					<Show when={instance.loading && !instance.latest}>
@@ -2560,8 +2925,13 @@ export default function InstanceDetails(
 												<OverviewTab
 													instance={inst()}
 													instanceSlug={slug()}
+													active={activeTab() === "home"}
 													installedResources={installedResources() || []}
-													knownUpdateCount={updatesKnown() ? Object.keys(updates()).length : undefined}
+													knownUpdateCount={
+														updatesKnown()
+															? Object.keys(updates()).length
+															: undefined
+													}
 													onManageResources={() => handleTabChange("resources")}
 													onAddResources={() => {
 														resources.setInstance(inst().id);
@@ -2581,18 +2951,34 @@ export default function InstanceDetails(
 											</Show>
 											<Show when={instance.latest}>
 												<Suspense
-													fallback={<InstanceTabLoading tabLabel={t("instances-details-tab-console")} />}
+													fallback={
+														<InstanceTabLoading
+															tabLabel={t("instances-details-tab-console")}
+														/>
+													}
 												>
-													<ConsoleTab instanceSlug={slug()} openLogsFolder={openLogsFolder} />
+													<ConsoleTab
+														instanceSlug={slug()}
+														openLogsFolder={openLogsFolder}
+													/>
 												</Suspense>
 											</Show>
 										</Show>
 									</TabsContent>
 
 									<TabsContent value="resources">
-										<Show when={instanceTabLoader.visitedTabs().has("resources") && instance.latest}>
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("resources") &&
+												instance.latest
+											}
+										>
 											<Suspense
-												fallback={<InstanceTabLoading tabLabel={t("instances-details-tab-resources")} />}
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-resources")}
+													/>
+												}
 											>
 												<ResourcesTab
 													instance={inst()}
@@ -2604,7 +2990,9 @@ export default function InstanceDetails(
 													resourcesStore={resources}
 													installedResources={installedResources}
 													modpackResources={modpackOwnedResources()}
-													modpackIcon={() => modpackIconBase64() || inst().modpackIconUrl || null}
+													modpackIcon={() =>
+														modpackIconBase64() || inst().modpackIconUrl || null
+													}
 													modpackExpanded={modpackResourcesExpanded()}
 													setModpackExpanded={setModpackResourcesExpanded}
 													currentModpackVersion={currentModpackVersion()}
@@ -2612,9 +3000,13 @@ export default function InstanceDetails(
 													router={activeRouter()}
 													handleBatchUpdate={handleBatchUpdate}
 													handleBatchDelete={handleBatchDelete}
-													onManageModpackVersions={() => handleTabChange("versioning")}
+													onManageModpackVersions={() =>
+														handleTabChange("versioning")
+													}
 													onUnlinkModpack={handleUnlink}
-													onDeleteModpackAndUnlink={handleDeleteModpackFilesAndUnlink}
+													onDeleteModpackAndUnlink={
+														handleDeleteModpackFilesAndUnlink
+													}
 													onRowClick={handleRowClick}
 													selectedToUpdateCount={selectedToUpdateCount()}
 													busy={busy()}
@@ -2627,19 +3019,43 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="worlds">
-										<Show when={instanceTabLoader.visitedTabs().has("worlds") && instance.latest}>
-											<Suspense fallback={<InstanceTabLoading tabLabel={t("instances-details-tab-worlds")} />}>
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("worlds") &&
+												instance.latest
+											}
+										>
+											<Suspense
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-worlds")}
+													/>
+												}
+											>
 												<WorldsTab
 													instance={inst()}
 													selectedWorldDirectory={selectedWorldDirectory()}
-													onSelectedWorldChange={(directoryName: string | null) =>
-														activeRouter()?.updateQuery("world", directoryName, true)
+													onSelectedWorldChange={(
+														directoryName: string | null,
+													) =>
+														activeRouter()?.updateQuery(
+															"world",
+															directoryName,
+															true,
+														)
 													}
 													onAddDatapack={(world: WorldSummary) => {
 														openWorldDatapackBrowser(world, activeRouter());
 													}}
-													onOpenDatapackDetails={(world: WorldSummary, entry: WorldDatapackSummary) =>
-														openWorldDatapackDetails(world, entry, activeRouter())
+													onOpenDatapackDetails={(
+														world: WorldSummary,
+														entry: WorldDatapackSummary,
+													) =>
+														openWorldDatapackDetails(
+															world,
+															entry,
+															activeRouter(),
+														)
 													}
 												/>
 											</Suspense>
@@ -2647,15 +3063,30 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="crash">
-										<Show when={instanceTabLoader.visitedTabs().has("crash") && instance.latest}>
-											<Suspense fallback={<InstanceTabLoading tabLabel={t("instances-details-tab-crash")} />}>
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("crash") &&
+												instance.latest
+											}
+										>
+											<Suspense
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-crash")}
+													/>
+												}
+											>
 												<CrashTab
 													instanceSlug={slug()}
 													instanceId={inst().id}
 													gameVersion={inst().minecraftVersion}
 													loader={inst().modloader ?? undefined}
 													crash={currentCrash()}
-													installedResources={installedResources.latest || installedResources() || []}
+													installedResources={
+														installedResources.latest ||
+														installedResources() ||
+														[]
+													}
 													projectRecords={projectRecords}
 													router={activeRouter()}
 													onCleared={() => void handleRefetch()}
@@ -2665,13 +3096,24 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="versioning">
-										<Show when={instanceTabLoader.visitedTabs().has("versioning") && instance.latest}>
+										<Show
+											when={
+												instanceTabLoader.visitedTabs().has("versioning") &&
+												instance.latest
+											}
+										>
 											<Suspense
-												fallback={<InstanceTabLoading tabLabel={t("instances-details-tab-version")} />}
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-version")}
+													/>
+												}
 											>
 												<VersioningTab
 													instance={inst()}
-													modpackIcon={() => modpackIconBase64() || inst().modpackIconUrl || null}
+													modpackIcon={() =>
+														modpackIconBase64() || inst().modpackIconUrl || null
+													}
 													isGuest={isGuest()}
 													busy={busy()}
 													isInstalling={isInstalling()}
@@ -2679,10 +3121,14 @@ export default function InstanceDetails(
 													checkUpdates={() => void checkUpdates(true)}
 													modpackVersions={modpackVersions}
 													availableModpackUpdate={availableModpackUpdate()}
-													handleModpackVersionSelect={handleModpackVersionSelect}
+													handleModpackVersionSelect={
+														handleModpackVersionSelect
+													}
 													rolloutModpackUpdate={rolloutModpackUpdate}
 													handleUnlink={handleUnlink}
-													handleDeleteModpackAndUnlink={handleDeleteModpackFilesAndUnlink}
+													handleDeleteModpackAndUnlink={
+														handleDeleteModpackFilesAndUnlink
+													}
 													router={activeRouter()}
 													searchableMcVersions={searchableMcVersions}
 													includeSnapshots={includeSnapshots}
@@ -2694,7 +3140,9 @@ export default function InstanceDetails(
 													selectedLoaderVersion={selectedLoaderVersion}
 													setSelectedLoaderVersion={setSelectedLoaderVersion}
 													loadersList={loadersList()}
-													currentVersionSupportedLoaders={currentVersionSupportedLoaders}
+													currentVersionSupportedLoaders={
+														currentVersionSupportedLoaders
+													}
 													searchableLoaderVersions={searchableLoaderVersions}
 													handleStandardUpdate={handleStandardUpdate}
 													mcVersions={mcVersions}
@@ -2704,7 +3152,20 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="settings">
-										<Show when={instanceTabLoader.visitedTabs().has("settings")}>
+										<Show when={showingGameOptions()}>
+											<GameOptionsEditor
+												state={gameOptions}
+												onBack={() =>
+													activeRouter()?.updateQuery("settingsPage", null)
+												}
+											/>
+										</Show>
+										<Show
+											when={
+												!showingGameOptions() &&
+												instanceTabLoader.visitedTabs().has("settings")
+											}
+										>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-settings"]}>
 													<Skeleton class={styles["skeleton-field"]} />
@@ -2713,7 +3174,11 @@ export default function InstanceDetails(
 											</Show>
 											<Show when={instance.latest}>
 												<Suspense
-													fallback={<InstanceTabLoading tabLabel={t("instances-details-tab-settings")} />}
+													fallback={
+														<InstanceTabLoading
+															tabLabel={t("instances-details-tab-settings")}
+														/>
+													}
 												>
 													<SettingsTab
 														instance={inst()}
@@ -2767,13 +3232,36 @@ export default function InstanceDetails(
 														environmentVariables={environmentVariables()}
 														setEnvironmentVariables={setEnvironmentVariables}
 														useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
-														setUseGlobalEnvironmentVariables={setUseGlobalEnvironmentVariables}
+														setUseGlobalEnvironmentVariables={
+															setUseGlobalEnvironmentVariables
+														}
 														setIsEnvDirty={setIsEnvDirty}
 														useGlobalLauncherAction={useGlobalLauncherAction()}
-														setUseGlobalLauncherAction={setUseGlobalLauncherAction}
+														setUseGlobalLauncherAction={
+															setUseGlobalLauncherAction
+														}
 														launcherActionOnLaunch={launcherActionOnLaunch()}
-														setLauncherActionOnLaunch={setLauncherActionOnLaunch}
+														setLauncherActionOnLaunch={
+															setLauncherActionOnLaunch
+														}
 														setIsLaunchActionDirty={setIsLaunchActionDirty}
+														useGlobalSandbox={useGlobalSandbox()}
+														setUseGlobalSandbox={setUseGlobalSandbox}
+														sandboxPreset={sandboxPreset()}
+														setSandboxPreset={setSandboxPreset}
+														sandboxWrapperNesting={sandboxWrapperNesting()}
+														setSandboxWrapperNesting={setSandboxWrapperNesting}
+														sandboxExtraPaths={sandboxExtraPaths()}
+														setSandboxExtraPaths={setSandboxExtraPaths}
+														inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
+														setIsSandboxDirty={setIsSandboxDirty}
+														onOpenGameOptions={() =>
+															activeRouter()?.updateQuery(
+																"settingsPage",
+																"game-options",
+																true,
+															)
+														}
 														invoke={invoke}
 														showToast={showToast}
 														isGuest={isGuest()}
@@ -2781,14 +3269,22 @@ export default function InstanceDetails(
 														setShowExportDialog={setShowExportDialog}
 														handleDuplicate={async () => {
 															const duplicateName = await dialogStore.prompt(
-																"Duplicate Instance",
-																"Enter name for the copy:",
+																t("instances-settings-duplicate-label"),
+																t("instances-extra-duplicate-name-prompt"),
 																{ defaultValue: `${inst().name} (Copy)` },
 															);
-															if (duplicateName) await duplicateInstance(inst().id, duplicateName);
+															if (duplicateName)
+																await duplicateInstance(
+																	inst().id,
+																	duplicateName,
+																);
 														}}
 														handleHardReset={() => handleHardReset(inst())}
-														handleUninstall={() => handleUninstall(inst(), () => activeRouter()?.navigate("/"))}
+														handleUninstall={() =>
+															handleUninstall(inst(), () =>
+																activeRouter()?.navigate("/"),
+															)
+														}
 														repairInstance={repairInstance}
 													/>
 												</Suspense>
@@ -2807,11 +3303,16 @@ export default function InstanceDetails(
 				onSave={handleSave}
 				isSaving={saving()}
 				onCancel={() => {
+					gameOptions.discard();
 					const i = inst();
 					if (!i) return;
 					batch(() => {
 						setName(i.name);
-						setIconPath(i.iconPath || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]);
+						setIconPath(
+							i.iconPath ||
+								getStableIconId(DEFAULT_ICONS[0]) ||
+								DEFAULT_ICONS[0],
+						);
 						setMinMemory([i.minMemory]);
 						setMaxMemory([i.maxMemory]);
 						setJavaArgs(i.javaArgs || "");
@@ -2829,6 +3330,19 @@ export default function InstanceDetails(
 						setUseGlobalEnvironmentVariables(i.useGlobalEnvironmentVariables);
 						setUseGlobalLauncherAction(i.useGlobalLauncherAction);
 						setLauncherActionOnLaunch(i.launcherActionOnLaunch || "stay-open");
+						setUseGlobalSandbox(i.useGlobalSandbox ?? true);
+						setSandboxPreset(
+							normalizeSandboxPreset(
+								i.sandboxPreset ?? instanceDefaults().default_sandbox_preset,
+							),
+						);
+						setSandboxWrapperNesting(
+							normalizeSandboxWrapperNesting(
+								i.sandboxWrapperNesting ??
+									instanceDefaults().default_sandbox_wrapper_nesting,
+							),
+						);
+						setSandboxExtraPaths(parseSandboxExtraPaths(i.sandboxExtraPaths));
 						setIsNameDirty(false);
 						setIsIconDirty(false);
 						setIsMinMemDirty(false);
@@ -2839,6 +3353,7 @@ export default function InstanceDetails(
 						setIsHooksDirty(false);
 						setIsEnvDirty(false);
 						setIsLaunchActionDirty(false);
+						setIsSandboxDirty(false);
 					});
 				}}
 				cancelText={t("instances-extra-reset")}

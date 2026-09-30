@@ -8,9 +8,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn(
-		async (event: string, listener: (event: { payload: any }) => void) => {
+		(event: string, listener: (event: { payload: any }) => void) => {
 			mocks.listeners.set(event, listener);
-			return vi.fn();
+			return Promise.resolve(vi.fn());
 		},
 	),
 }));

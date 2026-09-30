@@ -22,6 +22,27 @@ type NotificationType = "alert" | "progress" | "immediate" | "patient";
 type NotificationSeverity = "info" | "success" | "warning" | "error";
 type NotificationActionType = "primary" | "secondary" | "destructive";
 
+export interface NotificationContext {
+	kind: "instance" | "resource" | "channel" | string;
+	id?: string | null;
+	label?: string | null;
+	source?: string | null;
+	iconUrl?: string | null;
+}
+
+export function getNotificationContext(
+	metadata: string | null | undefined,
+): NotificationContext | undefined {
+	if (!metadata) return undefined;
+	try {
+		const value = JSON.parse(metadata);
+		const context = value?.context;
+		return context && typeof context.kind === "string" ? context : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 // Unified progress update protocol (matches Rust ProgressUpdate enum)
 export type ProgressUpdate =
 	| {
@@ -163,6 +184,7 @@ function updateExistingNotificationFromBackendSnapshot(
 		duration: getToastDuration(merged.notification_type, merged.progress),
 		dismissible: merged.dismissible,
 		actions: merged.actions,
+		metadata: merged.metadata,
 		onAction: (actionId, payload) => {
 			invokeNotificationAction(actionId, clientKey || undefined, payload);
 		},
@@ -220,6 +242,7 @@ function showAlert(
 			total_steps,
 			dismissible,
 			actions,
+			metadata,
 			onAction: (actionId, payload) => {
 				invokeNotificationAction(actionId, client_key || undefined, payload);
 			},

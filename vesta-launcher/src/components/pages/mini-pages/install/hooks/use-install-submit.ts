@@ -1,3 +1,4 @@
+import type { ResourceVersion } from "@stores/resources";
 import { t } from "~/localization";
 import { resources } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
@@ -19,6 +20,7 @@ interface UseInstallSubmitParams {
 	modpackUrl: Accessor<string>;
 	modpackPath: Accessor<string>;
 	modpackInfo: Accessor<{ fullMetadata?: any } | undefined>;
+	resolveConcreteModpackVersion?: () => Promise<ResourceVersion>;
 	pendingResource?: Accessor<PendingResourceInstall | undefined>;
 }
 
@@ -36,26 +38,24 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 					pending.version,
 					pending.installType,
 				);
-			if (
-				params.isModpackMode() &&
-				(params.modpackUrl() || params.modpackPath())
-			) {
-				const sourceUrl = params.modpackUrl();
+			if (params.isModpackMode()) {
+				let sourceUrl = params.modpackUrl();
 				const sourcePath = params.modpackPath();
+				let installData = data;
+				if (!sourceUrl && !sourcePath) {
+					const version = await params.resolveConcreteModpackVersion?.();
+					if (!version?.download_url) {
+						throw new Error("No downloadable modpack release is available.");
+					}
+					sourceUrl = version.download_url;
+					installData = { ...data, modpackVersionId: version.id };
+				}
 				const fullMetadata = params.modpackInfo()?.fullMetadata;
 				if (sourceUrl) {
-					await installModpackFromUrl(sourceUrl, data, fullMetadata);
+					await installModpackFromUrl(sourceUrl, installData, fullMetadata);
 				} else if (sourcePath) {
-					await installModpackFromZip(sourcePath, data, fullMetadata);
+					await installModpackFromZip(sourcePath, installData, fullMetadata);
 				}
-			} else if (params.isModpackMode()) {
-				showToast({
-					title: t("install-submit-version-loading-title"),
-					description:
-						t("install-submit-version-loading-description"),
-					severity: "warning",
-				});
-				return;
 			} else {
 				const id = await createInstance(data as any);
 				if (id) {
@@ -78,7 +78,8 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 							title: t("install-submit-resource-started-title"),
 							description: t("install-submit-resource-started-description", {
 								projectName: project.name,
-								instanceName: data.name || t("install-submit-instance-fallback"),
+								instanceName:
+									data.name || t("install-submit-instance-fallback"),
 							}),
 							severity: "success",
 						});
@@ -86,7 +87,8 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 						showToast({
 							title: t("install-submit-world-first-title"),
 							description: t("install-submit-world-first-description", {
-								instanceName: data.name || t("install-submit-new-instance-fallback"),
+								instanceName:
+									data.name || t("install-submit-new-instance-fallback"),
 								projectName: project.name,
 							}),
 							severity: "warning",

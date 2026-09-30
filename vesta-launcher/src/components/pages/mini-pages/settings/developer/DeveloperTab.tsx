@@ -8,10 +8,11 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { getInstanceSlug } from "@utils/instances";
 import { openInstanceTab } from "@utils/launch-intents";
+import { createNotification } from "@utils/notifications";
 import { simulateUpdateProcess } from "@utils/updater";
 import { createSignal, For, onMount, Show } from "solid-js";
-import { t } from "~/localization";
 import styles from "../settings-page.module.css";
+import { t } from "~/localization";
 import devStyles from "./developer-tab.module.css";
 
 type CrashScenarioInfo = {
@@ -73,6 +74,65 @@ export function DeveloperSettingsTab() {
 		}
 	};
 
+	const showNotificationPreview = async (severity: "warning" | "error") => {
+		const instance =
+			instancesState.instances.find(
+				(item) => getInstanceSlug(item) === selectedSlug(),
+			) ?? instancesState.instances[0];
+		const instanceName =
+			instance?.name ?? t("settings-developer-example-instance");
+
+		await createNotification({
+			client_key: `developer_notification_preview_${severity}`,
+			title:
+				severity === "warning"
+					? t("settings-developer-update-recovery-required-title")
+					: t("settings-developer-modpack-update-failed-title"),
+			description:
+				severity === "warning"
+					? t("settings-developer-update-recovery-required-description", {
+							instance: instanceName,
+						})
+					: t("settings-developer-modpack-update-failed-description", {
+							instance: instanceName,
+						}),
+			severity,
+			notification_type: "patient",
+			dismissible: true,
+			metadata: {
+				context: instance
+					? {
+							kind: "instance",
+							id: String(instance.id),
+							label: instance.name,
+						}
+					: {
+							kind: "channel",
+							label: t("settings-developer-preview-channel-label"),
+							source: "launcher",
+						},
+			},
+		});
+	};
+
+	const showGlobeNotificationPreview = async () => {
+		await createNotification({
+			client_key: "developer_notification_preview_globe",
+			title: t("settings-developer-globe-icon-preview-title"),
+			description: t("settings-developer-globe-icon-preview-description"),
+			severity: "info",
+			notification_type: "patient",
+			dismissible: true,
+			metadata: {
+				context: {
+					kind: "channel",
+					label: t("settings-developer-news-channel-label"),
+					source: "news",
+				},
+			},
+		});
+	};
+
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
@@ -101,9 +161,7 @@ export function DeveloperSettingsTab() {
 									await invoke("reset_notification_system");
 									showToast({
 										title: t("settings-developer-notifications-reset-title"),
-										description: t(
-											"settings-developer-notifications-reset-description",
-										),
+										description: t("settings-developer-notifications-reset-description"),
 										severity: "success",
 									});
 								}}
@@ -208,9 +266,7 @@ export function DeveloperSettingsTab() {
 										payload: {
 											client_key: "app_update_available",
 											title: t("settings-developer-update-available-title"),
-											description: t(
-												"settings-developer-update-available-description",
-											),
+											description: t("settings-developer-update-available-description"),
 											severity: "info",
 											notification_type: "patient",
 											dismissible: true,
@@ -220,6 +276,43 @@ export function DeveloperSettingsTab() {
 								}}
 							>
 								{t("settings-developer-simulate-discovery-button")}
+							</LauncherButton>
+						}
+					/>
+				</SettingsCard>
+
+				<SettingsCard header={t("settings-developer-notification-testing-title")}>
+					<SettingsField
+						label={t("settings-developer-warning-notification-label")}
+						description={t("settings-developer-warning-notification-description")}
+						headerRight={
+							<LauncherButton
+								onClick={() => void showNotificationPreview("warning")}
+							>
+								{t("settings-developer-test-warning-button")}
+							</LauncherButton>
+						}
+					/>
+					<SettingsField
+						label={t("settings-developer-error-notification-label")}
+						description={t("settings-developer-error-notification-description")}
+						headerRight={
+							<LauncherButton
+								type="destructive"
+								onClick={() => void showNotificationPreview("error")}
+							>
+								{t("settings-developer-test-error-button")}
+							</LauncherButton>
+						}
+					/>
+					<SettingsField
+						label={t("settings-developer-globe-icon-label")}
+						description={t("settings-developer-globe-icon-description")}
+						headerRight={
+							<LauncherButton
+								onClick={() => void showGlobeNotificationPreview()}
+							>
+								{t("settings-developer-test-globe-button")}
 							</LauncherButton>
 						}
 					/>
@@ -235,9 +328,7 @@ export function DeveloperSettingsTab() {
 									await invoke("start_demo_session");
 									showToast({
 										title: t("settings-developer-demo-account-added-title"),
-										description: t(
-											"settings-developer-demo-account-added-description",
-										),
+										description: t("settings-developer-demo-account-added-description"),
 										severity: "success",
 									});
 								}}
@@ -256,7 +347,9 @@ export function DeveloperSettingsTab() {
 							<LauncherButton
 								type="destructive"
 								onClick={() => {
-									throw new Error(t("settings-developer-test-sentry-error-message"));
+									throw new Error(
+										t("settings-developer-test-sentry-error-message"),
+									);
 								}}
 							>
 								{t("settings-developer-trigger-test-error-button")}
@@ -275,9 +368,7 @@ export function DeveloperSettingsTab() {
 									} catch (_e) {
 										showToast({
 											title: t("settings-developer-panic-triggered-title"),
-											description: t(
-												"settings-developer-panic-triggered-description",
-											),
+											description: t("settings-developer-panic-triggered-description"),
 											severity: "info",
 										});
 									}

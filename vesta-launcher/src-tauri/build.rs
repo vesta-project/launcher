@@ -1,8 +1,11 @@
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    bundle_sandbox_exec();
+
     tauri_build::build();
 
     // Obfuscate CurseForge API Key
@@ -30,4 +33,108 @@ fn main() {
     // Trigger rebuild when migrations change (for diesel_migrations)
     println!("cargo:rerun-if-changed=migrations");
     println!("cargo:rerun-if-env-changed=CURSEFORGE_API_KEY");
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn bundle_sandbox_exec() {
+    use std::path::PathBuf;
+
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".into());
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let workspace_root = manifest_dir.join("../..");
+    let target_dir = env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| workspace_root.join("target"));
+    let target = env::var("TARGET").unwrap_or_else(|_| "unknown-target".into());
+    let binaries_dir = manifest_dir.join("binaries");
+    let executable_suffix = if target.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    let helper_dest = binaries_dir.join(format!("vesta-sandbox-exec-{target}{executable_suffix}"));
+
+    // The packaged helper depends on the whole policy crate, not only its
+    // executable entry point. Rebuild it when shared policy code or resolved
+    // dependencies change so incremental builds cannot bundle a stale helper.
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/src");
+    println!("cargo:rerun-if-changed=../../crates/vesta-sandbox/Cargo.toml");
+    println!("cargo:rerun-if-changed=../../Cargo.lock");
+    println!("cargo:rerun-if-env-changed=TARGET");
+
+    let helper_src = ensure_sandbox_exec_built(
+        &workspace_root,
+        &target_dir,
+        &profile,
+        &target,
+        executable_suffix,
+    );
+    fs::create_dir_all(&binaries_dir).expect("create binaries directory");
+    fs::copy(&helper_src, &helper_dest).unwrap_or_else(|error| {
+        panic!(
+            "failed to copy vesta-sandbox-exec to {}: {error}",
+            helper_dest.display()
+        );
+    });
+    println!(
+        "cargo:rustc-env=VESTA_SANDBOX_EXEC={}",
+        helper_src.display()
+    );
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn ensure_sandbox_exec_built(
+    workspace_root: &Path,
+    target_dir: &Path,
+    profile: &str,
+    target: &str,
+    executable_suffix: &str,
+) -> PathBuf {
+    use std::process::Command;
+
+    // Nested `cargo build` must use a separate target dir or it deadlocks waiting
+    // on the parent build script's artifact directory lock.
+    let sidecar_target = target_dir.join("sidecar");
+    let sidecar_helper = sidecar_target
+        .join(target)
+        .join(profile)
+        .join(format!("vesta-sandbox-exec{executable_suffix}"));
+
+    let mut command = Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
+    command
+        .current_dir(workspace_root)
+        .env("CARGO_TARGET_DIR", &sidecar_target)
+        .args([
+            "build",
+            "--locked",
+            "-p",
+            "vesta-sandbox",
+            "--bin",
+            "vesta-sandbox-exec",
+            "--target",
+            target,
+        ]);
+    if profile == "release" {
+        command.arg("--release");
+    } else if profile != "debug" {
+        command.args(["--profile", profile]);
+    }
+    let build_status = command.status().unwrap_or_else(|error| {
+        panic!("failed to spawn cargo build for vesta-sandbox-exec helper: {error}");
+    });
+
+    if !build_status.success() {
+        panic!(
+            "failed to build vesta-sandbox-exec helper required by Tauri externalBin for {target}"
+        );
+    }
+
+    if sidecar_helper.is_file() {
+        return sidecar_helper;
+    }
+
+    panic!(
+        "vesta-sandbox-exec helper missing after build; expected {}",
+        sidecar_helper.display()
+    );
 }

@@ -12,20 +12,11 @@ import {
 	iconBackgroundStyle,
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS } from "@utils/instances";
-import {
-	type Component,
-	createMemo,
-	For,
-	Show,
-} from "solid-js";
+import { type Component, createMemo, For, Show } from "solid-js";
 import styles from "./instance-selection-dialog.module.css";
 import { t } from "~/localization";
 
-export type InstanceSelectionTone =
-	| "neutral"
-	| "accent"
-	| "warning"
-	| "danger";
+export type InstanceSelectionTone = "neutral" | "accent" | "warning" | "danger";
 
 export type InstanceSelectionOption = {
 	instance: Instance;
@@ -184,4 +175,5 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 };
 
 export default InstanceSelectionDialog;
+
 import AddIcon from "@assets/icons/actions/add.svg";

@@ -1,3 +1,7 @@
+import type {
+	SandboxPresetValue,
+	SandboxWrapperNestingValue,
+} from "@components/settings/sandbox-policy-ui";
 import type { Instance } from "@utils/instances";
 
 export type LauncherAction = Exclude<Instance["launcherActionOnLaunch"], null>;
@@ -22,6 +26,10 @@ export interface InstanceEditDraft {
 	postExitHook: string;
 	wrapperCommand: string;
 	environmentVariables: string;
+	useGlobalSandbox: boolean;
+	sandboxPreset: SandboxPresetValue;
+	sandboxWrapperNesting: SandboxWrapperNestingValue;
+	sandboxExtraPaths: string[];
 }
 
 export interface InstanceEditDirty {
@@ -35,6 +43,7 @@ export interface InstanceEditDirty {
 	hooks: boolean;
 	env: boolean;
 	launchAction: boolean;
+	sandbox: boolean;
 }
 
 export interface InstanceInstallDirty {
@@ -123,6 +132,10 @@ export function buildInstanceInstallPayload(
 		useGlobalJavaPath: true,
 		useGlobalHooks: true,
 		useGlobalEnvironmentVariables: true,
+		useGlobalSandbox: true,
+		sandboxPreset: null,
+		sandboxWrapperNesting: null,
+		sandboxExtraPaths: "[]",
 		preLaunchHook: null,
 		wrapperCommand: null,
 		postExitHook: null,
@@ -163,6 +176,12 @@ export function applyInstanceEditDraft(
 		postExitHook: draft.postExitHook || null,
 		wrapperCommand: draft.wrapperCommand || null,
 		environmentVariables: draft.environmentVariables || null,
+		useGlobalSandbox: draft.useGlobalSandbox,
+		sandboxPreset: draft.useGlobalSandbox ? null : draft.sandboxPreset,
+		sandboxWrapperNesting: draft.useGlobalSandbox
+			? null
+			: draft.sandboxWrapperNesting,
+		sandboxExtraPaths: JSON.stringify(draft.sandboxExtraPaths),
 	};
 }
 
@@ -190,6 +209,10 @@ export function toInstanceEditHandoff(
 		initialPostExitHook: draft.postExitHook,
 		initialWrapperCommand: draft.wrapperCommand,
 		initialEnvironmentVariables: draft.environmentVariables,
+		initialUseGlobalSandbox: draft.useGlobalSandbox,
+		initialSandboxPreset: draft.sandboxPreset,
+		initialSandboxWrapperNesting: draft.sandboxWrapperNesting,
+		initialSandboxExtraPaths: draft.sandboxExtraPaths,
 		_dirty: { ...dirty },
 	};
 }

@@ -228,23 +228,26 @@ impl Task for InstallModpackTask {
     }
 
     fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
-        crate::tasks::manager::localized_message(localization, "rust-task-install-modpack", &[("instance", &self.instance.name)])
+        crate::tasks::manager::localized_message(
+            localization,
+            "rust-task-install-modpack",
+            &[("instance", &self.instance.name)],
+        )
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance.id,
+            Some(self.instance.name.clone()),
+        ))
     }
 
     fn starting_description(&self) -> String {
         format!("Preparing to install modpack: {}", self.instance.name)
     }
 
-    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
-        crate::tasks::manager::localized_message(localization, "rust-task-preparing-install-modpack", &[("instance", &self.instance.name)])
-    }
-
     fn completion_description(&self) -> String {
         format!("Successfully installed modpack: {}", self.instance.name)
-    }
-
-    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
-        crate::tasks::manager::localized_message(localization, "rust-task-installed-modpack", &[("instance", &self.instance.name)])
     }
 
     fn show_completion_notification(&self) -> bool {
@@ -275,7 +278,7 @@ impl Task for InstallModpackTask {
             let modpack_path = match source {
                 ModpackSource::Path(p) => p,
                 ModpackSource::Url(u) => {
-                    reporter.set_message(&reporter.ctx.text("rust-task-downloading-modpack-zip"));
+                    reporter.set_message("Downloading modpack zip...");
 
                     let client = piston_lib::client::shared_client();
 
@@ -462,18 +465,19 @@ impl Task for InstallModpackTask {
                 &game_dir,
                 &root_manifest,
                 &known_resolutions,
+                "modpack-install-local-rows",
                 Some(&ctx),
             )
             .await?;
 
-            ctx.update_description(ctx.text("rust-task-attaching-resource-watcher"));
+            ctx.update_description("Attaching resource watcher…".to_string());
             let watcher = app_handle.state::<crate::resources::watcher::ResourceWatcher>();
             watcher
                 .watch_instance_without_scan(instance.id, game_dir.to_string_lossy().into_owned())
                 .await
                 .map_err(|error| format!("Failed to attach resource watcher: {error}"))?;
 
-            ctx.update_description(ctx.text("rust-task-finalizing-installed-instance"));
+            ctx.update_description("Finalizing installed instance…".to_string());
             diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
                 .set(inst_dsl::installation_status.eq(Some("installed".to_string())))
                 .execute(&mut conn)
@@ -576,14 +580,40 @@ fn manifest_resource_candidates(
         .collect()
 }
 
-async fn prepare_manifest_resource_rows(
+pub(crate) async fn prepare_manifest_resource_rows(
     app_handle: &tauri::AppHandle,
     instance_id: i32,
     game_dir: &std::path::Path,
     manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
     known_resolutions: &HashMap<String, crate::resources::reconciliation::KnownResourceResolution>,
+    publication_reason: &str,
     progress_context: Option<&TaskContext>,
 ) -> Result<Vec<crate::resources::reconciliation::PreparedResourceCandidate>, String> {
+    let prepared = prepare_manifest_resource_candidates(
+        instance_id,
+        game_dir,
+        manifest,
+        known_resolutions,
+        progress_context,
+    )
+    .await;
+    crate::resources::reconciliation::publish_local_rows(
+        app_handle,
+        instance_id,
+        &prepared,
+        publication_reason,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(prepared)
+}
+
+pub(crate) async fn prepare_manifest_resource_candidates(
+    instance_id: i32,
+    game_dir: &std::path::Path,
+    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
+    known_resolutions: &HashMap<String, crate::resources::reconciliation::KnownResourceResolution>,
+    progress_context: Option<&TaskContext>,
+) -> Vec<crate::resources::reconciliation::PreparedResourceCandidate> {
     let candidates =
         manifest_resource_candidates(instance_id, game_dir, manifest, known_resolutions);
     let total = candidates.len();
@@ -621,14 +651,35 @@ async fn prepare_manifest_resource_rows(
             Some(total as i32),
         );
     }
-    crate::resources::reconciliation::publish_local_rows(
-        app_handle,
-        instance_id,
-        &prepared,
-        "modpack-install-local-rows",
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(prepared)
+    prepared
+}
+
+pub(crate) fn spawn_prepared_resource_enrichment(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    instance_name: String,
+    prepared: Vec<crate::resources::reconciliation::PreparedResourceCandidate>,
+    reason: &'static str,
+) {
+    let app_handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = app_handle
+            .state::<TaskManager>()
+            .submit(Box::new(ResourceEnrichmentTask::new(
+                instance_id,
+                instance_name.clone(),
+                prepared,
+                reason,
+            )))
+            .await
+        {
+            log::warn!(
+                "[ResourceReconciliation] Failed to enqueue enrichment for {}: {}",
+                instance_name,
+                error
+            );
+        }
+    });
 }
 
 fn indexing_progress_description(processed: usize, total: usize) -> String {
@@ -668,6 +719,7 @@ pub fn spawn_manifest_resource_linking(
             &game_dir,
             &manifest,
             &HashMap::new(),
+            "modpack-update-local-rows",
             None,
         )
         .await
@@ -682,22 +734,13 @@ pub fn spawn_manifest_resource_linking(
                 return;
             }
         };
-        if let Err(error) = app_handle
-            .state::<TaskManager>()
-            .submit(Box::new(ResourceEnrichmentTask::new(
-                instance_id,
-                instance_name.clone(),
-                prepared,
-                "modpack-update-enrichment",
-            )))
-            .await
-        {
-            log::warn!(
-                "[ResourceReconciliation] Failed to enqueue enrichment for {}: {}",
-                instance_name,
-                error
-            );
-        }
+        spawn_prepared_resource_enrichment(
+            &app_handle,
+            instance_id,
+            instance_name,
+            prepared,
+            "modpack-update-enrichment",
+        );
     });
 }
 

@@ -10,10 +10,6 @@
 	color: var(--text-primary);
 	overflow: hidden;
 
-	& svg {
-		fill: var(--text-secondary);
-	}
-
 	transition:
 		width 300ms,
 		visibility 200ms,
@@ -79,6 +75,10 @@
 .sidebar__notifications-titlebar {
 	display: flex;
 	justify-content: space-between;
+}
+
+.sidebar__notifications-titlebar svg {
+	fill: var(--text-secondary);
 }
 
 @keyframes progress-pulse {

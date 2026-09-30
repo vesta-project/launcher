@@ -2,14 +2,12 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 0.5em;
-	cursor: default;
 	border-radius: 6px;
 	padding: 0.5rem;
 	position: relative;
 	transition-property: background-color, color;
 	transition-duration: 150ms;
 	transition-timing-function: ease-in-out;
-	cursor: default;
 	cursor: default;
 }
 
@@ -39,8 +37,6 @@
 		border-color 0.2s,
 		background-color 0.2s,
 		color 0.2s;
-	cursor: default;
-	cursor: default;
 	cursor: default;
 }
 

@@ -1,4 +1,15 @@
-import { SettingsCard, SettingsField } from "@components/settings";
+import {
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	PathListEditor,
+	SandboxHostNotice,
+	SandboxPresetSelect,
+	type SandboxPresetValue,
+	SettingsCard,
+	SettingsField,
+	useSandboxHostSupport,
+} from "@components/settings";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 import panelStyles from "@components/settings/settings.module.css";
 import { getTotalRam, instanceDefaults, updateDefaultField } from "@stores/settings";
 import {
@@ -12,6 +23,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { Separator } from "@ui/separator/separator";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { TextFieldInput, TextFieldRoot, TextFieldTextArea } from "@ui/text-field/text-field";
 import {
 	formatMemoryLabel,
@@ -29,6 +41,7 @@ import { t } from "~/localization";
 import styles from "../settings-page.module.css";
 
 export function InstanceDefaultsTab() {
+	const [sandboxSupport] = useSandboxHostSupport();
 	const launchOptions = createMemo(() => launchBehaviorOptions());
 
 	const handleMemoryChange = (val: number[]) => {
@@ -224,6 +237,66 @@ export function InstanceDefaultsTab() {
 							}}
 						/>
 					</TextFieldRoot>
+				</SettingsCard>
+
+				<SettingsCard
+					header={t("sandbox-settings-card-title")}
+					subHeader={t("sandbox-settings-defaults-card-subheader")}
+				>
+					<div class={sandboxStyles.fieldStack}>
+						<SandboxHostNotice support={sandboxSupport()} />
+						<SettingsField
+							label={t("sandbox-settings-preset-option-label")}
+							description={t("sandbox-settings-preset-option-description")}
+							body={
+								<SandboxPresetSelect
+									value={normalizeSandboxPreset(
+										instanceDefaults().default_sandbox_preset,
+									)}
+									onChange={(value: SandboxPresetValue) =>
+										updateDefaultField("default_sandbox_preset", value)
+									}
+								/>
+							}
+						/>
+						<SettingsField
+							label={t("sandbox-settings-wrapper-inclusion-label")}
+							description={t("sandbox-settings-wrapper-inclusion-description")}
+							headerRight={
+								<Switch
+									checked={
+										normalizeSandboxWrapperNesting(
+											instanceDefaults().default_sandbox_wrapper_nesting,
+										) === "sandbox-outside"
+									}
+									onCheckedChange={(checked: boolean) =>
+										updateDefaultField(
+											"default_sandbox_wrapper_nesting",
+											checked ? "sandbox-outside" : "wrapper-outside",
+										)
+									}
+								>
+									<SwitchControl>
+										<SwitchThumb />
+									</SwitchControl>
+								</Switch>
+							}
+						/>
+						<SettingsField
+							label={t("sandbox-settings-extra-folders-label")}
+							description={t("sandbox-settings-extra-folders-description")}
+							body={
+								<PathListEditor
+									paths={instanceDefaults().default_sandbox_extra_paths ?? []}
+									onChange={(paths) =>
+										updateDefaultField("default_sandbox_extra_paths", paths)
+									}
+									addLabel={t("sandbox-settings-add-default-folder")}
+									emptyLabel={t("sandbox-settings-no-extra-default-folders")}
+								/>
+							}
+						/>
+					</div>
 				</SettingsCard>
 
 				<SettingsCard

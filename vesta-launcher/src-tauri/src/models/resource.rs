@@ -67,6 +67,57 @@ pub struct ResourceMetadataCacheRecord {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceAuthor {
+    pub id: String,
+    pub username: String,
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub profile_url: Option<String>,
+    pub role: String,
+    pub ordering: i64,
+    #[serde(default)]
+    pub is_owner: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceOrganization {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
+    pub icon_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ResourceProjectLink {
+    pub kind: String,
+    pub label: String,
+    pub url: String,
+    #[serde(default)]
+    pub donation: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct ResourceEnvironment {
+    pub client: bool,
+    pub server: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ResourceCreatorKind {
+    Author,
+    Organization,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceCreatorFilter {
+    pub kind: ResourceCreatorKind,
+    pub id: String,
+    pub name: String,
+    pub icon_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResourceProject {
     pub id: String,
     pub source: SourcePlatform,
@@ -77,10 +128,20 @@ pub struct ResourceProject {
     pub icon_url: Option<String>,
     pub author: String,
     pub authors: Vec<String>,
+    #[serde(default)]
+    pub author_details: Vec<ResourceAuthor>,
+    #[serde(default)]
+    pub organization: Option<ResourceOrganization>,
+    #[serde(default)]
+    pub project_types: Vec<ResourceType>,
     pub download_count: u64,
     pub follower_count: u64,
     pub categories: Vec<String>,
     pub web_url: String,
+    #[serde(default)]
+    pub links: Vec<ResourceProjectLink>,
+    #[serde(default)]
+    pub environment: Option<ResourceEnvironment>,
     pub external_ids: Option<std::collections::HashMap<String, String>>,
     pub gallery: Vec<String>,
     pub featured_gallery: Option<String>,
@@ -231,6 +292,12 @@ pub struct SearchQuery {
     pub game_version: Option<String>,
     pub loader: Option<String>,
     pub categories: Option<Vec<String>>,
+    #[serde(default)]
+    pub client: bool,
+    #[serde(default)]
+    pub server: bool,
+    #[serde(default)]
+    pub creator: Option<ResourceCreatorFilter>,
     pub facets: Option<Vec<String>>,
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
@@ -256,7 +323,26 @@ pub struct ResourceCategory {
 
 #[cfg(test)]
 mod tests {
-    use super::{ResourceVersion, SourcePlatform};
+    use super::{ResourceProject, ResourceVersion, SourcePlatform};
+
+    #[test]
+    fn cached_resource_project_without_v3_attribution_still_deserializes() {
+        let cached = r#"{
+            "id":"project-1","source":"modrinth","resource_type":"mod",
+            "name":"Example","summary":"Summary","description":null,
+            "icon_url":null,"author":"Author","authors":["Author"],
+            "download_count":1,"follower_count":2,"categories":[],
+            "web_url":"https://example.invalid","external_ids":null,
+            "gallery":[],"featured_gallery":null,"published_at":null,
+            "updated_at":null
+        }"#;
+
+        let project: ResourceProject = serde_json::from_str(cached).unwrap();
+
+        assert!(project.author_details.is_empty());
+        assert!(project.organization.is_none());
+        assert!(project.project_types.is_empty());
+    }
 
     #[test]
     fn cached_resource_version_without_detail_stats_still_deserializes() {

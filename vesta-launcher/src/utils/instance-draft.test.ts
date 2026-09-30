@@ -30,6 +30,10 @@ const draft: InstanceEditDraft = {
 	postExitHook: "echo done",
 	wrapperCommand: "",
 	environmentVariables: "FOO=bar",
+	useGlobalSandbox: false,
+	sandboxPreset: "paranoid",
+	sandboxWrapperNesting: "wrapper-outside",
+	sandboxExtraPaths: ["/instance/extra"],
 };
 
 const clean: InstanceEditDirty = {
@@ -43,6 +47,7 @@ const clean: InstanceEditDirty = {
 	hooks: false,
 	env: false,
 	launchAction: false,
+	sandbox: false,
 };
 
 describe("instance edit draft", () => {
@@ -64,6 +69,8 @@ describe("instance edit draft", () => {
 		expect(applied.javaArgs).toBeNull();
 		expect(applied.postExitHook).toBe("echo done");
 		expect(applied.launcherActionOnLaunch).toBeNull();
+		expect(applied.sandboxPreset).toBe("paranoid");
+		expect(applied.sandboxExtraPaths).toBe(JSON.stringify(["/instance/extra"]));
 	});
 
 	it("preserves the local launcher action when global policy is disabled", () => {

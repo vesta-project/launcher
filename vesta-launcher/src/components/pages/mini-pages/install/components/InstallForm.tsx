@@ -109,6 +109,8 @@ export interface InstallFormProps {
 	onStateChange?: (data: Partial<Instance>) => void;
 	isInstalling?: boolean;
 	isFetchingMetadata?: boolean;
+	versionLookupError?: string;
+	onRetryVersionLookup?: () => void;
 }
 
 interface DirtyState {
@@ -345,7 +347,7 @@ export function InstallForm(props: InstallFormProps) {
 
 	const formatMemoryLabel = (value: number) =>
 		value >= 1024
-			? `${formatNumber(value / 1024, { maximumFractionDigits: 1 })} GB`
+			? `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} GB`
 			: `${value} MB`;
 
 	const memorySummaryReason = () => {
@@ -761,7 +763,7 @@ export function InstallForm(props: InstallFormProps) {
 									<div class={styles["version-item-content"]}>
 										<span class={styles["v-num"]}>{p.item.rawValue}</span>
 										<Show when={!vi?.stable}>
-											<span class={styles["v-meta"]}>{t("instances-versioning-experimental-badge")}</span>
+												<span class={styles["v-meta"]}>{t("instances-versioning-experimental-badge")}</span>
 										</Show>
 									</div>
 								</ComboboxItem>
@@ -851,7 +853,7 @@ export function InstallForm(props: InstallFormProps) {
 								applyMemoryPreset(generatedMemoryRecommendation().preferredMax)
 							}
 						>
-							{t("secondary-help-modpack-memory-targets-default-label")} {" "}
+							Default{" "}
 							{formatMemoryLabel(generatedMemoryRecommendation().preferredMax)}
 						</button>
 						<Show when={normalizedIsModpack()}>
@@ -859,16 +861,17 @@ export function InstallForm(props: InstallFormProps) {
 								type="button"
 								onClick={() => applyMemoryPreset(suggestedMemoryValue())}
 							>
-								{t("secondary-help-modpack-memory-targets-suggested-label")} {suggestedMemoryLabel()}
+								Suggested {suggestedMemoryLabel()}
 							</button>
 						</Show>
 						<Show when={shouldShowMemoryWarning()}>
 							<Tooltip>
 								<TooltipTrigger as="span" class={styles["memory-warning-pill"]}>
-									{t("common-warning")}
+									Warning
 								</TooltipTrigger>
 								<TooltipContent>
-									{t("install-form-memory-warning-description")}
+									Allowing Minecraft to use this much memory may leave too
+									little for the rest of the computer.
 								</TooltipContent>
 							</Tooltip>
 						</Show>
@@ -933,7 +936,7 @@ export function InstallForm(props: InstallFormProps) {
 					<div class={styles["install-main-column"]}>
 						{/* IDENTITY SECTION */}
 						<div class={styles["form-section"]}>
-							<div class={styles["form-section-title"]}>{t("install-form-instance-identity")}</div>
+						<div class={styles["form-section-title"]}>{t("install-form-instance-identity")}</div>
 							<div class={styles["identity-row"]}>
 								<IconPicker
 									value={icon()}
@@ -1035,7 +1038,7 @@ export function InstallForm(props: InstallFormProps) {
 												</ComboboxItem>
 											)}
 										>
-											<ComboboxControl aria-label={t("install-form-modpack-version-selection-aria")}>
+										<ComboboxControl aria-label={t("install-form-modpack-version-selection-aria")}>
 												<ComboboxInput as="input" />
 												<ComboboxTrigger />
 											</ComboboxControl>
@@ -1052,7 +1055,7 @@ export function InstallForm(props: InstallFormProps) {
 									</div>
 									<div class={styles["meta-item"]}>
 										<span class={styles["label"]}>
-											{t("instances-versioning-modloader-label")}
+												{t("instances-versioning-modloader-label")}
 											<HelpTrigger topic="MODLOADER_EXPLAINED" />
 										</span>
 										<span class={styles["value"]}>
@@ -1072,7 +1075,7 @@ export function InstallForm(props: InstallFormProps) {
 								<div class={styles["form-row"]}>
 									<div class={styles["flex-grow"]}>
 										<div class={styles["field-label-manual"]}>
-											{t("instances-versioning-modloader-label")}
+												{t("instances-versioning-modloader-label")}
 											<HelpTrigger topic="MODLOADER_EXPLAINED" />
 										</div>
 										<ModloaderSwitcher
@@ -1091,7 +1094,7 @@ export function InstallForm(props: InstallFormProps) {
 								<div class={styles["form-row"]}>
 									<div class={styles["flex-grow"]}>
 										<div class={styles["field-label-manual"]}>
-											{t("instances-versioning-mc-version-label")}
+												{t("instances-versioning-mc-version-label")}
 											<HelpTrigger topic="MINECRAFT_VERSION" />
 										</div>
 										<Combobox<string>
@@ -1159,7 +1162,7 @@ export function InstallForm(props: InstallFormProps) {
 										MC{" "}
 										{props.modpackInfo?.minecraftVersion ||
 											mcVersion() ||
-											t("resources-version-unknown")}
+													 t("resources-version-unknown")}
 									</span>
 									<span
 										class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}
@@ -1227,6 +1230,14 @@ export function InstallForm(props: InstallFormProps) {
 			{/* FOOTER ACTIONS */}
 			<Separator />
 			<div class={styles["install-form__actions-container"]}>
+				<Show when={props.versionLookupError && props.onRetryVersionLookup}>
+					<div class={styles["version-lookup-error"]} role="alert">
+						<span>{t("install-versions-sync-failed-description")}</span>
+						<button type="button" onClick={props.onRetryVersionLookup}>
+							{t("shared-ui-retry")}
+						</button>
+					</div>
+				</Show>
 				<div class={styles["install-form__actions"]}>
 					<Show when={props.onCancel}>
 						<LauncherButton
@@ -1244,7 +1255,9 @@ export function InstallForm(props: InstallFormProps) {
 						class={styles["install-submit-btn"]}
 					>
 						{props.isInstalling
-							? t("onboarding-modpack-installing")
+							? normalizedIsModpack()
+								? t("onboarding-modpack-installing")
+								: t("install-page-loading-creating-instance")
 							: normalizedIsModpack()
 								? t("onboarding-modpack-install")
 								: t("onboarding-instance-create")}

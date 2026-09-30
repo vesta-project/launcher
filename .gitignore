@@ -181,3 +181,5 @@ dist
 .DS_Store
 /target/
 **/target/**
+vesta-launcher/src-tauri/binaries/
+.skin-packs-cache/

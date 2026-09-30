@@ -1,8 +1,12 @@
 use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
+#[cfg(not(target_os = "windows"))]
 use tauri::webview::Color;
 use tauri::{Emitter, Manager};
+
+#[cfg(target_os = "windows")]
+use piston_lib::utils::process::PistonCommandExt;
 
 const IDLE_MINI_WINDOW_CAPACITY: usize = 2;
 
@@ -115,8 +119,10 @@ fn build_mini_window(
     .disable_drag_drop_handler()
     .visible(false)
     .transparent(true)
-    .decorations(false)
-    .background_color(Color(20, 20, 20, 255));
+    .decorations(false);
+
+    #[cfg(not(target_os = "windows"))]
+    let win_builder = win_builder.background_color(Color(20, 20, 20, 255));
 
     #[cfg(target_os = "macos")]
     let win_builder = win_builder
@@ -241,7 +247,8 @@ pub fn set_windows_gpu_preference(executable_path: &std::path::Path) -> Result<(
         path_str
     );
 
-    let output = std::process::Command::new("reg")
+    let mut command = std::process::Command::new("reg");
+    command
         .args([
             "add",
             "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences",
@@ -253,7 +260,8 @@ pub fn set_windows_gpu_preference(executable_path: &std::path::Path) -> Result<(
             "GpuPreference=2;",
             "/f",
         ])
-        .output()?;
+        .suppress_console();
+    let output = command.output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

@@ -84,7 +84,7 @@ export const NotificationSettingsTab = () => {
 		try {
 			await invoke("subscribe_to_preset_source", { source });
 			await refetch();
-				await refetchSources();
+			await refetchSources();
 		} catch (e) {
 			console.error("Failed to subscribe:", e);
 		}

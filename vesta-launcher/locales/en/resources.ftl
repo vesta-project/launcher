@@ -136,6 +136,7 @@ resources-version-changelog-unavailable = Changelog unavailable
 resources-version-release-notes-failed = Release notes could not be loaded
 resources-version-no-changelog = No changelog provided
 resources-version-supported-environment = Supported environment
+resources-filter-environment = Environment
 resources-version-show-fewer = Show fewer
 resources-version-show-all = Show all { $count }
 resources-version-dependencies = Dependencies

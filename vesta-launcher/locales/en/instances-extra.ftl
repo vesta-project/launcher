@@ -117,8 +117,11 @@ instances-extra-resource-summary-updates = { $count ->
 # Instance detail status, confirmation, and runtime option copy.
 instances-extra-java-global-default = Global Default (Java { $version })
 instances-extra-java-runtime-download = Not installed - Click to download and use
+instances-extra-java-runtime-managed = Managed Runtime
+instances-extra-java-runtime-system = System Runtime
 instances-extra-java-custom-path = Custom / Manual Path...
 instances-extra-java-select-file = Select a specific file
+instances-extra-java-path-not-set = (not set)
 instances-extra-unsaved-title = Unsaved Changes
 instances-extra-unsaved-description = You have unsaved changes to this instance. Are you sure you want to leave without saving?
 instances-extra-unsaved-leave = Leave
@@ -131,8 +134,11 @@ instances-extra-world-selection-required-description = { $count ->
    *[other] { $count } datapack updates must be updated individually so you can confirm the target world.
 }
 instances-extra-modpack-version-fallback = The previously selected modpack version is unavailable. Switched to the latest available version.
+instances-extra-modpack-version-updated = Version Updated
+instances-extra-compatibility-adjusted = Compatibility Adjusted
 instances-extra-modpack-files-deleted = Modpack Files Deleted
 instances-extra-modpack-files-deleted-description = Bundled modpack resources were removed and the instance was unlinked.
+instances-extra-modpack-delete-failed = Delete Failed
 instances-extra-modpack-delete-failed-description = Vesta stopped before unlinking. Your custom resources were left intact.
 instances-extra-update-check-failed = Update Check Failed
 instances-extra-update-check-failed-description = Vesta could not check for updates right now.
@@ -150,6 +156,9 @@ instances-extra-unlink-modpack-title = Unlink Modpack
 instances-extra-unlink-modpack-confirm = Are you sure you want to unlink this instance from the modpack? You will no longer receive updates from the platform, but your files will remain intact.
 instances-extra-switch-active-resource-title = Switch Active Resource?
 instances-extra-switch-active-resource-confirm = { $name } matches { $peers } from the { $source }. Vesta will disable the other copy so Minecraft only loads one version.
+instances-extra-resource-source-custom = custom resources
+instances-extra-resource-source-linked-modpack = linked modpack
 instances-extra-save-changes = Save Changes
 instances-extra-delete-modpack-files-action = Delete & Unlink
 instances-extra-switch-active-resource-action = Switch
+instances-extra-duplicate-name-prompt = Enter name for the copy:

@@ -1,0 +1,210 @@
+{
+	"packs": [
+		{
+			"id": "defaults",
+			"name": "Default Characters",
+			"kind": "defaults",
+			"order": 0,
+			"keys": [
+				"alex",
+				"ari",
+				"efe",
+				"kai",
+				"makena",
+				"noor",
+				"steve",
+				"sunny",
+				"zuri"
+			]
+		},
+		{
+			"id": "minecon_earth_2017",
+			"name": "MINECON Earth 2017",
+			"kind": "event_pack",
+			"order": 10,
+			"keyPrefixes": ["minecon_"]
+		},
+		{
+			"id": "builders_and_biomes",
+			"name": "Builders & Biomes",
+			"kind": "event_pack",
+			"order": 20,
+			"keyPrefixes": [
+				"barn_builder_",
+				"bee-friender_",
+				"buff_butcher_",
+				"homestead_healer_",
+				"pig_whisperer_",
+				"ranch_ranger_"
+			]
+		},
+		{
+			"id": "striding_hero",
+			"name": "Striding Hero",
+			"kind": "event_pack",
+			"order": 30,
+			"keys": ["strider_event"],
+			"keyPrefixes": ["strider"]
+		},
+		{
+			"id": "garden_awakens",
+			"name": "The Garden Awakens",
+			"kind": "event_pack",
+			"order": 40,
+			"keyPrefixes": ["thegardenawakens_"],
+			"keyIncludes": ["creaking"]
+		},
+		{
+			"id": "chase_the_skies",
+			"name": "Chase the Skies",
+			"kind": "event_pack",
+			"order": 50,
+			"keyPrefixes": ["ghastpilot", "ghastswimmer", "snowfeather"]
+		},
+		{
+			"id": "copper_age",
+			"name": "The Copper Age",
+			"kind": "event_pack",
+			"order": 60,
+			"keyPrefixes": ["copperchemist"]
+		},
+		{
+			"id": "mounts_of_mayhem",
+			"name": "Mounts of Mayhem",
+			"kind": "event_pack",
+			"order": 70,
+			"keyPrefixes": [
+				"palelumberjack",
+				"stray_",
+				"wither_skeleton_",
+				"villager",
+				"zombie_horse_"
+			]
+		},
+		{
+			"id": "tiny_takeover",
+			"name": "Tiny Takeover",
+			"kind": "event_pack",
+			"order": 80,
+			"keyIncludes": [
+				"tiny_takeover",
+				"dandelion_onesie",
+				"baby_bee",
+				"baby_axolotl"
+			],
+			"downloadUrl": "https://www.minecraft.net/content/dam/minecraftnet/games/minecraft/software/Java_Skins.zip"
+		},
+		{
+			"id": "chaos_cubed",
+			"name": "Chaos Cubed",
+			"kind": "event_pack",
+			"order": 90,
+			"keyIncludes": ["chaos_cubed"]
+		},
+		{
+			"id": "dungeons_hero",
+			"name": "Dungeons Hero",
+			"kind": "event_pack",
+			"order": 100,
+			"keyIncludes": ["dungeons_hero"],
+			"keyPrefixes": ["dungeons_hero_"],
+			"downloadUrl": "https://www.minecraft.net/content/dam/minecraftnet/games/minecraft/software/Dungeons%20Hero%20Skin%20Pack.zip"
+		},
+		{
+			"id": "dungeons_ii_hero",
+			"name": "Dungeons II Hero",
+			"kind": "event_pack",
+			"order": 110,
+			"keyIncludes": ["dungeons_ii", "dungeons2"],
+			"keyPrefixes": ["dungeons_ii_", "dungeons2_"],
+			"downloadUrl": "https://www.minecraft.net/content/dam/minecraftnet/games/minecraft/software/Dungeons%20II%20Hero%20Skin%20Pack.zip"
+		},
+		{
+			"id": "other_events",
+			"name": "Other Event Skins",
+			"kind": "event_pack",
+			"order": 1000,
+			"fallback": true
+		}
+	],
+	"displayNames": {
+		"alex": "Alex",
+		"ari": "Ari",
+		"efe": "Efe",
+		"kai": "Kai",
+		"makena": "Makena",
+		"noor": "Noor",
+		"steve": "Steve",
+		"sunny": "Sunny",
+		"zuri": "Zuri",
+		"barn_builder_skin_event": "Barn Builder",
+		"bee-friender_skin_event": "Bee-Friender",
+		"bee-friender_alternate_skin_event": "Bee-Friender (Alternate)",
+		"buff_butcher_skin_event": "Buff Butcher",
+		"buff_butcher_alternate_skin_event": "Buff Butcher (Alternate)",
+		"homestead_healer_skin_event": "Homestead Healer",
+		"pig_whisperer_skin_event": "Pig Whisperer",
+		"pig_whisperer_alternate_skin_event": "Pig Whisperer (Alternate)",
+		"ranch_ranger_skin_event": "Ranch Ranger",
+		"strider_event": "Strider",
+		"thegardenawakens_javaskin_creakingskin_b_event": "Creaking",
+		"ghastpilotskin_event": "Ghast Pilot",
+		"ghastswimmerskin_event": "Ghast Swimmer",
+		"snowfeather_event": "Snowfeather",
+		"copperchemist-java-skin_event": "Copper Chemist",
+		"palelumberjack_02_event": "Pale Lumberjack",
+		"stray_event": "Stray",
+		"wither_skeleton_event": "Wither Skeleton",
+		"villager1_event": "Villager 1",
+		"villager2_event": "Villager 2",
+		"zombie_horse_onesie_skin_event": "Zombie Horse Onesie",
+		"dandelion_onesie_tiny_takeover_skin_event": "Dandelion Onesie",
+		"tiny_takeover_baby_bee_skin_event": "Baby Bee Fan",
+		"tiny_takeover_baby_axolotl_skin_event": "Baby Axolotl Fan",
+		"brawler_skin_chaos_cubed_skin_event": "Brawler",
+		"builder_skin_chaos_cubed_skin_event": "Builder",
+		"rancher_skin_chaos_cubed_skin_event": "Rancher",
+		"minecon_alex_globe_event": "Alex Globe",
+		"minecon_alex_party_event": "Party Alex",
+		"minecon_cardboard_cosplayer_event": "Cardboard Cosplayer",
+		"minecon_creeper_cosplay_event": "Creeper Cosplay",
+		"minecon_creeper_pinata_cosplay_event": "Creeper Piñata",
+		"minecon_sheep_cosplayer_event": "Blue Sheep",
+		"minecon_steve_cake_event": "Cake",
+		"minecon_steve_party_event": "Party Steve",
+		"dungeons_hero_christina_event": "Christina",
+		"dungeons_hero_dani_event": "Dani",
+		"dungeons_hero_fishy_event": "Fishy",
+		"dungeons_hero_hal_event": "Hal",
+		"dungeons_hero_hedwig_event": "Hedwig",
+		"dungeons_hero_hex_event": "Hex",
+		"dungeons_hero_jellyfishgirl_event": "Jellyfish Girl",
+		"dungeons_hero_loge_event": "Loge",
+		"dungeons_hero_pawprints_event": "Paw Prints",
+		"dungeons_hero_penguinonesie_event": "Penguin Onesie",
+		"dungeons_hero_pigonesie_event": "Pig Onesie",
+		"dungeons_hero_tim_event": "Tim",
+		"dungeons_hero_valorie_event": "Valorie",
+		"dungeons_ii_hero_darian_event": "Darian",
+		"dungeons_ii_hero_edson_event": "Edson",
+		"dungeons_ii_hero_eshe_event": "Eshe",
+		"dungeons_ii_hero_esperanza_event": "Esperanza",
+		"dungeons_ii_hero_flores_event": "Flores",
+		"dungeons_ii_hero_gaston_event": "Gaston",
+		"dungeons_ii_hero_greta_event": "Greta",
+		"dungeons_ii_hero_gubbis_event": "Gubbis",
+		"dungeons_ii_hero_javier_event": "Javier",
+		"dungeons_ii_hero_kellen_event": "Kellen",
+		"dungeons_ii_hero_mats_event": "Mats",
+		"dungeons_ii_hero_nuru_event": "Nuru",
+		"dungeons_ii_hero_pim_event": "Pim",
+		"dungeons_ii_hero_qamar_event": "Qamar",
+		"dungeons_ii_hero_raven_event": "Raven",
+		"dungeons_ii_hero_ren_event": "Ren",
+		"dungeons_ii_hero_riggs_event": "Riggs",
+		"dungeons_ii_hero_stella_event": "Stella",
+		"dungeons_ii_hero_tula_event": "Tula",
+		"dungeons_ii_hero_valorie_event": "Valorie",
+		"dungeons_ii_hero_violet_event": "Violet"
+	}
+}

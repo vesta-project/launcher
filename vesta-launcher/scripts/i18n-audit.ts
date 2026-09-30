@@ -75,15 +75,16 @@ async function scanFile(filePath: string) {
 	const lines = source.split("\n");
 
 	for (const { name, regex } of PATTERNS) {
-		for (let index = 0; index < lines.length; index += 1) {
-			const line = lines[index];
-			if (line.includes('t("') || line.includes("t('")) continue;
-			regex.lastIndex = 0;
-			let match = regex.exec(line);
-			while (match) {
-				findings.push({ kind: name, text: match[1], line: index + 1 });
-				match = regex.exec(line);
+		regex.lastIndex = 0;
+		let match = regex.exec(source);
+		while (match) {
+			const valueOffset = match[0].indexOf(match[1]);
+			const line = source.slice(0, match.index + valueOffset).split("\n").length;
+			const currentLine = lines[line - 1] ?? "";
+			if (!currentLine.includes('t("') && !currentLine.includes("t('")) {
+				findings.push({ kind: name, text: match[1], line });
 			}
+			match = regex.exec(source);
 		}
 	}
 

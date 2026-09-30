@@ -52,9 +52,9 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
-import type { UiChromeMode } from "~/themes/presets";
 import { ariaShortcut, displayChord } from "~/keybindings/chords";
 import { keybindingFor } from "~/keybindings/store";
+import type { UiChromeMode } from "~/themes/presets";
 import { PinnedItem } from "./pinned-items";
 import styles from "./sidebar.module.css";
 
@@ -428,9 +428,7 @@ function Sidebar(props: SidebarProps) {
 						aria-keyshortcuts={ariaShortcut(
 							keybindingFor("navigation.settings"),
 						)}
-						aria-current={
-							activeSection() === "settings" ? "page" : undefined
-						}
+						aria-current={activeSection() === "settings" ? "page" : undefined}
 						class={
 							activeSection() === "settings"
 								? styles["sidebar-tab-active"]

@@ -65,4 +65,3 @@ export function afterStablePaint(callback: () => void): () => void {
 export function getPerformanceTrace(): readonly PerformanceTraceEntry[] {
 	return traceEntries;
 }
-

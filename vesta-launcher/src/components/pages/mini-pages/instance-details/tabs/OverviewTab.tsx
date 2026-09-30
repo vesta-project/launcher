@@ -10,6 +10,7 @@ interface OverviewTabProps {
 	instanceSlug: string;
 	installedResources: any[];
 	knownUpdateCount?: number;
+	active?: boolean;
 	onManageResources: () => void;
 	onAddResources: () => void;
 }
@@ -44,7 +45,10 @@ export const OverviewTab = (props: OverviewTabProps) => {
 					<div class={styles["overview-loading"]}>{t("instances-extra-screenshots-loading")}</div>
 				}
 			>
-				<ScreenshotGallery instanceIdSlug={props.instanceSlug} />
+				<ScreenshotGallery
+					instanceIdSlug={props.instanceSlug}
+					active={props.active !== false}
+				/>
 			</Suspense>
 		</section>
 	);

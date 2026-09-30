@@ -1,8 +1,8 @@
 /* @refresh skip */
 
 import InstanceSelectionDialog from "@components/instances/InstanceSelectionDialog";
-import type { Instance } from "@stores/instances";
 import { fireEvent, render, screen } from "@solidjs/testing-library";
+import type { Instance } from "@stores/instances";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@ui/dialog/dialog", () => ({
@@ -34,7 +34,7 @@ const instance = (
 		minecraftVersion: "1.21.5",
 		modloader: "fabric",
 		iconPath: null,
-	} as Instance);
+	}) as Instance;
 
 describe("InstanceSelectionDialog", () => {
 	it("sorts instances by recency and selects an eligible instance", async () => {
@@ -56,7 +56,11 @@ describe("InstanceSelectionDialog", () => {
 		expect(options[0]?.textContent).toContain("Recent");
 		expect(options[1]?.textContent).toContain("Older");
 
-		await fireEvent.click(options[0]!);
+		const recentOption = options[0];
+		if (!recentOption) {
+			throw new Error("Expected a recent instance option");
+		}
+		await fireEvent.click(recentOption);
 		expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
 	});
 

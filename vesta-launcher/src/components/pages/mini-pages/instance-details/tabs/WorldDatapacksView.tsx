@@ -1,11 +1,11 @@
-import BackIcon from "@assets/icons/navigation/arrow-back.svg";
-import DownloadIcon from "@assets/icons/actions/download.svg";
-import FolderIcon from "@assets/icons/content/folder.svg";
 import PlusIcon from "@assets/icons/actions/add.svg";
-import ReloadIcon from "@assets/icons/actions/reload.svg";
 import TrashIcon from "@assets/icons/actions/delete.svg";
+import DownloadIcon from "@assets/icons/actions/download.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
 import PackIcon from "@assets/icons/content/layers.svg";
+import { SubpageBackButton } from "@components/settings/SubpageBackButton";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
 import type {
@@ -54,7 +54,8 @@ import { t } from "~/localization";
 import styles from "./WorldDatapacksView.module.css";
 
 const providerName = (platform: string | null) => {
-	if (!platform || platform === "manual" || platform === "local") return t("instances-extra-local");
+	if (!platform || platform === "manual" || platform === "local")
+		return t("instances-extra-local");
 	if (platform.toLowerCase() === "modrinth") return "Modrinth";
 	if (platform.toLowerCase() === "curseforge") return "CurseForge";
 	return platform;
@@ -93,14 +94,17 @@ const DatapackRow: Component<{
 	icon?: string | null;
 	onOpenDetails: () => void;
 }> = (props) => {
-	const canManage = () => !props.entry.readOnly && props.entry.resourceId != null;
-	const canOpenDetails = () => Boolean(props.entry.platform && props.entry.projectId);
+	const canManage = () =>
+		!props.entry.readOnly && props.entry.resourceId != null;
+	const canOpenDetails = () =>
+		Boolean(props.entry.platform && props.entry.projectId);
 
 	const handleToggle = async (enabled: boolean) => {
-		if (!canManage() || props.busy) return;
+		const resourceId = props.entry.resourceId;
+		if (!canManage() || resourceId == null || props.busy) return;
 		props.onBusyChange(true);
 		try {
-			await toggleWorldDatapack(props.world.ref, props.entry.resourceId!, enabled);
+			await toggleWorldDatapack(props.world.ref, resourceId, enabled);
 		} catch (error) {
 			showToast({
 				title: t(
@@ -117,7 +121,8 @@ const DatapackRow: Component<{
 	};
 
 	const handleDelete = async () => {
-		if (!canManage() || props.busy) return;
+		const resourceId = props.entry.resourceId;
+		if (!canManage() || resourceId == null || props.busy) return;
 		const confirmed = await dialogStore.confirm(
 			t("instances-extra-world-datapack-remove-confirm-title", { name: props.entry.displayName }),
 			t("instances-extra-world-datapack-remove-confirm-description", {
@@ -132,14 +137,16 @@ const DatapackRow: Component<{
 
 		props.onBusyChange(true);
 		try {
-			const removal = await deleteWorldDatapack(props.world.ref, props.entry.resourceId!);
+			const removal = await deleteWorldDatapack(props.world.ref, resourceId);
 			const companionDescription =
 				removal.removedCompanionCount > 0
 					? ` ${t("instances-extra-world-datapack-companion-removed")}`
 					: removal.retainedCompanionCount > 0
 						? ` ${t("instances-extra-world-datapack-companion-retained")}`
+						: "";
+			const cleanupDescription = removal.cleanupWarning
+				? ` ${removal.cleanupWarning}`
 				: "";
-			const cleanupDescription = removal.cleanupWarning ? ` ${removal.cleanupWarning}` : "";
 			showToast({
 				title: t("instances-extra-world-datapack-removed-title"),
 				description: `${t("instances-extra-world-datapack-removed-description", { name: props.entry.displayName, world: props.world.displayName })}${companionDescription}${cleanupDescription}`,
@@ -304,8 +311,12 @@ const DatapackRow: Component<{
 					>
 						<MoreIcon />
 					</DropdownMenuTrigger>
-					<DropdownMenuContent onCloseAutoFocus={(event) => event.preventDefault()}>
-						<DropdownMenuItem onSelect={() => void showWorldDatapacksFolder(props.world)}>
+					<DropdownMenuContent
+						onCloseAutoFocus={(event) => event.preventDefault()}
+					>
+						<DropdownMenuItem
+							onSelect={() => void showWorldDatapacksFolder(props.world)}
+						>
 							<FolderIcon class={styles["menu-icon"]} />
 							{t("instances-extra-world-datapack-show-in-folder")}
 						</DropdownMenuItem>
@@ -331,11 +342,18 @@ export const WorldDatapacksView: Component<{
 	world: WorldSummary;
 	onBack: () => void;
 	onAddDatapack: (world: WorldSummary) => void;
-	onOpenDatapackDetails: (world: WorldSummary, entry: WorldDatapackSummary) => void;
+	onOpenDatapackDetails: (
+		world: WorldSummary,
+		entry: WorldDatapackSummary,
+	) => void;
 }> = (props) => {
 	const key = createMemo(() => worldRefKey(props.world.ref));
-	const [busyResourceIds, setBusyResourceIds] = createSignal<ReadonlySet<number>>(new Set());
-	const [projectIcons, setProjectIcons] = createSignal<Record<string, string>>({});
+	const [busyResourceIds, setBusyResourceIds] = createSignal<
+		ReadonlySet<number>
+	>(new Set());
+	const [projectIcons, setProjectIcons] = createSignal<Record<string, string>>(
+		{},
+	);
 	const overview = createMemo(() => worldDatapacksState.byWorld[key()]);
 	const updates = createMemo(() => worldDatapacksState.updatesByWorld[key()]);
 	const projectRefs = createMemo<ProviderProjectRef[]>(() => {
@@ -377,7 +395,8 @@ export const WorldDatapacksView: Component<{
 				const next = { ...current };
 				for (const record of records) {
 					if (record.icon_url) {
-						next[`${record.source.toLowerCase()}:${record.id}`] = record.icon_url;
+						next[`${record.source.toLowerCase()}:${record.id}`] =
+							record.icon_url;
 					}
 				}
 				return next;
@@ -406,9 +425,10 @@ export const WorldDatapacksView: Component<{
 						},
 					);
 					publish(metadata);
-					const icons = await invoke<ResourceProjectOverviewRecord[]>("hydrate_resource_project_icons", {
-						refs: supportedRefs,
-					});
+					const icons = await invoke<ResourceProjectOverviewRecord[]>(
+						"hydrate_resource_project_icons",
+						{ refs: supportedRefs },
+					);
 					publish(icons);
 				}
 
@@ -449,17 +469,7 @@ export const WorldDatapacksView: Component<{
 			aria-label={t("instances-extra-world-datapacks-world-label", { world: props.world.displayName })}
 		>
 			<header class={styles["context-rail"]}>
-				<Button
-					size="sm"
-					variant="ghost"
-					icon_only
-					class={styles.back}
-					aria-label={t("instances-extra-world-datapacks-back")}
-					tooltip_text={t("instances-extra-world-datapacks-back")}
-					onClick={props.onBack}
-				>
-					<BackIcon />
-				</Button>
+				<SubpageBackButton label={t("instances-extra-world-datapacks-back")} onClick={props.onBack} />
 				<WorldIcon
 					class={styles["context-icon"]}
 					src={props.world.iconDataUrl}
@@ -470,9 +480,7 @@ export const WorldDatapacksView: Component<{
 					<div class={styles["world-meta"]}>
 						<span title={t("instances-extra-world-datapacks-folder")}>{props.world.folderName}</span>
 						<span aria-hidden="true">·</span>
-						<span title={t("instances-extra-world-datapacks-size")}>
-							{formatBytes(props.world.sizeBytes)}
-						</span>
+						<span title={t("instances-extra-world-datapacks-size")}>{formatBytes(props.world.sizeBytes)}</span>
 						<Show when={props.world.lastPlayedAt}>
 							<span aria-hidden="true">·</span>
 							<span title={t("instances-extra-world-datapacks-last-played")}>
@@ -498,12 +506,19 @@ export const WorldDatapacksView: Component<{
 						icon_only
 						tooltip_text={t("instances-extra-world-datapacks-refresh")}
 						aria-label={t("instances-extra-world-datapacks-refresh")}
-						disabled={worldDatapacksState.loading[key()] || worldDatapacksState.updatesLoading[key()]}
+						disabled={
+							worldDatapacksState.loading[key()] ||
+							worldDatapacksState.updatesLoading[key()]
+						}
 						onClick={() => void refresh()}
 					>
 						<ReloadIcon />
 					</Button>
-					<Button size="sm" color="primary" onClick={() => props.onAddDatapack(props.world)}>
+					<Button
+						size="sm"
+						color="primary"
+						onClick={() => props.onAddDatapack(props.world)}
+					>
 						<PlusIcon />
 						{t("instances-extra-world-datapack-add")}
 					</Button>
@@ -539,7 +554,11 @@ export const WorldDatapacksView: Component<{
 								</div>
 								<h3>{t("instances-extra-world-datapacks-empty-title")}</h3>
 								<p>{t("instances-extra-world-datapacks-empty-description")}</p>
-								<Button size="sm" color="primary" onClick={() => props.onAddDatapack(props.world)}>
+								<Button
+									size="sm"
+									color="primary"
+									onClick={() => props.onAddDatapack(props.world)}
+								>
 									<PlusIcon />
 									{t("instances-extra-world-datapacks-browse")}
 								</Button>
@@ -552,11 +571,24 @@ export const WorldDatapacksView: Component<{
 									<DatapackRow
 										entry={entry}
 										world={props.world}
-										busy={entry.resourceId != null && busyResourceIds().has(entry.resourceId)}
-										icon={projectIcons()[projectKey(entry.platform, entry.projectId) ?? ""]}
-										update={updates()?.updates.find((update) => update.resourceId === entry.resourceId)}
-										onBusyChange={(busy) => setResourceBusy(entry.resourceId, busy)}
-										onOpenDetails={() => props.onOpenDatapackDetails(props.world, entry)}
+										busy={
+											entry.resourceId != null &&
+											busyResourceIds().has(entry.resourceId)
+										}
+										icon={
+											projectIcons()[
+												projectKey(entry.platform, entry.projectId) ?? ""
+											]
+										}
+										update={updates()?.updates.find(
+											(update) => update.resourceId === entry.resourceId,
+										)}
+										onBusyChange={(busy) =>
+											setResourceBusy(entry.resourceId, busy)
+										}
+										onOpenDetails={() =>
+											props.onOpenDatapackDetails(props.world, entry)
+										}
 									/>
 								)}
 							</For>

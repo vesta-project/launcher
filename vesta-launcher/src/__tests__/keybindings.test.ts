@@ -150,7 +150,9 @@ describe("keybinding dispatch", () => {
 
 	it("contains synchronous command failures", () => {
 		const failure = new Error("sync failure");
-		const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
+		const reportError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
 		const definition: CommandDefinition = {
 			commandId: "app.reload",
 			handlerId: "app.reload",
@@ -186,7 +188,9 @@ describe("keybinding dispatch", () => {
 
 	it("contains rejected asynchronous command failures", async () => {
 		const failure = new Error("async failure");
-		const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
+		const reportError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
 		const definition: CommandDefinition = {
 			commandId: "app.reload",
 			handlerId: "app.reload",

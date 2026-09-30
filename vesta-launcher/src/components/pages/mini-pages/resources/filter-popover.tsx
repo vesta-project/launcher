@@ -1,5 +1,6 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { supportsEnvironmentFilters } from "@resources/source-catalog";
 import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
 import { useMinecraftVersions } from "@stores/versions";
@@ -214,6 +215,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 		resources.state.resourceType === "modpack";
 
 	const isModpack = () => resources.state.resourceType === "modpack";
+	const shouldShowEnvironment = () =>
+		supportsEnvironmentFilters(
+			resources.state.activeSource,
+			resources.state.resourceType,
+		);
 
 	const selectedInstance = () => {
 		if (!resources.state.selectedInstanceId) return null;
@@ -286,6 +292,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 				>
 					<label class={styles["filter-label"]}>{t("resources-filter-kind-instance")}</label>
 					<Select<any>
+						aria-label={t("resources-filter-kind-instance")}
 						disabled={isModpack()}
 						options={[
 							{ id: "none", name: t("resources-filter-no-instance") } as any,
@@ -370,6 +377,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 				<div class={styles["filter-popover-section"]}>
 					<label class={styles["filter-label"]}>{t("instances-versioning-mc-version-label")}</label>
 					<Combobox
+						aria-label={t("instances-versioning-mc-version-label")}
 						options={gameVersions()}
 						value={resources.state.gameVersion || allVersions()}
 						onChange={(v: string | null) => {
@@ -396,7 +404,8 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 					<div class={styles["filter-popover-section"]}>
 						<label class={styles["filter-label"]}>{t("resources-filter-mod-loader")}</label>
 						<Select
-						options={[t("resources-filter-all-loaders"), ...LOADERS]}
+							aria-label={t("resources-filter-mod-loader")}
+							options={[t("resources-filter-all-loaders"), ...LOADERS]}
 							value={
 								LOADERS.find(
 									(l) => l.toLowerCase() === resources.state.loader,
@@ -422,6 +431,50 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 					</div>
 				</Show>
 
+				<Show when={shouldShowEnvironment()}>
+					<div class={styles["filter-popover-section"]}>
+						<span class={styles["filter-label"]}>{t("resources-filter-environment")}</span>
+						<div
+							class={styles["environment-filter-options"]}
+							role="group"
+							aria-label={t("resources-filter-environment")}
+						>
+							<Badge
+								as="button"
+								variant="theme"
+								clickable
+								active={resources.state.client}
+								aria-pressed={resources.state.client}
+								onClick={() => {
+									resources.setClient(!resources.state.client);
+									activeRouter()?.updateQuery(
+										"client",
+										resources.state.client || null,
+									);
+								}}
+							>
+								Client
+							</Badge>
+							<Badge
+								as="button"
+								variant="theme"
+								clickable
+								active={resources.state.server}
+								aria-pressed={resources.state.server}
+								onClick={() => {
+									resources.setServer(!resources.state.server);
+									activeRouter()?.updateQuery(
+										"server",
+										resources.state.server || null,
+									);
+								}}
+							>
+								Server
+							</Badge>
+						</div>
+					</div>
+				</Show>
+
 				<Show when={availableCategories().length > 0}>
 					<div class={styles["filter-popover-section"]}>
 						<label class={styles["filter-label"]}>{t("resources-filter-categories")}</label>
@@ -434,9 +487,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 												class={styles["category-group-header"]}
 												classList={{ [styles["not-clickable"]]: !group.id }}
 											>
-												<div
+												<button
 													class={styles["category-group-title"]}
 													title={group.id}
+													type="button"
+													disabled={!group.id}
 													classList={{
 														[styles.clickable]: group.id !== undefined,
 														[styles.active]:
@@ -474,7 +529,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 														</div>
 													</Show>
 													<span>{group.name}</span>
-												</div>
+												</button>
 												<Show
 													when={
 														group.items.length > 0 &&
@@ -483,6 +538,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 												>
 													<button
 														class={styles["expand-toggle"]}
+														type="button"
+														aria-label={`Toggle ${group.name} categories`}
+														aria-expanded={resources.state.expandedCategoryGroups.includes(
+															group.id || group.name,
+														)}
 														classList={{
 															[styles.expanded]:
 																resources.state.expandedCategoryGroups.includes(
@@ -493,7 +553,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 															toggleGroupExpand(group.id || group.name, e)
 														}
 													>
-												<ChevronDownIcon />
+														<ChevronDownIcon />
 													</button>
 												</Show>
 											</div>
@@ -509,7 +569,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 												<For each={group.items}>
 													{(cat) => (
 														<Badge
+															as="button"
 															variant="theme"
+															clickable
 															class={
 																styles["resource-tag"] +
 																" " +
@@ -566,6 +628,16 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 							activeRouter()?.updateQuery("selectedInstanceId", null);
 							activeRouter()?.updateQuery("gameVersion", null);
 							activeRouter()?.updateQuery("loader", null);
+							activeRouter()?.updateQuery("client", null);
+							activeRouter()?.updateQuery("server", null);
+							for (const key of [
+								"creatorKind",
+								"creatorId",
+								"creatorName",
+								"creatorIconUrl",
+							]) {
+								activeRouter()?.updateQuery(key, null);
+							}
 							activeRouter()?.updateQuery("categories", []);
 							activeRouter()?.updateQuery("query", "");
 						}}
@@ -578,4 +650,5 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 		</div>
 	);
 }
+
 import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";

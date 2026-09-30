@@ -90,6 +90,8 @@ action-active-processes-description = The launcher is still performing some acti
     Closing now may cause issues.
 action-active-processes-exit-anyway = Exit Anyway
 action-active-processes-stay-open = Stay Open
+action-active-processes-running-games-title = Running games won’t be closed
+action-active-processes-running-instances-description = { $instances } will keep running after Vesta closes.
 action-safe-exit-failed-title = Unable to confirm safe exit
 action-safe-exit-failed-description = Vesta couldn't validate running tasks right now, so the launcher will stay open.
 

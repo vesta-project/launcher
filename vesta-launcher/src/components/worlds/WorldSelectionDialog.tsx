@@ -164,10 +164,12 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 													type="button"
 													disabled={Boolean(disabled())}
 													title={disabled() ?? ""}
-												onClick={() =>
-													void (props.onSelectWorld?.(world) ??
-														props.onSelect?.(world.ref))
-												}
+													onClick={() =>
+														void (
+															props.onSelectWorld?.(world) ??
+															props.onSelect?.(world.ref)
+														)
+													}
 												>
 													<WorldIcon
 														src={world.iconDataUrl}

@@ -3,7 +3,6 @@ import { LauncherDetailsPanel } from "@components/pages/mini-pages/install/compo
 import { LauncherMenuGrid } from "@components/pages/mini-pages/install/components/LauncherMenuGrid";
 import { launcherOptions } from "@components/pages/mini-pages/install/config/launcher-options";
 import { useLauncherImport } from "@components/pages/mini-pages/install/hooks/use-launcher-import";
-import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import { useMinecraftVersions } from "@stores/versions";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
@@ -22,6 +21,7 @@ import {
 	installInstance,
 } from "@utils/instances";
 import type { LauncherKind } from "@utils/launcher-imports";
+import { installModpackFromUrl } from "@utils/modpacks";
 import {
 	getAllModloaders,
 	getModloadersForGameVersion,
@@ -37,6 +37,10 @@ import {
 } from "solid-js";
 import styles from "../init.module.css";
 import { t } from "~/localization";
+import {
+	type FirstModpackVersion,
+	installFirstModpack,
+} from "./first-modpack-install";
 
 interface FirstInstanceStepProps {
 	goNext: () => Promise<void>;
@@ -88,6 +92,10 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	>(null);
 	const [selectedModpack, setSelectedModpack] =
 		createSignal<CuratedModpack | null>(null);
+	const [acceptedModpackInstall, setAcceptedModpackInstall] = createSignal<{
+		projectId: string;
+		instanceId: number;
+	} | null>(null);
 	const [selectedImportLauncher, setSelectedImportLauncher] =
 		createSignal<LauncherKind | null>(null);
 	const [isDetectingLauncher, setIsDetectingLauncher] = createSignal(false);
@@ -254,46 +262,29 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 	const handleInstallModpack = async (modpack: CuratedModpack) => {
 		setInstallingModpackId(modpack.id);
+		setModpacksError("");
 		try {
-			// Fetch versions to get download URL
-			const versions = await invoke<
-				Array<{
-					id: string;
-					version_number: string;
-					game_versions: string[];
-					loaders: string[];
-					download_url: string;
-					file_name: string;
-					release_type: "release" | "beta" | "alpha";
-				}>
-			>("get_resource_versions", {
-				platform: modpack.platform,
-				projectId: modpack.id,
+			const accepted = acceptedModpackInstall();
+			await installFirstModpack(modpack, {
+				getVersions: async (project) =>
+					await invoke<FirstModpackVersion[]>("get_resource_versions", {
+						platform: project.platform,
+						projectId: project.id,
+					}),
+				queueInstall: (url, payload) => installModpackFromUrl(url, payload),
+				completeOnboarding,
+				goNext: props.goNext,
+				acceptedInstanceId:
+					accepted?.projectId === modpack.id ? accepted.instanceId : undefined,
+				onInstallAccepted: (instanceId) =>
+					setAcceptedModpackInstall({ projectId: modpack.id, instanceId }),
 			});
-
-			if (!versions || versions.length === 0) {
-				throw new Error("No versions found for this modpack");
-			}
-
-			// Find latest stable version
-			const latestVersion =
-				versions.find((v) => v.release_type === "release") || versions[0];
-
-			// Complete onboarding and go to finish step
-			await completeOnboarding();
-			await props.goNext();
-
-			// Open install dialog
-			openModpackInstallFromUrl(
-				latestVersion.download_url,
-				modpack.iconUrl || undefined,
-				modpack.id,
-				modpack.platform,
-			);
 		} catch (e) {
 			console.error("Failed to install modpack:", e);
 			setModpacksError(
-				t("onboarding-modpack-install-failed", { name: modpack.name }),
+				acceptedModpackInstall()?.projectId === modpack.id
+					? "Installation started, but setup could not finish. Retry to continue."
+					: t("onboarding-modpack-install-failed", { name: modpack.name }),
 			);
 		} finally {
 			setInstallingModpackId(null);
@@ -355,6 +346,10 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 				preLaunchHook: null,
 				postExitHook: null,
 				wrapperCommand: null,
+				useGlobalSandbox: true,
+				sandboxPreset: null,
+				sandboxWrapperNesting: null,
+				sandboxExtraPaths: "[]",
 			};
 
 			// Start installation in background, continue onboarding immediately
@@ -376,11 +371,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	};
 
 	const completeOnboarding = async () => {
-		try {
-			await invoke("complete_onboarding");
-		} catch (e) {
-			console.error("Failed to complete onboarding:", e);
-		}
+		await invoke("complete_onboarding");
 	};
 
 	const formatDownloads = (count: number) => {
@@ -556,6 +547,12 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 						<p class={styles["modpack-detail-desc"]}>{modpack.description}</p>
 
+						<Show when={modpacksError()}>
+							<div class={styles["modpack-picker-error"]}>
+								{modpacksError()}
+							</div>
+						</Show>
+
 						<div class={styles["modpack-detail-meta"]}>
 							<span>
 				<DownloadIcon width="14" height="14" />
@@ -588,7 +585,9 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 										</div>
 									}
 								>
-									{t("onboarding-modpack-install")}
+									{acceptedModpackInstall()?.projectId === modpack.id
+										? t("onboarding-modpack-finish-setup")
+										: t("onboarding-modpack-install")}
 								</Show>
 							</Button>
 						</div>
@@ -733,6 +732,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 }
 
 export default FirstInstanceStep;
+
 import AddIcon from "@assets/icons/actions/add.svg";
 import DownloadIcon from "@assets/icons/actions/download.svg";
 import UploadIcon from "@assets/icons/actions/upload.svg";

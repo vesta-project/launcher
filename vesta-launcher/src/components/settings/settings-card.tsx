@@ -8,7 +8,8 @@ export interface SettingsCardProps {
 	headerRight?: JSX.Element;
 	destructive?: boolean;
 	helpTopic?: string;
-	variant?: "default" | "compact" | "transparent" | "bordered";
+	class?: string;
+	variant?: "default" | "compact" | "transparent" | "bordered" | "fill";
 	children: JSX.Element;
 }
 
@@ -17,7 +18,7 @@ export const SettingsCard: Component<SettingsCardProps> = (props) => {
 
 	return (
 		<section
-			class={`${styles["settings-card"]}`}
+			class={`${styles["settings-card"]} ${props.class ?? ""}`}
 			classList={{
 				[styles["settings-card--destructive"]]: props.destructive,
 				[styles[`settings-card--${variant()}`]]: true,

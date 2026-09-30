@@ -1,8 +1,8 @@
 import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
 import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
 import SmithedIcon from "@assets/branding/sources/smithed.svg";
-import type { Component } from "solid-js";
 import type { ResourceType, SourcePlatform } from "@stores/resources";
+import type { Component } from "solid-js";
 import { t } from "~/localization";
 
 export type SourceSortOption = {
@@ -20,6 +20,7 @@ export type SourceDescriptor = {
 	supportsHashLookup: boolean;
 	peerPlatforms: SourcePlatform[];
 	multiArtifactVersions: boolean;
+	environmentResourceTypes: ResourceType[];
 };
 
 /**
@@ -77,6 +78,7 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		supportsHashLookup: true,
 		peerPlatforms: ["curseforge"],
 		multiArtifactVersions: false,
+		environmentResourceTypes: ["mod", "modpack"],
 	},
 	{
 		id: "curseforge",
@@ -146,6 +148,7 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		supportsHashLookup: true,
 		peerPlatforms: ["modrinth"],
 		multiArtifactVersions: false,
+		environmentResourceTypes: [],
 	},
 	{
 		id: "smithed",
@@ -184,6 +187,7 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		supportsHashLookup: false,
 		peerPlatforms: [],
 		multiArtifactVersions: true,
+		environmentResourceTypes: [],
 	},
 ];
 
@@ -204,11 +208,22 @@ export function sourcesForResourceType(
 export function firstSourceForResourceType(
 	resourceType: ResourceType,
 ): SourceDescriptor {
-	return (
-		sourcesForResourceType(resourceType)[0] ?? RESOURCE_SOURCES[0]
-	);
+	return sourcesForResourceType(resourceType)[0] ?? RESOURCE_SOURCES[0];
 }
 
-export function isContentSourcePlatform(value: string): value is SourcePlatform {
+export function isContentSourcePlatform(
+	value: string,
+): value is SourcePlatform {
 	return RESOURCE_SOURCES.some((source) => source.id === value);
+}
+
+export function supportsEnvironmentFilters(
+	source: SourcePlatform,
+	resourceType: ResourceType,
+): boolean {
+	return Boolean(
+		getSourceDescriptor(source)?.environmentResourceTypes.includes(
+			resourceType,
+		),
+	);
 }

@@ -1,8 +1,8 @@
 use crate::notifications::manager::NotificationManager;
 use crate::localization::LocalizationManager;
 use crate::notifications::models::{
-    CreateNotificationInput, NotificationAction, NotificationSeverity, NotificationType,
-    ProgressUpdate, PROGRESS_INDETERMINATE,
+    CreateNotificationInput, NotificationAction, NotificationContext, NotificationSeverity,
+    NotificationType, ProgressUpdate, PROGRESS_INDETERMINATE,
 };
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -16,18 +16,6 @@ use tokio::sync::{mpsc, watch, Notify, Semaphore};
 use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::UnicodeNormalization;
 
-pub fn localized_message(
-    localization: &LocalizationManager,
-    message_id: &str,
-    values: &[(&str, &str)],
-) -> String {
-    let mut args = fluent_bundle::FluentArgs::new();
-    for (name, value) in values {
-        args.set(*name, *value);
-    }
-    localization.format(message_id, Some(&args))
-}
-
 #[derive(Clone)]
 pub struct TaskContext {
     pub app_handle: AppHandle,
@@ -39,29 +27,19 @@ pub struct TaskContext {
 }
 
 impl TaskContext {
-    /// Format a message from the English Fluent catalog for task notification UI.
+    /// Format a task notification string from the active Fluent catalog.
     pub fn text(&self, message_id: &str) -> String {
-        self.app_handle
-            .state::<LocalizationManager>()
-            .text(message_id)
-    }
-
-    pub fn format(
-        &self,
-        message_id: &str,
-        args: &fluent_bundle::FluentArgs<'_>,
-    ) -> String {
-        self.app_handle
-            .state::<LocalizationManager>()
-            .format(message_id, Some(args))
+        self.app_handle.state::<LocalizationManager>().text(message_id)
     }
 
     pub fn format_values(&self, message_id: &str, values: &[(&str, &str)]) -> String {
-        localized_message(
-            &self.app_handle.state::<LocalizationManager>(),
-            message_id,
-            values,
-        )
+        let mut args = fluent_bundle::FluentArgs::new();
+        for (name, value) in values {
+            args.set(*name, *value);
+        }
+        self.app_handle
+            .state::<LocalizationManager>()
+            .format(message_id, Some(&args))
     }
 
     pub fn update_description(&self, description: String) {
@@ -180,13 +158,30 @@ impl TaskContext {
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+pub fn localized_message(
+    localization: &LocalizationManager,
+    message_id: &str,
+    values: &[(&str, &str)],
+) -> String {
+    let mut args = fluent_bundle::FluentArgs::new();
+    for (name, value) in values {
+        args.set(*name, *value);
+    }
+    localization.format(message_id, Some(&args))
+}
+
 pub trait Task: Send + Sync {
     fn name(&self) -> String;
-    /// Localized title used in task notifications and active task summaries.
+    /// Localized title used by task notifications and active task summaries.
     fn localized_name(&self, _localization: &LocalizationManager) -> String {
         self.name()
     }
     fn id(&self) -> Option<String> {
+        None
+    }
+    /// Subject shown by notification UI. This stays presentation-only and does not
+    /// participate in task identity, locking, or persistence policy.
+    fn notification_context(&self) -> Option<NotificationContext> {
         None
     }
     fn cancellable(&self) -> bool {
@@ -232,6 +227,29 @@ pub trait Task: Send + Sync {
     fn localized_completion_description(&self, localization: &LocalizationManager) -> String {
         localization.text("rust-task-completed-successfully")
     }
+    fn failure_description(&self, error: &str) -> String {
+        match self.notification_context() {
+            Some(context) if context.kind == "instance" => context
+                .label
+                .map(|label| format!("The task failed for instance ‘{}’: {}", label, error))
+                .unwrap_or_else(|| format!("The instance task failed: {}", error)),
+            Some(context) if context.kind == "resource" => context
+                .label
+                .map(|label| format!("The task failed for resource ‘{}’: {}", label, error))
+                .unwrap_or_else(|| format!("The resource task failed: {}", error)),
+            _ => format!("Failed: {}", error),
+        }
+    }
+    /// Cancellable preparation that must not consume a global worker permit.
+    /// Task Manager runs this after conflict locks and before permit acquisition.
+    fn ready(&self, _ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
+        Box::pin(async { Ok(()) })
+    }
+    /// Called when the task is discarded before `run` (cancel during conflict
+    /// locks, readiness failure, or cancel while waiting for a worker permit).
+    fn on_abandoned(&self, _app: &AppHandle) -> BoxFuture<'static, ()> {
+        Box::pin(async {})
+    }
     /// Execute task work.
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>>;
 }
@@ -252,6 +270,12 @@ pub fn saves_conflict_key(instance_id: i32) -> String {
 
 pub fn resourcepacks_conflict_key(instance_id: i32) -> String {
     format!("resourcepacks:{instance_id}")
+}
+
+/// Shared launch/update exclusion for one Instance. Held across cancellable
+/// readiness waits so a launch cannot start Java while an update is queued.
+pub fn instance_play_conflict_key(instance_id: i32) -> String {
+    format!("instance-play:{instance_id}")
 }
 
 fn normalize_conflict_keys<I, S>(keys: I) -> Vec<String>
@@ -364,6 +388,7 @@ impl TaskManager {
                 let task_name = task.name();
                 let localization = manager_app.state::<LocalizationManager>();
                 let display_name = task.localized_name(&localization);
+                let notification_context = task.notification_context();
                 let is_cancellable = task.cancellable();
                 let is_pausable = task.pausable();
                 let notifications_enabled = task.show_notification();
@@ -399,7 +424,7 @@ impl TaskManager {
                 if is_cancellable {
                     actions.push(NotificationAction {
                         action_id: "cancel_task".to_string(),
-                        label: localization.text("shared-ui-cancel"),
+                        label: "Cancel".to_string(),
                         action_type: "secondary".to_string(),
                         payload: None,
                     });
@@ -407,7 +432,7 @@ impl TaskManager {
                 if is_pausable {
                     actions.push(NotificationAction {
                         action_id: "pause_task".to_string(),
-                        label: localization.text("rust-task-action-pause"),
+                        label: "Pause".to_string(),
                         action_type: "secondary".to_string(),
                         payload: None,
                     });
@@ -442,7 +467,9 @@ impl TaskManager {
                             progress: Some(PROGRESS_INDETERMINATE), // Indeterminate until picked up
                             current_step: initial_current_step,
                             total_steps: initial_total_steps,
-                            metadata: None,
+                            metadata: notification_context
+                                .as_ref()
+                                .and_then(NotificationContext::metadata),
                             show_on_completion: Some(task.show_completion_notification()),
                         })
                         .map_err(|e| e.to_string())
@@ -489,32 +516,17 @@ impl TaskManager {
                     );
                     let _conflict_guard = conflicts.acquire(conflict_keys).await;
 
-                    // Resource locks are acquired before a worker permit so tasks waiting on
-                    // another mutation do not consume the global concurrency allowance.
-                    log::info!(
-                        "TaskManager: Waiting for worker permit for task: {}",
-                        task_name
-                    );
-                    let permit = match worker_semaphore.acquire_owned().await {
-                        Ok(permit) => permit,
-                        Err(_) => {
-                            if is_cancellable {
-                                tokens.lock().unwrap().remove(&key_clone);
-                            }
-                            if is_pausable {
-                                p_tokens.lock().unwrap().remove(&key_clone);
-                            }
-                            active_tasks.lock().unwrap().remove(&key_clone);
-                            return;
-                        }
+                    let mut ctx = TaskContext {
+                        app_handle: app.clone(),
+                        notification_id: key_clone.clone(),
+                        notifications_enabled,
+                        cancel_rx: rx.clone(),
+                        pause_rx: pause_rx.clone(),
+                        progress_channel: progress_channel.clone(),
                     };
-                    log::info!(
-                        "TaskManager: Acquired worker permit for task: {}",
-                        task_name
-                    );
 
-                    // Check if cancelled while waiting
-                    if *rx.borrow() {
+                    // Check if cancelled while waiting for conflict locks.
+                    if *ctx.cancel_rx.borrow() {
                         if notifications_enabled {
                             let manager = app.state::<NotificationManager>();
                             if let Err(e) = manager.create(CreateNotificationInput {
@@ -530,7 +542,144 @@ impl TaskManager {
                                 progress: None,
                                 current_step: None,
                                 total_steps: None,
-                                metadata: None,
+                                metadata: notification_context
+                                    .as_ref()
+                                    .and_then(NotificationContext::metadata),
+                                show_on_completion: None,
+                            }) {
+                                log::error!(
+                                    "Failed to create task-cancel notification for {}: {}",
+                                    key_clone,
+                                    e
+                                );
+                            }
+                        }
+                        if let Some(task_id) = task.id() {
+                            if task_id.starts_with("download_") || task_id.starts_with("download|")
+                            {
+                                let _ = app.emit("resource-install-error", task_id);
+                            }
+                        }
+                        if is_cancellable {
+                            tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        if is_pausable {
+                            p_tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        active_tasks.lock().unwrap().remove(&key_clone);
+                        task.on_abandoned(&app).await;
+                        return;
+                    }
+
+                    // Readiness runs under conflict exclusion but before a worker permit
+                    // so long waits (for example, Minecraft exit) do not stall unrelated work.
+                    log::info!("TaskManager: Running readiness for task: {}", task_name);
+                    if let Err(ready_error) = task.ready(ctx.clone()).await {
+                        log::error!("Task readiness failed: {}", ready_error);
+                        if let Some(ref channel) = ctx.progress_channel {
+                            let _ = channel.send(ProgressUpdate::Finished {
+                                success: false,
+                                message: Some(ready_error.to_string()),
+                            });
+                        }
+                        if let Some(task_id) = task.id() {
+                            if task_id.starts_with("download_") || task_id.starts_with("download|")
+                            {
+                                let _ = app.emit("resource-install-error", task_id);
+                            }
+                        }
+                        if notifications_enabled {
+                            let manager = app.state::<NotificationManager>();
+                            let cancelled = ready_error.to_ascii_lowercase().contains("cancel");
+                            if let Err(err) = manager.create(CreateNotificationInput {
+                                client_key: Some(key_clone.clone()),
+                                title: Some(display_name.clone()),
+                                description: Some(if cancelled {
+                                    app.state::<LocalizationManager>().text("rust-task-cancelled")
+                                } else {
+                                    task.failure_description(&ready_error)
+                                }),
+                                severity: Some(if cancelled {
+                                    "warning".to_string()
+                                } else {
+                                    "error".to_string()
+                                }),
+                                notification_type: Some(NotificationType::Patient),
+                                dismissible: Some(true),
+                                persist: Some(true),
+                                silent: Some(false),
+                                actions: None,
+                                progress: None,
+                                current_step: None,
+                                total_steps: None,
+                                metadata: notification_context
+                                    .as_ref()
+                                    .and_then(NotificationContext::metadata),
+                                show_on_completion: Some(!cancelled),
+                            }) {
+                                log::error!(
+                                    "Failed to create task-readiness notification for {}: {}",
+                                    key_clone,
+                                    err
+                                );
+                            }
+                        }
+                        if is_cancellable {
+                            tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        if is_pausable {
+                            p_tokens.lock().unwrap().remove(&key_clone);
+                        }
+                        active_tasks.lock().unwrap().remove(&key_clone);
+                        task.on_abandoned(&app).await;
+                        return;
+                    }
+
+                    // Resource locks and readiness complete before a worker permit so tasks
+                    // waiting on another mutation or game exit do not consume concurrency.
+                    log::info!(
+                        "TaskManager: Waiting for worker permit for task: {}",
+                        task_name
+                    );
+                    let permit = match worker_semaphore.acquire_owned().await {
+                        Ok(permit) => permit,
+                        Err(_) => {
+                            if is_cancellable {
+                                tokens.lock().unwrap().remove(&key_clone);
+                            }
+                            if is_pausable {
+                                p_tokens.lock().unwrap().remove(&key_clone);
+                            }
+                            active_tasks.lock().unwrap().remove(&key_clone);
+                            task.on_abandoned(&app).await;
+                            return;
+                        }
+                    };
+                    log::info!(
+                        "TaskManager: Acquired worker permit for task: {}",
+                        task_name
+                    );
+
+                    // Check if cancelled while waiting
+                    if *ctx.cancel_rx.borrow() {
+                        if notifications_enabled {
+                            let manager = app.state::<NotificationManager>();
+                            if let Err(e) = manager.create(CreateNotificationInput {
+                                client_key: Some(key_clone.clone()),
+                                title: Some(display_name.clone()),
+                                description: Some(app.state::<LocalizationManager>().text("rust-task-cancelled")),
+                                severity: Some("warning".to_string()),
+                                notification_type: Some(NotificationType::Patient),
+                                dismissible: Some(true),
+                                persist: Some(true),
+                                silent: Some(false),
+                                actions: None,
+                                progress: None,
+                                current_step: None,
+                                total_steps: None,
+                                metadata: notification_context
+                                    .as_ref()
+                                    .and_then(NotificationContext::metadata),
                                 show_on_completion: None,
                             }) {
                                 log::error!(
@@ -557,18 +706,12 @@ impl TaskManager {
                             p_tokens.lock().unwrap().remove(&key_clone);
                         }
                         active_tasks.lock().unwrap().remove(&key_clone);
+                        task.on_abandoned(&app).await;
                         drop(permit);
                         return;
                     }
 
-                    let ctx = TaskContext {
-                        app_handle: app.clone(),
-                        notification_id: key_clone.clone(),
-                        notifications_enabled,
-                        cancel_rx: rx,
-                        pause_rx,
-                        progress_channel,
-                    };
+                    ctx.progress_channel = progress_channel;
 
                     log::info!("TaskManager: Executing task: {}", task_name);
                     // Update initial progress to 0 and starting description.
@@ -579,7 +722,7 @@ impl TaskManager {
                             0,
                             initial_current_step,
                             initial_total_steps,
-                            task.localized_starting_description(&app.state::<LocalizationManager>()),
+                            task.starting_description(),
                         );
                     }
 
@@ -601,7 +744,7 @@ impl TaskManager {
                             if let Some(ref channel) = ctx.progress_channel {
                                 let _ = channel.send(ProgressUpdate::Finished {
                                     success: true,
-                                    message: Some(task.localized_completion_description(&app.state::<LocalizationManager>())),
+                                    message: Some(task.completion_description()),
                                 });
                             }
 
@@ -618,7 +761,7 @@ impl TaskManager {
                                     100,
                                     final_step,
                                     final_step,
-                                    task.localized_completion_description(&app.state::<LocalizationManager>()),
+                                    task.completion_description(),
                                     Some(NotificationSeverity::Success),
                                 );
                             }
@@ -648,7 +791,11 @@ impl TaskManager {
                                 if let Err(err) = manager.create(CreateNotificationInput {
                                     client_key: Some(key_clone.clone()),
                                     title: Some(display_name),
-                                    description: Some(format!("{}: {}", app.state::<LocalizationManager>().text("rust-task-failed"), e)),
+                                    description: Some(format!(
+                                        "{}: {}",
+                                        app.state::<LocalizationManager>().text("rust-task-failed"),
+                                        task.failure_description(&e)
+                                    )),
                                     severity: Some("error".to_string()),
                                     notification_type: Some(NotificationType::Patient),
                                     dismissible: Some(true),
@@ -658,7 +805,9 @@ impl TaskManager {
                                     progress: None,
                                     current_step: None,
                                     total_steps: None,
-                                    metadata: None,
+                                    metadata: notification_context
+                                        .as_ref()
+                                        .and_then(NotificationContext::metadata),
                                     show_on_completion: Some(true),
                                 }) {
                                     log::error!(
@@ -812,24 +961,21 @@ impl TaskManager {
             if is_cancellable {
                 actions.push(NotificationAction {
                     action_id: "cancel_task".to_string(),
-                    label: self.app_handle.state::<LocalizationManager>().text("shared-ui-cancel"),
+                    label: "Cancel".to_string(),
                     action_type: "secondary".to_string(),
                     payload: None,
                 });
             }
             actions.push(NotificationAction {
                 action_id: "resume_task".to_string(),
-                label: self.app_handle.state::<LocalizationManager>().text("rust-task-action-resume"),
+                label: "Resume".to_string(),
                 action_type: "primary".to_string(),
                 payload: None,
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
             let _ = manager.update_notification_actions(client_key.to_string(), actions);
-            let _ = manager.upsert_description(
-                client_key,
-                self.app_handle.state::<LocalizationManager>().text("rust-task-paused"),
-            );
+            let _ = manager.upsert_description(client_key, "Paused");
 
             Ok(())
         } else {
@@ -852,24 +998,21 @@ impl TaskManager {
             if is_cancellable {
                 actions.push(NotificationAction {
                     action_id: "cancel_task".to_string(),
-                    label: self.app_handle.state::<LocalizationManager>().text("shared-ui-cancel"),
+                    label: "Cancel".to_string(),
                     action_type: "secondary".to_string(),
                     payload: None,
                 });
             }
             actions.push(NotificationAction {
                 action_id: "pause_task".to_string(),
-                label: self.app_handle.state::<LocalizationManager>().text("rust-task-action-pause"),
+                label: "Pause".to_string(),
                 action_type: "secondary".to_string(),
                 payload: None,
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
             let _ = manager.update_notification_actions(client_key.to_string(), actions);
-            let _ = manager.upsert_description(
-                client_key,
-                self.app_handle.state::<LocalizationManager>().text("rust-task-resuming"),
-            );
+            let _ = manager.upsert_description(client_key, "Resuming...");
 
             Ok(())
         } else {
@@ -907,10 +1050,6 @@ impl Task for TestTask {
         self.title.clone()
     }
 
-    fn localized_name(&self, _localization: &LocalizationManager) -> String {
-        self.title.clone()
-    }
-
     fn cancellable(&self) -> bool {
         true
     }
@@ -934,7 +1073,7 @@ impl Task for TestTask {
                 .create(CreateNotificationInput {
                     client_key: Some(client_key.clone()),
                     title: Some(title.clone()),
-                    description: Some(ctx.text("rust-task-running")),
+                    description: Some("Task is running...".to_string()),
                     severity: Some("info".to_string()),
                     notification_type: Some(NotificationType::Progress),
                     dismissible: Some(false),
@@ -944,13 +1083,13 @@ impl Task for TestTask {
                         serde_json::to_string(&vec![
                             NotificationAction {
                                 action_id: "cancel_task".to_string(),
-                                label: ctx.text("shared-ui-cancel"),
+                                label: "Cancel".to_string(),
                                 action_type: "secondary".to_string(),
                                 payload: None,
                             },
                             NotificationAction {
                                 action_id: "pause_task".to_string(),
-                                label: ctx.text("rust-task-action-pause"),
+                                label: "Pause".to_string(),
                                 action_type: "secondary".to_string(),
                                 payload: None,
                             },
@@ -985,13 +1124,13 @@ impl Task for TestTask {
                             vec![
                                 NotificationAction {
                                     action_id: "cancel_task".to_string(),
-                                    label: ctx.text("shared-ui-cancel"),
+                                    label: "Cancel".to_string(),
                                     action_type: "secondary".to_string(),
                                     payload: None,
                                 },
                                 NotificationAction {
                                     action_id: "resume_task".to_string(),
-                                    label: ctx.text("rust-task-action-resume"),
+                                    label: "Resume".to_string(),
                                     action_type: "primary".to_string(),
                                     payload: None,
                                 },
@@ -1005,7 +1144,7 @@ impl Task for TestTask {
                             ((i * 100) / steps) as i32,
                             Some(i as i32),
                             Some(steps as i32),
-                            ctx.text("rust-task-paused"),
+                            "Paused".to_string(),
                         )
                         .map_err(|e| e.to_string())?;
 
@@ -1021,13 +1160,13 @@ impl Task for TestTask {
                                         vec![
                                             NotificationAction {
                                                 action_id: "cancel_task".to_string(),
-                                                label: ctx.text("shared-ui-cancel"),
+                                                label: "Cancel".to_string(),
                                                 action_type: "secondary".to_string(),
                                                 payload: None,
                                             },
                                             NotificationAction {
                                                 action_id: "pause_task".to_string(),
-                                                label: ctx.text("rust-task-action-pause"),
+                                                label: "Pause".to_string(),
                                                 action_type: "secondary".to_string(),
                                                 payload: None,
                                             },
@@ -1039,7 +1178,7 @@ impl Task for TestTask {
                                         ((i * 100) / steps) as i32,
                                         Some(i as i32),
                                         Some(steps as i32),
-                                        ctx.text("rust-task-resuming")
+                                        "Resuming...".to_string()
                                     ).map_err(|e| e.to_string())?;
                                     break;
                                 }

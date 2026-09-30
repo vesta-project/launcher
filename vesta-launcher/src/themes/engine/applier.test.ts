@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThemeConfig } from "../types";
 
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+
 vi.mock("./transitionManager", () => ({
 	startThemeTransition: vi.fn(),
 }));
 
-import { applyTheme, setColorModePreference } from "./applier";
+import { invoke } from "@tauri-apps/api/core";
+import {
+	applyTheme,
+	setColorModePreference,
+	waitForNativeEffectSettled,
+} from "./applier";
 
 function createTheme(overrides: Partial<ThemeConfig> = {}): ThemeConfig {
 	return {
@@ -24,6 +31,14 @@ function createTheme(overrides: Partial<ThemeConfig> = {}): ThemeConfig {
 	};
 }
 
+async function resetNativeEffectState() {
+	(window as any).__TAURI_INTERNALS__ = {};
+	vi.mocked(invoke).mockResolvedValue(undefined);
+	applyTheme(createTheme({ windowEffect: "none" }));
+	await waitForNativeEffectSettled();
+	vi.mocked(invoke).mockClear();
+}
+
 describe("applyTheme background and effect behavior", () => {
 	beforeEach(() => {
 		setColorModePreference("system");
@@ -38,6 +53,8 @@ describe("applyTheme background and effect behavior", () => {
 		root.removeAttribute("data-startup-fallback-active");
 		root.setAttribute("data-os", "windows");
 		document.getElementById("theme-custom-css")?.remove();
+		delete (window as any).__TAURI_INTERNALS__;
+		vi.mocked(invoke).mockReset();
 	});
 
 	it("keeps the app color mode independent from theme presets", () => {
@@ -147,5 +164,107 @@ describe("applyTheme background and effect behavior", () => {
 		applyTheme(createTheme({ id: "no-vars", customCss: undefined }));
 
 		expect(root.style.getPropertyValue("--theme-var-stale").trim()).toBe("");
+	});
+
+	it("serializes rapid native switches and exposes only latest acknowledged effect", async () => {
+		await resetNativeEffectState();
+		const resolvers: Array<() => void> = [];
+		vi.mocked(invoke).mockImplementation(
+			() => new Promise<void>((resolve) => resolvers.push(resolve)),
+		);
+
+		applyTheme(createTheme({ windowEffect: "mica" }));
+		await Promise.resolve();
+		applyTheme(createTheme({ windowEffect: "acrylic" }));
+		applyTheme(createTheme({ windowEffect: "none" }));
+		expect(invoke).toHaveBeenCalledTimes(1);
+		expect(document.documentElement.dataset.windowEffect).toBe("none");
+		resolvers.shift()?.();
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(invoke).toHaveBeenCalledTimes(2);
+		expect(vi.mocked(invoke).mock.calls.map((call) => call[1])).toEqual([
+			{ effect: "mica" },
+			{ effect: "none" },
+		]);
+		resolvers.shift()?.();
+		await waitForNativeEffectSettled();
+		expect(document.documentElement.dataset.windowEffect).toBe("none");
+	});
+
+	it("waits for a request arriving at the previous completion boundary", async () => {
+		await resetNativeEffectState();
+		const resolvers: Array<() => void> = [];
+		vi.mocked(invoke).mockImplementation(
+			() => new Promise<void>((resolve) => resolvers.push(resolve)),
+		);
+		applyTheme(createTheme({ windowEffect: "mica" }));
+		await Promise.resolve();
+		resolvers.shift()?.();
+		await Promise.resolve();
+		applyTheme(createTheme({ windowEffect: "acrylic" }));
+		let settled = false;
+		const settling = waitForNativeEffectSettled().then(() => {
+			settled = true;
+		});
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(settled).toBe(false);
+		expect(invoke).toHaveBeenLastCalledWith("set_window_effect", {
+			effect: "acrylic",
+		});
+		resolvers.shift()?.();
+		await settling;
+		expect(document.documentElement.dataset.windowEffect).toBe("acrylic");
+	});
+
+	it("keeps failed effect retryable", async () => {
+		await resetNativeEffectState();
+		vi.mocked(invoke).mockRejectedValue(new Error("native failure"));
+
+		applyTheme(createTheme({ windowEffect: "mica" }));
+		await waitForNativeEffectSettled();
+		expect(document.documentElement.dataset.windowEffect).toBe("none");
+		expect(invoke).toHaveBeenCalledTimes(1);
+		vi.mocked(invoke).mockResolvedValue(undefined);
+		applyTheme(createTheme({ windowEffect: "mica" }));
+		await waitForNativeEffectSettled();
+		expect(invoke).toHaveBeenCalledTimes(2);
+		expect(document.documentElement.dataset.windowEffect).toBe("mica");
+	});
+
+	it("clears uncertain native state when none is selected after a failure", async () => {
+		await resetNativeEffectState();
+		vi.mocked(invoke).mockRejectedValueOnce(
+			new Error("partial native failure"),
+		);
+		applyTheme(createTheme({ windowEffect: "mica" }));
+		await waitForNativeEffectSettled();
+		vi.mocked(invoke).mockResolvedValue(undefined);
+		applyTheme(createTheme({ windowEffect: "none" }));
+		await waitForNativeEffectSettled();
+		expect(invoke).toHaveBeenLastCalledWith("set_window_effect", {
+			effect: "none",
+		});
+		expect(document.documentElement.dataset.windowEffect).toBe("none");
+	});
+
+	it("restores none after switching through native effects", async () => {
+		await resetNativeEffectState();
+		vi.mocked(invoke).mockResolvedValue(undefined);
+
+		applyTheme(createTheme({ windowEffect: "mica" }));
+		await waitForNativeEffectSettled();
+		applyTheme(createTheme({ windowEffect: "acrylic" }));
+		await waitForNativeEffectSettled();
+		applyTheme(createTheme({ windowEffect: "none" }));
+		await waitForNativeEffectSettled();
+
+		expect(vi.mocked(invoke).mock.calls.map((call) => call[1])).toEqual([
+			{ effect: "mica" },
+			{ effect: "acrylic" },
+			{ effect: "none" },
+		]);
+		expect(document.documentElement.dataset.windowEffect).toBe("none");
 	});
 });

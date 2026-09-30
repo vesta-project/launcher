@@ -25,35 +25,6 @@ English is the final fallback. The default preference is `system`, which tries
 the operating-system locale and falls back to English. Changing the language in
 Settings applies immediately and persists in `app_config.language`.
 
-## Connect the existing Crowdin project
-
-The committed `crowdin.yml` is ready for a file-based Crowdin project. In
-Crowdin:
-
-1. Set the project source language to English and add the desired target
-   languages.
-2. Open **Integrations → GitHub → Set Up Integration**.
-3. Select **Source and translation files mode**, authorize the
-   `vesta-project/launcher` repository, and select the `main` branch.
-4. Keep the default configuration file name, `crowdin.yml`.
-5. Leave **Push Sources** disabled. Import existing translations once only;
-   after setup, Crowdin should be the source of truth for translated catalogs.
-6. Enable the sync schedule. Crowdin will maintain an `l10n_main` service branch
-   and open translation pull requests rather than writing directly to `main`.
-7. Run **Sync Now** and confirm that `common.ftl`, `settings.ftl`, and
-   `shell.ftl` appear as source files.
-
-Do not add Crowdin credentials to `crowdin.yml`. The GitHub integration stores
-authorization in Crowdin. The custom Crowdin commit message intentionally omits
-`[ci skip]` so the localization workflow validates translation pull requests;
-workflow concurrency cancels redundant runs while Crowdin is updating files.
-Crowdin omits untranslated messages so Vesta's English fallback remains the
-single fallback mechanism. When English source text changes, existing
-translations are preserved but marked unapproved for review.
-
-If Crowdin's `%locale%` value is not the BCP 47 directory code Vesta should use,
-configure a language mapping in Crowdin before downloading that language.
-
 ## Add and release a locale
 
 Before Crowdin exports a new target locale, add it to
@@ -110,9 +81,11 @@ args.set("instanceName", instance_name);
 localization.format("instance-launch-failed", Some(&args))
 ```
 
-Keep variables unchanged in translations. Prefer complete messages over
-concatenated fragments so translators can reorder words. Add translator context
-as an FTL comment immediately above an ambiguous message.
+Reuse a stable `generic-label-*` message when the same label has the same meaning
+across screens; keep screen-specific IDs when context changes the meaning. Keep
+variables unchanged in translations. Prefer complete messages over concatenated
+fragments so translators can reorder words. Add translator context as an FTL
+comment immediately above an ambiguous message.
 
 ## Verification
 

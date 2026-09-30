@@ -505,14 +505,8 @@
 	--instance-card-text-main: hsl(0 0% 100%);
 	--instance-card-text-muted: hsl(0 0% 100% / 0.86);
 	--instance-card-play-surface: hsl(0 0% 100% / 0.16);
-	--instance-card-play-surface-hover: hsl(
-		0 0% 100% /
-		0.28
-	);
-	--instance-card-play-surface-active: hsl(
-		0 0% 100% /
-		0.2
-	);
+	--instance-card-play-surface-hover: hsl(0 0% 100% / 0.28);
+	--instance-card-play-surface-active: hsl(0 0% 100% / 0.2);
 	--instance-card-glass-border: hsl(0 0% 100% / 0.28);
 	--instance-card-glass-highlight: hsl(0 0% 100% / 0.12);
 }
@@ -535,14 +529,8 @@
 		--instance-card-text-main: hsl(0 0% 100%);
 		--instance-card-text-muted: hsl(0 0% 100% / 0.86);
 		--instance-card-play-surface: hsl(0 0% 100% / 0.16);
-		--instance-card-play-surface-hover: hsl(
-			0 0% 100% /
-			0.28
-		);
-		--instance-card-play-surface-active: hsl(
-			0 0% 100% /
-			0.2
-		);
+		--instance-card-play-surface-hover: hsl(0 0% 100% / 0.28);
+		--instance-card-play-surface-active: hsl(0 0% 100% / 0.2);
 		--instance-card-glass-border: hsl(0 0% 100% / 0.28);
 		--instance-card-glass-highlight: hsl(0 0% 100% / 0.12);
 	}

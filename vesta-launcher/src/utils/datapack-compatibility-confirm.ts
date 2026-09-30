@@ -40,10 +40,7 @@ export function summarizeProviderMinecraftVersions(
 export function buildDatapackCompatibilityDescription(params: {
 	projectName: string;
 	version: Pick<ResourceVersion, "version_number" | "game_versions">;
-	world: Pick<
-		WorldSummary,
-		"displayName" | "gameVersion" | "dataVersion"
-	>;
+	world: Pick<WorldSummary, "displayName" | "gameVersion" | "dataVersion">;
 	compatibility: Exclude<DatapackVersionCompatibility, "exact">;
 }): string {
 	const targetVersion = params.world.gameVersion ??
@@ -68,10 +65,7 @@ export function buildDatapackCompatibilityDescription(params: {
 export async function confirmDatapackWorldCompatibility(params: {
 	projectName: string;
 	version: Pick<ResourceVersion, "version_number" | "game_versions">;
-	world: Pick<
-		WorldSummary,
-		"displayName" | "gameVersion" | "dataVersion"
-	>;
+	world: Pick<WorldSummary, "displayName" | "gameVersion" | "dataVersion">;
 }): Promise<{
 	compatibility: DatapackVersionCompatibility;
 	acknowledged: boolean;

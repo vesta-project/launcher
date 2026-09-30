@@ -91,10 +91,7 @@ describe("Keyboard settings", () => {
 		});
 
 		await waitFor(() =>
-			expect(mocks.assign).toHaveBeenCalledWith(
-				"app.reload",
-				"Mod+KeyK",
-			),
+			expect(mocks.assign).toHaveBeenCalledWith("app.reload", "Mod+KeyK"),
 		);
 	});
 
@@ -128,9 +125,7 @@ describe("Keyboard settings", () => {
 		});
 
 		expect(await screen.findByText("Replace existing shortcut?")).toBeTruthy();
-		fireEvent.click(
-			screen.getByRole("button", { name: "Replace shortcut" }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: "Replace shortcut" }));
 
 		await waitFor(() =>
 			expect(mocks.assign).toHaveBeenLastCalledWith(

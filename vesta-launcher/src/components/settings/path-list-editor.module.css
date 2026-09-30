@@ -1,0 +1,98 @@
+.pathList {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+}
+
+.pathRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 6px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--border-subtle);
+	background: color-mix(in srgb, var(--surface-overlay) 60%, transparent);
+}
+
+.pathRowInherited {
+	opacity: 0.55;
+	background: transparent;
+	border-style: dashed;
+}
+
+.pathIcon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	color: var(--text-secondary);
+}
+
+.pathIcon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.pathText {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--text-primary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pathTag {
+	flex-shrink: 0;
+	font-size: 10px;
+	color: var(--text-secondary);
+	opacity: 0.8;
+}
+
+.pathActions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.removeButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--text-secondary);
+	cursor: pointer;
+}
+
+.removeButton:hover {
+	background: color-mix(in srgb, var(--destructive) 12%, transparent);
+	color: var(--destructive);
+}
+
+.removeButton svg {
+	width: 14px;
+	height: 14px;
+}
+
+.addRow {
+	margin-top: 4px;
+}
+
+.emptyHint {
+	font-size: 11px;
+	color: var(--text-secondary);
+	opacity: 0.7;
+	padding: 4px 2px;
+}

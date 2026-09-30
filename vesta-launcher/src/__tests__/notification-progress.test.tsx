@@ -1,6 +1,6 @@
 /* @refresh skip */
 
-import { render, screen } from "@solidjs/testing-library";
+import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { NotificationItem } from "@ui/notification/notification-item";
 import { describe, expect, it, vi } from "vitest";
 
@@ -16,8 +16,14 @@ vi.mock("@assets/icons/status/error.svg", () => ({
 	default: (props: any) => <svg data-testid="error-icon" {...props} />,
 }));
 
+vi.mock("@assets/icons/content/cube.svg", () => ({
+	default: (props: any) => <svg data-testid="instance-icon" {...props} />,
+}));
+
 vi.mock("@utils/notifications", () => ({
 	PROGRESS_INDETERMINATE: -1,
+	getNotificationContext: (metadata?: string | null) =>
+		metadata ? JSON.parse(metadata).context : undefined,
 }));
 
 describe("Notification progress rendering", () => {
@@ -62,5 +68,67 @@ describe("Notification progress rendering", () => {
 		expect(progress?.style.getPropertyValue("--progress-fill-width")).toBe(
 			"100%",
 		);
+	});
+
+	it("keeps the instance icon primary and renders failure as an X badge", () => {
+		const { container } = render(() => (
+			<NotificationItem
+				id={3}
+				severity="error"
+				metadata={JSON.stringify({
+					context: { kind: "instance", id: "404", label: "Missing" },
+				})}
+			/>
+		));
+
+		expect(screen.getByTestId("instance-icon")).toBeTruthy();
+		expect(container.querySelector('[aria-hidden="true"]')).toBeTruthy();
+	});
+
+	it("clamps overflowing descriptions and exposes More and Less", async () => {
+		const scrollHeight = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			"scrollHeight",
+		);
+		const clientHeight = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			"clientHeight",
+		);
+		Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+			configurable: true,
+			get: () => 40,
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+			configurable: true,
+			get: () => 20,
+		});
+
+		try {
+			render(() => (
+				<NotificationItem
+					id={4}
+					description="A long notification description that takes more than two lines."
+				/>
+			));
+			await Promise.resolve();
+
+			fireEvent.click(await screen.findByRole("button", { name: "More" }));
+			expect(screen.getByRole("button", { name: "Less" })).toBeTruthy();
+		} finally {
+			if (scrollHeight) {
+				Object.defineProperty(
+					HTMLElement.prototype,
+					"scrollHeight",
+					scrollHeight,
+				);
+			}
+			if (clientHeight) {
+				Object.defineProperty(
+					HTMLElement.prototype,
+					"clientHeight",
+					clientHeight,
+				);
+			}
+		}
 	});
 });

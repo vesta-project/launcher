@@ -4,7 +4,7 @@ import {
 	pageViewerOpen,
 	router,
 } from "@components/page-viewer/page-viewer";
-import { pinning, type PinnedPage } from "@stores/pinning";
+import { type PinnedPage, pinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { handleNavigationBack, handleNavigationForward } from "@utils/flat-shell-navigation";

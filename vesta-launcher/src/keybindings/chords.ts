@@ -16,9 +16,16 @@ export function chordFromKeyboardEvent(
 	if (
 		!code ||
 		["Meta", "Control", "Alt", "Shift"].includes(event.key) ||
-		["MetaLeft", "MetaRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"].includes(
-			code,
-		)
+		[
+			"MetaLeft",
+			"MetaRight",
+			"ControlLeft",
+			"ControlRight",
+			"AltLeft",
+			"AltRight",
+			"ShiftLeft",
+			"ShiftRight",
+		].includes(code)
 	) {
 		return undefined;
 	}
@@ -72,7 +79,9 @@ export function displayChord(chord: string | null | undefined): string {
 		.join(mac ? "" : "+");
 }
 
-export function ariaShortcut(chord: string | null | undefined): string | undefined {
+export function ariaShortcut(
+	chord: string | null | undefined,
+): string | undefined {
 	if (!chord) return undefined;
 	return chord
 		.split("+")

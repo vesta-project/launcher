@@ -65,6 +65,17 @@ impl ThreeWayDiffer {
                 .unwrap_or_else(|| lower_path.clone());
 
             match file_class {
+                FileClass::Options => {
+                    let source = new_mod.map(mod_source_to_file_source).or_else(|| {
+                        in_new_overrides.then(|| FileSource::ZipOverride {
+                            relative_path: display_path.clone(),
+                        })
+                    });
+                    tree.add_action(crate::settings_sync::pack_update::plan(
+                        &display_path,
+                        source,
+                    ));
+                }
                 FileClass::Binary => {
                     Self::handle_binary(
                         &mut tree,

@@ -1,5 +1,9 @@
 # Keyboard settings and command descriptions.
 settings-extra-example-prefix = e.g.
+settings-extra-instance-game-options-title = Game options
+settings-extra-instance-game-options-label = Minecraft options
+settings-extra-instance-game-options-description = Edit the options saved by this instance.
+settings-extra-instance-game-options-action = Edit
 settings-extra-keyboard-temporary-defaults = Shortcuts are using temporary defaults.
 settings-extra-keyboard-loading = Loading keyboard commands…
 settings-extra-keyboard-recording-help = Shortcut recording help

@@ -98,12 +98,11 @@ pub fn open_screenshot_in_folder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        use piston_lib::utils::process::PistonCommandExt;
         use std::process::Command;
-        Command::new("explorer")
-            .arg("/select,")
-            .arg(p)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let mut command = Command::new("explorer");
+        command.arg("/select,").arg(p).suppress_console();
+        command.spawn().map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {

@@ -50,6 +50,11 @@ impl InstallInstanceTask {
 }
 
 impl Task for InstallInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance.id,
+        )]
+    }
     fn name(&self) -> String {
         format!("Install {}", self.instance.name)
     }
@@ -60,6 +65,13 @@ impl Task for InstallInstanceTask {
 
     fn id(&self) -> Option<String> {
         Some(format!("install_instance_{}", self.instance.id))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance.id,
+            Some(self.instance.name.clone()),
+        ))
     }
 
     fn cancellable(&self) -> bool {

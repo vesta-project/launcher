@@ -4,6 +4,8 @@ import { ensureOsType } from "@utils/os";
 import { getStartupConfig } from "@utils/startup-state";
 import { afterNextPaint } from "@utils/window-readiness";
 import { createSignal } from "solid-js";
+import { waitForNativeEffectSettled } from "~/themes/engine/applier";
+import { loadWindowEffectCapabilities } from "~/themes/engine/effects";
 
 const [isThemeReady, setIsThemeReady] = createSignal(false);
 let themeInitPromise: Promise<Record<string, any> | null> | null = null;
@@ -50,9 +52,14 @@ export function initTheme(): Promise<Record<string, any> | null> {
 				document.documentElement.setAttribute("data-os", urlOs);
 			}
 
-			// Parallelize OS verification and config fetching
+			// Resolve native capabilities before applying saved effects. Otherwise the
+			// conservative fallback list can rewrite a supported Windows 10 Blur theme.
 			const osPromise = ensureOsType();
-			const [os, config] = await Promise.all([osPromise, configPromise]);
+			const [os, config] = await Promise.all([
+				osPromise,
+				configPromise,
+				loadWindowEffectCapabilities(),
+			]);
 
 			// Actualize the OS attribute if detection finishes and differs (or was missing)
 			if (os && os !== urlOs) {
@@ -60,6 +67,7 @@ export function initTheme(): Promise<Record<string, any> | null> {
 			}
 
 			applyConfigSnapshot(config);
+			await waitForNativeEffectSettled();
 			await afterNextPaint();
 
 			// Clear the solid startup backing only after the configured theme has painted.

@@ -1,19 +1,19 @@
-import ErrorIcon from "@assets/icons/status/error.svg";
 import PinIcon from "@assets/icons/actions/pin.svg";
-import PinOffIcon from "@assets/icons/actions/unpin.svg";
 import PlayIcon from "@assets/icons/actions/play.svg";
+import RecoveryIcon from "@assets/icons/actions/reload.svg";
 import KillIcon from "@assets/icons/actions/stop.svg";
+import PinOffIcon from "@assets/icons/actions/unpin.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import LinkIcon from "@assets/icons/content/link.svg";
-import RecoveryIcon from "@assets/icons/actions/reload.svg";
+import ErrorIcon from "@assets/icons/status/error.svg";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { formatRelativeTime } from "@utils/date";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
 import { Show } from "solid-js";
 import { t } from "~/localization";
-import type { ReturnTypeOfPrimaryAction } from "./instance-header-types";
 import styles from "./InstanceHeader.module.css";
+import type { ReturnTypeOfPrimaryAction } from "./instance-header-types";
 
 interface InstanceHeaderProps {
 	instance: any;
@@ -37,10 +37,16 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 	const played = () => formatRelativeTime(props.instance.lastPlayed);
 	const playtime = () => {
 		const minutes = props.instance.totalPlaytimeMinutes ?? 0;
-		return t("instances-details-header-playtime-total", {
-			hours: Math.floor(minutes / 60),
-			minutes: minutes % 60,
-		});
+		const hours = Math.floor(minutes / 60);
+		const days = Math.floor(hours / 24);
+		const remainingHours = hours % 24;
+		const remainingMinutes = minutes % 60;
+		return days > 0
+			? `${days}d ${remainingHours}h total`
+			: t("instances-details-header-playtime-total", {
+					hours,
+					minutes: remainingMinutes,
+				});
 	};
 	const failureSummary = () => {
 		const reason = props.failureReason?.replace(/\s+/g, " ").trim();

@@ -123,11 +123,10 @@ function InstallPage(props: InstallPageRouteProps) {
 	);
 	const effectivePendingResource = createMemo(() => props.pendingResource);
 	const pendingResourceIsNonModpack = createMemo(() => {
-		const resourceType =
-			(
-				effectivePendingResource()?.installType ??
-				effectivePendingResource()?.project.resource_type
-			)?.toLowerCase();
+		const resourceType = (
+			effectivePendingResource()?.installType ??
+			effectivePendingResource()?.project.resource_type
+		)?.toLowerCase();
 		return (
 			!!resourceType &&
 			resourceType !== "modpack" &&
@@ -187,17 +186,13 @@ function InstallPage(props: InstallPageRouteProps) {
 		selectedModpackVersionId,
 	});
 
-	const install = useInstallSubmit({
-		close: props.close,
-		navigateHome: () => activeRouter()?.navigate("/home"),
-		isModpackMode,
-		modpackUrl: source.modpackUrl,
-		modpackPath: source.modpackPath,
-		modpackInfo: source.modpackInfo as any,
-		pendingResource: effectivePendingResource,
-	});
-
-	const { projectVersions, handleModpackVersionChange } = useProjectVersions({
+	const {
+		projectVersions,
+		versionLookupError,
+		retryProjectVersions,
+		resolveConcreteVersion,
+		handleModpackVersionChange,
+	} = useProjectVersions({
 		isModpackMode,
 		modpackPath: source.modpackPath,
 		modpackUrl: source.modpackUrl,
@@ -211,6 +206,17 @@ function InstallPage(props: InstallPageRouteProps) {
 		selectedModpackVersionId,
 		setSelectedModpackVersionId,
 		setModpackUrl: source.setModpackUrl,
+	});
+
+	const install = useInstallSubmit({
+		close: props.close,
+		navigateHome: () => activeRouter()?.navigate("/home"),
+		isModpackMode,
+		modpackUrl: source.modpackUrl,
+		modpackPath: source.modpackPath,
+		modpackInfo: source.modpackInfo as any,
+		resolveConcreteModpackVersion: resolveConcreteVersion,
+		pendingResource: effectivePendingResource,
 	});
 
 	// --- Enrich modpackInfo with version details when the selected version resolves ---
@@ -235,7 +241,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		);
 
 		source.setModpackInfo({
-			name: info?.name || effectiveProjectName() || UNKNOWN_MODPACK_NAME,
+			name: info?.name || effectiveProjectName() || "Unknown Modpack",
 			version: selected.version_number,
 			author: info?.author || effectiveProjectAuthor() || null,
 			description: info?.description ?? null,
@@ -327,7 +333,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		const author = effectiveProjectAuthor();
 
 		const updates: Record<string, any> = {};
-		if (name && info.name === UNKNOWN_MODPACK_NAME) updates.name = name;
+		if (name && info.name === "Unknown Modpack") updates.name = name;
 		if (id && !info.modpackId) updates.modpackId = id;
 		if (platform && !info.modpackPlatform) updates.modpackPlatform = platform;
 		if (icon && !info.iconUrl) updates.iconUrl = icon;
@@ -469,7 +475,9 @@ function InstallPage(props: InstallPageRouteProps) {
 					resourceName: effectivePendingResource()?.project.name || t("install-page-resource-fallback"),
 				});
 			}
-			return t("install-page-loading-applying-configuration");
+			return isModpackMode()
+				? "Resolving the selected release and queuing its install task."
+				: t("install-page-loading-applying-configuration");
 		}
 		return metadataStatus().message;
 	});
@@ -581,7 +589,7 @@ function InstallPage(props: InstallPageRouteProps) {
 						(source.modpackUrl() || source.modpackPath()) &&
 						!effectiveProjectId()
 							? {
-									label: t("install-page-change-import"),
+							label: t("install-page-change-import"),
 									onClick: () =>
 										openImportModal({
 											expandUrl: !!source.modpackUrl(),
@@ -670,6 +678,8 @@ function InstallPage(props: InstallPageRouteProps) {
 						}}
 						isInstalling={install.isInstalling()}
 						isFetchingMetadata={isFetchingMetadata()}
+						versionLookupError={versionLookupError()?.message}
+						onRetryVersionLookup={() => void retryProjectVersions()}
 					/>
 				</Show>
 			</div>

@@ -1,5 +1,5 @@
 import FolderIcon from "@assets/icons/content/folder.svg";
-import CopyIcon from "@assets/icons/content/link.svg";
+import CopyIcon from "@assets/icons/actions/copy.svg";
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import TrashIcon from "@assets/icons/actions/delete.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
@@ -17,7 +17,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
-import { createResource, createSignal, For, Show, Suspense } from "solid-js";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	Show,
+	Suspense,
+} from "solid-js";
 import { t } from "~/localization";
 import styles from "./ScreenshotGallery.module.css";
 
@@ -30,12 +38,20 @@ interface Screenshot {
 
 interface ScreenshotGalleryProps {
 	instanceIdSlug: string;
+	/** When false, close the lightbox so a portaled dialog cannot outlive the tab. */
+	active?: boolean;
 }
 
 export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 	const [viewMode, setViewMode] = createSignal<"grid" | "list">("grid");
 	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">("newest");
 	const [selectedScreenshot, setSelectedScreenshot] = createSignal<Screenshot | null>(null);
+	createEffect(() => {
+		if (props.active === false) {
+			setSelectedScreenshot(null);
+		}
+	});
+	onCleanup(() => setSelectedScreenshot(null));
 
 	const [screenshots, { mutate, refetch }] = createResource(
 		() => props.instanceIdSlug,

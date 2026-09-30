@@ -22,6 +22,8 @@ describe("formatRelativeTime", () => {
 	});
 
 	it("clamps future clock skew to just now", () => {
-		expect(formatRelativeTime("2026-08-03T12:00:15.000Z", now)).toBe("just now");
+		expect(formatRelativeTime("2026-08-03T12:00:15.000Z", now)).toBe(
+			"just now",
+		);
 	});
 });

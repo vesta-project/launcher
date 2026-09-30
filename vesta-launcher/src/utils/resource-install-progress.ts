@@ -87,7 +87,10 @@ export function installingIdsFromTargets(keys: readonly string[]) {
 	return { projects, versions };
 }
 
-export function installTargetMatchesTaskId(key: string, taskId: string): boolean {
+export function installTargetMatchesTaskId(
+	key: string,
+	taskId: string,
+): boolean {
 	const parsed = parseInstallTargetKey(key);
 	if (!parsed || parsed.target.kind === "modpack") return false;
 	const target =
@@ -105,7 +108,6 @@ export function installTargetMatchesTaskId(key: string, taskId: string): boolean
 		);
 	}
 	return (
-		taskId ===
-		`download_${target}_${parsed.projectId}_${parsed.versionId}`
+		taskId === `download_${target}_${parsed.projectId}_${parsed.versionId}`
 	);
 }

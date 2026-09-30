@@ -1,0 +1,2 @@
+-- This migration also repairs databases where the table was created under the
+-- collided 20260724000000 version. Reverting it must preserve those bindings.

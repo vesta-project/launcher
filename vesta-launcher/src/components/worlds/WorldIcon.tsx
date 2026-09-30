@@ -28,4 +28,5 @@ export const WorldIcon: Component<{
 		/>
 	</Show>
 );
+
 import CubeIcon from "@assets/icons/content/cube.svg";

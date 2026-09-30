@@ -17,6 +17,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getActiveAccount } from "@utils/auth";
+import { invalidateSandboxHostSupportCache } from "@utils/sandbox-host";
 import { t } from "~/localization";
 
 export const DEMO_INSTANCE_ID = -1;
@@ -144,6 +145,11 @@ export interface Instance {
 	postExitHook: string | null;
 	wrapperCommand: string | null;
 
+	useGlobalSandbox: boolean;
+	sandboxPreset: string | null;
+	sandboxWrapperNesting: string | null;
+	sandboxExtraPaths: string;
+
 	/**
 	 * Identifier of the last lifecycle operation performed on this instance.
 	 *
@@ -248,6 +254,10 @@ export function createDemoInstance(): Instance {
 		preLaunchHook: null,
 		postExitHook: null,
 		wrapperCommand: null,
+		useGlobalSandbox: true,
+		sandboxPreset: null,
+		sandboxWrapperNesting: null,
+		sandboxExtraPaths: "[]",
 	};
 }
 
@@ -297,6 +307,10 @@ export async function createInstance(
 		preLaunchHook: null,
 		postExitHook: null,
 		wrapperCommand: null,
+		useGlobalSandbox: true,
+		sandboxPreset: null,
+		sandboxWrapperNesting: null,
+		sandboxExtraPaths: "[]",
 	};
 
 	console.log(
@@ -562,6 +576,9 @@ export async function launchInstance(instance: Instance): Promise<void> {
 	} catch (e) {
 		setLaunching(slug, false);
 		console.error("[launchInstance] Launch command failed:", e);
+		if (String(e).toLowerCase().includes("sandbox")) {
+			invalidateSandboxHostSupportCache();
+		}
 		throw e;
 	}
 }

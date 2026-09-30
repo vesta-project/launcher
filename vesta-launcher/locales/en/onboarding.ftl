@@ -56,6 +56,7 @@ onboarding-modpack-download-count = { $total ->
 }
 onboarding-modpack-installing = Installing...
 onboarding-modpack-install = Install Modpack
+onboarding-modpack-finish-setup = Finish Setup
 onboarding-import-instance = Import Instance
 onboarding-import-detecting-launcher = Detecting launcher...
 onboarding-instance-name = Instance Name
