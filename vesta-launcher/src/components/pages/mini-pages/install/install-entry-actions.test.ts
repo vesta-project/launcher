@@ -1,5 +1,23 @@
-import { describe, expect, it } from "vitest";
-import { isHttpUrl } from "./install-entry-actions";
+import { beforeEach, describe, expect, it } from "vitest";
+import { applyLanguagePreference } from "~/localization";
+import { getExploreResourceTypes, isHttpUrl } from "./install-entry-actions";
+
+beforeEach(() => {
+	applyLanguagePreference("en", ["en-AU"]);
+});
+
+describe("getExploreResourceTypes", () => {
+	it("returns resource type values with their English labels", () => {
+		expect(getExploreResourceTypes()).toEqual([
+			{ value: "mod", label: "Mods" },
+			{ value: "resourcepack", label: "Resource Packs" },
+			{ value: "shader", label: "Shaders" },
+			{ value: "datapack", label: "Data Packs" },
+			{ value: "modpack", label: "Modpacks" },
+			{ value: "world", label: "Worlds" },
+		]);
+	});
+});
 
 describe("isHttpUrl", () => {
 	it("accepts http and https URLs", () => {

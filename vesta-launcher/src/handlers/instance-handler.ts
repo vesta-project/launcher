@@ -14,7 +14,7 @@ import {
 	repairInstance,
 	resetInstance,
 } from "@utils/instances";
-import { t } from "~/localization";
+import { t, tPlain } from "~/localization";
 
 /**
  * Handles duplicating an instance with user prompt for name.
@@ -24,7 +24,7 @@ export const handleDuplicate = async (instance: Instance) => {
 		t("action-duplicate-instance-prompt-title"),
 		t("action-duplicate-instance-prompt-description"),
 		{
-			defaultValue: t("action-duplicate-instance-default-name", {
+			defaultValue: tPlain("action-duplicate-instance-default-name", {
 				instanceName: instance.name,
 			}),
 		},

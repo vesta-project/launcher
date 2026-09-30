@@ -34,6 +34,7 @@ import {
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { getStartupConfig } from "@utils/startup-state";
+import { getThemeDescription } from "../themes/theme-description";
 import { t } from "~/localization";
 import {
 	batch,
@@ -325,7 +326,7 @@ export const filteredThemeCatalog = createMemo(() => {
 			if (filter === "imported" && source !== "imported") return false;
 
 			if (!query) return true;
-			const haystack = [theme.name, theme.author, theme.description]
+			const haystack = [theme.name, theme.author, getThemeDescription(theme)]
 				.filter((value): value is string => Boolean(value))
 				.join(" ")
 				.toLowerCase();

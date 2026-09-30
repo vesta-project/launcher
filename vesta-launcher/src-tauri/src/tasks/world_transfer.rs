@@ -87,11 +87,19 @@ impl Task for WorldTransferTask {
             .lock()
             .ok()
             .and_then(|warning| warning.clone())
+            .map(|warning| format!("World moved, but cleanup needs attention: {warning}"))
             .unwrap_or_else(|| "World transfer completed".to_string())
     }
 
     fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
-        self.cleanup_warning.lock().ok().and_then(|warning| warning.clone()).unwrap_or_else(|| localization.text("rust-task-world-transfer-completed"))
+        localized_completion_description(
+            localization,
+            self.cleanup_warning
+                .lock()
+                .ok()
+                .and_then(|warning| warning.clone())
+                .as_deref(),
+        )
     }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
@@ -191,12 +199,44 @@ impl Task for WorldTransferTask {
             if let Some(warning) = result.cleanup_warning {
                 log::warn!("World move completed with cleanup warning: {warning}");
                 if let Ok(mut completion) = cleanup_warning.lock() {
-                    *completion = Some(format!(
-                        "World moved, but cleanup needs attention: {warning}"
-                    ));
+                    *completion = Some(warning);
                 }
             }
             Ok(())
         })
+    }
+}
+
+fn localized_completion_description(
+    localization: &crate::localization::LocalizationManager,
+    cleanup_warning: Option<&str>,
+) -> String {
+    match cleanup_warning {
+        Some(warning) => crate::tasks::manager::localized_message(
+            localization,
+            "rust-task-world-transfer-cleanup-warning",
+            &[("warning", warning)],
+        ),
+        None => localization.text("rust-task-world-transfer-completed"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::localized_completion_description;
+    use crate::localization::LocalizationManager;
+
+    #[test]
+    fn cleanup_warning_is_interpolated_in_localized_completion_message() {
+        let localization = LocalizationManager::new("en").expect("catalog should load");
+
+        assert_eq!(
+            localized_completion_description(&localization, Some("leftover files")),
+            "World moved, but cleanup needs attention: leftover files"
+        );
+        assert_eq!(
+            localized_completion_description(&localization, None),
+            "World transfer completed"
+        );
     }
 }

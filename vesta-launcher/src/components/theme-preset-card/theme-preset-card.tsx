@@ -2,6 +2,7 @@ import { type Component, Show } from "solid-js";
 import type { ThemeConfig } from "../../themes/presets";
 import styles from "./theme-preset-card.module.css";
 import { t } from "~/localization";
+import { getThemeDescription } from "../../themes/theme-description";
 
 interface ThemePresetCardProps {
 	theme: ThemeConfig;
@@ -21,8 +22,7 @@ interface ThemePresetCardProps {
 export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 	const previewStyle = () => props.theme.style ?? "glass";
 	const description = () =>
-		(props.theme.descriptionId && t(props.theme.descriptionId)) ||
-		props.theme.description ||
+		getThemeDescription(props.theme) ||
 		previewStyle();
 
 	return (

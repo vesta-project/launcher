@@ -79,8 +79,18 @@ function keybindingMessage(
 }
 
 function keybindingCategory(category: string): string {
-	if (category === "Application") return t("settings-extra-keybinding-category-application");
-	if (category === "Navigation") return t("settings-extra-keybinding-category-navigation");
+	if (
+		category === "settings-extra-keybinding-category-application" ||
+		category === "application" ||
+		category === "Application"
+	)
+		return t("settings-extra-keybinding-category-application");
+	if (
+		category === "settings-extra-keybinding-category-navigation" ||
+		category === "navigation" ||
+		category === "Navigation"
+	)
+		return t("settings-extra-keybinding-category-navigation");
 	return category;
 }
 

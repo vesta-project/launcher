@@ -9,7 +9,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { handleNavigationBack, handleNavigationForward } from "@utils/flat-shell-navigation";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { t } from "~/localization";
 import type { CommandDefinition } from "./types";
 
 function isMainWindow(): boolean {
@@ -72,9 +71,9 @@ function pinnedCommand(slot: number, chord: string): CommandDefinition {
 	return {
 		commandId: `navigation.pinned.${slot}`,
 		handlerId: `navigation.pinned.${slot}`,
-		label: t("settings-extra-keybinding-pinned-item", { slot }),
-		description: t("settings-extra-keybinding-open-pinned-item", { slot }),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-pinned-item",
+		description: "settings-extra-keybinding-open-pinned-item",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: chord,
 		sortOrder: 30 + slot,
 		canExecute: () => isMainWindow() && Boolean(pinnedAtSlot(slot)),
@@ -89,9 +88,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "app.reload",
 		handlerId: "app.reload",
-		label: t("settings-extra-keybinding-reload-label"),
-		description: t("settings-extra-keybinding-reload-description"),
-		category: t("settings-extra-keybinding-category-application"),
+		label: "settings-extra-keybinding-reload-label",
+		description: "settings-extra-keybinding-reload-description",
+		category: "settings-extra-keybinding-category-application",
 		defaultChord: "Mod+KeyR",
 		sortOrder: 10,
 		execute: async () => {
@@ -106,9 +105,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "app.close",
 		handlerId: "app.close",
-		label: t("settings-extra-keybinding-close-label"),
-		description: t("settings-extra-keybinding-close-description"),
-		category: t("settings-extra-keybinding-category-application"),
+		label: "settings-extra-keybinding-close-label",
+		description: "settings-extra-keybinding-close-description",
+		category: "settings-extra-keybinding-category-application",
 		defaultChord: "Mod+KeyW",
 		sortOrder: 20,
 		canExecute: () => !isMainWindow() || pageViewerOpen(),
@@ -117,9 +116,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.back",
 		handlerId: "navigation.back",
-		label: t("settings-extra-keybinding-back-label"),
-		description: t("settings-extra-keybinding-back-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-back-label",
+		description: "settings-extra-keybinding-back-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Alt+ArrowLeft",
 		sortOrder: 10,
 		canExecute: canNavigateBack,
@@ -131,9 +130,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.forward",
 		handlerId: "navigation.forward",
-		label: t("settings-extra-keybinding-forward-label"),
-		description: t("settings-extra-keybinding-forward-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-forward-label",
+		description: "settings-extra-keybinding-forward-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Alt+ArrowRight",
 		sortOrder: 20,
 		canExecute: canNavigateForward,
@@ -145,9 +144,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.library",
 		handlerId: "navigation.library",
-		label: t("settings-extra-keybinding-library-label"),
-		description: t("settings-extra-keybinding-library-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-library-label",
+		description: "settings-extra-keybinding-library-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Mod+Digit1",
 		sortOrder: 21,
 		canExecute: isMainWindow,
@@ -156,9 +155,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.new-instance",
 		handlerId: "navigation.new-instance",
-		label: t("app-shell-new-instance"),
-		description: t("settings-extra-keybinding-new-instance-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "app-shell-new-instance",
+		description: "settings-extra-keybinding-new-instance-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Mod+Digit2",
 		sortOrder: 22,
 		canExecute: isMainWindow,
@@ -167,9 +166,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.explore",
 		handlerId: "navigation.explore",
-		label: t("app-shell-explore"),
-		description: t("settings-extra-keybinding-explore-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "app-shell-explore",
+		description: "settings-extra-keybinding-explore-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Mod+Digit3",
 		sortOrder: 23,
 		canExecute: isMainWindow,
@@ -183,9 +182,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.pinned.last",
 		handlerId: "navigation.pinned.last",
-		label: t("settings-extra-keybinding-last-pinned-label"),
-		description: t("settings-extra-keybinding-last-pinned-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-last-pinned-label",
+		description: "settings-extra-keybinding-last-pinned-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Mod+Digit9",
 		sortOrder: 39,
 		canExecute: () => isMainWindow() && Boolean(lastPinned()),
@@ -197,9 +196,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.settings",
 		handlerId: "navigation.settings",
-		label: t("settings-extra-keybinding-settings-label"),
-		description: t("settings-extra-keybinding-settings-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-settings-label",
+		description: "settings-extra-keybinding-settings-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Mod+Comma",
 		sortOrder: 50,
 		canExecute: isMainWindow,
@@ -208,9 +207,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.notifications",
 		handlerId: "navigation.notifications",
-		label: t("settings-extra-keybinding-notifications-label"),
-		description: t("settings-extra-keybinding-notifications-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-notifications-label",
+		description: "settings-extra-keybinding-notifications-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: null,
 		sortOrder: 60,
 		canExecute: isMainWindow,
@@ -221,9 +220,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.focus-search",
 		handlerId: "navigation.focus-search",
-		label: t("settings-extra-keybinding-focus-search-label"),
-		description: t("settings-extra-keybinding-focus-search-description"),
-		category: t("settings-extra-keybinding-category-navigation"),
+		label: "settings-extra-keybinding-focus-search-label",
+		description: "settings-extra-keybinding-focus-search-description",
+		category: "settings-extra-keybinding-category-navigation",
 		defaultChord: "Mod+KeyF",
 		sortOrder: 70,
 		canExecute: () => Boolean(currentSearchTarget()),

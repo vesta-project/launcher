@@ -28,6 +28,7 @@ rust-task-manifest-generation-complete = Manifest generation complete
 rust-task-world-transfer-name = { $mode } world { $world }
 rust-task-validating-world-transfer = Validating world transfer…
 rust-task-world-transfer-completed = World transfer completed
+rust-task-world-transfer-cleanup-warning = World moved, but cleanup needs attention: { $warning }
 rust-task-duplicate-instance = Duplicate Instance
 rust-task-preparing-duplicate-instance = Preparing to duplicate instance...
 rust-task-duplicated-instance = Successfully duplicated instance
