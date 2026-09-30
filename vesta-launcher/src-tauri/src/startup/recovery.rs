@@ -4,6 +4,7 @@ use crate::notifications::models::{CreateNotificationInput, NotificationAction, 
 use crate::schema::instance::dsl::*;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
+use tauri::Manager;
 
 pub enum RecoveryNoticeKind {
     Interrupted,
@@ -107,6 +108,7 @@ pub fn recover_interrupted_operations(
 }
 
 pub fn publish_interrupted_notifications(
+    app_handle: tauri::AppHandle,
     manager: NotificationManager,
     recovery_notices: Vec<RecoveryNotice>,
 ) {
@@ -115,6 +117,7 @@ pub fn publish_interrupted_notifications(
     }
 
     tauri::async_runtime::spawn(async move {
+        let localization = app_handle.state::<crate::localization::LocalizationManager>();
         for notice in recovery_notices {
             let interrupted = notice.instance;
             let raw_operation = interrupted
@@ -129,52 +132,58 @@ pub fn publish_interrupted_notifications(
                 _ => "installation",
             };
             let (title, description, severity, actions) = match notice.kind {
-                RecoveryNoticeKind::Interrupted => (
-                    "Interrupted Operation Detected".to_string(),
-                    format!(
-                        "The {} for '{}' was interrupted. Would you like to resume?",
-                        display_operation, interrupted.name
-                    ),
+                RecoveryNoticeKind::Interrupted => {
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("operation", display_operation);
+                    args.set("instanceName", interrupted.name.as_str());
+                    (
+                    localization.text("rust-native-interrupted-operation-title"),
+                    localization.format("rust-native-interrupted-operation-description", Some(&args)),
                     "warning".to_string(),
                     vec![NotificationAction {
                         action_id: "resume_instance_operation".to_string(),
-                        label: "Resume Now".to_string(),
+                        label: localization.text("rust-native-resume-now"),
                         action_type: "primary".to_string(),
                         payload: None,
                     }],
-                ),
-                RecoveryNoticeKind::UpdateRestored => (
-                    "Modpack Update Restored".to_string(),
-                    format!(
-                        "The interrupted update for '{}' was rolled back. The previous version is ready to play.",
-                        interrupted.name
-                    ),
+                    )
+                }
+                RecoveryNoticeKind::UpdateRestored => {
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("instanceName", interrupted.name.as_str());
+                    (
+                    localization.text("rust-native-modpack-update-restored-title"),
+                    localization.format("rust-native-modpack-update-restored-description", Some(&args)),
                     "error".to_string(),
                     Vec::new(),
-                ),
-                RecoveryNoticeKind::UpdateCommitted => (
-                    "Modpack Update Completed".to_string(),
-                    format!(
-                        "The completed update for '{}' was finalized after the launcher restarted.",
-                        interrupted.name
-                    ),
+                    )
+                }
+                RecoveryNoticeKind::UpdateCommitted => {
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("instanceName", interrupted.name.as_str());
+                    (
+                    localization.text("rust-native-modpack-update-completed-title"),
+                    localization.format("rust-native-modpack-update-completed-description", Some(&args)),
                     "success".to_string(),
                     Vec::new(),
-                ),
-                RecoveryNoticeKind::UpdateRecoveryRequired(error) => (
-                    "Update Recovery Required".to_string(),
-                    format!(
-                        "The previous version of '{}' could not be fully restored: {}",
-                        interrupted.name, error
-                    ),
+                    )
+                }
+                RecoveryNoticeKind::UpdateRecoveryRequired(error) => {
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("instanceName", interrupted.name.as_str());
+                    args.set("error", error.as_str());
+                    (
+                    localization.text("rust-native-update-recovery-required-title"),
+                    localization.format("rust-native-update-recovery-required-description", Some(&args)),
                     "error".to_string(),
                     vec![NotificationAction {
                         action_id: "resume_instance_operation".to_string(),
-                        label: "Resume recovery".to_string(),
+                        label: localization.text("common-resume-recovery"),
                         action_type: "primary".to_string(),
                         payload: None,
                     }],
-                ),
+                    )
+                }
             };
 
             if let Err(error) = manager.create(CreateNotificationInput {

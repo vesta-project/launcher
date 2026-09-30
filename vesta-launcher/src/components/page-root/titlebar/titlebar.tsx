@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import HelpIcon from "@assets/icons/content/help.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { getVersion } from "@tauri-apps/api/app";
@@ -88,16 +89,14 @@ function TitleBar(props: TitleBarProps) {
 								height: "16px",
 								"text-transform": "uppercase",
 							}}
-						>
-							Guest Mode
-						</div>
+						>{t("app-shell-guest-mode")}</div>
 					</Show>
 					<NetworkPill />
 					<Show when={!props.hideHelp}>
 						<button
 							class={styles["titlebar__help-btn"]}
 							onClick={handleHelpClick}
-							title="Help & Modding Guide"
+							title={t("app-shell-help-modding-guide")}
 						>
 							<HelpIcon />
 						</button>

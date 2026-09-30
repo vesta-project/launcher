@@ -6,6 +6,7 @@ import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
 import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
 import { createSignal, onCleanup, onMount } from "solid-js";
 import styles from "../init.module.css";
+import { t } from "~/localization";
 
 interface CreditsStepProps {
 	goNext: () => Promise<void>;
@@ -53,14 +54,13 @@ function CreditsStep(props: CreditsStepProps) {
 	return (
 		<div class={styles["credits-step"]} onClick={handleClick}>
 			<p class={`${styles["credits-text"]} ${styles["fade-up--enter"]}`}>
-				Minecraft modding exists because of an incredible community.
+				{t("onboarding-credits-community")}
 			</p>
 
 			<p
 				class={`${styles["credits-subtext"]} ${styles["fade-up--enter-delay-1"]}`}
 			>
-				Vesta stands on the work of these teams and the thousands of mod
-				developers who make it all possible.
+				{t("onboarding-credits-teams-and-developers")}
 			</p>
 
 			<div
@@ -79,7 +79,7 @@ function CreditsStep(props: CreditsStepProps) {
 			</div>
 
 			<p class={`${styles["credits-hint"]} ${styles["credits-hint--enter"]}`}>
-				Click or press any key to continue
+				{t("onboarding-credits-continue-hint")}
 			</p>
 		</div>
 	);

@@ -10,6 +10,7 @@ import {
 import { openExternal as openUrl } from "@utils/external-link";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "../init.module.css";
+import { t } from "~/localization";
 
 interface AuthStepProps {
 	goNext: () => Promise<void>;
@@ -82,7 +83,7 @@ function AuthStep(props: AuthStepProps) {
 			} else if (event.stage === "Cancelled") {
 				setIsAuthenticating(false);
 				setIsStartingAuth(false);
-				setErrorMessage("Authentication cancelled");
+				setErrorMessage(t("auth-authentication-cancelled"));
 				if (timer) clearInterval(timer);
 			} else if (event.stage === "Error") {
 				setIsAuthenticating(false);
@@ -105,7 +106,7 @@ function AuthStep(props: AuthStepProps) {
 			await startLogin();
 		} catch (error) {
 			setIsStartingAuth(false);
-			setErrorMessage(`Failed to start login: ${error}`);
+			setErrorMessage(t("auth-login-start-failed", { error: String(error) }));
 		}
 	};
 
@@ -119,7 +120,7 @@ function AuthStep(props: AuthStepProps) {
 			await invoke("start_guest_session");
 			props.navigate("/home", { replace: true });
 		} catch (error) {
-			setErrorMessage(`Failed to start guest session: ${error}`);
+			setErrorMessage(t("auth-guest-session-start-failed", { error: String(error) }));
 		}
 	};
 
@@ -152,19 +153,19 @@ function AuthStep(props: AuthStepProps) {
 	};
 
 	const timerDisplay = () => {
-		const t = timeLeft();
-		if (t <= 0) return "Expired";
-		const m = Math.floor(t / 60);
-		const s = (t % 60).toString().padStart(2, "0");
+		const secondsRemaining = timeLeft();
+		if (secondsRemaining <= 0) return t("auth-expired");
+		const m = Math.floor(secondsRemaining / 60);
+		const s = (secondsRemaining % 60).toString().padStart(2, "0");
 		return `${m}:${s}`;
 	};
 
 	return (
 		<div class={styles["auth-step"]}>
 			<div class={`${styles["auth-header"]} ${styles["fade-up--enter"]}`}>
-				<h2 class={styles["auth-title"]}>Sign in to Minecraft</h2>
+				<h2 class={styles["auth-title"]}>{t("auth-sign-in-to-minecraft")}</h2>
 				<p class={styles["auth-subtitle"]}>
-					Use your Microsoft account to play online.
+					{t("auth-use-microsoft-account-to-play-online")}
 				</p>
 			</div>
 
@@ -177,10 +178,10 @@ function AuthStep(props: AuthStepProps) {
 								<div class={styles["auth-offline-box"]}>
 									<ConnectionLostIcon width="40" height="40" />
 									<p class={styles["auth-offline-title"]}>
-										No internet connection
+										{t("auth-no-internet-connection")}
 									</p>
 									<p class={styles["auth-offline-desc"]}>
-										A connection is required to authenticate with Microsoft.
+										{t("auth-connection-required-to-authenticate")}
 									</p>
 								</div>
 							}
@@ -197,7 +198,7 @@ function AuthStep(props: AuthStepProps) {
 									fallback={
 										<div class={styles["auth-spinner-inline"]}>
 											<div class={styles["spinner--small"]} />
-											<span>Connecting...</span>
+											<span>{t("auth-connecting")}</span>
 										</div>
 									}
 								>
@@ -206,7 +207,7 @@ function AuthStep(props: AuthStepProps) {
 										height="22"
 										class={styles["auth-ms-icon"]}
 									/>
-									Login with Microsoft
+									{t("auth-login-with-microsoft")}
 								</Show>
 							</Button>
 						</Show>
@@ -217,13 +218,13 @@ function AuthStep(props: AuthStepProps) {
 
 						<button class={styles["auth-guest-link"]} onClick={handleGuestMode}>
 							{hasAccount() && props.isLoginOnly
-								? "Back to Launcher"
-								: "Continue as Guest"}
+								? t("auth-back-to-launcher")
+								: t("auth-continue-as-guest")}
 						</button>
 
 						<Show when={networkStore.isOffline()}>
 							<p class={styles["auth-guest-hint"]}>
-								Guest profiles cannot launch Minecraft.
+								{t("auth-guest-profiles-cannot-launch-minecraft")}
 							</p>
 						</Show>
 					</div>
@@ -233,26 +234,26 @@ function AuthStep(props: AuthStepProps) {
 					<div class={`${styles["auth-active"]} ${styles["panel--enter"]}`}>
 						<div class={styles["auth-instructions"]}>
 							<p>
-								Visit <strong>microsoft.com/link</strong>
+								{t("auth-visit-link-page")} <strong>microsoft.com/link</strong>
 							</p>
 							<p class={styles["auth-instructions-sub"]}>
-								Enter the code below to connect your account.
+								{t("auth-enter-code-to-connect-account")}
 							</p>
 						</div>
 
 						<div class={styles["auth-code-box"]}>
 							<div class={styles["auth-code"]}>{authCode()}</div>
 							<button class={styles["auth-copy-btn"]} onClick={copyCode}>
-								{copied() ? "Copied!" : "Copy"}
+								{copied() ? t("auth-copied") : t("shared-ui-copy")}
 							</button>
 						</div>
 
 						<div class={styles["auth-actions"]}>
 							<Button color="primary" onClick={openAuthUrl}>
-								Open Browser
+								{t("auth-open-browser")}
 							</Button>
 							<Button variant="ghost" onClick={handleCancel}>
-								Cancel
+								{t("shared-ui-cancel")}
 							</Button>
 						</div>
 
@@ -261,7 +262,7 @@ function AuthStep(props: AuthStepProps) {
 								when={timeLeft() > 0}
 								fallback={
 									<Button size="sm" variant="shadow" onClick={handleLogin}>
-										Get New Code
+										{t("auth-get-new-code")}
 									</Button>
 								}
 							>
@@ -273,7 +274,7 @@ function AuthStep(props: AuthStepProps) {
 
 						<div class={styles["auth-waiting"]}>
 							<div class={styles["spinner--small"]} />
-							<span>Waiting for Microsoft authentication...</span>
+							<span>{t("auth-waiting-for-microsoft-authentication")}</span>
 						</div>
 					</div>
 				</Show>

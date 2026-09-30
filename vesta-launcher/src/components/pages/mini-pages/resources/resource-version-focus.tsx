@@ -24,6 +24,7 @@ import type {
 import Button from "@ui/button/button";
 import { formatDate } from "@utils/date";
 import { formatBytesCompact } from "@utils/format-bytes";
+import { t } from "~/localization";
 import {
 	type Component,
 	createMemo,
@@ -108,7 +109,7 @@ export const VersionSummaryRow: Component<{
 				type="button"
 				class={styles["version-summary-main"]}
 				onClick={() => props.onSelect(props.version)}
-				aria-label={`View details for ${props.version.version_number}`}
+				aria-label={t("resources-version-view-details", { version: props.version.version_number })}
 			>
 				<div class={styles["version-summary-identity"]}>
 					<div class={styles["version-summary-copy"]}>
@@ -172,7 +173,10 @@ export const VersionSummaryRow: Component<{
 				}}
 				disabled={props.actionDisabled}
 				onClick={() => props.onAction(props.version)}
-				aria-label={`${props.actionLabel} ${props.version.version_number}`}
+				aria-label={t("resources-version-action-aria", {
+					action: props.actionLabel,
+					version: props.version.version_number,
+				})}
 				title={props.actionLabel}
 			>
 				<VersionActionIcon kind={props.actionKind} />
@@ -187,7 +191,7 @@ export const VersionFocusMainLoading: Component<{
 	<div
 		class={`${styles["version-focus-main"]} ${styles["version-focus-loading-shell"]}`}
 		aria-busy="true"
-		aria-label="Loading version details"
+		aria-label={t("resources-version-loading-details")}
 	>
 		<button
 			type="button"
@@ -195,7 +199,7 @@ export const VersionFocusMainLoading: Component<{
 			onClick={props.onBack}
 		>
 			<BackArrowIcon width={15} height={15} />
-			<span>All versions</span>
+			<span>{t("resources-filter-all-versions")}</span>
 		</button>
 		<section class={styles["artifact-card"]} aria-hidden="true">
 			<div
@@ -238,7 +242,7 @@ export const VersionFocusSidebarLoading: Component<{
 	<div
 		class={`${styles["version-focus-sidebar"]} ${styles["version-focus-loading-shell"]}`}
 		aria-busy="true"
-		aria-label="Loading version installation details"
+			aria-label={t("resources-version-loading-installation-details")}
 	>
 		<Show when={props.sections !== "metadata"}>
 			<section class={styles["focus-action-card"]} aria-hidden="true">
@@ -303,7 +307,7 @@ export const VersionFocusMain: Component<{
 				onClick={props.onBack}
 			>
 				<BackArrowIcon width={15} height={15} />
-				<span>All versions</span>
+				<span>{t("resources-filter-all-versions")}</span>
 			</button>
 
 			<section class={styles["artifact-card"]} aria-labelledby="artifact-title">
@@ -311,15 +315,15 @@ export const VersionFocusMain: Component<{
 					<FileIcon width={20} height={20} />
 				</div>
 				<div class={styles["artifact-name"]}>
-					<span id="artifact-title">Release file</span>
+					<span id="artifact-title">{t("resources-version-release-file")}</span>
 					<strong title={props.version.file_name}>
 						{props.version.file_name}
 					</strong>
 				</div>
 				<div class={styles["artifact-stat"]}>
-					<span>Size</span>
+					<span>{t("resources-version-size")}</span>
 					<strong>
-						{formatBytesCompact(props.version.file_size) || "Unknown"}
+						{formatBytesCompact(props.version.file_size) || t("resources-version-unknown")}
 					</strong>
 				</div>
 				<button
@@ -328,12 +332,12 @@ export const VersionFocusMain: Component<{
 					disabled={!props.version.hash}
 					onClick={props.onCopyHash}
 					aria-label={
-						props.version.hash ? "Copy SHA-1 hash" : "SHA-1 hash not provided"
+						props.version.hash ? t("resources-version-copy-sha1") : t("resources-version-sha1-not-provided")
 					}
 				>
-					<span>SHA-1</span>
+					<span>{t("resources-version-sha1")}</span>
 					<code title={props.version.hash}>
-						{props.version.hash || "Not provided"}
+						{props.version.hash || t("resources-version-not-provided")}
 					</code>
 					<Show when={props.version.hash}>
 						<span class={styles["artifact-hash-copy"]} aria-hidden="true">
@@ -350,19 +354,19 @@ export const VersionFocusMain: Component<{
 				<div class={styles["focus-section-heading"]}>
 					<HistoryIcon width={18} height={18} />
 					<div>
-						<span>Release notes</span>
-						<h2 id="changelog-title">Changelog</h2>
+						<span>{t("resources-version-release-notes")}</span>
+						<h2 id="changelog-title">{t("resources-version-changelog")}</h2>
 					</div>
 				</div>
 				<Show
 					when={!props.loading}
-					fallback={<InlineLoadingRow message="Loading changelog..." />}
+					fallback={<InlineLoadingRow message={t("resources-version-loading-changelog")} />}
 				>
 					<Show
 						when={!props.error}
 						fallback={
 							<div class={styles["changelog-state"]}>
-								<strong>Changelog unavailable</strong>
+							<strong>{t("resources-version-changelog-unavailable")}</strong>
 								<span>{props.error}</span>
 								<Button size="sm" variant="outline" onClick={props.onRetry}>
 									Retry
@@ -379,8 +383,8 @@ export const VersionFocusMain: Component<{
 								<div class={styles["changelog-state"]}>
 									<strong>
 										{props.details?.changelog_status === "unavailable"
-											? "Release notes could not be loaded"
-											: "No changelog provided"}
+							? t("resources-version-release-notes-failed")
+							: t("resources-version-no-changelog")}
 									</strong>
 									<span>
 										The remaining version details are still available.
@@ -509,7 +513,7 @@ export const VersionFocusSidebar: Component<{
 				<section class={styles["focus-sidebar-section"]}>
 					<div class={styles["focus-sidebar-heading"]}>
 						<EnvironmentIcon width={16} height={16} />
-						<h3>Supported environment</h3>
+					<h3>{t("resources-version-supported-environment")}</h3>
 					</div>
 					<div class={styles["environment-list"]}>
 						<For each={visibleGameVersions()}>
@@ -528,8 +532,8 @@ export const VersionFocusSidebar: Component<{
 							onClick={() => setShowAllVersions((value) => !value)}
 						>
 							{showAllVersions()
-								? "Show fewer"
-								: `Show all ${supportedGameVersions().length}`}
+							? t("resources-version-show-fewer")
+							: t("resources-version-show-all", { count: supportedGameVersions().length })}
 						</button>
 					</Show>
 					<div class={styles["loader-detail-list"]}>
@@ -555,30 +559,30 @@ export const VersionFocusSidebar: Component<{
 				<section class={styles["focus-sidebar-section"]}>
 					<div class={styles["focus-sidebar-heading"]}>
 						<DependenciesIcon width={16} height={16} />
-						<h3>Dependencies</h3>
+					<h3>{t("resources-version-dependencies")}</h3>
 					</div>
 					<Show
 						when={props.version.dependencies.length > 0}
 						fallback={
-							<p class={styles["focus-empty-copy"]}>No dependencies listed.</p>
+						<p class={styles["focus-empty-copy"]}>{t("resources-version-no-dependencies")}</p>
 						}
 					>
 						<DependencyGroup
-							title="Required"
+						title={t("resources-version-required")}
 							tone="required"
 							dependencies={required()}
 							projects={props.dependencyProjects}
 							onOpenProject={props.onOpenProject}
 						/>
 						<DependencyGroup
-							title="Optional / embedded"
+						title={t("resources-version-optional-embedded")}
 							tone="optional"
 							dependencies={optional()}
 							projects={props.dependencyProjects}
 							onOpenProject={props.onOpenProject}
 						/>
 						<DependencyGroup
-							title="Incompatible"
+						title={t("resources-version-incompatible")}
 							tone="incompatible"
 							dependencies={incompatible()}
 							projects={props.dependencyProjects}
@@ -590,35 +594,35 @@ export const VersionFocusSidebar: Component<{
 				<section class={styles["focus-sidebar-section"]}>
 					<div class={styles["focus-sidebar-heading"]}>
 						<TagIcon width={16} height={16} />
-						<h3>Release details</h3>
+					<h3>{t("resources-version-release-details")}</h3>
 					</div>
 					<dl class={styles["release-metadata-list"]}>
 						<Show when={props.version.published_at}>
 							<div>
-								<dt>Published</dt>
+								<dt>{t("resources-details-published")}</dt>
 								<dd>{formatDate(props.version.published_at || "")}</dd>
 							</div>
 						</Show>
 						<Show when={props.version.download_count != null}>
 							<div>
-								<dt>Downloads</dt>
+								<dt>{t("resources-source-sort-downloads")}</dt>
 								<dd>{props.version.download_count?.toLocaleString()}</dd>
 							</div>
 						</Show>
 						<div>
-							<dt>Channel</dt>
+							<dt>{t("resources-version-channel")}</dt>
 							<dd class={styles.capitalize}>{props.version.release_type}</dd>
 						</div>
 						<div>
-							<dt>Provider</dt>
+							<dt>{t("resources-version-provider")}</dt>
 							<dd class={styles.capitalize}>{props.project.source}</dd>
 						</div>
 						<div>
-							<dt>Version ID</dt>
+							<dt>{t("install-form-version-id")}</dt>
 							<dd title={props.version.id}>{props.version.id}</dd>
 						</div>
 						<div>
-							<dt>Project ID</dt>
+							<dt>{t("install-form-project-id")}</dt>
 							<dd title={props.version.project_id}>
 								{props.version.project_id}
 							</dd>

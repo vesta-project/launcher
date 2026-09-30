@@ -183,6 +183,11 @@ export function t(messageId: string, args?: TranslationArgs): string {
 	return messageId;
 }
 
+/** Format a translation for a plain value that will be stored or edited. */
+export function tPlain(messageId: string, args?: TranslationArgs): string {
+	return t(messageId, args).replace(/[\u2068\u2069]/g, "");
+}
+
 export async function changeLanguagePreference(
 	preference: string,
 ): Promise<LocaleState> {

@@ -44,7 +44,7 @@ const SOURCE_MESSAGE_ID: Record<
 	Exclude<JavaOption["type"], "browse">,
 	string
 > = {
-	managed: "settings-java-source-managed",
+	managed: "common-managed",
 	system: "settings-java-source-system",
 	custom: "settings-java-source-custom",
 };

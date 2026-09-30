@@ -3,6 +3,7 @@ import FileAddIcon from "@assets/icons/content/file-add.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import { DropZone } from "@ui/drop-zone/drop-zone";
 import { createSignal, For } from "solid-js";
+import { t } from "~/localization";
 import styles from "./file-drop-page.module.css";
 
 interface DroppedFile {
@@ -46,23 +47,22 @@ function FileDropPage() {
 
 	return (
 		<div class={styles["file-drop-page"]}>
-			<h1>File Drop Test</h1>
+			<h1>{t("secondary-file-drop-title")}</h1>
 			<p class={styles["file-drop-page__description"]}>
-				Test the file drop functionality by dragging files or folders onto the
-				drop zones below.
+				{t("secondary-file-drop-description")}
 			</p>
 
 			<div class={styles["file-drop-page__zones"]}>
 				{/* Single File Drop Zone */}
 				<section class={styles["file-drop-page__section"]}>
 					<div class={styles["file-drop-page__section-header"]}>
-						<h2>Single File Drop</h2>
+						<h2>{t("secondary-file-drop-single-title")}</h2>
 						<button
 							class={styles["file-drop-page__clear-btn"]}
 							onClick={clearSingleFile}
 							disabled={!singleFile()}
 						>
-							Clear
+							{t("settings-help-action-clear")}
 						</button>
 					</div>
 					<DropZone onFileDrop={handleSingleFileDrop} accept="files">
@@ -70,16 +70,16 @@ function FileDropPage() {
 							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--single"]}`}
 						>
 							<UploadIcon class={styles["file-drop-page__icon"]} />
-							<p>Drop a single file here</p>
+							<p>{t("secondary-file-drop-single-prompt")}</p>
 							<p class={styles["file-drop-page__hint"]}>
-								Files only (no folders)
+								{t("secondary-file-drop-files-only")}
 							</p>
 						</div>
 					</DropZone>
 					{singleFile() && (
 						<div class={styles["file-drop-page__result"]}>
 							<p class={styles["file-drop-page__result-label"]}>
-								Dropped file:
+								{t("secondary-file-drop-dropped-file")}
 							</p>
 							<code class={styles["file-drop-page__path"]}>
 								{singleFile()?.path}
@@ -91,13 +91,13 @@ function FileDropPage() {
 				{/* Multiple Files Drop Zone */}
 				<section class={styles["file-drop-page__section"]}>
 					<div class={styles["file-drop-page__section-header"]}>
-						<h2>Multiple Files Drop</h2>
+						<h2>{t("secondary-file-drop-multiple-title")}</h2>
 						<button
 							class={styles["file-drop-page__clear-btn"]}
 							onClick={clearMultipleFiles}
 							disabled={multipleFiles().length === 0}
 						>
-							Clear
+							{t("settings-help-action-clear")}
 						</button>
 					</div>
 					<DropZone onFileDrop={handleMultipleFilesDrop} accept="files">
@@ -105,16 +105,18 @@ function FileDropPage() {
 							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--multiple"]}`}
 						>
 							<FileAddIcon class={styles["file-drop-page__icon"]} />
-							<p>Drop multiple files here</p>
+							<p>{t("secondary-file-drop-multiple-prompt")}</p>
 							<p class={styles["file-drop-page__hint"]}>
-								Files only (no folders)
+								{t("secondary-file-drop-files-only")}
 							</p>
 						</div>
 					</DropZone>
 					{multipleFiles().length > 0 && (
 						<div class={styles["file-drop-page__result"]}>
 							<p class={styles["file-drop-page__result-label"]}>
-								Dropped {multipleFiles().length} file(s):
+								{t("secondary-file-drop-dropped-files", {
+									count: multipleFiles().length,
+								})}
 							</p>
 							<div class={styles["file-drop-page__file-list"]}>
 								<For each={multipleFiles()}>
@@ -132,13 +134,13 @@ function FileDropPage() {
 				{/* Folder Drop Zone */}
 				<section class={styles["file-drop-page__section"]}>
 					<div class={styles["file-drop-page__section-header"]}>
-						<h2>Folder Drop</h2>
+						<h2>{t("secondary-file-drop-folder-title")}</h2>
 						<button
 							class={styles["file-drop-page__clear-btn"]}
 							onClick={clearFolderContents}
 							disabled={folderContents().length === 0}
 						>
-							Clear
+							{t("settings-help-action-clear")}
 						</button>
 					</div>
 					<DropZone onFileDrop={handleFolderDrop} accept="folders">
@@ -146,16 +148,18 @@ function FileDropPage() {
 							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--folder"]}`}
 						>
 							<FolderIcon class={styles["file-drop-page__icon"]} />
-							<p>Drop a folder here</p>
+							<p>{t("secondary-file-drop-folder-prompt")}</p>
 							<p class={styles["file-drop-page__hint"]}>
-								Folders only (no files)
+								{t("secondary-file-drop-folders-only")}
 							</p>
 						</div>
 					</DropZone>
 					{folderContents().length > 0 && (
 						<div class={styles["file-drop-page__result"]}>
 							<p class={styles["file-drop-page__result-label"]}>
-								Folder contents ({folderContents().length} item(s)):
+								{t("secondary-file-drop-folder-contents", {
+									count: folderContents().length,
+								})}
 							</p>
 							<div class={styles["file-drop-page__file-list"]}>
 								<For each={folderContents()}>

@@ -3,6 +3,7 @@ import SearchIcon from "@assets/icons/content/search.svg";
 import CheckIcon from "@assets/icons/controls/check.svg";
 import clsx from "clsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "./version-filter-bar.module.css";
 
 export interface VersionFilterBarProps {
@@ -52,6 +53,12 @@ function formatLoaderName(loader: string): string {
 }
 
 function formatReleaseType(type: string): string {
+	const knownTypes: Record<string, string> = {
+		release: t("resources-release-type-release"),
+		beta: t("resources-release-type-beta"),
+		alpha: t("resources-release-type-alpha"),
+	};
+	if (knownTypes[type.toLowerCase()]) return knownTypes[type.toLowerCase()];
 	return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -78,7 +85,9 @@ function versionChipLabel(chip: string): string {
 		return chip.slice(RANGE_CHIP_PREFIX.length);
 	}
 	if (chip.startsWith(VERSION_CHIP_PREFIX)) {
-		return `MC ${chip.slice(VERSION_CHIP_PREFIX.length)}`;
+		return t("resources-version-chip-minecraft", {
+			version: chip.slice(VERSION_CHIP_PREFIX.length),
+		});
 	}
 	return chip;
 }
@@ -157,7 +166,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 						ref={inputRef}
 						type="text"
 						class={styles["search-input"]}
-						placeholder="Filter versions (name, version, loader)..."
+						placeholder={t("resources-version-filter-placeholder")}
 						value={props.searchText}
 						onInput={(e) => {
 							props.onSearchTextChange(e.currentTarget.value);
@@ -182,7 +191,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 					<Show when={showDropdown()}>
 						<div class={styles["dropdown"]}>
 							<div class={styles["dropdown-section"]}>
-								<div class={styles["dropdown-section-label"]}>Release Type</div>
+								<div class={styles["dropdown-section-label"]}>{t("resources-version-filter-release-type")}</div>
 								<div class={styles["dropdown-pills"]}>
 									{releaseTypesList.map((type) => (
 										<button
@@ -211,7 +220,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 
 							<Show when={props.availableLoaders.length > 1}>
 								<div class={styles["dropdown-section"]}>
-									<div class={styles["dropdown-section-label"]}>Modloader</div>
+									<div class={styles["dropdown-section-label"]}>{t("instances-versioning-modloader-label")}</div>
 									<div class={styles["dropdown-pills"]}>
 										{props.availableLoaders.map((loader) => (
 											<button
@@ -242,7 +251,7 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 							<div class={styles["dropdown-divider"]} />
 
 							<div class={styles["dropdown-section"]}>
-								<div class={styles["dropdown-section-label"]}>MC Versions</div>
+								<div class={styles["dropdown-section-label"]}>{t("instances-versioning-mc-version-label")}</div>
 								<div class={styles["dropdown-versions"]}>
 									<Show when={rangeMatch()?.isFull ? rangeMatch() : undefined}>
 										{(range) => (
@@ -286,8 +295,8 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 										fallback={
 											<div class={styles["dropdown-empty"]}>
 												{props.searchText.trim()
-													? "No matching MC versions"
-													: "Type a version to filter (e.g. 1.21)"}
+											? t("resources-version-filter-no-matching-minecraft-versions")
+											: t("resources-version-filter-type-to-filter")}
 											</div>
 										}
 									>

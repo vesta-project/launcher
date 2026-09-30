@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 /* @refresh skip */
 
 import { render, screen } from "@solidjs/testing-library";
@@ -23,7 +24,7 @@ describe("MiniRouter lazy route loading", () => {
 
 		render(() => router.getRouterView());
 
-		expect(screen.getByText("Fetching project details...")).toBeTruthy();
+		expect(screen.getByText(t("app-shell-fetching-project-details"))).toBeTruthy();
 		expect(screen.getByText("Fabric API")).toBeTruthy();
 		expect(document.querySelector("[data-mini-route-loading]")).toBeTruthy();
 	});

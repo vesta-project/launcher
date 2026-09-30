@@ -1,9 +1,10 @@
-import PrismLauncherIcon from "@assets/branding/launchers/prism-launcher.svg";
-import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
-import CubeIcon from "@assets/icons/content/cube.svg";
-import LinkIcon from "@assets/icons/content/link.svg";
-import SearchIcon from "@assets/icons/content/search.svg";
+import { t } from "~/localization";
 import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
+import CubeIcon from "@assets/icons/content/cube.svg";
+import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
+import LinkIcon from "@assets/icons/content/link.svg";
+import PrismLauncherIcon from "@assets/branding/launchers/prism-launcher.svg";
+import SearchIcon from "@assets/icons/content/search.svg";
 import LauncherButton from "@ui/button/button";
 import {
 	Dialog,
@@ -13,9 +14,12 @@ import {
 	DialogTitle,
 } from "@ui/dialog/dialog";
 import type { LauncherKind } from "@utils/launcher-imports";
-import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
+import { createEffect, createSignal, For, Show, type JSX } from "solid-js";
 import { launcherOptions } from "../config/launcher-options";
-import { isHttpUrl, pickLocalModpackFile } from "../install-entry-actions";
+import {
+	isHttpUrl,
+	pickLocalModpackFile,
+} from "../install-entry-actions";
 import styles from "../install-page.module.css";
 
 export type ImportMethodModalStep = "methods" | "launchers";
@@ -58,11 +62,11 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 	const handleUrlSubmit = () => {
 		const value = urlValue().trim();
 		if (!value) {
-			setUrlError("Enter a modpack URL.");
+			setUrlError(t("install-import-enter-url"));
 			return;
 		}
 		if (!isHttpUrl(value)) {
-			setUrlError("URL must start with http:// or https://");
+			setUrlError(t("install-import-url-scheme-error"));
 			return;
 		}
 		setUrlError(undefined);
@@ -82,10 +86,9 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 					fallback={
 						<>
 							<DialogHeader>
-								<DialogTitle>Import instance</DialogTitle>
+								<DialogTitle>{t("install-import-methods-title")}</DialogTitle>
 								<DialogDescription>
-									Choose how you want to bring in a modpack or existing
-									instance.
+									{t("install-import-methods-description")}
 								</DialogDescription>
 							</DialogHeader>
 
@@ -100,10 +103,10 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 									</span>
 									<span class={styles["import-method-row-copy"]}>
 										<span class={styles["import-method-row-title"]}>
-											Local file
+											{t("install-import-local-file")}
 										</span>
 										<span class={styles["import-method-row-desc"]}>
-											Upload a .zip or .mrpack
+											{t("install-import-archive-types")}
 										</span>
 									</span>
 								</button>
@@ -118,10 +121,10 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 									</span>
 									<span class={styles["import-method-row-copy"]}>
 										<span class={styles["import-method-row-title"]}>
-											Browse modpacks
+											{t("install-import-browse-modpacks")}
 										</span>
 										<span class={styles["import-method-row-desc"]}>
-											Search Modrinth &amp; CurseForge
+											{t("install-import-search-platforms")}
 										</span>
 									</span>
 								</button>
@@ -141,10 +144,10 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 									</span>
 									<span class={styles["import-method-row-copy"]}>
 										<span class={styles["import-method-row-title"]}>
-											Import from launcher
+											{t("install-import-from-launcher")}
 										</span>
 										<span class={styles["import-method-row-desc"]}>
-											Prism, CurseForge, GDLauncher, and more
+											{t("install-import-launcher-examples")}
 										</span>
 									</span>
 								</button>
@@ -165,10 +168,10 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 											</span>
 											<span class={styles["import-method-row-copy"]}>
 												<span class={styles["import-method-row-title"]}>
-													From URL
+													{t("install-import-from-url")}
 												</span>
 												<span class={styles["import-method-row-desc"]}>
-													Paste a Modrinth, CurseForge, or direct link
+													{t("install-import-paste-url-description")}
 												</span>
 											</span>
 										</button>
@@ -178,7 +181,7 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 										<div class={styles["import-method-url-row"]}>
 											<input
 												type="text"
-												placeholder="https://…"
+												placeholder={t("install-import-url-placeholder")}
 												value={urlValue()}
 												onInput={(e) => {
 													setUrlValue(e.currentTarget.value);
@@ -194,12 +197,14 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 												onClick={handleUrlSubmit}
 												disabled={!urlValue().trim()}
 											>
-												Import
+												{t("settings-appearance-import")}
 											</LauncherButton>
 										</div>
 										<Show when={urlError()}>
 											{(err) => (
-												<p class={styles["import-method-url-error"]}>{err()}</p>
+												<p class={styles["import-method-url-error"]}>
+													{err()}
+												</p>
 											)}
 										</Show>
 									</div>
@@ -214,14 +219,14 @@ export function ImportMethodModal(props: ImportMethodModalProps): JSX.Element {
 								type="button"
 								class={styles["import-method-back-btn"]}
 								onClick={() => setStep("methods")}
-								aria-label="Back to import methods"
+								aria-label={t("install-import-back-aria")}
 							>
 								<BackArrowIcon width={16} height={16} />
 							</button>
 							<div class={styles["import-method-header-copy"]}>
-								<DialogTitle>Import from launcher</DialogTitle>
+								<DialogTitle>{t("install-import-from-launcher")}</DialogTitle>
 								<DialogDescription>
-									Choose which launcher you want to import from.
+									{t("install-import-choose-launcher-description")}
 								</DialogDescription>
 							</div>
 						</div>

@@ -14,29 +14,32 @@ import {
 	repairInstance,
 	resetInstance,
 } from "@utils/instances";
+import { t, tPlain } from "~/localization";
 
 /**
  * Handles duplicating an instance with user prompt for name.
  */
 export const handleDuplicate = async (instance: Instance) => {
 	const newName = await dialogStore.prompt(
-		"Duplicate Instance",
-		"Enter name for the copy:",
+		t("action-duplicate-instance-prompt-title"),
+		t("action-duplicate-instance-prompt-description"),
 		{
-			defaultValue: `${instance.name} (Copy)`,
+			defaultValue: tPlain("action-duplicate-instance-default-name", {
+				instanceName: instance.name,
+			}),
 		},
 	);
 	if (newName) {
 		try {
 			await duplicateInstance(instance.id, newName);
 			showToast({
-				title: "Duplicating instance",
-				description: `Creating copy as "${newName}"...`,
+				title: t("action-duplicate-instance-toast-title"),
+				description: t("action-duplicate-instance-toast-description", { newName }),
 			});
 		} catch (e) {
 			console.error("Failed to duplicate instance:", e);
 			showToast({
-				title: "Duplicate failed",
+				title: t("action-duplicate-instance-failed-title"),
 				description: String(e),
 				severity: "error",
 			});
@@ -49,8 +52,8 @@ export const handleDuplicate = async (instance: Instance) => {
  */
 export const handleRepair = async (instance: Instance) => {
 	const confirmed = await dialogStore.confirm(
-		"Repair Instance",
-		`Are you sure you want to repair "${instance.name}"? This will re-verify all game files and modloader versions.`,
+		t("action-repair-instance-confirm-title"),
+		t("action-repair-instance-confirm-description", { instanceName: instance.name }),
 		{ severity: "info" },
 	);
 
@@ -58,13 +61,13 @@ export const handleRepair = async (instance: Instance) => {
 		try {
 			await repairInstance(instance.id);
 			showToast({
-				title: "Repair started",
-				description: "Verifying game integrity...",
+				title: t("action-repair-started-title"),
+				description: t("action-repair-started-description"),
 			});
 		} catch (e) {
 			console.error("Repair failed:", e);
 			showToast({
-				title: "Repair failed",
+				title: t("action-repair-failed-title"),
 				description: String(e),
 				severity: "error",
 			});
@@ -77,22 +80,22 @@ export const handleRepair = async (instance: Instance) => {
  */
 export const handleHardReset = async (instance: Instance) => {
 	const confirmed = await dialogStore.confirm(
-		"Hard Reset",
-		`This will wipe the ENTIRE instance folder for "${instance.name}".\n\nAll worlds, screenshots, and custom mods will be DELETED! This action cannot be undone.\n\nAre you absolutely sure?`,
-		{ severity: "error", okLabel: "Hard Reset", isDestructive: true },
+		t("action-hard-reset-confirm-title"),
+		t("action-hard-reset-confirm-description", { instanceName: instance.name }),
+		{ severity: "error", okLabel: t("action-hard-reset-confirm-ok"), isDestructive: true },
 	);
 
 	if (confirmed) {
 		try {
 			await resetInstance(instance.id);
 			showToast({
-				title: "Hard reset started",
-				description: "Wiping instance data and resetting to default...",
+				title: t("action-hard-reset-started-title"),
+				description: t("action-hard-reset-started-description"),
 			});
 		} catch (e) {
 			console.error("Hard reset failed:", e);
 			showToast({
-				title: "Reset failed",
+				title: t("action-reset-failed-title"),
 				description: String(e),
 				severity: "error",
 			});
@@ -108,9 +111,9 @@ export const handleUninstall = async (
 	onSuccess?: () => void,
 ) => {
 	const confirmed = await dialogStore.confirm(
-		"Uninstall Instance",
-		`Are you sure you want to uninstall "${instance.name}"?\n\nThis will permanently delete the instance and its files.`,
-		{ severity: "warning", okLabel: "Uninstall", isDestructive: true },
+		t("action-uninstall-instance-confirm-title"),
+		t("action-uninstall-instance-confirm-description", { instanceName: instance.name }),
+		{ severity: "warning", okLabel: t("action-uninstall-instance-confirm-ok"), isDestructive: true },
 	);
 
 	if (confirmed) {
@@ -118,15 +121,15 @@ export const handleUninstall = async (
 		try {
 			await deleteInstance(instance.id);
 			showToast({
-				title: "Uninstalling",
-				description: `"${instance.name}" is being removed...`,
+				title: t("action-uninstall-started-title"),
+				description: t("action-uninstall-started-description", { instanceName: instance.name }),
 			});
 			if (onSuccess) onSuccess();
 		} catch (e) {
 			restoreInstanceOptimistic(snapshot);
 			console.error("Uninstall failed:", e);
 			showToast({
-				title: "Uninstall failed",
+				title: t("action-uninstall-failed-title"),
 				description: String(e),
 				severity: "error",
 			});
@@ -145,7 +148,7 @@ export const handleLaunch = async (instance: Instance) => {
 	} catch (e) {
 		console.error("Launch failed:", e);
 		showToast({
-			title: "Launch failed",
+			title: t("action-launch-failed-title"),
 			description: String(e),
 			severity: "error",
 		});

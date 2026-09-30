@@ -1,7 +1,7 @@
-import CopyIcon from "@assets/icons/actions/copy.svg";
-import TrashIcon from "@assets/icons/actions/delete.svg";
-import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
+import CopyIcon from "@assets/icons/actions/copy.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import TrashIcon from "@assets/icons/actions/delete.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
 import ListIcon from "@assets/icons/content/list.svg";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -13,13 +13,7 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
@@ -32,6 +26,7 @@ import {
 	Show,
 	Suspense,
 } from "solid-js";
+import { t } from "~/localization";
 import styles from "./ScreenshotGallery.module.css";
 
 interface Screenshot {
@@ -49,12 +44,8 @@ interface ScreenshotGalleryProps {
 
 export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 	const [viewMode, setViewMode] = createSignal<"grid" | "list">("grid");
-	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">(
-		"newest",
-	);
-	const [selectedScreenshot, setSelectedScreenshot] =
-		createSignal<Screenshot | null>(null);
-
+	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">("newest");
+	const [selectedScreenshot, setSelectedScreenshot] = createSignal<Screenshot | null>(null);
 	createEffect(() => {
 		if (props.active === false) {
 			setSelectedScreenshot(null);
@@ -87,38 +78,36 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 		try {
 			await invoke("copy_screenshot_to_clipboard", { path: screenshot.path });
 			showToast({
-				title: "Copied!",
-				description: "Screenshot copied to clipboard.",
+				title: t("auth-copied"),
+				description: t("instances-extra-screenshot-copied-description"),
 				severity: "success",
 			});
 		} catch (e) {
 			console.error(e);
 			showToast({
-				title: "Error",
-				description: "Failed to copy screenshot.",
+				title: t("common-error"),
+				description: t("instances-extra-screenshot-copy-failed"),
 				severity: "error",
 			});
 		}
 	};
 
 	const handleDelete = async (screenshot: Screenshot) => {
-		if (!confirm(`Are you sure you want to delete ${screenshot.name}?`)) return;
+		if (!confirm(t("instances-extra-screenshot-delete-confirm", { name: screenshot.name }))) return;
 
 		try {
 			await invoke("delete_screenshot", { path: screenshot.path });
-			mutate((prev) =>
-				prev ? prev.filter((s) => s.path !== screenshot.path) : [],
-			);
+			mutate((prev) => (prev ? prev.filter((s) => s.path !== screenshot.path) : []));
 			showToast({
-				title: "Deleted",
-				description: "Screenshot removed.",
+				title: t("instances-extra-screenshot-deleted-title"),
+				description: t("instances-extra-screenshot-deleted-description"),
 				severity: "success",
 			});
 		} catch (e) {
 			console.error(e);
 			showToast({
-				title: "Error",
-				description: "Failed to delete screenshot.",
+				title: t("common-error"),
+				description: t("instances-extra-screenshot-delete-failed"),
 				severity: "error",
 			});
 		}
@@ -136,15 +125,9 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 		<section class={styles.container} aria-labelledby="screenshots-heading">
 			<div class={styles.sectionHeading}>
 				<div class={styles.headingCopy}>
-					<h2 id="screenshots-heading">Screenshots</h2>
-					<Show
-						when={
-							!screenshots.loading &&
-							!screenshots.error &&
-							(screenshots()?.length ?? 0) > 0
-						}
-					>
-						<span>{screenshots()?.length ?? 0} files</span>
+					<h2 id="screenshots-heading">{t("instances-extra-screenshots-title")}</h2>
+					<Show when={!screenshots.loading && !screenshots.error && (screenshots()?.length ?? 0) > 0}>
+						<span>{t("instances-extra-screenshots-count", { count: screenshots()?.length ?? 0 })}</span>
 					</Show>
 				</div>
 				<Show when={!screenshots.error && (screenshots()?.length ?? 0) > 0}>
@@ -159,16 +142,16 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 								<ToggleGroupItem
 									value="list"
 									icon_only={true}
-									title="List View"
-									aria-label="List View"
+									title={t("resources-view-list")}
+									aria-label={t("resources-view-list")}
 								>
 									<ListIcon width="14" height="14" />
 								</ToggleGroupItem>
 								<ToggleGroupItem
 									value="grid"
 									icon_only={true}
-									title="Grid View"
-									aria-label="Grid View"
+									title={t("resources-view-grid")}
+									aria-label={t("resources-view-grid")}
 								>
 									<GridIcon width="14" height="14" />
 								</ToggleGroupItem>
@@ -184,10 +167,10 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 									<SelectItem item={props.item}>
 										{(() => {
 											if (props.item.rawValue === "newest")
-												return "Newest First";
+												return t("instances-extra-screenshots-sort-newest");
 											if (props.item.rawValue === "oldest")
-												return "Oldest First";
-											if (props.item.rawValue === "name") return "Name";
+												return t("instances-extra-screenshots-sort-oldest");
+											if (props.item.rawValue === "name") return t("instances-worlds-sort-name");
 											return props.item.rawValue;
 										})()}
 									</SelectItem>
@@ -197,9 +180,9 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 									<SelectValue<string>>
 										{(state) => {
 											const val = state.selectedOption();
-											if (val === "newest") return "Newest First";
-											if (val === "oldest") return "Oldest First";
-											if (val === "name") return "Name";
+											if (val === "newest") return t("instances-extra-screenshots-sort-newest");
+											if (val === "oldest") return t("instances-extra-screenshots-sort-oldest");
+											if (val === "name") return t("instances-worlds-sort-name");
 											return val;
 										}}
 									</SelectValue>
@@ -211,7 +194,7 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 								size="sm"
 								icon_only={true}
 								onClick={refetch}
-								title="Refresh screenshots"
+								title={t("instances-extra-screenshots-refresh")}
 							>
 								<RefreshIcon />
 							</Button>
@@ -221,13 +204,13 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 			</div>
 
 			<Suspense
-				fallback={<div class={styles.loading}>Loading screenshots…</div>}
+				fallback={<div class={styles.loading}>{t("instances-extra-screenshots-loading")}</div>}
 			>
 				<Show when={screenshots.error}>
 					<div class={styles.empty} role="alert">
-						<p>Could not load screenshots.</p>
+						<p>{t("instances-extra-screenshots-load-failed")}</p>
 						<Button size="sm" variant="outline" onClick={() => void refetch()}>
-							Retry
+							{t("shared-ui-retry")}
 						</Button>
 					</div>
 				</Show>
@@ -236,7 +219,7 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 					fallback={
 						<Show when={!screenshots.error}>
 							<div class={styles.empty}>
-								<p>No screenshots yet.</p>
+								<p>{t("instances-extra-screenshots-empty")}</p>
 							</div>
 						</Show>
 					}
@@ -247,38 +230,16 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 								<ContextMenu>
 									<ContextMenuTrigger>
 										<div
-											class={
-												viewMode() === "grid"
-													? styles.gridItem
-													: styles.listItem
-											}
+											class={viewMode() === "grid" ? styles.gridItem : styles.listItem}
 											onClick={() => setSelectedScreenshot(screenshot)}
 										>
 											<div class={styles.preview}>
-												<img
-													src={convertFileSrc(screenshot.path)}
-													alt={screenshot.name}
-													loading="lazy"
-												/>
-												<button
-													type="button"
-													class={styles.copyButton}
-													aria-label={`Copy ${screenshot.name} to clipboard`}
-													title="Copy to clipboard"
-													onClick={(event) => {
-														event.stopPropagation();
-														void handleCopy(screenshot);
-													}}
-												>
-													<CopyIcon aria-hidden="true" />
-												</button>
+												<img src={convertFileSrc(screenshot.path)} alt={screenshot.name} loading="lazy" />
 											</div>
 											<div class={styles.details}>
 												<span class={styles.name}>{screenshot.name}</span>
 												<span class={styles.date}>
-													{formatDate(
-														new Date(screenshot.createdAt * 1000).toISOString(),
-													)}
+													{formatDate(new Date(screenshot.createdAt * 1000).toISOString())}
 												</span>
 											</div>
 										</div>
@@ -286,20 +247,17 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 									<ContextMenuContent>
 										<ContextMenuItem onClick={() => handleCopy(screenshot)}>
 											<div class={styles.menuItem}>
-												<CopyIcon /> Copy to Clipboard
+												<CopyIcon /> {t("instances-extra-screenshots-copy-to-clipboard")}
 											</div>
 										</ContextMenuItem>
 										<ContextMenuItem onClick={() => openInFolder(screenshot)}>
 											<div class={styles.menuItem}>
-												<FolderIcon /> Open in Folder
+												<FolderIcon /> {t("instances-extra-screenshots-open-in-folder")}
 											</div>
 										</ContextMenuItem>
-										<ContextMenuItem
-											class={styles.deleteAction}
-											onClick={() => handleDelete(screenshot)}
-										>
+										<ContextMenuItem class={styles.deleteAction} onClick={() => handleDelete(screenshot)}>
 											<div class={styles.menuItem}>
-												<TrashIcon /> Delete
+												<TrashIcon /> {t("shared-ui-delete")}
 											</div>
 										</ContextMenuItem>
 									</ContextMenuContent>
@@ -323,28 +281,20 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 				title={selectedScreenshot()?.name}
 				date={(() => {
 					const s = selectedScreenshot();
-					return s
-						? formatDate(new Date(s.createdAt * 1000).toISOString())
-						: undefined;
+					return s ? formatDate(new Date(s.createdAt * 1000).toISOString()) : undefined;
 				})()}
 				onClose={() => setSelectedScreenshot(null)}
 				onCopy={(src) => {
 					// Map back to original screenshot object if needed
-					const s = screenshots()?.find(
-						(ss) => convertFileSrc(ss.path) === src,
-					);
+					const s = screenshots()?.find((ss) => convertFileSrc(ss.path) === src);
 					if (s) handleCopy(s);
 				}}
 				onOpenFolder={(src) => {
-					const s = screenshots()?.find(
-						(ss) => convertFileSrc(ss.path) === src,
-					);
+					const s = screenshots()?.find((ss) => convertFileSrc(ss.path) === src);
 					if (s) openInFolder(s);
 				}}
 				onDelete={(src) => {
-					const s = screenshots()?.find(
-						(ss) => convertFileSrc(ss.path) === src,
-					);
+					const s = screenshots()?.find((ss) => convertFileSrc(ss.path) === src);
 					if (s) {
 						handleDelete(s).then(() => {
 							// If it was the only one, close

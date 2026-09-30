@@ -4,6 +4,7 @@ import { openExternal } from "@utils/external-link";
 import { sanitizeHtml } from "@utils/security";
 import { marked } from "marked";
 import { createEffect, createSignal, For, onMount, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "./changelog.module.css";
 
 export default function ChangelogPage() {
@@ -94,7 +95,9 @@ export default function ChangelogPage() {
 
 	const renderMarkdown = (text: string) => {
 		// Use domestic sanitizer for basic XSS protection
-		const parsed = marked.parse(text || "No release notes available.");
+		const parsed = marked.parse(
+			text || t("secondary-changelog-no-release-notes"),
+		);
 		return typeof parsed === "string"
 			? sanitizeHtml(parsed)
 			: sanitizeHtml(String(parsed));
@@ -119,7 +122,7 @@ export default function ChangelogPage() {
 	return (
 		<div class={styles.container}>
 			<div class={styles.sidebar}>
-				<h3 class={styles.sidebarTitle}>Versions</h3>
+				<h3 class={styles.sidebarTitle}>{t("secondary-changelog-versions")}</h3>
 				<div class={styles.versionNav}>
 					<Show when={!releases.loading}>
 						<For each={releases()}>
@@ -142,22 +145,19 @@ export default function ChangelogPage() {
 
 			<div class={styles.content} ref={listRef}>
 				<div class={styles.header}>
-					<h1 class={styles.title}>What's New</h1>
+					<h1 class={styles.title}>{t("secondary-changelog-whats-new")}</h1>
 				</div>
 
 				<Show
 					when={!releases.loading}
 					fallback={
-						<div class={styles.loading}>Fetching latest updates...</div>
+						<div class={styles.loading}>{t("secondary-changelog-loading")}</div>
 					}
 				>
 					<Show
 						when={!releases.error}
 						fallback={
-							<div class={styles.error}>
-								Failed to load release notes. Please check your internet
-								connection.
-							</div>
+							<div class={styles.error}>{t("secondary-changelog-error")}</div>
 						}
 					>
 						<div class={styles.releaseList}>
@@ -180,7 +180,7 @@ export default function ChangelogPage() {
 												<button
 													class={styles.githubLink}
 													onClick={() => openExternal(release.html_url)}
-													title="View on GitHub"
+													title={t("secondary-changelog-view-on-github")}
 												>
 													<ExternalLinkIcon />
 												</button>

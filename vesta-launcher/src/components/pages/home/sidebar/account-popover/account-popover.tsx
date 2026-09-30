@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { authStore } from "@stores/auth";
 import { invoke } from "@tauri-apps/api/core";
@@ -89,8 +90,8 @@ export function AccountPopover(props: AccountPopoverProps) {
 		if (uuid) {
 			await writeText(uuid);
 			createNotification({
-				title: "Copied UUID",
-				description: "Account UUID copied to clipboard",
+				title: t("app-shell-copied-uuid"),
+				description: t("app-shell-account-uuid-copied"),
 				notification_type: "immediate",
 			});
 		}
@@ -118,7 +119,7 @@ export function AccountPopover(props: AccountPopoverProps) {
 									>
 										<span class={styles["active-uuid"]}>{account().uuid}</span>
 									</TooltipTrigger>
-									<TooltipContent>Click to copy UUID</TooltipContent>
+									<TooltipContent>{t("app-shell-click-to-copy-uuid")}</TooltipContent>
 								</Tooltip>
 							</div>
 						</div>
@@ -131,7 +132,7 @@ export function AccountPopover(props: AccountPopoverProps) {
 									onClick={openSettings}
 									class={styles["action-btn"]}
 								>
-									Edit Skin
+									{t("app-shell-edit-skin")}
 								</Button>
 								<Show
 									when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}
@@ -145,7 +146,7 @@ export function AccountPopover(props: AccountPopoverProps) {
 										}}
 										class={styles["action-btn"]}
 									>
-										Logout
+										{t("app-shell-logout")}
 									</Button>
 								</Show>
 							</div>
@@ -158,7 +159,7 @@ export function AccountPopover(props: AccountPopoverProps) {
 
 			<div class={styles["other-accounts-section"]}>
 				<div class={styles["section-header"]}>
-					<div class={styles["section-title"]}>Other Accounts</div>
+					<div class={styles["section-title"]}>{t("app-shell-other-accounts")}</div>
 				</div>
 				<div class={styles["account-list"]}>
 					<For
@@ -180,10 +181,12 @@ export function AccountPopover(props: AccountPopoverProps) {
 										{account.username}
 									</div>
 									<Show when={account.is_expired}>
-										<div class={styles["expired-badge"]}>Expired</div>
+										<div class={styles["expired-badge"]}>{t("app-shell-expired")}</div>
 									</Show>
 								</TooltipTrigger>
-								<TooltipContent>Switch to {account.username}</TooltipContent>
+				<TooltipContent>
+					{t("app-shell-switch-to-account", { username: account.username })}
+				</TooltipContent>
 							</Tooltip>
 						)}
 					</For>
@@ -194,7 +197,7 @@ export function AccountPopover(props: AccountPopoverProps) {
 					variant="ghost"
 					size="sm"
 				>
-					+ Add Account
+					{t("app-shell-add-account")}
 				</Button>
 			</div>
 		</PopoverContent>

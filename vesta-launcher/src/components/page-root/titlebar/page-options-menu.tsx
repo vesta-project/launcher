@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import DesktopAddIcon from "@assets/icons/actions/desktop-add.svg";
 import PinIcon from "@assets/icons/actions/pin.svg";
 import PinOffIcon from "@assets/icons/actions/unpin.svg";
@@ -54,7 +55,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 					? selected.name
 					: (params as any).name
 						? String((params as any).name)
-						: "Resource",
+						: t("app-shell-resource"),
 				icon: isMatchesSelected
 					? selected.icon_url
 					: (params as any).iconUrl
@@ -68,7 +69,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 			return {
 				type: "settings" as const,
 				id: "app-settings",
-				label: "Settings",
+				label: t("app-shell-settings"),
 				icon: null,
 				platform: null,
 			};
@@ -113,7 +114,9 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		setIsOpen(false);
 
 		try {
-			const suffix = quickLaunch ? " (Launch)" : " (Open Page)";
+			const suffix = quickLaunch
+				? ` ${t("app-shell-shortcut-launch-suffix")}`
+				: ` ${t("app-shell-shortcut-open-page-suffix")}`;
 			const name = info.label + suffix;
 			const target =
 				info.type === "instance"
@@ -138,14 +141,14 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 			const warning = result.warnings?.[0];
 
 			showToast({
-				title: "Shortcut Created",
-				description: warning || `Added ${name} to your desktop`,
+				title: t("app-shell-shortcut-created"),
+				description: warning || t("app-shell-shortcut-added", { name }),
 				severity: warning ? "warning" : "success",
 			});
 		} catch (e) {
 			console.error("Failed to create shortcut:", e);
 			showToast({
-				title: "Shortcut Failed",
+				title: t("app-shell-shortcut-failed"),
 				description: String(e),
 				severity: "error",
 			});
@@ -163,7 +166,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		} catch (e) {
 			console.error("Failed to open instance folder:", e);
 			showToast({
-				title: "Open folder failed",
+				title: t("app-shell-open-folder-failed"),
 				description: String(e),
 				severity: "error",
 			});
@@ -179,15 +182,15 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		try {
 			await navigator.clipboard.writeText(url);
 			showToast({
-				title: "URL Copied",
-				description: "Page URL copied to clipboard",
+				title: t("app-shell-url-copied"),
+				description: t("app-shell-page-url-copied"),
 				severity: "success",
 			});
 		} catch (e) {
 			console.error("Failed to copy URL:", e);
 			showToast({
-				title: "Copy Failed",
-				description: "Failed to copy URL",
+				title: t("app-shell-copy-failed"),
+				description: t("app-shell-failed-to-copy-url"),
 				severity: "error",
 			});
 		}
@@ -205,7 +208,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 							<Show when={pinned()} fallback={<PinIcon />}>
 								<PinOffIcon />
 							</Show>
-							<span>{pinned() ? "Unpin Page" : "Pin Page"}</span>
+							<span>{pinned() ? t("app-shell-unpin-page") : t("app-shell-pin-page")}</span>
 						</button>
 
 						<Show when={pageInfo()?.type !== "settings"}>
@@ -215,7 +218,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 									onClick={handleOpenInstanceFolder}
 								>
 									<FolderIcon />
-									<span>Open Folder</span>
+								<span>{t("shared-ui-open-folder")}</span>
 								</button>
 
 								<button
@@ -223,7 +226,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 									onClick={() => handleCreateShortcut(true)}
 								>
 									<DesktopAddIcon />
-									<span>Create Launch Shortcut</span>
+									<span>{t("app-shell-create-launch-shortcut")}</span>
 								</button>
 							</Show>
 
@@ -232,13 +235,13 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 								onClick={() => handleCreateShortcut(false)}
 							>
 								<DesktopAddIcon />
-								<span>Create Page Shortcut</span>
+								<span>{t("app-shell-create-page-shortcut")}</span>
 							</button>
 						</Show>
 
 						<button class={styles["menu-item"]} onClick={copyUrl}>
 							<LinkIcon />
-							<span>Copy URL</span>
+							<span>{t("app-shell-copy-url")}</span>
 						</button>
 					</div>
 				</PopoverContent>

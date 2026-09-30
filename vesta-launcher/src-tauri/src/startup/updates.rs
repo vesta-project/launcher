@@ -22,18 +22,20 @@ pub fn notify_current_version(app_handle: tauri::AppHandle) {
                 let manager = app_handle.state::<NotificationManager>();
                 let actions = vec![NotificationAction {
                     action_id: "navigate".to_string(),
-                    label: "View Changelog".to_string(),
+                    label: app_handle.state::<crate::localization::LocalizationManager>().text("settings-help-view-changelog-action"),
                     action_type: "primary".to_string(),
                     payload: Some(serde_json::json!({ "path": "/changelog" })),
                 }];
 
                 if let Err(error) = manager.create(CreateNotificationInput {
                     client_key: Some("launcher_update".to_string()),
-                    title: Some("Vesta has been updated!".to_string()),
-                    description: Some(format!(
-                        "Welcome to version {}. Check out what's new in this release!",
-                        current_version
-                    )),
+                    title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-launcher-updated-title")),
+                    description: {
+                        let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                        let mut args = fluent_bundle::FluentArgs::new();
+                        args.set("version", current_version.as_str());
+                        Some(localization.format("rust-native-launcher-updated-description", Some(&args)))
+                    },
                     severity: Some("info".to_string()),
                     notification_type: Some(NotificationType::Patient),
                     dismissible: Some(true),

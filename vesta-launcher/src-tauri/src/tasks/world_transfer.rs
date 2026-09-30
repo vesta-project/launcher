@@ -41,6 +41,11 @@ impl Task for WorldTransferTask {
         format!("{:?} world {}", self.mode, self.world_ref.directory_name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        let mode = format!("{:?}", self.mode);
+        crate::tasks::manager::localized_message(localization, "rust-task-world-transfer-name", &[("mode", &mode), ("world", &self.world_ref.directory_name)])
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!(
             "world_transfer_{}_{}",
@@ -73,12 +78,28 @@ impl Task for WorldTransferTask {
         "Validating world transfer…".to_string()
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-validating-world-transfer")
+    }
+
     fn completion_description(&self) -> String {
         self.cleanup_warning
             .lock()
             .ok()
             .and_then(|warning| warning.clone())
+            .map(|warning| format!("World moved, but cleanup needs attention: {warning}"))
             .unwrap_or_else(|| "World transfer completed".to_string())
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localized_completion_description(
+            localization,
+            self.cleanup_warning
+                .lock()
+                .ok()
+                .and_then(|warning| warning.clone())
+                .as_deref(),
+        )
     }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
@@ -91,7 +112,7 @@ impl Task for WorldTransferTask {
         Box::pin(async move {
             ctx.update_full(
                 20,
-                "Copying and verifying world…".to_string(),
+                ctx.text("rust-task-copying-verifying-world"),
                 Some(1),
                 Some(3),
             );
@@ -111,7 +132,7 @@ impl Task for WorldTransferTask {
 
             ctx.update_full(
                 85,
-                "Updating installed resource records…".to_string(),
+                ctx.text("rust-task-updating-installed-resource-records"),
                 Some(2),
                 Some(3),
             );
@@ -148,7 +169,7 @@ impl Task for WorldTransferTask {
 
             ctx.update_full(
                 100,
-                "World transfer completed".to_string(),
+                ctx.text("rust-task-world-transfer-completed"),
                 Some(3),
                 Some(3),
             );
@@ -178,12 +199,44 @@ impl Task for WorldTransferTask {
             if let Some(warning) = result.cleanup_warning {
                 log::warn!("World move completed with cleanup warning: {warning}");
                 if let Ok(mut completion) = cleanup_warning.lock() {
-                    *completion = Some(format!(
-                        "World moved, but cleanup needs attention: {warning}"
-                    ));
+                    *completion = Some(warning);
                 }
             }
             Ok(())
         })
+    }
+}
+
+fn localized_completion_description(
+    localization: &crate::localization::LocalizationManager,
+    cleanup_warning: Option<&str>,
+) -> String {
+    match cleanup_warning {
+        Some(warning) => crate::tasks::manager::localized_message(
+            localization,
+            "rust-task-world-transfer-cleanup-warning",
+            &[("warning", warning)],
+        ),
+        None => localization.text("rust-task-world-transfer-completed"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::localized_completion_description;
+    use crate::localization::LocalizationManager;
+
+    #[test]
+    fn cleanup_warning_is_interpolated_in_localized_completion_message() {
+        let localization = LocalizationManager::new("en").expect("catalog should load");
+
+        assert_eq!(
+            localized_completion_description(&localization, Some("leftover files")),
+            "World moved, but cleanup needs attention: leftover files"
+        );
+        assert_eq!(
+            localized_completion_description(&localization, None),
+            "World transfer completed"
+        );
     }
 }

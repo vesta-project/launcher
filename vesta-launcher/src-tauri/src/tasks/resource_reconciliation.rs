@@ -29,6 +29,10 @@ impl Task for ResourceEnrichmentTask {
         format!("Enrich resources for {}", self.instance_name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-enrich-resources-for", &[("instance", &self.instance_name)])
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!("resource-enrichment-{}", self.instance_id))
     }
@@ -41,8 +45,16 @@ impl Task for ResourceEnrichmentTask {
         "Filling in resource metadata…".to_string()
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-filling-resource-metadata")
+    }
+
     fn completion_description(&self) -> String {
         "Resource metadata enrichment finished".to_string()
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-resource-metadata-enrichment-finished")
     }
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
@@ -54,7 +66,7 @@ impl Task for ResourceEnrichmentTask {
             let total = candidates.len();
             ctx.update_full(
                 crate::notifications::models::PROGRESS_INDETERMINATE,
-                format!("Matching {total} indexed resources with providers…"),
+                ctx.format_values("rust-task-matching-indexed-resources", &[("total", &total.to_string())]),
                 Some(0),
                 Some(total as i32),
             );
@@ -66,10 +78,7 @@ impl Task for ResourceEnrichmentTask {
                 .map_err(|error| error.to_string())?;
             ctx.update_full(
                 crate::notifications::models::PROGRESS_INDETERMINATE,
-                format!(
-                    "Matched metadata for {}/{} resources.",
-                    summary.identified, summary.attempted
-                ),
+                ctx.format_values("rust-task-matched-resource-metadata", &[("identified", &summary.identified.to_string()), ("attempted", &summary.attempted.to_string())]),
                 Some(summary.attempted as i32),
                 Some(summary.attempted as i32),
             );

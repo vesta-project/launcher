@@ -44,6 +44,7 @@ import {
 } from "@utils/resource-install-intent";
 import { parseSearchFilterOperators } from "@utils/resource-search-operators";
 import { parseResourceUrl } from "@utils/resource-url";
+import { t } from "~/localization";
 import {
 	batch,
 	type Component,
@@ -158,8 +159,8 @@ const ResourceBrowser: Component<{
 				!hasDownloadableArtifact(decision.version)
 			) {
 				showToast({
-					title: "Third-party download required",
-					description: `Opening ${project.name} on the provider website.`,
+					title: t("resources-toast-third-party-download-title"),
+					description: t("resources-toast-opening-provider", { project: project.name }),
 					severity: "info",
 				});
 				await openExternal(project.web_url);
@@ -188,14 +189,17 @@ const ResourceBrowser: Component<{
 				);
 			} else {
 				showToast({
-					title: "No compatible version",
-					description: `Could not find a version for ${instance.minecraftVersion} with ${instance.modloader || "no loader"}.`,
+					title: t("resources-toast-no-compatible-version"),
+					description: t("resources-toast-no-compatible-version-description", {
+						minecraftVersion: instance.minecraftVersion,
+						loader: instance.modloader || t("resources-no-loader"),
+					}),
 					severity: "error",
 				});
 			}
 		} catch (err) {
 			showToast({
-				title: "Installation failed",
+				title: t("instances-installation-failed"),
 				description: err instanceof Error ? err.message : String(err),
 				severity: "error",
 			});
@@ -227,8 +231,11 @@ const ResourceBrowser: Component<{
 					{ project: context.project },
 				);
 				showToast({
-					title: "Choose a datapack version",
-					description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version manually; Vesta will ask for the destination world when you install it.`,
+					title: t("resources-toast-choose-datapack-version"),
+					description: t("resources-toast-datapack-version-description", {
+						world: world.displayName,
+					gameVersion: world.gameVersion ?? t("resources-known-version"),
+					}),
 					severity: "warning",
 				});
 				return;
@@ -237,8 +244,8 @@ const ResourceBrowser: Component<{
 		if (!hasDownloadableArtifact(selectedVersion)) {
 			setWorldInstall(null);
 			showToast({
-				title: "Third-party download required",
-				description: `Opening ${context.project.name} on the provider website.`,
+				title: t("resources-toast-third-party-download-title"),
+				description: t("resources-toast-opening-provider", { project: context.project.name }),
 				severity: "info",
 			});
 			await openExternal(context.project.web_url);
@@ -264,8 +271,10 @@ const ResourceBrowser: Component<{
 				{ project: context.project },
 			);
 			showToast({
-				title: "Choose a datapack version",
-				description: `Choose another ${context.project.name} release. Vesta will ask for the destination world again when you install it.`,
+				title: t("resources-toast-choose-datapack-version"),
+				description: t("resources-toast-choose-another-datapack-version", {
+					project: context.project.name,
+				}),
 				severity: "warning",
 			});
 			return;
@@ -285,13 +294,15 @@ const ResourceBrowser: Component<{
 				},
 			);
 			showToast({
-				title: "Installation started",
-				description: `${context.project.name} will be installed into the selected world.`,
+				title: t("resources-toast-installation-started"),
+				description: t("resources-toast-installation-world-description", {
+					project: context.project.name,
+				}),
 				severity: "success",
 			});
 		} catch (err) {
 			showToast({
-				title: "Installation failed",
+				title: t("instances-installation-failed"),
 				description: String(err),
 				severity: "error",
 			});
@@ -420,13 +431,13 @@ const ResourceBrowser: Component<{
 			}
 			if (props.gameVersion !== undefined) {
 				resources.setGameVersion(
-					props.gameVersion === "All versions" ? null : props.gameVersion,
+					props.gameVersion === t("resources-filter-all-versions") ? null : props.gameVersion,
 				);
 				isInitializedFromProps = true;
 			}
 			if (props.loader !== undefined) {
 				resources.setLoader(
-					props.loader === "All Loaders" ? null : props.loader,
+					props.loader === t("resources-filter-all-loaders") ? null : props.loader,
 				);
 				isInitializedFromProps = true;
 			}
@@ -606,12 +617,14 @@ const ResourceBrowser: Component<{
 			<div class={styles["resource-results-info"]}>
 				<div class={styles["results-stats"]}>
 					<Show when={resources.state.totalHits > 0}>
-						Showing {resources.state.totalHits.toLocaleString()} results
+						{t("resources-results-count", {
+							count: resources.state.totalHits.toLocaleString(),
+						})}
 					</Show>
 				</div>
 				<div class={styles["results-sort"]}>
 					<div class={styles["limit-selector"]}>
-						<span class={styles["sort-label"]}>Per Page:</span>
+						<span class={styles["sort-label"]}>{t("resources-per-page")}</span>
 						<Select
 							options={[20, 50, 100]}
 							value={resources.state.limit}
@@ -628,7 +641,7 @@ const ResourceBrowser: Component<{
 					</div>
 
 					<div class={styles["sort-selector-wrapper"]}>
-						<span class={styles["sort-label"]}>Sort By:</span>
+						<span class={styles["sort-label"]}>{t("resources-sort-by")}</span>
 						<Select<{ label: string; value: string }>
 							options={currentSortOptions()}
 							optionValue="value"
@@ -653,7 +666,7 @@ const ResourceBrowser: Component<{
 						>
 							<SelectTrigger class={styles["sort-select-trigger"]}>
 								<SelectValue<any>>
-									{(s) => s.selectedOption()?.label || "Sort By..."}
+									{(s) => s.selectedOption()?.label || t("resources-sort-placeholder")}
 								</SelectValue>
 							</SelectTrigger>
 							<SelectContent />
@@ -667,7 +680,9 @@ const ResourceBrowser: Component<{
 								resources.setOffset(0);
 							}}
 							title={
-								resources.state.sortOrder === "asc" ? "Ascending" : "Descending"
+								resources.state.sortOrder === "asc"
+									? t("resources-sort-ascending")
+									: t("resources-sort-descending")
 							}
 						>
 							{resources.state.sortOrder === "asc" ? "↑" : "↓"}
@@ -681,7 +696,7 @@ const ResourceBrowser: Component<{
 								[styles.active]: resources.state.viewMode === "list",
 							}}
 							onClick={() => resources.setViewMode("list")}
-							title="List View"
+							title={t("resources-view-list")}
 						>
 							<ListIcon width="16" height="16" />
 						</button>
@@ -691,7 +706,7 @@ const ResourceBrowser: Component<{
 								[styles.active]: resources.state.viewMode === "grid",
 							}}
 							onClick={() => resources.setViewMode("grid")}
-							title="Grid View"
+							title={t("resources-view-grid")}
 						>
 							<GridIcon width="16" height="16" />
 						</button>
@@ -720,13 +735,13 @@ const ResourceBrowser: Component<{
 						fallback={
 							<div class={styles["error-state"]}>
 								<ErrorIcon width="32" height="32" />
-								<h3>Search failed</h3>
+								<h3>{t("resources-search-failed")}</h3>
 								<p>{resources.state.searchError}</p>
 								<button
 									class={styles["empty-state-action"]}
 									onClick={() => resources.search()}
 								>
-									Try Again
+									{t("resources-try-again")}
 								</button>
 							</div>
 						}
@@ -736,8 +751,8 @@ const ResourceBrowser: Component<{
 							fallback={
 								<div class={styles["empty-state"]}>
 									<SearchIcon width="32" height="32" />
-									<h3>No resources found</h3>
-									<p>Try adjusting your search query or filters.</p>
+									<h3>{t("resources-empty-results-title")}</h3>
+									<p>{t("resources-empty-results-description")}</p>
 									<Show
 										when={
 											resources.state.query ||

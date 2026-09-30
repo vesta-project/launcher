@@ -8,6 +8,7 @@ import type { JSX, ValidComponent } from "solid-js";
 import { Show, splitProps } from "solid-js";
 import buttonStyles from "../button/button.module.css";
 import styles from "./pagination.module.css";
+import { t } from "~/localization";
 
 export const PaginationItems = PaginationPrimitive.Items;
 
@@ -63,7 +64,7 @@ export const PaginationEllipsis = <T extends ValidComponent = "div">(
 			{...others}
 		>
 			<EllipsisHorizontalIcon class={styles["size-4"]} />
-			<span class={styles["sr-only"]}>More pages</span>
+			<span class={styles["sr-only"]}>{t("shared-ui-more-pages")}</span>
 		</PaginationPrimitive.Ellipsis>
 	);
 };
@@ -96,7 +97,7 @@ export const PaginationPrevious = <T extends ValidComponent = "button">(
 				fallback={
 					<>
 						<ChevronLeftIcon class={styles["size-4"]} />
-						<span>Previous</span>
+						<span>{t("shared-ui-previous")}</span>
 					</>
 				}
 			>
@@ -133,7 +134,7 @@ export const PaginationNext = <T extends ValidComponent = "button">(
 				when={local.children}
 				fallback={
 					<>
-						<span>Next</span>
+						<span>{t("shared-ui-next")}</span>
 						<ChevronRightIcon class={styles["size-4"]} />
 					</>
 				}

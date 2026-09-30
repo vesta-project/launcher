@@ -13,6 +13,7 @@ import {
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
+import { t } from "~/localization";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import {
@@ -215,7 +216,7 @@ const ResourceCard: Component<{
 	const creatorAttribution = () => (
 		<Show
 			when={primaryOwnerFilter()}
-			fallback={<span>by {primaryOwner().name}</span>}
+			fallback={<span>{t("shared-ui-theme-author", { author: primaryOwner().name })}</span>}
 		>
 			<button
 				class={styles["card-author-button"]}
@@ -223,7 +224,7 @@ const ResourceCard: Component<{
 				onClick={handleCreatorFilter}
 				aria-label={`Filter by ${primaryOwner().name}`}
 			>
-				by {primaryOwner().name}
+				{t("shared-ui-theme-author", { author: primaryOwner().name })}
 			</button>
 		</Show>
 	);
@@ -328,11 +329,11 @@ const ResourceCard: Component<{
 	});
 
 	const buttonText = createMemo(() => {
-		if (installing()) return "Installing...";
-		if (isUpdateAvailable()) return "Update";
-		if (isInstalled()) return confirmUninstall() ? "Confirm?" : "Uninstall";
-		if (compatibility().type === "incompatible") return "Unsupported";
-		return "Install";
+		if (installing()) return t("onboarding-modpack-installing");
+		if (isUpdateAvailable()) return t("app-shell-update");
+		if (isInstalled()) return confirmUninstall() ? t("resources-card-confirm") : t("app-shell-uninstall");
+		if (compatibility().type === "incompatible") return t("resources-card-unsupported");
+		return t("app-shell-install");
 	});
 
 	// Prefer the first gallery image for browse banners.
@@ -490,13 +491,13 @@ const ResourceCard: Component<{
 						{ installType: requestedInstallType },
 					);
 					showToast({
-						title: "Update Started",
-						description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
+						title: t("resources-toast-update-started"),
+						description: t("resources-toast-progress-sidebar", { project: props.project.name }),
 						severity: "success",
 					});
 				} catch (err) {
 					showToast({
-						title: "Failed to update",
+						title: t("resources-toast-update-failed"),
 						description: err instanceof Error ? err.message : String(err),
 						severity: "error",
 					});
@@ -518,8 +519,8 @@ const ResourceCard: Component<{
 					await resources.uninstall(res.instance_id, res.id);
 					setConfirmUninstall(false);
 					showToast({
-						title: "Resource removed",
-						description: `${props.project.name} has been uninstalled.`,
+						title: t("resources-toast-resource-removed"),
+						description: t("resources-toast-resource-uninstalled", { project: props.project.name }),
 						severity: "success",
 					});
 				} catch (err) {
@@ -602,8 +603,8 @@ const ResourceCard: Component<{
 					best.loaders.some((l) => l.toLowerCase() === "fabric")
 				) {
 					showToast({
-						title: "Potential Incompatibility",
-						description: `Installing Fabric version of ${props.project.name} on a Quilt instance.`,
+						title: t("resources-toast-potential-incompatibility"),
+						description: t("resources-toast-fabric-on-quilt", { project: props.project.name }),
 						severity: "warning",
 					});
 				}
@@ -618,20 +619,23 @@ const ResourceCard: Component<{
 					{ installType: requestedInstallType },
 				);
 				showToast({
-					title: "Installation Started",
-					description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
+					title: t("resources-toast-installation-started-title"),
+					description: t("resources-toast-progress-sidebar", { project: props.project.name }),
 					severity: "success",
 				});
 			} else {
 				showToast({
-					title: "No compatible version",
-					description: `Could not find a version for ${instance.minecraftVersion} with ${instance.modloader || "no loader"}.`,
+					title: t("resources-toast-no-compatible-version"),
+					description: t("resources-toast-no-compatible-version-description", {
+						minecraftVersion: instance.minecraftVersion,
+						loader: instance.modloader || t("resources-no-loader"),
+					}),
 					severity: "error",
 				});
 			}
 		} catch (err) {
 			showToast({
-				title: "Failed to install",
+				title: t("resources-toast-failed-to-install"),
 				description: err instanceof Error ? err.message : String(err),
 				severity: "error",
 			});

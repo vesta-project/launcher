@@ -331,7 +331,7 @@ const ResourceIcon = (props: {
 				{(url) => (
 					<img
 						src={url()}
-						alt={props.name || "Resource Icon"}
+						alt={props.name || t("instances-extra-resource-icon-alt")}
 						class={styles["res-icon"]}
 						loading="eager"
 						decoding="async"
@@ -997,9 +997,12 @@ export default function InstanceDetails(
 		activeRouter()?.setCanExit(async () => {
 			if (isDirty()) {
 				const confirmed = await dialogStore.confirm(
-					"Unsaved Changes",
-					"You have unsaved changes to this instance. Are you sure you want to leave without saving?",
-					{ okLabel: "Leave", cancelLabel: "Stay" },
+					t("instances-extra-unsaved-title"),
+					t("instances-extra-unsaved-description"),
+					{
+						okLabel: t("instances-extra-unsaved-leave"),
+						cancelLabel: t("instances-extra-unsaved-stay"),
+					},
 				);
 				return confirmed;
 			}
@@ -1157,11 +1160,13 @@ export default function InstanceDetails(
 		const global = javaSettings.globalJavaPaths.find(
 			(g) => g.major_version === req,
 		);
-		const globalPathSuffix = global ? `→ ${global.path}` : "(not set)";
+		const globalPathSuffix = global
+			? `→ ${global.path}`
+			: t("instances-extra-java-path-not-set");
 
 		const opts: any[] = [
 			{
-				label: `Global Default (Java ${req})`,
+				label: t("instances-extra-java-global-default", { version: req }),
 				description: globalPathSuffix,
 				value: "__default__",
 			},
@@ -1172,14 +1177,14 @@ export default function InstanceDetails(
 		const managedForVersion = managed.find((j) => j.major_version === req);
 		if (managedForVersion) {
 			opts.push({
-				label: `Managed Runtime`,
+				label: t("instances-extra-java-runtime-managed"),
 				description: managedForVersion.path,
 				value: managedForVersion.path,
 			});
 		} else {
 			opts.push({
-				label: `Managed Runtime`,
-				description: "Not installed - Click to download and use",
+				label: t("instances-extra-java-runtime-managed"),
+				description: t("instances-extra-java-runtime-download"),
 				value: `__download_${req}__`,
 			});
 		}
@@ -1188,15 +1193,15 @@ export default function InstanceDetails(
 			.filter((j) => j.major_version === req)
 			.forEach((j) => {
 				opts.push({
-					label: `System Runtime`,
+					label: t("instances-extra-java-runtime-system"),
 					description: j.path,
 					value: j.path,
 				});
 			});
 
 		opts.push({
-			label: "Custom / Manual Path...",
-			description: "Select a specific file",
+			label: t("instances-extra-java-custom-path"),
+			description: t("instances-extra-java-select-file"),
 			value: "__custom__",
 		});
 
@@ -1314,8 +1319,10 @@ export default function InstanceDetails(
 		if (selectedCount === 0 || !inst) return;
 
 		const confirmed = await dialogStore.confirm(
-			"Delete Resources",
-			`Are you sure you want to delete ${selectedCount} selected resources?`,
+			t("instances-extra-delete-resources-title"),
+			t("instances-extra-delete-selected-resources-confirm", {
+				count: selectedCount,
+			}),
 			{ severity: "warning", isDestructive: true },
 		);
 		if (!confirmed) return;
@@ -1359,8 +1366,10 @@ export default function InstanceDetails(
 			}
 			if (worldScopedSkipped > 0) {
 				showToast({
-					title: "World selection required",
-					description: `${worldScopedSkipped} datapack update${worldScopedSkipped === 1 ? "" : "s"} must be updated individually so you can confirm the target world.`,
+					title: t("instances-extra-world-selection-required"),
+					description: t("instances-extra-world-selection-required-description", {
+						count: worldScopedSkipped,
+					}),
 					severity: "info",
 				});
 			}
@@ -1374,7 +1383,7 @@ export default function InstanceDetails(
 
 	// Resources Tab State
 	const [resourceTypeFilter, setResourceTypeFilter] =
-		createSignal<string>("All");
+		createSignal<string>(t("instances-details-resources-filter-all"));
 	const [resourceSearch, setResourceSearch] = createSignal("");
 	const [isCompactTable, setIsCompactTable] = createSignal(false);
 	const [modpackResourcesExpanded, setModpackResourcesExpanded] =
@@ -1673,7 +1682,7 @@ export default function InstanceDetails(
 
 		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
 			showToast({
-				title: "Compatibility Adjusted",
+				title: t("instances-extra-compatibility-adjusted"),
 				description: describeSelectionAdjustments(notifiableAdjustments),
 				severity: "info",
 			});
@@ -1706,9 +1715,8 @@ export default function InstanceDetails(
 			if (fallbackId !== current) {
 				setSelectedModpackVersionId(fallbackId);
 				showToast({
-					title: "Version Updated",
-					description:
-						"The previously selected modpack version is unavailable. Switched to the latest available version.",
+					title: t("instances-extra-modpack-version-updated"),
+					description: t("instances-extra-modpack-version-fallback"),
 					severity: "info",
 				});
 			}
@@ -1841,8 +1849,8 @@ export default function InstanceDetails(
 		if (!inst) return;
 
 		const confirmed = await dialogStore.confirm(
-			"Unlink Modpack",
-			"Are you sure you want to unlink this instance from the modpack? You will no longer receive updates from the platform, but your files will remain intact.",
+			t("instances-extra-unlink-modpack-title"),
+			t("instances-extra-unlink-modpack-confirm"),
 			{ severity: "warning" },
 		);
 		if (!confirmed) return;
@@ -1864,11 +1872,13 @@ export default function InstanceDetails(
 
 		const bundledResources = modpackOwnedResources();
 		const confirmed = await dialogStore.confirm(
-			"Delete Modpack Files?",
-			`This will delete ${bundledResources.length} bundled modpack resources from this instance, keep custom resources and overrides, then unlink the modpack connection.`,
+			t("instances-extra-delete-modpack-files-title"),
+			t("instances-extra-delete-modpack-files-confirm", {
+				count: bundledResources.length,
+			}),
 			{
 				severity: "warning",
-				okLabel: "Delete & Unlink",
+				okLabel: t("instances-extra-delete-modpack-files-action"),
 				isDestructive: true,
 			},
 		);
@@ -1886,18 +1896,16 @@ export default function InstanceDetails(
 			await unlinkInstance(inst);
 			await Promise.all([refetch(), refetchResources()]);
 			showToast({
-				title: "Modpack Files Deleted",
-				description:
-					"Bundled modpack resources were removed and the instance was unlinked.",
+				title: t("instances-extra-modpack-files-deleted"),
+				description: t("instances-extra-modpack-files-deleted-description"),
 				severity: "success",
 			});
 		} catch (e) {
 			console.error("Failed to delete modpack files and unlink:", e);
 			await refetchResources();
 			showToast({
-				title: "Delete Failed",
-				description:
-					"Vesta stopped before unlinking. Your custom resources were left intact.",
+				title: t("instances-extra-modpack-delete-failed"),
+				description: t("instances-extra-modpack-delete-failed-description"),
 				severity: "error",
 			});
 		} finally {
@@ -1941,7 +1949,7 @@ export default function InstanceDetails(
 
 				if (notifiableAdjustments.length > 0) {
 					showToast({
-						title: "Compatibility Adjusted",
+						title: t("instances-extra-compatibility-adjusted"),
 						description: describeSelectionAdjustments(notifiableAdjustments),
 						severity: "info",
 					});
@@ -1999,8 +2007,8 @@ export default function InstanceDetails(
 		} catch (e) {
 			console.error("Failed to check instance updates:", e);
 			showToast({
-				title: "Update Check Failed",
-				description: "Vesta could not check for updates right now.",
+				title: t("instances-extra-update-check-failed"),
+				description: t("instances-extra-update-check-failed-description"),
 				severity: "error",
 			});
 		} finally {
@@ -2018,8 +2026,8 @@ export default function InstanceDetails(
 		} catch (error) {
 			console.error("Failed to identify resource:", error);
 			showToast({
-				title: "Resource Identification Failed",
-				description: "Vesta could not identify this resource right now.",
+				title: t("instances-extra-resource-identification-failed"),
+				description: t("instances-extra-resource-identification-failed-description"),
 				severity: "error",
 			});
 		} finally {
@@ -2173,7 +2181,7 @@ export default function InstanceDetails(
 			});
 		} catch (error) {
 			showToast({
-				title: "Update failed",
+				title: t("instances-extra-update-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -2207,15 +2215,21 @@ export default function InstanceDetails(
 
 		if (peers.length > 0 && !overrideConflictConfirmed()) {
 			const confirmed = await dialogStore.confirm(
-				"Switch Active Resource?",
-				`${resource.display_name} matches ${peers
-					.map((peer) => peer.display_name)
-					.join(", ")} from the ${
-					isModpackOwnedResource(resource)
-						? "custom resources"
-						: "linked modpack"
-				}. Vesta will disable the other copy so Minecraft only loads one version.`,
-				{ okLabel: "Switch", cancelLabel: "Cancel", severity: "warning" },
+				t("instances-extra-switch-active-resource-title"),
+				t("instances-extra-switch-active-resource-confirm", {
+					name: resource.display_name,
+					peers: peers.map((peer) => peer.display_name).join(", "),
+					source: t(
+						isModpackOwnedResource(resource)
+							? "instances-extra-resource-source-custom"
+							: "instances-extra-resource-source-linked-modpack",
+					),
+				}),
+				{
+					okLabel: t("instances-extra-switch-active-resource-action"),
+					cancelLabel: t("generic-action-cancel"),
+					severity: "warning",
+				},
 			);
 			if (!confirmed) return false;
 			setOverrideConflictConfirmed(true);
@@ -2323,7 +2337,7 @@ export default function InstanceDetails(
 			),
 		}),
 		columnHelper.accessor("display_name", {
-			header: "Name",
+			header: t("generic-label-name"),
 			cell: (info) => {
 				const displayName = info.getValue();
 				const fileName =
@@ -2349,13 +2363,17 @@ export default function InstanceDetails(
 			},
 		}),
 		columnHelper.accessor("current_version", {
-			header: "Version",
+			header: t("instances-details-tab-version"),
 			cell: (info) => (
 				<span class={styles["col-version-text"]}>{info.getValue()}</span>
 			),
 		}),
 		columnHelper.accessor("is_enabled", {
-			header: () => <div style="text-align: center; width: 100%;">Enabled</div>,
+			header: () => (
+				<div style="text-align: center; width: 100%;">
+					{t("instances-extra-resource-enabled")}
+				</div>
+			),
 			cell: (info) => (
 				<div
 					class={styles["col-enabled"]}
@@ -2395,8 +2413,10 @@ export default function InstanceDetails(
 					onDelete={async (resource) => {
 						if (
 							await dialogStore.confirm(
-								"Delete Resource",
-								`Are you sure you want to delete ${resource.display_name}? This will remove the file from your instance.`,
+								t("instances-extra-delete-resource-title"),
+								t("instances-extra-delete-resource-confirm", {
+									name: resource.display_name,
+								}),
 								{ severity: "warning", isDestructive: true },
 							)
 						) {
@@ -2670,7 +2690,7 @@ export default function InstanceDetails(
 		} catch (e) {
 			console.error("Action failed:", e);
 			showToast({
-				title: "Action Failed",
+				title: t("instances-extra-action-failed"),
 				description: String(e),
 				severity: "error",
 			});
@@ -3249,8 +3269,8 @@ export default function InstanceDetails(
 														setShowExportDialog={setShowExportDialog}
 														handleDuplicate={async () => {
 															const duplicateName = await dialogStore.prompt(
-																"Duplicate Instance",
-																"Enter name for the copy:",
+																t("instances-settings-duplicate-label"),
+																t("instances-extra-duplicate-name-prompt"),
 																{ defaultValue: `${inst().name} (Copy)` },
 															);
 															if (duplicateName)
@@ -3336,8 +3356,12 @@ export default function InstanceDetails(
 						setIsSandboxDirty(false);
 					});
 				}}
-				cancelText="Reset"
-				saveText={saving() ? "Saving..." : "Save Changes"}
+				cancelText={t("instances-extra-reset")}
+				saveText={
+					saving()
+						? t("instances-extra-saving")
+						: t("instances-extra-save-changes")
+				}
 			/>
 
 			<Show when={instance()}>

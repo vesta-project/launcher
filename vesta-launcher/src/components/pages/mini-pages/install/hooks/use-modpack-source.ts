@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import type { ResourceVersion } from "@stores/resources";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
@@ -15,6 +16,8 @@ import {
 	createSignal,
 	untrack,
 } from "solid-js";
+
+export const UNKNOWN_MODPACK_NAME = "__vesta_unknown_modpack__";
 
 export type ModpackPreflightPhase =
 	| "idle"
@@ -86,7 +89,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 			) || versions?.[0];
 
 		return {
-			name: params.projectName || "Unknown Modpack",
+			name: params.projectName || UNKNOWN_MODPACK_NAME,
 			version:
 				selectedVer?.version_number ||
 				params.initialVersionNumber ||
@@ -117,7 +120,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 		latestMatchRequestId = requestId;
 		setMetadataStatus({
 			phase: "matching-source",
-			message: "Matching online source...",
+			message: t("install-page-loading-matching-source"),
 			canRetry: false,
 		});
 
@@ -197,8 +200,8 @@ export function useModpackSource(params: UseModpackSourceParams) {
 			setMetadataStatus({
 				phase: path ? "reading-local-pack" : "fetching-pack-details",
 				message: path
-					? "Reading the root modpack manifest..."
-					: "Fetching project and version details...",
+					? t("install-page-loading-reading-root-manifest")
+					: t("install-import-fetching-project-details"),
 				canRetry: false,
 			});
 			try {
@@ -220,27 +223,27 @@ export function useModpackSource(params: UseModpackSourceParams) {
 					setMetadataStatus({
 						phase: "ready-with-warnings",
 						message:
-							"Using cached project details while online metadata is unavailable.",
+							t("install-import-cached-project-details-message"),
 						error: errorText,
 						canRetry: true,
 					});
 					showToast({
-						title: "Modpack Details Limited",
+						title: t("install-import-details-limited-title"),
 						description:
-							"Using the project details already loaded from Browse.",
+							t("install-import-cached-project-details-toast"),
 						severity: "warning",
 					});
 				} else {
 					showToast({
-						title: "Metadata Sync Failed",
+						title: t("install-import-metadata-sync-failed-title"),
 						description:
-							"Could not read modpack metadata from the provided source. Check your selection.",
+							t("install-import-metadata-sync-failed-description"),
 						severity: "warning",
 					});
 					setModpackInfo(undefined);
 					setMetadataStatus({
 						phase: "failed",
-						message: "Could not read this modpack.",
+						message: t("install-import-no-metadata-modpack"),
 						error: String(error),
 						canRetry: true,
 					});
@@ -259,7 +262,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 		try {
 			const res = await open({
 				multiple: false,
-				filters: [{ name: "Modpack", extensions: ["zip", "mrpack"] }],
+				filters: [{ name: t("install-form-modpack-fallback"), extensions: ["zip", "mrpack"] }],
 			});
 			if (res && typeof res === "string") {
 				batch(() => {

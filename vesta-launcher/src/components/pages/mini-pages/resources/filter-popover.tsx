@@ -27,13 +27,13 @@ import {
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS } from "@utils/instances";
 import { sanitizeSvg } from "@utils/security";
+import { t } from "~/localization";
 import { batch, For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
 
 const LOADERS = ["Forge", "Fabric", "Quilt", "NeoForge"];
 
 const VERSION_OPTIONS = [
-	"All versions",
 	"1.21.4",
 	"1.21.1",
 	"1.20.1",
@@ -77,6 +77,7 @@ function InstanceOptionIcon(props: {
 
 export function FilterPopover(props: { router?: MiniRouter }) {
 	const activeRouter = () => props.router || router();
+	const allVersions = () => t("resources-filter-all-versions");
 	const { versions: mcVersions } = useMinecraftVersions();
 
 	const gameVersions = () => {
@@ -88,17 +89,17 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 			const releases = meta.game_versions
 				.filter((v: any) => v.version_type === "release")
 				.map((v: any) => v.id);
-			const merged = ["All versions", ...releases];
-			if (current && current !== "All versions" && !merged.includes(current)) {
+			const merged = [allVersions(), ...releases];
+			if (current && current !== allVersions() && !merged.includes(current)) {
 				merged.push(current);
 			}
 			return merged;
 		}
 
-		if (current && current !== "All versions" && !base.includes(current)) {
-			return [...base, current];
+		if (current && current !== allVersions() && !base.includes(current)) {
+			return [allVersions(), ...base, current];
 		}
-		return base;
+		return [allVersions(), ...base];
 	};
 
 	const availableCategories = () => {
@@ -135,7 +136,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 			const generalGroup: CategoryGroup = {
 				id: undefined,
-				name: "General",
+			name: t("resources-filter-general-category"),
 				icon: undefined,
 				displayIndex: -1,
 				items: [],
@@ -285,24 +286,24 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 					classList={{ [styles.disabled]: isModpack() }}
 					title={
 						isModpack()
-							? "Instance selection is disabled for modpacks"
+							? t("resources-filter-instance-disabled-modpack")
 							: undefined
 					}
 				>
-					<span class={styles["filter-label"]}>Instance</span>
+					<label class={styles["filter-label"]}>{t("resources-filter-kind-instance")}</label>
 					<Select<any>
-						aria-label="Instance"
+						aria-label={t("resources-filter-kind-instance")}
 						disabled={isModpack()}
 						options={[
-							{ id: "none", name: "No Instance" } as any,
+							{ id: "none", name: t("resources-filter-no-instance") } as any,
 							...instancesState.instances,
 						]}
 						value={
 							resources.state.selectedInstanceId
 								? instancesState.instances.find(
 										(i) => i.id === resources.state.selectedInstanceId,
-									) || ({ id: "none", name: "No Instance" } as any)
-								: ({ id: "none", name: "No Instance" } as any)
+									) || ({ id: "none", name: t("resources-filter-no-instance") } as any)
+								: ({ id: "none", name: t("resources-filter-no-instance") } as any)
 						}
 						onChange={applyInstance}
 						optionValue="id"
@@ -319,7 +320,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 										/>
 									</Show>
 									<span class={styles["instance-item-name"]}>
-										{p.item.rawValue?.name || "No Instance"}
+										{p.item.rawValue?.name || t("resources-filter-no-instance")}
 									</span>
 									<span class={styles["instance-item-meta"]}>
 										{p.item.rawValue?.minecraftVersion || ""}
@@ -336,7 +337,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 								when={selectedInstance()}
 								fallback={
 									<span class={styles["instance-trigger-name"]}>
-										No Instance
+										{t("resources-filter-no-instance")}
 									</span>
 								}
 							>
@@ -374,13 +375,13 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 				</div>
 
 				<div class={styles["filter-popover-section"]}>
-					<span class={styles["filter-label"]}>Minecraft version</span>
+					<label class={styles["filter-label"]}>{t("instances-versioning-mc-version-label")}</label>
 					<Combobox
-						aria-label="Minecraft version"
+						aria-label={t("instances-versioning-mc-version-label")}
 						options={gameVersions()}
-						value={resources.state.gameVersion || "All versions"}
+						value={resources.state.gameVersion || allVersions()}
 						onChange={(v: string | null) => {
-							const val = v === "All versions" || !v ? null : v;
+							const val = v === allVersions() || !v ? null : v;
 							resources.setGameVersion(val);
 							resources.setOffset(0);
 							activeRouter()?.updateQuery("gameVersion", val);
@@ -401,17 +402,17 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 				<Show when={shouldShowLoader()}>
 					<div class={styles["filter-popover-section"]}>
-						<span class={styles["filter-label"]}>Mod loader</span>
+						<label class={styles["filter-label"]}>{t("resources-filter-mod-loader")}</label>
 						<Select
-							aria-label="Mod loader"
-							options={["All Loaders", ...LOADERS]}
+							aria-label={t("resources-filter-mod-loader")}
+							options={[t("resources-filter-all-loaders"), ...LOADERS]}
 							value={
 								LOADERS.find(
 									(l) => l.toLowerCase() === resources.state.loader,
-								) || "All Loaders"
+								) || t("resources-filter-all-loaders")
 							}
 							onChange={(v: string | null) => {
-								const val = v === "All Loaders" || !v ? null : v.toLowerCase();
+								const val = v === t("resources-filter-all-loaders") || !v ? null : v.toLowerCase();
 								resources.setLoader(val);
 								resources.setOffset(0);
 								activeRouter()?.updateQuery("loader", val);
@@ -422,7 +423,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 						>
 							<SelectTrigger class={styles["filter-select"]}>
 								<SelectValue<string>>
-									{(s) => String(s.selectedOption() || "All Loaders")}
+									{(s) => String(s.selectedOption() || t("resources-filter-all-loaders"))}
 								</SelectValue>
 							</SelectTrigger>
 							<SelectContent />
@@ -432,11 +433,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 				<Show when={shouldShowEnvironment()}>
 					<div class={styles["filter-popover-section"]}>
-						<span class={styles["filter-label"]}>Environment</span>
+						<span class={styles["filter-label"]}>{t("resources-filter-environment")}</span>
 						<div
 							class={styles["environment-filter-options"]}
 							role="group"
-							aria-label="Environment"
+							aria-label={t("resources-filter-environment")}
 						>
 							<Badge
 								as="button"
@@ -476,7 +477,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 				<Show when={availableCategories().length > 0}>
 					<div class={styles["filter-popover-section"]}>
-						<span class={styles["filter-label"]}>Categories</span>
+						<label class={styles["filter-label"]}>{t("resources-filter-categories")}</label>
 						<div class={styles["category-groups-popover"]}>
 							<For each={availableCategories()}>
 								{(group) => (

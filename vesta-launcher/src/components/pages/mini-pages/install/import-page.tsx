@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import { router } from "@components/page-viewer/page-viewer";
 import type { LauncherKind } from "@utils/launcher-imports";
 import { createMemo, createSignal, onMount, Show } from "solid-js";
@@ -81,9 +82,9 @@ function ImportPage(props: ImportPageRouteProps) {
 		<div class={styles["page-root"]}>
 			<Show when={isDetailsMode()}>
 				<InstallStageHeader
-					title={activeLauncherVisual()?.label ?? "Launcher Import"}
-					description="Select a launcher path, rescan detected instances, then import one."
-					actionLabel="Change import"
+					title={activeLauncherVisual()?.label ?? t("settings-help-import-label")}
+					description={t("install-import-page-description")}
+					actionLabel={t("install-page-change-import")}
 					onAction={() => openMethodModal("methods")}
 					prefixIcon={
 						activeLauncherVisual()?.icon ? (

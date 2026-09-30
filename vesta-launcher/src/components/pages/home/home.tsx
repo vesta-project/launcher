@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import TitleBar from "@components/page-root/titlebar/titlebar";
 import {
 	PageViewer,
@@ -63,27 +64,27 @@ function HomePage() {
 	let shellEffectPriorFlatChrome: boolean | undefined;
 	const sectionTitle = createMemo(() => {
 		if (!isFlatChrome()) return undefined;
-		if (!pageViewerOpen()) return "Library";
+		if (!pageViewerOpen()) return t("app-shell-library");
 
 		const r = router();
 		const path = r?.currentPath.get() ?? "";
 		const params = r?.currentParams.get() ?? {};
 		if (path.startsWith("/config")) {
 			const settingsTabs: Record<string, string> = {
-				general: "Settings",
-				account: "Account",
-				appearance: "Appearance",
-				java: "Java",
-				notifications: "Notifications",
-				keyboard: "Keyboard",
-				defaults: "Defaults",
-				developer: "Developer",
-				help: "Help",
+				general: t("app-shell-settings"),
+				account: t("settings-tab-account"),
+				appearance: t("settings-tab-appearance"),
+				java: t("settings-tab-java"),
+				notifications: t("app-shell-notifications"),
+				keyboard: t("settings-tab-keyboard"),
+				defaults: t("settings-tab-defaults"),
+				developer: t("settings-tab-developer"),
+				help: t("settings-tab-help"),
 			};
-			return settingsTabs[String(params.activeTab ?? "general")] ?? "Settings";
+			return settingsTabs[String(params.activeTab ?? "general")] ?? t("app-shell-settings");
 		}
 
-		return r?.customName.get() || r?.currentElement().name || "Library";
+		return r?.customName.get() || r?.currentElement().name || t("app-shell-library");
 	});
 
 	function ensureLibrarySlot() {
@@ -281,9 +282,7 @@ function MainMenu() {
 							!homeIntroShowDemoCards()
 						}
 					>
-						<p style={{ color: "#888", padding: "20px" }}>
-							No instances found. Create one to get started!
-						</p>
+						<p style={{ color: "#888", padding: "20px" }}>{t("app-shell-empty-instance-library")}</p>
 					</Show>
 					<For each={instancesStore()}>
 						{(instance) => <InstanceCard instance={instance} />}

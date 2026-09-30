@@ -132,9 +132,12 @@ describe("versionsSupportedByInstance", () => {
 
 describe("summarizeGameVersions", () => {
 	it("uses a compact range for long version lists", () => {
-		expect(summarizeGameVersions(["1.20", "1.21.1", "1.19.4", "1.21"])).toBe(
-			"MC 1.19.4 — 1.21.1",
-		);
+		expect(
+			summarizeGameVersions(["1.20", "1.21.1", "1.19.4", "1.21"]).replace(
+				/[\u2068\u2069]/g,
+				"",
+			),
+		).toBe("MC 1.19.4 — 1.21.1");
 	});
 
 	it("excludes CurseForge client and server environment labels", () => {

@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import { createSignal, Match, Switch } from "solid-js";
 
 function ConnectionStatus() {
@@ -19,8 +20,8 @@ function ConnectionStatus() {
 				left: "100px",
 			}}
 		>
-			<Switch fallback={<>Offline</>}>
-				<Match when={status()}>Online</Match>
+			<Switch fallback={<>{t("app-shell-offline")}</>}>
+				<Match when={status()}>{t("app-shell-online")}</Match>
 			</Switch>
 		</div>
 	);

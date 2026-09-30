@@ -19,6 +19,7 @@ import {
 	getCompatibilityForInstance,
 	getProjectCompatibilityForInstance,
 } from "@utils/resources";
+import { t } from "~/localization";
 import {
 	type Component,
 	createEffect,
@@ -86,7 +87,7 @@ const ResourceInstanceSelectionDialog: Component<
 					return { instanceId: instance.id, rows, failed: false };
 				} catch (error) {
 					console.error(
-						`Failed to fetch installed resources for instance ${instance.id}`,
+						t("resources-instance-fetch-installed-failed", { instance: instance.id }),
 						error,
 					);
 					return { instanceId: instance.id, rows: [], failed: true };
@@ -138,7 +139,7 @@ const ResourceInstanceSelectionDialog: Component<
 			.catch((error) => {
 				if (generation === versionRequestGeneration) {
 					console.error(
-						"Failed to fetch versions for compatibility check",
+						t("resources-instance-fetch-versions-failed"),
 						error,
 					);
 				}
@@ -190,21 +191,24 @@ const ResourceInstanceSelectionDialog: Component<
 				? { type: "compatible" as const }
 				: {
 						type: "incompatible" as const,
-						reason: `No compatible version found for ${instance.minecraftVersion} / ${instance.modloader || "Vanilla"}`,
+					reason: t("resources-instance-no-compatible-version", {
+						minecraftVersion: instance.minecraftVersion,
+						loader: instance.modloader || t("instances-details-modloader-vanilla"),
+					}),
 					};
 		}
 
 		if (isLoadingVersions()) {
 			return {
 				type: "incompatible" as const,
-				reason: "Loading compatibility data...",
+				reason: t("resources-instance-loading-compatibility"),
 			};
 		}
 
 		if (props.installType === "mod" || props.installType === "shader") {
 			return {
 				type: "incompatible" as const,
-				reason: "No compatible versions found.",
+				reason: t("resources-instance-no-compatible-versions"),
 			};
 		}
 
@@ -242,9 +246,9 @@ const ResourceInstanceSelectionDialog: Component<
 					disabled: true,
 					detail:
 						lookupState === "error"
-							? "Could not verify installed resources"
-							: "Checking installed resources…",
-					badge: lookupState === "error" ? "Unavailable" : "Checking",
+							? t("resources-instance-could-not-verify")
+							: t("resources-instance-checking-installed-ellipsis"),
+					badge: lookupState === "error" ? t("resources-instance-unavailable") : t("resources-instance-checking"),
 					tone: lookupState === "error" ? "danger" : "neutral",
 				};
 			}
@@ -263,7 +267,7 @@ const ResourceInstanceSelectionDialog: Component<
 					instance,
 					disabled: true,
 					detail: compatibility.reason,
-					badge: "Incompatible",
+				badge: t("resources-version-incompatible"),
 					tone: "danger",
 				};
 			}
@@ -271,16 +275,16 @@ const ResourceInstanceSelectionDialog: Component<
 				return {
 					instance,
 					disabled: true,
-					detail: "Already installed",
-					badge: "Installed",
+				detail: t("resources-instance-already-installed"),
+				badge: t("resources-instance-installed"),
 					tone: "accent",
 				};
 			}
 			if (updateAvailable) {
 				return {
 					instance,
-					detail: "Update available",
-					badge: "Update",
+				detail: t("instances-details-resources-update-available"),
+				badge: t("app-shell-update"),
 					tone: "warning",
 				};
 			}
@@ -291,12 +295,14 @@ const ResourceInstanceSelectionDialog: Component<
 	return (
 		<InstanceSelectionDialog
 			isOpen={props.isOpen}
-			description={`Choose where to install ${props.project?.name || "this resource"}.`}
+			description={t("resources-instance-choose-destination", {
+				project: props.project?.name || t("resources-this-resource"),
+			})}
 			options={options()}
 			onClose={props.onClose}
 			onSelect={props.onSelect}
 			footerAction={{
-				label: "Create New Instance",
+				label: t("resources-instance-create-new"),
 				onSelect: props.onCreateNew,
 			}}
 		/>

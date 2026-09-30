@@ -1,6 +1,7 @@
 import type { Component } from "solid-js";
 import { Show } from "solid-js";
 import styles from "./worlds.module.css";
+import { t } from "~/localization";
 
 export const WorldIcon: Component<{
 	src?: string | null;
@@ -20,7 +21,7 @@ export const WorldIcon: Component<{
 	>
 		<img
 			src={props.src ?? ""}
-			alt={`${props.name} world icon`}
+			alt={t("shared-ui-world-icon-alt", { name: props.name })}
 			class={`${styles["world-icon"]} ${props.class ?? ""}`}
 			loading="lazy"
 			decoding="async"

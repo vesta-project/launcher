@@ -14,6 +14,7 @@ import {
 import { DEFAULT_ICONS } from "@utils/instances";
 import { type Component, createMemo, For, Show } from "solid-js";
 import styles from "./instance-selection-dialog.module.css";
+import { t } from "~/localization";
 
 export type InstanceSelectionTone = "neutral" | "accent" | "warning" | "danger";
 
@@ -98,7 +99,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 			<DialogContent class={styles.dialog}>
 				<DialogHeader>
 					<DialogTitle class={styles.title}>
-						{props.title ?? "Select Instance"}
+						{props.title ?? t("shared-ui-select-instance")}
 					</DialogTitle>
 					<DialogDescription class={styles.description}>
 						{props.description}
@@ -109,7 +110,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 					when={sortedOptions().length > 0}
 					fallback={
 						<div class={styles.empty}>
-							{props.emptyMessage ?? "No instances are available."}
+							{props.emptyMessage ?? t("shared-ui-no-instances-available")}
 						</div>
 					}
 				>
@@ -136,7 +137,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 											</span>
 											<span class={styles["option-meta"]}>
 												{option.instance.minecraftVersion} ·{" "}
-												{option.instance.modloader || "Vanilla"}
+												{option.instance.modloader || t("instances-details-modloader-vanilla")}
 											</span>
 											<Show when={option.detail}>
 												<span class={styles["option-detail"]}>

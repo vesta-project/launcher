@@ -475,8 +475,14 @@ impl ProgressReporter for LaunchJavaProgressReporter {
     fn done(&self, success: bool, message: Option<&str>) {
         if success {
             log::info!("Managed Java reinstall finished successfully");
+        } else if let Some(message) = message {
+            self.set_message(message);
         } else {
-            self.set_message(message.unwrap_or("Java download failed"));
+            let localized = self
+                .app_handle
+                .state::<crate::localization::LocalizationManager>()
+                .text("rust-task-java-download-failed");
+            self.set_message(&localized);
         }
     }
 
@@ -514,11 +520,11 @@ pub async fn ensure_java_available(
     }
 
     if !is_configured_java_managed(java_path_str, major_version as i32) {
-        return Err(format!(
-            "Java verification failed: executable not found or invalid at {}. \
-             Update your Java installation in Settings.",
-            java_path_str
-        ));
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("path", java_path_str);
+        return Err(app_handle
+            .state::<crate::localization::LocalizationManager>()
+            .format("rust-native-java-verification-failed", Some(&args)));
     }
 
     log::warn!(
@@ -534,11 +540,13 @@ pub async fn ensure_java_available(
         if let Some(nm) = app_handle.try_state::<NotificationManager>() {
             let _ = nm.create(CreateNotificationInput {
                 client_key: Some(client_key.clone()),
-                title: Some(format!("Repairing Java {}", major_version)),
-                description: Some(
-                    "The managed Java installation was missing or corrupted. Downloading a fresh copy..."
-                        .to_string(),
-                ),
+                title: {
+                    let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("version", major_version.to_string());
+                    Some(localization.format("rust-native-repairing-java-title", Some(&args)))
+                },
+                description: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-repairing-java-description")),
                 severity: Some("info".to_string()),
                 notification_type: Some(NotificationType::Progress),
                 dismissible: Some(false),
@@ -553,7 +561,7 @@ pub async fn ensure_java_available(
             });
         }
     } else if let Some(reporter) = progress_reporter {
-        reporter.set_message("Setting up Java runtime...");
+        reporter.set_message(&app_handle.state::<crate::localization::LocalizationManager>().text("rust-task-setting-up-java-runtime"));
     }
 
     remove_managed_zulu_install_dir(major_version)?;
@@ -570,8 +578,18 @@ pub async fn ensure_java_available(
             if let Some(nm) = app_handle.try_state::<NotificationManager>() {
                 let _ = nm.create(CreateNotificationInput {
                     client_key: Some(client_key.clone()),
-                    title: Some(format!("Java {} repair failed", major_version)),
-                    description: Some(format!("Failed to reinstall managed Java: {}", e)),
+                    title: {
+                        let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                        let mut args = fluent_bundle::FluentArgs::new();
+                        args.set("version", major_version.to_string());
+                        Some(localization.format("rust-native-java-repair-failed-title", Some(&args)))
+                    },
+                    description: {
+                        let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                        let mut args = fluent_bundle::FluentArgs::new();
+                        args.set("error", e.to_string());
+                        Some(localization.format("rust-native-java-reinstall-failed-description", Some(&args)))
+                    },
                     severity: Some("error".to_string()),
                     notification_type: Some(NotificationType::Patient),
                     dismissible: Some(true),

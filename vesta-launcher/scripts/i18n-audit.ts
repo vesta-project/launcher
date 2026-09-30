@@ -120,7 +120,9 @@ async function main() {
 
 	for (const report of withFindings) {
 		totalFindings += report.findings.length;
-		console.log(`${report.relative} (${report.findings.length} candidates, ${report.tCalls} t())`);
+		console.log(
+			`${report.relative} (${report.findings.length} candidates, ${report.tCalls} t() calls)`,
+		);
 		for (const finding of report.findings.slice(0, 12)) {
 			console.log(`  L${finding.line} [${finding.kind}] ${finding.text}`);
 		}

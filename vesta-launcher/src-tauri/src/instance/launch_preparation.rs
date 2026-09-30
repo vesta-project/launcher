@@ -747,11 +747,13 @@ fn notify_login_required(app_handle: &tauri::AppHandle, account_type: &str) {
     if let Some(nm) = app_handle.try_state::<crate::notifications::manager::NotificationManager>() {
         let _ = nm.create(crate::notifications::models::CreateNotificationInput {
             client_key: None,
-            title: Some("Login Required".to_string()),
-            description: Some(format!(
-                "You must be signed in with a Microsoft account to launch Minecraft. (Current: {})",
-                account_type
-            )),
+            title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-login-required-title")),
+            description: {
+                let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                let mut args = fluent_bundle::FluentArgs::new();
+                args.set("accountType", account_type);
+                Some(localization.format("rust-native-login-required-launch-description", Some(&args)))
+            },
             severity: Some("warning".to_string()),
             notification_type: Some(crate::notifications::models::NotificationType::Immediate),
             dismissible: Some(true),
@@ -775,8 +777,13 @@ pub(crate) fn notify_offline_launch(
     if let Some(nm) = app_handle.try_state::<crate::notifications::manager::NotificationManager>() {
         let _ = nm.create(crate::notifications::models::CreateNotificationInput {
             client_key: None,
-            title: Some(format!("Launching {} (Offline)", instance_name)),
-            description: Some("Started in offline mode. Multiplayer on authenticated servers will not be available.".to_string()),
+            title: {
+                let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                let mut args = fluent_bundle::FluentArgs::new();
+                args.set("instanceName", instance_name);
+                Some(localization.format("rust-native-offline-launch-title", Some(&args)))
+            },
+            description: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-offline-launch-description")),
             severity: Some("info".to_string()),
             notification_type: Some(crate::notifications::models::NotificationType::Immediate),
             dismissible: Some(true),

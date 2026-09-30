@@ -1,5 +1,6 @@
 import Button from "@ui/button/button";
 import { Show, Suspense } from "solid-js";
+import { t } from "~/localization";
 import styles from "../instance-details.module.css";
 import { summarizeResources } from "../instance-details-view";
 import { ScreenshotGallery } from "./ScreenshotGallery";
@@ -20,31 +21,28 @@ export const OverviewTab = (props: OverviewTabProps) => {
 			<div class={styles["overview-resource-rail"]}>
 				<div class={styles["overview-resource-copy"]}>
 					<div>
-						<h2>Resources</h2>
+						<h2>{t("instances-details-tab-resources")}</h2>
 						<p>
 							{props.installedResources.length === 0
-								? "No resources installed"
-								: summarizeResources(
-										props.installedResources,
-										props.knownUpdateCount,
-									)}
+								? t("instances-extra-overview-no-resources")
+								: summarizeResources(props.installedResources, props.knownUpdateCount)}
 						</p>
 					</div>
 				</div>
 				<div class={styles["overview-resource-actions"]}>
 					<Show when={props.installedResources.length > 0}>
 						<Button size="sm" variant="ghost" onClick={props.onManageResources}>
-							Manage
+							{t("app-shell-manage")}
 						</Button>
 					</Show>
 					<Button size="sm" variant="outline" onClick={props.onAddResources}>
-						Add resources
+						{t("instances-details-resources-add")}
 					</Button>
 				</div>
 			</div>
 			<Suspense
 				fallback={
-					<div class={styles["overview-loading"]}>Loading screenshots…</div>
+					<div class={styles["overview-loading"]}>{t("instances-extra-screenshots-loading")}</div>
 				}
 			>
 				<ScreenshotGallery

@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import CloseIcon from "@assets/icons/actions/close.svg";
 import OpenIcon from "@assets/icons/actions/external-link.svg";
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
@@ -92,14 +93,14 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					<div class={styles["page-viewer-navbar-left"]}>
 						<NavbarButton
 							onClick={() => void history.back()}
-							text="Back"
+							text={t("app-shell-back")}
 							disabled={!history.canGoBack()}
 						>
 							<BackArrowIcon />
 						</NavbarButton>
 						<NavbarButton
 							onClick={history.forward}
-							text="Forward"
+							text={t("app-shell-forward")}
 							disabled={!history.canGoForward()}
 						>
 							<ForwardsArrowIcon />
@@ -107,7 +108,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 						<Show when={history.canReload()}>
 							<NavbarButton
 								onClick={history.reload}
-								text="Reload"
+								text={t("app-shell-reload")}
 								loading={history.isReloading()}
 							>
 								<RefreshIcon />
@@ -135,7 +136,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 						<PageOptionsMenu router={props.router} />
 
 						<Show when={props.onPopOut}>
-							<NavbarButton onClick={props.onPopOut} text="Open in new window">
+							<NavbarButton onClick={props.onPopOut} text={t("app-shell-open-in-new-window")}>
 								<OpenIcon />
 							</NavbarButton>
 						</Show>
@@ -145,7 +146,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 								props.onClose && !props.windowControls && !props.hideCloseButton
 							}
 						>
-							<NavbarButton onClick={handleClose} text="Close">
+							<NavbarButton onClick={handleClose} text={t("app-shell-close")}>
 								<CloseIcon />
 							</NavbarButton>
 						</Show>

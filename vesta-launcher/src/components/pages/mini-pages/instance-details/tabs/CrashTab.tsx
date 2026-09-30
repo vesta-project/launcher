@@ -12,10 +12,8 @@ import type { CrashEvent, CrashSuspect } from "@utils/crash-handler";
 import { clearCrashDetails, formatCrashCategory } from "@utils/crash-handler";
 import { openExternal } from "@utils/external-link";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import {
-	getRequiredVersionIssue,
-	matchSuspectToResource,
-} from "./crash-resource-match";
+import { getRequiredVersionIssue, matchSuspectToResource } from "./crash-resource-match";
+import { t } from "~/localization";
 import styles from "./crash-tab.module.css";
 
 type MclogsUploadResult = {
@@ -49,9 +47,7 @@ function SuspectIcon(props: { name: string; iconUrl?: string | null }) {
 	return (
 		<Show
 			when={props.iconUrl?.startsWith("data:") ? props.iconUrl : null}
-			fallback={
-				<div class={styles.suspectIconPlaceholder}>{displayChar()}</div>
-			}
+			fallback={<div class={styles.suspectIconPlaceholder}>{displayChar()}</div>}
 		>
 			{(url) => <img src={url()} alt="" class={styles.suspectIcon} />}
 		</Show>
@@ -68,16 +64,15 @@ function CrashSuspectCard(props: {
 	router?: MiniRouter;
 }) {
 	const clickable = () => hasCanonicalResourceLink(props.resource);
-	const versionIssue = () =>
-		getRequiredVersionIssue(props.resource, props.suspect.reason);
+	const versionIssue = () => getRequiredVersionIssue(props.resource, props.suspect.reason);
 	const statusLabel = () => {
-		if (versionIssue()) return "Update";
-		if (props.resource && !props.resource.is_enabled) return "Disabled";
-		if (!props.resource) return "Missing";
+		if (versionIssue()) return t("app-shell-update");
+		if (props.resource && !props.resource.is_enabled)
+			return t("instances-extra-crash-status-disabled");
+		if (!props.resource) return t("instances-extra-crash-status-missing");
 		return null;
 	};
-	const showStatusMeta = () =>
-		!!versionIssue() || (!props.resource && !!props.instanceId);
+	const showStatusMeta = () => !!versionIssue() || (!props.resource && !!props.instanceId);
 
 	const navigateToResource = () => {
 		const resource = props.resource;
@@ -106,8 +101,7 @@ function CrashSuspectCard(props: {
 			classList={{
 				[styles.suspectCard]: true,
 				[styles.suspectCardClickable]: clickable(),
-				[styles.suspectCardDisabled]:
-					!!props.resource && !props.resource.is_enabled,
+				[styles.suspectCardDisabled]: !!props.resource && !props.resource.is_enabled,
 			}}
 			role={clickable() ? "button" : undefined}
 			tabIndex={clickable() ? 0 : undefined}
@@ -140,16 +134,11 @@ function CrashSuspectCard(props: {
 					>
 						<span class={styles.suspectModId}>{props.suspect.mod_id}</span>
 					</Show>
-					<Show
-						when={
-							props.suspect.suspect_kind === "missing_dependency" &&
-							statusLabel()
-						}
-					>
+					<Show when={props.suspect.suspect_kind === "missing_dependency" && statusLabel()}>
 						{(label) => (
 							<Badge
 								class={styles.suspectStatusBadge}
-								variant={label() === "Missing" ? "error" : "warning"}
+								variant={label() === t("instances-extra-crash-status-missing") ? "error" : "warning"}
 							>
 								{label()}
 							</Badge>
@@ -159,12 +148,7 @@ function CrashSuspectCard(props: {
 				<Show when={props.suspect.reason}>
 					<p class={styles.suspectReason}>{props.suspect.reason}</p>
 				</Show>
-				<Show
-					when={
-						props.suspect.suspect_kind === "missing_dependency" &&
-						showStatusMeta()
-					}
-				>
+				<Show when={props.suspect.suspect_kind === "missing_dependency" && showStatusMeta()}>
 					<div class={styles.suspectMeta}>
 						<Show when={versionIssue()}>
 							<span class={styles.suspectStatusNote}>{versionIssue()}</span>
@@ -178,7 +162,7 @@ function CrashSuspectCard(props: {
 									browseMods();
 								}}
 							>
-								Browse mods
+								{t("instances-extra-crash-browse-mods")}
 							</button>
 						</Show>
 					</div>
@@ -199,9 +183,7 @@ export function CrashTab(props: {
 	router?: MiniRouter;
 	onCleared?: () => void;
 }) {
-	const [shareUrl, setShareUrl] = createSignal<string | null>(
-		props.crash?.mclogs_url ?? null,
-	);
+	const [shareUrl, setShareUrl] = createSignal<string | null>(props.crash?.mclogs_url ?? null);
 	const [busy, setBusy] = createSignal(false);
 
 	const AFFECTED_MODS_SCROLL_THRESHOLD = 4;
@@ -209,9 +191,7 @@ export function CrashTab(props: {
 	const fixes = () =>
 		props.crash?.suggested_fixes?.length
 			? props.crash.suggested_fixes
-			: [
-					"Open the latest log and check the first error above the stack trace.",
-				];
+			: [t("instances-extra-crash-suggested-fix-default")];
 
 	const suspects = createMemo((): CrashSuspect[] => {
 		if (props.crash?.suspects?.length) return props.crash.suspects;
@@ -239,7 +219,7 @@ export function CrashTab(props: {
 			});
 		} catch (error) {
 			showToast({
-				title: "Could not open file",
+				title: t("instances-extra-crash-open-file-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -255,7 +235,7 @@ export function CrashTab(props: {
 			props.onCleared?.();
 		} catch (error) {
 			showToast({
-				title: "Could not clear crash",
+				title: t("instances-extra-crash-clear-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -265,17 +245,14 @@ export function CrashTab(props: {
 	const upload = async () => {
 		setBusy(true);
 		try {
-			const result = await invoke<MclogsUploadResult>(
-				"upload_crash_to_mclogs",
-				{
+			const result = await invoke<MclogsUploadResult>("upload_crash_to_mclogs", {
 					instanceIdSlug: props.instanceSlug,
 					crashId: props.crash?.crash_id ?? null,
-				},
-			);
+			});
 			setShareUrl(result.url);
 		} catch (error) {
 			showToast({
-				title: "mclo.gs upload failed",
+				title: t("instances-extra-crash-mclogs-upload-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -291,13 +268,13 @@ export function CrashTab(props: {
 		try {
 			await navigator.clipboard.writeText(url);
 			showToast({
-				title: "Link copied",
-				description: "Crash log URL copied to clipboard",
+				title: t("instances-extra-crash-link-copied-title"),
+				description: t("instances-extra-crash-link-copied-description"),
 				severity: "success",
 			});
 		} catch (error) {
 			showToast({
-				title: "Could not copy link",
+				title: t("instances-extra-crash-copy-link-failed"),
 				description: String(error),
 				severity: "error",
 			});
@@ -308,9 +285,7 @@ export function CrashTab(props: {
 		const installed = props.installedResources ?? [];
 		const resource = matchSuspectToResource(suspect, installed);
 		const projectRecord = resource
-			? props.projectRecords?.[
-					getProjectRecordKey(resource.platform, resource.remote_id) || ""
-				]
+			? props.projectRecords?.[getProjectRecordKey(resource.platform, resource.remote_id) || ""]
 			: undefined;
 		return { resource, projectRecord };
 	};
@@ -323,7 +298,7 @@ export function CrashTab(props: {
 
 	const shareLabel = () => {
 		const url = shareUrl();
-		if (!url) return "Share log";
+		if (!url) return t("instances-extra-crash-share-log");
 		return url.replace(/^https?:\/\//, "");
 	};
 
@@ -362,7 +337,7 @@ export function CrashTab(props: {
 				fallback={
 					<div class={styles.empty}>
 						<div class={styles.emptyMark} />
-						<h2>No recent crash</h2>
+						<h2>{t("instances-extra-crash-no-recent-crash")}</h2>
 					</div>
 				}
 			>
@@ -372,13 +347,11 @@ export function CrashTab(props: {
 							<div class={styles.heroContent}>
 								<div class={styles.kicker}>
 									<Badge variant="error">
-										{formatCrashCategory(
-											crash().category || crash().crash_type,
-										)}
+										{formatCrashCategory(crash().category || crash().crash_type)}
 									</Badge>
 									<span>{new Date(crash().timestamp).toLocaleString()}</span>
 								</div>
-								<h2>{crash().title || "Instance crashed"}</h2>
+								<h2>{crash().title || t("instances-extra-crash-instance-crashed")}</h2>
 								<p>{crash().message}</p>
 							</div>
 							<div class={styles.heroActions}>
@@ -393,16 +366,12 @@ export function CrashTab(props: {
 											disabled={busy()}
 										>
 											<LinkIcon />
-											{busy() ? "Uploading..." : "Share log"}
+											{busy() ? t("instances-extra-crash-uploading") : t("instances-extra-crash-share-log")}
 										</Button>
 									}
 								>
 									<div class={styles.shareInline}>
-										<button
-											type="button"
-											class={styles.shareLinkButton}
-											onClick={() => void openShareUrl()}
-										>
+										<button type="button" class={styles.shareLinkButton} onClick={() => void openShareUrl()}>
 											<LinkIcon />
 											<span>{shareLabel()}</span>
 										</button>
@@ -410,20 +379,15 @@ export function CrashTab(props: {
 											type="button"
 											class={styles.shareCopyButton}
 											onClick={() => void copyShareUrl()}
-											aria-label="Copy link"
-											title="Copy link"
+											aria-label={t("instances-extra-crash-copy-link")}
+											title={t("instances-extra-crash-copy-link")}
 										>
 											<CopyIcon />
 										</button>
 									</div>
 								</Show>
-								<Button
-									color="destructive"
-									variant="outline"
-									size="sm"
-									onClick={() => void clearCrash()}
-								>
-									Clear Crash
+								<Button color="destructive" variant="outline" size="sm" onClick={() => void clearCrash()}>
+									{t("instances-extra-crash-clear-crash")}
 								</Button>
 							</div>
 						</div>
@@ -432,20 +396,19 @@ export function CrashTab(props: {
 							<div class={styles.primary}>
 								<Show when={suspects().length}>
 									<section class={styles.panel}>
-										<h3>Suspects</h3>
+										<h3>{t("instances-extra-crash-suspects")}</h3>
 										{renderSuspectGroup(
-											"Missing dependencies",
+											t("instances-extra-crash-missing-dependencies"),
 											missingDependencies(),
 										)}
 										<Show when={affectedMods().length}>
 											<div class={styles.suspectGroup}>
-												<h4>Affected mods</h4>
+												<h4>{t("instances-extra-crash-affected-mods")}</h4>
 												<div
 													classList={{
 														[styles.suspectList]: true,
 														[styles.suspectListScrollable]:
-															affectedMods().length >
-															AFFECTED_MODS_SCROLL_THRESHOLD,
+															affectedMods().length > AFFECTED_MODS_SCROLL_THRESHOLD,
 													}}
 												>
 													{renderSuspectCards(affectedMods())}
@@ -456,7 +419,7 @@ export function CrashTab(props: {
 								</Show>
 
 								<section class={styles.panel}>
-									<h3>Suggested Fixes</h3>
+									<h3>{t("instances-extra-crash-suggested-fixes")}</h3>
 									<div class={styles.fixList}>
 										<For each={fixes()}>
 											{(fix, index) => (
@@ -469,15 +432,13 @@ export function CrashTab(props: {
 										<div class={`${styles.fix} ${styles.fixHelp}`}>
 											<span class={styles.fixNumber}>?</span>
 											<p>
-												Still having issues?{" "}
+												{t("instances-extra-crash-still-having-issues")}{" "}
 												<button
 													type="button"
 													class={styles.helpLink}
-													onClick={() =>
-														void openExternal("https://discord.gg/zuDNHNHk8E")
-													}
+													onClick={() => void openExternal("https://discord.gg/zuDNHNHk8E")}
 												>
-													Ask for help on Discord
+													{t("instances-extra-crash-ask-discord")}
 												</button>
 											</p>
 										</div>
@@ -488,39 +449,33 @@ export function CrashTab(props: {
 							<aside class={styles.side}>
 								<div class={styles.devNoticePanel}>
 									<p>
-										Crash detection is still in development and may be
-										incomplete or wrong.{" "}
+										{t("instances-extra-crash-detection-notice")}{" "}
 										<button
 											type="button"
 											class={styles.helpLink}
-											onClick={() =>
-												void openExternal("https://discord.gg/zuDNHNHk8E")
-											}
+											onClick={() => void openExternal("https://discord.gg/zuDNHNHk8E")}
 										>
-											Report problems on Discord
+											{t("instances-extra-crash-report-problems")}
 										</button>
 									</p>
 								</div>
 
 								<section class={styles.panel}>
 									<div class={styles.logExcerptBlock}>
-										<h3>Log excerpt</h3>
+										<h3>{t("instances-extra-crash-log-excerpt")}</h3>
 										<div class={styles.evidenceScroller}>
 											<pre class={styles.evidence}>
-												{crash().evidence ||
-													"No excerpt was captured for this crash. Use Open file or Logs below to inspect the full log."}
+												{crash().evidence || t("instances-extra-crash-empty-excerpt")}
 											</pre>
 										</div>
 										<div class={styles.pathActions}>
 											<Button
 												size="sm"
 												variant="outline"
-												onClick={() =>
-													void openPath(crash().report_path || crash().log_path)
-												}
+												onClick={() => void openPath(crash().report_path || crash().log_path)}
 												disabled={!crash().report_path && !crash().log_path}
 											>
-												Open file
+												{t("instances-extra-crash-open-file")}
 											</Button>
 											<Button
 												size="sm"
@@ -531,7 +486,7 @@ export function CrashTab(props: {
 													})
 												}
 											>
-												Logs
+												{t("instances-extra-crash-logs")}
 											</Button>
 										</div>
 									</div>
@@ -543,18 +498,12 @@ export function CrashTab(props: {
 							<Button
 								size="sm"
 								variant="outline"
-								onClick={() =>
-									void openPath(crash().report_path || crash().log_path)
-								}
+								onClick={() => void openPath(crash().report_path || crash().log_path)}
 							>
-								Open file
+								{t("instances-extra-crash-open-file")}
 							</Button>
-							<Button
-								size="sm"
-								variant="ghost"
-								onClick={() => void clearCrash()}
-							>
-								Clear Crash
+							<Button size="sm" variant="ghost" onClick={() => void clearCrash()}>
+								{t("instances-extra-crash-clear-crash")}
 							</Button>
 						</div>
 					</>

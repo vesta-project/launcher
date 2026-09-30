@@ -1,6 +1,8 @@
 import { type Component, Show } from "solid-js";
 import type { ThemeConfig } from "../../themes/presets";
 import styles from "./theme-preset-card.module.css";
+import { t } from "~/localization";
+import { getThemeDescription } from "../../themes/theme-description";
 
 interface ThemePresetCardProps {
 	theme: ThemeConfig;
@@ -19,6 +21,9 @@ interface ThemePresetCardProps {
  */
 export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 	const previewStyle = () => props.theme.style ?? "glass";
+	const description = () =>
+		getThemeDescription(props.theme) ||
+		previewStyle();
 
 	return (
 		<div
@@ -78,7 +83,7 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 				<div class={styles["theme-preset-card__info"]}>
 					<Show when={props.source === "imported"}>
 						<div class={styles["theme-preset-card__meta"]}>
-							<span class={styles["theme-preset-card__source"]}>Imported</span>
+							<span class={styles["theme-preset-card__source"]}>{t("settings-appearance-filter-imported")}</span>
 						</div>
 					</Show>
 					<span class={styles["theme-preset-card__name"]}>
@@ -87,8 +92,8 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 					<Show when={!props.compact}>
 						<span class={styles["theme-preset-card__description"]}>
 							{props.theme.author
-								? `by ${props.theme.author}`
-								: props.theme.description || previewStyle()}
+								? t("shared-ui-theme-author", { author: props.theme.author })
+								: description()}
 						</span>
 					</Show>
 				</div>
@@ -103,7 +108,7 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 						props.onDelete?.();
 					}}
 				>
-					Delete
+					{t("instances-settings-delete-action")}
 				</button>
 			</Show>
 		</div>

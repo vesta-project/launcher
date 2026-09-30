@@ -26,6 +26,7 @@ import {
 } from "solid-js";
 import { WorldIcon } from "./WorldIcon";
 import styles from "./world-selection-dialog.module.css";
+import { t } from "~/localization";
 
 export type WorldSelectionDialogProps = {
 	isOpen: boolean;
@@ -38,7 +39,7 @@ export type WorldSelectionDialogProps = {
 
 export const worldDisabledReason = (world: WorldSummary): string | null => {
 	if (world.levelStatus === "unreadable")
-		return "This world's level data is unreadable.";
+		return t("shared-ui-world-level-unreadable");
 	return null;
 };
 
@@ -101,10 +102,10 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 		<>
 			<InstanceSelectionDialog
 				isOpen={props.isOpen && instanceId() == null}
-				title="Choose an instance"
-				description={`First choose the instance that owns the world for ${props.projectName ?? "this datapack"}.`}
+				title={t("shared-ui-choose-instance")}
+				description={t("shared-ui-choose-owning-instance-description", { projectName: props.projectName ?? "this datapack" })}
 				options={instanceOptions()}
-				emptyMessage="Create an instance and play a world before installing this datapack."
+				emptyMessage={t("shared-ui-create-instance-before-datapack")}
 				onClose={props.onClose}
 				onSelect={(instance) => selectInstance(instance.id)}
 			/>
@@ -115,7 +116,7 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 			>
 				<DialogContent class={styles.dialog}>
 					<DialogHeader>
-						<DialogTitle>Choose a world</DialogTitle>
+						<DialogTitle>{t("shared-ui-choose-world")}</DialogTitle>
 						<DialogDescription>
 							Install {props.projectName ?? "this datapack"} into one world.
 							Companion packs will use the same instance.
@@ -129,13 +130,13 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 								type="button"
 								onClick={() => setInstanceId(null)}
 							>
-								← Choose another instance
+								{t("shared-ui-choose-another-instance")}
 							</button>
 						</Show>
 
 						<Show
 							when={!loading()}
-							fallback={<div class={styles.loading}>Finding worlds…</div>}
+							fallback={<div class={styles.loading}>{t("instances-worlds-loading")}</div>}
 						>
 							<Show
 								when={!error() && worlds().length > 0}
@@ -143,17 +144,17 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 									<div class={styles.empty}>
 										<strong>
 											{error()
-												? "Worlds could not be loaded"
-												: "No Java worlds yet"}
+												? t("shared-ui-failed-to-load-worlds")
+												: t("shared-ui-no-java-worlds-yet")}
 										</strong>
 										<p>
 											{error() ??
-												`Create and play a world in ${selectedInstance()?.name ?? "this instance"} first, then return here. Vesta will not hold datapacks outside a world.`}
+												t("shared-ui-create-world-before-returning", { instanceName: selectedInstance()?.name ?? "this instance" })}
 										</p>
 									</div>
 								}
 							>
-								<div class={styles.list} aria-label="Worlds">
+								<div class={styles.list} aria-label={t("instances-worlds-section-aria")}>
 									<For each={worlds()}>
 										{(world) => {
 											const disabled = () => worldDisabledReason(world);
@@ -181,8 +182,8 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 															{formatBytes(world.sizeBytes)} ·{" "}
 															{world.gameVersion ??
 																(world.dataVersion != null
-																	? `DataVersion ${world.dataVersion}`
-																	: "Unknown version")}
+																	? t("shared-ui-data-version", { version: world.dataVersion })
+																	: t("shared-ui-unknown-version"))}
 														</span>
 														<Show when={disabled()}>
 															{(reason) => (

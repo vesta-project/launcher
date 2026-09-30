@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import CloseIcon from "@assets/icons/actions/close.svg";
 import Button from "@ui/button/button";
 import { NotificationItem } from "@ui/notification/notification-item";
@@ -88,10 +89,10 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 			}}
 		>
 			<div class={styles["sidebar__notifications-titlebar"]}>
-				<h1>Notifications</h1>
+				<h1>{t("app-shell-notifications")}</h1>
 				<Button
 					icon_only={true}
-					tooltip_text={"Close"}
+					tooltip_text={t("app-shell-close")}
 					onClick={() => props.openChanged(false)}
 					tooltip_placement={"right"}
 					size="sm"
@@ -106,7 +107,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 					notifications().length > 0 ||
 					(persistentNotifs() && (persistentNotifs()?.length ?? 0) > 0)
 				}
-				fallback={<div>Wooo! No Notifications!</div>}
+				fallback={<div>{t("app-shell-no-notifications")}</div>}
 			>
 				<div class={styles.sidebar__notifications__wrapper}>
 					{/* All notifications from backend (includes Immediate which won't persist after restart) */}
@@ -162,7 +163,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 							console.log(`Cleared ${cleared} dismissible notifications`);
 						}}
 					>
-						Clear All
+						{t("app-shell-clear-all")}
 					</Button>
 				</div>
 			</Show>

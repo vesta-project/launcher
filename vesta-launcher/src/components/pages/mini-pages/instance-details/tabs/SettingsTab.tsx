@@ -229,13 +229,13 @@ export const SettingsTab = (p: SettingsTabProps) => {
 			</div>
 
 			<div class={panelStyles["settings-panel"]}>
-				<SettingsCard header="Game options">
+				<SettingsCard header={t("settings-extra-instance-game-options-title")}>
 					<SettingsField
-						label="Minecraft options"
-						description="Edit the options saved by this instance."
+						label={t("settings-extra-instance-game-options-label")}
+						description={t("settings-extra-instance-game-options-description")}
 						headerRight={
 							<Button variant="outline" onClick={p.onOpenGameOptions}>
-								Edit
+								{t("settings-extra-instance-game-options-action")}
 							</Button>
 						}
 					/>
@@ -789,7 +789,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											p.setPreLaunchHook(e.currentTarget.value);
 											p.setIsHooksDirty(true);
 										}}
-										placeholder="e.g. C:\scripts\pre-launch.bat"
+										placeholder={t("settings-extra-pre-launch-example")}
 										style="font-family: var(--font-mono); font-size: 12px;"
 									/>
 								</TextFieldRoot>
@@ -807,7 +807,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											p.setWrapperCommand(e.currentTarget.value);
 											p.setIsHooksDirty(true);
 										}}
-										placeholder="e.g. mangohud --dlsym"
+										placeholder={t("settings-extra-wrapper-example")}
 										style="font-family: var(--font-mono); font-size: 12px;"
 									/>
 								</TextFieldRoot>
@@ -825,7 +825,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											p.setPostExitHook(e.currentTarget.value);
 											p.setIsHooksDirty(true);
 										}}
-										placeholder="e.g. powershell -File C:\scripts\cleanup.ps1"
+										placeholder={t("settings-extra-post-exit-example")}
 										style="font-family: var(--font-mono); font-size: 12px;"
 									/>
 								</TextFieldRoot>
@@ -834,15 +834,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					</Show>
 				</SettingsCard>
 
-				<SettingsCard header="Sandbox">
+				<SettingsCard header={t("sandbox-settings-card-title")}>
 					<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 4px;">
 						<div style="display: flex; flex-direction: column; gap: 2px;">
 							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
-								Use Global Preset
+								{t("sandbox-settings-use-global-preset")}
 							</span>
 							<span style="font-size: 11px; opacity: 0.6;">
-								Link preset and wrapper inclusion only. Extra read-write folders
-								stay instance-editable.
+								{t("sandbox-settings-global-preset-description")}
 							</span>
 						</div>
 						<Switch
@@ -875,7 +874,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							}
 						>
 							<SettingsField
-								label="Preset"
+								label={t("sandbox-settings-preset-option-label")}
 								body={
 									<SandboxPresetSelect
 										value={p.sandboxPreset}
@@ -887,8 +886,10 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								}
 							/>
 							<SettingsField
-								label="Include wrapper in the sandbox"
-								description="When enabled, the wrapper runs inside the game sandbox. When disabled, the wrapper runs outside the sandbox with your normal user access."
+								label={t("sandbox-settings-wrapper-inclusion-label")}
+								description={t(
+									"sandbox-settings-wrapper-inclusion-description",
+								)}
 								headerRight={
 									<Switch
 										checked={p.sandboxWrapperNesting === "sandbox-outside"}
@@ -907,8 +908,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							/>
 						</Show>
 						<SettingsField
-							label="Extra read-write folders"
-							description="The game may read from and write to these folders in addition to its instance folder."
+							label={t("sandbox-settings-extra-folders-label")}
+							description={t("sandbox-settings-extra-folders-description")}
 							body={
 								<PathListEditor
 									paths={p.sandboxExtraPaths}
@@ -917,61 +918,55 @@ export const SettingsTab = (p: SettingsTabProps) => {
 										p.setSandboxExtraPaths(paths);
 										p.setIsSandboxDirty(true);
 									}}
-									addLabel="Add instance-only folder…"
-									emptyLabel="No instance-only folders."
+									addLabel={t("sandbox-settings-add-instance-folder")}
+									emptyLabel={t("sandbox-settings-no-instance-folders")}
 								/>
 							}
 						/>
 					</div>
 				</SettingsCard>
 
-				<SettingsCard header="Maintenance">
+				<SettingsCard header={t("instances-settings-maintenance-title")}>
 					<SettingsField
-						label="Export Instance"
-						description="Pack this instance into a file for sharing or backup."
-						actionLabel="Export…"
+						label={t("instances-settings-export-label")}
+						description={t("instances-settings-export-description")}
+						actionLabel={t("instances-settings-export-action")}
 						onAction={() => p.setShowExportDialog(true)}
 						disabled={p.isGuest || p.busy || p.isInstalling}
 					/>
 					<SettingsField
-						label="Duplicate Instance"
-						description="Create an exact clone of this instance."
-						actionLabel="Duplicate"
+						label={t("instances-settings-duplicate-label")}
+						description={t("instances-settings-duplicate-description")}
+						actionLabel={t("instances-settings-duplicate-action")}
 						onAction={p.handleDuplicate}
 						disabled={p.busy || p.isInstalling}
 					/>
 					<SettingsField
-						label={p.instance.modpackId ? "Repair Files" : "Repair Instance"}
-						description="Verify instance files and re-download anything missing."
-						actionLabel="Repair"
+						label={
+							p.instance.modpackId
+								? t("instances-settings-repair-modpack-label")
+								: t("instances-settings-repair-instance-label")
+						}
+						description={t("instances-settings-repair-description")}
+						actionLabel={t("instances-settings-repair-action")}
 						onAction={() => p.repairInstance(p.instance.id)}
 						disabled={p.isGuest || p.busy || p.isInstalling}
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Danger Zone" destructive>
+				<SettingsCard header={t("instances-settings-danger-title")} destructive>
 					<SettingsField
-						label="Reset Instance"
-						description={
-							<span>
-								Reinstall from scratch and <strong>permanently delete</strong>{" "}
-								worlds, configs, and screenshots.
-							</span>
-						}
-						actionLabel="Reset"
+						label={t("instances-settings-reset-label")}
+						description={t("instances-settings-reset-description")}
+						actionLabel={t("instances-settings-reset-action")}
 						destructive
 						onAction={p.handleHardReset}
 						disabled={p.isGuest || p.busy || p.isInstalling}
 					/>
 					<SettingsField
-						label="Delete Instance"
-						description={
-							<span>
-								Remove this instance and all its files. This action is{" "}
-								<strong>permanent and irreversible</strong>.
-							</span>
-						}
-						actionLabel="Delete"
+						label={t("instances-settings-delete-label")}
+						description={t("instances-settings-delete-description")}
+						actionLabel={t("instances-settings-delete-action")}
 						destructive
 						onAction={p.handleUninstall}
 						disabled={p.isGuest || p.busy || p.isInstalling}

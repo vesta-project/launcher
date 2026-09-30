@@ -41,6 +41,8 @@ impl Task for CloneInstanceTask {
         "Duplicate Instance".to_string()
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-duplicate-instance") }
+
     fn id(&self) -> Option<String> {
         Some(format!("clone_instance_{}", self.source_id))
     }
@@ -68,15 +70,19 @@ impl Task for CloneInstanceTask {
         "Preparing to duplicate instance...".to_string()
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-preparing-duplicate-instance") }
+
     fn completion_description(&self) -> String {
         "Successfully duplicated instance".to_string()
     }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-duplicated-instance") }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         let source_id = self.source_id;
         let new_name_opt = self.new_name.clone();
 
-        ctx.set_title("Duplicating Instance".to_string());
+        ctx.set_title(ctx.text("rust-task-duplicating-instance"));
 
         Box::pin(async move {
             let mut created_instance_id: Option<i32> = None;
@@ -115,7 +121,7 @@ impl Task for CloneInstanceTask {
 
                 ctx.update_full(
                     10,
-                    "Locating source instance files...".to_string(),
+                    ctx.text("rust-task-locating-source-instance-files"),
                     Some(1),
                     Some(4),
                 );
@@ -126,7 +132,7 @@ impl Task for CloneInstanceTask {
                 let source_file_count = count_files_in_directory(&source_dir);
                 ctx.update_full(
                     25,
-                    format!("Copying files for {}...", final_name),
+                    ctx.format_values("rust-task-copying-files-for", &[("instance", &final_name)]),
                     Some(2),
                     Some(4),
                 );
@@ -148,7 +154,7 @@ impl Task for CloneInstanceTask {
 
                 ctx.update_full(
                     55,
-                    "Creating database record...".to_string(),
+                    ctx.text("rust-task-creating-database-record"),
                     Some(3),
                     Some(4),
                 );
@@ -221,7 +227,7 @@ impl Task for CloneInstanceTask {
 
                 ctx.update_full(
                     85,
-                    "Indexing duplicated resources...".to_string(),
+                    ctx.text("rust-task-indexing-duplicated-resources"),
                     Some(4),
                     Some(4),
                 );
@@ -421,6 +427,8 @@ impl Task for ResetInstanceTask {
         "Resetting Instance".to_string()
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-resetting-instance") }
+
     fn id(&self) -> Option<String> {
         Some(format!("reset_instance_{}", self.instance_id))
     }
@@ -444,9 +452,13 @@ impl Task for ResetInstanceTask {
         "Preparing hard reset...".to_string()
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-preparing-hard-reset") }
+
     fn completion_description(&self) -> String {
         "Successfully reset instance".to_string()
     }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-reset-instance-success") }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         let inst_id = self.instance_id;
@@ -461,7 +473,7 @@ impl Task for ResetInstanceTask {
                 .map_err(|e| format!("Instance not found: {}", e))?;
 
             if let Some(ref gd) = inst.game_directory {
-                ctx.update_description("Wiping instance directory...".to_string());
+                ctx.update_description(ctx.text("rust-task-wiping-instance-directory"));
                 let gd_path = PathBuf::from(gd);
                 if gd_path.exists() {
                     let gd_path_clone = gd_path.clone();
@@ -475,7 +487,7 @@ impl Task for ResetInstanceTask {
                 }
             }
 
-            ctx.update_description("Reinstalling...".to_string());
+            ctx.update_description(ctx.text("rust-task-reinstalling"));
             let mut install_task = InstallInstanceTask::new(inst);
             install_task.set_update_notification_title(false);
             install_task.run(ctx).await?;
@@ -516,6 +528,8 @@ impl Task for RepairInstanceTask {
         "Repairing Instance".to_string()
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-repairing-instance") }
+
     fn id(&self) -> Option<String> {
         Some(format!("repair_instance_{}", self.instance_id))
     }
@@ -539,9 +553,13 @@ impl Task for RepairInstanceTask {
         "Preparing repair...".to_string()
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-preparing-repair") }
+
     fn completion_description(&self) -> String {
         "Repair completed".to_string()
     }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-repair-completed") }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         let inst_id = self.instance_id;
@@ -601,7 +619,7 @@ impl Task for RepairInstanceTask {
             // Phase 1: Verification with progress
             ctx.update_full(
                 5,
-                format!("Verifying instance integrity (scope: {})...", repair_scope),
+                ctx.format_values("rust-task-verifying-instance-integrity", &[("scope", repair_scope)]),
                 Some(0),
                 Some(3),
             );
@@ -674,7 +692,7 @@ impl Task for RepairInstanceTask {
             if !verify_result.ready && repair_scope != "resources" {
                 ctx.update_full(
                     30,
-                    "Repairing instance files...".to_string(),
+                    ctx.text("rust-task-repairing-instance-files"),
                     Some(1),
                     Some(3),
                 );
@@ -685,7 +703,7 @@ impl Task for RepairInstanceTask {
             } else if verify_result.ready {
                 ctx.update_full(
                     50,
-                    "Instance files verified — no issues found.".to_string(),
+                    ctx.text("rust-task-instance-files-verified"),
                     Some(2),
                     Some(3),
                 );
@@ -720,7 +738,7 @@ impl Task for RepairInstanceTask {
                     }
                     ctx.update_full(
                         85,
-                        "Repairing modpack files...".to_string(),
+                        ctx.text("rust-task-repairing-modpack-files"),
                         Some(2),
                         Some(3),
                     );
@@ -767,7 +785,7 @@ impl Task for RepairInstanceTask {
                     );
                     ctx.update_full(
                         85,
-                        "Reconstructing modpack manifest...".to_string(),
+                        ctx.text("rust-task-reconstructing-modpack-manifest"),
                         Some(2),
                         Some(3),
                     );
@@ -845,7 +863,7 @@ impl Task for RepairInstanceTask {
             };
             ctx.update_full(95, final_desc, Some(3), Some(3));
 
-            ctx.update_description("Setting up Java runtime...".to_string());
+            ctx.update_description(ctx.text("rust-task-setting-up-java-runtime"));
             if let Err(e) =
                 crate::utils::java::ensure_java_for_instance(&app_handle, &inst, None, None).await
             {
@@ -903,6 +921,8 @@ impl Task for DeleteInstanceTask {
         "Deleting Instance".to_string()
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-deleting-instance") }
+
     fn id(&self) -> Option<String> {
         Some(format!("delete_instance_{}", self.instance_id))
     }
@@ -926,16 +946,20 @@ impl Task for DeleteInstanceTask {
         "Preparing uninstall...".to_string()
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-preparing-uninstall") }
+
     fn completion_description(&self) -> String {
         "Instance deleted".to_string()
     }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String { localization.text("rust-task-instance-deleted") }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         let instance_id = self.instance_id;
 
         Box::pin(async move {
             log::info!("[delete_instance_task] start instance_id={}", instance_id);
-            ctx.update_full(5, "Stopping watcher...".to_string(), Some(1), Some(5));
+            ctx.update_full(5, ctx.text("rust-task-stopping-watcher"), Some(1), Some(5));
             let watcher = ctx
                 .app_handle
                 .state::<crate::resources::watcher::ResourceWatcher>();
@@ -1012,7 +1036,7 @@ impl Task for DeleteInstanceTask {
             })
             .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
 
-            ctx.update_full(95, "Finalizing...".to_string(), Some(5), Some(5));
+            ctx.update_full(95, ctx.text("rust-task-finalizing"), Some(5), Some(5));
             use tauri::Emitter;
             let _ = ctx.app_handle.emit(
                 "core://instance-deleted",

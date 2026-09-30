@@ -23,6 +23,7 @@ import {
 } from "solid-js";
 import { WorldIcon } from "./WorldIcon";
 import styles from "./world-archive-selection-dialog.module.css";
+import { t } from "~/localization";
 
 export const WorldArchiveSelectionDialog: Component = () => {
 	const [request, setRequest] =
@@ -115,14 +116,14 @@ export const WorldArchiveSelectionDialog: Component = () => {
 		>
 			<DialogContent class={styles.dialog}>
 				<DialogHeader>
-					<DialogTitle>Choose worlds to install</DialogTitle>
+					<DialogTitle>{t("shared-ui-choose-worlds-to-install")}</DialogTitle>
 					<DialogDescription>
-						This archive for {request()?.project?.name ?? "this project"}{" "}
-						contains more than one Java world. Select the worlds you want to
-						add.
+						{t("shared-ui-world-archive-description", {
+							projectName: request()?.project?.name ?? "this project",
+						})}
 					</DialogDescription>
 				</DialogHeader>
-				<div class={styles.list} aria-label="Detected worlds">
+				<div class={styles.list} aria-label={t("shared-ui-detected-worlds")}>
 					<For each={request()?.candidates ?? []}>
 						{(candidate) => (
 							<label
@@ -141,8 +142,8 @@ export const WorldArchiveSelectionDialog: Component = () => {
 										{candidate.folder} · {formatBytes(candidate.sizeBytes)} ·{" "}
 										{candidate.gameVersion ??
 											(candidate.dataVersion != null
-												? `DataVersion ${candidate.dataVersion}`
-												: "Unknown version")}
+												? t("shared-ui-data-version", { version: candidate.dataVersion })
+												: t("shared-ui-unknown-version"))}
 									</span>
 								</span>
 							</label>
@@ -158,7 +159,7 @@ export const WorldArchiveSelectionDialog: Component = () => {
 						disabled={submitting()}
 						onClick={() => void submit([])}
 					>
-						Cancel
+						{t("shared-ui-cancel")}
 					</Button>
 					<Button
 						variant="outline"
@@ -169,14 +170,14 @@ export const WorldArchiveSelectionDialog: Component = () => {
 							)
 						}
 					>
-						Install all
+						{t("shared-ui-install-all")}
 					</Button>
 					<Button
 						color="primary"
 						disabled={submitting() || selected().length === 0}
 						onClick={() => void submit(selected())}
 					>
-						Install selected
+						{t("shared-ui-install-selected")}
 					</Button>
 				</div>
 			</DialogContent>

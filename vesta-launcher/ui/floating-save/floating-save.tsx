@@ -1,6 +1,7 @@
 import Button from "@ui/button/button";
 import { Show } from "solid-js";
 import styles from "./floating-save.module.css";
+import { t } from "~/localization";
 
 export interface FloatingSaveProps {
 	message?: string;
@@ -19,7 +20,7 @@ export function FloatingSave(props: FloatingSaveProps) {
 			class={`${styles["floating-save-footer"]} ${props.position === "absolute" ? styles.absolute : ""} ${props.class || ""}`}
 		>
 			<div class={styles["save-footer-content"]}>
-				<p>{props.message || "You have unsaved changes"}</p>
+				<p>{props.message || t("shared-ui-unsaved-changes")}</p>
 				<div class={styles["save-footer-actions"]}>
 					<Show when={props.onCancel}>
 						{(onCancel) => (
@@ -28,7 +29,7 @@ export function FloatingSave(props: FloatingSaveProps) {
 								onClick={onCancel()}
 								disabled={props.isSaving}
 							>
-								{props.cancelText || "Cancel"}
+								{props.cancelText || t("shared-ui-cancel")}
 							</Button>
 						)}
 					</Show>
@@ -37,7 +38,7 @@ export function FloatingSave(props: FloatingSaveProps) {
 						onClick={props.onSave}
 						disabled={props.isSaving}
 					>
-						{props.saveText || "Save"}
+						{props.saveText || t("shared-ui-save")}
 					</Button>
 				</div>
 			</div>

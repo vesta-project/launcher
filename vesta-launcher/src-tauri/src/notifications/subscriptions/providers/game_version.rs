@@ -5,6 +5,7 @@ use crate::notifications::subscriptions::{
 use crate::utils::version_tracking::VersionTrackingRepository;
 use anyhow::Result;
 use async_trait::async_trait;
+use tauri::Manager;
 
 pub struct GameVersionProvider;
 
@@ -46,11 +47,13 @@ impl SubscriptionProvider for GameVersionProvider {
         if VersionTrackingRepository::is_version_newer("minecraft_release", latest_release)? {
             items.push(NotificationUpdateItem {
                 id: format!("minecraft_release_{}", latest_release),
-                title: "New Minecraft Release Available".to_string(),
-                description: Some(format!(
-                    "Minecraft {} is now available for download!",
-                    latest_release
-                )),
+                title: _app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-new-minecraft-release-title"),
+                description: {
+                    let localization = _app_handle.state::<crate::localization::LocalizationManager>();
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("version", latest_release.as_str());
+                    Some(localization.format("rust-native-new-minecraft-release-description", Some(&args)))
+                },
                 link: None,
                 metadata: serde_json::json!({
                     "version": latest_release,
@@ -68,11 +71,13 @@ impl SubscriptionProvider for GameVersionProvider {
         if VersionTrackingRepository::is_version_newer("minecraft_snapshot", latest_snapshot)? {
             items.push(NotificationUpdateItem {
                 id: format!("minecraft_snapshot_{}", latest_snapshot),
-                title: "New Minecraft Snapshot Available".to_string(),
-                description: Some(format!(
-                    "Minecraft snapshot {} is now available for testing!",
-                    latest_snapshot
-                )),
+                title: _app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-new-minecraft-snapshot-title"),
+                description: {
+                    let localization = _app_handle.state::<crate::localization::LocalizationManager>();
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("version", latest_snapshot.as_str());
+                    Some(localization.format("rust-native-new-minecraft-snapshot-description", Some(&args)))
+                },
                 link: None,
                 metadata: serde_json::json!({
                     "version": latest_snapshot,

@@ -1,5 +1,6 @@
 import { dialogStore } from "@stores/dialog-store";
 import { open } from "@tauri-apps/plugin-shell";
+import { t } from "~/localization";
 
 /**
  * Whitelist for URLs that don't need a warning.
@@ -48,12 +49,12 @@ export async function openExternal(
 	}
 
 	const confirmed = await dialogStore.confirm(
-		options.title ?? "Open External Link",
+		options.title ?? t("action-open-external-link-title"),
 		options.description ??
-			`This link will open in your default web browser:\n\n${url}\n\nDo you want to continue?`,
+			t("action-open-external-link-description", { url }),
 		{
-			okLabel: "Open Link",
-			cancelLabel: "Stay in App",
+			okLabel: t("action-open-external-link-ok"),
+			cancelLabel: t("action-open-external-link-cancel"),
 			severity: "question",
 		},
 	);

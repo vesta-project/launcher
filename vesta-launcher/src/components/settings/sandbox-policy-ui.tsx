@@ -29,18 +29,19 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { t } from "~/localization";
 import styles from "./sandbox-policy.module.css";
 
 export type SandboxPresetValue = "trusted" | "modded" | "paranoid";
 export type SandboxWrapperNestingValue = "sandbox-outside" | "wrapper-outside";
 
-export const SANDBOX_PRESET_OPTIONS: {
+const getSandboxPresetOptions = (): {
 	value: SandboxPresetValue;
 	label: string;
-}[] = [
-	{ value: "trusted", label: "Trusted" },
-	{ value: "modded", label: "Modded" },
-	{ value: "paranoid", label: "Paranoid" },
+}[] => [
+	{ value: "trusted", label: t("sandbox-preset-trusted") },
+	{ value: "modded", label: t("sandbox-preset-modded") },
+	{ value: "paranoid", label: t("sandbox-preset-paranoid") },
 ];
 
 function CapabilityChip(props: {
@@ -73,48 +74,58 @@ export function SandboxPresetOptionLabel(props: {
 	return (
 		<div class={styles.presetOption}>
 			<span class={styles.presetLabel}>
-				{SANDBOX_PRESET_OPTIONS.find((option) => option.value === props.preset)
-					?.label ?? props.preset}
+				{getSandboxPresetOptions().find(
+					(option) => option.value === props.preset,
+				)?.label ?? props.preset}
 			</span>
 			<span class={styles.capabilityRow}>
 				{props.preset === "trusted" && (
 					<CapabilityChip
 						icon={<ShieldOffIcon />}
-						label="No sandbox enforcement"
+						label={t("sandbox-capability-none")}
 					/>
 				)}
 				{props.preset === "modded" && (
 					<>
 						<CapabilityChip
 							icon={<ShieldCheckIcon />}
-							label="Sandbox enforced"
+							label={t("sandbox-capability-enforced")}
 						/>
 						<CapabilityChip
 							icon={<FolderLockIcon />}
-							label="Files restricted"
+							label={t("sandbox-capability-files-restricted")}
 						/>
-						<CapabilityChip icon={<NetworkIcon />} label="Network allowed" />
-						<CapabilityChip icon={<MicIcon />} label="Microphone allowed" />
+						<CapabilityChip
+							icon={<NetworkIcon />}
+							label={t("sandbox-capability-network-allowed")}
+						/>
+						<CapabilityChip
+							icon={<MicIcon />}
+							label={t("sandbox-capability-mic-allowed")}
+						/>
 					</>
 				)}
 				{props.preset === "paranoid" && (
 					<>
-						<CapabilityChip icon={<LockIcon />} label="Strict sandbox" />
+						<CapabilityChip
+							icon={<LockIcon />}
+							label={t("sandbox-capability-strict")}
+						/>
 						<CapabilityChip
 							icon={<FolderLockIcon />}
-							label="Files restricted"
+							label={t("sandbox-capability-files-restricted")}
 						/>
 						<CapabilityChip
 							icon={<NetworkIcon />}
 							off
 							denied
-							label="Network blocked"
+							label={t("sandbox-capability-network-blocked")}
 						/>
 						<CapabilityChip
 							icon={<MicOffIcon />}
 							off
 							denied
-							label="Microphone blocked"
+							label={t("sandbox-capability-mic-blocked")}
 						/>
 					</>
 				)}
@@ -133,12 +144,11 @@ export function SandboxHostNotice(props: {
 		}
 		if (support.enforcementAvailable) {
 			return support.hostOs === "linux"
-				? "On Linux, Paranoid blocks microphone access by also disabling game audio playback."
+				? t("sandbox-host-notice-linux-paranoid-audio")
 				: null;
 		}
 		return (
-			support.missingRequirementMessage ??
-			"Modded and Paranoid sandbox presets cannot be enforced on this system."
+			support.missingRequirementMessage ?? t("sandbox-host-notice-fallback")
 		);
 	});
 
@@ -184,10 +194,10 @@ export function SandboxPresetSelect(props: {
 	value: SandboxPresetValue;
 	onChange: (value: SandboxPresetValue) => void;
 }) {
+	const options = createMemo(getSandboxPresetOptions);
 	const selected = createMemo(
 		() =>
-			SANDBOX_PRESET_OPTIONS.find((option) => option.value === props.value) ??
-			SANDBOX_PRESET_OPTIONS[0],
+			options().find((option) => option.value === props.value) ?? options()[0],
 	);
 
 	const handleChange = async (next: SandboxPresetValue) => {
@@ -207,7 +217,7 @@ export function SandboxPresetSelect(props: {
 
 	return (
 		<Select
-			options={SANDBOX_PRESET_OPTIONS}
+			options={options()}
 			optionValue="value"
 			optionTextValue="label"
 			value={selected()}
@@ -223,7 +233,7 @@ export function SandboxPresetSelect(props: {
 			)}
 		>
 			<SelectTrigger>
-				<SelectValue<(typeof SANDBOX_PRESET_OPTIONS)[number]>>
+				<SelectValue<{ value: SandboxPresetValue; label: string }>>
 					{(state) => (
 						<SandboxPresetOptionLabel preset={state.selectedOption().value} />
 					)}

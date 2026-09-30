@@ -7,6 +7,7 @@ import {
 	resolveLocale,
 	SYSTEM_LANGUAGE,
 	t,
+	tPlain,
 } from "./index";
 
 describe("localization", () => {
@@ -43,6 +44,14 @@ describe("localization", () => {
 	it("formats catalog messages and exposes missing keys safely", () => {
 		expect(t("settings-language-label")).toBe("Launcher language");
 		expect(t("missing-message-id")).toBe("missing-message-id");
+	});
+
+	it("removes Fluent isolation marks from plain values only", () => {
+		expect(t("action-duplicate-instance-default-name", { instanceName: "World" }))
+			.toContain("\u2068World\u2069");
+		expect(tPlain("action-duplicate-instance-default-name", { instanceName: "World" }))
+			.toBe("World (Copy)");
+		expect(tPlain("settings-language-label")).toBe("Launcher language");
 	});
 
 	it("formats numbers with the effective locale", () => {

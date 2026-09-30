@@ -59,6 +59,10 @@ impl Task for InstallInstanceTask {
         format!("Install {}", self.instance.name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-install-instance", &[("instance", &self.instance.name)])
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!("install_instance_{}", self.instance.id))
     }
@@ -103,8 +107,25 @@ impl Task for InstallInstanceTask {
         }
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        let modloader = self.instance.modloader.as_deref().unwrap_or("vanilla");
+        let mut values = vec![("version", self.instance.minecraft_version.as_str()), ("modloader", modloader)];
+        if modloader != "vanilla" {
+            if let Some(loader_version) = self.instance.modloader_version.as_deref() {
+                values.push(("loader_version", loader_version));
+                return crate::tasks::manager::localized_message(localization, "rust-task-install-minecraft-with-loader-version", &values);
+            }
+            return crate::tasks::manager::localized_message(localization, "rust-task-install-minecraft-with-loader", &values);
+        }
+        crate::tasks::manager::localized_message(localization, "rust-task-install-minecraft", &values)
+    }
+
     fn completion_description(&self) -> String {
         format!("Successfully installed {}", self.instance.name)
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-installed-instance", &[("instance", &self.instance.name)])
     }
 
     fn show_completion_notification(&self) -> bool {
@@ -121,7 +142,7 @@ impl Task for InstallInstanceTask {
         let pause_rx = ctx.pause_rx.clone();
 
         if update_notification_title {
-            ctx.set_title(format!("Installing {}", instance.name));
+            ctx.set_title(ctx.format_values("rust-task-install-instance", &[("instance", &instance.name)]));
         }
 
         Box::pin(async move {
@@ -221,13 +242,13 @@ impl Task for InstallInstanceTask {
                         vec![
                             crate::notifications::models::NotificationAction {
                                 action_id: "cancel_task".to_string(),
-                                label: "Cancel".to_string(),
+                                label: ctx.text("shared-ui-cancel"),
                                 action_type: "secondary".to_string(),
                                 payload: None,
                             },
                             crate::notifications::models::NotificationAction {
                                 action_id: "resume_task".to_string(),
-                                label: "Resume".to_string(),
+                                label: ctx.text("rust-task-action-resume"),
                                 action_type: "primary".to_string(),
                                 payload: None,
                             },
@@ -236,13 +257,13 @@ impl Task for InstallInstanceTask {
                         vec![
                             crate::notifications::models::NotificationAction {
                                 action_id: "cancel_task".to_string(),
-                                label: "Cancel".to_string(),
+                                label: ctx.text("shared-ui-cancel"),
                                 action_type: "secondary".to_string(),
                                 payload: None,
                             },
                             crate::notifications::models::NotificationAction {
                                 action_id: "pause_task".to_string(),
-                                label: "Pause".to_string(),
+                                label: ctx.text("rust-task-action-pause"),
                                 action_type: "secondary".to_string(),
                                 payload: None,
                             },
@@ -253,7 +274,7 @@ impl Task for InstallInstanceTask {
                         manager.update_notification_actions(pause_notification_id.clone(), actions);
 
                     if is_paused {
-                        let _ = manager.upsert_description(&pause_notification_id, "Paused");
+                        let _ = manager.upsert_description(&pause_notification_id, ctx.text("rust-task-paused"));
                     } else {
                         // Restore the current step description when resuming
                         let step = current_step_for_pause.read().await;

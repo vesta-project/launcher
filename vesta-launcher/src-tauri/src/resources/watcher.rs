@@ -803,7 +803,16 @@ pub fn resolve_override_conflicts(
         .join("\n");
     let remaining = disabled.len().saturating_sub(8);
     let suffix = if remaining > 0 {
-        format!("\n…and {} more.", remaining)
+        let remaining_text = remaining.to_string();
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("remaining", remaining_text.as_str());
+        format!(
+            "\n{}",
+            app.state::<crate::localization::LocalizationManager>().format(
+                "rust-native-modpack-versions-restored-suffix",
+                Some(&args),
+            )
+        )
     } else {
         String::new()
     };
@@ -811,11 +820,15 @@ pub fn resolve_override_conflicts(
     let manager = app.state::<NotificationManager>();
     let _ = manager.create(CreateNotificationInput {
         client_key: Some(format!("modpack_override_conflicts_{}", instance_id)),
-        title: Some("Duplicate mod versions resolved".to_string()),
-        description: Some(format!(
-            "Vesta kept the preferred copy of each duplicate and disabled the others:\n{}{}",
-            visible, suffix
-        )),
+        title: Some(app.state::<crate::localization::LocalizationManager>().text("rust-native-modpack-versions-restored-title")),
+        description: {
+            let localization = app.state::<crate::localization::LocalizationManager>();
+            let mut args = fluent_bundle::FluentArgs::new();
+            args.set("lineBreak", "\n");
+            args.set("items", visible.as_str());
+            args.set("suffix", suffix.as_str());
+            Some(localization.format("rust-native-modpack-versions-restored-description", Some(&args)))
+        },
         severity: Some("info".to_string()),
         notification_type: Some(NotificationType::Patient),
         dismissible: Some(true),

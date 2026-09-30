@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
 		handlerId: "app.reload",
 		label: "Reload current page",
 		description: "Reload the current page.",
-		category: "Application",
+		category: "settings-extra-keybinding-category-application",
 		defaultChord: "Mod+KeyR",
 		currentChord: "Mod+KeyR",
 		customized: false,
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => {
 		handlerId: "app.close",
 		label: "Close current page",
 		description: "Close the current page.",
-		category: "Application",
+		category: "settings-extra-keybinding-category-application",
 		defaultChord: "Mod+KeyW",
 		currentChord: "Mod+KeyW",
 		customized: false,
@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => {
 	return {
 		reload,
 		close,
+		commands: [reload, close],
 		assign: vi.fn(),
 		clear: vi.fn(),
 		reset: vi.fn(),
@@ -42,7 +43,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("~/keybindings/store", () => ({
-	keybindingCommands: () => [mocks.reload, mocks.close],
+	keybindingCommands: () => mocks.commands,
 	keybindingsLoading: () => false,
 	keybindingsPersistenceError: () => undefined,
 	assignKeybinding: mocks.assign,
@@ -61,6 +62,7 @@ describe("Keyboard settings", () => {
 		mocks.assign.mockReset();
 		mocks.clear.mockReset();
 		mocks.reset.mockReset();
+		mocks.commands.splice(0, mocks.commands.length, mocks.reload, mocks.close);
 	});
 
 	afterEach(() => cleanup());
@@ -79,7 +81,7 @@ describe("Keyboard settings", () => {
 
 		fireEvent.click(
 			screen.getByRole("button", {
-				name: "Change shortcut for Reload current page",
+				name: /^Change shortcut for \u2068?Reload current page\u2069?$/,
 			}),
 		);
 		fireEvent.keyDown(window, {
@@ -113,7 +115,7 @@ describe("Keyboard settings", () => {
 
 		fireEvent.click(
 			screen.getByRole("button", {
-				name: "Change shortcut for Reload current page",
+				name: /^Change shortcut for \u2068?Reload current page\u2069?$/,
 			}),
 		);
 		fireEvent.keyDown(window, {
@@ -132,5 +134,25 @@ describe("Keyboard settings", () => {
 				true,
 			),
 		);
+	});
+
+	it("renders stable category IDs as translated English headings", () => {
+		const navigation = {
+			...mocks.reload,
+			commandId: "navigation.back",
+			handlerId: "navigation.back",
+			label: "Go back",
+			description: "Move to the previous page in Vesta history.",
+			category: "settings-extra-keybinding-category-navigation",
+			sortOrder: 10,
+		};
+		mocks.commands.push(navigation);
+
+		render(() => <KeyboardSettingsTab />);
+
+		expect(screen.getByText("Application")).toBeTruthy();
+		expect(screen.getByText("Navigation")).toBeTruthy();
+		expect(screen.getByText("Reload current page")).toBeTruthy();
+		expect(screen.getByText("Go back")).toBeTruthy();
 	});
 });

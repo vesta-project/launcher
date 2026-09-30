@@ -3,6 +3,7 @@ import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
 import SmithedIcon from "@assets/branding/sources/smithed.svg";
 import type { ResourceType, SourcePlatform } from "@stores/resources";
 import type { Component } from "solid-js";
+import { t } from "~/localization";
 
 export type SourceSortOption = {
 	label: string;
@@ -29,7 +30,9 @@ export type SourceDescriptor = {
 export const RESOURCE_SOURCES: SourceDescriptor[] = [
 	{
 		id: "modrinth",
-		label: "Modrinth",
+		get label() {
+			return t("resources-source-modrinth");
+		},
 		Icon: ModrinthIcon,
 		supportedResourceTypes: [
 			"mod",
@@ -41,11 +44,36 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		],
 		defaultSort: "relevance",
 		sortOptions: [
-			{ label: "Relevance", value: "relevance" },
-			{ label: "Downloads", value: "downloads" },
-			{ label: "Followers", value: "follows" },
-			{ label: "Newest", value: "newest" },
-			{ label: "Updated", value: "updated" },
+			{
+				get label() {
+					return t("resources-source-sort-relevance");
+				},
+				value: "relevance",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-downloads");
+				},
+				value: "downloads",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-followers");
+				},
+				value: "follows",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-newest");
+				},
+				value: "newest",
+			},
+			{
+				get label() {
+					return t("resources-details-updated");
+				},
+				value: "updated",
+			},
 		],
 		supportsHashLookup: true,
 		peerPlatforms: ["curseforge"],
@@ -54,7 +82,9 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 	},
 	{
 		id: "curseforge",
-		label: "CurseForge",
+		get label() {
+			return t("resources-source-curseforge");
+		},
 		Icon: CurseForgeIcon,
 		supportedResourceTypes: [
 			"mod",
@@ -66,14 +96,54 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 		],
 		defaultSort: "featured",
 		sortOptions: [
-			{ label: "Featured", value: "featured" },
-			{ label: "Popularity", value: "popularity" },
-			{ label: "Last Updated", value: "updated" },
-			{ label: "Newest", value: "newest" },
-			{ label: "Rating", value: "rating" },
-			{ label: "Name", value: "name" },
-			{ label: "Author", value: "author" },
-			{ label: "Total Downloads", value: "total_downloads" },
+			{
+				get label() {
+					return t("resources-source-sort-featured");
+				},
+				value: "featured",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-popularity");
+				},
+				value: "popularity",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-last-updated");
+				},
+				value: "updated",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-newest");
+				},
+				value: "newest",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-rating");
+				},
+				value: "rating",
+			},
+			{
+				get label() {
+					return t("instances-worlds-sort-name");
+				},
+				value: "name",
+			},
+			{
+				get label() {
+					return t("shared-ui-author");
+				},
+				value: "author",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-total-downloads");
+				},
+				value: "total_downloads",
+			},
 		],
 		supportsHashLookup: true,
 		peerPlatforms: ["modrinth"],
@@ -82,15 +152,37 @@ export const RESOURCE_SOURCES: SourceDescriptor[] = [
 	},
 	{
 		id: "smithed",
-		label: "Smithed",
+		get label() {
+			return t("resources-source-smithed");
+		},
 		Icon: SmithedIcon,
 		supportedResourceTypes: ["datapack"],
 		defaultSort: "trending",
 		sortOptions: [
-			{ label: "Trending", value: "trending" },
-			{ label: "Downloads", value: "downloads" },
-			{ label: "Name", value: "alphabetically" },
-			{ label: "Newest", value: "newest" },
+			{
+				get label() {
+					return t("resources-source-sort-trending");
+				},
+				value: "trending",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-downloads");
+				},
+				value: "downloads",
+			},
+			{
+				get label() {
+					return t("instances-worlds-sort-name");
+				},
+				value: "alphabetically",
+			},
+			{
+				get label() {
+					return t("resources-source-sort-newest");
+				},
+				value: "newest",
+			},
 		],
 		supportsHashLookup: false,
 		peerPlatforms: [],

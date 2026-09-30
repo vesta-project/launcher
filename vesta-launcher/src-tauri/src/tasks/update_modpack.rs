@@ -30,10 +30,7 @@ impl UpdateModpackTask {
     async fn wait_for_instance_exit(game_dir: &PathBuf, ctx: &TaskContext) -> Result<(), String> {
         let mut cancel = ctx.cancel_rx.clone();
         while safeguards::check_instance_not_running(game_dir).is_err() {
-            ctx.update_description(
-                "Update queued — close Minecraft for this instance to continue, or cancel."
-                    .to_string(),
-            );
+            ctx.update_description(ctx.text("rust-task-checking-minecraft-stopped"));
             if *cancel.borrow() {
                 return Err("Update cancelled".to_string());
             }
@@ -53,6 +50,10 @@ impl UpdateModpackTask {
 impl Task for UpdateModpackTask {
     fn name(&self) -> String {
         "Updating Modpack".to_string()
+    }
+
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-updating-modpack")
     }
 
     fn id(&self) -> Option<String> {
@@ -82,11 +83,19 @@ impl Task for UpdateModpackTask {
         format!("Preparing the modpack update for ‘{}’…", self.instance_name)
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-preparing-modpack-update")
+    }
+
     fn completion_description(&self) -> String {
         format!(
             "Updated the modpack for ‘{}’ successfully.",
             self.instance_name
         )
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-modpack-updated-successfully")
     }
 
     fn failure_description(&self, error: &str) -> String {
@@ -210,12 +219,7 @@ impl Task for UpdateModpackTask {
                 let skipped_deletions = outcome.skipped_deletions;
                 let preserved_worlds = outcome.preserved_worlds;
 
-                ctx.update_full(
-                    90,
-                    "Saving manifest and finalizing...".to_string(),
-                    Some(5),
-                    Some(6),
-                );
+                ctx.update_full(90, ctx.text("rust-task-saving-manifest-finalizing"), Some(5), Some(6));
                 let finished = match crate::modpack::update::finish(
                     &app_handle,
                     &ctx,
@@ -298,30 +302,30 @@ impl Task for UpdateModpackTask {
                 finished.publish(&app_handle, instance_id);
                 sync_result?;
 
-                let skipped_msg = if skipped_deletions > 0 {
-                    format!(" ({} user-modified files were kept)", skipped_deletions)
+                let version = plan.new_manifest.version.to_string();
+                let skipped = skipped_deletions.to_string();
+                let preserved = preserved_worlds.to_string();
+                let message_id = if already_up_to_date {
+                    "rust-task-modpack-already-up-to-date"
                 } else {
-                    String::new()
+                    match (skipped_deletions > 0, preserved_worlds > 0) {
+                        (true, true) => "rust-task-modpack-updated-with-skipped-and-preserved",
+                        (true, false) => "rust-task-modpack-updated-with-skipped",
+                        (false, true) => "rust-task-modpack-updated-with-preserved",
+                        (false, false) => "rust-task-modpack-updated",
+                    }
                 };
-                let world_msg = if preserved_worlds > 0 {
-                    format!(
-                        " {} world save(s) were preserved in timestamped folders.",
-                        preserved_worlds
+                let description = if already_up_to_date {
+                    ctx.text(message_id)
+                } else {
+                    ctx.format_values(
+                        message_id,
+                        &[("version", &version), ("skipped", &skipped), ("preserved", &preserved)],
                     )
-                } else {
-                    String::new()
                 };
-
                 ctx.update_full(
                     100,
-                    if already_up_to_date {
-                        "Modpack is already up to date.".to_string()
-                    } else {
-                        format!(
-                            "Modpack updated to version {} successfully.{}{}",
-                            plan.new_manifest.version, skipped_msg, world_msg
-                        )
-                    },
+                    description,
                     Some(6),
                     Some(6),
                 );

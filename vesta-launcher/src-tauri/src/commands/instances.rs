@@ -791,10 +791,13 @@ pub async fn install_instance(
             {
                 let _ = nm.create(crate::notifications::models::CreateNotificationInput {
                     client_key: None,
-                    title: Some("Login Required".to_string()),
-                    description: Some(
-                        format!("You must be signed in with a Microsoft account to install Minecraft. (Current: {})", acc.account_type)
-                    ),
+                    title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-login-required-title")),
+                    description: {
+                        let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                        let mut args = fluent_bundle::FluentArgs::new();
+                        args.set("accountType", acc.account_type.as_str());
+                        Some(localization.format("rust-native-login-required-install-description", Some(&args)))
+                    },
                     severity: Some("warning".to_string()),
                     notification_type: Some(
                         crate::notifications::models::NotificationType::Immediate,

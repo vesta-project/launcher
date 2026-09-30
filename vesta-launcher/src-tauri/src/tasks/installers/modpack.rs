@@ -227,6 +227,14 @@ impl Task for InstallModpackTask {
         format!("Install Modpack {}", self.instance.name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(
+            localization,
+            "rust-task-install-modpack",
+            &[("instance", &self.instance.name)],
+        )
+    }
+
     fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
         Some(crate::notifications::models::NotificationContext::instance(
             self.instance.id,

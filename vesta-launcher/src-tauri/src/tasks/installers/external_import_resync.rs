@@ -29,6 +29,10 @@ impl Task for ImportResourceResyncTask {
         format!("Resync imported resources for {}", self.instance_name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-resync-imported-resources", &[("instance", &self.instance_name)])
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!("import_resync_instance_{}", self.instance_id))
     }
@@ -52,8 +56,16 @@ impl Task for ImportResourceResyncTask {
         format!("Starting resource resync for {}...", self.instance_name)
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-starting-resource-resync", &[("instance", &self.instance_name)])
+    }
+
     fn completion_description(&self) -> String {
         format!("Resync completed for {}", self.instance_name)
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-resource-resync-completed", &[("instance", &self.instance_name)])
     }
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
@@ -142,7 +154,7 @@ impl Task for ImportResourceResyncTask {
                     }
                     _ = tokio::time::sleep(tokio::time::Duration::from_secs(3)) => {
                         if last_heartbeat.elapsed().as_secs() >= 3 {
-                            ctx.update_description("Resyncing imported resources... still working".to_string());
+                            ctx.update_description(ctx.text("rust-task-resyncing-imported-resources-working"));
                             last_heartbeat = std::time::Instant::now();
                         }
                     }
@@ -285,7 +297,7 @@ impl Task for ImportResourceResyncTask {
                 return Err("Resync cancelled".to_string());
             }
 
-            ctx.update_description("Setting up Java runtime...".to_string());
+            ctx.update_description(ctx.text("rust-task-setting-up-java-runtime"));
             if let Err(e) = crate::utils::java::ensure_java_for_instance(
                 &app_handle,
                 &target_instance,

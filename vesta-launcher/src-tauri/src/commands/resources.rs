@@ -234,8 +234,9 @@ pub async fn rescan_instance_resources(
 
     let targeted = resource_ids.as_ref().is_some_and(|ids| !ids.is_empty());
     if !targeted {
+        let localization = app_handle.state::<crate::localization::LocalizationManager>();
         let _ = progress_channel.send(ProgressUpdate::Step {
-            name: "Discovering local resources…".to_string(),
+            name: localization.text("rust-task-discovering-local-resources"),
             total: None,
         });
         resource_watcher
@@ -253,10 +254,21 @@ pub async fn rescan_instance_resources(
 
     let total = candidates.len();
     let channel = progress_channel.clone();
+    let progress_app_handle = app_handle.clone();
     let progress = std::sync::Arc::new(move |current: usize, total: usize| {
+        let localization = progress_app_handle
+            .state::<crate::localization::LocalizationManager>();
+        let current_text = current.to_string();
+        let total_text = total.to_string();
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("current", current_text.as_str());
+        args.set("total", total_text.as_str());
         let _ = channel.send(ProgressUpdate::Progress {
             percent: PROGRESS_INDETERMINATE,
-            description: Some(format!("Hashing local resources… {current}/{total}")),
+            description: Some(localization.format(
+                "rust-task-hashing-local-resources-progress",
+                Some(&args),
+            )),
             severity: None,
         });
         let _ = channel.send(ProgressUpdate::StepCount {
@@ -264,8 +276,9 @@ pub async fn rescan_instance_resources(
             total: Some(total as u32),
         });
     }) as crate::resources::reconciliation::LocalFactProgress;
+    let localization = app_handle.state::<crate::localization::LocalizationManager>();
     let _ = progress_channel.send(ProgressUpdate::Step {
-        name: "Hashing local resources…".to_string(),
+        name: localization.text("rust-task-hashing-local-resources"),
         total: Some(total as u32),
     });
     let prepared = crate::resources::reconciliation::prepare_candidates_with_progress(
@@ -276,8 +289,9 @@ pub async fn rescan_instance_resources(
     .await;
     let hashed = prepared.len();
 
+    let localization = app_handle.state::<crate::localization::LocalizationManager>();
     let _ = progress_channel.send(ProgressUpdate::Step {
-        name: "Matching with Modrinth and CurseForge…".to_string(),
+        name: localization.text("rust-task-matching-resource-sources"),
         total: Some(hashed as u32),
     });
     let summary = crate::resources::reconciliation::reconcile_prepared_candidates(
@@ -304,15 +318,21 @@ pub async fn rescan_instance_resources(
     } else {
         "partial"
     };
+    let localization = app_handle.state::<crate::localization::LocalizationManager>();
     let message = if scanned == 0 {
-        "No unlinked resources need identification.".to_string()
+        localization.text("rust-task-resource-identification-none")
     } else if summary.unresolved == 0 {
-        format!("Identified {} resources.", summary.identified)
+        let identified = summary.identified.to_string();
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("identified", identified.as_str());
+        localization.format("rust-task-resource-identification-complete", Some(&args))
     } else {
-        format!(
-            "Identified {} resources; {} remain unlinked.",
-            summary.identified, summary.unresolved
-        )
+        let identified = summary.identified.to_string();
+        let unresolved = summary.unresolved.to_string();
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("identified", identified.as_str());
+        args.set("unresolved", unresolved.as_str());
+        localization.format("rust-task-resource-identification-partial", Some(&args))
     };
     let _ = progress_channel.send(ProgressUpdate::Finished {
         success: true,
@@ -1458,11 +1478,8 @@ pub async fn install_resource(
             {
                 let _ = nm.create(crate::notifications::models::CreateNotificationInput {
                     client_key: None,
-                    title: Some("Login Required".to_string()),
-                    description: Some(
-                        "You must be signed in with a Microsoft account to install mods or resources."
-                            .to_string(),
-                    ),
+                    title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-login-required-title")),
+                    description: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-login-required-resource-description")),
                     severity: Some("warning".to_string()),
                     notification_type: Some(crate::notifications::models::NotificationType::Immediate),
                     dismissible: Some(true),                    persist: Some(false),

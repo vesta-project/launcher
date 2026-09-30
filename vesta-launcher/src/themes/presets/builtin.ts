@@ -8,7 +8,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "vesta",
 		name: "Vesta",
-		description: "Signature teal to purple to orange gradient",
+		descriptionId: "settings-appearance-theme-vesta-description",
 		primaryHue: 180,
 		opacity: 0,
 		grainStrength: 30,
@@ -30,7 +30,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "solar",
 		name: "Solar",
-		description: "Signature warm orange frosted finish with soft diffusion",
+		descriptionId: "settings-appearance-theme-solar-description",
 		primaryHue: 40,
 		opacity: 50,
 		grainStrength: 65,
@@ -44,7 +44,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "neon",
 		name: "Neon",
-		description: "Signature electric pink glass with vibrant gradient",
+		descriptionId: "settings-appearance-theme-neon-description",
 		primaryHue: 300,
 		opacity: 0,
 		grainStrength: 25,
@@ -61,7 +61,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "classic",
 		name: "Classic",
-		description: "Clean customizable theme - Maximum accessibility",
+		descriptionId: "settings-appearance-theme-classic-description",
 		primaryHue: 210,
 		opacity: 100,
 		grainStrength: 0,
@@ -75,7 +75,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "forest",
 		name: "Forest",
-		description: "Signature natural green with soft grain",
+		descriptionId: "settings-appearance-theme-forest-description",
 		primaryHue: 140,
 		opacity: 50,
 		grainStrength: 58,
@@ -92,7 +92,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "sunset",
 		name: "Sunset",
-		description: "Signature warm gradient from purple to orange",
+		descriptionId: "settings-appearance-theme-sunset-description",
 		primaryHue: 270,
 		opacity: 0,
 		grainStrength: 26,
@@ -169,8 +169,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "midnight",
 		name: "Midnight",
-		description:
-			"Ultra-dark Midnight mode — pure black surfaces for true blacks",
+		descriptionId: "settings-appearance-theme-midnight-description",
 		primaryHue: 240, // Dark blue for midnight theme preview
 		opacity: 100,
 		grainStrength: 0,
@@ -256,7 +255,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "oldschool",
 		name: "Old School",
-		description: "Classic customizable design with strong borders",
+		descriptionId: "settings-appearance-theme-old-school-description",
 		primaryHue: 210,
 		opacity: 100,
 		grainStrength: 0,
@@ -270,7 +269,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "custom",
 		name: "Custom",
-		description: "Unlock all controls to craft your own theme",
+		descriptionId: "settings-appearance-theme-custom-description",
 		primaryHue: 220,
 		opacity: 0,
 		grainStrength: 40,

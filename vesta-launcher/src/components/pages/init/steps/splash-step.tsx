@@ -1,6 +1,7 @@
 import networkStore from "@stores/network";
 import Button from "@ui/button/button";
 import { Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "../init.module.css";
 
 interface SplashStepProps {
@@ -13,7 +14,7 @@ function SplashStep(props: SplashStepProps) {
 		<div class={styles["splash-step"]}>
 			<h1 class={styles["splash-title"]}>Vesta</h1>
 
-			<p class={styles["splash-subtitle"]}>Welcome to the next generation</p>
+			<p class={styles["splash-subtitle"]}>{t("onboarding-splash-subtitle")}</p>
 
 			<div class={styles["splash-actions"]}>
 				<Button
@@ -24,16 +25,15 @@ function SplashStep(props: SplashStepProps) {
 					class={styles["splash-primary-btn"]}
 				>
 					{networkStore.isOffline()
-						? "Internet connection required"
-						: "Start Setup"}
+						? t("onboarding-splash-internet-required")
+						: t("onboarding-splash-start-setup")}
 				</Button>
 
 				<Show when={networkStore.isOffline()}>
 					<p class={styles["splash-offline-hint"]}>
-						No internet connection detected.
+						{t("onboarding-splash-no-internet")}
 						<span>
-							You will need a connection to sign in and download game
-							components.
+							{t("onboarding-splash-connection-required-description")}
 						</span>
 					</p>
 				</Show>
@@ -42,7 +42,7 @@ function SplashStep(props: SplashStepProps) {
 					class={styles["splash-guest-link"]}
 					onClick={() => void props.goToStep(2)}
 				>
-					Continue as Guest
+					{t("auth-continue-as-guest")}
 				</button>
 			</div>
 		</div>

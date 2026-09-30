@@ -1,0 +1,105 @@
+# Shared UI primitives and reusable dialogs.
+shared-ui-select-instance = Select Instance
+shared-ui-no-instances-available = No instances are available.
+shared-ui-unknown-version = Unknown version
+shared-ui-choose-world = Choose a world
+shared-ui-worlds = Worlds
+shared-ui-detected-worlds = Detected worlds
+shared-ui-choose-worlds-to-install = Choose worlds to install
+shared-ui-world-archive-description = This archive for { $projectName } contains more than one Java world. Select the worlds you want to add.
+shared-ui-cancel = Cancel
+shared-ui-install-all = Install all
+shared-ui-install-selected = Install selected
+shared-ui-choose-instance = Choose an instance
+shared-ui-choose-owning-instance-description = First choose the instance that owns the world for { $projectName }.
+shared-ui-create-instance-before-datapack = Create an instance and play a world before installing this datapack.
+shared-ui-choose-another-instance = ← Choose another instance
+shared-ui-no-java-worlds-yet = No Java worlds yet
+shared-ui-create-world-before-returning = Create and play a world in { $instanceName } first, then return here. Vesta will not hold datapacks outside a world.
+shared-ui-world-level-unreadable = This world's level data is unreadable.
+shared-ui-data-version = DataVersion { $version }
+shared-ui-world-icon-alt = { $name } world icon
+shared-ui-retry = Retry
+shared-ui-choose-another-file = Choose another file
+
+# Crash details modal.
+shared-ui-runtime-crash = Runtime Crash
+shared-ui-mod-incompatibility = Mod Incompatibility
+shared-ui-launch-failed = Launch Failed
+shared-ui-java-virtual-machine-crash = Java Virtual Machine Crash
+shared-ui-unknown-crash = Unknown Crash
+shared-ui-runtime-crash-description = The game crashed while running. This is usually caused by a mod conflict or unsupported game configuration.
+shared-ui-mod-incompatibility-description = One or more mods are incompatible with this version or with each other. Check your mods and try removing recently added ones.
+shared-ui-launch-failed-description = The game failed to launch. Check your Java installation and game settings.
+shared-ui-java-crash-description = The Java Virtual Machine crashed. This may indicate a serious compatibility issue or memory problem.
+shared-ui-unknown-crash-description = An unknown error occurred while running the instance.
+shared-ui-instance-crashed = Instance Crashed
+shared-ui-error-message = Error Message
+shared-ui-no-error-message-available = No error message available
+shared-ui-timestamp = Timestamp
+shared-ui-crash-report = Crash Report
+shared-ui-view-report = View Report
+shared-ui-crash-fix-steps = Try these steps to fix the crash:
+shared-ui-remove-recently-added-mods = Remove recently added mods
+shared-ui-update-mods-compatible-versions = Update all mods to compatible versions
+shared-ui-check-mod-dependencies-conflicts = Check mod dependencies and conflicts
+shared-ui-update-graphics-drivers = Update your graphics drivers
+shared-ui-increase-allocated-ram = Increase allocated RAM in instance settings
+shared-ui-remove-conflicting-mods = Remove conflicting mods
+shared-ui-update-java-latest = Update Java to latest version
+shared-ui-increase-allocated-memory-xmx = Increase allocated memory (Xmx flag)
+shared-ui-try-different-java-version = Try a different Java version (Java 8, 11, 17, 21)
+
+# Export dialog.
+shared-ui-select-output-folder = Select Output Folder
+shared-ui-export-started = Export Started
+shared-ui-exporting-modpack-background = Exporting modpack to { $fileName } in the background.
+shared-ui-export-failed = Export Failed
+shared-ui-back-to-metadata = Back to Metadata
+shared-ui-export-instance = Export Instance: { $instanceName }
+shared-ui-configure-modpack-metadata-format = Configure modpack metadata and format.
+shared-ui-select-files-include-modpack = Select the files you want to include in the modpack.
+shared-ui-scanning-instance-directory = Scanning instance directory...
+shared-ui-no-exportable-files = No exportable files found.
+shared-ui-modpack-name = Modpack Name
+shared-ui-my-modpack = My Modpack
+shared-ui-version = Version
+shared-ui-version-example = 1.0.0
+shared-ui-author = Author
+shared-ui-username = Username
+shared-ui-format = Format
+shared-ui-description = Description
+shared-ui-short-modpack-description-placeholder = A short description of your modpack...
+shared-ui-select-files-to-include = Select Files to Include
+shared-ui-items-selected = ({ $count } items selected)
+shared-ui-exporting = Exporting...
+shared-ui-export = Export
+shared-ui-mod = Mod
+
+# Theme and notification cards.
+shared-ui-delete = Delete
+shared-ui-theme-author = by { $author }
+shared-ui-working = Working...
+shared-ui-notification = Notification
+
+# Generic UI controls.
+shared-ui-dismiss = Dismiss
+shared-ui-more-pages = More pages
+shared-ui-previous = Previous
+shared-ui-next = Next
+shared-ui-previous-slide = Previous slide
+shared-ui-next-slide = Next slide
+shared-ui-failed-to-load-image = Failed to load image
+shared-ui-image-viewer = Image Viewer
+shared-ui-download = Download
+shared-ui-open-folder = Open Folder
+shared-ui-more-info = Click for more info
+shared-ui-unsaved-changes = You have unsaved changes
+shared-ui-previous-image = Previous image
+shared-ui-next-image = Next image
+shared-ui-click-to-reset = Click to Reset
+shared-ui-click-to-zoom = Click to Zoom
+shared-ui-failed-to-load-worlds = Worlds could not be loaded
+shared-ui-unknown-error-occurred = Unknown error occurred
+shared-ui-copy = Copy
+shared-ui-save = Save

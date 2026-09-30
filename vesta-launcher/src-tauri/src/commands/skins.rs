@@ -60,11 +60,13 @@ fn notify_mojang_rate_limit(app: &tauri::AppHandle, account_uuid: &str, operatio
     let manager = app.state::<NotificationManager>();
     let _ = manager.create(CreateNotificationInput {
         client_key: Some(format!("mojang_rate_limit_{}", account_uuid)),
-        title: Some("Mojang API Rate Limited".to_string()),
-        description: Some(format!(
-            "{} was rate-limited by Mojang. Please wait a moment and retry.",
-            operation
-        )),
+        title: Some(app.state::<crate::localization::LocalizationManager>().text("rust-native-mojang-rate-limited-title")),
+        description: {
+            let localization = app.state::<crate::localization::LocalizationManager>();
+            let mut args = fluent_bundle::FluentArgs::new();
+            args.set("operation", operation);
+            Some(localization.format("rust-native-mojang-rate-limited-description", Some(&args)))
+        },
         severity: Some("warning".to_string()),
         notification_type: Some(NotificationType::Immediate),
         dismissible: Some(true),

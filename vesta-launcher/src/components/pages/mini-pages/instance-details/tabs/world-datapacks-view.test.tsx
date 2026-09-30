@@ -487,7 +487,9 @@ describe("WorldDatapacksView", () => {
 		expect(screen.getByText("Read only")).toBeTruthy();
 		expect(screen.queryByRole("switch", { name: /Folder Pack/ })).toBeNull();
 		expect(
-			screen.getByRole("switch", { name: "Disable Managed Pack" }),
+			screen.getByRole("switch", {
+				name: /^Disable \u2068?Managed Pack\u2069?$/,
+			}),
 		).toBeTruthy();
 	});
 
@@ -503,14 +505,18 @@ describe("WorldDatapacksView", () => {
 		));
 
 		await fireEvent.click(
-			screen.getByRole("button", { name: "View details for Managed Pack" }),
+			screen.getByRole("button", {
+				name: /^View details for \u2068?Managed Pack\u2069?$/,
+			}),
 		);
 		expect(onOpenDatapackDetails).toHaveBeenCalledWith(
 			world(),
 			expect.objectContaining({ resourceId: 11, projectId: "pack" }),
 		);
 		await fireEvent.click(
-			screen.getByRole("switch", { name: "Disable Managed Pack" }),
+			screen.getByRole("switch", {
+				name: /^Disable \u2068?Managed Pack\u2069?$/,
+			}),
 		);
 		expect(onOpenDatapackDetails).toHaveBeenCalledOnce();
 	});
@@ -735,10 +741,10 @@ describe("WorldDatapacksView", () => {
 		));
 
 		const firstSwitch = screen.getByRole("switch", {
-			name: "Disable First Pack",
+			name: /^Disable \u2068?First Pack\u2069?$/,
 		}) as HTMLButtonElement;
 		const secondSwitch = screen.getByRole("switch", {
-			name: "Disable Second Pack",
+			name: /^Disable \u2068?Second Pack\u2069?$/,
 		}) as HTMLButtonElement;
 		await fireEvent.click(firstSwitch);
 		await fireEvent.click(secondSwitch);

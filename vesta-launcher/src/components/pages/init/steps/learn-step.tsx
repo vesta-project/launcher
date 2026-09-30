@@ -2,6 +2,7 @@ import ChevronLeftIcon from "@assets/icons/controls/chevron-left.svg";
 import ChevronRightIcon from "@assets/icons/controls/chevron-right.svg";
 import { createSignal, For, type JSX, Show } from "solid-js";
 import styles from "../init.module.css";
+import { t } from "~/localization";
 
 interface LearnStepProps {
 	goNext: () => Promise<void>;
@@ -9,15 +10,15 @@ interface LearnStepProps {
 }
 
 interface Slide {
-	title: string;
-	body: string;
+	titleId: string;
+	bodyId: string;
 	illustration: JSX.Element;
 }
 
 const SLIDES: Slide[] = [
 	{
-		title: "Welcome, traveler.",
-		body: "Before you step into new worlds, here is how everything fits together. Minecraft modding is simpler than it looks — you just need to know the pieces.",
+		titleId: "onboarding-learn-slide-welcome-title",
+		bodyId: "onboarding-learn-slide-welcome-body",
 		illustration: (
 			<svg viewBox="0 0 200 140" class={styles["learn-illustration"]}>
 				<circle
@@ -67,8 +68,8 @@ const SLIDES: Slide[] = [
 		),
 	},
 	{
-		title: "Minecraft runs on Java",
-		body: "The programming language called Java was used to build Minecraft. But different versions of Minecraft require different versions of Java. Don't worry, Vesta will handle all the Java stuff for you.",
+		titleId: "onboarding-learn-slide-java-title",
+		bodyId: "onboarding-learn-slide-java-body",
 		illustration: (
 			<svg viewBox="0 0 200 140" class={styles["learn-illustration"]}>
 				<rect
@@ -90,7 +91,7 @@ const SLIDES: Slide[] = [
 					fill="currentColor"
 					opacity="0.7"
 				>
-					Java
+					{t("onboarding-learn-illustration-java")}
 				</text>
 				<rect
 					x="75"
@@ -110,7 +111,7 @@ const SLIDES: Slide[] = [
 					font-weight="600"
 					fill="var(--primary)"
 				>
-					Minecraft
+					{t("onboarding-learn-illustration-minecraft")}
 				</text>
 				<path
 					d="M100 50 L100 35"
@@ -133,8 +134,8 @@ const SLIDES: Slide[] = [
 		),
 	},
 	{
-		title: "Mods need a bridge.",
-		body: "Minecraft was not built for changes. A Modloader is the bridge that allows mods to chane the way you play.",
+		titleId: "onboarding-learn-slide-mods-title",
+		bodyId: "onboarding-learn-slide-mods-body",
 		illustration: (
 			<svg viewBox="0 0 200 140" class={styles["learn-illustration"]}>
 				<rect
@@ -156,7 +157,7 @@ const SLIDES: Slide[] = [
 					fill="currentColor"
 					opacity="0.7"
 				>
-					Mod
+					{t("onboarding-learn-illustration-mod")}
 				</text>
 				<rect
 					x="20"
@@ -177,7 +178,7 @@ const SLIDES: Slide[] = [
 					fill="currentColor"
 					opacity="0.7"
 				>
-					Mod
+					{t("onboarding-learn-illustration-mod")}
 				</text>
 				<rect
 					x="20"
@@ -198,7 +199,7 @@ const SLIDES: Slide[] = [
 					fill="currentColor"
 					opacity="0.7"
 				>
-					Mod
+					{t("onboarding-learn-illustration-mod")}
 				</text>
 				<rect
 					x="77"
@@ -218,7 +219,7 @@ const SLIDES: Slide[] = [
 					font-weight="700"
 					fill="var(--primary)"
 				>
-					Loader
+					{t("onboarding-learn-illustration-loader")}
 				</text>
 				<path
 					d="M65 42 L77 70 M65 77 L77 77 M65 112 L77 85"
@@ -246,7 +247,7 @@ const SLIDES: Slide[] = [
 					fill="currentColor"
 					opacity="0.6"
 				>
-					Game
+					{t("onboarding-learn-illustration-game")}
 				</text>
 				<path
 					d="M123 77 L135 77"
@@ -258,8 +259,8 @@ const SLIDES: Slide[] = [
 		),
 	},
 	{
-		title: "Choose your path.",
-		body: "Forge and its modern successor, NeoForge, focus on deep, complex game overhauls, while Fabric and its fork, Quilt, prioritize a lightweight, high-performance experience with faster updates. Together, these four loaders represent the choice between heavy-duty content ecosystems and agile, modular performance.",
+		titleId: "onboarding-learn-slide-loaders-title",
+		bodyId: "onboarding-learn-slide-loaders-body",
 		illustration: (
 			<svg viewBox="0 0 200 140" class={styles["learn-illustration"]}>
 				{["Forge", "Fabric", "Neo", "Quilt"].map((name, i) => {
@@ -301,8 +302,8 @@ const SLIDES: Slide[] = [
 		),
 	},
 	{
-		title: "Modpacks are a quick way to get started.",
-		body: "A modpack is a curated collection of mods, configurations, and sometimes custom assets that work together to create a specific gameplay experience. They are an easy way to dive into modded Minecraft without having to pick and choose individual mods yourself.",
+		titleId: "onboarding-learn-slide-modpacks-title",
+		bodyId: "onboarding-learn-slide-modpacks-body",
 		illustration: (
 			<svg viewBox="0 0 200 140" class={styles["learn-illustration"]}>
 				<rect
@@ -387,7 +388,7 @@ function LearnStep(props: LearnStepProps) {
 					class={styles["learn-skip-btn"]}
 					onClick={() => void props.goNext()}
 				>
-					Skip
+					{t("onboarding-learn-skip")}
 				</button>
 			</div>
 
@@ -397,10 +398,10 @@ function LearnStep(props: LearnStepProps) {
 						{SLIDES[currentSlide()].illustration}
 					</div>
 					<h3 class={styles["learn-slide-title"]}>
-						{SLIDES[currentSlide()].title}
+						{t(SLIDES[currentSlide()].titleId)}
 					</h3>
 					<p class={styles["learn-slide-body"]}>
-						{SLIDES[currentSlide()].body}
+						{t(SLIDES[currentSlide()].bodyId)}
 					</p>
 				</div>
 			</div>
@@ -410,7 +411,7 @@ function LearnStep(props: LearnStepProps) {
 					class={styles["learn-arrow"]}
 					onClick={goBackward}
 					disabled={currentSlide() === 0}
-					aria-label="Previous slide"
+					aria-label={t("shared-ui-previous-slide")}
 				>
 					<ChevronLeftIcon width="20" height="20" stroke-width="2.5" />
 				</button>
@@ -427,7 +428,7 @@ function LearnStep(props: LearnStepProps) {
 									setDirection(i() > currentSlide() ? "right" : "left");
 									setCurrentSlide(i());
 								}}
-								aria-label={`Go to slide ${i() + 1}`}
+								aria-label={t("onboarding-learn-go-to-slide", { number: i() + 1 })}
 							/>
 						)}
 					</For>
@@ -439,7 +440,7 @@ function LearnStep(props: LearnStepProps) {
 						<button
 							class={styles["learn-arrow"]}
 							onClick={() => void props.goNext()}
-							aria-label="Continue"
+							aria-label={t("app-shell-continue")}
 						>
 							<ChevronRightIcon width="20" height="20" stroke-width="2.5" />
 						</button>
@@ -448,7 +449,7 @@ function LearnStep(props: LearnStepProps) {
 					<button
 						class={styles["learn-arrow"]}
 						onClick={goForward}
-						aria-label="Next slide"
+						aria-label={t("shared-ui-next-slide")}
 					>
 						<ChevronRightIcon width="20" height="20" stroke-width="2.5" />
 					</button>

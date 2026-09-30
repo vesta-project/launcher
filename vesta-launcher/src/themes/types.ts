@@ -59,6 +59,7 @@ export interface ThemeConfig {
 	author?: string;
 	source?: ThemeSource;
 	description?: string;
+	descriptionId?: string;
 	primaryHue: number;
 	primarySat?: number;
 	primaryLight?: number;

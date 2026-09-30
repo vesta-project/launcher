@@ -1,4 +1,5 @@
 import type { ResourceVersion } from "@stores/resources";
+import { t } from "~/localization";
 import { resources } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
 import {
@@ -74,14 +75,22 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 							{ installType: pendingResource?.installType },
 						);
 						showToast({
-							title: "Resource Installation Started",
-							description: `${project.name} will be installed into ${data.name || "the new instance"}.`,
+							title: t("install-submit-resource-started-title"),
+							description: t("install-submit-resource-started-description", {
+								projectName: project.name,
+								instanceName:
+									data.name || t("install-submit-instance-fallback"),
+							}),
 							severity: "success",
 						});
 					} else if (project && pendingNeedsWorld) {
 						showToast({
-							title: "Create and play a world first",
-							description: `${data.name || "Your new instance"} is ready. Launch Minecraft and play a world, then add ${project.name} from that world's datapack view.`,
+							title: t("install-submit-world-first-title"),
+							description: t("install-submit-world-first-description", {
+								instanceName:
+									data.name || t("install-submit-new-instance-fallback"),
+								projectName: project.name,
+							}),
 							severity: "warning",
 						});
 					}
@@ -95,7 +104,7 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 		} catch (error) {
 			console.error("[Install] ERROR:", error);
 			showToast({
-				title: "Failed",
+				title: t("rust-task-failed"),
 				description: String(error),
 				severity: "error",
 			});

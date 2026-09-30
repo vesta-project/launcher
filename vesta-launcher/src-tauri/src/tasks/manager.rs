@@ -1,4 +1,5 @@
 use crate::notifications::manager::NotificationManager;
+use crate::localization::LocalizationManager;
 use crate::notifications::models::{
     CreateNotificationInput, NotificationAction, NotificationContext, NotificationSeverity,
     NotificationType, ProgressUpdate, PROGRESS_INDETERMINATE,
@@ -26,6 +27,21 @@ pub struct TaskContext {
 }
 
 impl TaskContext {
+    /// Format a task notification string from the active Fluent catalog.
+    pub fn text(&self, message_id: &str) -> String {
+        self.app_handle.state::<LocalizationManager>().text(message_id)
+    }
+
+    pub fn format_values(&self, message_id: &str, values: &[(&str, &str)]) -> String {
+        let mut args = fluent_bundle::FluentArgs::new();
+        for (name, value) in values {
+            args.set(*name, *value);
+        }
+        self.app_handle
+            .state::<LocalizationManager>()
+            .format(message_id, Some(&args))
+    }
+
     pub fn update_description(&self, description: String) {
         // 1. Update the channel if available
         if let Some(ref channel) = self.progress_channel {
@@ -142,8 +158,24 @@ impl TaskContext {
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+pub fn localized_message(
+    localization: &LocalizationManager,
+    message_id: &str,
+    values: &[(&str, &str)],
+) -> String {
+    let mut args = fluent_bundle::FluentArgs::new();
+    for (name, value) in values {
+        args.set(*name, *value);
+    }
+    localization.format(message_id, Some(&args))
+}
+
 pub trait Task: Send + Sync {
     fn name(&self) -> String;
+    /// Localized title used by task notifications and active task summaries.
+    fn localized_name(&self, _localization: &LocalizationManager) -> String {
+        self.name()
+    }
     fn id(&self) -> Option<String> {
         None
     }
@@ -185,9 +217,15 @@ pub trait Task: Send + Sync {
     fn starting_description(&self) -> String {
         "Starting...".to_string()
     }
+    fn localized_starting_description(&self, localization: &LocalizationManager) -> String {
+        localization.text("rust-task-starting")
+    }
     /// Description shown on successful completion.
     fn completion_description(&self) -> String {
         "Completed successfully".to_string()
+    }
+    fn localized_completion_description(&self, localization: &LocalizationManager) -> String {
+        localization.text("rust-task-completed-successfully")
     }
     fn failure_description(&self, error: &str) -> String {
         match self.notification_context() {
@@ -348,6 +386,8 @@ impl TaskManager {
                 log::info!("TaskManager: Received task: {}", task.name());
 
                 let task_name = task.name();
+                let localization = manager_app.state::<LocalizationManager>();
+                let display_name = task.localized_name(&localization);
                 let notification_context = task.notification_context();
                 let is_cancellable = task.cancellable();
                 let is_pausable = task.pausable();
@@ -375,7 +415,7 @@ impl TaskManager {
                 manager_active_tasks
                     .lock()
                     .unwrap()
-                    .insert(client_key.clone(), task_name.clone());
+                    .insert(client_key.clone(), display_name.clone());
 
                 let manager = manager_app.state::<NotificationManager>();
 
@@ -416,8 +456,8 @@ impl TaskManager {
                     if let Err(e) = manager
                         .create(CreateNotificationInput {
                             client_key: Some(client_key.clone()),
-                            title: Some(task_name.clone()),
-                            description: Some("Waiting for worker...".to_string()),
+                            title: Some(display_name.clone()),
+                            description: Some(localization.text("rust-task-waiting")),
                             severity: Some("info".to_string()),
                             notification_type: Some(NotificationType::Progress),
                             dismissible: Some(false),
@@ -491,8 +531,8 @@ impl TaskManager {
                             let manager = app.state::<NotificationManager>();
                             if let Err(e) = manager.create(CreateNotificationInput {
                                 client_key: Some(key_clone.clone()),
-                                title: Some(task_name.clone()),
-                                description: Some("Task cancelled.".to_string()),
+                                title: Some(display_name.clone()),
+                                description: Some(app.state::<LocalizationManager>().text("rust-task-cancelled")),
                                 severity: Some("warning".to_string()),
                                 notification_type: Some(NotificationType::Patient),
                                 dismissible: Some(true),
@@ -553,9 +593,9 @@ impl TaskManager {
                             let cancelled = ready_error.to_ascii_lowercase().contains("cancel");
                             if let Err(err) = manager.create(CreateNotificationInput {
                                 client_key: Some(key_clone.clone()),
-                                title: Some(task_name.clone()),
+                                title: Some(display_name.clone()),
                                 description: Some(if cancelled {
-                                    "Task cancelled.".to_string()
+                                    app.state::<LocalizationManager>().text("rust-task-cancelled")
                                 } else {
                                     task.failure_description(&ready_error)
                                 }),
@@ -626,8 +666,8 @@ impl TaskManager {
                             let manager = app.state::<NotificationManager>();
                             if let Err(e) = manager.create(CreateNotificationInput {
                                 client_key: Some(key_clone.clone()),
-                                title: Some(task_name.clone()),
-                                description: Some("Task cancelled.".to_string()),
+                                title: Some(display_name.clone()),
+                                description: Some(app.state::<LocalizationManager>().text("rust-task-cancelled")),
                                 severity: Some("warning".to_string()),
                                 notification_type: Some(NotificationType::Patient),
                                 dismissible: Some(true),
@@ -750,8 +790,12 @@ impl TaskManager {
                             if notifications_enabled {
                                 if let Err(err) = manager.create(CreateNotificationInput {
                                     client_key: Some(key_clone.clone()),
-                                    title: Some(task_name),
-                                    description: Some(task.failure_description(&e)),
+                                    title: Some(display_name),
+                                    description: Some(format!(
+                                        "{}: {}",
+                                        app.state::<LocalizationManager>().text("rust-task-failed"),
+                                        task.failure_description(&e)
+                                    )),
                                     severity: Some("error".to_string()),
                                     notification_type: Some(NotificationType::Patient),
                                     dismissible: Some(true),

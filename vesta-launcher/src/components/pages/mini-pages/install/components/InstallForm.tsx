@@ -1,3 +1,5 @@
+import { formatNumber, t } from "~/localization";
+import { UNKNOWN_MODPACK_NAME } from "../hooks/use-modpack-source";
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { instanceDefaults } from "@stores/settings";
 import { useMinecraftVersions } from "@stores/versions";
@@ -242,10 +244,7 @@ export function InstallForm(props: InstallFormProps) {
 	);
 	const formatCompactNumber = (value?: number | null) => {
 		if (value === null || value === undefined) return null;
-		return new Intl.NumberFormat(undefined, {
-			notation: "compact",
-			maximumFractionDigits: 1,
-		}).format(value);
+		return formatNumber(value, { notation: "compact", maximumFractionDigits: 1 });
 	};
 	const resourceCountValue = createMemo(() => {
 		if (
@@ -253,10 +252,10 @@ export function InstallForm(props: InstallFormProps) {
 			(props.modpackInfo?.modCountSource === "unknown" &&
 				!props.modpackInfo?.modCountLookupFailed)
 		) {
-			return "Counting...";
+			return t("install-form-counting");
 		}
 		const count = props.modpackInfo?.modCount || 0;
-		return count > 0 ? count.toLocaleString() : "Unknown";
+		return count > 0 ? formatNumber(count) : t("resources-version-unknown");
 	});
 	const titleCase = (value?: string | null) => {
 		if (!value) return null;
@@ -265,24 +264,28 @@ export function InstallForm(props: InstallFormProps) {
 	const sourceLabel = createMemo(() => {
 		const platform = props.platform || props.modpackInfo?.modpackPlatform;
 		if (platform) return titleCase(platform);
-		return "Local upload";
+		return t("install-form-local-upload");
 	});
 	const loaderLabel = createMemo(() => {
 		const loaderName = titleCase(props.modpackInfo?.modloader || loader());
 		const loaderVersion = props.modpackInfo?.modloaderVersion || loaderVer();
-		if (!loaderName) return "Unknown";
+		if (!loaderName) return t("resources-version-unknown");
 		return loaderVersion ? `${loaderName} ${loaderVersion}` : loaderName;
 	});
-	const modpackTitle = createMemo(
-		() => props.modpackInfo?.name || name() || "Modpack",
-	);
+	const modpackTitle = createMemo(() => {
+		const infoName = props.modpackInfo?.name;
+		if (infoName === UNKNOWN_MODPACK_NAME) {
+			return t("install-page-unknown-modpack");
+		}
+		return infoName || name() || t("install-form-modpack-fallback");
+	});
 	const modpackAuthor = createMemo(
 		() => props.modpackInfo?.author || props.initialAuthor || null,
 	);
 	const modpackStatPills = createMemo<ModpackStatPill[]>(() => {
 		const stats: ModpackStatPill[] = [
 			{
-				label: "Resources",
+				label: t("instances-details-tab-resources"),
 				value: resourceCountValue(),
 				muted:
 					!!props.modpackInfo?.isCountingResources ||
@@ -294,23 +297,23 @@ export function InstallForm(props: InstallFormProps) {
 
 		const downloads = formatCompactNumber(props.modpackInfo?.downloadCount);
 		if (downloads !== null)
-			stats.push({ label: "Downloads", value: downloads });
+			stats.push({ label: t("resources-source-sort-downloads"), value: downloads });
 
 		return stats;
 	});
 	const modpackMetaRows = createMemo<ModpackMetaRow[]>(() => {
 		const rows: ModpackMetaRow[] = [];
 		rows.push({
-			label: "Pack Version",
+			label: t("install-form-pack-version"),
 			value: props.modpackInfo?.version || "1.0.0",
 		});
 
 		const projectId = props.modpackInfo?.modpackId || props.projectId;
-		if (projectId) rows.push({ label: "Project ID", value: projectId });
+		if (projectId) rows.push({ label: t("install-form-project-id"), value: projectId });
 
 		const versionId =
 			props.modpackInfo?.modpackVersionId || props.selectedModpackVersionId;
-		if (versionId) rows.push({ label: "Version ID", value: versionId });
+		if (versionId) rows.push({ label: t("install-form-version-id"), value: versionId });
 
 		return rows;
 	});
@@ -348,32 +351,32 @@ export function InstallForm(props: InstallFormProps) {
 			: `${value} MB`;
 
 	const memorySummaryReason = () => {
-		if (isMemoryDirty()) return "Manually set for this instance.";
+		if (isMemoryDirty()) return t("install-form-manual-memory-reason");
 
 		const recommendation = generatedMemoryRecommendation();
 		if (recommendation.adjustment === "high-for-device") {
 			if (recommendation.source === "modpack") {
 				return recommendation.policyMax > recommendation.generatedLimit
-					? "Set below the modpack suggestion to leave memory for the system. This pack may struggle."
-					: "Using the modpack's recommendation. This is high for this device.";
+					? t("install-form-memory-high-modpack-below")
+					: t("install-form-memory-high-modpack");
 			}
 			if (recommendation.source === "mod-count") {
 				return recommendation.policyMax > recommendation.generatedLimit
-					? "Set below the suggested memory to leave room for the system. This pack may struggle."
-					: "Raised for this modpack. This is high for this device.";
+					? t("install-form-memory-high-suggested-below")
+					: t("install-form-memory-high-raised");
 			}
-			return "Using your default max. This is high for this device.";
+			return t("install-form-memory-high-default");
 		}
 		if (recommendation.source === "modpack") {
-			return "Using the modpack's recommended memory.";
+			return t("install-form-memory-modpack");
 		}
 		if (recommendation.adjustment === "increased") {
 			const modCount = props.modpackInfo?.modCount;
 			return modCount
-				? `Raised for this modpack based on ${modCount} resources.`
-				: "Raised for this modpack.";
+				? t("install-form-memory-raised-count", { count: modCount })
+				: t("install-form-memory-raised");
 		}
-		return "Using your default max for new instances.";
+		return t("install-form-memory-default");
 	};
 
 	const suggestedMemoryLabel = () => {
@@ -615,7 +618,7 @@ export function InstallForm(props: InstallFormProps) {
 
 		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
 			showToast({
-				title: "Compatibility Adjusted",
+				title: t("install-form-compatibility-adjusted"),
 				description: describeSelectionAdjustments(notifiableAdjustments),
 				severity: "info",
 			});
@@ -740,7 +743,7 @@ export function InstallForm(props: InstallFormProps) {
 		<Show when={!normalizedIsModpack() && loader() !== "vanilla"}>
 			<div class={styles["form-row"]}>
 				<div class={styles["flex-grow"]}>
-					<div class={styles["field-label-manual"]}>Loader Version</div>
+					<div class={styles["field-label-manual"]}>{t("instances-versioning-loader-version-label")}</div>
 					<Combobox<string>
 						options={availableLoaderVers().map((v) => v.version)}
 						value={loaderVer()}
@@ -750,7 +753,7 @@ export function InstallForm(props: InstallFormProps) {
 								setDirty("loaderVer", true);
 							}
 						}}
-						placeholder="Latest"
+						placeholder={t("install-form-latest")}
 						itemComponent={(p) => {
 							const vi = availableLoaderVers().find(
 								(v) => v.version === p.item.rawValue,
@@ -760,14 +763,14 @@ export function InstallForm(props: InstallFormProps) {
 									<div class={styles["version-item-content"]}>
 										<span class={styles["v-num"]}>{p.item.rawValue}</span>
 										<Show when={!vi?.stable}>
-											<span class={styles["v-meta"]}>Experimental</span>
+												<span class={styles["v-meta"]}>{t("instances-versioning-experimental-badge")}</span>
 										</Show>
 									</div>
 								</ComboboxItem>
 							);
 						}}
 					>
-						<ComboboxControl aria-label="Loader Version Picker">
+						<ComboboxControl aria-label={t("install-form-loader-version-picker-aria")}>
 							<ComboboxInput />
 							<ComboboxTrigger />
 						</ComboboxControl>
@@ -786,7 +789,7 @@ export function InstallForm(props: InstallFormProps) {
 			<div class={styles["memory-card-header"]}>
 				<div>
 					<div class={styles["memory-card-title"]}>
-						Memory
+						{t("install-form-memory-title")}
 						<HelpTrigger topic="MODPACK_MEMORY_TARGETS" />
 					</div>
 					<div class={styles["memory-card-reason"]}>
@@ -799,7 +802,7 @@ export function InstallForm(props: InstallFormProps) {
 						class={styles["memory-card-edit"]}
 						onClick={() => setIsEditingMemory(!isEditingMemory())}
 					>
-						{isEditingMemory() ? "Hide controls" : "Edit"}
+						{isEditingMemory() ? t("install-form-hide-controls") : t("settings-help-edit")}
 					</button>
 				</div>
 			</div>
@@ -809,13 +812,13 @@ export function InstallForm(props: InstallFormProps) {
 				fallback={
 					<div class={styles["memory-card-details"]}>
 						<div class={styles["memory-card-selected"]}>
-							<span>Selected max</span>
+							<span>{t("install-form-selected-max")}</span>
 							<button type="button" onClick={toggleMemoryUnit}>
 								{formatMemory(memory()[1])} {memoryUnit()}
 							</button>
 						</div>
 						<div>
-							<span>{normalizedIsModpack() ? "Suggested" : "Default"}</span>
+							<span>{normalizedIsModpack() ? t("secondary-help-modpack-memory-targets-suggested-label") : t("secondary-help-modpack-memory-targets-default-label")}</span>
 							<strong>{suggestedMemoryLabel()}</strong>
 						</div>
 					</div>
@@ -824,10 +827,10 @@ export function InstallForm(props: InstallFormProps) {
 				<div class={styles["memory-edit-panel"]}>
 					<div class={styles["memory-edit-readout"]}>
 						<span>
-							{formatMemory(memory()[0])} {memoryUnit()} min
+							{formatMemory(memory()[0])} {memoryUnit()} {t("install-form-memory-min")}
 						</span>
 						<strong>
-							{formatMemory(memory()[1])} {memoryUnit()} max
+							{formatMemory(memory()[1])} {memoryUnit()} {t("install-form-memory-max")}
 						</strong>
 					</div>
 					<Slider
@@ -933,7 +936,7 @@ export function InstallForm(props: InstallFormProps) {
 					<div class={styles["install-main-column"]}>
 						{/* IDENTITY SECTION */}
 						<div class={styles["form-section"]}>
-							<div class={styles["form-section-title"]}>Instance Identity</div>
+						<div class={styles["form-section-title"]}>{t("install-form-instance-identity")}</div>
 							<div class={styles["identity-row"]}>
 								<IconPicker
 									value={icon()}
@@ -954,14 +957,14 @@ export function InstallForm(props: InstallFormProps) {
 								/>
 								<div class={styles["name-field"]}>
 									<TextFieldRoot>
-										<TextFieldLabel>Instance Name</TextFieldLabel>
+										<TextFieldLabel>{t("instances-settings-name-placeholder")}</TextFieldLabel>
 										<TextFieldInput
 											value={name()}
 											onInput={(e) => {
 												setName((e.currentTarget as HTMLInputElement).value);
 												setDirty("name", true);
 											}}
-											placeholder="My Instance"
+											placeholder={t("install-form-instance-name-placeholder")}
 										/>
 									</TextFieldRoot>
 								</div>
@@ -980,7 +983,7 @@ export function InstallForm(props: InstallFormProps) {
 								}}
 							>
 								<div class={styles["form-section-title"]}>
-									Modpack Configuration
+									{t("install-form-modpack-configuration")}
 								</div>
 								<Show
 									when={
@@ -989,14 +992,14 @@ export function InstallForm(props: InstallFormProps) {
 									fallback={
 										<div class={styles["modpack-version-placeholder"]}>
 											{props.isFetchingMetadata
-												? "Fetching available versions..."
-												: "No other versions available for this platform."}
+												? t("install-form-fetching-versions")
+												: t("install-form-no-other-versions")}
 										</div>
 									}
 								>
 									<div class={styles["modpack-version-picker"]}>
 										<div class={styles["field-label-manual"]}>
-											Release Version
+											{t("install-form-release-version")}
 										</div>
 										<Combobox<any>
 											options={searchableModpackVersions()}
@@ -1015,8 +1018,8 @@ export function InstallForm(props: InstallFormProps) {
 											optionTextValue={(v) => v.searchString}
 											placeholder={
 												props.selectedModpackVersionId
-													? "Loading version..."
-													: "Select version..."
+													? t("install-form-loading-version")
+													: t("install-form-select-version")
 											}
 											itemComponent={(p) => (
 												<ComboboxItem item={p.item}>
@@ -1035,7 +1038,7 @@ export function InstallForm(props: InstallFormProps) {
 												</ComboboxItem>
 											)}
 										>
-											<ComboboxControl aria-label="Modpack Version Selection">
+										<ComboboxControl aria-label={t("install-form-modpack-version-selection-aria")}>
 												<ComboboxInput as="input" />
 												<ComboboxTrigger />
 											</ComboboxControl>
@@ -1045,14 +1048,14 @@ export function InstallForm(props: InstallFormProps) {
 								</Show>
 								<div class={styles["modpack-meta-grid"]}>
 									<div class={styles["meta-item"]}>
-										<span class={styles["label"]}>Minecraft</span>
+										<span class={styles["label"]}>{t("install-form-minecraft")}</span>
 										<span class={styles["value"]}>
-											{mcVersion() || "Loading..."}
+											{mcVersion() || t("install-form-loading")}
 										</span>
 									</div>
 									<div class={styles["meta-item"]}>
 										<span class={styles["label"]}>
-											Modloader
+												{t("instances-versioning-modloader-label")}
 											<HelpTrigger topic="MODLOADER_EXPLAINED" />
 										</span>
 										<span class={styles["value"]}>
@@ -1068,11 +1071,11 @@ export function InstallForm(props: InstallFormProps) {
 						{/* GAME OPTIONS (Standard / non-modpack installs) */}
 						<Show when={!normalizedIsModpack()}>
 							<div class={styles["form-section"]}>
-								<div class={styles["form-section-title"]}>Game Options</div>
+								<div class={styles["form-section-title"]}>{t("install-form-game-options")}</div>
 								<div class={styles["form-row"]}>
 									<div class={styles["flex-grow"]}>
 										<div class={styles["field-label-manual"]}>
-											Modloader
+												{t("instances-versioning-modloader-label")}
 											<HelpTrigger topic="MODLOADER_EXPLAINED" />
 										</div>
 										<ModloaderSwitcher
@@ -1091,7 +1094,7 @@ export function InstallForm(props: InstallFormProps) {
 								<div class={styles["form-row"]}>
 									<div class={styles["flex-grow"]}>
 										<div class={styles["field-label-manual"]}>
-											Minecraft Version
+												{t("instances-versioning-mc-version-label")}
 											<HelpTrigger topic="MINECRAFT_VERSION" />
 										</div>
 										<Combobox<string>
@@ -1103,14 +1106,14 @@ export function InstallForm(props: InstallFormProps) {
 													setDirty("version", true);
 												}
 											}}
-											placeholder="Pick a version..."
+											placeholder={t("install-form-pick-version")}
 											itemComponent={(p) => (
 												<ComboboxItem item={p.item}>
 													{p.item.rawValue}
 												</ComboboxItem>
 											)}
 										>
-											<ComboboxControl aria-label="Version Picker">
+											<ComboboxControl aria-label={t("instances-versioning-version-picker-aria")}>
 												<ComboboxInput />
 												<ComboboxTrigger />
 											</ComboboxControl>
@@ -1127,7 +1130,7 @@ export function InstallForm(props: InstallFormProps) {
 												<SwitchThumb class={styles["form-switch__thumb"]} />
 											</SwitchControl>
 											<SwitchLabel class={styles["form-switch__label"]}>
-												Include Snapshots
+												{t("install-form-include-snapshots")}
 											</SwitchLabel>
 										</Switch>
 									</div>
@@ -1159,7 +1162,7 @@ export function InstallForm(props: InstallFormProps) {
 										MC{" "}
 										{props.modpackInfo?.minecraftVersion ||
 											mcVersion() ||
-											"Unknown"}
+													 t("resources-version-unknown")}
 									</span>
 									<span
 										class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}
@@ -1229,9 +1232,9 @@ export function InstallForm(props: InstallFormProps) {
 			<div class={styles["install-form__actions-container"]}>
 				<Show when={props.versionLookupError && props.onRetryVersionLookup}>
 					<div class={styles["version-lookup-error"]} role="alert">
-						<span>Could not load a downloadable modpack release.</span>
+						<span>{t("install-versions-sync-failed-description")}</span>
 						<button type="button" onClick={props.onRetryVersionLookup}>
-							Retry release lookup
+							{t("shared-ui-retry")}
 						</button>
 					</div>
 				</Show>
@@ -1242,7 +1245,7 @@ export function InstallForm(props: InstallFormProps) {
 							onClick={props.onCancel}
 							disabled={props.isInstalling}
 						>
-							Cancel
+							{t("shared-ui-cancel")}
 						</LauncherButton>
 					</Show>
 					<LauncherButton
@@ -1253,11 +1256,11 @@ export function InstallForm(props: InstallFormProps) {
 					>
 						{props.isInstalling
 							? normalizedIsModpack()
-								? "Starting installation..."
-								: "Creating instance..."
+								? t("onboarding-modpack-installing")
+								: t("install-page-loading-creating-instance")
 							: normalizedIsModpack()
-								? "Install Modpack"
-								: "Create Instance"}
+								? t("onboarding-modpack-install")
+								: t("onboarding-instance-create")}
 					</LauncherButton>
 				</div>
 			</div>

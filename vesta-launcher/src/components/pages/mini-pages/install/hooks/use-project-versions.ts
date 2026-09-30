@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import {
 	type ResourceVersion,
 	resources,
@@ -187,9 +188,9 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 					error instanceof Error ? error : new Error(String(error)),
 				);
 				showToast({
-					title: "Version Sync Failed",
+						title: t("install-versions-sync-failed-title"),
 					description:
-						"Could not load modpack versions. Install will retry when you try again.",
+						t("install-versions-sync-failed-description"),
 					severity: "warning",
 				});
 				// Keep the populated install form usable. The explicit error signal owns
@@ -236,9 +237,8 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 			params.setModpackUrl(fallback.download_url);
 		});
 		showToast({
-			title: "Version Updated",
-			description:
-				"The selected modpack version is no longer available. Switched to the latest available version.",
+			title: t("install-versions-updated-title"),
+			description: t("install-versions-updated-description"),
 			severity: "info",
 		});
 	});

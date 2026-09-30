@@ -73,6 +73,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let _ = notification_manager.clear_task_notifications();
 
     crate::startup::recovery::publish_interrupted_notifications(
+        app.handle().clone(),
         notification_manager.clone(),
         recovery_notices,
     );

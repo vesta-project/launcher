@@ -40,7 +40,7 @@ import {
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { onCleanup, onMount } from "solid-js";
-import { applyLanguagePreference } from "~/localization";
+import { applyLanguagePreference, t } from "~/localization";
 import styles from "./app.module.css";
 
 export interface ExitCheckResponse {
@@ -228,9 +228,8 @@ function Root(props: ChildrenProp) {
 					openMiniPage(event.payload.path, event.payload.params);
 				} else {
 					showToast({
-						title: "App Not Ready",
-						description:
-							"Please wait for the app to fully load before navigating.",
+						title: t("action-app-not-ready-title"),
+						description: t("action-app-not-ready-description"),
 						severity: "error",
 						duration: 5000,
 					});
@@ -247,27 +246,25 @@ function Root(props: ChildrenProp) {
 					await invoke("exit_app");
 				} else {
 					const confirmed = await dialogStore.confirm(
-						"Vesta is still working",
+						t("action-active-processes-title"),
 						<div class={styles["exit-warning"]}>
-							<p>Closing now may interrupt these active tasks:</p>
-							<ul class={styles["exit-warning__list"]}>
-								{check.blocking_tasks.map((task) => (
-									<li>{task}</li>
-								))}
-							</ul>
+							<p>{t("action-active-processes-description", {
+								processes: check.blocking_tasks.map((task) => `• ${task}`).join("\n"),
+							})}</p>
 							{check.running_instances.length > 0 && (
 								<div class={styles["exit-warning__note"]}>
-									<strong>Running games won’t be closed</strong>
+									<strong>{t("action-active-processes-running-games-title")}</strong>
 									<p>
-										{check.running_instances.join(", ")} will keep running after
-										Vesta closes.
+										{t("action-active-processes-running-instances-description", {
+											instances: check.running_instances.join(", "),
+										})}
 									</p>
 								</div>
 							)}
 						</div>,
 						{
-							okLabel: "Close Anyway",
-							cancelLabel: "Keep Vesta Open",
+							okLabel: t("action-active-processes-exit-anyway"),
+							cancelLabel: t("action-active-processes-stay-open"),
 							isDestructive: true,
 							severity: "warning",
 						},
@@ -279,9 +276,8 @@ function Root(props: ChildrenProp) {
 			} catch (e) {
 				console.error("Failed to perform exit check:", e);
 				showToast({
-					title: "Unable to confirm safe exit",
-					description:
-						"Vesta couldn't validate running tasks right now, so the launcher will stay open.",
+					title: t("action-safe-exit-failed-title"),
+					description: t("action-safe-exit-failed-description"),
 					severity: "warning",
 				});
 			}

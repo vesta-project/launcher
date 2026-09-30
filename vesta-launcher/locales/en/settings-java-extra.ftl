@@ -9,7 +9,6 @@ settings-java-scanning = Scanning…
 settings-java-loading-metadata = Loading Minecraft version metadata…
 settings-java-loading-metadata-hint = Java requirements appear once the launcher manifest is ready.
 
-settings-java-source-managed = Managed
 settings-java-source-system = System
 settings-java-source-custom = Custom
 settings-java-source-browse = Browse

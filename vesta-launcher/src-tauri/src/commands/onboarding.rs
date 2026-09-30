@@ -127,7 +127,7 @@ pub async fn select_java_file(app_handle: AppHandle) -> Result<Option<String>, S
     app_handle
         .dialog()
         .file()
-        .set_title("Select Java Executable")
+        .set_title(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-select-java-executable"))
         .pick_file(move |res| {
             let _ = tx.send(res.map(|p| p.to_string()));
         });

@@ -36,6 +36,7 @@ import {
 	Show,
 } from "solid-js";
 import styles from "../init.module.css";
+import { t } from "~/localization";
 import {
 	type FirstModpackVersion,
 	installFirstModpack,
@@ -71,7 +72,9 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	const [isInstalling, setIsInstalling] = createSignal(false);
 
 	// Blank instance form state
-	const [instanceName, setInstanceName] = createSignal("My First Instance");
+	const [instanceName, setInstanceName] = createSignal(
+		t("app-shell-my-first-instance"),
+	);
 	const [selectedVersion, setSelectedVersion] = createSignal<string>("");
 	const [selectedModloader, setSelectedModloader] =
 		createSignal<string>("vanilla");
@@ -240,7 +243,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 		} catch (e) {
 			console.error("Failed to fetch curated modpacks:", e);
 			setModpacksError(
-				"Could not load modpacks. Please try again or create a blank instance.",
+				t("onboarding-modpacks-load-failed"),
 			);
 		} finally {
 			setModpacksLoading(false);
@@ -281,7 +284,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 			setModpacksError(
 				acceptedModpackInstall()?.projectId === modpack.id
 					? "Installation started, but setup could not finish. Retry to continue."
-					: `Failed to install ${modpack.name}. Please try again.`,
+					: t("onboarding-modpack-install-failed", { name: modpack.name }),
 			);
 		} finally {
 			setInstallingModpackId(null);
@@ -377,25 +380,25 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 		return String(count);
 	};
 
-	const menuOptions = [
+	const menuOptions = () => [
 		{
 			id: "browse" as const,
-			title: "Browse Modpacks",
-			description: "Discover curated packs from Modrinth and CurseForge",
+			title: t("onboarding-instance-browse-modpacks"),
+			description: t("onboarding-instance-browse-modpacks-description"),
 			icon: <SearchIcon width="32" height="32" stroke-width="1.5" />,
 			action: () => handleOpenModpackPicker(),
 		},
 		{
 			id: "import" as const,
-			title: "Import from Launcher",
-			description: "Bring in instances from CurseForge, Prism, and others",
+			title: t("onboarding-instance-import-from-launcher"),
+			description: t("onboarding-instance-import-from-launcher-description"),
 			icon: <UploadIcon width="32" height="32" stroke-width="1.5" />,
 			action: () => setMode("import"),
 		},
 		{
 			id: "blank" as const,
-			title: "Blank Instance",
-			description: "Start from scratch with any version and modloader",
+			title: t("onboarding-instance-blank"),
+			description: t("onboarding-instance-blank-description"),
 			icon: <AddIcon width="32" height="32" stroke-width="1.5" />,
 			action: () => setMode("blank"),
 		},
@@ -408,14 +411,16 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 					class={`${styles["first-instance-menu"]} ${styles["panel--enter"]}`}
 				>
 					<div class={styles["first-instance-header"]}>
-						<h2 class={styles["first-instance-title"]}>Your First Instance</h2>
+						<h2 class={styles["first-instance-title"]}>
+							{t("onboarding-instance-title")}
+						</h2>
 						<p class={styles["first-instance-subtitle"]}>
-							How would you like to get started?
+							{t("onboarding-instance-get-started-question")}
 						</p>
 					</div>
 
 					<div class={styles["first-instance-options"]}>
-						{menuOptions.map((option) => (
+						{menuOptions().map((option) => (
 							<button
 								class={styles["first-instance-option"]}
 								onClick={option.action}
@@ -437,7 +442,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 					<div class={styles["first-instance-footer"]}>
 						<button class={styles["first-instance-skip"]} onClick={handleSkip}>
-							Skip for now
+							{t("onboarding-instance-skip-for-now")}
 						</button>
 					</div>
 				</div>
@@ -451,18 +456,20 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							onClick={() => setMode("menu")}
 						>
 							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
-							Back
+							{t("app-shell-back")}
 						</button>
-						<h3 class={styles["modpack-picker-title"]}>Popular Modpacks</h3>
+						<h3 class={styles["modpack-picker-title"]}>
+							{t("onboarding-modpacks-popular")}
+						</h3>
 						<p class={styles["modpack-picker-subtitle"]}>
-							Hand-picked modpacks from the community
+							{t("onboarding-modpacks-community-picked")}
 						</p>
 					</div>
 
 					<Show when={modpacksLoading()}>
 						<div class={styles["modpack-picker-loading"]}>
 							<div class={styles["spinner--small"]} />
-							<span>Loading modpacks...</span>
+							<span>{t("onboarding-modpacks-loading")}</span>
 						</div>
 					</Show>
 
@@ -514,7 +521,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							onClick={() => setMode("modpack-picker")}
 						>
 							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
-							Back
+							{t("app-shell-back")}
 						</button>
 
 						<div class={styles["modpack-detail-hero"]}>
@@ -533,7 +540,9 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 								</Show>
 							</div>
 							<h3 class={styles["modpack-detail-name"]}>{modpack.name}</h3>
-							<p class={styles["modpack-detail-author"]}>by {modpack.author}</p>
+							<p class={styles["modpack-detail-author"]}>
+								{t("onboarding-modpack-author", { author: modpack.author })}
+							</p>
 						</div>
 
 						<p class={styles["modpack-detail-desc"]}>{modpack.description}</p>
@@ -546,8 +555,11 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 						<div class={styles["modpack-detail-meta"]}>
 							<span>
-								<DownloadIcon width="14" height="14" />
-								{formatDownloads(modpack.downloadCount)} downloads
+				<DownloadIcon width="14" height="14" />
+				{t("onboarding-modpack-download-count", {
+					count: formatDownloads(modpack.downloadCount),
+					total: modpack.downloadCount,
+				})}
 							</span>
 						</div>
 
@@ -569,15 +581,13 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 											}}
 										>
 											<div class={styles["spinner--small"]} />
-											{acceptedModpackInstall()?.projectId === modpack.id
-												? "Finishing setup..."
-												: "Starting installation..."}
+											{t("onboarding-modpack-installing")}
 										</div>
 									}
 								>
 									{acceptedModpackInstall()?.projectId === modpack.id
-										? "Finish Setup"
-										: "Install Modpack"}
+										? t("onboarding-modpack-finish-setup")
+										: t("onboarding-modpack-install")}
 								</Show>
 							</Button>
 						</div>
@@ -601,12 +611,12 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							}}
 						>
 							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
-							Back
+							{t("app-shell-back")}
 						</button>
 						<h3 class={styles["first-instance-form-title"]}>
 							{selectedImportLauncher()
-								? "Import Instance"
-								: "Import from Launcher"}
+								? t("onboarding-import-instance")
+								: t("onboarding-instance-import-from-launcher")}
 						</h3>
 					</div>
 
@@ -618,7 +628,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 								fallback={
 									<div class={styles["import-detecting"]}>
 										<div class={styles["spinner--small"]} />
-										<span>Detecting launcher...</span>
+										<span>{t("onboarding-import-detecting-launcher")}</span>
 									</div>
 								}
 							>
@@ -656,9 +666,11 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							onClick={() => setMode("menu")}
 						>
 							<ChevronLeftIcon width="16" height="16" stroke-width="2.5" />
-							Back
+							{t("app-shell-back")}
 						</button>
-						<h3 class={styles["first-instance-form-title"]}>Blank Instance</h3>
+						<h3 class={styles["first-instance-form-title"]}>
+							{t("onboarding-instance-blank")}
+						</h3>
 					</div>
 
 					<div class={styles["first-instance-form-body"]}>
@@ -676,21 +688,21 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							<div class={styles["first-instance-form-fields"]}>
 								<TextFieldRoot>
 									<TextFieldLabel class={styles["first-instance-label"]}>
-										Instance Name
+										{t("onboarding-instance-name")}
 									</TextFieldLabel>
 									<TextFieldInput
 										value={instanceName()}
 										onInput={(e) =>
 											setInstanceName((e.target as HTMLInputElement).value)
 										}
-										placeholder="Enter instance name..."
+										placeholder={t("onboarding-instance-name-placeholder")}
 										style={{ background: "var(--surface-sunken)" }}
 									/>
 								</TextFieldRoot>
 
 								<div>
 									<label class={styles["first-instance-label"]}>
-										Modloader
+										{t("onboarding-instance-modloader")}
 									</label>
 									<ModloaderSwitcher
 										options={modloaderSwitcherOptions()}
@@ -708,7 +720,9 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							onClick={handleInstallBlank}
 							disabled={isInstalling() || !instanceName() || !selectedVersion()}
 						>
-							{isInstalling() ? "Creating..." : "Create Instance"}
+							{isInstalling()
+								? t("onboarding-instance-creating")
+								: t("onboarding-instance-create")}
 						</Button>
 					</div>
 				</div>

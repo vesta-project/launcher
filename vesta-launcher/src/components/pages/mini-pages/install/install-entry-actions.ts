@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import type { ResourceType } from "@stores/resources";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { LauncherKind } from "@utils/launcher-imports";
@@ -7,14 +8,16 @@ export type InstallNavigate = (
 	params?: Record<string, unknown>,
 ) => void;
 
-export const EXPLORE_RESOURCE_TYPES = [
-	{ value: "mod" as const, label: "Mods" },
-	{ value: "resourcepack" as const, label: "Resource Packs" },
-	{ value: "shader" as const, label: "Shaders" },
-	{ value: "datapack" as const, label: "Data Packs" },
-	{ value: "modpack" as const, label: "Modpacks" },
-	{ value: "world" as const, label: "Worlds" },
-] satisfies ReadonlyArray<{ value: ResourceType; label: string }>;
+export function getExploreResourceTypes() {
+	return [
+		{ value: "mod" as const, label: t("instances-details-resources-filter-mods") },
+		{ value: "resourcepack" as const, label: t("resources-type-resource-packs") },
+		{ value: "shader" as const, label: t("instances-details-resources-filter-shaders") },
+		{ value: "datapack" as const, label: t("resources-type-data-packs") },
+		{ value: "modpack" as const, label: t("resources-type-modpacks") },
+		{ value: "world" as const, label: t("instances-worlds-title") },
+	] satisfies ReadonlyArray<{ value: ResourceType; label: string }>;
+}
 
 /** Client-side gate before navigating to URL install. Backend still validates the pack. */
 export function isHttpUrl(value: string): boolean {
@@ -25,7 +28,7 @@ export function isHttpUrl(value: string): boolean {
 export async function pickLocalModpackFile(): Promise<string | null> {
 	const selected = await open({
 		multiple: false,
-		filters: [{ name: "Modpack", extensions: ["zip", "mrpack"] }],
+		filters: [{ name: t("install-form-modpack-fallback"), extensions: ["zip", "mrpack"] }],
 	});
 	if (selected && typeof selected === "string") return selected;
 	return null;

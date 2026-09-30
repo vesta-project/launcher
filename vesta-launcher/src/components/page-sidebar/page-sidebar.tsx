@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import { Tabs, TabsList, TabsTrigger } from "@ui/tabs/tabs";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./page-sidebar.module.css";
@@ -62,7 +63,7 @@ export function PageSidebar(props: PageSidebarProps) {
 					class={styles.sidebar}
 					classList={{ [styles.mobileOpen]: isMobile() && mobileOpen() }}
 				>
-					<TabsList class={styles.nav} aria-label="Page sections">
+					<TabsList class={styles.nav} aria-label={t("app-shell-page-sections")}>
 						{props.tabs.map((tab) => (
 							<TabsTrigger
 								value={tab.value}
@@ -93,7 +94,7 @@ export function PageSidebar(props: PageSidebarProps) {
 								type="button"
 								class={styles.mobileToggle}
 								onClick={() => setMobileOpen((o) => !o)}
-								aria-label="Toggle sidebar"
+								aria-label={t("app-shell-toggle-sidebar")}
 							>
 								<MenuIcon width="18" height="18" />
 							</button>

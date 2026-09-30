@@ -154,7 +154,10 @@ describe("ResourceCard", () => {
 			/>
 		));
 
-		expect(screen.getByText("by Vesta team")).toBeTruthy();
+		const organizationByline = screen.getByText("by Vesta team", {
+			normalizer: (text) => text.replace(/[\u2066-\u2069]/g, ""),
+		});
+		expect(organizationByline).toBeTruthy();
 		expect(screen.queryByText(/Project owner/)).toBeNull();
 		expect(screen.queryByText(/Contributor/)).toBeNull();
 	});

@@ -20,6 +20,7 @@ import {
 	useOnboardingFlow,
 } from "./hooks/use-onboarding-flow";
 import styles from "./init.module.css";
+import { t } from "~/localization";
 import {
 	isGuestOrDemoAccountType,
 	isSkippableAuthenticatedAccount,
@@ -251,7 +252,7 @@ function TelemetryToggle(props: { show: boolean }) {
 					</SwitchControl>
 				</Switch>
 				<p class={styles["init-telemetry-text"]}>
-					Share crash and error reports.{" "}
+					{t("onboarding-telemetry-description")}{" "}
 					<a
 						href={PRIVACY_POLICY_URL}
 						onClick={(e) => {
@@ -259,7 +260,7 @@ function TelemetryToggle(props: { show: boolean }) {
 							void openUrl(PRIVACY_POLICY_URL);
 						}}
 					>
-						Privacy Policy
+						{t("onboarding-telemetry-privacy-policy")}
 					</a>
 				</p>
 			</div>
