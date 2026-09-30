@@ -409,6 +409,10 @@ impl Task for ResourceDownloadTask {
         format!("Installing {}", self.project_name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-installing-resource", &[("project", &self.project_name)])
+    }
+
     fn id(&self) -> Option<String> {
         let target = match &self.target {
             ResourceInstallTarget::Instance { instance_id } => format!("instance-{instance_id}"),
@@ -490,6 +494,22 @@ impl Task for ResourceDownloadTask {
         } else {
             format!("{} installed successfully.{}", self.project_name, suffix)
         }
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        let is_resource_pack = self.resource_type == ResourceType::ResourcePack
+            || self.version.files.iter().any(|file| file.role.eq_ignore_ascii_case("resourcepack"));
+        let message_id = match (self.dependency_for.is_some(), is_resource_pack) {
+            (true, true) => "rust-task-resource-installed-required-resourcepack",
+            (true, false) => "rust-task-resource-installed-required",
+            (false, true) => "rust-task-resource-installed-resourcepack",
+            (false, false) => "rust-task-resource-installed",
+        };
+        let mut values = vec![("project", self.project_name.as_str())];
+        if let Some(parent) = self.dependency_for.as_deref() {
+            values.push(("parent", parent));
+        }
+        crate::tasks::manager::localized_message(localization, message_id, &values)
     }
 
     fn run(

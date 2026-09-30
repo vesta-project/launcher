@@ -13,6 +13,11 @@ impl Task for DownloadJavaTask {
         format!("Downloading Java {}", self.major_version)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        let version = self.major_version.to_string();
+        crate::tasks::manager::localized_message(localization, "rust-task-java-downloading", &[("version", &version)])
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!("download_java_{}", self.major_version))
     }
@@ -29,8 +34,18 @@ impl Task for DownloadJavaTask {
         format!("Preparing to download Java {}...", self.major_version)
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        let version = self.major_version.to_string();
+        crate::tasks::manager::localized_message(localization, "rust-task-java-preparing-download", &[("version", &version)])
+    }
+
     fn completion_description(&self) -> String {
         format!("Java {} installed successfully.", self.major_version)
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        let version = self.major_version.to_string();
+        crate::tasks::manager::localized_message(localization, "rust-task-java-installed", &[("version", &version)])
     }
 
     fn run(
@@ -133,8 +148,7 @@ impl ProgressReporter for TaskProgressReporter {
             log::info!("Java installation finished successfully (internal done called)");
             // self.ctx.update_full(100, "Java setup complete".to_string(), None, None);
         } else {
-            self.ctx
-                .update_description(message.unwrap_or("Java download failed").to_string());
+            self.ctx.update_description(message.map(str::to_string).unwrap_or_else(|| self.ctx.text("rust-task-java-download-failed")));
         }
     }
 

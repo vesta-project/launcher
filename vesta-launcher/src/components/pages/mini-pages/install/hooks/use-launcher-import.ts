@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import { dialogStore } from "@stores/dialog-store";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
@@ -54,7 +55,7 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 		} catch (error) {
 			console.error("[InstallPage] Failed to list launcher instances", error);
 			showToast({
-				title: "Instance Detection Failed",
+				title: t("install-import-detection-failed-title"),
 				description: String(error),
 				severity: "warning",
 			});
@@ -102,8 +103,8 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 
 		if (uniqueRoots.length > 1) {
 			const selectedPath = await dialogStore.select(
-				`Select ${launcherLabelMap.get(launcher) ?? "launcher"} data root`,
-				"Multiple data roots were detected. Choose the one you want to use:",
+				t("install-import-roots-title", { launcherName: launcherLabelMap.get(launcher) ?? "launcher" }),
+				t("install-import-multiple-roots"),
 				uniqueRoots,
 				preferredPath,
 			);
@@ -138,16 +139,16 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 				basePathOverride: launcherBasePath().trim() || null,
 			});
 			showToast({
-				title: "Import Queued",
+				title: t("install-import-queued-title"),
 				description:
-					"The import task is queued and will start when a worker is available.",
+					t("install-import-queued-description"),
 				severity: "success",
 			});
 			// Give the user a moment to see confirmation before the view closes.
 			setTimeout(() => params.onImportSuccess(), 180);
 		} catch (error) {
 			showToast({
-				title: "Import Failed",
+				title: t("install-import-failed-title"),
 				description: String(error),
 				severity: "error",
 			});

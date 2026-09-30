@@ -44,7 +44,7 @@ const SOURCE_MESSAGE_ID: Record<
 	Exclude<JavaOption["type"], "browse">,
 	string
 > = {
-	managed: "settings-java-source-managed",
+	managed: "common-managed",
 	system: "settings-java-source-system",
 	custom: "settings-java-source-custom",
 };
@@ -212,7 +212,9 @@ const JavaVersionGroup: Component<{
 	);
 	const statusText = createMemo(() => {
 		const selected = active();
-		if (!selected) return t("settings-java-no-runtime-selected");
+		if (!selected || selected.type === "browse") {
+			return t("settings-java-no-runtime-selected");
+		}
 		return t(STATUS_MESSAGE_ID[selected.type]);
 	});
 	const runtimes = createMemo((): JavaOption[] =>

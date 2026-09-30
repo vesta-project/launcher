@@ -5,6 +5,7 @@ import {
 	setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
 import { useOs } from "@utils/os";
+import { t } from "~/localization";
 
 function InvalidPage() {
 	const os = useOs();
@@ -14,7 +15,7 @@ function InvalidPage() {
 	return (
 		<div>
 			<TitleBar os={os()} />
-			The location {page_path} is not valid
+			{t("secondary-invalid-location", { path: page_path })}
 			<PageViewer
 				open={pageViewerOpen()}
 				viewChanged={() => setPageViewerOpen(false)}

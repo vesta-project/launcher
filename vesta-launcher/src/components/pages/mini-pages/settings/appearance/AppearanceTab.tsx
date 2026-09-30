@@ -211,7 +211,7 @@ export function AppearanceSettingsTab() {
 									onClick={handleExportTheme}
 									title={t("settings-appearance-export-custom-title")}
 								>
-									{t("settings-appearance-export")}
+								{t("shared-ui-export")}
 								</Button>
 							</Show>
 							<ToggleGroup
@@ -283,7 +283,7 @@ export function AppearanceSettingsTab() {
 					subHeader={t("settings-appearance-color-mode-subheader")}
 				>
 					<SettingsField
-						label={t("settings-appearance-color-mode-label")}
+						label={t("settings-appearance-color-mode-title")}
 						description={t("settings-appearance-color-mode-description")}
 						headerRight={
 							<ToggleGroup

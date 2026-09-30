@@ -13,6 +13,7 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { TextField } from "@ui/text-field/text-field";
+import { t } from "~/localization";
 import { batch, createMemo, For, Show } from "solid-js";
 import {
 	activeBrowseFilterCount,
@@ -23,13 +24,18 @@ import { FilterPopover } from "./filter-popover";
 import styles from "./resource-browser.module.css";
 
 const RESOURCE_TYPES = [
-	{ value: "mod", label: "Mods" },
-	{ value: "resourcepack", label: "Resource Packs" },
-	{ value: "shader", label: "Shaders" },
-	{ value: "datapack", label: "Data Packs" },
-	{ value: "modpack", label: "Modpacks" },
-	{ value: "world", label: "Worlds" },
+	{ value: "mod", messageId: "instances-details-resources-filter-mods" },
+	{ value: "resourcepack", messageId: "resources-type-resource-packs" },
+	{ value: "shader", messageId: "instances-details-resources-filter-shaders" },
+	{ value: "datapack", messageId: "resources-type-data-packs" },
+	{ value: "modpack", messageId: "resources-type-modpacks" },
+	{ value: "world", messageId: "instances-worlds-title" },
 ] as const;
+
+function resourceTypeLabel(value: string | null | undefined): string {
+	const type = RESOURCE_TYPES.find((item) => item.value === value);
+	return type ? t(type.messageId) : (value ?? "");
+}
 
 export function ResourceToolbar(props: {
 	router?: MiniRouter;
@@ -55,13 +61,10 @@ export function ResourceToolbar(props: {
 						});
 					}}
 					optionValue={(v) => v}
-					optionTextValue={(v) =>
-						RESOURCE_TYPES.find((t) => t.value === v)?.label || v
-					}
+					optionTextValue={resourceTypeLabel}
 					itemComponent={(p) => (
 						<SelectItem item={p.item}>
-							{RESOURCE_TYPES.find((t) => t.value === p.item.rawValue)?.label ||
-								p.item.rawValue}
+							{resourceTypeLabel(p.item.rawValue)}
 						</SelectItem>
 					)}
 				>
@@ -70,9 +73,9 @@ export function ResourceToolbar(props: {
 							{(s) => {
 								const val = s.selectedOption();
 								return (
-									RESOURCE_TYPES.find((t) => t.value === val)?.label ||
+									resourceTypeLabel(val) ||
 									val ||
-									"Mods"
+									resourceTypeLabel("mod")
 								);
 							}}
 						</SelectValue>
@@ -84,7 +87,7 @@ export function ResourceToolbar(props: {
 					<div class={styles["search-container"]}>
 						<SearchIcon class={styles["search-svg"]} />
 						<TextField
-							placeholder="Search… or mc:1.21.1 loader:neo"
+							placeholder={t("resources-search-placeholder")}
 							value={props.searchValue}
 							onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) =>
 								props.onSearchInput(e.currentTarget.value)
@@ -102,8 +105,8 @@ export function ResourceToolbar(props: {
 						<PopoverTrigger
 							class={styles["search-filter-trigger"]}
 							classList={{ [styles["has-filters"]]: filterCount() > 0 }}
-							aria-label="Filters"
-							title="Filters"
+							aria-label={t("resources-filters")}
+							title={t("resources-filters")}
 						>
 							<FilterIcon width="16" height="16" />
 							<Show when={filterCount() > 0}>

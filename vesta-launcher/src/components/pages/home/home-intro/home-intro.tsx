@@ -3,11 +3,12 @@ import {
 	setHomeIntroSidebarVisible,
 } from "@stores/home-intro";
 import { invoke } from "@tauri-apps/api/core";
-import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "./home-intro.module.css";
 import HomeIntroModal from "./home-intro-modal";
 import HomeIntroRing from "./home-intro-ring";
-import { INTRO_STEPS } from "./home-intro-steps";
+import { getIntroSteps } from "./home-intro-steps";
 import HomeIntroTooltip from "./home-intro-tooltip";
 
 interface HomeIntroProps {
@@ -16,29 +17,30 @@ interface HomeIntroProps {
 
 function HomeIntro(props: HomeIntroProps) {
 	const [stepIndex, setStepIndex] = createSignal(0);
+	const introSteps = createMemo(getIntroSteps);
 	const [ringReady, setRingReady] = createSignal(false);
 	const [tooltipReady, setTooltipReady] = createSignal(false);
 	let ringTimeout: ReturnType<typeof setTimeout> | null = null;
 	let tooltipTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	const currentStep = () => INTRO_STEPS[stepIndex()];
-	const isLastStep = () => stepIndex() >= INTRO_STEPS.length - 1;
+	const currentStep = () => introSteps()[stepIndex()];
+	const isLastStep = () => stepIndex() >= introSteps().length - 1;
 	const stepKind = () => currentStep().kind;
 	const isDarkBackdrop = () => stepKind() === "modal";
 
 	// Show sidebar when we reach the first sidebar highlight step (profiles) or later
 	createEffect(() => {
 		const idx = stepIndex();
-		const firstRingStepIndex = INTRO_STEPS.findIndex((s) => s.kind === "ring");
+		const firstRingStepIndex = introSteps().findIndex((s) => s.kind === "ring");
 		setHomeIntroSidebarVisible(idx >= firstRingStepIndex);
 	});
 
 	// Show demo cards when we're on the instances step or any step after it (before the last modal)
 	createEffect(() => {
 		const idx = stepIndex();
-		const instancesStepIndex = INTRO_STEPS.findIndex((s) => s.kind === "cards");
+		const instancesStepIndex = introSteps().findIndex((s) => s.kind === "cards");
 		const shouldShow =
-			idx >= instancesStepIndex && idx < INTRO_STEPS.length - 1;
+			idx >= instancesStepIndex && idx < introSteps().length - 1;
 		setHomeIntroShowDemoCards(shouldShow);
 	});
 
@@ -135,7 +137,7 @@ function HomeIntro(props: HomeIntroProps) {
 			/>
 
 			<button class={styles["home-intro-skip"]} onClick={() => void finish()}>
-				Skip intro
+				{t("app-shell-skip-intro")}
 			</button>
 
 			{/* Ring highlight */}

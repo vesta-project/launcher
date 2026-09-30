@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { showToast } from "@ui/toast/toast";
 import { createNotification } from "@utils/notifications";
 import { createSignal } from "solid-js";
+import { t } from "~/localization";
 
 /**
  * Crash details from the backend crash detection system
@@ -71,7 +72,7 @@ export function normalizeCrashEvent(event: any): CrashEvent {
 		crash_type: event.crash_type || "launch_other",
 		category: event.category,
 		title: event.title,
-		message: event.message || "The instance crashed.",
+		message: event.message || t("app-services-instance-crashed"),
 		evidence: event.evidence ?? null,
 		suspected_resources: Array.isArray(event.suspected_resources)
 			? event.suspected_resources
@@ -114,7 +115,7 @@ export function clearCrashDetails(instanceId: string): void {
  * Get a human-readable crash category label
  */
 export function formatCrashCategory(category?: string): string {
-	if (!category) return "Crash";
+	if (!category) return t("app-services-crash");
 	return category
 		.split("_")
 		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -127,15 +128,15 @@ export function formatCrashCategory(category?: string): string {
 function getCrashTypeLabel(crashType: string): string {
 	switch (crashType) {
 		case "runtime":
-			return "Runtime Crash";
+			return t("app-services-runtime-crash");
 		case "launch_mod":
-			return "Mod Incompatibility";
+			return t("app-services-mod-incompatibility");
 		case "launch_other":
-			return "Launch Failed";
+			return t("shared-ui-launch-failed");
 		case "jvm":
-			return "Java Crash";
+			return t("app-services-java-crash");
 		default:
-			return "Unknown Crash";
+			return t("app-services-unknown-crash");
 	}
 }
 
@@ -157,7 +158,7 @@ function getCrashDescription(crashEvent: CrashEvent): string {
  * Show a crash notification to the user
  */
 async function showCrashNotification(crashEvent: CrashEvent): Promise<void> {
-	const title = crashEvent.title || "Instance Crashed";
+	const title = crashEvent.title || t("app-services-instance-crashed-title");
 	const description = getCrashDescription(crashEvent);
 
 	try {
@@ -172,7 +173,7 @@ async function showCrashNotification(crashEvent: CrashEvent): Promise<void> {
 			actions: [
 				{
 					id: "navigate",
-					label: "Details",
+					label: t("action-crash-details"),
 					type: "primary",
 					payload: {
 						path: "/instance",

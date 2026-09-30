@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import ConnectionLostSvg from "@assets/icons/status/connection-lost.svg";
 import ReloadIcon from "@assets/icons/actions/reload.svg";
 import networkStore from "@stores/network";
@@ -10,8 +11,8 @@ function NetworkPill() {
 	const isRefreshing = networkStore.isRefreshing;
 
 	const label = createMemo(() => {
-		if (isRefreshing()) return "Checking...";
-		if (status() === "offline") return "Offline";
+		if (isRefreshing()) return t("app-shell-checking");
+		if (status() === "offline") return t("app-shell-offline");
 		return "";
 	});
 
@@ -31,10 +32,10 @@ function NetworkPill() {
 					[styles["network-pill"]]: true,
 					[styles["network-pill--refreshing"]]: isRefreshing(),
 				}}
-				title={
-					isRefreshing()
-						? "Checking connection..."
-						: `${label()} - Click to retry`
+					title={
+						isRefreshing()
+							? t("app-shell-checking-connection")
+							: t("app-shell-network-click-to-retry", { label: label() })
 				}
 				onClick={handleRetry}
 			>

@@ -7,11 +7,9 @@ import {
 import { pinning, type PinnedPage } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import {
-	handleNavigationBack,
-	handleNavigationForward,
-} from "@utils/flat-shell-navigation";
+import { handleNavigationBack, handleNavigationForward } from "@utils/flat-shell-navigation";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { t } from "~/localization";
 import type { CommandDefinition } from "./types";
 
 function isMainWindow(): boolean {
@@ -66,7 +64,7 @@ function lastPinned(): PinnedPage | undefined {
 
 function currentSearchTarget(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(
-		'[data-keybinding-search] input:not([disabled]), input[data-keybinding-search]:not([disabled])',
+		"[data-keybinding-search] input:not([disabled]), input[data-keybinding-search]:not([disabled])",
 	);
 }
 
@@ -74,9 +72,9 @@ function pinnedCommand(slot: number, chord: string): CommandDefinition {
 	return {
 		commandId: `navigation.pinned.${slot}`,
 		handlerId: `navigation.pinned.${slot}`,
-		label: `Pinned item ${slot}`,
-		description: `Open the pinned sidebar item in position ${slot}.`,
-		category: "Navigation",
+		label: t("settings-extra-keybinding-pinned-item", { slot }),
+		description: t("settings-extra-keybinding-open-pinned-item", { slot }),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: chord,
 		sortOrder: 30 + slot,
 		canExecute: () => isMainWindow() && Boolean(pinnedAtSlot(slot)),
@@ -91,9 +89,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "app.reload",
 		handlerId: "app.reload",
-		label: "Reload current page",
-		description: "Reload data for the current page, or reload the app shell.",
-		category: "Application",
+		label: t("settings-extra-keybinding-reload-label"),
+		description: t("settings-extra-keybinding-reload-description"),
+		category: t("settings-extra-keybinding-category-application"),
 		defaultChord: "Mod+KeyR",
 		sortOrder: 10,
 		execute: async () => {
@@ -108,9 +106,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "app.close",
 		handlerId: "app.close",
-		label: "Close current page",
-		description: "Close the current Vesta page or reusable mini window.",
-		category: "Application",
+		label: t("settings-extra-keybinding-close-label"),
+		description: t("settings-extra-keybinding-close-description"),
+		category: t("settings-extra-keybinding-category-application"),
 		defaultChord: "Mod+KeyW",
 		sortOrder: 20,
 		canExecute: () => !isMainWindow() || pageViewerOpen(),
@@ -119,9 +117,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.back",
 		handlerId: "navigation.back",
-		label: "Go back",
-		description: "Move to the previous page in Vesta history.",
-		category: "Navigation",
+		label: t("settings-extra-keybinding-back-label"),
+		description: t("settings-extra-keybinding-back-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Alt+ArrowLeft",
 		sortOrder: 10,
 		canExecute: canNavigateBack,
@@ -133,9 +131,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.forward",
 		handlerId: "navigation.forward",
-		label: "Go forward",
-		description: "Move to the next page in Vesta history.",
-		category: "Navigation",
+		label: t("settings-extra-keybinding-forward-label"),
+		description: t("settings-extra-keybinding-forward-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Alt+ArrowRight",
 		sortOrder: 20,
 		canExecute: canNavigateForward,
@@ -147,9 +145,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.library",
 		handlerId: "navigation.library",
-		label: "Open Library",
-		description: "Return to the instance library.",
-		category: "Navigation",
+		label: t("settings-extra-keybinding-library-label"),
+		description: t("settings-extra-keybinding-library-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Mod+Digit1",
 		sortOrder: 21,
 		canExecute: isMainWindow,
@@ -158,9 +156,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.new-instance",
 		handlerId: "navigation.new-instance",
-		label: "New Instance",
-		description: "Open the new instance flow.",
-		category: "Navigation",
+		label: t("app-shell-new-instance"),
+		description: t("settings-extra-keybinding-new-instance-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Mod+Digit2",
 		sortOrder: 22,
 		canExecute: isMainWindow,
@@ -169,9 +167,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.explore",
 		handlerId: "navigation.explore",
-		label: "Explore",
-		description: "Browse mods, modpacks, resource packs, and other resources.",
-		category: "Navigation",
+		label: t("app-shell-explore"),
+		description: t("settings-extra-keybinding-explore-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Mod+Digit3",
 		sortOrder: 23,
 		canExecute: isMainWindow,
@@ -185,9 +183,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.pinned.last",
 		handlerId: "navigation.pinned.last",
-		label: "Last pinned item",
-		description: "Open the final pinned sidebar item.",
-		category: "Navigation",
+		label: t("settings-extra-keybinding-last-pinned-label"),
+		description: t("settings-extra-keybinding-last-pinned-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Mod+Digit9",
 		sortOrder: 39,
 		canExecute: () => isMainWindow() && Boolean(lastPinned()),
@@ -199,9 +197,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.settings",
 		handlerId: "navigation.settings",
-		label: "Open Settings",
-		description: "Open Vesta settings.",
-		category: "Navigation",
+		label: t("settings-extra-keybinding-settings-label"),
+		description: t("settings-extra-keybinding-settings-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Mod+Comma",
 		sortOrder: 50,
 		canExecute: isMainWindow,
@@ -210,9 +208,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.notifications",
 		handlerId: "navigation.notifications",
-		label: "Toggle Notifications",
-		description: "Open or close the notifications sidebar.",
-		category: "Navigation",
+		label: t("settings-extra-keybinding-notifications-label"),
+		description: t("settings-extra-keybinding-notifications-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: null,
 		sortOrder: 60,
 		canExecute: isMainWindow,
@@ -223,9 +221,9 @@ export const commandDefinitions: readonly CommandDefinition[] = [
 	{
 		commandId: "navigation.focus-search",
 		handlerId: "navigation.focus-search",
-		label: "Focus page search",
-		description: "Focus the search field exposed by the current page.",
-		category: "Navigation",
+		label: t("settings-extra-keybinding-focus-search-label"),
+		description: t("settings-extra-keybinding-focus-search-description"),
+		category: t("settings-extra-keybinding-category-navigation"),
 		defaultChord: "Mod+KeyF",
 		sortOrder: 70,
 		canExecute: () => Boolean(currentSearchTarget()),

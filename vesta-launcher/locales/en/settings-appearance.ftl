@@ -6,7 +6,6 @@ settings-appearance-filter-all = All
 settings-appearance-filter-defaults = Defaults
 settings-appearance-filter-imported = Imported
 settings-appearance-import = Import
-settings-appearance-export = Export
 settings-appearance-export-custom-title = Export current custom theme
 settings-appearance-grid-view = Grid view
 settings-appearance-list-view = List view
@@ -15,7 +14,6 @@ settings-appearance-no-themes-match = No themes match your current filters.
 # Color mode
 settings-appearance-color-mode-title = Color Mode
 settings-appearance-color-mode-subheader = Choose how Vesta renders light and dark surfaces. This preference applies across themes and app restarts.
-settings-appearance-color-mode-label = Color Mode
 settings-appearance-color-mode-description = Follow the system appearance or keep Vesta in light or dark mode.
 settings-appearance-color-mode-system = System
 settings-appearance-color-mode-light = Light
@@ -79,3 +77,14 @@ settings-appearance-chrome-page-style-label = Page style
 settings-appearance-chrome-page-style-description = Windowed keeps the framed page viewer. Flat uses sidebar tabs.
 settings-appearance-chrome-windowed = Windowed
 settings-appearance-chrome-flat = Flat
+
+# Built-in theme descriptions.
+settings-appearance-theme-vesta-description = Signature teal to purple to orange gradient
+settings-appearance-theme-solar-description = Signature warm orange frosted finish with soft diffusion
+settings-appearance-theme-neon-description = Signature electric pink glass with vibrant gradient
+settings-appearance-theme-classic-description = Clean customizable theme - Maximum accessibility
+settings-appearance-theme-forest-description = Signature natural green with soft grain
+settings-appearance-theme-sunset-description = Signature warm gradient from purple to orange
+settings-appearance-theme-midnight-description = Ultra-dark Midnight mode — pure black surfaces for true blacks
+settings-appearance-theme-old-school-description = Classic customizable design with strong borders
+settings-appearance-theme-custom-description = Unlock all controls to craft your own theme

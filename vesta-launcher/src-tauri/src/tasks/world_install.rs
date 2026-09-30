@@ -29,7 +29,7 @@ pub async fn install_world_archive(
 
     ctx.update_full(
         20,
-        "Choosing worlds to install…".to_string(),
+        ctx.text("rust-task-choosing-worlds-to-install"),
         Some(1),
         Some(3),
     );
@@ -50,7 +50,7 @@ pub async fn install_world_archive(
 
     ctx.update_full(
         30,
-        "Extracting selected worlds…".to_string(),
+        ctx.text("rust-task-extracting-selected-worlds"),
         Some(2),
         Some(3),
     );
@@ -84,7 +84,7 @@ pub async fn install_world_archive(
     .await
     .map_err(|error| format!("World extraction task failed: {error}"))??;
 
-    ctx.update_full(100, "Worlds installed".to_string(), Some(3), Some(3));
+    ctx.update_full(100, ctx.text("rust-task-worlds-installed"), Some(3), Some(3));
     if let Some(world_manager) = app_handle.try_state::<crate::worlds::WorldManager>() {
         world_manager.invalidate(instance.id);
     }

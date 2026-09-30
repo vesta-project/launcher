@@ -1,5 +1,6 @@
 import { onMount } from "solid-js";
 import styles from "../init.module.css";
+import { t } from "~/localization";
 
 interface CompleteStepProps {
 	navigate: (to: string, options?: { replace?: boolean }) => void;
@@ -23,20 +24,20 @@ function CompleteStep(props: CompleteStepProps) {
 			<h2
 				class={`${styles["complete-title"]} ${styles["fade-up--enter-delay-1"]}`}
 			>
-				You are all set.
+				{t("onboarding-complete-title")}
 			</h2>
 
 			<p
 				class={`${styles["complete-subtitle"]} ${styles["fade-up--enter-delay-2"]}`}
 			>
-				Welcome to Vesta. Your journey starts now.
+				{t("onboarding-complete-description")}
 			</p>
 
 			<button
 				class={`${styles["complete-skip"]} ${styles["fade-in--enter-delay-3"]}`}
 				onClick={() => props.navigate("/home", { replace: true })}
 			>
-				Enter Vesta
+				{t("app-shell-enter")}
 			</button>
 		</div>
 	);

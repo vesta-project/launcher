@@ -4,6 +4,7 @@ import { cancelLogin, listenToAuthEvents, startLogin } from "@utils/auth";
 import { openExternal } from "@utils/external-link";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./login-page.module.css";
+import { t } from "~/localization";
 
 interface LoginPageProps {
 	onClose?: () => void;
@@ -30,7 +31,7 @@ function LoginPage(_props: LoginPageProps) {
 				window.location.reload();
 			} else if (event.stage === "Cancelled") {
 				setIsAuthenticating(false);
-				setErrorMessage("Authentication cancelled");
+				setErrorMessage(t("auth-authentication-cancelled"));
 			} else if (event.stage === "Error") {
 				setIsAuthenticating(false);
 				setErrorMessage(event.message);
@@ -47,7 +48,7 @@ function LoginPage(_props: LoginPageProps) {
 			setErrorMessage("");
 			await startLogin();
 		} catch (error) {
-			setErrorMessage(`Failed to start login: ${error}`);
+			setErrorMessage(t("auth-login-start-failed", { error: String(error) }));
 		}
 	};
 
@@ -81,11 +82,11 @@ function LoginPage(_props: LoginPageProps) {
 	return (
 		<div class={styles["login-page"]}>
 			<div class={styles["login-page__content"]}>
-				<h1 class={styles["login-page__title"]}>Sign in to Microsoft</h1>
+				<h1 class={styles["login-page__title"]}>{t("auth-sign-in-to-microsoft")}</h1>
 
 				<Show when={!isAuthenticating()}>
 					<p class={styles["login-page__description"]}>
-						Sign in with your Microsoft account to access Minecraft
+						{t("auth-sign-in-to-minecraft-description")}
 					</p>
 					<Show when={errorMessage()}>
 						<p class={styles["login-page__error"]}>{errorMessage()}</p>
@@ -94,14 +95,14 @@ function LoginPage(_props: LoginPageProps) {
 						onClick={handleLogin}
 						class={styles["login-page__button"]}
 					>
-						Sign in with Microsoft
+						{t("auth-sign-in-with-microsoft")}
 					</LauncherButton>
 				</Show>
 
 				<Show when={isAuthenticating()}>
 					<div class={styles["login-page__auth-box"]}>
 						<p class={styles["login-page__auth-instruction"]}>
-							Copy this code and sign in with your Microsoft account:
+							{t("auth-copy-code-instruction")}
 						</p>
 						<div class={styles["login-page__code-container"]}>
 							<code class={styles["login-page__code"]}>{authCode()}</code>
@@ -109,7 +110,7 @@ function LoginPage(_props: LoginPageProps) {
 								onClick={copyCode}
 								class={styles["login-page__copy-button"]}
 							>
-								{copied() ? "Copied!" : "Copy"}
+								{copied() ? t("auth-copied") : t("shared-ui-copy")}
 							</LauncherButton>
 						</div>
 						<div class={styles["login-page__button-group"]}>
@@ -117,13 +118,13 @@ function LoginPage(_props: LoginPageProps) {
 								onClick={openUrl}
 								class={styles["login-page__button"]}
 							>
-								Open Sign-in Page
+								{t("auth-open-sign-in-page")}
 							</LauncherButton>
 							<LauncherButton
 								onClick={handleCancel}
 								class={`${styles["login-page__button"]} ${styles["login-page__button--secondary"]}`}
 							>
-								Cancel
+								{t("shared-ui-cancel")}
 							</LauncherButton>
 						</div>
 					</div>

@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import {
 	type ResourceVersion,
 	resources,
@@ -140,9 +141,9 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 			} catch (error) {
 				console.error("[InstallPage] Version fetch failed:", error);
 				showToast({
-					title: "Version Sync Failed",
+					title: t("install-versions-sync-failed-title"),
 					description:
-						"Could not load modpack versions right now. You can still continue and retry shortly.",
+						t("install-versions-sync-failed-description"),
 					severity: "warning",
 				});
 				return [];
@@ -170,9 +171,9 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 			params.setModpackUrl(fallback.download_url);
 		});
 		showToast({
-			title: "Version Updated",
+			title: t("install-versions-updated-title"),
 			description:
-				"The selected modpack version is no longer available. Switched to the latest available version.",
+				t("install-versions-updated-description"),
 			severity: "info",
 		});
 	});

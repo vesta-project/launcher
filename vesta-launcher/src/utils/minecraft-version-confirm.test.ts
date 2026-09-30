@@ -9,6 +9,9 @@ vi.mock("@stores/dialog-store", () => ({
 }));
 
 describe("confirmMinecraftVersionChange", () => {
+	const withoutBidiIsolation = (value: string) =>
+		value.replace(/[\u2068\u2069]/g, "");
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});
@@ -38,18 +41,21 @@ describe("confirmMinecraftVersionChange", () => {
 		expect(result).toBe(true);
 		expect(dialogStore.confirm).toHaveBeenCalledWith(
 			"Change Minecraft Version?",
-			expect.stringContaining("from 1.20.1 to 1.21.1"),
+			expect.any(String),
 			{
 				severity: "warning",
 				okLabel: "Change Version",
 				isDestructive: true,
 			},
 		);
+		const description = vi.mocked(dialogStore.confirm).mock.calls[0][1] ?? "";
+		expect(withoutBidiIsolation(description)).toContain("from 1.20.1 to 1.21.1");
 		expect(dialogStore.confirm).toHaveBeenCalledWith(
 			"Change Minecraft Version?",
-			expect.stringContaining("Existing worlds may become incompatible"),
+			expect.any(String),
 			expect.any(Object),
 		);
+		expect(withoutBidiIsolation(description)).toContain("Existing worlds may become incompatible");
 	});
 
 	it("uses modpack-specific wording for modpack updates", async () => {
@@ -62,12 +68,9 @@ describe("confirmMinecraftVersionChange", () => {
 			context: "modpack-update",
 		});
 
-		expect(dialogStore.confirm).toHaveBeenCalledWith(
-			"Change Minecraft Version?",
-			expect.stringContaining(
-				"Updating this modpack will change the Minecraft version",
-			),
-			expect.any(Object),
+		const description = vi.mocked(dialogStore.confirm).mock.calls[0][1] ?? "";
+		expect(withoutBidiIsolation(description)).toContain(
+			"Updating this modpack will change the Minecraft version",
 		);
 	});
 

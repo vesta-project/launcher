@@ -32,6 +32,10 @@ impl Task for GenerateManifestTask {
         }
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text(if self.force_refresh { "rust-task-refresh-piston-manifest" } else { "rust-task-generate-piston-manifest" })
+    }
+
     fn id(&self) -> Option<String> {
         if self.force_refresh {
             Some("generate_manifest_force_refresh".to_string())
@@ -56,12 +60,20 @@ impl Task for GenerateManifestTask {
         }
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text(if self.force_refresh { "rust-task-force-fetching-fresh-metadata" } else { "rust-task-preparing-manifest-generation" })
+    }
+
     fn completion_description(&self) -> String {
         if self.force_refresh {
             "Manifest refreshed successfully".to_string()
         } else {
             "Manifest generation complete".to_string()
         }
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text(if self.force_refresh { "rust-task-manifest-refreshed-successfully" } else { "rust-task-manifest-generation-complete" })
     }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
@@ -124,7 +136,7 @@ impl Task for GenerateManifestTask {
                 metadata.last_updated
             );
 
-            ctx.update_full(100, "Manifest ready".to_string(), Some(5), Some(5));
+            ctx.update_full(100, ctx.text("rust-task-manifest-ready"), Some(5), Some(5));
 
             // Update in-memory cache for fast subsequent access
             if let Some(cache) = app.try_state::<MetadataCache>() {

@@ -5,6 +5,7 @@ import Button from "@ui/button/button";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import clsx from "clsx";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "./modpack-version-selector.module.css";
 
 export interface ModpackVersion {
@@ -32,9 +33,7 @@ interface ModpackVersionSelectorProps {
 }
 
 export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
-	const [selectedId, setSelectedId] = createSignal<string | null>(
-		props.currentVersionId,
-	);
+	const [selectedId, setSelectedId] = createSignal<string | null>(props.currentVersionId);
 	const [searchQuery, setSearchQuery] = createSignal("");
 	const [isOpen, setIsOpen] = createSignal(false);
 	const [confirmingId, setConfirmingId] = createSignal<string | null>(null);
@@ -94,20 +93,14 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 	const platformLabel = createMemo(() => {
 		if (props.platform === "modrinth") return "Modrinth";
 		if (props.platform === "curseforge") return "CurseForge";
-		return "Linked";
+		return t("instances-extra-modpack-version-linked");
 	});
 
 	return (
 		<div class={styles["control"]}>
-			<Show
-				when={!props.loading}
-				fallback={<Skeleton class={styles["triggerSkeleton"]} />}
-			>
+			<Show when={!props.loading} fallback={<Skeleton class={styles["triggerSkeleton"]} />}>
 				<div
-					class={clsx(
-						styles["triggerCard"],
-						props.disabled && styles["disabled"],
-					)}
+					class={clsx(styles["triggerCard"], props.disabled && styles["disabled"])}
 					data-expanded={isOpen()}
 				>
 					<div class={styles["triggerMain"]}>
@@ -145,18 +138,16 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 								<span class={styles["versionSummaryPrimary"]}>
 									{selectedVersion()?.version_number ||
 										props.currentVersionId ||
-										"Current"}
+										t("instances-details-resources-current-version")}
 								</span>
 								<div class={styles["triggerMeta"]}>
 									<span>
 										MC{" "}
 										{selectedVersion()?.game_versions[0] ||
 											props.minecraftVersion ||
-											"unknown"}
+											t("instances-extra-modpack-version-unknown")}
 									</span>
-									<span>
-										{selectedVersion()?.loaders[0] || props.loader || "Vanilla"}
-									</span>
+									<span>{selectedVersion()?.loaders[0] || props.loader || "Vanilla"}</span>
 								</div>
 							</div>
 							<div class={styles["statusArea"]}>
@@ -169,7 +160,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 									}
 								>
 									<span class={styles["updateAvailableLabel"]}>
-										Update available
+										{t("instances-details-resources-update-available")}
 									</span>
 								</Show>
 							</div>
@@ -178,16 +169,13 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 				</div>
 
 				<Show when={isOpen()}>
-					<div
-						class={styles["selectionContainer"]}
-						onClick={(e) => e.stopPropagation()}
-					>
+					<div class={styles["selectionContainer"]} onClick={(e) => e.stopPropagation()}>
 						<div class={styles["searchBarContainer"]}>
 							<div class={styles["searchBar"]}>
 								<SearchIcon class={styles["searchIcon"]} />
 								<input
 									type="text"
-									placeholder="Search versions..."
+									placeholder={t("instances-extra-modpack-version-search-placeholder")}
 									onInput={(e) => setSearchQuery(e.currentTarget.value)}
 									value={searchQuery()}
 									autofocus
@@ -198,8 +186,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 						<div class={styles["versionListContainer"]}>
 							<For each={filteredVersions()}>
 								{(version) => {
-									const isCurrent =
-										String(version.id) === props.currentVersionId;
+									const isCurrent = String(version.id) === props.currentVersionId;
 									const isConfirming = () => confirmingId() === version.id;
 
 									return (
@@ -208,8 +195,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 												if (isCurrent) activeRowRef = el;
 											}}
 											onMouseLeave={() => {
-												if (confirmingId() === version.id)
-													setConfirmingId(null);
+												if (confirmingId() === version.id) setConfirmingId(null);
 											}}
 											class={clsx(
 												styles["versionRow"],
@@ -220,12 +206,8 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 											<div class={styles["versionInfo"]}>
 												<div class={styles["metaContainer"]}>
 													<div class={styles["versionHeader"]}>
-														<span class={styles["versionNumber"]}>
-															{version.version_number}
-														</span>
-														<span class={styles["releaseType"]}>
-															{version.release_type}
-														</span>
+														<span class={styles["versionNumber"]}>{version.version_number}</span>
+														<span class={styles["releaseType"]}>{version.release_type}</span>
 													</div>
 													<div class={styles["versionSub"]}>
 														<span>MC {version.game_versions[0]}</span>
@@ -253,17 +235,15 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 															<div class={styles["confirmSlide"]}>
 																<div class={styles["slideInner"]}>
 																	<span class={styles["slideText"]}>
-																		Switch
+																		{t("instances-extra-modpack-version-switch")}
 																	</span>
-																	<span class={styles["slideText"]}>
-																		Confirm?
-																	</span>
+																	<span class={styles["slideText"]}>{t("resources-card-confirm")}</span>
 																</div>
 															</div>
 														</Button>
 													}
 												>
-													<div class={styles["installedLabel"]}>Installed</div>
+													<div class={styles["installedLabel"]}>{t("resources-instance-installed")}</div>
 												</Show>
 											</div>
 										</div>

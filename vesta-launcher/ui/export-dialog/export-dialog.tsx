@@ -42,6 +42,7 @@ import {
 	Show,
 } from "solid-js";
 import styles from "./export-dialog.module.css";
+import { t } from "~/localization";
 
 export interface ExportDialogProps {
 	isOpen: boolean;
@@ -222,7 +223,7 @@ export function ExportDialog(props: ExportDialogProps) {
 			const selectedDir = await open({
 				directory: true,
 				multiple: false,
-				title: "Select Output Folder",
+				title: t("shared-ui-select-output-folder"),
 				defaultPath: await downloadDir(),
 			});
 
@@ -263,15 +264,15 @@ export function ExportDialog(props: ExportDialogProps) {
 			);
 
 			showToast({
-				title: "Export Started",
-				description: `Exporting modpack to ${fileName} in the background.`,
+				title: t("shared-ui-export-started"),
+				description: t("shared-ui-exporting-modpack-background", { fileName }),
 				severity: "success",
 			});
 		} catch (e: any) {
 			console.error("Export failed:", e);
 			showToast({
-				title: "Export Failed",
-				description: e.toString() || "Unknown error occurred",
+				title: t("shared-ui-export-failed"),
+				description: e.toString() || t("shared-ui-unknown-error-occurred"),
 				severity: "error",
 			});
 		} finally {
@@ -411,7 +412,7 @@ export function ExportDialog(props: ExportDialogProps) {
 								"border-radius": "8px",
 								"margin-left": "-4px",
 							}}
-							title="Back to Metadata"
+							title={t("shared-ui-back-to-metadata")}
 						>
 							<BackIcon width={18} height={18} fill="currentColor" />
 						</LauncherButton>
@@ -425,12 +426,12 @@ export function ExportDialog(props: ExportDialogProps) {
 						}}
 					>
 						<DialogTitle style={{ "line-height": 1.2 }}>
-							Export Instance: {props.instanceName}
+							{t("shared-ui-export-instance", { instanceName: props.instanceName })}
 						</DialogTitle>
 						<DialogDescription style={{ "line-height": 1.4 }}>
 							{view() === "metadata"
-								? "Configure modpack metadata and format."
-								: "Select the files you want to include in the modpack."}
+								? t("shared-ui-configure-modpack-metadata-format")
+								: t("shared-ui-select-files-include-modpack")}
 						</DialogDescription>
 					</div>
 				</DialogHeader>
@@ -468,7 +469,7 @@ export function ExportDialog(props: ExportDialogProps) {
 										opacity: 0.6,
 									}}
 								>
-									Scanning instance directory...
+									{t("shared-ui-scanning-instance-directory")}
 								</div>
 							</Show>
 
@@ -480,7 +481,7 @@ export function ExportDialog(props: ExportDialogProps) {
 										opacity: 0.6,
 									}}
 								>
-									No exportable files found.
+									{t("shared-ui-no-exportable-files")}
 								</div>
 							</Show>
 
@@ -502,34 +503,34 @@ export function ExportDialog(props: ExportDialogProps) {
 						>
 							<div style={{ display: "flex", gap: "12px" }}>
 								<TextFieldRoot style={{ flex: 1 }}>
-									<TextFieldLabel>Modpack Name</TextFieldLabel>
+									<TextFieldLabel>{t("shared-ui-modpack-name")}</TextFieldLabel>
 									<TextFieldInput
 										value={modpackName()}
 										onInput={(e: any) => setModpackName(e.currentTarget.value)}
-										placeholder="My Modpack"
+										placeholder={t("shared-ui-my-modpack")}
 									/>
 								</TextFieldRoot>
 								<TextFieldRoot style={{ width: "120px" }}>
-									<TextFieldLabel>Version</TextFieldLabel>
+									<TextFieldLabel>{t("shared-ui-version")}</TextFieldLabel>
 									<TextFieldInput
 										value={version()}
 										onInput={(e: any) => setVersion(e.currentTarget.value)}
-										placeholder="1.0.0"
+										placeholder={t("shared-ui-version-example")}
 									/>
 								</TextFieldRoot>
 							</div>
 
 							<div style={{ display: "flex", gap: "12px" }}>
 								<TextFieldRoot style={{ flex: 1 }}>
-									<TextFieldLabel>Author</TextFieldLabel>
+									<TextFieldLabel>{t("shared-ui-author")}</TextFieldLabel>
 									<TextFieldInput
 										value={author()}
 										onInput={(e: any) => setAuthor(e.currentTarget.value)}
-										placeholder="Username"
+										placeholder={t("shared-ui-username")}
 									/>
 								</TextFieldRoot>
 								<TextFieldRoot style={{ flex: 1 }}>
-									<TextFieldLabel>Format</TextFieldLabel>
+									<TextFieldLabel>{t("shared-ui-format")}</TextFieldLabel>
 									<Select
 										options={["modrinth", "curseforge"]}
 										value={exportFormat()}
@@ -554,11 +555,11 @@ export function ExportDialog(props: ExportDialogProps) {
 							<TextFieldRoot
 								style={{ flex: 1, display: "flex", "flex-direction": "column" }}
 							>
-								<TextFieldLabel>Description</TextFieldLabel>
+								<TextFieldLabel>{t("shared-ui-description")}</TextFieldLabel>
 								<TextFieldTextArea
 									value={description()}
 									onInput={(e: any) => setDescription(e.currentTarget.value)}
-									placeholder="A short description of your modpack..."
+									placeholder={t("shared-ui-short-modpack-description-placeholder")}
 									style={{ flex: 1, "min-height": "100px", resize: "none" }}
 								/>
 							</TextFieldRoot>
@@ -581,7 +582,7 @@ export function ExportDialog(props: ExportDialogProps) {
 									}}
 								>
 									<span style={{ "font-weight": "inherit" }}>
-										Select Files to Include
+										{t("shared-ui-select-files-to-include")}
 									</span>
 									<span
 										style={{
@@ -590,7 +591,7 @@ export function ExportDialog(props: ExportDialogProps) {
 											"font-weight": "400",
 										}}
 									>
-										({selections().size} items selected)
+										{t("shared-ui-items-selected", { count: selections().size })}
 									</span>
 								</div>
 								<RightArrowIcon width={14} height={14} />
@@ -618,7 +619,7 @@ export function ExportDialog(props: ExportDialogProps) {
 						onClick={handleExport}
 						disabled={selections().size === 0 || isExporting()}
 					>
-						{isExporting() ? "Exporting..." : "Export"}
+						{isExporting() ? t("shared-ui-exporting") : t("shared-ui-export")}
 					</LauncherButton>
 				</div>
 			</DialogContent>

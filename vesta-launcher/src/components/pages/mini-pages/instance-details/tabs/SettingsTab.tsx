@@ -682,7 +682,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							>
 								{/* SelectContent needs itemComponent to render options; derive value from the same options list to avoid object mismatch bugs. */}
 								<Select
-									options={launchBehaviorOptions}
+									options={launchBehaviorOptions()}
 									optionValue="value"
 									optionTextValue="label"
 									value={selectedLaunchBehavior()}
@@ -752,7 +752,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											p.setPreLaunchHook(e.currentTarget.value);
 											p.setIsHooksDirty(true);
 										}}
-										placeholder="e.g. C:\scripts\pre-launch.bat"
+										placeholder={t("settings-extra-pre-launch-example")}
 										style="font-family: var(--font-mono); font-size: 12px;"
 									/>
 								</TextFieldRoot>
@@ -770,7 +770,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											p.setWrapperCommand(e.currentTarget.value);
 											p.setIsHooksDirty(true);
 										}}
-										placeholder="e.g. mangohud --dlsym"
+										placeholder={t("settings-extra-wrapper-example")}
 										style="font-family: var(--font-mono); font-size: 12px;"
 									/>
 								</TextFieldRoot>
@@ -788,7 +788,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											p.setPostExitHook(e.currentTarget.value);
 											p.setIsHooksDirty(true);
 										}}
-										placeholder="e.g. powershell -File C:\scripts\cleanup.ps1"
+										placeholder={t("settings-extra-post-exit-example")}
 										style="font-family: var(--font-mono); font-size: 12px;"
 									/>
 								</TextFieldRoot>

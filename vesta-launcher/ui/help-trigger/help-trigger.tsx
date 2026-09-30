@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { HELP_CONTENT } from "@utils/help-content";
 import { type Component, Show } from "solid-js";
 import styles from "./help-trigger.module.css";
+import { t } from "~/localization";
 
 interface HelpTriggerProps {
 	topic: string;
@@ -16,7 +17,7 @@ export const HelpTrigger: Component<HelpTriggerProps> = (props) => {
 	const TriggerAction = () => (
 		<div
 			class={styles["help-trigger"]}
-			title={props.mode === "popover" ? "Click for more info" : undefined}
+			title={props.mode === "popover" ? t("shared-ui-more-info") : undefined}
 		>
 			<HelpIcon class={styles["help-trigger-icon"]} />
 		</div>

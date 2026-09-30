@@ -12,6 +12,8 @@ vi.mock("@stores/dialog-store", () => ({
 
 describe("datapack compatibility confirmation", () => {
 	beforeEach(() => vi.clearAllMocks());
+	const withoutBidiIsolation = (value: string) =>
+		value.replace(/[\u2068\u2069]/g, "");
 
 	it("does not prompt for an exact saved Minecraft version", async () => {
 		expect(
@@ -52,15 +54,18 @@ describe("datapack compatibility confirmation", () => {
 
 		expect(dialogStore.confirm).toHaveBeenCalledWith(
 			"Confirm datapack compatibility",
-			expect.stringContaining("Datapack release: 2.3.1"),
+			expect.any(String),
 			expect.objectContaining({ severity: "warning" }),
 		);
 		const description = vi.mocked(dialogStore.confirm).mock.calls[0][1] ?? "";
-		expect(description).toContain(
+		expect(withoutBidiIsolation(description)).toContain(
+			"Datapack release: 2.3.1",
+		);
+		expect(withoutBidiIsolation(description)).toContain(
 			"Provider-listed Minecraft versions: 1.20.1–1.21.3 (6 versions listed)",
 		);
-		expect(description).toContain("Target world: New World");
-		expect(description).toContain("Target saved version: 1.21.4");
+		expect(withoutBidiIsolation(description)).toContain("Target world: New World");
+		expect(withoutBidiIsolation(description)).toContain("Target saved version: 1.21.4");
 	});
 
 	it("uses a DataVersion fallback when the saved version name is unknown", () => {
@@ -74,10 +79,10 @@ describe("datapack compatibility confirmation", () => {
 			},
 			compatibility: "unknown",
 		});
-		expect(description).toContain(
+		expect(withoutBidiIsolation(description)).toContain(
 			"Provider-listed Minecraft versions: Not specified by provider",
 		);
-		expect(description).toContain("Target saved version: DataVersion 19133");
+		expect(withoutBidiIsolation(description)).toContain("Target saved version: DataVersion 19133");
 	});
 
 	it("filters environment labels and lists short version sets exactly", () => {

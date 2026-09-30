@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import CurseForgeIcon from "@assets/branding/sources/curseforge.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import ModrinthIcon from "@assets/branding/sources/modrinth.svg";
@@ -88,7 +89,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 		const inst = props.instances.find(
 			(item) => item.instancePath === instancePath,
 		);
-		if (!inst) return "Select an instance";
+		if (!inst) return t("settings-developer-select-instance-title");
 		const suffix = inst.minecraftVersion ? ` (${inst.minecraftVersion})` : "";
 		return `${inst.name}${suffix}`;
 	};
@@ -98,15 +99,15 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 		if (!inst) return [];
 		const result: StatPill[] = [];
 		if (hasNumber(inst.modsCount))
-			result.push({ label: "Mods", value: inst.modsCount });
+			result.push({ label: t("instances-details-resources-filter-mods"), value: inst.modsCount });
 		if (hasNumber(inst.resourcepacksCount))
-			result.push({ label: "Packs", value: inst.resourcepacksCount });
+			result.push({ label: t("instances-details-resources-filter-packs"), value: inst.resourcepacksCount });
 		if (hasNumber(inst.shaderpacksCount))
-			result.push({ label: "Shaders", value: inst.shaderpacksCount });
+			result.push({ label: t("instances-details-resources-filter-shaders"), value: inst.shaderpacksCount });
 		if (hasNumber(inst.worldsCount))
-			result.push({ label: "Worlds", value: inst.worldsCount });
+			result.push({ label: t("instances-worlds-title"), value: inst.worldsCount });
 		if (hasNumber(inst.screenshotsCount))
-			result.push({ label: "Shots", value: inst.screenshotsCount });
+			result.push({ label: t("install-import-shots"), value: inst.screenshotsCount });
 		return result;
 	};
 
@@ -115,15 +116,15 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 		if (!inst) return [];
 		const rows: MetaRow[] = [];
 		const lastPlayed = formatUnixTime(inst.lastPlayedAtUnixMs);
-		if (lastPlayed) rows.push({ label: "Last Played", value: lastPlayed });
+		if (lastPlayed) rows.push({ label: t("install-import-last-played"), value: lastPlayed });
 		const dirSize = formatBytesCompact(inst.gameDirectorySizeBytes);
-		if (dirSize) rows.push({ label: "Size", value: dirSize });
+		if (dirSize) rows.push({ label: t("instances-worlds-sort-size"), value: dirSize });
 		const source = formatSource(inst.modpackPlatform);
-		if (source) rows.push({ label: "Source", value: source.label });
+		if (source) rows.push({ label: t("install-import-source"), value: source.label });
 		if (hasValue(inst.modpackId))
-			rows.push({ label: "Project ID", value: inst.modpackId as string });
+			rows.push({ label: t("install-form-project-id"), value: inst.modpackId as string });
 		if (hasValue(inst.modloaderVersion))
-			rows.push({ label: "Loader", value: inst.modloaderVersion as string });
+			rows.push({ label: t("resources-filter-kind-loader"), value: inst.modloaderVersion as string });
 		return rows;
 	};
 
@@ -159,7 +160,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 					<TextFieldRoot class={styles["launcher-path-input"]}>
 						<TextFieldInput
 							value={props.basePath}
-							placeholder="Detected launcher instances path"
+							placeholder={t("install-import-launcher-path-placeholder")}
 							onInput={(e) =>
 								handlePathChange((e.target as HTMLInputElement).value)
 							}
@@ -170,7 +171,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 						onClick={props.onBrowse}
 						disabled={props.isLoading || props.isImporting}
 					>
-						Browse
+						{t("settings-java-source-browse")}
 					</LauncherButton>
 					<Show when={isPathEdited() && !props.isLoading}>
 						<LauncherButton
@@ -178,7 +179,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 							onClick={handleRescan}
 							disabled={props.isLoading || props.isImporting}
 						>
-							Rescan
+							{t("settings-java-rescan")}
 						</LauncherButton>
 					</Show>
 				</div>
@@ -209,7 +210,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 
 				<Show when={props.hasScanned && props.instances.length === 0}>
 					<p class={styles["fetching-subtext"]}>
-						No instances found for the selected launcher and path.
+						{t("install-import-no-instances")}
 					</p>
 				</Show>
 
@@ -219,7 +220,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 						onClick={props.onImport}
 						disabled={!props.selectedInstancePath || props.isImporting}
 					>
-						{props.isImporting ? "Importing..." : "Import Selected"}
+						{props.isImporting ? t("install-importing") : t("install-import-selected")}
 					</LauncherButton>
 				</div>
 			</div>
@@ -302,12 +303,12 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 						<button
 							class={styles["import-path-button"]}
 							onClick={handleOpenFolder}
-							title="Open game directory in file manager"
+							title={t("install-import-open-game-directory-title")}
 							type="button"
 						>
 							<FolderIcon class={styles["import-path-icon"]} />
 							<span class={styles["import-path-text"]}>{gameDirPath()}</span>
-							<span class={styles["import-path-hint"]}>Open</span>
+							<span class={styles["import-path-hint"]}>{t("settings-help-action-open")}</span>
 						</button>
 					</Show>
 				</div>

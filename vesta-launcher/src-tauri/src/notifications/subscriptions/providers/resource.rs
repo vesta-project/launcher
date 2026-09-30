@@ -67,11 +67,19 @@ impl SubscriptionProvider for ResourceProvider {
 
             items.push(NotificationUpdateItem {
                 id: format!("{}-{}", project_id, latest.id),
-                title: format!("New Update: {}", latest.version_number),
-                description: Some(format!(
-                    "A new version for {} has been released on {}.",
-                    sub.title, platform_str
-                )),
+                title: {
+                    let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("version", latest.version_number.as_str());
+                    localization.format("rust-native-new-resource-update-title", Some(&args))
+                },
+                description: {
+                    let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                    let mut args = fluent_bundle::FluentArgs::new();
+                    args.set("project", sub.title.as_str());
+                    args.set("platform", platform_str);
+                    Some(localization.format("rust-native-new-resource-update-description", Some(&args)))
+                },
                 link: Some(link),
                 metadata: serde_json::json!({
                     "platform": platform_str,

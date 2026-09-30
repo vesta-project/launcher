@@ -41,7 +41,7 @@ import {
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { onCleanup, onMount } from "solid-js";
-import { applyLanguagePreference } from "~/localization";
+import { applyLanguagePreference, t } from "~/localization";
 
 export interface ExitCheckResponse {
 	can_exit: boolean;
@@ -228,9 +228,8 @@ function Root(props: ChildrenProp) {
 					openMiniPage(event.payload.path, event.payload.params);
 				} else {
 					showToast({
-						title: "App Not Ready",
-						description:
-							"Please wait for the app to fully load before navigating.",
+						title: t("action-app-not-ready-title"),
+						description: t("action-app-not-ready-description"),
 						severity: "error",
 						duration: 5000,
 					});
@@ -246,15 +245,18 @@ function Root(props: ChildrenProp) {
 				if (check.can_exit) {
 					await invoke("exit_app");
 				} else {
-					const confirmed = await dialogStore.confirm(
-						"Active Processes Detected",
-						`The launcher is still performing some actions or games are running:\n\n${[
+					const processList = [
 							...check.running_instances.map((i) => `• ${i}`),
 							...check.blocking_tasks.map((t) => `• ${t}`),
-						].join("\n")}\n\nClosing now may cause issues.`,
+						].join("\n");
+					const confirmed = await dialogStore.confirm(
+						t("action-active-processes-title"),
+						t("action-active-processes-description", {
+							processes: processList,
+						}),
 						{
-							okLabel: "Exit Anyway",
-							cancelLabel: "Stay Open",
+							okLabel: t("action-active-processes-exit-anyway"),
+							cancelLabel: t("action-active-processes-stay-open"),
 							isDestructive: true,
 							severity: "warning",
 						},
@@ -266,9 +268,8 @@ function Root(props: ChildrenProp) {
 			} catch (e) {
 				console.error("Failed to perform exit check:", e);
 				showToast({
-					title: "Unable to confirm safe exit",
-					description:
-						"Vesta couldn't validate running tasks right now, so the launcher will stay open.",
+					title: t("action-safe-exit-failed-title"),
+					description: t("action-safe-exit-failed-description"),
 					severity: "warning",
 				});
 			}

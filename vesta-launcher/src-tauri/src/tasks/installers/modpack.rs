@@ -227,12 +227,24 @@ impl Task for InstallModpackTask {
         format!("Install Modpack {}", self.instance.name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-install-modpack", &[("instance", &self.instance.name)])
+    }
+
     fn starting_description(&self) -> String {
         format!("Preparing to install modpack: {}", self.instance.name)
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-preparing-install-modpack", &[("instance", &self.instance.name)])
+    }
+
     fn completion_description(&self) -> String {
         format!("Successfully installed modpack: {}", self.instance.name)
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-installed-modpack", &[("instance", &self.instance.name)])
     }
 
     fn show_completion_notification(&self) -> bool {
@@ -263,7 +275,7 @@ impl Task for InstallModpackTask {
             let modpack_path = match source {
                 ModpackSource::Path(p) => p,
                 ModpackSource::Url(u) => {
-                    reporter.set_message("Downloading modpack zip...");
+                    reporter.set_message(&reporter.ctx.text("rust-task-downloading-modpack-zip"));
 
                     let client = piston_lib::client::shared_client();
 
@@ -454,14 +466,14 @@ impl Task for InstallModpackTask {
             )
             .await?;
 
-            ctx.update_description("Attaching resource watcher…".to_string());
+            ctx.update_description(ctx.text("rust-task-attaching-resource-watcher"));
             let watcher = app_handle.state::<crate::resources::watcher::ResourceWatcher>();
             watcher
                 .watch_instance_without_scan(instance.id, game_dir.to_string_lossy().into_owned())
                 .await
                 .map_err(|error| format!("Failed to attach resource watcher: {error}"))?;
 
-            ctx.update_description("Finalizing installed instance…".to_string());
+            ctx.update_description(ctx.text("rust-task-finalizing-installed-instance"));
             diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
                 .set(inst_dsl::installation_status.eq(Some("installed".to_string())))
                 .execute(&mut conn)

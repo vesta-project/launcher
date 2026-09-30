@@ -8,6 +8,7 @@ import { versionMatchesResourceType } from "@utils/resource-install-intent";
 import { getCompatibilityForInstance } from "@utils/resources";
 import { sanitizeHtml } from "@utils/security";
 import { marked } from "marked";
+import { t } from "~/localization";
 
 function compareVersionLabels(left: string, right: string): number {
 	return left.localeCompare(right, undefined, {
@@ -33,10 +34,19 @@ export function minecraftGameVersions(
 
 export function summarizeGameVersions(gameVersions: readonly string[]): string {
 	const versions = minecraftGameVersions(gameVersions);
-	if (versions.length === 0) return "No MC version listed";
-	if (versions.length === 1) return `MC ${versions[0]}`;
-	if (versions.length <= 3) return `MC ${versions.join(", ")}`;
-	return `MC ${versions[0]} — ${versions[versions.length - 1]}`;
+	if (versions.length === 0) return t("resources-version-no-minecraft-version");
+	if (versions.length === 1) {
+		return t("resources-version-minecraft-single", { version: versions[0] });
+	}
+	if (versions.length <= 3) {
+		return t("resources-version-minecraft-short-list", {
+			versions: versions.join(", "),
+		});
+	}
+	return t("resources-version-minecraft-range", {
+		first: versions[0],
+		last: versions[versions.length - 1],
+	});
 }
 
 export function resourceProjectKey(

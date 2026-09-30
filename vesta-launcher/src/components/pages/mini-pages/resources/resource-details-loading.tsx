@@ -1,4 +1,5 @@
 import { For } from "solid-js";
+import { t } from "~/localization";
 import styles from "./resource-details.module.css";
 
 const SkeletonLine = (props: { class?: string }) => (
@@ -9,7 +10,7 @@ export const ResourceDescriptionLoading = () => (
 	<div
 		class={styles["resource-description-loading"]}
 		aria-busy="true"
-		aria-label="Loading resource description"
+		aria-label={t("resources-loading-description")}
 	>
 		<SkeletonLine class={styles["resource-skeleton-title"]} />
 		<SkeletonLine class={styles["resource-skeleton-lead"]} />
@@ -29,7 +30,7 @@ export const ResourceVersionsLoading = () => (
 	<div
 		class={styles["resource-versions-loading"]}
 		aria-busy="true"
-		aria-label="Loading resource versions"
+		aria-label={t("resources-loading-versions")}
 	>
 		<For each={[0, 1, 2, 3, 4]}>
 			{() => (
@@ -50,7 +51,7 @@ export const ResourceDetailsSidebarLoading = () => (
 	<div
 		class={`${styles["sidebar-scrollable-area"]} ${styles["resource-sidebar-loading"]}`}
 		aria-busy="true"
-		aria-label="Loading resource installation details"
+		aria-label={t("resources-loading-install-details")}
 	>
 		<section class={styles["resource-sidebar-loading-section"]}>
 			<SkeletonLine class={styles["resource-skeleton-sidebar-heading"]} />

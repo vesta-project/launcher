@@ -2,6 +2,7 @@ import CloseIcon from "@assets/icons/actions/close.svg";
 import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
 import { batch, For, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "./resource-browser.module.css";
 
 export function hasActiveBrowseFilters(): boolean {
@@ -37,8 +38,10 @@ export function ActiveFilterChips(props: { router?: any }) {
 			);
 			result.push({
 				key: "instance",
-				kind: "Instance",
-				label: inst?.name || `Instance #${resources.state.selectedInstanceId}`,
+				kind: t("resources-filter-kind-instance"),
+				label: inst?.name || t("resources-filter-instance-number", {
+					id: resources.state.selectedInstanceId,
+				}),
 				onRemove: () => {
 					batch(() => {
 						resources.setInstance(null);
@@ -56,7 +59,7 @@ export function ActiveFilterChips(props: { router?: any }) {
 		if (resources.state.gameVersion) {
 			result.push({
 				key: "version",
-				kind: "MC",
+				kind: t("resources-filter-kind-minecraft"),
 				label: resources.state.gameVersion,
 				onRemove: () => {
 					resources.setGameVersion(null);
@@ -72,7 +75,7 @@ export function ActiveFilterChips(props: { router?: any }) {
 				resources.state.loader.slice(1);
 			result.push({
 				key: "loader",
-				kind: "Loader",
+				kind: t("resources-filter-kind-loader"),
 				label: loaderName,
 				onRemove: () => {
 					resources.setLoader(null);
@@ -117,7 +120,10 @@ export function ActiveFilterChips(props: { router?: any }) {
 							class={styles["filter-chip"]}
 							onClick={chip.onRemove}
 							type="button"
-							title={`Remove ${chip.kind || "filter"}: ${chip.label}`}
+							title={t("resources-filter-remove-title", {
+								kind: chip.kind || t("resources-filter-generic"),
+								label: chip.label,
+							})}
 						>
 							<Show when={chip.kind}>
 								<span class={styles["filter-chip-kind"]}>{chip.kind}</span>
@@ -141,7 +147,7 @@ export function ActiveFilterChips(props: { router?: any }) {
 					}}
 					type="button"
 				>
-					Clear all
+					{t("resources-filter-clear-all")}
 				</button>
 			</div>
 		</Show>

@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import BackArrowIcon from "@assets/icons/navigation/arrow-back.svg";
 import ForwardsArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
@@ -18,8 +19,8 @@ function FlatNavigationControls() {
 				class={styles["flat-navigation-controls__button"]}
 				onClick={() => void history.back()}
 				disabled={!history.canGoBack()}
-				aria-label="Back"
-				title="Back"
+				aria-label={t("app-shell-back")}
+				title={t("app-shell-back")}
 			>
 				<BackArrowIcon />
 			</button>
@@ -28,8 +29,8 @@ function FlatNavigationControls() {
 				class={styles["flat-navigation-controls__button"]}
 				onClick={history.forward}
 				disabled={!history.canGoForward()}
-				aria-label="Forward"
-				title="Forward"
+				aria-label={t("app-shell-forward")}
+				title={t("app-shell-forward")}
 			>
 				<ForwardsArrowIcon />
 			</button>
@@ -39,8 +40,8 @@ function FlatNavigationControls() {
 					class={`${styles["flat-navigation-controls__button"]} ${history.isReloading() ? styles["flat-navigation-controls__button--loading"] : ""}`}
 					onClick={history.reload}
 					disabled={history.isReloading()}
-					aria-label="Reload"
-					title="Reload"
+					aria-label={t("app-shell-reload")}
+					title={t("app-shell-reload")}
 				>
 					<RefreshIcon />
 				</button>

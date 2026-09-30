@@ -227,11 +227,8 @@ pub fn publish_auth_service_unavailable(app_handle: &AppHandle, failure: &AuthFa
 
     let _ = manager.create(crate::notifications::models::CreateNotificationInput {
         client_key: Some(AUTH_SERVICE_UNAVAILABLE_NOTIFICATION_KEY.to_string()),
-        title: Some("Minecraft Authentication Unavailable".to_string()),
-        description: Some(
-            "Vesta cannot reach Minecraft authentication services. Previously authenticated accounts can still launch offline."
-                .to_string(),
-        ),
+        title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-authentication-unavailable-title")),
+        description: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-authentication-unavailable-description")),
         severity: Some("warning".to_string()),
         notification_type: Some(crate::notifications::models::NotificationType::Patient),
         dismissible: Some(true),
@@ -428,15 +425,15 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
 
     let actions = vec![NotificationAction {
         action_id: "logout_guest".to_string(),
-        label: "Sign In".to_string(),
+        label: app_handle.state::<crate::localization::LocalizationManager>().text("auth-sign-in"),
         action_type: "primary".to_string(),
         payload: None,
     }];
 
     if let Err(e) = manager.create(CreateNotificationInput {
         client_key: Some("guest_mode_warning".to_string()),
-        title: Some("Guest Mode Active".to_string()),
-        description: Some("You are in guest mode. Changes will not be saved, and certain features are restricted.".to_string()),
+        title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-guest-mode-title")),
+        description: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-guest-mode-description")),
         severity: Some("info".to_string()),
         notification_type: Some(NotificationType::Patient),
         dismissible: Some(false),

@@ -7,6 +7,35 @@ import { createResource, For, Show } from "solid-js";
 import { t } from "~/localization";
 import styles from "../settings-page.module.css";
 
+const SOURCE_TITLE_IDS: Record<string, string> = {
+	minecraft_versions: "settings-notifications-source-minecraft-version-updates",
+	mojang_news: "settings-notifications-source-minecraft-news",
+	patch_notes: "settings-notifications-source-java-patch-notes",
+	fabric_news: "settings-notifications-source-fabric-news",
+	quilt_news: "settings-notifications-source-quilt-news",
+	forge_releases: "settings-notifications-source-forge-releases",
+	neoforge_releases: "settings-notifications-source-neoforge-all-news",
+	neoforge_announcements: "settings-notifications-source-neoforge-news",
+};
+
+const SOURCE_TITLE_IDS_BY_ENGLISH_TITLE: Record<string, string> = {
+	"Minecraft Version Updates": SOURCE_TITLE_IDS.minecraft_versions,
+	"Minecraft News": SOURCE_TITLE_IDS.mojang_news,
+	"Java Patch Notes": SOURCE_TITLE_IDS.patch_notes,
+	"Fabric News": SOURCE_TITLE_IDS.fabric_news,
+	"Quilt News": SOURCE_TITLE_IDS.quilt_news,
+	"Forge Releases": SOURCE_TITLE_IDS.forge_releases,
+	"NeoForge All News": SOURCE_TITLE_IDS.neoforge_releases,
+	"NeoForge News": SOURCE_TITLE_IDS.neoforge_announcements,
+};
+
+const PROVIDER_TYPE_IDS: Record<string, string> = {
+	game: "settings-notifications-provider-game",
+	news: "settings-notifications-provider-news",
+	patch_notes: "settings-notifications-provider-patch-notes",
+	rss: "settings-notifications-provider-rss",
+};
+
 export const NotificationSettingsTab = () => {
 	const [subscriptions, { refetch }] = createResource<any[]>(() =>
 		invoke("get_notification_subscriptions"),
@@ -24,12 +53,26 @@ export const NotificationSettingsTab = () => {
 	const deleteSub = async (id: string) => {
 		await invoke("delete_notification_subscription", { id });
 		await refetch();
-		// @ts-expect-error
 		await refetchSources();
 	};
 
 	const checkNow = async () => {
 		await invoke("check_notifications_now");
+	};
+
+	const getSourceTitle = (source: any) => {
+		const messageId = SOURCE_TITLE_IDS[source.id];
+		return messageId ? t(messageId) : source.title;
+	};
+
+	const getSubscriptionTitle = (subscription: any) => {
+		const messageId = SOURCE_TITLE_IDS_BY_ENGLISH_TITLE[subscription.title];
+		return messageId ? t(messageId) : subscription.title;
+	};
+
+	const getProviderType = (providerType: string) => {
+		const messageId = PROVIDER_TYPE_IDS[providerType];
+		return messageId ? t(messageId) : providerType;
 	};
 
 	const _addPreset = async (title: string, url: string) => {
@@ -41,8 +84,7 @@ export const NotificationSettingsTab = () => {
 		try {
 			await invoke("subscribe_to_preset_source", { source });
 			await refetch();
-			// @ts-expect-error
-			await refetchSources();
+				await refetchSources();
 		} catch (e) {
 			console.error("Failed to subscribe:", e);
 		}
@@ -86,9 +128,9 @@ export const NotificationSettingsTab = () => {
 							{(sub) => (
 								<div class={styles["subscription-item"]}>
 									<div class={styles["sub-info"]}>
-										<div class={styles["sub-title"]}>{sub.title}</div>
+										<div class={styles["sub-title"]}>{getSubscriptionTitle(sub)}</div>
 										<div class={styles["sub-type"]}>
-											{sub.provider_type}
+											{getProviderType(sub.provider_type)}
 											{sub.metadata && (
 												<span
 													style={{
@@ -163,9 +205,9 @@ export const NotificationSettingsTab = () => {
 									>
 										{isSubscribed
 											? t("settings-notifications-subscribed-to", {
-													title: source.title,
+													title: getSourceTitle(source),
 												})
-											: source.title}
+											: getSourceTitle(source)}
 									</Button>
 								);
 							}}

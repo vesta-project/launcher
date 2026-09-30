@@ -13,21 +13,19 @@ pub async fn test_blocking_dialog(
 ) -> Result<String, String> {
     let request = DialogRequest {
         id: uuid::Uuid::new_v4(),
-        title: "Backend Blocking Test".to_string(),
-        description: Some(
-            "This dialog was triggered by the backend! Do you want to continue?".to_string(),
-        ),
+        title: app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-dialog-test-title"),
+        description: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-dialog-test-description")),
         severity: DialogSeverity::Question,
         actions: vec![
             DialogAction {
                 id: "no".to_string(),
-                label: "No, Stop!".to_string(),
+                label: app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-dialog-test-stop"),
                 color: Some("none".to_string()),
                 variant: Some("ghost".to_string()),
             },
             DialogAction {
                 id: "yes".to_string(),
-                label: "Yes, Proceed".to_string(),
+                label: app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-dialog-test-proceed"),
                 color: Some("primary".to_string()),
                 variant: Some("solid".to_string()),
             },
@@ -832,11 +830,16 @@ fn notify_unsupported_window_effect(
             "window_effect_unsupported_{}_{}",
             os, requested_effect
         )),
-        title: Some("Window effect unavailable on this OS".to_string()),
-        description: Some(format!(
-            "The '{}' window effect is not supported on {}{}. Falling back to '{}'.",
-            requested_effect, os, version_suffix, active_effect
-        )),
+        title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-window-effect-unavailable-title")),
+        description: {
+            let localization = app_handle.state::<crate::localization::LocalizationManager>();
+            let mut args = fluent_bundle::FluentArgs::new();
+            args.set("requestedEffect", requested_effect);
+            args.set("os", os);
+            args.set("versionSuffix", version_suffix.as_str());
+            args.set("activeEffect", active_effect);
+            Some(localization.format("rust-native-window-effect-unavailable-description", Some(&args)))
+        },
         severity: Some("warning".to_string()),
         notification_type: Some(NotificationType::Immediate),
         dismissible: Some(true),

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { check, type Update } from "@tauri-apps/plugin-updater";
+import { t } from "~/localization";
 import {
 	createNotification,
 	type NotificationAction,
@@ -57,8 +58,8 @@ export function initUpdateListener() {
 
 				// Re-use the existing notification to show installation progress
 				await createNotification({
-					title: "Installing Update",
-					description: "Applying changes and restarting...",
+					title: t("app-services-installing-update"),
+					description: t("app-services-applying-update"),
 					notification_type: "progress",
 					severity: "info",
 					progress: PROGRESS_INDETERMINATE,
@@ -82,8 +83,8 @@ export function initUpdateListener() {
 				console.error("[Updater] Failed to install update:", error);
 				await showAlert(
 					"error",
-					"Update Error",
-					`Failed to install the update: ${error}. Please try again manually.`,
+					t("app-services-update-error"),
+					t("app-services-install-update-failed", { error: String(error) }),
 					null,
 					null,
 					null,
@@ -120,8 +121,10 @@ export async function downloadUpdate() {
 	try {
 		// Create a progress notification
 		await createNotification({
-			title: "Updating Vesta",
-			description: `Downloading version ${update.version}...`,
+			title: t("app-services-updating-vesta"),
+			description: t("app-services-downloading-version", {
+				version: update.version,
+			}),
 			notification_type: "progress",
 			severity: "info",
 			progress: 0,
@@ -177,14 +180,16 @@ export async function downloadUpdate() {
 		const actions: NotificationAction[] = [
 			{
 				id: "install_app_update",
-				label: "Install & Restart",
+				label: t("app-services-install-restart"),
 				type: "primary",
 			},
 		];
 
 		await createNotification({
-			title: "Update Downloaded",
-			description: `Vesta v${update.version} is ready to install. Restart to apply changes.`,
+			title: t("app-services-update-downloaded"),
+			description: t("app-services-update-ready-description", {
+				version: update.version,
+			}),
 			notification_type: "patient",
 			severity: "success",
 			dismissible: false,
@@ -196,8 +201,8 @@ export async function downloadUpdate() {
 		isDownloaded = false;
 		console.error("Failed to download update:", error);
 
-		let errorMessage = "Failed to download the update. Please try again.";
-		let errorTitle = "Download Error";
+		let errorMessage = t("app-services-download-update-failed");
+		let errorTitle = t("app-services-download-error");
 
 		if (
 			error &&
@@ -205,17 +210,17 @@ export async function downloadUpdate() {
 			(error.includes("Invalid encoding in minisign data") ||
 				error.includes("signature"))
 		) {
-			errorTitle = "Update Verification Failed";
+			errorTitle = t("app-services-update-verification-failed");
 			errorMessage =
-				"The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
+				t("app-services-update-signature-invalid");
 		} else if (
 			error instanceof Error &&
 			(error.message.includes("Invalid encoding in minisign data") ||
 				error.message.includes("signature"))
 		) {
-			errorTitle = "Update Verification Failed";
+			errorTitle = t("app-services-update-verification-failed");
 			errorMessage =
-				"The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
+				t("app-services-update-signature-invalid");
 		}
 
 		await createNotification({
@@ -247,8 +252,10 @@ export async function checkForAppUpdates(silent = false) {
 				if (!silent) {
 					await showAlert(
 						"info",
-						"Update Available",
-						`Version ${update.version} is available. Downloading now...`,
+						t("app-services-update-available"),
+						t("app-services-update-available-downloading", {
+							version: update.version,
+						}),
 						null,
 						null,
 						null,
@@ -261,14 +268,16 @@ export async function checkForAppUpdates(silent = false) {
 				const actions: NotificationAction[] = [
 					{
 						id: "download_app_update",
-						label: "Download",
+						label: t("shared-ui-download"),
 						type: "primary",
 					},
 				];
 
 				await createNotification({
-					title: "Update Available",
-					description: `Vesta Launcher v${update.version} is now available!`,
+					title: t("app-services-update-available"),
+					description: t("app-services-update-available-description", {
+						version: update.version,
+					}),
 					notification_type: "patient",
 					severity: "info",
 					dismissible: false,
@@ -279,8 +288,10 @@ export async function checkForAppUpdates(silent = false) {
 				if (!silent) {
 					await showAlert(
 						"info",
-						"Update Available",
-						`Version ${update.version} is available.`,
+						t("app-services-update-available"),
+						t("app-services-update-available-version", {
+							version: update.version,
+						}),
 						null,
 						null,
 						null,
@@ -292,8 +303,8 @@ export async function checkForAppUpdates(silent = false) {
 		} else if (!silent) {
 			await showAlert(
 				"success",
-				"No Updates",
-				"You are running the latest version of Vesta.",
+				t("app-services-no-updates"),
+				t("app-services-latest-version"),
 				null,
 				null,
 				null,
@@ -306,8 +317,8 @@ export async function checkForAppUpdates(silent = false) {
 		if (!silent) {
 			await showAlert(
 				"error",
-				"Update Error",
-				"Could not check for updates. Please try again later.",
+				t("app-services-update-error"),
+				t("app-services-check-updates-failed"),
 				null,
 				null,
 				null,
@@ -325,14 +336,18 @@ export async function simulateUpdateProcess() {
 		const simulatedVersion = "9.9.9-debug";
 		showAlert(
 			"info",
-			"Update Available (Simulated)",
-			`Version ${simulatedVersion} is available. Downloading now...`,
+			t("settings-developer-update-available-title"),
+			t("app-services-update-available-downloading", {
+						version: simulatedVersion,
+			}),
 		);
 
 		// Create a progress notification
 		await createNotification({
-			title: "Updating Vesta (Simulated)",
-			description: `Downloading version ${simulatedVersion}...`,
+			title: t("app-services-updating-vesta-simulated"),
+			description: t("app-services-downloading-version", {
+				version: simulatedVersion,
+			}),
 			notification_type: "progress",
 			severity: "info",
 			progress: 0,
@@ -354,15 +369,17 @@ export async function simulateUpdateProcess() {
 		const actions = [
 			{
 				id: "install_app_update",
-				label: "Install & Restart",
+				label: t("app-services-install-restart"),
 				type: "primary",
 			},
 		];
 
 		await invoke("create_notification", {
 			payload: {
-				title: "Update Ready (Simulated)",
-				description: `Vesta has been updated to v${simulatedVersion}. Please restart to apply changes.`,
+				title: t("app-services-update-ready-simulated"),
+				description: t("app-services-update-ready-simulated-description", {
+					version: simulatedVersion,
+				}),
 				notification_type: "patient",
 				severity: "success",
 				dismissible: true,

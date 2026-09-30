@@ -25,6 +25,10 @@ impl Task for UpdateModpackTask {
         "Updating Modpack".to_string()
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-updating-modpack")
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!("update_modpack_{}", self.instance_id))
     }
@@ -41,8 +45,16 @@ impl Task for UpdateModpackTask {
         "Preparing modpack update...".to_string()
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-preparing-modpack-update")
+    }
+
     fn completion_description(&self) -> String {
         "Modpack updated successfully".to_string()
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-modpack-updated-successfully")
     }
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
@@ -74,7 +86,7 @@ impl Task for UpdateModpackTask {
                 .map_err(|e| format!("Instance not found: {}", e))?;
 
             // ─── Safeguard: ensure Minecraft is not running ──────────────
-            ctx.update_description("Checking that Minecraft is not running...".to_string());
+            ctx.update_description(ctx.text("rust-task-checking-minecraft-stopped"));
             if let Err(e) = safeguards::check_instance_not_running(&game_dir) {
                 return Err(format!("{}", e));
             }
@@ -101,7 +113,7 @@ impl Task for UpdateModpackTask {
 
             ctx.update_full(
                 90,
-                "Saving manifest and finalizing...".to_string(),
+                ctx.text("rust-task-saving-manifest-finalizing"),
                 Some(5),
                 Some(6),
             );
@@ -172,29 +184,21 @@ impl Task for UpdateModpackTask {
             status_guard.mark_success();
             finished.publish(&app_handle, instance_id, &game_dir);
 
-            let skipped_msg = if skipped_deletions > 0 {
-                format!(" ({} user-modified files were kept)", skipped_deletions)
-            } else {
-                String::new()
-            };
-            let world_msg = if preserved_worlds > 0 {
-                format!(
-                    " {} world save(s) were preserved in timestamped folders.",
-                    preserved_worlds
-                )
-            } else {
-                String::new()
-            };
-
             ctx.update_full(
                 100,
                 if already_up_to_date {
-                    "Modpack is already up to date.".to_string()
+                    ctx.text("rust-task-modpack-already-up-to-date")
                 } else {
-                    format!(
-                        "Modpack updated to version {} successfully.{}{}",
-                        plan.new_manifest.version, skipped_msg, world_msg
-                    )
+                    let version = plan.new_manifest.version.to_string();
+                    let skipped = skipped_deletions.to_string();
+                    let preserved = preserved_worlds.to_string();
+                    let message_id = match (skipped_deletions > 0, preserved_worlds > 0) {
+                        (true, true) => "rust-task-modpack-updated-with-skipped-and-preserved",
+                        (true, false) => "rust-task-modpack-updated-with-skipped",
+                        (false, true) => "rust-task-modpack-updated-with-preserved",
+                        (false, false) => "rust-task-modpack-updated",
+                    };
+                    crate::tasks::manager::localized_message(&ctx.app_handle.state::<crate::localization::LocalizationManager>(), message_id, &[("version", &version), ("skipped", &skipped), ("preserved", &preserved)])
                 },
                 Some(6),
                 Some(6),

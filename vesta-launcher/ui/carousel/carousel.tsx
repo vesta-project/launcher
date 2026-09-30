@@ -15,6 +15,7 @@ import {
 	useContext,
 } from "solid-js";
 import styles from "./carousel.module.css";
+import { t } from "~/localization";
 
 export type CarouselApi = CreateEmblaCarouselType[1];
 
@@ -221,7 +222,7 @@ const CarouselPrevious: Component<CarouselButtonProps> = (rawProps) => {
 			{...others}
 		>
 			<ArrowBackIcon class={styles["carousel-control-icon"]} />
-			<span class={styles["sr-only"]}>Previous slide</span>
+			<span class={styles["sr-only"]}>{t("shared-ui-previous-slide")}</span>
 		</Button>
 	);
 };
@@ -250,7 +251,7 @@ const CarouselNext: Component<CarouselButtonProps> = (rawProps) => {
 			{...others}
 		>
 			<ArrowForwardIcon class={styles["carousel-control-icon"]} />
-			<span class={styles["sr-only"]}>Next slide</span>
+			<span class={styles["sr-only"]}>{t("shared-ui-next-slide")}</span>
 		</Button>
 	);
 };

@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import Button from "@ui/button/button";
 import { useOs } from "@utils/os";
 import { createSignal } from "solid-js";
+import { t } from "~/localization";
 import styles from "./fatal-page.module.css";
 
 const [fatalInfo, setFatalInfo] = createSignal<{
@@ -25,9 +26,19 @@ function FatalPage() {
 			<TitleBar os={os()} />
 
 			<div class={styles["fatal-page__wrapper"]}>
-				<h1>{fatalInfo().title}</h1>
-				<p>{fatalInfo().description}</p>
-				<Button onClick={() => navigate("/", { replace: true })}>Back</Button>
+				<h1>
+					{fatalInfo().title === "Fatal Error"
+						? t("secondary-fatal-title")
+						: fatalInfo().title}
+				</h1>
+				<p>
+					{fatalInfo().description === "unknown"
+						? t("secondary-fatal-unknown")
+						: fatalInfo().description}
+				</p>
+				<Button onClick={() => navigate("/", { replace: true })}>
+					{t("app-shell-back")}
+				</Button>
 			</div>
 		</div>
 	);

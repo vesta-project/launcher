@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import {
 	Dialog,
 	DialogContent,
@@ -82,15 +83,17 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 			}
 
 			showToast({
-				title: "Installation Started",
-				description: `Installing ${data.name}... Check notifications for progress.`,
+				title: t("resources-toast-installation-started-title"),
+				description: t("install-dialog-started-description", {
+					instanceName: String(data.name),
+				}),
 				severity: "success",
 			});
 			setTimeout(props.onClose, 800);
 		} catch (e) {
 			console.error(e);
 			showToast({
-				title: "Installation Failed",
+				title: t("install-dialog-failed-title"),
 				description: String(e),
 				severity: "error",
 			});
@@ -111,15 +114,15 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 				}}
 			>
 				<DialogHeader>
-					<DialogTitle>Install Modpack</DialogTitle>
+					<DialogTitle>{t("onboarding-modpack-install")}</DialogTitle>
 					<DialogDescription>
-						Configure your new instance for this modpack.
+						{t("install-dialog-configure-description")}
 					</DialogDescription>
 				</DialogHeader>
 
 				<Show when={modpackInfo.loading}>
 					<div style={{ padding: "20px", "text-align": "center" }}>
-						Analyzing modpack...
+						{t("install-dialog-analyzing")}
 					</div>
 				</Show>
 

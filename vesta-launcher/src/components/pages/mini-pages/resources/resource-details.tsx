@@ -72,6 +72,7 @@ import {
 	getCompatibilityForInstance,
 } from "@utils/resources";
 import { marked } from "marked";
+import { t } from "~/localization";
 import {
 	type Component,
 	createEffect,
@@ -394,7 +395,7 @@ const ResourceDetailsPage: Component<{
 	const showNotFound = () => loadingState().showNotFound;
 	const showOverlay = () => loadingState().showOverlay;
 	const shellName = createMemo(
-		() => project()?.name || props.name || "Resource",
+		() => project()?.name || props.name || t("app-shell-resource"),
 	);
 	const shellIcon = createMemo(
 		() => projectIconPreview.displaySource() || props.iconUrl || null,
@@ -403,9 +404,9 @@ const ResourceDetailsPage: Component<{
 		() => !!project() && projectLoadSettled(),
 	);
 	const overlayTitle = createMemo(() => {
-		if (showError()) return "Unable to load project";
-		if (showNotFound()) return "Project not found";
-		return "Fetching project details...";
+		if (showError()) return t("resources-details-unable-load-project");
+		if (showNotFound()) return t("resources-details-project-not-found");
+		return t("app-shell-fetching-project-details");
 	});
 	const overlayMessage = createMemo(() => {
 		if (showError() || showNotFound()) return undefined;
@@ -752,7 +753,7 @@ const ResourceDetailsPage: Component<{
 						title={
 							canSwitchToPlatform(source.id)
 								? source.label
-								: `Not available on ${source.label}`
+								: t("resources-details-not-available-source", { source: source.label })
 						}
 						onClick={() => navigateToPlatform(source.id)}
 					>
@@ -913,14 +914,14 @@ const ResourceDetailsPage: Component<{
 			try {
 				await resources.uninstall(res.instance_id, res.id);
 				showToast({
-					title: "Resource removed",
+					title: t("resources-toast-resource-removed"),
 					description: `${project()?.name} has been uninstalled.`,
 					severity: "success",
 				});
 			} catch (e) {
 				console.error("Failed to uninstall:", e);
 				showToast({
-					title: "Uninstall failed",
+					title: t("action-uninstall-failed-title"),
 					description: String(e),
 					severity: "error",
 				});
@@ -1121,9 +1122,8 @@ const ResourceDetailsPage: Component<{
 
 		if (resources.state.versions.length === 0) {
 			return {
-				title: "No versions available",
-				description:
-					"This project did not return any versions from the selected platform.",
+				title: t("resources-details-no-versions-title"),
+				description: t("resources-details-no-versions-description"),
 			};
 		}
 
@@ -1133,15 +1133,18 @@ const ResourceDetailsPage: Component<{
 			compatibilityFilteredVersions().length === 0
 		) {
 			return {
-				title: "No compatible versions for this instance",
-				description: `No versions support Minecraft ${selectedInst.minecraftVersion} with ${formatLoaderName(selectedInst.modloader)}. Try another instance or adjust your target version.`,
+				title: t("resources-details-no-compatible-versions-title"),
+				description: t("resources-details-no-compatible-versions-description", {
+					minecraftVersion: selectedInst.minecraftVersion,
+					loader: formatLoaderName(selectedInst.modloader),
+				}),
 			};
 		}
 
 		if (query.length > 0) {
 			return {
-				title: "No versions match your filter",
-				description: `No versions matched "${query}". Try a broader search term.`,
+				title: t("resources-details-no-match-filter-title"),
+				description: t("resources-details-no-match-filter-description", { query }),
 			};
 		}
 
@@ -1151,14 +1154,14 @@ const ResourceDetailsPage: Component<{
 			versionReleaseTypes().size > 0
 		) {
 			return {
-				title: "No versions match your filters",
-				description: "Try clearing the version chips or loader filters.",
+				title: t("resources-details-no-match-filters-title"),
+				description: t("resources-details-no-match-filters-description"),
 			};
 		}
 
 		return {
-			title: "No versions to display",
-			description: "Try another instance or clear your filters.",
+			title: t("resources-details-no-versions-display-title"),
+			description: t("resources-details-no-versions-display-description"),
 		};
 	});
 
@@ -1347,9 +1350,9 @@ const ResourceDetailsPage: Component<{
 		} else {
 			activeRouter()?.updateQuery("activeTab", "versions", true);
 			showToast({
-				title: "Choose version",
+				title: t("resources-details-choose-version"),
 				description:
-					"No automatically compatible version found. Please select one manually.",
+				t("resources-details-no-auto-compatible-version"),
 				severity: "info",
 			});
 		}
@@ -1536,10 +1539,10 @@ const ResourceDetailsPage: Component<{
 						name: cached.name,
 						summary: cached.summary || "",
 						description:
-							cached.description || "No description available (Disconnected).",
+							cached.description || t("resources-details-description-unavailable"),
 						icon_url: cached.icon_url,
-						author: cached.author || "Unknown",
-						authors: cached.authors || ["Unknown"],
+						author: cached.author || t("resources-version-unknown"),
+						authors: cached.authors || [t("resources-version-unknown")],
 						download_count: 0,
 						follower_count: 0,
 						categories: [],
@@ -1552,9 +1555,9 @@ const ResourceDetailsPage: Component<{
 					setProjectLoadSettled(true);
 					await resources.selectProject(fallback);
 					showToast({
-						title: "Offline Mode",
+						title: t("resources-details-offline-mode"),
 						description:
-							"Showing cached details. Some functionality may be limited.",
+							t("resources-details-offline-description"),
 						severity: "warning",
 					});
 				} else {
@@ -1607,8 +1610,10 @@ const ResourceDetailsPage: Component<{
 
 		if (!hasDownloadableArtifact(version)) {
 			showToast({
-				title: "Third-party download required",
-				description: `Opening ${p?.name ?? "this resource"} on the provider website.`,
+				title: t("resources-toast-third-party-download-title"),
+			description: t("resources-toast-opening-provider", {
+				project: p?.name ?? t("resources-this-resource"),
+			}),
 				severity: "info",
 			});
 			await openExternal(p?.web_url || "");
@@ -1651,8 +1656,8 @@ const ResourceDetailsPage: Component<{
 						version.loaders.some((l) => l.toLowerCase() === "fabric")
 					) {
 						showToast({
-							title: "Potential Incompatibility",
-							description: `Installing Fabric version of ${p.name} on a Quilt instance. Most mods work, but some may have issues.`,
+							title: t("resources-toast-potential-incompatibility"),
+							description: t("resources-details-fabric-quilt-warning", { project: p.name }),
 							severity: "warning",
 						});
 					}
@@ -1668,13 +1673,13 @@ const ResourceDetailsPage: Component<{
 					{ installType: installType() },
 				);
 				showToast({
-					title: "Installation Started",
-					description: `Check the notifications in the sidebar for progress on ${p.name}.`,
+					title: t("resources-toast-installation-started-title"),
+					description: t("resources-toast-progress-sidebar", { project: p.name }),
 					severity: "success",
 				});
 			} catch (err) {
 				showToast({
-					title: "Failed to install",
+					title: t("resources-toast-failed-to-install"),
 					description: err instanceof Error ? err.message : String(err),
 					severity: "error",
 				});
@@ -1696,8 +1701,11 @@ const ResourceDetailsPage: Component<{
 			setWorldInstall(null);
 			transitionRouteState({ activeTab: "versions", versionId: null }, true);
 			showToast({
-				title: "Choose a datapack version",
-				description: `${world.displayName} has no exact ${world.gameVersion ?? "known-version"} release. Choose a version manually; Vesta will ask for the destination world when you install it.`,
+				title: t("resources-toast-choose-datapack-version"),
+				description: t("resources-toast-datapack-version-description", {
+					world: world.displayName,
+				gameVersion: world.gameVersion ?? t("resources-known-version"),
+				}),
 				severity: "warning",
 			});
 			return;
@@ -1705,8 +1713,8 @@ const ResourceDetailsPage: Component<{
 		if (!hasDownloadableArtifact(selectedVersion)) {
 			setWorldInstall(null);
 			showToast({
-				title: "Third-party download required",
-				description: `Opening ${context.project.name} on the provider website.`,
+				title: t("resources-toast-third-party-download-title"),
+				description: t("resources-toast-opening-provider", { project: context.project.name }),
 				severity: "info",
 			});
 			await openExternal(context.project.web_url);
@@ -1722,8 +1730,10 @@ const ResourceDetailsPage: Component<{
 			setWorldInstall(null);
 			transitionRouteState({ activeTab: "versions", versionId: null }, true);
 			showToast({
-				title: "Choose a datapack version",
-				description: `Choose another ${context.project.name} release. Vesta will ask for the destination world again when you install it.`,
+				title: t("resources-toast-choose-datapack-version"),
+				description: t("resources-toast-choose-another-datapack-version", {
+					project: context.project.name,
+				}),
 				severity: "warning",
 			});
 			return;
@@ -1747,13 +1757,13 @@ const ResourceDetailsPage: Component<{
 				},
 			);
 			showToast({
-				title: "Installation Started",
-				description: `Check notifications for progress on ${context.project.name}.`,
+				title: t("resources-toast-installation-started-title"),
+				description: t("resources-details-progress-notifications", { project: context.project.name }),
 				severity: "success",
 			});
 		} catch (err) {
 			showToast({
-				title: "Failed to install",
+				title: t("resources-toast-failed-to-install"),
 				description: String(err),
 				severity: "error",
 			});
@@ -1852,7 +1862,7 @@ const ResourceDetailsPage: Component<{
 
 	const renderedDescription = createMemo(() => {
 		const desc = project()?.description;
-		if (!desc) return "No description provided.";
+		if (!desc) return t("resources-details-no-description");
 
 		// Preprocess known spoiler BBCode from CurseForge/other sources.
 		// Some descriptions include [spoiler]...[/spoiler] blocks with
@@ -2130,18 +2140,18 @@ const ResourceDetailsPage: Component<{
 	) => {
 		if (isVersionInstalled(version.id, version.hash)) {
 			return confirmVersionId() === version.id
-				? "Confirm removal"
+				? t("resources-details-confirm-removal")
 				: includeVersionNumber
-					? `Uninstall ${version.version_number}`
-					: "Uninstall";
+					? t("resources-details-uninstall-version", { version: version.version_number })
+					: t("app-shell-uninstall");
 		}
-		if (isVersionInstalling(version.id)) return "Installing…";
-		if (isModpack()) return "Create instance";
-		if (!selectedInstance()) return "Select instance";
-		if (!version.download_url) return "Open provider";
+		if (isVersionInstalling(version.id)) return t("resources-details-installing");
+		if (isModpack()) return t("resources-details-create-instance");
+		if (!selectedInstance()) return t("resources-details-select-instance");
+		if (!version.download_url) return t("resources-details-open-provider");
 		return includeVersionNumber
-			? `Install ${version.version_number}`
-			: "Install";
+			? t("resources-details-install-version", { version: version.version_number })
+			: t("app-shell-install");
 	};
 
 	const versionActionKind = (version: ResourceVersion): VersionActionKind => {
@@ -2153,9 +2163,9 @@ const ResourceDetailsPage: Component<{
 
 	const compactVersionActionLabel = (version: ResourceVersion) => {
 		const label = versionActionLabel(version);
-		if (label === "Select instance") return "Select";
-		if (label === "Open provider") return "Open";
-		if (label === "Create instance") return "Create";
+		if (label === t("resources-details-select-instance")) return t("dialogs-select");
+		if (label === t("resources-details-open-provider")) return t("settings-help-action-open");
+		if (label === t("resources-details-create-instance")) return t("resources-details-create");
 		return label;
 	};
 
@@ -2172,7 +2182,7 @@ const ResourceDetailsPage: Component<{
 
 	const focusedActionLabel = createMemo(() => {
 		const version = focusedVersion();
-		return version ? versionActionLabel(version, true) : "Install";
+		return version ? versionActionLabel(version, true) : t("app-shell-install");
 	});
 	const focusedActionKind = createMemo<VersionActionKind>(() => {
 		const version = focusedVersion();
@@ -2221,10 +2231,10 @@ const ResourceDetailsPage: Component<{
 		if (!hash) return;
 		try {
 			await navigator.clipboard.writeText(hash);
-			showToast({ title: "Hash copied", severity: "success" });
+			showToast({ title: t("resources-details-hash-copied"), severity: "success" });
 		} catch (copyError) {
 			showToast({
-				title: "Could not copy hash",
+				title: t("resources-details-copy-hash-failed"),
 				description: String(copyError),
 				severity: "error",
 			});
@@ -2238,19 +2248,19 @@ const ResourceDetailsPage: Component<{
 				when={!isModpack()}
 				fallback={
 					<div class={styles["modpack-instance-notice"]}>
-						<span>Modpacks will create a new instance when installed</span>
+						<span>{t("resources-details-modpack-new-instance")}</span>
 					</div>
 				}
 			>
 				<Select<any>
 					options={[
-						{ id: null, name: "No Instance" },
+						{ id: null, name: t("resources-filter-no-instance") },
 						...instancesState.instances,
 					]}
 					value={
 						instancesState.instances.find(
 							(instance) => instance.id === resources.state.selectedInstanceId,
-						) || { id: null, name: "No Instance" }
+						) || { id: null, name: t("resources-filter-no-instance") }
 					}
 					onChange={(value) => {
 						const id = (value as any)?.id ?? null;
@@ -2266,7 +2276,7 @@ const ResourceDetailsPage: Component<{
 					}}
 					optionValue="id"
 					optionTextValue="name"
-					placeholder="Select instance..."
+					placeholder={t("resources-details-select-instance-placeholder")}
 					itemComponent={(selectProps) => (
 						<SelectItem item={selectProps.item}>
 							<div class={styles["instance-select-option"]}>
@@ -2293,7 +2303,10 @@ const ResourceDetailsPage: Component<{
 								return (
 									<div class={styles["instance-select-option"]}>
 										<InstanceIcon instance={instance} />
-										<span>{instance?.name || "Select instance..."}</span>
+										<span>
+										{instance?.name ||
+											t("resources-details-select-instance-placeholder")}
+									</span>
 									</div>
 								);
 							}}
@@ -2370,13 +2383,13 @@ const ResourceDetailsPage: Component<{
 						when={!isModpack()}
 						fallback={
 							<div class={styles["modpack-instance-notice"]}>
-								<span>Modpacks will create a new instance when installed</span>
+								<span>{t("resources-details-modpack-new-instance")}</span>
 							</div>
 						}
 					>
 						<Select<any>
 							options={[
-								{ id: null, name: "No Instance" },
+								{ id: null, name: t("resources-filter-no-instance") },
 								...instancesState.instances,
 							]}
 							value={
@@ -2384,7 +2397,7 @@ const ResourceDetailsPage: Component<{
 									(i) => i.id === resources.state.selectedInstanceId,
 								) || {
 									id: null,
-									name: "No Instance",
+									name: t("resources-filter-no-instance"),
 								}
 							}
 							onChange={(v) => {
@@ -2402,7 +2415,7 @@ const ResourceDetailsPage: Component<{
 							}}
 							optionValue="id"
 							optionTextValue="name"
-							placeholder="Select instance..."
+							placeholder={t("resources-details-select-instance-placeholder")}
 							itemComponent={(props) => (
 								<SelectItem item={props.item}>
 									<div
@@ -2453,7 +2466,9 @@ const ResourceDetailsPage: Component<{
 											>
 												<InstanceIcon instance={inst} />
 												<span>
-													{inst ? `${inst.name}` : "Select instance..."}
+									{inst
+									? `${inst.name}`
+									: t("resources-details-select-instance-placeholder")}
 												</span>
 											</div>
 										);
@@ -2492,7 +2507,7 @@ const ResourceDetailsPage: Component<{
 						>
 							<Show when={isProjectInstalling()}>
 								<VersionActionIcon kind="progress" size={15} />
-								<span>Installing...</span>
+								<span>{t("onboarding-modpack-installing")}</span>
 							</Show>
 							<Show when={!isProjectInstalling()}>
 								<Show when={isProjectInstalled()}>
@@ -2501,14 +2516,17 @@ const ResourceDetailsPage: Component<{
 										fallback={
 											<>
 												<VersionActionIcon kind="remove" size={15} />
-												<Show when={confirmUninstall()} fallback="Uninstall">
-													Confirm?
+												<Show
+													when={confirmUninstall()}
+													fallback={t("app-shell-uninstall")}
+												>
+													{t("resources-card-confirm")}
 												</Show>
 											</>
 										}
 									>
-										<VersionActionIcon kind="download" size={15} />
-										Update
+						<VersionActionIcon kind="download" size={15} />
+						{t("app-shell-update")}
 									</Show>
 								</Show>
 								<Show when={!isProjectInstalled()}>
@@ -2516,16 +2534,16 @@ const ResourceDetailsPage: Component<{
 										when={isProjectIncompatible()}
 										fallback={
 											<>
-												<VersionActionIcon kind="download" size={15} />
-												Install
+											<VersionActionIcon kind="download" size={15} />
+											{t("app-shell-install")}
 											</>
 										}
 									>
 										<Show
 											when={hasAnyCompatibleVersion()}
-											fallback="Unsupported"
+											fallback={t("resources-card-unsupported")}
 										>
-											Check Versions
+											{t("resources-details-check-versions")}
 										</Show>
 									</Show>
 								</Show>
@@ -2538,15 +2556,15 @@ const ResourceDetailsPage: Component<{
 			<section class={styles["sidebar-section"]}>
 				<div class={styles["sidebar-section-heading"]}>
 					<InfoIcon width={16} height={16} />
-					<h3>Project details</h3>
+					<h3>{t("resources-details-project-details")}</h3>
 				</div>
 				<div class={styles["sidebar-info-list"]}>
 					<Show when={project()?.published_at}>
 						<div class={styles["sidebar-info-row"]}>
-							<span class={styles["field-label"]}>Published</span>
+							<span class={styles["field-label"]}>{t("resources-details-published")}</span>
 							<span
 								class={styles["sidebar-info-value"]}
-								title={`Published ${formatDate(project()?.published_at || "")}`}
+								title={t("resources-details-published-date", { date: formatDate(project()?.published_at || "") })}
 							>
 								{formatDate(project()?.published_at || "")}
 							</span>
@@ -2554,10 +2572,10 @@ const ResourceDetailsPage: Component<{
 					</Show>
 					<Show when={project()?.updated_at}>
 						<div class={styles["sidebar-info-row"]}>
-							<span class={styles["field-label"]}>Updated</span>
+							<span class={styles["field-label"]}>{t("resources-details-updated")}</span>
 							<span
 								class={styles["sidebar-info-value"]}
-								title={`Updated ${formatDate(project()?.updated_at || "")}`}
+								title={t("resources-details-updated-date", { date: formatDate(project()?.updated_at || "") })}
 							>
 								{formatDate(project()?.updated_at || "")}
 							</span>
@@ -2571,18 +2589,18 @@ const ResourceDetailsPage: Component<{
 			>
 				<div class={styles["sidebar-section-heading"]}>
 					<DownloadIcon width={16} height={16} />
-					<h3>Recent versions</h3>
+					<h3>{t("resources-details-recent-versions")}</h3>
 					<button
 						class={styles["view-all-link"]}
 						onClick={() => selectTab("versions")}
 					>
-						View all
+						{t("resources-details-view-all")}
 					</button>
 				</div>
 				<div class={styles["sidebar-version-list"]}>
 					<Show
 						when={!resources.state.versionsLoading}
-						fallback={<InlineLoadingRow message="Loading versions..." />}
+						fallback={<InlineLoadingRow message={t("resources-details-loading-versions")} />}
 					>
 						<For each={compatibilityFilteredVersions().slice(0, 5)}>
 							{(version) => (
@@ -2618,7 +2636,7 @@ const ResourceDetailsPage: Component<{
 				onRetry={showError() ? () => activeRouter()?.reload() : undefined}
 				secondaryAction={
 					showError() || showNotFound()
-						? { label: "Go Back", onClick: () => activeRouter()?.backwards() }
+								? { label: t("resources-details-go-back"), onClick: () => activeRouter()?.backwards() }
 						: undefined
 				}
 			/>
@@ -2652,7 +2670,7 @@ const ResourceDetailsPage: Component<{
 												<div
 													class={styles["version-header-info"]}
 													aria-busy="true"
-													aria-label="Loading version"
+													aria-label={t("resources-details-loading-version")}
 												>
 													<Show when={shellIcon()}>
 														<img
@@ -2686,7 +2704,7 @@ const ResourceDetailsPage: Component<{
 															{shellName()}
 														</h1>
 														<Show when={isProjectInstalling()}>
-															<Badge variant="success">Installing...</Badge>
+										<Badge variant="success">{t("onboarding-modpack-installing")}</Badge>
 														</Show>
 													</div>
 													<Show
@@ -2786,7 +2804,11 @@ const ResourceDetailsPage: Component<{
 											size="icon"
 											onClick={() => openExternal(project()?.web_url ?? "")}
 											class={styles["header-action-btn"]}
-											tooltip_text={`View on ${getSourceDescriptor(project()?.source ?? "modrinth")?.label ?? "provider"}`}
+						tooltip_text={t("resources-details-tooltip-view-on", {
+							source:
+								getSourceDescriptor(project()?.source ?? "modrinth")?.label ??
+								t("resources-provider-fallback"),
+						})}
 											tooltip_placement="left"
 										>
 											<ExternalLinkIcon width="16" height="16" />
@@ -2798,8 +2820,8 @@ const ResourceDetailsPage: Component<{
 											class={`${styles["header-action-btn"]} ${styles["header-action-btn--notify"]}`}
 											tooltip_text={
 												isFollowing()
-													? "Disable update notifications"
-													: "Receive notifications for updates"
+											? t("resources-details-disable-update-notifications")
+											: t("resources-details-enable-update-notifications")
 											}
 											tooltip_placement="left"
 										>
@@ -2855,14 +2877,14 @@ const ResourceDetailsPage: Component<{
 							>
 								<TabsList class={styles["details-tabs"]}>
 									<TabsTrigger value="description" class={styles["tab-btn"]}>
-										<span>Description</span>
+										<span>{t("shared-ui-description")}</span>
 									</TabsTrigger>
 									<TabsTrigger value="versions" class={styles["tab-btn"]}>
-										<span>Versions</span>
+										<span>{t("secondary-changelog-versions")}</span>
 									</TabsTrigger>
 									<Show when={(project()?.gallery?.length ?? 0) > 0}>
 										<TabsTrigger value="gallery" class={styles["tab-btn"]}>
-											<span>Gallery</span>
+											<span>{t("resources-details-gallery-tab")}</span>
 										</TabsTrigger>
 									</Show>
 								</TabsList>
@@ -2940,7 +2962,7 @@ const ResourceDetailsPage: Component<{
 															class={styles["gallery-item"]}
 															onClick={() => setSelectedGalleryItem(item)}
 														>
-															<img src={item} alt="Gallery Item" />
+										<img src={item} alt={t("resources-details-gallery-item")} />
 														</div>
 													)}
 												</For>
@@ -2992,7 +3014,7 @@ const ResourceDetailsPage: Component<{
 																>
 																	<Show
 																		when={compatibleVersionCount() > 0}
-																		fallback="No compatible versions for selected instance"
+											fallback={t("resources-details-no-compatible-selected-instance")}
 																	>
 																		Showing {compatibleVersionCount()}{" "}
 																		compatible version
@@ -3090,7 +3112,7 @@ const ResourceDetailsPage: Component<{
 															when={!versionDetails.error}
 															fallback={
 																<div class={styles["version-focus-loading"]}>
-																	<strong>Version details unavailable</strong>
+											<strong>{t("resources-details-version-unavailable")}</strong>
 																	<span>{String(versionDetails.error)}</span>
 																	<div
 																		class={
@@ -3200,9 +3222,9 @@ const ResourceDetailsPage: Component<{
 						src={selectedGalleryItem()}
 						images={project()?.gallery?.map((item) => ({
 							src: item,
-							title: project()?.name || "Resource Gallery",
+							title: project()?.name || t("resources-details-resource-gallery"),
 						}))}
-						title={project()?.name || "Resource Gallery"}
+						title={project()?.name || t("resources-details-resource-gallery")}
 						showDelete={false}
 						onClose={() => {
 							setSelectedGalleryItem(null);

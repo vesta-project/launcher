@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { createStore } from "solid-js/store";
+import { t } from "~/localization";
 
 export type DialogSeverity =
 	| "info"
@@ -110,7 +111,7 @@ export const dialogStore = {
 			title,
 			description,
 			severity,
-			actions: [{ id: "ok", label: "OK", color: "primary", variant: "solid" }],
+			actions: [{ id: "ok", label: t("dialogs-ok"), color: "primary", variant: "solid" }],
 		});
 	},
 
@@ -135,12 +136,12 @@ export const dialogStore = {
 			actions: [
 				{
 					id: "cancel",
-					label: options?.cancelLabel ?? "Cancel",
+					label: options?.cancelLabel ?? t("shared-ui-cancel"),
 					variant: "ghost",
 				},
 				{
 					id: "confirm",
-					label: options?.okLabel ?? "Confirm",
+					label: options?.okLabel ?? t("dialogs-confirm"),
 					color: options?.isDestructive ? "destructive" : "primary",
 					variant: "solid",
 				},
@@ -172,10 +173,10 @@ export const dialogStore = {
 				isPassword: options?.isPassword,
 			},
 			actions: [
-				{ id: "cancel", label: "Cancel", variant: "ghost" },
+				{ id: "cancel", label: t("shared-ui-cancel"), variant: "ghost" },
 				{
 					id: "confirm",
-					label: options?.okLabel ?? "Submit",
+					label: options?.okLabel ?? t("dialogs-submit"),
 					color: "primary",
 					variant: "solid",
 				},
@@ -207,10 +208,10 @@ export const dialogStore = {
 				selectOptions: options,
 				defaultSelectOption: defaultOption,
 				actions: [
-					{ id: "cancel", label: "Cancel", variant: "ghost" },
+					{ id: "cancel", label: t("shared-ui-cancel"), variant: "ghost" },
 					{
 						id: "confirm",
-						label: "Select",
+						label: t("dialogs-select"),
 						color: "primary",
 						variant: "solid",
 					},

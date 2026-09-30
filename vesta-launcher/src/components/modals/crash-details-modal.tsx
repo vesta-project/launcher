@@ -10,6 +10,7 @@ import { Separator } from "@ui/separator/separator";
 import { getCrashDetails } from "@utils/crash-handler";
 import { createSignal, Match, Show, Switch } from "solid-js";
 import styles from "./crash-details-modal.module.css";
+import { t } from "~/localization";
 
 interface CrashDetailsModalProps {
 	instanceId: string;
@@ -38,30 +39,30 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 	const _getCrashTypeLabel = (crashType: string) => {
 		switch (crashType) {
 			case "runtime":
-				return "Runtime Crash";
+				return t("shared-ui-runtime-crash");
 			case "launch_mod":
-				return "Mod Incompatibility";
+				return t("shared-ui-mod-incompatibility");
 			case "launch_other":
-				return "Launch Failed";
+				return t("shared-ui-launch-failed");
 			case "jvm":
-				return "Java Virtual Machine Crash";
+				return t("shared-ui-java-virtual-machine-crash");
 			default:
-				return "Unknown Crash";
+				return t("shared-ui-unknown-crash");
 		}
 	};
 
 	const getCrashTypeDescription = (crashType: string) => {
 		switch (crashType) {
 			case "runtime":
-				return "The game crashed while running. This is usually caused by a mod conflict or unsupported game configuration.";
+				return t("shared-ui-runtime-crash-description");
 			case "launch_mod":
-				return "One or more mods are incompatible with this version or with each other. Check your mods and try removing recently added ones.";
+				return t("shared-ui-mod-incompatibility-description");
 			case "launch_other":
-				return "The game failed to launch. Check your Java installation and game settings.";
+				return t("shared-ui-launch-failed-description");
 			case "jvm":
-				return "The Java Virtual Machine crashed. This may indicate a serious compatibility issue or memory problem.";
+				return t("shared-ui-java-crash-description");
 			default:
-				return "An unknown error occurred while running the instance.";
+				return t("shared-ui-unknown-crash-description");
 		}
 	};
 
@@ -94,21 +95,21 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 								</Match>
 							</Switch>
 						</span>
-						Instance Crashed
+						{t("shared-ui-instance-crashed")}
 					</DialogTitle>
 					<DialogDescription>
-						<Switch fallback={<span>Unknown crash</span>}>
+						<Switch fallback={<span>{t("shared-ui-unknown-crash")}</span>}>
 							<Match when={crashDetails()?.crash_type === "runtime"}>
-								<span>Runtime Crash</span>
+								<span>{t("shared-ui-runtime-crash")}</span>
 							</Match>
 							<Match when={crashDetails()?.crash_type === "launch_mod"}>
-								<span>Mod Incompatibility</span>
+								<span>{t("shared-ui-mod-incompatibility")}</span>
 							</Match>
 							<Match when={crashDetails()?.crash_type === "launch_other"}>
-								<span>Launch Failed</span>
+								<span>{t("shared-ui-launch-failed")}</span>
 							</Match>
 							<Match when={crashDetails()?.crash_type === "jvm"}>
-								<span>Java Virtual Machine Crash</span>
+								<span>{t("shared-ui-java-virtual-machine-crash")}</span>
 							</Match>
 						</Switch>
 					</DialogDescription>
@@ -123,14 +124,14 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 
 							<div class={styles["crash-info"]}>
 								<div class={styles["info-section"]}>
-									<h3>Error Message</h3>
+									<h3>{t("shared-ui-error-message")}</h3>
 									<div class={styles["error-message"]}>
-										{details().message || "No error message available"}
+										{details().message || t("shared-ui-no-error-message-available")}
 									</div>
 								</div>
 
 								<div class={styles["info-section"]}>
-									<h3>Timestamp</h3>
+									<h3>{t("shared-ui-timestamp")}</h3>
 									<p class={styles["timestamp"]}>
 										{new Date(details().timestamp).toLocaleString()}
 									</p>
@@ -138,14 +139,14 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 
 								<Show when={details().report_path}>
 									<div class={styles["info-section"]}>
-										<h3>Crash Report</h3>
+										<h3>{t("shared-ui-crash-report")}</h3>
 										<p class={styles["report-path"]}>{details().report_path}</p>
 										<LauncherButton
 											onClick={openCrashReport}
 											variant="outline"
 											size="sm"
 										>
-											View Report
+											{t("shared-ui-view-report")}
 										</LauncherButton>
 									</div>
 								</Show>
@@ -153,24 +154,24 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 
 							<div class={styles["crash-actions"]}>
 								<p class={styles["action-hint"]}>
-									Try these steps to fix the crash:
+									{t("shared-ui-crash-fix-steps")}
 								</p>
 								<ul>
 									<Switch>
 										<Match when={crashDetails()?.crash_type === "launch_mod"}>
-											<li>Remove recently added mods</li>
-											<li>Update all mods to compatible versions</li>
-											<li>Check mod dependencies and conflicts</li>
+											<li>{t("shared-ui-remove-recently-added-mods")}</li>
+											<li>{t("shared-ui-update-mods-compatible-versions")}</li>
+											<li>{t("shared-ui-check-mod-dependencies-conflicts")}</li>
 										</Match>
 										<Match when={crashDetails()?.crash_type === "runtime"}>
-											<li>Update your graphics drivers</li>
-											<li>Increase allocated RAM in instance settings</li>
-											<li>Remove conflicting mods</li>
+											<li>{t("shared-ui-update-graphics-drivers")}</li>
+											<li>{t("shared-ui-increase-allocated-ram")}</li>
+											<li>{t("shared-ui-remove-conflicting-mods")}</li>
 										</Match>
 										<Match when={crashDetails()?.crash_type === "jvm"}>
-											<li>Update Java to latest version</li>
-											<li>Increase allocated memory (Xmx flag)</li>
-											<li>Try a different Java version (Java 8, 11, 17, 21)</li>
+											<li>{t("shared-ui-update-java-latest")}</li>
+											<li>{t("shared-ui-increase-allocated-memory-xmx")}</li>
+											<li>{t("shared-ui-try-different-java-version")}</li>
 										</Match>
 									</Switch>
 								</ul>

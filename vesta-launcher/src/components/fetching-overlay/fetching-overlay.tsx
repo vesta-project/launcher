@@ -1,5 +1,6 @@
 import { Show } from "solid-js";
 import styles from "./fetching-overlay.module.css";
+import { t } from "~/localization";
 
 export interface FetchingOverlayProps {
 	isVisible: boolean;
@@ -48,7 +49,7 @@ export function FetchingOverlay(props: FetchingOverlayProps) {
 									class={styles["fetching-action"]}
 									onClick={props.onRetry}
 								>
-									Retry
+									{t("shared-ui-retry")}
 								</button>
 							</Show>
 							<Show when={props.onChooseAnother}>
@@ -57,7 +58,7 @@ export function FetchingOverlay(props: FetchingOverlayProps) {
 									class={styles["fetching-action"]}
 									onClick={props.onChooseAnother}
 								>
-									Choose another file
+									{t("shared-ui-choose-another-file")}
 								</button>
 							</Show>
 							<Show when={props.secondaryAction}>

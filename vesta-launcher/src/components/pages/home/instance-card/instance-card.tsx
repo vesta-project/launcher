@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 // Instance Card component with play/kill button and toast notifications
 
 import ErrorIcon from "@assets/icons/status/error.svg";
@@ -201,27 +202,29 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const playButtonTooltip = () => {
 		if (isInstalling()) {
-			return `${operationLabel()}...`;
+			return t("app-shell-operation-progress", { operation: operationLabel() });
 		}
 
 		if (isInterrupted()) {
 			if (isUpdateRecovery()) {
-				return "Update recovery is incomplete. Click to resume recovery.";
+				return t("app-shell-update-recovery-incomplete");
 			}
 			const op =
 				storeInstance().lastOperation === "hard-reset"
-					? "Hard reset"
+					? t("app-shell-hard-reset")
 					: storeInstance().lastOperation === "update"
-						? "Update"
-						: storeInstance().lastOperation || "Installation";
-			return `${op.slice(0, 1).toUpperCase() + op.slice(1).toLowerCase()} interrupted. Click to resume.`;
+						? t("app-shell-update")
+						: storeInstance().lastOperation || t("app-shell-installation");
+			return t("app-shell-operation-interrupted", {
+				operation: op.slice(0, 1).toUpperCase() + op.slice(1).toLowerCase(),
+			});
 		}
 
-		if (needsInstallation()) return "Needs Installation";
-		if (isRunning()) return "Running (click to stop)";
-		if (isWarmingUp()) return "Warming up...";
-		if (hasCrashed()) return "Crash details";
-		return "Launch";
+		if (needsInstallation()) return t("app-shell-needs-installation");
+		if (isRunning()) return t("app-shell-running-click-to-stop");
+		if (isWarmingUp()) return t("app-shell-warming-up");
+		if (hasCrashed()) return t("app-shell-crash-details");
+		return t("app-shell-launch");
 	};
 
 	const toggleRun = async () => {
@@ -235,15 +238,17 @@ export default function InstanceCard(props: InstanceCardProps) {
 			try {
 				await killInstance(props.instance);
 				showToast({
-					title: "Killed",
-					description: `Killed instance "${props.instance.name}"`,
+					title: t("app-shell-killed"),
+					description: t("app-shell-killed-instance", {
+						name: props.instance.name,
+					}),
 					severity: "info",
 					duration: 3000,
 				});
 			} catch (err) {
 				console.error("Kill failed", err);
 				showToast({
-					title: "Kill Failed",
+					title: t("app-shell-kill-failed"),
 					description: String(err),
 					severity: "error",
 					duration: 5000,
@@ -260,7 +265,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 			} catch (err) {
 				console.error("Launch failed", err);
 				showToast({
-					title: "Launch Failed",
+					title: t("shared-ui-launch-failed"),
 					description: String(err),
 					severity: "error",
 					duration: 5000,
@@ -342,7 +347,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		} catch (e) {
 			console.error("Failed to open instance folder:", e);
 			showToast({
-				title: "Open folder failed",
+				title: t("app-shell-open-folder-failed"),
 				description: String(e),
 				severity: "error",
 			});
@@ -374,14 +379,16 @@ export default function InstanceCard(props: InstanceCardProps) {
 		try {
 			await invoke("emit_fake_crash", { instanceIdSlug: instanceSlug() });
 			showToast({
-				title: "Fake Crash",
-				description: `Emitted fake crash for instance "${props.instance.name}"`,
+				title: t("app-shell-fake-crash"),
+				description: t("app-shell-fake-crash-description", {
+					name: props.instance.name,
+				}),
 				severity: "info",
 			});
 		} catch (err) {
 			console.error("Fake crash failed:", err);
 			showToast({
-				title: "Fake Crash Failed",
+				title: t("app-shell-fake-crash-failed"),
 				description: String(err),
 				severity: "error",
 			});
@@ -452,7 +459,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 									"text-align": "center",
 								}}
 							>
-								{operationLabel()}...
+				{t("app-shell-operation-progress", {
+					operation: operationLabel(),
+				})}
 							</p>
 						</div>
 					</Match>
@@ -488,10 +497,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 								class={styles["failure-retry-button"]}
 								onClick={handleClick}
 								disabled={busy()}
-								aria-label="Retry installation"
+								aria-label={t("app-shell-retry-installation")}
 							>
 								<ReloadIcon />
-								<span>{busy() ? "Retrying…" : "Retry installation"}</span>
+								<span>{busy() ? t("app-shell-retrying") : t("app-shell-retry-installation")}</span>
 							</button>
 						</div>
 					</Match>
@@ -504,9 +513,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 											styles["status-tag"],
 											styles["status-tag--warming"],
 										)}
-									>
-										Warming up
-									</div>
+									>{t("app-shell-warming-up-status")}</div>
 								</Show>
 								<Show when={isRunning() && !isWarmingUp()}>
 									<div
@@ -514,13 +521,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 											styles["status-tag"],
 											styles["status-tag--running"],
 										)}
-									>
-										Running
-									</div>
+									>{t("app-shell-running")}</div>
 								</Show>
 								<Show when={isInterrupted()}>
 									<Badge variant="warning" dot={true}>
-										{isUpdateRecovery() ? "Recovery needed" : "Interrupted"}
+										{isUpdateRecovery() ? t("app-shell-recovery-needed") : t("app-shell-interrupted")}
 									</Badge>
 								</Show>
 								<Show when={hasCrashed()}>
@@ -542,9 +547,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 												openCrashDetails();
 											}
 										}}
-									>
-										Crashed
-									</div>
+									>{t("app-shell-crashed")}</div>
 								</Show>
 							</div>
 							<Tooltip placement="top">
@@ -640,35 +643,35 @@ export default function InstanceCard(props: InstanceCardProps) {
 					>
 						<span>
 							{isRunning()
-								? "Stop"
+								? t("app-shell-stop")
 								: isWarmingUp()
-									? "Warming up..."
+									? t("app-shell-warming-up")
 									: isInterrupted()
 										? isUpdateRecovery()
-											? "Resume recovery"
-											: "Resume operation"
+										? t("common-resume-recovery")
+											: t("app-shell-resume-operation")
 										: needsInstallation()
 											? isFailed()
-												? "Retry installation"
-												: "Install"
+												? t("app-shell-retry-installation")
+												: t("app-shell-install")
 											: hasCrashed()
-												? "Crash details"
-												: "Play"}
+												? t("app-shell-crash-details")
+												: t("app-shell-play")}
 						</span>
 					</ContextMenuItem>
 
 					<ContextMenuItem onSelect={openInstanceDetails}>
-						<span>Open Details</span>
+						<span>{t("app-shell-open-details")}</span>
 					</ContextMenuItem>
 
 					<ContextMenuItem onSelect={openInstanceDetailsStandalone}>
-						<span>Open in New Window</span>
+						<span>{t("app-shell-open-in-new-window-menu")}</span>
 					</ContextMenuItem>
 
 					<ContextMenuSeparator />
 
 					<ContextMenuItem onSelect={openAddContent}>
-						<span>Add Content</span>
+						<span>{t("app-shell-add-content")}</span>
 					</ContextMenuItem>
 
 					<ContextMenuItem
@@ -676,7 +679,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 							void openInstanceFolder();
 						}}
 					>
-						<span>Open Folder</span>
+										<span>{t("shared-ui-open-folder")}</span>
 					</ContextMenuItem>
 
 					<ContextMenuItem
@@ -684,12 +687,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 							void handlePinToggle();
 						}}
 					>
-						<span>{isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}</span>
+						<span>{isPinned() ? t("app-shell-unpin-from-sidebar") : t("app-shell-pin-to-sidebar")}</span>
 					</ContextMenuItem>
 
 					<ContextMenuSub>
 						<ContextMenuSubTrigger>
-							<span>Manage</span>
+							<span>{t("app-shell-manage")}</span>
 						</ContextMenuSubTrigger>
 						<ContextMenuSubContent>
 							<ContextMenuItem
@@ -697,7 +700,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 									void handleRepair(props.instance);
 								}}
 							>
-								<span>Repair</span>
+								<span>{t("app-shell-repair")}</span>
 							</ContextMenuItem>
 
 							<ContextMenuItem
@@ -705,11 +708,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 									handleDuplicate(props.instance);
 								}}
 							>
-								<span>Duplicate</span>
+								<span>{t("app-shell-duplicate")}</span>
 							</ContextMenuItem>
 
 							<ContextMenuItem onSelect={() => setShowExportDialog(true)}>
-								<span>Export Instance</span>
+								<span>{t("app-shell-export-instance")}</span>
 							</ContextMenuItem>
 
 							<ContextMenuItem
@@ -717,7 +720,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 									handleHardReset(props.instance);
 								}}
 							>
-								<span>Hard Reset</span>
+								<span>{t("app-shell-hard-reset-menu")}</span>
 							</ContextMenuItem>
 
 							<Show when={import.meta.env.DEV}>
@@ -726,7 +729,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 										void handleFakeCrash();
 									}}
 								>
-									<span>Fake Crash</span>
+									<span>{t("app-shell-fake-crash")}</span>
 								</ContextMenuItem>
 							</Show>
 						</ContextMenuSubContent>
@@ -740,7 +743,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 							handleUninstall(props.instance);
 						}}
 					>
-						<span>Uninstall</span>
+						<span>{t("app-shell-uninstall")}</span>
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenuPortal>

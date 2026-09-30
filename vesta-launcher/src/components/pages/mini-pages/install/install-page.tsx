@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { router } from "@components/page-viewer/page-viewer";
 import type { ResourceVersion } from "@stores/resources";
@@ -23,7 +24,7 @@ import { InstallForm } from "./components/InstallForm";
 import { InstallStageHeader } from "./components/InstallStageHeader";
 import { useInstallCapabilities } from "./hooks/use-install-capabilities";
 import { useInstallSubmit } from "./hooks/use-install-submit";
-import { useModpackSource } from "./hooks/use-modpack-source";
+import { UNKNOWN_MODPACK_NAME, useModpackSource } from "./hooks/use-modpack-source";
 import { useProjectVersions } from "./hooks/use-project-versions";
 import {
 	openBrowseModpacks,
@@ -153,8 +154,12 @@ function InstallPage(props: InstallPageRouteProps) {
 			effectivePendingResource()?.project.resource_type ||
 			effectiveResourceType();
 		if (!raw) return undefined;
-		if (raw === "resourcepack") return "Resource Pack";
-		if (raw === "datapack") return "Data Pack";
+		if (raw === "mod") return t("shared-ui-mod");
+		if (raw === "resourcepack") return t("install-import-resource-pack");
+		if (raw === "shader") return t("install-page-resource-shader");
+		if (raw === "datapack") return t("install-import-resource-data-pack");
+		if (raw === "modpack") return t("install-form-modpack-fallback");
+		if (raw === "world") return t("install-page-resource-world");
 		return raw.charAt(0).toUpperCase() + raw.slice(1);
 	});
 
@@ -230,7 +235,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		);
 
 		source.setModpackInfo({
-			name: info?.name || effectiveProjectName() || "Unknown Modpack",
+			name: info?.name || effectiveProjectName() || UNKNOWN_MODPACK_NAME,
 			version: selected.version_number,
 			author: info?.author || effectiveProjectAuthor() || null,
 			description: info?.description ?? null,
@@ -322,7 +327,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		const author = effectiveProjectAuthor();
 
 		const updates: Record<string, any> = {};
-		if (name && info.name === "Unknown Modpack") updates.name = name;
+		if (name && info.name === UNKNOWN_MODPACK_NAME) updates.name = name;
 		if (id && !info.modpackId) updates.modpackId = id;
 		if (platform && !info.modpackPlatform) updates.modpackPlatform = platform;
 		if (icon && !info.iconUrl) updates.iconUrl = icon;
@@ -448,21 +453,23 @@ function InstallPage(props: InstallPageRouteProps) {
 	);
 	const loadingTitle = createMemo(() => {
 		if (install.isInstalling())
-			return isModpackMode() ? "Installing modpack..." : "Creating instance...";
+			return isModpackMode() ? t("install-page-loading-installing-modpack") : t("install-page-loading-creating-instance");
 		if (metadataStatus().phase === "reading-local-pack")
-			return "Reading modpack manifest...";
-		if (isMatchingSource()) return "Matching online source...";
-		if (metadataStatus().phase === "failed") return "Could not read modpack";
+			return t("install-page-loading-reading-manifest");
+		if (isMatchingSource()) return t("install-page-loading-matching-source");
+		if (metadataStatus().phase === "failed") return t("install-page-loading-could-not-read");
 		return isModpackMode()
-			? "Fetching modpack details..."
-			: "Preparing instance...";
+			? t("install-page-loading-fetching-details")
+			: t("install-page-loading-preparing-instance");
 	});
 	const loadingMessage = createMemo(() => {
 		if (install.isInstalling()) {
 			if (isResourceInstanceMode()) {
-				return `Installing ${effectivePendingResource()?.project.name || "the selected resource"} after the instance is created.`;
+				return t("install-page-loading-installing-resource", {
+					resourceName: effectivePendingResource()?.project.name || t("install-page-resource-fallback"),
+				});
 			}
-			return "Creating files and applying the selected configuration.";
+			return t("install-page-loading-applying-configuration");
 		}
 		return metadataStatus().message;
 	});
@@ -474,10 +481,10 @@ function InstallPage(props: InstallPageRouteProps) {
 	};
 
 	const contextBackLabel = createMemo(() => {
-		if (effectiveProjectId()) return "Back to Browser";
-		if (isLocalModpackUpload() || !!source.modpackUrl()) return "Change import";
-		if (isResourceInstanceMode()) return "Back";
-		return "Import";
+		if (effectiveProjectId()) return t("install-page-back-to-browser");
+		if (isLocalModpackUpload() || !!source.modpackUrl()) return t("install-page-change-import");
+		if (isResourceInstanceMode()) return t("app-shell-back");
+		return t("settings-appearance-import");
 	});
 
 	const handleContextBack = () => {
@@ -503,22 +510,28 @@ function InstallPage(props: InstallPageRouteProps) {
 				title={
 					isModpackMode()
 						? effectiveProjectName() ||
-							source.modpackInfo()?.name ||
-							"Analyzing modpack details..."
-						: "New Instance"
+							(source.modpackInfo()?.name === UNKNOWN_MODPACK_NAME
+								? t("install-page-unknown-modpack")
+								: source.modpackInfo()?.name) ||
+							t("install-page-analyzing-modpack")
+						: t("app-shell-new-instance")
 				}
 				description={
 					isModpackMode()
 						? undefined
 						: isResourceInstanceMode()
-							? `Create a new instance with ${effectivePendingResource()?.project.name || "this resource"} installed.`
-							: "Create a clean slate and customize it."
+							? t("install-page-create-resource-instance", {
+								resourceName: effectivePendingResource()?.project.name || t("install-page-resource-fallback"),
+							})
+							: t("install-page-create-clean-slate")
 				}
 				label={
 					isModpackMode()
-						? effectiveResourceType() || "Modpack"
+						? effectiveResourceType() || t("install-form-modpack-fallback")
 						: isResourceInstanceMode()
-							? `New instance with ${resourceTypeLabel() || "Resource"}`
+							? t("install-page-new-resource-instance-label", {
+								resourceType: resourceTypeLabel() || t("app-shell-resource"),
+							})
 							: undefined
 				}
 				iconUrl={
@@ -568,7 +581,7 @@ function InstallPage(props: InstallPageRouteProps) {
 						(source.modpackUrl() || source.modpackPath()) &&
 						!effectiveProjectId()
 							? {
-									label: "Change import",
+									label: t("install-page-change-import"),
 									onClick: () =>
 										openImportModal({
 											expandUrl: !!source.modpackUrl(),

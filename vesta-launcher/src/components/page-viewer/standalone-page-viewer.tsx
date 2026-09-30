@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import {
 	MiniRouter,
 	type MiniRouterSnapshot,
@@ -151,7 +152,7 @@ function StandalonePageViewer() {
 				<UnifiedPageViewer
 					router={miniRouter()}
 					showWindowControls={true}
-					titleSuffix="Standalone"
+					titleSuffix={t("app-shell-standalone")}
 					os={osType()}
 					macosFullscreen={isMacosFullscreen()}
 					onClose={() => void requestHide()}

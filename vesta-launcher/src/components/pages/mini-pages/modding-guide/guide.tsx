@@ -1,5 +1,6 @@
 import { Separator } from "@ui/separator/separator";
 import { type Component, For } from "solid-js";
+import { t } from "~/localization";
 import { HELP_CONTENT } from "../../../../utils/help-content";
 import styles from "./modding-guide.module.css";
 
@@ -16,23 +17,18 @@ export const ModdingGuideContent: Component = () => {
 		<div class={styles.container}>
 			<section class={styles.section_visual}>
 				<div class={styles.visual_text}>
-					<h2 class={styles.section_title}>How Modding Works</h2>
-					<p class={styles.section_subtitle}>
-						Minecraft runs on a software called Java. Since the game wasn't
-						originally designed to be modified, player-made additions (Mods)
-						require a "Modloader" to help the game recognize and run them
-						correctly.
-					</p>
+					<h2 class={styles.section_title}>
+						{t("secondary-modding-how-it-works")}
+					</h2>
+					<p class={styles.section_subtitle}>{t("secondary-modding-intro")}</p>
 					<div class={styles.tech_list}>
 						<div class={styles.tech_item}>
 							<span class={styles.tech_dot}></span>
-							<span>A Modloader connects player-made content to the game</span>
+							<span>{t("secondary-modding-loader-connection")}</span>
 						</div>
 						<div class={styles.tech_item}>
 							<span class={styles.tech_dot}></span>
-							<span>
-								Vesta automatically installs the version of Java the game needs
-							</span>
+							<span>{t("secondary-modding-java-auto-install")}</span>
 						</div>
 					</div>
 				</div>
@@ -95,7 +91,7 @@ export const ModdingGuideContent: Component = () => {
 									fill="var(--text-primary)"
 									text-anchor="middle"
 								>
-									Mod A
+									{t("secondary-modding-mod-a")}
 								</text>
 
 								<rect
@@ -117,7 +113,7 @@ export const ModdingGuideContent: Component = () => {
 									fill="var(--text-primary)"
 									text-anchor="middle"
 								>
-									Mod B
+									{t("secondary-modding-mod-b")}
 								</text>
 
 								<rect
@@ -139,7 +135,7 @@ export const ModdingGuideContent: Component = () => {
 									fill="var(--text-primary)"
 									text-anchor="middle"
 								>
-									Mod C
+									{t("secondary-modding-mod-c")}
 								</text>
 
 								{/* Middle Layer: Modloader */}
@@ -162,7 +158,7 @@ export const ModdingGuideContent: Component = () => {
 									fill="var(--primary)"
 									text-anchor="middle"
 								>
-									Modloader
+									{t("secondary-modding-modloader")}
 								</text>
 								<text
 									x="200"
@@ -174,7 +170,7 @@ export const ModdingGuideContent: Component = () => {
 									text-anchor="middle"
 									opacity="0.9"
 								>
-									(Connecting Software)
+									{t("secondary-modding-connecting-software")}
 								</text>
 
 								{/* Bottom Layer: Minecraft */}
@@ -198,7 +194,7 @@ export const ModdingGuideContent: Component = () => {
 									text-anchor="middle"
 									opacity="0.8"
 								>
-									Minecraft (Base Game)
+									{t("secondary-modding-minecraft-base-game")}
 								</text>
 							</svg>
 						</div>
@@ -216,7 +212,9 @@ export const ModdingGuideContent: Component = () => {
 			</section>
 
 			<section class={styles.section}>
-				<h2 class={styles.section_title}>Available Modloaders</h2>
+				<h2 class={styles.section_title}>
+					{t("secondary-modding-available-modloaders")}
+				</h2>
 				<div class={styles.comparison_grid}>
 					<For each={modloaders.slice(1)}>
 						{(loader) => (
@@ -313,7 +311,7 @@ export const ModdingGuideContent: Component = () => {
 									font-weight="600"
 									text-anchor="middle"
 								>
-									Number of Mods
+									{t("secondary-modding-number-of-mods")}
 								</text>
 
 								{/* Unoptimized Line (Steep) */}
@@ -334,7 +332,7 @@ export const ModdingGuideContent: Component = () => {
 									text-anchor="end"
 									opacity="0.6"
 								>
-									Unoptimized
+									{t("secondary-modding-unoptimized")}
 								</text>
 
 								{/* Optimized Line (Flatter) */}
@@ -353,7 +351,7 @@ export const ModdingGuideContent: Component = () => {
 									font-weight="700"
 									text-anchor="end"
 								>
-									Vesta Optimized
+									{t("secondary-modding-vesta-optimized")}
 								</text>
 
 								{/* Legend/Y-Axis */}
@@ -372,14 +370,16 @@ export const ModdingGuideContent: Component = () => {
 									font-weight="600"
 									text-anchor="end"
 								>
-									Workload
+									{t("secondary-modding-workload")}
 								</text>
 							</svg>
 						</div>
 					</div>
 				</div>
 				<div class={styles.visual_text}>
-					<h2 class={styles.section_title}>Performance & Smoothness</h2>
+					<h2 class={styles.section_title}>
+						{t("secondary-modding-performance-smoothness")}
+					</h2>
 					<div class={styles.guide_info_list}>
 						<div class={styles.guide_info_entry}>
 							<h3>{HELP_CONTENT.JAVA_MANAGED.title}</h3>

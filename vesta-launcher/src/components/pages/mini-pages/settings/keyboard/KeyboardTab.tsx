@@ -9,14 +9,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
-import {
-	createMemo,
-	createSignal,
-	For,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { chordFromKeyboardEvent, displayChord } from "~/keybindings/chords";
 import {
 	assignKeybinding,
@@ -26,10 +19,8 @@ import {
 	keybindingsPersistenceError,
 	resetKeybinding,
 } from "~/keybindings/store";
-import type {
-	BindingMutationResult,
-	PersistedCommand,
-} from "~/keybindings/types";
+import type { BindingMutationResult, PersistedCommand } from "~/keybindings/types";
+import { t } from "~/localization";
 import pageStyles from "../settings-page.module.css";
 import styles from "./keyboard-tab.module.css";
 
@@ -39,6 +30,59 @@ type PendingConflict = {
 	chord: string | null;
 	operation: "assign" | "reset";
 };
+
+const keybindingLabelIds: Record<string, string> = {
+	"app.reload": "settings-extra-keybinding-reload-label",
+	"app.close": "settings-extra-keybinding-close-label",
+	"navigation.back": "settings-extra-keybinding-back-label",
+	"navigation.forward": "settings-extra-keybinding-forward-label",
+	"navigation.library": "settings-extra-keybinding-library-label",
+	"navigation.new-instance": "app-shell-new-instance",
+	"navigation.explore": "app-shell-explore",
+	"navigation.pinned.last": "settings-extra-keybinding-last-pinned-label",
+	"navigation.settings": "settings-extra-keybinding-settings-label",
+	"navigation.notifications": "settings-extra-keybinding-notifications-label",
+	"navigation.focus-search": "settings-extra-keybinding-focus-search-label",
+};
+
+const keybindingDescriptionIds: Record<string, string> = {
+	"app.reload": "settings-extra-keybinding-reload-description",
+	"app.close": "settings-extra-keybinding-close-description",
+	"navigation.back": "settings-extra-keybinding-back-description",
+	"navigation.forward": "settings-extra-keybinding-forward-description",
+	"navigation.library": "settings-extra-keybinding-library-description",
+	"navigation.new-instance": "settings-extra-keybinding-new-instance-description",
+	"navigation.explore": "settings-extra-keybinding-explore-description",
+	"navigation.pinned.last": "settings-extra-keybinding-last-pinned-description",
+	"navigation.settings": "settings-extra-keybinding-settings-description",
+	"navigation.notifications": "settings-extra-keybinding-notifications-description",
+	"navigation.focus-search": "settings-extra-keybinding-focus-search-description",
+};
+
+function keybindingMessage(
+	command: PersistedCommand,
+	ids: Record<string, string>,
+	value: "label" | "description",
+): string {
+	const key = ids[command.commandId];
+	if (key) return t(key);
+	const pinnedSlot = command.commandId.match(/^navigation\.pinned\.(\d+)$/)?.[1];
+	if (pinnedSlot) {
+		return t(
+			value === "label"
+				? "settings-extra-keybinding-pinned-item"
+				: "settings-extra-keybinding-open-pinned-item",
+			{ slot: Number(pinnedSlot) },
+		);
+	}
+	return command[value];
+}
+
+function keybindingCategory(category: string): string {
+	if (category === "Application") return t("settings-extra-keybinding-category-application");
+	if (category === "Navigation") return t("settings-extra-keybinding-category-navigation");
+	return category;
+}
 
 export function KeyboardSettingsTab() {
 	const [recordingId, setRecordingId] = createSignal<string>();
@@ -56,7 +100,11 @@ export function KeyboardSettingsTab() {
 		return [...groups.entries()].map(([category, commands]) => ({
 			category,
 			commands: commands.sort(
-				(a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label),
+				(a, b) =>
+					a.sortOrder - b.sortOrder ||
+					keybindingMessage(a, keybindingLabelIds, "label").localeCompare(
+						keybindingMessage(b, keybindingLabelIds, "label"),
+					),
 			),
 		}));
 	});
@@ -78,8 +126,13 @@ export function KeyboardSettingsTab() {
 		}
 		setStatus(
 			result.command.currentChord
-				? `${result.command.label} is now ${displayChord(result.command.currentChord)}.`
-				: `${result.command.label} is now unassigned.`,
+				? t("settings-extra-keyboard-assigned-status", {
+						label: keybindingMessage(result.command, keybindingLabelIds, "label"),
+						chord: displayChord(result.command.currentChord),
+					})
+				: t("settings-extra-keyboard-unassigned-status", {
+						label: keybindingMessage(result.command, keybindingLabelIds, "label"),
+					}),
 		);
 		return true;
 	};
@@ -90,7 +143,7 @@ export function KeyboardSettingsTab() {
 			const result = await assignKeybinding(commandId, chord);
 			if (applyResult(result, "assign", chord)) setRecordingId(undefined);
 		} catch (error) {
-			setStatus(`Could not save shortcut: ${String(error)}`);
+			setStatus(t("settings-extra-keyboard-save-failed", { error: String(error) }));
 		} finally {
 			setBusyId(undefined);
 		}
@@ -103,7 +156,7 @@ export function KeyboardSettingsTab() {
 			applyResult(result, "assign", null);
 			setRecordingId(undefined);
 		} catch (error) {
-			setStatus(`Could not clear shortcut: ${String(error)}`);
+			setStatus(t("settings-extra-keyboard-clear-failed", { error: String(error) }));
 		} finally {
 			setBusyId(undefined);
 		}
@@ -115,7 +168,7 @@ export function KeyboardSettingsTab() {
 			const result = await resetKeybinding(command.commandId);
 			applyResult(result, "reset", command.defaultChord);
 		} catch (error) {
-			setStatus(`Could not restore shortcut: ${String(error)}`);
+			setStatus(t("settings-extra-keyboard-restore-failed", { error: String(error) }));
 		} finally {
 			setBusyId(undefined);
 		}
@@ -131,13 +184,11 @@ export function KeyboardSettingsTab() {
 
 			if (event.key === "Escape") {
 				setRecordingId(undefined);
-				setStatus("Shortcut recording cancelled.");
+				setStatus(t("settings-extra-keyboard-recording-cancelled"));
 				return;
 			}
 
-			const command = keybindingCommands().find(
-				(item) => item.commandId === commandId,
-			);
+			const command = keybindingCommands().find((item) => item.commandId === commandId);
 			if (!command) return;
 
 			if (event.key === "Backspace" || event.key === "Delete") {
@@ -161,16 +212,12 @@ export function KeyboardSettingsTab() {
 			const result =
 				pending.operation === "reset"
 					? await resetKeybinding(pending.command.commandId, true)
-					: await assignKeybinding(
-							pending.command.commandId,
-							pending.chord as string,
-							true,
-						);
+					: await assignKeybinding(pending.command.commandId, pending.chord as string, true);
 			applyResult(result, pending.operation, pending.chord);
 			setPendingConflict(undefined);
 			setRecordingId(undefined);
 		} catch (error) {
-			setStatus(`Could not replace shortcut: ${String(error)}`);
+			setStatus(t("settings-extra-keyboard-replace-failed", { error: String(error) }));
 		} finally {
 			setBusyId(undefined);
 		}
@@ -182,7 +229,7 @@ export function KeyboardSettingsTab() {
 				<Show when={keybindingsPersistenceError()}>
 					<SettingsCard>
 						<div class={styles.error} role="alert">
-							<strong>Shortcuts are using temporary defaults.</strong>
+							<strong>{t("settings-extra-keyboard-temporary-defaults")}</strong>
 							<span>{keybindingsPersistenceError()}</span>
 						</div>
 					</SettingsCard>
@@ -192,28 +239,28 @@ export function KeyboardSettingsTab() {
 					when={!keybindingsLoading()}
 					fallback={
 						<SettingsCard>
-							<div class={styles.loading}>Loading keyboard commands…</div>
+							<div class={styles.loading}>{t("settings-extra-keyboard-loading")}</div>
 						</SettingsCard>
 					}
 				>
 					<For each={groupedCommands()}>
 						{(group, index) => (
 							<SettingsCard
-								header={group.category}
+								header={keybindingCategory(group.category)}
 								headerRight={
 									index() === 0 ? (
 										<div
 											class={styles.recordingHelp}
-											aria-label="Shortcut recording help"
+											aria-label={t("settings-extra-keyboard-recording-help")}
 										>
-											<span>While recording</span>
+											<span>{t("settings-extra-keyboard-while-recording")}</span>
 											<span class={styles.helpAction}>
 												<kbd>Esc</kbd>
-												Cancel
+												{t("shared-ui-cancel")}
 											</span>
 											<span class={styles.helpAction}>
 												<kbd>⌫</kbd>
-												Clear
+												{t("settings-help-action-clear")}
 											</span>
 										</div>
 									) : undefined
@@ -222,69 +269,64 @@ export function KeyboardSettingsTab() {
 								<div class={styles.commands}>
 									<For each={group.commands}>
 										{(command) => {
-											const recording = () =>
-												recordingId() === command.commandId;
+											const recording = () => recordingId() === command.commandId;
 											const busy = () => busyId() === command.commandId;
 											return (
-												<div
-													class={styles.command}
-													classList={{ [styles.recording]: recording() }}
-												>
+												<div class={styles.command} classList={{ [styles.recording]: recording() }}>
 													<SettingsField
-														label={command.label}
-														description={command.description}
+														label={keybindingMessage(command, keybindingLabelIds, "label")}
+														description={keybindingMessage(command, keybindingDescriptionIds, "description")}
 														headerRight={
 															<div class={styles.controls}>
 																<button
 																	type="button"
 																	class={styles.capture}
 																	disabled={busy()}
-																	aria-label={`Change shortcut for ${command.label}`}
+																	aria-label={t("settings-extra-keyboard-change-shortcut", {
+																		label: keybindingMessage(command, keybindingLabelIds, "label"),
+																	})}
 																	aria-pressed={recording()}
 																	onClick={() => {
-																		setRecordingId(
-																			recording()
-																				? undefined
-																				: command.commandId,
-																		);
+																		setRecordingId(recording() ? undefined : command.commandId);
 																		setStatus(
 																			recording()
-																				? "Shortcut recording cancelled."
-																				: `Recording shortcut for ${command.label}.`,
+																				? t("settings-extra-keyboard-recording-cancelled")
+																				: t("settings-extra-keyboard-recording-command", {
+																						label: keybindingMessage(command, keybindingLabelIds, "label"),
+																					}),
 																		);
 																	}}
 																>
 																	<Show
 																		when={!recording()}
-																		fallback={<span>Press keys…</span>}
+																		fallback={<span>{t("settings-extra-keyboard-press-keys")}</span>}
 																	>
-																		<kbd>
-																			{displayChord(command.currentChord)}
-																		</kbd>
+																		<kbd>{displayChord(command.currentChord)}</kbd>
 																	</Show>
 																</button>
 																<LauncherButton
 																	variant="ghost"
 																	size="sm"
 																	disabled={busy() || !command.currentChord}
-																	aria-label={`Clear shortcut for ${command.label}`}
+																	aria-label={t("settings-extra-keyboard-clear-shortcut", {
+																		label: keybindingMessage(command, keybindingLabelIds, "label"),
+																	})}
 																	onClick={() => void clearShortcut(command)}
 																>
-																	Clear
+																	{t("settings-help-action-clear")}
 																</LauncherButton>
 																<LauncherButton
 																	variant="ghost"
 																	size="sm"
 																	disabled={
-																		busy() ||
-																		(!command.customized &&
-																			command.currentChord ===
-																				command.defaultChord)
+																		busy() || (!command.customized && command.currentChord === command.defaultChord)
 																	}
-																	aria-label={`Reset shortcut for ${command.label}`}
+																	aria-label={t("settings-extra-keyboard-reset-shortcut", {
+																		label: keybindingMessage(command, keybindingLabelIds, "label"),
+																	})}
 																	onClick={() => void restoreDefault(command)}
 																>
-																	Reset
+																	{t("instances-settings-reset-action")}
 																</LauncherButton>
 															</div>
 														}
@@ -312,11 +354,16 @@ export function KeyboardSettingsTab() {
 			>
 				<DialogContent class={styles.conflictDialog}>
 					<DialogHeader>
-						<DialogTitle>Replace existing shortcut?</DialogTitle>
+						<DialogTitle>{t("settings-extra-keyboard-replace-existing-title")}</DialogTitle>
 						<DialogDescription>
-							<kbd>{displayChord(pendingConflict()?.chord)}</kbd> is assigned to{" "}
-							<strong>{pendingConflict()?.conflict.label}</strong>. Replacing it
-							will leave that command unassigned.
+							<kbd>{displayChord(pendingConflict()?.chord)}</kbd>{" "}
+							{t("settings-extra-keyboard-conflict-prefix")}{" "}
+							<strong>
+								{pendingConflict()
+									? keybindingMessage(pendingConflict()!.conflict, keybindingLabelIds, "label")
+									: ""}
+							</strong>
+							. {t("settings-extra-keyboard-conflict-suffix")}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter class={styles.dialogActions}>
@@ -325,14 +372,10 @@ export function KeyboardSettingsTab() {
 							class={styles.secondaryAction}
 							onClick={() => setPendingConflict(undefined)}
 						>
-							Cancel
+							{t("shared-ui-cancel")}
 						</button>
-						<button
-							type="button"
-							class={styles.primaryAction}
-							onClick={() => void confirmReplacement()}
-						>
-							Replace shortcut
+						<button type="button" class={styles.primaryAction} onClick={() => void confirmReplacement()}>
+							{t("settings-extra-keyboard-replace-shortcut")}
 						</button>
 					</DialogFooter>
 				</DialogContent>

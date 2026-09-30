@@ -13,6 +13,7 @@ import {
 } from "@utils/deep-links";
 import { launchInstance } from "@utils/instances";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { t } from "~/localization";
 
 export { generateVestaDeepLink } from "@utils/deep-links";
 
@@ -53,9 +54,8 @@ async function ensureExternalIntentReady(): Promise<boolean> {
 	const config = await invoke<any>("get_config");
 	if (!config || !config.setup_completed) {
 		showToast({
-			title: "Setup Required",
-			description:
-				"Please complete the onboarding process before using 'Open in Vesta'.",
+			title: t("action-external-setup-required-title"),
+			description: t("action-external-setup-required-description"),
 			severity: "error",
 			duration: 5000,
 		});
@@ -69,8 +69,8 @@ async function ensureExternalIntentReady(): Promise<boolean> {
 		account.is_expired
 	) {
 		showToast({
-			title: "Authentication Required",
-			description: "Please sign in to a valid account to use 'Open in Vesta'.",
+			title: t("action-external-auth-required-title"),
+			description: t("action-external-auth-required-description"),
 			severity: "error",
 			duration: 5000,
 		});
@@ -89,8 +89,8 @@ export async function launchInstanceBySlug(slug: string): Promise<void> {
 	);
 	if (!inst) {
 		showToast({
-			title: "Instance Not Found",
-			description: `No instance found for "${slug}".`,
+			title: t("action-instance-not-found-title"),
+			description: t("action-instance-not-found-description", { slug }),
 			severity: "error",
 			duration: 5000,
 		});
@@ -256,8 +256,8 @@ export async function handleDeepLink(url: string): Promise<void> {
 	} catch (error) {
 		console.error("Failed to parse deep link:", url, error);
 		showToast({
-			title: "Invalid Link",
-			description: "The Vesta link you clicked is invalid or unsupported.",
+			title: t("action-invalid-link-title"),
+			description: t("action-invalid-link-description"),
 			severity: "error",
 			duration: 5000,
 		});

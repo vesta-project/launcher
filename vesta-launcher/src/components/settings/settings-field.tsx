@@ -2,6 +2,7 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { type Component, type JSX, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "./settings.module.css";
 
 export interface SettingsFieldProps {
@@ -61,7 +62,7 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 
 		if (props.confirmationDesc) {
 			const confirmed = await confirm(props.confirmationDesc, {
-				title: "Confirm Action",
+				title: t("dialogs-confirm-action"),
 				kind: props.destructive ? "error" : "info",
 			});
 			if (!confirmed) return;

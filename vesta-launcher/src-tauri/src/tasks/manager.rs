@@ -1,4 +1,5 @@
 use crate::notifications::manager::NotificationManager;
+use crate::localization::LocalizationManager;
 use crate::notifications::models::{
     CreateNotificationInput, NotificationAction, NotificationSeverity, NotificationType,
     ProgressUpdate, PROGRESS_INDETERMINATE,
@@ -15,6 +16,18 @@ use tokio::sync::{mpsc, watch, Notify, Semaphore};
 use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::UnicodeNormalization;
 
+pub fn localized_message(
+    localization: &LocalizationManager,
+    message_id: &str,
+    values: &[(&str, &str)],
+) -> String {
+    let mut args = fluent_bundle::FluentArgs::new();
+    for (name, value) in values {
+        args.set(*name, *value);
+    }
+    localization.format(message_id, Some(&args))
+}
+
 #[derive(Clone)]
 pub struct TaskContext {
     pub app_handle: AppHandle,
@@ -26,6 +39,31 @@ pub struct TaskContext {
 }
 
 impl TaskContext {
+    /// Format a message from the English Fluent catalog for task notification UI.
+    pub fn text(&self, message_id: &str) -> String {
+        self.app_handle
+            .state::<LocalizationManager>()
+            .text(message_id)
+    }
+
+    pub fn format(
+        &self,
+        message_id: &str,
+        args: &fluent_bundle::FluentArgs<'_>,
+    ) -> String {
+        self.app_handle
+            .state::<LocalizationManager>()
+            .format(message_id, Some(args))
+    }
+
+    pub fn format_values(&self, message_id: &str, values: &[(&str, &str)]) -> String {
+        localized_message(
+            &self.app_handle.state::<LocalizationManager>(),
+            message_id,
+            values,
+        )
+    }
+
     pub fn update_description(&self, description: String) {
         // 1. Update the channel if available
         if let Some(ref channel) = self.progress_channel {
@@ -144,6 +182,10 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait Task: Send + Sync {
     fn name(&self) -> String;
+    /// Localized title used in task notifications and active task summaries.
+    fn localized_name(&self, _localization: &LocalizationManager) -> String {
+        self.name()
+    }
     fn id(&self) -> Option<String> {
         None
     }
@@ -180,9 +222,15 @@ pub trait Task: Send + Sync {
     fn starting_description(&self) -> String {
         "Starting...".to_string()
     }
+    fn localized_starting_description(&self, localization: &LocalizationManager) -> String {
+        localization.text("rust-task-starting")
+    }
     /// Description shown on successful completion.
     fn completion_description(&self) -> String {
         "Completed successfully".to_string()
+    }
+    fn localized_completion_description(&self, localization: &LocalizationManager) -> String {
+        localization.text("rust-task-completed-successfully")
     }
     /// Execute task work.
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>>;
@@ -314,6 +362,8 @@ impl TaskManager {
                 log::info!("TaskManager: Received task: {}", task.name());
 
                 let task_name = task.name();
+                let localization = manager_app.state::<LocalizationManager>();
+                let display_name = task.localized_name(&localization);
                 let is_cancellable = task.cancellable();
                 let is_pausable = task.pausable();
                 let notifications_enabled = task.show_notification();
@@ -340,7 +390,7 @@ impl TaskManager {
                 manager_active_tasks
                     .lock()
                     .unwrap()
-                    .insert(client_key.clone(), task_name.clone());
+                    .insert(client_key.clone(), display_name.clone());
 
                 let manager = manager_app.state::<NotificationManager>();
 
@@ -349,7 +399,7 @@ impl TaskManager {
                 if is_cancellable {
                     actions.push(NotificationAction {
                         action_id: "cancel_task".to_string(),
-                        label: "Cancel".to_string(),
+                        label: localization.text("shared-ui-cancel"),
                         action_type: "secondary".to_string(),
                         payload: None,
                     });
@@ -357,7 +407,7 @@ impl TaskManager {
                 if is_pausable {
                     actions.push(NotificationAction {
                         action_id: "pause_task".to_string(),
-                        label: "Pause".to_string(),
+                        label: localization.text("rust-task-action-pause"),
                         action_type: "secondary".to_string(),
                         payload: None,
                     });
@@ -381,8 +431,8 @@ impl TaskManager {
                     if let Err(e) = manager
                         .create(CreateNotificationInput {
                             client_key: Some(client_key.clone()),
-                            title: Some(task_name.clone()),
-                            description: Some("Waiting for worker...".to_string()),
+                            title: Some(display_name.clone()),
+                            description: Some(localization.text("rust-task-waiting")),
                             severity: Some("info".to_string()),
                             notification_type: Some(NotificationType::Progress),
                             dismissible: Some(false),
@@ -469,8 +519,8 @@ impl TaskManager {
                             let manager = app.state::<NotificationManager>();
                             if let Err(e) = manager.create(CreateNotificationInput {
                                 client_key: Some(key_clone.clone()),
-                                title: Some(task_name),
-                                description: Some("Task cancelled.".to_string()),
+                                title: Some(display_name.clone()),
+                                description: Some(app.state::<LocalizationManager>().text("rust-task-cancelled")),
                                 severity: Some("warning".to_string()),
                                 notification_type: Some(NotificationType::Patient),
                                 dismissible: Some(true),
@@ -529,7 +579,7 @@ impl TaskManager {
                             0,
                             initial_current_step,
                             initial_total_steps,
-                            task.starting_description(),
+                            task.localized_starting_description(&app.state::<LocalizationManager>()),
                         );
                     }
 
@@ -551,7 +601,7 @@ impl TaskManager {
                             if let Some(ref channel) = ctx.progress_channel {
                                 let _ = channel.send(ProgressUpdate::Finished {
                                     success: true,
-                                    message: Some(task.completion_description()),
+                                    message: Some(task.localized_completion_description(&app.state::<LocalizationManager>())),
                                 });
                             }
 
@@ -568,7 +618,7 @@ impl TaskManager {
                                     100,
                                     final_step,
                                     final_step,
-                                    task.completion_description(),
+                                    task.localized_completion_description(&app.state::<LocalizationManager>()),
                                     Some(NotificationSeverity::Success),
                                 );
                             }
@@ -597,8 +647,8 @@ impl TaskManager {
                             if notifications_enabled {
                                 if let Err(err) = manager.create(CreateNotificationInput {
                                     client_key: Some(key_clone.clone()),
-                                    title: Some(task_name),
-                                    description: Some(format!("Failed: {}", e)),
+                                    title: Some(display_name),
+                                    description: Some(format!("{}: {}", app.state::<LocalizationManager>().text("rust-task-failed"), e)),
                                     severity: Some("error".to_string()),
                                     notification_type: Some(NotificationType::Patient),
                                     dismissible: Some(true),
@@ -762,21 +812,24 @@ impl TaskManager {
             if is_cancellable {
                 actions.push(NotificationAction {
                     action_id: "cancel_task".to_string(),
-                    label: "Cancel".to_string(),
+                    label: self.app_handle.state::<LocalizationManager>().text("shared-ui-cancel"),
                     action_type: "secondary".to_string(),
                     payload: None,
                 });
             }
             actions.push(NotificationAction {
                 action_id: "resume_task".to_string(),
-                label: "Resume".to_string(),
+                label: self.app_handle.state::<LocalizationManager>().text("rust-task-action-resume"),
                 action_type: "primary".to_string(),
                 payload: None,
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
             let _ = manager.update_notification_actions(client_key.to_string(), actions);
-            let _ = manager.upsert_description(client_key, "Paused");
+            let _ = manager.upsert_description(
+                client_key,
+                self.app_handle.state::<LocalizationManager>().text("rust-task-paused"),
+            );
 
             Ok(())
         } else {
@@ -799,21 +852,24 @@ impl TaskManager {
             if is_cancellable {
                 actions.push(NotificationAction {
                     action_id: "cancel_task".to_string(),
-                    label: "Cancel".to_string(),
+                    label: self.app_handle.state::<LocalizationManager>().text("shared-ui-cancel"),
                     action_type: "secondary".to_string(),
                     payload: None,
                 });
             }
             actions.push(NotificationAction {
                 action_id: "pause_task".to_string(),
-                label: "Pause".to_string(),
+                label: self.app_handle.state::<LocalizationManager>().text("rust-task-action-pause"),
                 action_type: "secondary".to_string(),
                 payload: None,
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
             let _ = manager.update_notification_actions(client_key.to_string(), actions);
-            let _ = manager.upsert_description(client_key, "Resuming...");
+            let _ = manager.upsert_description(
+                client_key,
+                self.app_handle.state::<LocalizationManager>().text("rust-task-resuming"),
+            );
 
             Ok(())
         } else {
@@ -851,6 +907,10 @@ impl Task for TestTask {
         self.title.clone()
     }
 
+    fn localized_name(&self, _localization: &LocalizationManager) -> String {
+        self.title.clone()
+    }
+
     fn cancellable(&self) -> bool {
         true
     }
@@ -874,7 +934,7 @@ impl Task for TestTask {
                 .create(CreateNotificationInput {
                     client_key: Some(client_key.clone()),
                     title: Some(title.clone()),
-                    description: Some("Task is running...".to_string()),
+                    description: Some(ctx.text("rust-task-running")),
                     severity: Some("info".to_string()),
                     notification_type: Some(NotificationType::Progress),
                     dismissible: Some(false),
@@ -884,13 +944,13 @@ impl Task for TestTask {
                         serde_json::to_string(&vec![
                             NotificationAction {
                                 action_id: "cancel_task".to_string(),
-                                label: "Cancel".to_string(),
+                                label: ctx.text("shared-ui-cancel"),
                                 action_type: "secondary".to_string(),
                                 payload: None,
                             },
                             NotificationAction {
                                 action_id: "pause_task".to_string(),
-                                label: "Pause".to_string(),
+                                label: ctx.text("rust-task-action-pause"),
                                 action_type: "secondary".to_string(),
                                 payload: None,
                             },
@@ -925,13 +985,13 @@ impl Task for TestTask {
                             vec![
                                 NotificationAction {
                                     action_id: "cancel_task".to_string(),
-                                    label: "Cancel".to_string(),
+                                    label: ctx.text("shared-ui-cancel"),
                                     action_type: "secondary".to_string(),
                                     payload: None,
                                 },
                                 NotificationAction {
                                     action_id: "resume_task".to_string(),
-                                    label: "Resume".to_string(),
+                                    label: ctx.text("rust-task-action-resume"),
                                     action_type: "primary".to_string(),
                                     payload: None,
                                 },
@@ -945,7 +1005,7 @@ impl Task for TestTask {
                             ((i * 100) / steps) as i32,
                             Some(i as i32),
                             Some(steps as i32),
-                            "Paused".to_string(),
+                            ctx.text("rust-task-paused"),
                         )
                         .map_err(|e| e.to_string())?;
 
@@ -961,13 +1021,13 @@ impl Task for TestTask {
                                         vec![
                                             NotificationAction {
                                                 action_id: "cancel_task".to_string(),
-                                                label: "Cancel".to_string(),
+                                                label: ctx.text("shared-ui-cancel"),
                                                 action_type: "secondary".to_string(),
                                                 payload: None,
                                             },
                                             NotificationAction {
                                                 action_id: "pause_task".to_string(),
-                                                label: "Pause".to_string(),
+                                                label: ctx.text("rust-task-action-pause"),
                                                 action_type: "secondary".to_string(),
                                                 payload: None,
                                             },
@@ -979,7 +1039,7 @@ impl Task for TestTask {
                                         ((i * 100) / steps) as i32,
                                         Some(i as i32),
                                         Some(steps as i32),
-                                        "Resuming...".to_string()
+                                        ctx.text("rust-task-resuming")
                                     ).map_err(|e| e.to_string())?;
                                     break;
                                 }

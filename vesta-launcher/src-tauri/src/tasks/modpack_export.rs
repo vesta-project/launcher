@@ -23,6 +23,10 @@ impl Task for ModpackExportTask {
         format!("Exporting Modpack: {}", self.instance_name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-exporting-modpack", &[("instance", &self.instance_name)])
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!("export_{}", self.instance_name))
     }
@@ -46,8 +50,17 @@ impl Task for ModpackExportTask {
         )
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        let format = match self.modpack_format { ModpackFormat::Modrinth => "Modrinth", ModpackFormat::CurseForge => "CurseForge" };
+        crate::tasks::manager::localized_message(localization, "rust-task-creating-modpack", &[("format", format), ("instance", &self.instance_name)])
+    }
+
     fn completion_description(&self) -> String {
         format!("Successfully exported to {}", self.output_path)
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-exported-to", &[("path", &self.output_path)])
     }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
@@ -71,7 +84,7 @@ impl Task for ModpackExportTask {
             // If exporting to CurseForge, we need to ensure we have numeric IDs for linking.
             // If IDs are non-numeric (e.g. from Modrinth), we try to resolve them via hash.
             if format == ModpackFormat::CurseForge {
-                reporter.set_message("Resolving CurseForge identifiers...");
+                reporter.set_message(&reporter.ctx.text("rust-task-resolving-curseforge-identifiers"));
                 reporter.set_percent(-1); // Indeterminate during resolution
                 let mut resolved_count = 0;
 

@@ -79,7 +79,7 @@ describe("Keyboard settings", () => {
 
 		fireEvent.click(
 			screen.getByRole("button", {
-				name: "Change shortcut for Reload current page",
+				name: /^Change shortcut for \u2068?Reload current page\u2069?$/,
 			}),
 		);
 		fireEvent.keyDown(window, {
@@ -116,7 +116,7 @@ describe("Keyboard settings", () => {
 
 		fireEvent.click(
 			screen.getByRole("button", {
-				name: "Change shortcut for Reload current page",
+				name: /^Change shortcut for \u2068?Reload current page\u2069?$/,
 			}),
 		);
 		fireEvent.keyDown(window, {

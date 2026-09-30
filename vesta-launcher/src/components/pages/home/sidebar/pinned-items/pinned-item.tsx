@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import PlayIcon from "@assets/icons/actions/play.svg";
 import StopIcon from "@assets/icons/actions/stop.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
@@ -164,7 +165,7 @@ export function PinnedItem(props: PinnedItemProps) {
 		} catch (err) {
 			console.error("Failed to launch instance from sidebar:", err);
 			showToast({
-				title: "Launch Failed",
+				title: t("shared-ui-launch-failed"),
 				description: String(err),
 				severity: "error",
 			});
@@ -184,7 +185,7 @@ export function PinnedItem(props: PinnedItemProps) {
 		} catch (err) {
 			console.error("Failed to kill instance from sidebar:", err);
 			showToast({
-				title: "Kill Failed",
+				title: t("app-shell-kill-failed"),
 				description: String(err),
 				severity: "error",
 			});
@@ -195,7 +196,9 @@ export function PinnedItem(props: PinnedItemProps) {
 		if (props.pin.page_type === "settings") return;
 
 		try {
-			const suffix = quickLaunch ? " (Launch)" : " (Open Page)";
+			const suffix = quickLaunch
+				? ` ${t("app-shell-shortcut-launch-suffix")}`
+				: ` ${t("app-shell-shortcut-open-page-suffix")}`;
 			const name = `${displayName()}${suffix}`;
 			const target =
 				props.pin.page_type === "instance"
@@ -220,14 +223,14 @@ export function PinnedItem(props: PinnedItemProps) {
 			const warning = result.warnings?.[0];
 
 			showToast({
-				title: "Shortcut Created",
-				description: warning || `Added ${name} to your desktop`,
+				title: t("app-shell-shortcut-created"),
+				description: warning || t("app-shell-shortcut-added", { name }),
 				severity: warning ? "warning" : "success",
 			});
 		} catch (e) {
 			console.error("Failed to create shortcut:", e);
 			showToast({
-				title: "Shortcut Failed",
+				title: t("app-shell-shortcut-failed"),
 				description: String(e),
 				severity: "error",
 			});
@@ -257,8 +260,8 @@ export function PinnedItem(props: PinnedItemProps) {
 		try {
 			await navigator.clipboard.writeText(url);
 			showToast({
-				title: "Link Copied",
-				description: "Page link copied to clipboard",
+				title: t("app-shell-link-copied"),
+				description: t("app-shell-page-link-copied"),
 				severity: "success",
 			});
 		} catch (e) {
@@ -367,8 +370,8 @@ export function PinnedItem(props: PinnedItemProps) {
 										}
 										title={
 											isRunning() || isLaunching()
-												? "Kill Instance"
-												: "Quick Launch"
+												? t("app-shell-kill-instance")
+												: t("app-shell-quick-launch")
 										}
 									>
 										<Show
@@ -387,10 +390,10 @@ export function PinnedItem(props: PinnedItemProps) {
 			<ContextMenuPortal>
 				<ContextMenuContent>
 					<ContextMenuItem onClick={handleClick}>
-						<span>Open Page</span>
+						<span>{t("app-shell-open-page")}</span>
 					</ContextMenuItem>
 					<ContextMenuItem onClick={handleCopyLink}>
-						<span>Copy Link</span>
+						<span>{t("app-shell-copy-link")}</span>
 					</ContextMenuItem>
 					<Show when={props.pin.page_type === "instance"}>
 						<ContextMenuItem
@@ -405,8 +408,8 @@ export function PinnedItem(props: PinnedItemProps) {
 						>
 							<span>
 								{isRunning() || isLaunching()
-									? "Kill Instance"
-									: "Launch Instance"}
+									? t("app-shell-kill-instance")
+									: t("app-shell-launch-instance")}
 							</span>
 						</ContextMenuItem>
 					</Show>
@@ -414,11 +417,11 @@ export function PinnedItem(props: PinnedItemProps) {
 					<Show when={props.pin.page_type !== "settings"}>
 						<Show when={props.pin.page_type === "instance"}>
 							<ContextMenuItem onClick={() => handleCreateShortcut(true)}>
-								<span>Create Launch Shortcut</span>
+								<span>{t("app-shell-create-launch-shortcut")}</span>
 							</ContextMenuItem>
 						</Show>
 						<ContextMenuItem onClick={() => handleCreateShortcut(false)}>
-							<span>Create Page Shortcut</span>
+							<span>{t("app-shell-create-page-shortcut")}</span>
 						</ContextMenuItem>
 						<ContextMenuSeparator />
 					</Show>
@@ -426,7 +429,7 @@ export function PinnedItem(props: PinnedItemProps) {
 						onClick={() => unpinPage(props.pin.id)}
 						class={styles["menu-item--danger"]}
 					>
-						<span>Unpin</span>
+						<span>{t("app-shell-unpin")}</span>
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenuPortal>

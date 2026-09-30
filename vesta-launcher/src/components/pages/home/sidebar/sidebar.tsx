@@ -1,3 +1,4 @@
+import { t } from "~/localization";
 import BellIcon from "@assets/icons/status/bell.svg";
 import LibraryIcon from "@assets/icons/content/cube.svg";
 import GearIcon from "@assets/icons/content/gear.svg";
@@ -16,7 +17,7 @@ import {
 } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
 import {
-	EXPLORE_RESOURCE_TYPES,
+	getExploreResourceTypes,
 	openBlankInstall,
 	openBrowseModpacks,
 	openExploreResourceType,
@@ -202,7 +203,7 @@ function Sidebar(props: SidebarProps) {
 						<PopoverAnchor>
 							<SidebarProfileButton
 								id={"profile-selector"}
-								tooltip_text={"Profile"}
+								tooltip_text={t("app-shell-profile")}
 								open={accountMenuOpen()}
 								onAccountMenuToggle={(open) => setAccountMenuOpen(open)}
 							/>
@@ -234,7 +235,7 @@ function Sidebar(props: SidebarProps) {
 							<SidebarActionButton
 								id={"sidebar-library"}
 								tooltip_text={tooltipWithShortcut(
-									"Library",
+									t("app-shell-library"),
 									"navigation.library",
 								)}
 								aria-keyshortcuts={ariaShortcut(
@@ -259,7 +260,7 @@ function Sidebar(props: SidebarProps) {
 								<SidebarActionButton
 									id={"sidebar-new"}
 									tooltip_text={tooltipWithShortcut(
-										"New Instance",
+										t("app-shell-new-instance"),
 										"navigation.new-instance",
 									)}
 									aria-keyshortcuts={ariaShortcut(
@@ -282,29 +283,21 @@ function Sidebar(props: SidebarProps) {
 								<ContextMenuContent>
 									<ContextMenuItem
 										onSelect={() => openBlankInstall(navigateFromSidebar)}
-									>
-										New blank instance
-									</ContextMenuItem>
+									>{t("app-shell-new-blank-instance")}</ContextMenuItem>
 									<ContextMenuItem
 										onSelect={() => {
 											void pickAndOpenLocalModpack(navigateFromSidebar);
 										}}
-									>
-										Import local file…
-									</ContextMenuItem>
+									>{t("app-shell-import-local-file")}</ContextMenuItem>
 									<ContextMenuItem
 										onSelect={() => {
 											void openBrowseModpacks(navigateFromSidebar);
 										}}
-									>
-										Browse modpacks…
-									</ContextMenuItem>
+									>{t("app-shell-browse-modpacks")}</ContextMenuItem>
 									<ContextMenuSeparator />
 									<ContextMenuItem
 										onSelect={() => openLauncherImport(navigateFromSidebar)}
-									>
-										Import from another launcher…
-									</ContextMenuItem>
+									>{t("app-shell-import-from-another-launcher")}</ContextMenuItem>
 								</ContextMenuContent>
 							</ContextMenuPortal>
 						</ContextMenu>
@@ -314,7 +307,7 @@ function Sidebar(props: SidebarProps) {
 								<SidebarActionButton
 									id={"sidebar-explore"}
 									tooltip_text={tooltipWithShortcut(
-										"Explore",
+										t("app-shell-explore"),
 										"navigation.explore",
 									)}
 									aria-keyshortcuts={ariaShortcut(
@@ -335,7 +328,7 @@ function Sidebar(props: SidebarProps) {
 							</ContextMenuTrigger>
 							<ContextMenuPortal>
 								<ContextMenuContent>
-									<For each={[...EXPLORE_RESOURCE_TYPES]}>
+									<For each={getExploreResourceTypes()}>
 										{(type) => (
 											<ContextMenuItem
 												onSelect={() => {
@@ -383,7 +376,7 @@ function Sidebar(props: SidebarProps) {
 					<SidebarActionButton
 						id={"sidebar-notifications"}
 						tooltip_text={tooltipWithShortcut(
-							"Notifications",
+							t("app-shell-notifications"),
 							"navigation.notifications",
 						)}
 						aria-keyshortcuts={ariaShortcut(
@@ -407,7 +400,7 @@ function Sidebar(props: SidebarProps) {
 									<TooltipTrigger>
 										<div class={styles["notification-spinner"]} />
 									</TooltipTrigger>
-									<TooltipContent>Task in progress</TooltipContent>
+									<TooltipContent>{t("app-shell-task-in-progress")}</TooltipContent>
 								</Tooltip>
 							</Show>
 							<Show when={notifData().totalCount > 0}>
@@ -417,7 +410,11 @@ function Sidebar(props: SidebarProps) {
 											{notifData().totalCount}
 										</div>
 									</TooltipTrigger>
-									<TooltipContent>{`${notifData().totalCount} notification${notifData().totalCount === 1 ? "" : "s"}`}</TooltipContent>
+									<TooltipContent>
+										{t("app-shell-notification-count", {
+											count: notifData().totalCount,
+										})}
+									</TooltipContent>
 								</Tooltip>
 							</Show>
 						</div>
@@ -425,7 +422,7 @@ function Sidebar(props: SidebarProps) {
 					<SidebarActionButton
 						id={"sidebar-settings"}
 						tooltip_text={tooltipWithShortcut(
-							"Settings",
+							t("app-shell-settings"),
 							"navigation.settings",
 						)}
 						aria-keyshortcuts={ariaShortcut(

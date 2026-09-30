@@ -33,6 +33,10 @@ impl Task for ImportExternalInstanceTask {
         format!("Import external instance {}", self.instance_name)
     }
 
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-import-external-instance", &[("instance", &self.instance_name)])
+    }
+
     fn id(&self) -> Option<String> {
         Some(format!("import_external_instance_{}", self.instance_id))
     }
@@ -49,8 +53,16 @@ impl Task for ImportExternalInstanceTask {
         format!("Preparing import for {}...", self.instance_name)
     }
 
+    fn localized_starting_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-preparing-import", &[("instance", &self.instance_name)])
+    }
+
     fn completion_description(&self) -> String {
         format!("Import completed for {}", self.instance_name)
+    }
+
+    fn localized_completion_description(&self, localization: &crate::localization::LocalizationManager) -> String {
+        crate::tasks::manager::localized_message(localization, "rust-task-import-completed-for", &[("instance", &self.instance_name)])
     }
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
@@ -86,9 +98,9 @@ impl Task for ImportExternalInstanceTask {
                     instance_id,
                     source_dir
                 );
-                ctx.update_description("Resuming import from previous interruption...".to_string());
+                ctx.update_description(ctx.text("rust-task-resuming-interrupted-import"));
             } else {
-                ctx.update_description("Preparing launcher file copy...".to_string());
+                ctx.update_description(ctx.text("rust-task-preparing-launcher-file-copy"));
             }
             ctx.update_full(
                 5,
@@ -370,8 +382,8 @@ impl Task for ImportExternalInstanceTask {
                 }),
             );
 
-            ctx.update_description("Import completed".to_string());
-            ctx.update_full(100, "Import completed".to_string(), Some(3), Some(3));
+            ctx.update_description(ctx.text("rust-task-import-completed"));
+            ctx.update_full(100, ctx.text("rust-task-import-completed"), Some(3), Some(3));
             log::info!(
                 "[external_import] completed instance_id={} elapsed_ms={}",
                 instance_id,

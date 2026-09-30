@@ -13,6 +13,7 @@ import {
 	saveThemeUpdate as persistThemeUpdate,
 } from "../../../../utils/config-sync";
 import styles from "../init.module.css";
+import { t } from "~/localization";
 
 interface ThemeStepProps {
 	goNext: () => Promise<void>;
@@ -178,9 +179,9 @@ function ThemeStep(props: ThemeStepProps) {
 		<div class={styles["theme-step"]}>
 			<div class={styles["theme-fade-up--enter"]}>
 				<div class={styles["theme-header"]}>
-					<h2 class={styles["theme-title"]}>Make it yours.</h2>
+					<h2 class={styles["theme-title"]}>{t("onboarding-theme-title")}</h2>
 					<p class={styles["theme-subtitle"]}>
-						Pick a starting look for Vesta.
+						{t("onboarding-theme-description")}
 					</p>
 				</div>
 			</div>
@@ -205,7 +206,7 @@ function ThemeStep(props: ThemeStepProps) {
 				<div class={styles["theme-fade-up--enter"]}>
 					<div class={styles["theme-hue-section"]}>
 						<div class={styles["theme-hue-label"]}>
-							<span>Customize Primary Hue</span>
+							<span>{t("onboarding-theme-customize-primary-hue")}</span>
 							<span class={styles["theme-hue-value"]}>{backgroundHue()}°</span>
 						</div>
 						<Slider
@@ -240,7 +241,7 @@ function ThemeStep(props: ThemeStepProps) {
 							disabled={!canProceed()}
 							class={styles["theme-continue-btn"]}
 						>
-							Continue
+							{t("app-shell-continue")}
 						</Button>
 					</div>
 				</div>

@@ -19,6 +19,7 @@ import {
 	Show,
 } from "solid-js";
 import styles from "./session-expired-dialog.module.css";
+import { t } from "~/localization";
 
 const SessionExpiredDialog: Component = () => {
 	const { expiredAccount, setExpiredAccount } = authStore;
@@ -53,12 +54,12 @@ const SessionExpiredDialog: Component = () => {
 		if (!account) return;
 
 		const confirmed = await ask(
-			`Are you sure you want to remove the account "${account.username}"? You will need to sign in again to use this account later.`,
+			t("auth-remove-account-confirmation", { username: account.username }),
 			{
-				title: "Remove Account",
+				title: t("auth-remove-account"),
 				kind: "warning",
-				okLabel: "Remove Account",
-				cancelLabel: "Cancel",
+				okLabel: t("auth-remove-account"),
+				cancelLabel: t("shared-ui-cancel"),
 			},
 		);
 
@@ -129,11 +130,11 @@ const SessionExpiredDialog: Component = () => {
 					</div>
 
 					<div class={styles.content}>
-						<h2>Session Expired</h2>
+						<h2>{t("auth-session-expired")}</h2>
 						<p>
-							Your security token for{" "}
+							{t("auth-expired-token-prefix")}{" "}
 							<span class={styles.username}>{expiredAccount()?.username}</span>{" "}
-							has expired or been revoked by Microsoft.
+							{t("auth-expired-token-suffix")}
 						</p>
 					</div>
 
@@ -143,11 +144,11 @@ const SessionExpiredDialog: Component = () => {
 							classList={{ [styles.single]: (accounts()?.length ?? 0) <= 1 }}
 						>
 							<Button onClick={handleRelogin} variant="solid" color="primary">
-								Sign In
+								{t("auth-sign-in")}
 							</Button>
 							<Show when={(accounts()?.length ?? 0) > 1}>
 								<Button onClick={() => setView("switch")} variant="outline">
-									Switch Account
+									{t("auth-switch-account")}
 								</Button>
 							</Show>
 						</div>
@@ -157,7 +158,7 @@ const SessionExpiredDialog: Component = () => {
 							color="destructive"
 							class={styles["full-width"]}
 						>
-							Delete Account
+							{t("auth-delete-account")}
 						</Button>
 					</div>
 				</Show>
@@ -170,9 +171,9 @@ const SessionExpiredDialog: Component = () => {
 							onClick={() => setView("expired")}
 							style={{ position: "absolute", left: "16px", top: "16px" }}
 						>
-							← Back
+							{t("app-shell-back")}
 						</Button>
-						<h2>Switch Account</h2>
+						<h2>{t("auth-switch-account")}</h2>
 					</div>
 					<div class={styles["account-list"]}>
 						<For each={accounts()}>
@@ -193,12 +194,14 @@ const SessionExpiredDialog: Component = () => {
 										</span>
 										<Show when={account.is_expired}>
 											<span class={styles["account-status-expired"]}>
-												Expired
+												{t("auth-expired")}
 											</span>
 										</Show>
 									</div>
 									<Show when={account.uuid === expiredAccount()?.uuid}>
-										<span class={styles["active-indicator"]}>Active</span>
+						<span class={styles["active-indicator"]}>
+							{t("auth-account-active")}
+						</span>
 									</Show>
 								</button>
 							)}

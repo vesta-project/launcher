@@ -1,6 +1,7 @@
 import { showToast } from "@ui/toast/toast";
 import { getMinecraftVersions, type PistonMetadata } from "@utils/instances";
 import { createSignal } from "solid-js";
+import { t } from "~/localization";
 
 /**
  * Shared signal for Minecraft version metadata.
@@ -33,7 +34,7 @@ export async function refetchMinecraftVersions() {
 		console.error("[versions store] Failed to load:", e);
 		setVersionsError(msg);
 		showToast({
-			title: "Failed to load Minecraft versions",
+			title: t("action-load-minecraft-versions-failed"),
 			description: msg,
 			severity: "error",
 		});

@@ -10,6 +10,9 @@ common-select-placeholder = Select…
 common-error = Error
 common-copied = Copied
 common-warning = Warning
+# Shared label for content or runtimes maintained by Vesta.
+common-managed = Managed
+common-resume-recovery = Resume recovery
 
 common-launcher-action-stay-open = Stay Open
 common-launcher-action-minimize = Minimize Window

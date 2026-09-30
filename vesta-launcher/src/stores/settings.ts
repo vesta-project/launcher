@@ -34,6 +34,7 @@ import {
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { getStartupConfig } from "@utils/startup-state";
+import { t } from "~/localization";
 import {
 	batch,
 	createEffect,
@@ -443,7 +444,7 @@ export const javaOptions = createMemo(() => {
 		options.push({
 			type: "managed",
 			version: req.major_version,
-			title: "Managed Runtime",
+			title: t("app-services-managed-runtime"),
 			path: managedPath,
 			isActive: Boolean(
 				current?.is_active &&
@@ -465,7 +466,7 @@ export const javaOptions = createMemo(() => {
 				options.push({
 					type: "system",
 					version: req.major_version,
-					title: "System Runtime",
+					title: t("app-services-system-runtime"),
 					path: det.path,
 					isActive:
 						current?.path === det.path &&
@@ -488,7 +489,7 @@ export const javaOptions = createMemo(() => {
 			options.push({
 				type: "custom",
 				version: req.major_version,
-				title: "Custom Path",
+				title: t("app-services-custom-path"),
 				path: p.path,
 				isActive: p.is_active ?? false,
 				onClick: () => handleSetGlobalPath(req.major_version, p.path, false),
@@ -498,7 +499,7 @@ export const javaOptions = createMemo(() => {
 		options.push({
 			type: "browse",
 			version: req.major_version,
-			title: "+ Browse...",
+			title: t("app-services-browse"),
 			isActive: false,
 			onClick: () => handleManualPickSetGlobal(req.major_version),
 		});
@@ -544,15 +545,15 @@ export async function handleDownloadManaged(version: number) {
 	try {
 		await invoke("download_managed_java", { version });
 		showToast({
-			title: "Download Started",
-			description: `Java ${version} is being downloaded in the background.`,
+			title: t("common-java-download-started"),
+			description: t("app-services-java-download-description", { version }),
 			severity: "info",
 		});
 	} catch (e) {
 		console.error("Failed to download managed java:", e);
 		showToast({
-			title: "Download Failed",
-			description: "Failed to initiate Java download.",
+			title: t("app-services-java-download-failed"),
+			description: t("app-services-java-download-failed-description"),
 			severity: "error",
 		});
 	}
@@ -565,8 +566,11 @@ export async function handleManualPickSetGlobal(version: number) {
 			const info = await invoke<any>("verify_java_path", { pathStr: path });
 			if (info.major_version !== version) {
 				await dialogStore.alert(
-					"Invalid Java Version",
-					`Selected Java is version ${info.major_version}, but ${version} is required.`,
+					t("app-services-invalid-java-version"),
+					t("app-services-invalid-java-version-description", {
+						selectedVersion: info.major_version,
+						requiredVersion: version,
+					}),
 					"error",
 				);
 			} else {
@@ -992,11 +996,11 @@ export async function handleDeleteImportedTheme(targetThemeId: string) {
 	}
 
 	const confirmed = await dialogStore.confirm(
-		"Delete Imported Theme",
-		`Delete "${themeToDelete.name}" from your imported theme library?`,
+		t("app-services-delete-imported-theme"),
+		t("app-services-delete-imported-theme-description", { name: themeToDelete.name }),
 		{
-			okLabel: "Delete",
-			cancelLabel: "Cancel",
+			okLabel: t("shared-ui-delete"),
+			cancelLabel: t("shared-ui-cancel"),
 			isDestructive: true,
 			severity: "warning",
 		},
@@ -1017,15 +1021,16 @@ export async function handleDeleteImportedTheme(targetThemeId: string) {
 		if (themeId() === targetThemeId) {
 			await migrateToCustomTheme(themeToDelete);
 			showToast({
-				title: "Theme Deleted",
-				description:
-					"Active imported theme was removed. You have been switched to Custom with migrated settings.",
+				title: t("app-services-theme-deleted"),
+				description: t("app-services-active-imported-theme-removed"),
 				severity: "info",
 			});
 		} else {
 			showToast({
-				title: "Theme Deleted",
-				description: `${themeToDelete.name} was removed from your imported library.`,
+				title: t("app-services-theme-deleted"),
+				description: t("app-services-imported-theme-removed", {
+					name: themeToDelete.name,
+				}),
 				severity: "success",
 			});
 		}
@@ -1034,8 +1039,8 @@ export async function handleDeleteImportedTheme(targetThemeId: string) {
 	} catch (error) {
 		console.error("Failed to delete imported theme:", error);
 		dialogStore.alert(
-			"Delete Failed",
-			"Failed to delete the selected imported theme.",
+			t("app-services-delete-failed"),
+			t("app-services-delete-imported-theme-failed"),
 			"error",
 		);
 	}
@@ -1044,14 +1049,18 @@ export async function handleDeleteImportedTheme(targetThemeId: string) {
 export async function handleExportTheme() {
 	try {
 		if (!hasTauriRuntime()) {
-			dialogStore.alert("Platform Error", "Tauri runtime not found.", "error");
+			dialogStore.alert(
+				t("app-services-platform-error"),
+				t("app-services-tauri-runtime-not-found"),
+				"error",
+			);
 			return;
 		}
 
 		if (themeId() !== "custom") {
 			dialogStore.alert(
-				"Export Unavailable",
-				"Only the Custom theme can be exported. Switch to Custom first.",
+				t("app-services-export-unavailable"),
+				t("app-services-only-custom-theme-exportable"),
 				"warning",
 			);
 			return;
@@ -1060,22 +1069,27 @@ export async function handleExportTheme() {
 		const themeClass = getThemeById(themeId()) || validateTheme({});
 		const activeAccount = await getActiveAccount();
 		const author =
-			activeAccount?.display_name || activeAccount?.username || "Anonymous";
+			activeAccount?.display_name || activeAccount?.username || t("app-services-anonymous");
 
 		const customName = await dialogStore.prompt(
-			"Theme Name",
-			"Enter a name for your theme before exporting.",
+			t("app-services-theme-name"),
+			t("app-services-enter-theme-name"),
 			{
-				defaultValue: "My Custom Theme",
+				defaultValue: t("app-services-my-custom-theme"),
 			},
 		);
 
 		if (!customName) return;
 
 		const savePath = await saveDialog({
-			title: "Export Theme",
+			title: t("app-services-export-theme"),
 			defaultPath: `${customName.replace(/[^a-zA-Z0-9- ]/g, "_")}.vestatheme`,
-			filters: [{ name: "Vesta Theme", extensions: ["vestatheme", "json"] }],
+			filters: [
+				{
+					name: t("app-services-vesta-theme"),
+					extensions: ["vestatheme", "json"],
+				},
+			],
 		});
 
 		if (savePath) {
@@ -1086,27 +1100,40 @@ export async function handleExportTheme() {
 				customCss: themeClass.customCss || "",
 			});
 			dialogStore.alert(
-				"Theme Exported",
-				"Your theme has been exported successfully.",
+				t("app-services-theme-exported"),
+				t("app-services-theme-export-success"),
 				"success",
 			);
 		}
 	} catch (e) {
 		console.error("Failed to export theme", e);
-		dialogStore.alert("Export Error", "Failed to export the theme.", "error");
+		dialogStore.alert(
+			t("app-services-export-error"),
+			t("app-services-export-failed"),
+			"error",
+		);
 	}
 }
 
 export async function handleImportTheme() {
 	try {
 		if (!hasTauriRuntime()) {
-			dialogStore.alert("Platform Error", "Tauri runtime not found.", "error");
+			dialogStore.alert(
+				t("app-services-platform-error"),
+				t("app-services-tauri-runtime-not-found"),
+				"error",
+			);
 			return;
 		}
 
 		const openPath = await openDialog({
-			title: "Import Theme",
-			filters: [{ name: "Vesta Theme", extensions: ["vestatheme", "json"] }],
+			title: t("app-services-import-theme"),
+			filters: [
+				{
+					name: t("app-services-vesta-theme"),
+					extensions: ["vestatheme", "json"],
+				},
+			],
 			multiple: false,
 		});
 		if (!openPath) return;
@@ -1171,22 +1198,22 @@ export async function handleImportTheme() {
 
 		if (result.warnings && result.warnings.length > 0) {
 			dialogStore.alert(
-				"Theme Imported With Warnings",
+				t("app-services-theme-imported-with-warnings"),
 				result.warnings.join("\n"),
 				"warning",
 			);
 		} else {
 			dialogStore.alert(
-				"Theme Imported",
-				"Theme imported and added to your library.",
+				t("app-services-theme-imported"),
+				t("app-services-theme-import-success"),
 				"success",
 			);
 		}
 	} catch (e) {
 		console.error("Failed to import theme", e);
 		dialogStore.alert(
-			"Import Error",
-			"Failed to import the selected theme file.",
+			t("app-services-import-error"),
+			t("app-services-import-failed"),
 			"error",
 		);
 	}
@@ -1366,14 +1393,13 @@ export async function handleTelemetryToggle(checked: boolean) {
 	}
 
 	showToast({
-		title: "Telemetry Preference Updated",
-		description:
-			"Restart Vesta Launcher to apply telemetry changes to backend crash reporting.",
+		title: t("app-services-telemetry-preference-updated"),
+		description: t("app-services-telemetry-restart-description"),
 		severity: "info",
 		actions: [
 			{
 				id: "restart_app",
-				label: "Restart Now",
+				label: t("app-services-restart-now"),
 				type: "primary",
 			},
 		],
@@ -1467,7 +1493,7 @@ export async function testProxyConnection(): Promise<ProxyTestResult> {
 		return {
 			ok: true,
 			status: "online",
-			message: "Proxy testing is available in the desktop app.",
+			message: t("app-services-proxy-testing-desktop-only"),
 		};
 	}
 
@@ -1512,16 +1538,16 @@ export async function handleClearCache() {
 			const snapshot = await fetchStorageSnapshot(true);
 			mutateStorageSnapshot(snapshot);
 			showToast({
-				title: "Cache Cleared",
+				title: t("app-services-cache-cleared"),
 				description:
-					"All stored metadata and temporary files have been cleared.",
+					t("app-services-cache-cleared-description"),
 				severity: "success",
 			});
 		} catch (e) {
 			console.error("Failed to clear cache:", e);
 			showToast({
-				title: "Clear Cache Failed",
-				description: "Something went wrong while clearing the cache.",
+				title: t("app-services-clear-cache-failed"),
+				description: t("app-services-clear-cache-error"),
 				severity: "error",
 			});
 		}
@@ -1711,8 +1737,8 @@ async function initializeSettings() {
 		} catch (error) {
 			console.error("Failed to load settings:", error);
 			showToast({
-				title: "Settings Load Failed",
-				description: "Could not load your saved preferences. Using defaults.",
+				title: t("app-services-settings-load-failed"),
+				description: t("app-services-settings-load-failed-description"),
 				severity: "error",
 			});
 		}

@@ -15,6 +15,7 @@ describe("getInstancePrimaryAction", () => {
 		[{ running: true }, "Stop", "stop"],
 		[{ launching: true }, "Starting…", "spinner"],
 		[{ operationInProgress: true, operationLabel: "Repairing" }, "Repairing…", "spinner"],
+		[{ operationInProgress: true }, "Working…", "spinner"],
 		[{ interrupted: true, lastOperation: "repair" }, "Resume repair", "recovery"],
 		[{ needsInstallation: true, installationFailed: true }, "Retry install", "error"],
 		[{ updateRecovery: true }, "Resume recovery", "error"],
@@ -22,13 +23,13 @@ describe("getInstancePrimaryAction", () => {
 		[{}, "Play", "play"],
 	])("maps %o to %s", (state, label, icon) => {
 		const action = getInstancePrimaryAction(state);
-		expect(action.label).toBe(label);
+		expect(action.label.replace(/[\u2068\u2069]/g, "")).toBe(label);
 		expect(action.icon).toBe(icon);
 	});
 });
 
 describe("summarizeResources", () => {
 	it("describes mixed ownership and known updates without filler", () => {
-		expect(summarizeResources([{ source_kind: "modpack" }, {}], 1)).toBe("2 installed · 1 bundled · 1 custom · 1 update");
+		expect(summarizeResources([{ source_kind: "modpack" }, {}], 1).replace(/[\u2068\u2069]/g, "")).toBe("2 installed · 1 bundled · 1 custom · 1 update");
 	});
 });

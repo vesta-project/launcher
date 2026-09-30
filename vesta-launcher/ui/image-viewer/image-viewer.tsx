@@ -18,6 +18,7 @@ import {
 	Show,
 } from "solid-js";
 import styles from "./image-viewer.module.css";
+import { t } from "~/localization";
 
 interface ImageViewerProps {
 	src: string | null;
@@ -445,7 +446,7 @@ export function ImageViewer(props: ImageViewerProps) {
 				>
 					<div class={styles.info}>
 						<span class={styles.title}>
-							{currentImage()?.title || props.title || "Image Viewer"}
+							{currentImage()?.title || props.title || t("shared-ui-image-viewer")}
 						</span>
 						<Show when={currentImage()?.date}>
 							<span class={styles.date}>{currentImage()?.date}</span>
@@ -461,7 +462,7 @@ export function ImageViewer(props: ImageViewerProps) {
 									const current = imageList()[currentIndex()];
 									if (current) props.onCopy?.(current.src);
 								}}
-								tooltip_text="Copy"
+								tooltip_text={t("shared-ui-copy")}
 							>
 								<CopyIcon />
 							</Button>
@@ -475,7 +476,7 @@ export function ImageViewer(props: ImageViewerProps) {
 									const current = imageList()[currentIndex()];
 									if (current) props.onDownload?.(current.src);
 								}}
-								tooltip_text="Download"
+								tooltip_text={t("shared-ui-download")}
 							>
 								<DownloadIcon />
 							</Button>
@@ -489,7 +490,7 @@ export function ImageViewer(props: ImageViewerProps) {
 									const current = imageList()[currentIndex()];
 									if (current) props.onOpenFolder?.(current.src);
 								}}
-								tooltip_text="Open Folder"
+								tooltip_text={t("shared-ui-open-folder")}
 							>
 								<FolderIcon />
 							</Button>
@@ -504,7 +505,7 @@ export function ImageViewer(props: ImageViewerProps) {
 									const current = imageList()[currentIndex()];
 									if (current) props.onDelete?.(current.src);
 								}}
-								tooltip_text="Delete"
+								tooltip_text={t("shared-ui-delete")}
 							>
 								<TrashIcon />
 							</Button>
@@ -539,7 +540,7 @@ export function ImageViewer(props: ImageViewerProps) {
 												fallback={
 													<div class={styles.errorContainer}>
 														<InfoIcon width="48" height="48" />
-														<p>Failed to load image</p>
+														<p>{t("shared-ui-failed-to-load-image")}</p>
 														<span class={styles.errorPath}>{image.src}</span>
 													</div>
 												}
@@ -613,7 +614,7 @@ export function ImageViewer(props: ImageViewerProps) {
 						<Show when={imageList().length > 1}>
 							<button
 								type="button"
-								aria-label="Previous image"
+								aria-label={t("shared-ui-previous-image")}
 								class={`${styles.navBtn} ${styles.navBtnPrev} ${!showUI() ? styles.hidden : ""}`}
 								onMouseEnter={handleControlHoverStart}
 								onMouseLeave={handleControlHoverEnd}
@@ -629,7 +630,7 @@ export function ImageViewer(props: ImageViewerProps) {
 							</button>
 							<button
 								type="button"
-								aria-label="Next image"
+								aria-label={t("shared-ui-next-image")}
 								class={`${styles.navBtn} ${styles.navBtnNext} ${!showUI() ? styles.hidden : ""}`}
 								onMouseEnter={handleControlHoverStart}
 								onMouseLeave={handleControlHoverEnd}
@@ -660,7 +661,7 @@ export function ImageViewer(props: ImageViewerProps) {
 							{currentIndex() + 1} / {imageList().length}
 						</span>
 					</Show>
-					<span>Click to {isZoomed() ? "Reset" : "Zoom"}</span>
+					<span>{isZoomed() ? t("shared-ui-click-to-reset") : t("shared-ui-click-to-zoom")}</span>
 				</div>
 			</DialogContent>
 		</Dialog>

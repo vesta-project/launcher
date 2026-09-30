@@ -227,17 +227,20 @@ pub(crate) fn publish_recovery_required_notification(
         .unwrap_or_else(|_| format!("Instance {}", instance_id));
     let actions = vec![crate::notifications::models::NotificationAction {
         action_id: "resume_instance_operation".to_string(),
-        label: "Resume recovery".to_string(),
+        label: app_handle.state::<crate::localization::LocalizationManager>().text("common-resume-recovery"),
         action_type: "primary".to_string(),
         payload: None,
     }];
     let _ = manager.create(crate::notifications::models::CreateNotificationInput {
         client_key: Some(format!("interrupted_instance_{}", instance_id)),
-        title: Some("Update Recovery Required".to_string()),
-        description: Some(format!(
-            "The previous version of '{}' could not be fully restored: {}",
-            instance_name, error
-        )),
+        title: Some(app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-update-recovery-required-title")),
+        description: {
+            let localization = app_handle.state::<crate::localization::LocalizationManager>();
+            let mut args = fluent_bundle::FluentArgs::new();
+            args.set("instanceName", instance_name.as_str());
+            args.set("error", error.as_str());
+            Some(localization.format("rust-native-update-recovery-required-description", Some(&args)))
+        },
         severity: Some("error".to_string()),
         notification_type: Some(crate::notifications::models::NotificationType::Patient),
         dismissible: Some(true),
@@ -267,26 +270,30 @@ pub fn publish_recovery_complete_notification(
         .unwrap_or_else(|_| format!("Instance {}", instance_id));
     let (title, description, severity) = if committed {
         (
-            "Modpack Update Completed",
-            format!(
-                "The completed update for '{}' was finalized successfully.",
-                instance_name
-            ),
+            app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-modpack-update-completed-title"),
+            {
+                let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                let mut args = fluent_bundle::FluentArgs::new();
+                args.set("instanceName", instance_name.as_str());
+                localization.format("rust-native-update-completed-description", Some(&args))
+            },
             "success",
         )
     } else {
         (
-            "Previous Version Restored",
-            format!(
-                "The failed update for '{}' was rolled back. The instance is ready to play.",
-                instance_name
-            ),
+            app_handle.state::<crate::localization::LocalizationManager>().text("rust-native-previous-version-restored-title"),
+            {
+                let localization = app_handle.state::<crate::localization::LocalizationManager>();
+                let mut args = fluent_bundle::FluentArgs::new();
+                args.set("instanceName", instance_name.as_str());
+                localization.format("rust-native-failed-update-rolled-back-description", Some(&args))
+            },
             "error",
         )
     };
     let _ = manager.create(crate::notifications::models::CreateNotificationInput {
         client_key: Some(format!("interrupted_instance_{}", instance_id)),
-        title: Some(title.to_string()),
+        title: Some(title),
         description: Some(description),
         severity: Some(severity.to_string()),
         notification_type: Some(crate::notifications::models::NotificationType::Patient),

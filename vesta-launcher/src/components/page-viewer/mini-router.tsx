@@ -1,4 +1,5 @@
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
+import { t } from "~/localization";
 import { generateVestaDeepLink } from "@utils/deep-links";
 
 import {
@@ -515,8 +516,10 @@ class MiniRouter {
 	getRouterView(additionalProps?: Record<string, unknown>) {
 		const loadingTitle = () =>
 			this.currentPath.get() === "/resource-details"
-				? "Fetching project details..."
-				: `Loading ${this.currentElement().name || "page"}...`;
+				? t("app-shell-fetching-project-details")
+				: t("app-shell-loading-route", {
+					page: this.currentElement().name || "page",
+				});
 		const loadingMessage = () => {
 			if (this.currentPath.get() !== "/resource-details") return undefined;
 			const name = this.currentParams.get().name;

@@ -1,4 +1,5 @@
 import { dialogStore } from "@stores/dialog-store";
+import { t } from "~/localization";
 
 export type MinecraftVersionChangeContext = "manual" | "modpack-update";
 
@@ -10,18 +11,20 @@ export interface MinecraftVersionChangeParams {
 }
 
 function buildDescription(params: MinecraftVersionChangeParams): string {
-	const action =
-		params.context === "modpack-update"
-			? "Updating this modpack will change the Minecraft version"
-			: "Changing the Minecraft version";
-
-	return [
-		`${action} for "${params.instanceName}" from ${params.currentVersion} to ${params.nextVersion}.`,
-		"",
-		"Existing worlds may become incompatible or unusable after this change.",
-		"",
-		"Are you sure you want to continue?",
-	].join("\n");
+	return t("action-minecraft-version-confirm-description", {
+		instanceName: params.instanceName,
+		currentVersion: params.currentVersion,
+		nextVersion: params.nextVersion,
+		action: t(params.context === "modpack-update"
+			? "action-minecraft-version-update-warning"
+			: "action-minecraft-version-change-warning", {
+				instanceName: params.instanceName,
+				currentVersion: params.currentVersion,
+				nextVersion: params.nextVersion,
+			}),
+		worldWarning: t("action-minecraft-version-world-warning"),
+		question: t("action-minecraft-version-continue-question"),
+	});
 }
 
 /**
@@ -36,11 +39,11 @@ export async function confirmMinecraftVersionChange(
 	}
 
 	return await dialogStore.confirm(
-		"Change Minecraft Version?",
+		t("action-minecraft-version-confirm-title"),
 		buildDescription(params),
 		{
 			severity: "warning",
-			okLabel: "Change Version",
+			okLabel: t("action-minecraft-version-confirm-ok"),
 			isDestructive: true,
 		},
 	);

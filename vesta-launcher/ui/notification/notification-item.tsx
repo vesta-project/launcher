@@ -11,6 +11,7 @@ import type {
 import clsx from "clsx";
 import { For, JSX, Show, splitProps } from "solid-js";
 import styles from "./notification-item.module.css";
+import { t } from "~/localization";
 
 export interface NotificationItemProps {
 	id: number;
@@ -102,8 +103,8 @@ export function NotificationItem(props: NotificationItemProps) {
 						<span class={clsx(styles.title, "selectable")}>
 							{local.title ||
 								(local.notification_type === "progress"
-									? "Working..."
-									: "Notification")}
+									? t("shared-ui-working")
+									: t("shared-ui-notification"))}
 						</span>
 						<div class={styles.headerActions}>
 							<Show when={local.created_at}>
@@ -119,7 +120,7 @@ export function NotificationItem(props: NotificationItemProps) {
 										e.stopPropagation();
 										local.onDismiss?.();
 									}}
-									aria-label="Dismiss"
+									aria-label={t("shared-ui-dismiss")}
 								>
 									<CloseIcon />
 								</button>

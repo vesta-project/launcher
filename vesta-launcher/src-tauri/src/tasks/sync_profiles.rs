@@ -257,12 +257,12 @@ pub async fn sync_account_profile_data(
 
             if notify_remote_change && remote_change_detected {
                 let manager = app.state::<crate::notifications::manager::NotificationManager>();
+                let localization = app
+                    .state::<crate::localization::LocalizationManager>();
                 let _ = manager.create(crate::notifications::models::CreateNotificationInput {
                     client_key: Some("remote_skin_update".into()),
-                    title: Some("Profile Synced".into()),
-                    description: Some(
-                        "Your Minecraft skin/cape was updated to match your Mojang profile.".into(),
-                    ),
+                    title: Some(localization.text("rust-native-profile-synced-title")),
+                    description: Some(localization.text("rust-native-profile-synced-description")),
                     notification_type: Some(
                         crate::notifications::models::NotificationType::Immediate,
                     ),
@@ -292,14 +292,14 @@ impl Task for SyncAccountProfilesTask {
                 return Ok(());
             }
 
-            ctx.update_full(0, "Initializing sync...".into(), Some(1), Some(100));
+            ctx.update_full(0, ctx.text("rust-task-initializing-sync"), Some(1), Some(100));
 
             let total = accounts.len();
             for (idx, acc) in accounts.into_iter().enumerate() {
                 let p = (((idx + 1) as f32 / total as f32) * 100.0) as i32;
                 ctx.update_full(
                     p,
-                    format!("Syncing profile for {}", acc.username),
+                    ctx.format_values("rust-task-syncing-profile", &[("username", &acc.username)]),
                     Some((idx + 1) as i32),
                     Some(total as i32),
                 );
@@ -314,5 +314,9 @@ impl Task for SyncAccountProfilesTask {
 
     fn name(&self) -> String {
         "Sync Profile Data".to_string()
+    }
+
+    fn localized_name(&self, localization: &crate::localization::LocalizationManager) -> String {
+        localization.text("rust-task-sync-profile-data")
     }
 }

@@ -5,6 +5,7 @@ import {
 	classifyDatapackVersionCompatibility,
 	type DatapackVersionCompatibility,
 } from "@utils/resource-install-intent";
+import { t } from "~/localization";
 
 const NON_MINECRAFT_VERSION_LABELS = new Set(["client", "server"]);
 
@@ -27,9 +28,13 @@ export function summarizeProviderMinecraftVersions(
 			sensitivity: "base",
 		}),
 	);
-	if (versions.length === 0) return "Not specified by provider";
+	if (versions.length === 0) return t("action-datapack-versions-not-specified");
 	if (versions.length <= 5) return versions.join(", ");
-	return `${versions[0]}–${versions[versions.length - 1]} (${versions.length} versions listed)`;
+	return t("action-datapack-versions-range", {
+		firstVersion: versions[0],
+		lastVersion: versions[versions.length - 1],
+		count: versions.length,
+	});
 }
 
 export function buildDatapackCompatibilityDescription(params: {
@@ -41,25 +46,23 @@ export function buildDatapackCompatibilityDescription(params: {
 	>;
 	compatibility: Exclude<DatapackVersionCompatibility, "exact">;
 }): string {
-	const targetVersion =
-		params.world.gameVersion ??
+	const targetVersion = params.world.gameVersion ??
 		(params.world.dataVersion != null
-			? `DataVersion ${params.world.dataVersion}`
-			: "Unknown saved version");
-	const reason =
-		params.compatibility === "sameRelease"
-			? "This release does not explicitly list the target version, although it lists a nearby Minecraft release."
-			: "This release does not explicitly list the target version.";
-	return [
-		`Project: ${params.projectName}`,
-		`Datapack release: ${params.version.version_number}`,
-		`Provider-listed Minecraft versions: ${summarizeProviderMinecraftVersions(params.version.game_versions)}`,
-		`Target world: ${params.world.displayName}`,
-		`Target saved version: ${targetVersion}`,
-		"",
-		reason,
-		"Datapacks often work across nearby releases, but Vesta cannot verify this one.",
-	].join("\n");
+			? t("action-datapack-data-version", {
+					dataVersion: String(params.world.dataVersion),
+				})
+			: t("action-datapack-unknown-saved-version"));
+	return t("action-datapack-compatibility-description", {
+		projectName: params.projectName,
+		releaseVersion: params.version.version_number,
+		providerVersions: summarizeProviderMinecraftVersions(params.version.game_versions),
+		worldName: params.world.displayName,
+		targetVersion,
+		reason: params.compatibility === "sameRelease"
+			? t("action-datapack-compatibility-nearby-warning")
+			: t("action-datapack-compatibility-unlisted-warning"),
+		closing: t("action-datapack-compatibility-warning"),
+	});
 }
 
 export async function confirmDatapackWorldCompatibility(params: {
@@ -81,12 +84,12 @@ export async function confirmDatapackWorldCompatibility(params: {
 		return { compatibility, acknowledged: true };
 	}
 	const acknowledged = await dialogStore.confirm(
-		"Confirm datapack compatibility",
+		t("action-datapack-compatibility-confirm-title"),
 		buildDatapackCompatibilityDescription({ ...params, compatibility }),
 		{
 			severity: "warning",
-			okLabel: "Install anyway",
-			cancelLabel: "Choose another version",
+			okLabel: t("action-datapack-compatibility-install-anyway"),
+			cancelLabel: t("action-datapack-compatibility-choose-another"),
 		},
 	);
 	return { compatibility, acknowledged };

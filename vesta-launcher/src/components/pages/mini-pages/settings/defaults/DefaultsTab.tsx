@@ -1,10 +1,6 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
-import {
-	getTotalRam,
-	instanceDefaults,
-	updateDefaultField,
-} from "@stores/settings";
+import { getTotalRam, instanceDefaults, updateDefaultField } from "@stores/settings";
 import {
 	NumberField,
 	NumberFieldDecrementTrigger,
@@ -13,25 +9,10 @@ import {
 	NumberFieldInput,
 	NumberFieldLabel,
 } from "@ui/number-field/number-field";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { Separator } from "@ui/separator/separator";
-import {
-	Slider,
-	SliderFill,
-	SliderThumb,
-	SliderTrack,
-} from "@ui/slider/slider";
-import {
-	TextFieldInput,
-	TextFieldRoot,
-	TextFieldTextArea,
-} from "@ui/text-field/text-field";
+import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
+import { TextFieldInput, TextFieldRoot, TextFieldTextArea } from "@ui/text-field/text-field";
 import {
 	formatMemoryLabel,
 	findLaunchBehaviorOption,
@@ -57,8 +38,7 @@ export function InstanceDefaultsTab() {
 	};
 
 	const preferredMaxMemory = () =>
-		instanceDefaults().default_max_memory ||
-		getDynamicPreferredMaxMemoryMb(getTotalRam());
+		instanceDefaults().default_max_memory || getDynamicPreferredMaxMemoryMb(getTotalRam());
 	const generatedMemoryLimit = () => getGeneratedMemoryLimitMb(getTotalRam());
 
 	return (
@@ -83,9 +63,7 @@ export function InstanceDefaultsTab() {
 								<NumberField
 									style={{ flex: 1 }}
 									value={instanceDefaults().default_width}
-									onRawValueChange={(val) =>
-										updateDefaultField("default_width", val)
-									}
+									onRawValueChange={(val) => updateDefaultField("default_width", val)}
 									minValue={0}
 								>
 									<NumberFieldLabel
@@ -107,9 +85,7 @@ export function InstanceDefaultsTab() {
 								<NumberField
 									style={{ flex: 1 }}
 									value={instanceDefaults().default_height}
-									onRawValueChange={(val) =>
-										updateDefaultField("default_height", val)
-									}
+									onRawValueChange={(val) => updateDefaultField("default_height", val)}
 									minValue={0}
 								>
 									<NumberFieldLabel
@@ -158,9 +134,7 @@ export function InstanceDefaultsTab() {
 												"margin-bottom": "8px",
 											}}
 										>
-											<div
-												style={{ "font-size": "13px", "font-weight": "600" }}
-											>
+											<div style={{ "font-size": "13px", "font-weight": "600" }}>
 												{formatMemoryLabel(preferredMaxMemory())}
 											</div>
 										</div>
@@ -194,27 +168,19 @@ export function InstanceDefaultsTab() {
 						optionTextValue={"label" as any}
 						value={
 							findLaunchBehaviorOption(
-								instanceDefaults().default_launcher_action_on_launch ||
-									"stay-open",
+								instanceDefaults().default_launcher_action_on_launch || "stay-open",
 							) as any
 						}
 						onChange={(option: any) =>
-							updateDefaultField(
-								"default_launcher_action_on_launch",
-								option?.value,
-							)
+							updateDefaultField("default_launcher_action_on_launch", option?.value)
 						}
 						itemComponent={(selectProps: any) => (
-							<SelectItem item={selectProps.item}>
-								{selectProps.item.rawValue.label}
-							</SelectItem>
+							<SelectItem item={selectProps.item}>{selectProps.item.rawValue.label}</SelectItem>
 						)}
 					>
 						<SelectTrigger>
 							<SelectValue<any>>
-								{(state) =>
-									state.selectedOption()?.label ?? t("common-select-placeholder")
-								}
+								{(state) => state.selectedOption()?.label ?? t("common-select-placeholder")}
 							</SelectValue>
 						</SelectTrigger>
 						<SelectContent />
@@ -229,10 +195,7 @@ export function InstanceDefaultsTab() {
 						<TextFieldTextArea
 							value={instanceDefaults().default_java_args || ""}
 							onInput={(e) =>
-								updateDefaultField(
-									"default_java_args",
-									(e.currentTarget as HTMLTextAreaElement).value,
-								)
+								updateDefaultField("default_java_args", (e.currentTarget as HTMLTextAreaElement).value)
 							}
 							placeholder="-Xmx4G -XX:+UseG1GC ..."
 							style={{ "min-height": "100px" }}
@@ -267,9 +230,7 @@ export function InstanceDefaultsTab() {
 					header={t("settings-defaults-hooks-title")}
 					subHeader={t("settings-defaults-hooks-subheader")}
 				>
-					<div
-						style={{ display: "flex", "flex-direction": "column", gap: "16px" }}
-					>
+					<div style={{ display: "flex", "flex-direction": "column", gap: "16px" }}>
 						<SettingsField
 							label={t("settings-defaults-pre-launch-label")}
 							description={t("settings-defaults-pre-launch-description")}
@@ -283,7 +244,7 @@ export function InstanceDefaultsTab() {
 												(e.currentTarget as HTMLInputElement).value,
 											)
 										}
-										placeholder="e.g. echo 'Starting...' > start.log"
+										placeholder={`${t("settings-extra-example-prefix")} echo 'Starting...' > start.log`}
 									/>
 								</TextFieldRoot>
 							}
@@ -302,7 +263,7 @@ export function InstanceDefaultsTab() {
 												(e.currentTarget as HTMLInputElement).value,
 											)
 										}
-										placeholder="e.g. mangohud"
+										placeholder={`${t("settings-extra-example-prefix")} mangohud`}
 									/>
 								</TextFieldRoot>
 							}
@@ -316,12 +277,9 @@ export function InstanceDefaultsTab() {
 									<TextFieldInput
 										value={instanceDefaults().default_post_exit_hook || ""}
 										onInput={(e) =>
-											updateDefaultField(
-												"default_post_exit_hook",
-												(e.currentTarget as HTMLInputElement).value,
-											)
+											updateDefaultField("default_post_exit_hook", (e.currentTarget as HTMLInputElement).value)
 										}
-										placeholder="e.g. echo 'Finished' >> start.log"
+										placeholder={`${t("settings-extra-example-prefix")} echo 'Finished' >> start.log`}
 									/>
 								</TextFieldRoot>
 							}
