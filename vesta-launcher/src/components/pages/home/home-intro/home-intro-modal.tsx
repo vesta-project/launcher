@@ -20,9 +20,7 @@ function HomeIntroModal(props: HomeIntroModalProps) {
 					<div class={styles["home-intro-modal-icon"]}>
 						<Show
 							when={isWelcome()}
-							fallback={
-								<SuccessIcon width="56" height="56" />
-							}
+							fallback={<SuccessIcon width="56" height="56" />}
 						>
 							<HomeIcon width="56" height="56" />
 						</Show>
@@ -44,5 +42,6 @@ function HomeIntroModal(props: HomeIntroModalProps) {
 }
 
 export default HomeIntroModal;
+
 import SuccessIcon from "@assets/icons/controls/success.svg";
 import HomeIcon from "@assets/icons/navigation/home.svg";

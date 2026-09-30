@@ -114,4 +114,5 @@ export function PageSidebar(props: PageSidebarProps) {
 		</Tabs>
 	);
 }
+
 import MenuIcon from "@assets/icons/controls/menu.svg";

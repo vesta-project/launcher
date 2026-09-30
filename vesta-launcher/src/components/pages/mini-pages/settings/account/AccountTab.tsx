@@ -1,10 +1,10 @@
-﻿import CapeIcon from "@assets/icons/content/cape-icon.svg";
-import CheckIcon from "@assets/icons/controls/check.svg";
 import PlusIcon from "@assets/icons/actions/add.svg";
 // Assets
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import ViewIcon from "@assets/icons/content/search.svg";
 import SkinIcon from "@assets/icons/content/skin-icon.svg";
+import CheckIcon from "@assets/icons/controls/check.svg";
+import ChevronDownIcon from "@assets/icons/controls/chevron-down.svg";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -41,9 +41,10 @@ import {
 	onCleanup,
 	onMount,
 	Show,
+	Suspense,
 } from "solid-js";
-import pageStyles from "../settings-page.module.css";
 import { t } from "~/localization";
+import pageStyles from "../settings-page.module.css";
 import styles from "./AccountTab.module.css";
 
 interface Account {
@@ -66,6 +67,17 @@ interface SkinSource {
 	slim_texture?: string;
 	texture?: string;
 	url?: string;
+	pack_id?: string;
+	pack_name?: string;
+	/** Legacy alias of pack_name */
+	category?: string;
+}
+
+interface SkinPackGroup {
+	packId: string;
+	packName: string;
+	skins: Skin[];
+	isDefaults: boolean;
 }
 
 interface Skin {
@@ -146,7 +158,7 @@ const formatTooltipName = (
 	name: string | undefined,
 	source: string | undefined,
 ): string => {
-	if (!name) return t("settings-account-default-skin-label");
+	if (!name) return "Skin";
 	const normalizedSource = (source || "").toLowerCase();
 	if (
 		normalizedSource === "default" ||
@@ -218,9 +230,13 @@ export function AccountSettingsTab() {
 	const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
 	const [skins, setSkins] = createSignal<Skin[]>([]);
 	const [skinHistory, setSkinHistory] = createSignal<SkinHistory[]>([]);
+	const [skinHistoryLoaded, setSkinHistoryLoaded] = createSignal(false);
 	const [capes, setCapes] = createSignal<Cape[]>([]);
 	const [saving, setSaving] = createSignal(false);
-	const [browseTab, setBrowseTab] = createSignal("recent");
+	const [browseTab, setBrowseTab] = createSignal("yours");
+	const [collapsedPacks, setCollapsedPacks] = createSignal<
+		Record<string, boolean>
+	>({});
 	const [viewerSrc, setViewerSrc] = createSignal<string | null>(null);
 	const [compactActionMode, setCompactActionMode] = createSignal(false);
 	const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
@@ -248,6 +264,7 @@ export function AccountSettingsTab() {
 	);
 
 	const loadData = async () => {
+		setSkinHistoryLoaded(false);
 		try {
 			const accs = await invoke<Account[]>("get_accounts");
 			setAccounts(accs);
@@ -275,7 +292,7 @@ export function AccountSettingsTab() {
 							setCapes(
 								res.capes.map((c) => ({
 									id: c.id,
-									name: c.alias || t("settings-account-default-cape"),
+									name: c.alias || "Cape",
 									url: c.url,
 								})),
 							);
@@ -339,10 +356,11 @@ export function AccountSettingsTab() {
 					setCapes(
 						res.capes.map((c) => ({
 							id: c.id,
-							name: c.alias || t("settings-account-default-cape"),
+							name: c.alias || "Cape",
 							url: c.url,
 						})),
 					);
+					setSkinHistoryLoaded(true);
 
 					setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
 					setPreviewVariant(
@@ -376,7 +394,10 @@ export function AccountSettingsTab() {
 					setSkins(await invoke<Skin[]>("get_default_skins"));
 					setCapes([]);
 					setSkinHistory([]);
+					setSkinHistoryLoaded(true);
 				}
+			} else {
+				setSkinHistoryLoaded(true);
 			}
 		} catch (err) {
 			console.error("Failed to load account data:", err);
@@ -385,12 +406,18 @@ export function AccountSettingsTab() {
 
 	onMount(loadData);
 
+	const normalizeAccountUuid = (uuid?: string | null) =>
+		(uuid || "").replace(/-/g, "").toLowerCase();
+
 	onMount(() => {
 		// Listen for external active account changes (e.g. from Sidebar)
 		const unsubscribe = onConfigUpdate(async (field) => {
 			if (field === "active_account_uuid") {
 				const active = (await getActiveAccount()) as any as Account;
-				if (active?.uuid !== activeAccount()?.uuid) {
+				if (
+					normalizeAccountUuid(active?.uuid) !==
+					normalizeAccountUuid(activeAccount()?.uuid)
+				) {
 					await loadData();
 				}
 			}
@@ -542,39 +569,61 @@ export function AccountSettingsTab() {
 		return false;
 	};
 
-	const skinHistoryCategories = createMemo(() => {
-		const categories = new Set<string>();
+	const PACK_ORDER: Record<string, number> = {
+		defaults: 0,
+		minecon_earth_2017: 10,
+		builders_and_biomes: 20,
+		striding_hero: 30,
+		garden_awakens: 40,
+		chase_the_skies: 50,
+		copper_age: 60,
+		mounts_of_mayhem: 70,
+		tiny_takeover: 80,
+		chaos_cubed: 90,
+		dungeons_hero: 100,
+		dungeons_ii_hero: 110,
+		other_events: 1000,
+	};
+
+	const getPackId = (source: SkinSource): string => {
+		return source.pack_id || source.pack_name || source.category || "other";
+	};
+
+	const getPackName = (source: SkinSource): string => {
+		return (
+			source.pack_name || source.category || toTitleCase(getPackId(source))
+		);
+	};
+
+	const skinPackGroups = createMemo((): SkinPackGroup[] => {
+		const groups = new Map<string, SkinPackGroup>();
+
 		for (const skin of skins()) {
-			const cat = (skin.source as any).category;
-			if (cat) {
-				categories.add(cat);
+			if (skin.source?.type !== "default") continue;
+			const packId = getPackId(skin.source);
+			const packName = getPackName(skin.source);
+			const existing = groups.get(packId);
+			if (existing) {
+				existing.skins.push(skin);
+			} else {
+				groups.set(packId, {
+					packId,
+					packName,
+					skins: [skin],
+					isDefaults: packId === "defaults",
+				});
 			}
 		}
-		// Also include categories from history that aren't in defaults
-		for (const item of skinHistory()) {
-			if (
-				item.source &&
-				item.source !== "mojang" &&
-				item.source !== "history" &&
-				item.source !== "local"
-			) {
-				categories.add(item.source);
-			}
-		}
-		return Array.from(categories).sort();
+
+		return Array.from(groups.values()).sort((a, b) => {
+			const orderA = PACK_ORDER[a.packId] ?? 500;
+			const orderB = PACK_ORDER[b.packId] ?? 500;
+			if (orderA !== orderB) return orderA - orderB;
+			return a.packName.localeCompare(b.packName, undefined, {
+				sensitivity: "base",
+			});
+		});
 	});
-
-	const defaultCategories = createMemo(() =>
-		skinHistoryCategories().filter(
-			(category) => !category.toLowerCase().includes("event"),
-		),
-	);
-
-	const eventCategories = createMemo(() =>
-		skinHistoryCategories().filter((category) =>
-			category.toLowerCase().includes("event"),
-		),
-	);
 
 	const filteredRecentHistory = createMemo(() => {
 		const defaultTextureKeys = new Set(
@@ -586,7 +635,7 @@ export function AccountSettingsTab() {
 		let duplicateCount = 0;
 
 		const filtered = skinHistory().filter((item) => {
-			// Hide if it matches a preset (don't duplicate preset in recent)
+			// Hide if it matches a preset (don't duplicate preset in Your skins)
 			if (defaultTextureKeys.has(item.texture_key)) return false;
 
 			if (seenHistoryTextureKeys.has(item.texture_key)) {
@@ -596,14 +645,17 @@ export function AccountSettingsTab() {
 
 			seenHistoryTextureKeys.add(item.texture_key);
 
-			// Don't show in "Recent" if it belongs to a known category (it will show there instead)
+			const source = (item.source || "").toLowerCase();
+			// Keep user-owned sources only; pack_id / pack_name history stays under Presets
 			if (
-				item.source &&
-				item.source !== "mojang" &&
-				item.source !== "history" &&
-				item.source !== "custom" &&
-				item.source !== "local" &&
-				item.source !== "preset"
+				source &&
+				source !== "mojang" &&
+				source !== "history" &&
+				source !== "custom" &&
+				source !== "local" &&
+				source !== "preset" &&
+				source !== "uploaded" &&
+				!source.startsWith("temp")
 			) {
 				return false;
 			}
@@ -638,7 +690,7 @@ export function AccountSettingsTab() {
 				multiple: false,
 				filters: [
 					{
-						name: t("settings-account-skin-file-filter"),
+						name: "Minecraft Skin",
 						extensions: ["png", "jpeg", "jpg"],
 					},
 				],
@@ -709,7 +761,7 @@ export function AccountSettingsTab() {
 							id: tempId,
 							account_uuid: active.uuid,
 							texture_key: tempKey,
-							name: t("settings-account-uploaded-skin"),
+							name: "Uploaded Skin",
 							variant: detectedVariant,
 							image_data: dataUrl,
 							source: "local",
@@ -725,8 +777,8 @@ export function AccountSettingsTab() {
 		} catch (err) {
 			console.error("Failed to upload skin:", err);
 			createNotification({
-				title: t("settings-account-upload-failed-title"),
-				description: t("settings-account-upload-failed-description"),
+				title: "Upload Failed",
+				description: "Could not read the selected file.",
 				notification_type: "immediate",
 			});
 		}
@@ -750,7 +802,20 @@ export function AccountSettingsTab() {
 		setSaving(true);
 		try {
 			if (previewSkinUrl() !== (active.skin_url || "")) {
-				if (previewSkinUrl().startsWith("data:")) {
+				const skin = activeSkin();
+				const isBuiltinDefault = skin?.source?.type === "default";
+
+				if (isBuiltinDefault && skin) {
+					const source = skin.source;
+					await invoke("apply_preset_skin", {
+						accountUuid: active.uuid,
+						textureUrl: previewSkinUrl(),
+						variant: previewVariant(),
+						category: source.pack_name || source.category || "Preset",
+						name: skin.name || undefined,
+						packId: source.pack_id || undefined,
+					});
+				} else if (previewSkinUrl().startsWith("data:")) {
 					const accountName = getAccountDisplayName(active);
 					await invoke("upload_account_skin", {
 						accountUuid: active.uuid,
@@ -764,9 +829,12 @@ export function AccountSettingsTab() {
 						textureUrl: previewSkinUrl(),
 						variant: previewVariant(),
 						category:
-							(activeSkin()?.source as any)?.category ||
-							activeSkin()?.source.type ||
+							skin?.source?.pack_name ||
+							skin?.source?.category ||
+							skin?.source?.type ||
 							"Preset",
+						name: skin?.name || undefined,
+						packId: skin?.source?.pack_id || undefined,
 					});
 				}
 			}
@@ -796,7 +864,7 @@ export function AccountSettingsTab() {
 			setCapes(
 				res.capes.map((c) => ({
 					id: c.id,
-					name: c.alias || t("settings-account-default-cape"),
+					name: c.alias || "Cape",
 					url: c.url,
 				})),
 			);
@@ -823,17 +891,15 @@ export function AccountSettingsTab() {
 			if (updatedAccount) setActiveAccount(updatedAccount);
 
 			createNotification({
-				title: t("settings-account-updated-title"),
-				description: t("settings-account-updated-description"),
+				title: "Account Updated",
+				description: "Your skin and cape changes have been saved successfully.",
 				notification_type: "immediate",
 			});
 		} catch (err) {
 			console.error("Save failed:", err);
 			createNotification({
-				title: t("settings-account-update-failed-title"),
-				description: t("settings-account-update-failed-description", {
-					error: err instanceof Error ? err.message : String(err),
-				}),
+				title: "Update Failed",
+				description: `Failed to save changes: ${err instanceof Error ? err.message : String(err)}`,
 				notification_type: "alert",
 			});
 		} finally {
@@ -842,18 +908,21 @@ export function AccountSettingsTab() {
 	};
 
 	const selectAccount = async (acc: Account) => {
+		if (
+			normalizeAccountUuid(acc.uuid) ===
+			normalizeAccountUuid(activeAccount()?.uuid)
+		) {
+			return;
+		}
 		setActiveAccount(acc);
 		await persistActiveAccount(acc.uuid);
 		await loadData();
 	};
 
 	const getAccountDisplayName = (account?: Account | null) => {
-		if (!account) return t("settings-account-select-account");
+		if (!account) return "Select account";
 		return (
-			account.display_name ||
-			account.username ||
-			account.name ||
-			t("settings-account-fallback-name")
+			account.display_name || account.username || account.name || "Account"
 		);
 	};
 
@@ -870,19 +939,32 @@ export function AccountSettingsTab() {
 			optionTextValue="uuid"
 			itemComponent={(props) => (
 				<SelectItem item={props.item} class={styles.accountSelectItem}>
-					<div class={styles.accountSelectOption}>
-						<ResourceAvatar
-							name={getAccountDisplayName(props.item.rawValue)}
-							playerUuid={props.item.rawValue.uuid}
-							size={20}
-							shape="square"
-						/>
-						<div class={styles.accountSelectText}>
-							<span class={styles.accountSelectName}>
-								{getAccountDisplayName(props.item.rawValue)}
-							</span>
+					<Suspense
+						fallback={
+							<div class={styles.accountSelectOption}>
+								<div class={styles.accountSelectAvatarFallback} />
+								<div class={styles.accountSelectText}>
+									<span class={styles.accountSelectName}>
+										{getAccountDisplayName(props.item.rawValue)}
+									</span>
+								</div>
+							</div>
+						}
+					>
+						<div class={styles.accountSelectOption}>
+							<ResourceAvatar
+								name={getAccountDisplayName(props.item.rawValue)}
+								playerUuid={props.item.rawValue.uuid}
+								size={20}
+								shape="square"
+							/>
+							<div class={styles.accountSelectText}>
+								<span class={styles.accountSelectName}>
+									{getAccountDisplayName(props.item.rawValue)}
+								</span>
+							</div>
 						</div>
-					</div>
+					</Suspense>
 				</SelectItem>
 			)}
 		>
@@ -925,117 +1007,100 @@ export function AccountSettingsTab() {
 		setPreviewCapeId(snapshot.capeId);
 	};
 
-	const renderSkinCategorySection = (category: string) => {
-		const categorySkins = () => {
-			const defaults = skins().filter(
-				(s) => (s.source as any).category === category,
-			);
-			const historyPresets = skinHistory()
-				.filter((h) => h.source === category)
-				.map(
-					(h) =>
-						({
-							texture_key: h.texture_key,
-							name: h.name,
-							source: {
-								type: h.source,
-								classic_texture: h.image_data,
-								slim_texture: h.image_data,
-							},
-						}) as any as Skin,
-				);
+	const renderSkinTile = (skin: Skin) => {
+		const classicTexture = getSkinTexture(skin, "classic");
+		const preferredTexture =
+			getSkinTexture(skin, previewVariant()) || classicTexture;
 
-			const combined = [...defaults];
-			const seenTextureKeys = new Set<string>();
-
-			for (const existing of combined) {
-				if (existing.texture_key) {
-					seenTextureKeys.add(existing.texture_key);
-				}
-			}
-
-			for (const h of historyPresets) {
-				if (!h.texture_key || seenTextureKeys.has(h.texture_key)) {
-					continue;
-				}
-
-				seenTextureKeys.add(h.texture_key);
-
-				combined.push(h);
-			}
-			return combined;
-		};
+		const isSelected = createMemo(() => {
+			return isSkinSelected(preferredTexture, skin.texture_key);
+		});
 
 		return (
-			<Show when={categorySkins().length > 0}>
-				<section class={styles.contentCard}>
-					<div class={styles.cardHeader}>
-						<SkinIcon width="20" style="color: var(--primary)" />
-						<h2 class={styles.cardTitle} style="text-transform: capitalize;">
-							{t("settings-account-category-outfits", { category })}
-						</h2>
+			<Tooltip placement="top">
+				<TooltipTrigger as="div">
+					<div
+						class={styles.skinItem}
+						classList={{
+							[styles.selected]: isSelected(),
+						}}
+						onClick={() => handlePreviewSkin(skin)}
+					>
+						<SkinPortrait src={preferredTexture} variant={previewVariant()} />
+						<Tooltip>
+							<TooltipTrigger
+								as="button"
+								class={styles.viewRawButton}
+								onClick={(e) => {
+									e.stopPropagation();
+									setViewerSrc(preferredTexture);
+								}}
+								aria-label={t("settings-account-view-raw-texture")}
+							>
+								<ViewIcon width="16" />
+							</TooltipTrigger>
+							<TooltipContent>{t("settings-account-view-raw-texture")}</TooltipContent>
+						</Tooltip>
+						<Show when={isSelected()}>
+							<span class={styles.selectedBadge}>
+								<CheckIcon />
+							</span>
+						</Show>
 					</div>
-					<div class={styles.presetsGrid}>
-						<For each={categorySkins()}>
-							{(skin) => {
-								const classicTexture = getSkinTexture(skin, "classic");
-								const preferredTexture =
-									getSkinTexture(skin, previewVariant()) || classicTexture;
+				</TooltipTrigger>
+				<TooltipContent>
+					{formatTooltipName(skin.name || "Default Skin", skin.source?.type)}
+				</TooltipContent>
+			</Tooltip>
+		);
+	};
 
-								const isSelected = createMemo(() => {
-									return isSkinSelected(preferredTexture, skin.texture_key);
-								});
+	const isPackCollapsed = (packId: string) => !!collapsedPacks()[packId];
 
-								return (
-									<Tooltip placement="top">
-										<TooltipTrigger as="div">
-											<div
-												class={styles.skinItem}
-												classList={{
-													[styles.selected]: isSelected(),
-												}}
-												onClick={() => handlePreviewSkin(skin)}
-											>
-												<SkinPortrait
-													src={preferredTexture}
-													variant={
-														(skin.source as any)?.variant || previewVariant()
-													}
-												/>
-												<Tooltip>
-													<TooltipTrigger
-														as="button"
-														class={styles.viewRawButton}
-														onClick={(e) => {
-															e.stopPropagation();
-															setViewerSrc(preferredTexture);
-														}}
-														aria-label={t("settings-account-view-raw-texture")}
-													>
-														<ViewIcon width="16" />
-													</TooltipTrigger>
-													<TooltipContent>
-														{t("settings-account-view-raw-texture")}
-													</TooltipContent>
-												</Tooltip>
-												<Show when={isSelected()}>
-													<span class={styles.selectedBadge}>
-														<CheckIcon />
-													</span>
-												</Show>
-											</div>
-										</TooltipTrigger>
-										<TooltipContent>
-											{formatTooltipName(
-												skin.name || t("settings-account-default-skin"),
-												(skin.source as any)?.type,
-											)}
-										</TooltipContent>
-									</Tooltip>
-								);
-							}}
-						</For>
-					</div>
+	const togglePackCollapsed = (packId: string) => {
+		setCollapsedPacks((prev) => ({
+			...prev,
+			[packId]: !prev[packId],
+		}));
+	};
+
+	const renderPackSection = (pack: SkinPackGroup) => {
+		const collapsed = () => isPackCollapsed(pack.packId);
+
+		return (
+			<Show when={pack.skins.length > 0}>
+				<section
+					class={`${styles.contentCard} ${styles.packSection}`}
+					classList={{
+						[styles.packSectionDefaults]: pack.isDefaults,
+						[styles.packSectionCollapsed]: collapsed(),
+					}}
+				>
+					<button
+						type="button"
+						class={styles.packHeader}
+						onClick={() => togglePackCollapsed(pack.packId)}
+						aria-expanded={!collapsed()}
+					>
+						<div class={styles.packHeaderText}>
+							<h2 class={styles.packTitle}>{pack.packName}</h2>
+							<span class={styles.packMeta}>
+								{pack.skins.length} {pack.skins.length === 1 ? "skin" : "skins"}
+							</span>
+						</div>
+						<span
+							class={styles.packChevron}
+							classList={{ [styles.packChevronCollapsed]: collapsed() }}
+							aria-hidden="true"
+						>
+							<ChevronDownIcon width="16" height="16" />
+						</span>
+					</button>
+					<Show when={!collapsed()}>
+						<div class={styles.presetsGrid}>
+							<For each={pack.skins}>{(skin) => renderSkinTile(skin)}</For>
+						</div>
+					</Show>
 				</section>
 			</Show>
 		);
@@ -1047,154 +1112,148 @@ export function AccountSettingsTab() {
 		>
 			<div class={styles.container}>
 				<Show
-					when={activeAccount()}
-					fallback={
-						<div class={styles.noAccount}>
-							{t("settings-account-no-account")}
-						</div>
-					}
+					when={Boolean(activeAccount())}
+					fallback={<div class={styles.noAccount}>{t("settings-account-no-account")}</div>}
 				>
-					{(active) => (
-						<>
-							<Show when={isNarrowLayout()}>
-								<div class={styles.viewToolbar}>
-									<Show
-										when={!isDirty()}
-										fallback={
-											<div class={styles.toolbarActions}>
-												<button
-													type="button"
-													class={styles.toolbarRevertButton}
-													disabled={saving()}
-													onClick={revertChanges}
-												>
-													{t("settings-account-revert")}
-												</button>
-												<button
-													type="button"
-													class={styles.toolbarSaveButton}
-													disabled={saving()}
-													onClick={handleSave}
-												>
-													<Show when={saving()}>
-														<RefreshIcon width="14" class="spin" />
-													</Show>
-													{saving()
-														? t("settings-account-syncing")
-														: t("settings-account-apply")}
-												</button>
-											</div>
-										}
-									>
-										<div class={styles.toolbarAccountSwitcher}>
-											{renderAccountSwitcher(styles.toolbarAccountSelect)}
+					<>
+						<Show when={isNarrowLayout()}>
+							<div class={styles.viewToolbar}>
+								<Show
+									when={!isDirty()}
+									fallback={
+										<div class={styles.toolbarActions}>
+											<button
+												type="button"
+												class={styles.toolbarRevertButton}
+												disabled={saving()}
+												onClick={revertChanges}
+											>
+												{t("settings-account-revert")}
+											</button>
+											<button
+												type="button"
+												class={styles.toolbarSaveButton}
+												disabled={saving()}
+												onClick={handleSave}
+											>
+												<Show when={saving()}>
+													<RefreshIcon width="14" class="spin" />
+												</Show>
+												{saving() ? t("settings-account-syncing") : t("settings-account-apply")}
+											</button>
 										</div>
-									</Show>
-
-									<div class={styles.narrowViewToggle}>
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={styles.narrowViewIcon}
-												classList={{
-													[styles.active]: narrowView() === "browse",
-												}}
-												onClick={() => setNarrowView("browse")}
-												aria-label={t("settings-account-browse-skins")}
-											>
-												<ViewIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>
-												{t("settings-account-browse-skins")}
-											</TooltipContent>
-										</Tooltip>
-
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={styles.narrowViewIcon}
-												classList={{
-													[styles.active]: narrowView() === "preview",
-												}}
-												onClick={() => setNarrowView("preview")}
-												aria-label={t("settings-account-preview")}
-											>
-												<SkinIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>
-												{t("settings-account-preview")}
-											</TooltipContent>
-										</Tooltip>
-
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
-												onClick={handleUploadSkin}
-												aria-label={t("settings-account-upload-custom-skin")}
-											>
-												<PlusIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>
-												{t("settings-account-upload-custom-skin")}
-											</TooltipContent>
-										</Tooltip>
-									</div>
-								</div>
-							</Show>
-
-							<div
-								class={styles.leftSection}
-								classList={{
-									[styles.hiddenOnNarrow]:
-										isNarrowLayout() && narrowView() !== "browse",
-								}}
-							>
-								<Tabs
-									value={browseTab()}
-									onChange={setBrowseTab}
-									class={styles.browseTabs}
+									}
 								>
-									<div class={styles.browseTabsHeader}>
-										<TabsList class={styles.browseTabsList}>
-											<TabsIndicator />
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="recent"
-											>
-												{t("settings-account-tab-recent")}
-											</TabsTrigger>
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="defaults"
-											>
-												{t("settings-account-tab-default")}
-											</TabsTrigger>
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="events"
-											>
-												{t("settings-account-tab-events")}
-											</TabsTrigger>
-											<TabsTrigger
-												class={styles.browseTabsTrigger}
-												value="capes"
-											>
-												{t("settings-account-tab-capes")}
-											</TabsTrigger>
-										</TabsList>
+									<div class={styles.toolbarAccountSwitcher}>
+										{renderAccountSwitcher(styles.toolbarAccountSelect)}
 									</div>
+								</Show>
 
-									<TabsContent value="recent" class={styles.browseTabsContent}>
-										<section class={styles.contentCard}>
-											<div class={styles.cardHeader}>
-												<h2 class={styles.cardTitle}>
-													{t("settings-account-recent-skins")}
-												</h2>
-											</div>
+								<div class={styles.narrowViewToggle}>
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={styles.narrowViewIcon}
+											classList={{
+												[styles.active]: narrowView() === "browse",
+											}}
+											onClick={() => setNarrowView("browse")}
+											aria-label={t("settings-account-browse-skins")}
+										>
+											<ViewIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>{t("settings-account-browse-skins")}</TooltipContent>
+									</Tooltip>
+
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={styles.narrowViewIcon}
+											classList={{
+												[styles.active]: narrowView() === "preview",
+											}}
+											onClick={() => setNarrowView("preview")}
+											aria-label={t("settings-account-preview")}
+										>
+											<SkinIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>{t("settings-account-preview")}</TooltipContent>
+									</Tooltip>
+
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
+											onClick={handleUploadSkin}
+											aria-label={t("settings-account-upload-custom-skin")}
+										>
+											<PlusIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>{t("settings-account-upload-custom-skin")}</TooltipContent>
+									</Tooltip>
+								</div>
+							</div>
+						</Show>
+
+						<div
+							class={styles.leftSection}
+							classList={{
+								[styles.hiddenOnNarrow]:
+									isNarrowLayout() && narrowView() !== "browse",
+							}}
+						>
+							<Tabs
+								value={browseTab()}
+								onChange={setBrowseTab}
+								class={styles.browseTabs}
+							>
+								<div class={styles.browseTabsHeader}>
+									<TabsList class={styles.browseTabsList}>
+										<TabsIndicator />
+										<TabsTrigger class={styles.browseTabsTrigger} value="yours">
+											Your skins
+										</TabsTrigger>
+										<TabsTrigger
+											class={styles.browseTabsTrigger}
+											value="presets"
+										>
+											Presets
+										</TabsTrigger>
+										<TabsTrigger class={styles.browseTabsTrigger} value="capes">
+											Capes
+										</TabsTrigger>
+									</TabsList>
+								</div>
+
+								<TabsContent value="yours" class={styles.browseTabsContent}>
+									<section class={styles.contentCard}>
+										<div class={styles.cardHeader}>
+											<h2 class={styles.cardTitle}>Your skins</h2>
+											<button
+												type="button"
+												class={styles.headerUploadButton}
+												onClick={handleUploadSkin}
+											>
+												<PlusIcon width="14" height="14" />
+												<span>Add skin</span>
+											</button>
+										</div>
+
+										<Show
+											when={filteredRecentHistory().length > 0}
+											fallback={
+												<Show when={skinHistoryLoaded()}>
+													<div class={styles.emptyState}>
+														<p class={styles.emptyStateTitle}>
+															No custom skins yet
+														</p>
+													</div>
+												</Show>
+											}
+										>
 											<div class={styles.presetsGrid}>
 												<For each={filteredRecentHistory()}>
 													{(item) => {
@@ -1228,241 +1287,217 @@ export function AccountSettingsTab() {
 																				<ViewIcon width="16" />
 																			</TooltipTrigger>
 																			<TooltipContent>
-																				{t("settings-account-view-raw-texture")}
+																				View raw texture
 																			</TooltipContent>
 																		</Tooltip>
 																		<Show when={selected()}>
 																			<span class={styles.selectedBadge}>
-																				✓
+																				<CheckIcon />
 																			</span>
 																		</Show>
 																	</div>
 																</TooltipTrigger>
 																<TooltipContent>
-																	{t("settings-account-skin-tooltip-with-variant", {
-																		name: formatTooltipName(
-																			item.name,
-																			item.source,
-																		),
-																		variant:
-																			normalizeVariant(item.variant) === "slim"
-																				? t("settings-account-model-slim")
-																				: t("settings-account-model-classic"),
-																	})}
+																	{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
 																</TooltipContent>
 															</Tooltip>
 														);
 													}}
 												</For>
 											</div>
-										</section>
-									</TabsContent>
+										</Show>
+									</section>
+								</TabsContent>
 
-									<TabsContent
-										value="defaults"
-										class={styles.browseTabsContent}
-									>
-										<For each={defaultCategories()}>
-											{(category) => renderSkinCategorySection(category)}
-										</For>
-									</TabsContent>
+								<TabsContent
+									value="presets"
+									class={`${styles.browseTabsContent} ${styles.presetsBrowse}`}
+								>
+									<For each={skinPackGroups()}>
+										{(pack) => renderPackSection(pack)}
+									</For>
+								</TabsContent>
 
-									<TabsContent value="events" class={styles.browseTabsContent}>
-										<For each={eventCategories()}>
-											{(category) => renderSkinCategorySection(category)}
-										</For>
-									</TabsContent>
-
-									<TabsContent value="capes" class={styles.browseTabsContent}>
-										<section class={styles.contentCard}>
-											<div class={styles.cardHeader}>
-												<CapeIcon width="20" style="color: var(--primary)" />
-												<h2 class={styles.cardTitle}>
-													{t("settings-account-capes-title")}
-												</h2>
-											</div>
-											<div class={styles.capesGrid}>
-												<button
-													class={styles.capeItem}
-													classList={{
-														[styles.selected]: !previewCapeId(),
-													}}
-													onClick={() => handlePreviewCape(null)}
-												>
-													<span class={styles.noneLabel}>
-														{t("settings-account-cape-none")}
+								<TabsContent value="capes" class={styles.browseTabsContent}>
+									<section class={styles.contentCard}>
+										<div class={styles.cardHeader}>
+											<h2 class={styles.cardTitle}>Capes</h2>
+										</div>
+										<div class={styles.capesGrid}>
+											<button
+												class={styles.capeItem}
+												classList={{
+													[styles.selected]: !previewCapeId(),
+												}}
+												onClick={() => handlePreviewCape(null)}
+											>
+												<span class={styles.noneLabel}>NONE</span>
+												<Show when={!previewCapeId()}>
+													<span class={styles.selectedBadge}>
+														<CheckIcon />
 													</span>
-													<Show when={!previewCapeId()}>
-														<span class={styles.selectedBadge}>
-															<CheckIcon />
-														</span>
-													</Show>
-												</button>
-												<For each={capes()}>
-													{(cape) => {
-														const isSelected = createMemo(
-															() => previewCapeId() === cape.id,
-														);
-
-														return (
-															<Tooltip>
-																<TooltipTrigger
-																	as="button"
-																	class={styles.capeItem}
-																	style={{
-																		"background-image": `url(${cape.url})`,
-																	}}
-																	classList={{
-																		[styles.selected]: isSelected(),
-																	}}
-																	onClick={() => handlePreviewCape(cape)}
-																	aria-label={cape.name}
-																>
-																	<Show when={isSelected()}>
-																		<span class={styles.selectedBadge}>
-																			<CheckIcon />
-																		</span>
-																	</Show>
-																</TooltipTrigger>
-																<TooltipContent>{cape.name}</TooltipContent>
-															</Tooltip>
-														);
-													}}
-												</For>
-											</div>
-										</section>
-									</TabsContent>
-								</Tabs>
-							</div>
-
-							<aside
-								class={styles.visualizerSidebar}
-								classList={{
-									[styles.hiddenOnNarrow]:
-										isNarrowLayout() && narrowView() !== "preview",
-								}}
-							>
-								<Show when={isDirty() && !isNarrowLayout()}>
-									<section
-										class={styles.actionCard}
-										classList={{
-											[styles.compactActionCard]: compactActionMode(),
-										}}
-									>
-										<div class={styles.actionButtonsRow}>
-											<button
-												type="button"
-												class={styles.revertButton}
-												disabled={saving()}
-												onClick={revertChanges}
-											>
-												{t("settings-account-revert")}
-											</button>
-											<button
-												type="button"
-												class={styles.saveButton}
-												disabled={saving()}
-												onClick={handleSave}
-											>
-												<Show when={saving()}>
-													<RefreshIcon width="18" class="spin" />
 												</Show>
-												{saving()
-													? t("settings-account-syncing")
-													: t("settings-account-apply-changes")}
 											</button>
+											<For each={capes()}>
+												{(cape) => {
+													const isSelected = createMemo(
+														() => previewCapeId() === cape.id,
+													);
+
+													return (
+														<Tooltip>
+															<TooltipTrigger
+																as="button"
+																class={styles.capeItem}
+																style={{
+																	"background-image": `url(${cape.url})`,
+																}}
+																classList={{
+																	[styles.selected]: isSelected(),
+																}}
+																onClick={() => handlePreviewCape(cape)}
+																aria-label={cape.name}
+															>
+																<Show when={isSelected()}>
+																	<span class={styles.selectedBadge}>
+																		<CheckIcon />
+																	</span>
+																</Show>
+															</TooltipTrigger>
+															<TooltipContent>{cape.name}</TooltipContent>
+														</Tooltip>
+													);
+												}}
+											</For>
 										</div>
 									</section>
-								</Show>
+								</TabsContent>
+							</Tabs>
+						</div>
 
-								<Show when={!isDirty() && !isNarrowLayout()}>
-									<section>
-										{renderAccountSwitcher(styles.accountSwitcherSelect)}
-									</section>
-								</Show>
-
-								<section class={styles.visualizerCard}>
-									<Show when={!isNarrowLayout()}>
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
-												onClick={handleUploadSkin}
-												aria-label={t("settings-account-upload-custom-skin")}
-											>
-												<PlusIcon width="18" />
-											</TooltipTrigger>
-											<TooltipContent>
-												{t("settings-account-upload-custom-skin")}
-											</TooltipContent>
-										</Tooltip>
-									</Show>
-
-									<div class={styles.visualizerWrapper}>
-										<SkinView3d
-											skinUrl={previewSkinUrl() || undefined}
-											capeUrl={previewCapeUrl() || ""}
-											model={previewVariant()}
-											animation="walking"
-											animationSpeed={0.5}
-											enableZoom={false}
-										/>
-									</div>
-
-									<div class={styles.modelToggle}>
+						<aside
+							class={styles.visualizerSidebar}
+							classList={{
+								[styles.hiddenOnNarrow]:
+									isNarrowLayout() && narrowView() !== "preview",
+							}}
+						>
+							<Show when={isDirty() && !isNarrowLayout()}>
+								<section
+									class={styles.actionCard}
+									classList={{
+										[styles.compactActionCard]: compactActionMode(),
+									}}
+								>
+									<div class={styles.actionButtonsRow}>
 										<button
 											type="button"
-											class={styles.toggleBtn}
-											classList={{
-												[styles.active]: previewVariant() === "classic",
-											}}
-											onClick={() => {
-												setPreviewVariant("classic");
-												const skin = activeSkin();
-												if (
-													skin &&
-													skin.source?.type === "default" &&
-													skin.source.classic_texture &&
-													skin.source.slim_texture
-												) {
-													setPreviewSkinUrl(getSkinTexture(skin, "classic"));
-												}
-											}}
+											class={styles.revertButton}
+											disabled={saving()}
+											onClick={revertChanges}
 										>
-											{t("settings-account-model-classic")}
+											{t("settings-account-revert")}
 										</button>
 										<button
 											type="button"
-											class={styles.toggleBtn}
-											classList={{
-												[styles.active]: previewVariant() === "slim",
-											}}
-											onClick={() => {
-												setPreviewVariant("slim");
-												const skin = activeSkin();
-												if (
-													skin &&
-													skin.source?.type === "default" &&
-													skin.source.classic_texture &&
-													skin.source.slim_texture
-												) {
-													setPreviewSkinUrl(getSkinTexture(skin, "slim"));
-												}
-											}}
+											class={styles.saveButton}
+											disabled={saving()}
+											onClick={handleSave}
 										>
-											{t("settings-account-model-slim")}
+											<Show when={saving()}>
+												<RefreshIcon width="18" class="spin" />
+											</Show>
+											{saving() ? "Syncing..." : "Apply Changes"}
 										</button>
 									</div>
 								</section>
-							</aside>
-						</>
-					)}
+							</Show>
+
+							<Show when={!isDirty() && !isNarrowLayout()}>
+								<section>
+									{renderAccountSwitcher(styles.accountSwitcherSelect)}
+								</section>
+							</Show>
+
+							<section class={styles.visualizerCard}>
+								<Show when={!isNarrowLayout()}>
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
+											onClick={handleUploadSkin}
+											aria-label={t("settings-account-upload-custom-skin")}
+										>
+											<PlusIcon width="18" />
+										</TooltipTrigger>
+										<TooltipContent>{t("settings-account-upload-custom-skin")}</TooltipContent>
+									</Tooltip>
+								</Show>
+
+								<div class={styles.visualizerWrapper}>
+									<SkinView3d
+										skinUrl={previewSkinUrl() || undefined}
+										capeUrl={previewCapeUrl() || ""}
+										model={previewVariant()}
+										animation="walking"
+										animationSpeed={0.5}
+										enableZoom={false}
+									/>
+								</div>
+
+								<div class={styles.modelToggle}>
+									<button
+										type="button"
+										class={styles.toggleBtn}
+										classList={{
+											[styles.active]: previewVariant() === "classic",
+										}}
+										onClick={() => {
+											setPreviewVariant("classic");
+											const skin = activeSkin();
+											if (
+												skin &&
+												skin.source?.type === "default" &&
+												skin.source.classic_texture &&
+												skin.source.slim_texture
+											) {
+												setPreviewSkinUrl(getSkinTexture(skin, "classic"));
+											}
+										}}
+									>
+										Classic
+									</button>
+									<button
+										type="button"
+										class={styles.toggleBtn}
+										classList={{
+											[styles.active]: previewVariant() === "slim",
+										}}
+										onClick={() => {
+											setPreviewVariant("slim");
+											const skin = activeSkin();
+											if (
+												skin &&
+												skin.source?.type === "default" &&
+												skin.source.classic_texture &&
+												skin.source.slim_texture
+											) {
+												setPreviewSkinUrl(getSkinTexture(skin, "slim"));
+											}
+										}}
+									>
+										Slim
+									</button>
+								</div>
+							</section>
+						</aside>
+					</>
 				</Show>
 				<ImageViewer
 					src={viewerSrc()}
 					onClose={() => setViewerSrc(null)}
-					title={t("settings-account-texture-preview-title")}
+					title="Skin Texture Preview"
 					scale={4}
 					pixelated={true}
 				/>

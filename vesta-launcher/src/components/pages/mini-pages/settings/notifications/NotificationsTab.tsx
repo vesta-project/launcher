@@ -24,7 +24,6 @@ export const NotificationSettingsTab = () => {
 	const deleteSub = async (id: string) => {
 		await invoke("delete_notification_subscription", { id });
 		await refetch();
-		// @ts-expect-error
 		await refetchSources();
 	};
 
@@ -41,7 +40,6 @@ export const NotificationSettingsTab = () => {
 		try {
 			await invoke("subscribe_to_preset_source", { source });
 			await refetch();
-			// @ts-expect-error
 			await refetchSources();
 		} catch (e) {
 			console.error("Failed to subscribe:", e);

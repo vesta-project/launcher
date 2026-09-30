@@ -15,7 +15,8 @@ export function formatRelativeTime(
 	dateValue?: string | number | Date | null,
 	now: string | number | Date = new Date(),
 ): string | null {
-	if (dateValue === null || dateValue === undefined || dateValue === "") return null;
+	if (dateValue === null || dateValue === undefined || dateValue === "")
+		return null;
 	const dateMs = new Date(dateValue).getTime();
 	const nowMs = new Date(now).getTime();
 	if (!Number.isFinite(dateMs) || !Number.isFinite(nowMs)) return null;
@@ -34,10 +35,9 @@ export function formatRelativeTime(
 	for (const [unit, unitSeconds, upperBound] of units) {
 		const value = elapsedSeconds / unitSeconds;
 		if (value < upperBound) {
-			return new Intl.RelativeTimeFormat(undefined, { numeric: "always" }).format(
-				-Math.max(1, Math.round(value)),
-				unit,
-			);
+			return new Intl.RelativeTimeFormat(undefined, {
+				numeric: "always",
+			}).format(-Math.max(1, Math.round(value)), unit);
 		}
 	}
 	return null;

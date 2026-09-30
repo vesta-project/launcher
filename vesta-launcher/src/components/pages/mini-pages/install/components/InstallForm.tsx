@@ -107,6 +107,8 @@ export interface InstallFormProps {
 	onStateChange?: (data: Partial<Instance>) => void;
 	isInstalling?: boolean;
 	isFetchingMetadata?: boolean;
+	versionLookupError?: string;
+	onRetryVersionLookup?: () => void;
 }
 
 interface DirtyState {
@@ -1225,6 +1227,14 @@ export function InstallForm(props: InstallFormProps) {
 			{/* FOOTER ACTIONS */}
 			<Separator />
 			<div class={styles["install-form__actions-container"]}>
+				<Show when={props.versionLookupError && props.onRetryVersionLookup}>
+					<div class={styles["version-lookup-error"]} role="alert">
+						<span>Could not load a downloadable modpack release.</span>
+						<button type="button" onClick={props.onRetryVersionLookup}>
+							Retry release lookup
+						</button>
+					</div>
+				</Show>
 				<div class={styles["install-form__actions"]}>
 					<Show when={props.onCancel}>
 						<LauncherButton
@@ -1242,7 +1252,9 @@ export function InstallForm(props: InstallFormProps) {
 						class={styles["install-submit-btn"]}
 					>
 						{props.isInstalling
-							? "Installing..."
+							? normalizedIsModpack()
+								? "Starting installation..."
+								: "Creating instance..."
 							: normalizedIsModpack()
 								? "Install Modpack"
 								: "Create Instance"}

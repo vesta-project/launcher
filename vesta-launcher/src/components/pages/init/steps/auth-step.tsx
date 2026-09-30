@@ -2,7 +2,6 @@ import networkStore from "@stores/network";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import {
-	type AuthStage,
 	cancelLogin,
 	getActiveAccount,
 	listenToAuthEvents,
@@ -284,5 +283,6 @@ function AuthStep(props: AuthStepProps) {
 }
 
 export default AuthStep;
+
 import MicrosoftIcon from "@assets/branding/microsoft.svg";
 import ConnectionLostIcon from "@assets/icons/status/connection-lost.svg";

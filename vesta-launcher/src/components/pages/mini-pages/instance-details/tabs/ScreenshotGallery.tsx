@@ -1,7 +1,7 @@
-import FolderIcon from "@assets/icons/content/folder.svg";
-import CopyIcon from "@assets/icons/content/link.svg";
-import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import CopyIcon from "@assets/icons/actions/copy.svg";
 import TrashIcon from "@assets/icons/actions/delete.svg";
+import RefreshIcon from "@assets/icons/actions/refresh.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
 import GridIcon from "@assets/icons/content/grid.svg";
 import ListIcon from "@assets/icons/content/list.svg";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -23,7 +23,15 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
-import { createResource, createSignal, For, Show, Suspense } from "solid-js";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	Show,
+	Suspense,
+} from "solid-js";
 import styles from "./ScreenshotGallery.module.css";
 
 interface Screenshot {
@@ -35,6 +43,8 @@ interface Screenshot {
 
 interface ScreenshotGalleryProps {
 	instanceIdSlug: string;
+	/** When false, close the lightbox so a portaled dialog cannot outlive the tab. */
+	active?: boolean;
 }
 
 export function ScreenshotGallery(props: ScreenshotGalleryProps) {
@@ -44,6 +54,13 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 	);
 	const [selectedScreenshot, setSelectedScreenshot] =
 		createSignal<Screenshot | null>(null);
+
+	createEffect(() => {
+		if (props.active === false) {
+			setSelectedScreenshot(null);
+		}
+	});
+	onCleanup(() => setSelectedScreenshot(null));
 
 	const [screenshots, { mutate, refetch }] = createResource(
 		() => props.instanceIdSlug,
@@ -243,6 +260,18 @@ export function ScreenshotGallery(props: ScreenshotGalleryProps) {
 													alt={screenshot.name}
 													loading="lazy"
 												/>
+												<button
+													type="button"
+													class={styles.copyButton}
+													aria-label={`Copy ${screenshot.name} to clipboard`}
+													title="Copy to clipboard"
+													onClick={(event) => {
+														event.stopPropagation();
+														void handleCopy(screenshot);
+													}}
+												>
+													<CopyIcon aria-hidden="true" />
+												</button>
 											</div>
 											<div class={styles.details}>
 												<span class={styles.name}>{screenshot.name}</span>

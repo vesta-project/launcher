@@ -1,3 +1,4 @@
+import type { ResourceVersion } from "@stores/resources";
 import { resources } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
 import {
@@ -18,6 +19,7 @@ interface UseInstallSubmitParams {
 	modpackUrl: Accessor<string>;
 	modpackPath: Accessor<string>;
 	modpackInfo: Accessor<{ fullMetadata?: any } | undefined>;
+	resolveConcreteModpackVersion?: () => Promise<ResourceVersion>;
 	pendingResource?: Accessor<PendingResourceInstall | undefined>;
 }
 
@@ -35,26 +37,24 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 					pending.version,
 					pending.installType,
 				);
-			if (
-				params.isModpackMode() &&
-				(params.modpackUrl() || params.modpackPath())
-			) {
-				const sourceUrl = params.modpackUrl();
+			if (params.isModpackMode()) {
+				let sourceUrl = params.modpackUrl();
 				const sourcePath = params.modpackPath();
+				let installData = data;
+				if (!sourceUrl && !sourcePath) {
+					const version = await params.resolveConcreteModpackVersion?.();
+					if (!version?.download_url) {
+						throw new Error("No downloadable modpack release is available.");
+					}
+					sourceUrl = version.download_url;
+					installData = { ...data, modpackVersionId: version.id };
+				}
 				const fullMetadata = params.modpackInfo()?.fullMetadata;
 				if (sourceUrl) {
-					await installModpackFromUrl(sourceUrl, data, fullMetadata);
+					await installModpackFromUrl(sourceUrl, installData, fullMetadata);
 				} else if (sourcePath) {
-					await installModpackFromZip(sourcePath, data, fullMetadata);
+					await installModpackFromZip(sourcePath, installData, fullMetadata);
 				}
-			} else if (params.isModpackMode()) {
-				showToast({
-					title: "Modpack Version Still Loading",
-					description:
-						"Wait for a version to finish loading, then try installing again.",
-					severity: "warning",
-				});
-				return;
 			} else {
 				const id = await createInstance(data as any);
 				if (id) {

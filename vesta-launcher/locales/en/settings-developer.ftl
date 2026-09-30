@@ -40,7 +40,7 @@ settings-developer-add-demo-account-label = Add Demo Account
 settings-developer-add-demo-account-description = Add a temporary demo account that is removed on restart
 settings-developer-add-demo-account-button = Add Demo Account
 settings-developer-demo-account-added-title = Demo Account Added
-settings-developer-demo-account-added-description = Temporal account 'DemoUser' is now active.
+settings-developer-demo-account-added-description = Temporary account 'DemoUser' is now active.
 
 settings-developer-sentry-testing-title = Sentry Testing
 settings-developer-test-error-capture-label = Test Error Capture

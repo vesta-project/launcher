@@ -13,9 +13,7 @@
 	background: var(--surface-raised);
 	border: var(--border-width-subtle) solid var(--border-subtle);
 	border-radius: 12px;
-	cursor: default;
 	transition: all 200ms ease;
-	cursor: default;
 	cursor: default;
 	&:hover {
 		border-color: var(--border-strong);
@@ -254,9 +252,7 @@
 	border: var(--border-width-subtle) solid hsl(0 60% 45% / 0.35);
 	padding: 2px 4px;
 	border-radius: 4px;
-	cursor: default;
 	user-select: none;
-	cursor: default;
 	cursor: default;
 	&:hover,
 	&:focus-visible {
@@ -287,15 +283,17 @@
 
 /* Light mode adjustments */
 :root[data-theme="light"] .theme-preview__bg {
-		background: hsl(var(--preview-hue) 30% 85% / var(--preview-bg-base));
-	}
+	background: hsl(var(--preview-hue) 30% 85% / var(--preview-bg-base));
+}
 
-:root[data-theme="light"] .theme-preset-card[data-preview-gradient="1"] .theme-preview__bg {
-		background-image: linear-gradient(
-			var(--preview-angle, 135deg),
-			hsl(var(--preview-hue) 70% 80% / 0.6) 0%,
-			hsl(calc(var(--preview-hue) + 60) 60% 75% / 0.4) 100%
-		);
+:root[data-theme="light"]
+	.theme-preset-card[data-preview-gradient="1"]
+	.theme-preview__bg {
+	background-image: linear-gradient(
+		var(--preview-angle, 135deg),
+		hsl(var(--preview-hue) 70% 80% / 0.6) 0%,
+		hsl(calc(var(--preview-hue) + 60) 60% 75% / 0.4) 100%
+	);
 }
 
 :root[data-theme="light"] .theme-preview__sidebar {
@@ -311,17 +309,17 @@
 }
 
 :root[data-theme="light"] .theme-preview__card {
-		background: hsl(var(--preview-hue) 25% 92% / var(--preview-bg-base));
-		border-color: hsl(var(--preview-hue) 20% 70% / 0.3);
-	}
+	background: hsl(var(--preview-hue) 25% 92% / var(--preview-bg-base));
+	border-color: hsl(var(--preview-hue) 20% 70% / 0.3);
+}
 
-	:root[data-theme="light"] .theme-preview__card-header {
-		background: hsl(var(--preview-hue) 5% 20%);
-	}
+:root[data-theme="light"] .theme-preview__card-header {
+	background: hsl(var(--preview-hue) 5% 20%);
+}
 
 :root[data-theme="light"] .theme-preview__card-line {
-		background: hsl(var(--preview-hue) 5% 40%);
-	}
+	background: hsl(var(--preview-hue) 5% 40%);
+}
 
 @media (prefers-color-scheme: light) {
 	:root:not([data-theme="dark"]) .theme-preview__bg {

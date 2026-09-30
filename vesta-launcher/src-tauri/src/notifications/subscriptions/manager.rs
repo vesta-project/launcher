@@ -146,7 +146,7 @@ impl SubscriptionManager {
 
     fn create_notification(
         &self,
-        _sub: &NotificationSubscription,
+        sub: &NotificationSubscription,
         item: &crate::notifications::subscriptions::NotificationUpdateItem,
     ) -> Result<()> {
         let nm = self.app_handle.state::<NotificationManager>();
@@ -165,6 +165,36 @@ impl SubscriptionManager {
             None
         };
 
+        let mut metadata = item.metadata.clone();
+        let context_source = if sub.id.contains("neoforge") {
+            "neoforge".to_string()
+        } else if sub.id.contains("forge") {
+            "forge".to_string()
+        } else if sub.id.contains("fabric") {
+            "fabric".to_string()
+        } else if sub.id.contains("quilt") {
+            "quilt".to_string()
+        } else if sub.provider_type == "resource" {
+            sub.metadata
+                .as_deref()
+                .and_then(|value| serde_json::from_str::<serde_json::Value>(value).ok())
+                .and_then(|value| value.get("platform")?.as_str().map(str::to_owned))
+                .unwrap_or_else(|| sub.provider_type.clone())
+        } else {
+            sub.provider_type.clone()
+        };
+        let context = serde_json::json!({
+            "kind": "channel",
+            "id": sub.target_id.as_ref().unwrap_or(&sub.id),
+            "label": sub.title,
+            "source": context_source,
+        });
+        if let Some(object) = metadata.as_object_mut() {
+            object.insert("context".to_string(), context);
+        } else {
+            metadata = serde_json::json!({ "context": context, "data": metadata });
+        }
+
         nm.create(CreateNotificationInput {
             // Use item.id directly to allow de-duplication across different subscriptions
             // that might contain the same notification item.
@@ -180,7 +210,7 @@ impl SubscriptionManager {
             current_step: None,
             total_steps: None,
             actions,
-            metadata: Some(item.metadata.to_string()),
+            metadata: Some(metadata.to_string()),
             show_on_completion: None,
         })?;
 

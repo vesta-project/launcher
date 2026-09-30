@@ -32,12 +32,24 @@ impl CloneInstanceTask {
 }
 
 impl Task for CloneInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.source_id,
+        )]
+    }
     fn name(&self) -> String {
         "Duplicate Instance".to_string()
     }
 
     fn id(&self) -> Option<String> {
         Some(format!("clone_instance_{}", self.source_id))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.source_id,
+            None,
+        ))
     }
 
     fn cancellable(&self) -> bool {
@@ -182,6 +194,10 @@ impl Task for CloneInstanceTask {
                     pre_launch_hook: source.pre_launch_hook.clone(),
                     wrapper_command: source.wrapper_command.clone(),
                     post_exit_hook: source.post_exit_hook.clone(),
+                    use_global_sandbox: source.use_global_sandbox,
+                    sandbox_preset: source.sandbox_preset.clone(),
+                    sandbox_wrapper_nesting: source.sandbox_wrapper_nesting.clone(),
+                    sandbox_extra_paths: source.sandbox_extra_paths.clone(),
                 };
 
                 diesel::insert_into(instance)
@@ -396,12 +412,24 @@ impl ResetInstanceTask {
 }
 
 impl Task for ResetInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance_id,
+        )]
+    }
     fn name(&self) -> String {
         "Resetting Instance".to_string()
     }
 
     fn id(&self) -> Option<String> {
         Some(format!("reset_instance_{}", self.instance_id))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance_id,
+            None,
+        ))
     }
 
     fn cancellable(&self) -> bool {
@@ -479,12 +507,24 @@ impl RepairInstanceTask {
 }
 
 impl Task for RepairInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance_id,
+        )]
+    }
     fn name(&self) -> String {
         "Repairing Instance".to_string()
     }
 
     fn id(&self) -> Option<String> {
         Some(format!("repair_instance_{}", self.instance_id))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance_id,
+            None,
+        ))
     }
 
     fn cancellable(&self) -> bool {
@@ -854,12 +894,24 @@ impl DeleteInstanceTask {
 }
 
 impl Task for DeleteInstanceTask {
+    fn conflict_keys(&self) -> Vec<String> {
+        vec![crate::tasks::manager::instance_play_conflict_key(
+            self.instance_id,
+        )]
+    }
     fn name(&self) -> String {
         "Deleting Instance".to_string()
     }
 
     fn id(&self) -> Option<String> {
         Some(format!("delete_instance_{}", self.instance_id))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(
+            self.instance_id,
+            None,
+        ))
     }
 
     fn cancellable(&self) -> bool {

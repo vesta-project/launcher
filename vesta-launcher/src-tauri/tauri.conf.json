@@ -1,11 +1,11 @@
 {
 	"productName": "Vesta Launcher",
-	"version": "0.1.0-alpha.29",
+	"version": "0.1.0-alpha.31",
 	"identifier": "com.vesta.launcher",
 	"build": {
-		"beforeDevCommand": "npm run dev",
+		"beforeDevCommand": "bun run dev",
 		"devUrl": "http://localhost:1420",
-		"beforeBuildCommand": "npm run build",
+		"beforeBuildCommand": "bun run build",
 		"frontendDist": "../dist"
 	},
 	"app": {
@@ -40,9 +40,12 @@
 	},
 	"bundle": {
 		"createUpdaterArtifacts": true,
+		"externalBin": [
+			"binaries/vesta-sandbox-exec"
+		],
 		"windows": {
 			"wix": {
-				"version": "0.1.0.29"
+				"version": "0.1.0.31"
 			}
 		},
 		"macOS": {
@@ -58,10 +61,10 @@
 			"icons/icon.icns",
 			"icons/icon.ico"
 		],
-		"resources": [
-			"../resources/exit-handler/exit-handler.jar",
-			"icons/icon.png"
-		],
+		"resources": {
+			"../resources/exit-handler/exit-handler.jar": "exit-handler.jar",
+			"icons/icon.png": "icons/icon.png"
+		},
 		"fileAssociations": [
 			{
 				"ext": [

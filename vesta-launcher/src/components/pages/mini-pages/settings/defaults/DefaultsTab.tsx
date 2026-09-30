@@ -1,4 +1,15 @@
-import { SettingsCard, SettingsField } from "@components/settings";
+import {
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	PathListEditor,
+	SandboxHostNotice,
+	SandboxPresetSelect,
+	type SandboxPresetValue,
+	SettingsCard,
+	SettingsField,
+	useSandboxHostSupport,
+} from "@components/settings";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	getTotalRam,
@@ -27,28 +38,23 @@ import {
 	SliderThumb,
 	SliderTrack,
 } from "@ui/slider/slider";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import {
 	TextFieldInput,
 	TextFieldRoot,
 	TextFieldTextArea,
 } from "@ui/text-field/text-field";
 import {
-	formatMemoryLabel,
-	findLaunchBehaviorOption,
-	launchBehaviorOptions,
-} from "@utils/localized-options";
-import {
 	DEFAULT_MIN_MEMORY_MB,
 	getDynamicPreferredMaxMemoryMb,
 	getGeneratedMemoryLimitMb,
 	MAX_GENERATED_MEMORY_MB,
 } from "@utils/memory-policy";
-import { createMemo } from "solid-js";
 import { t } from "~/localization";
 import styles from "../settings-page.module.css";
 
 export function InstanceDefaultsTab() {
-	const launchOptions = createMemo(() => launchBehaviorOptions());
+	const [sandboxSupport] = useSandboxHostSupport();
 
 	const handleMemoryChange = (val: number[]) => {
 		const nextMax = val[0] || preferredMaxMemory();
@@ -60,17 +66,21 @@ export function InstanceDefaultsTab() {
 		instanceDefaults().default_max_memory ||
 		getDynamicPreferredMaxMemoryMb(getTotalRam());
 	const generatedMemoryLimit = () => getGeneratedMemoryLimitMb(getTotalRam());
+	const formatMemory = (value: number) =>
+		value >= 1024
+			? `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)}GB`
+			: `${value}MB`;
 
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
 				<SettingsCard
-					header={t("settings-defaults-resolution-title")}
-					subHeader={t("settings-defaults-resolution-subheader")}
+					header="Resolution Defaults"
+					subHeader="Default window size for new instances."
 				>
 					<SettingsField
-						label={t("settings-defaults-game-window-label")}
-						description={t("settings-defaults-game-window-description")}
+						label="Game Window"
+						description="Initial width and height for the game window."
 						body={
 							<div
 								style={{
@@ -95,10 +105,10 @@ export function InstanceDefaultsTab() {
 											opacity: 0.6,
 										}}
 									>
-										{t("common-width")}
+										Width
 									</NumberFieldLabel>
 									<NumberFieldGroup>
-										<NumberFieldInput placeholder={t("common-width")} />
+										<NumberFieldInput placeholder="Width" />
 										<NumberFieldIncrementTrigger />
 										<NumberFieldDecrementTrigger />
 									</NumberFieldGroup>
@@ -119,10 +129,10 @@ export function InstanceDefaultsTab() {
 											opacity: 0.6,
 										}}
 									>
-										{t("common-height")}
+										Height
 									</NumberFieldLabel>
 									<NumberFieldGroup>
-										<NumberFieldInput placeholder={t("common-height")} />
+										<NumberFieldInput placeholder="Height" />
 										<NumberFieldIncrementTrigger />
 										<NumberFieldDecrementTrigger />
 									</NumberFieldGroup>
@@ -133,14 +143,14 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header={t("settings-defaults-memory-title")}
-					subHeader={t("settings-defaults-memory-subheader")}
+					header="Memory Defaults"
+					subHeader="Defaults used when creating new instances."
 				>
 					<SettingsField
-						label={t("settings-defaults-memory-preferred-label")}
-						description={t("settings-defaults-memory-preferred-description", {
-							totalRam: Math.round(getTotalRam() / 1024),
-						})}
+						label="Preferred max memory"
+						description={`Used as the starting max memory when Vesta creates a new instance. Larger modpacks may get more automatically. (System Total: ${Math.round(
+							getTotalRam() / 1024,
+						)}GB)`}
 						body={
 							<>
 								<div class={styles["memory-default-control"]}>
@@ -161,7 +171,9 @@ export function InstanceDefaultsTab() {
 											<div
 												style={{ "font-size": "13px", "font-weight": "600" }}
 											>
-												{formatMemoryLabel(preferredMaxMemory())}
+												{preferredMaxMemory() >= 1024
+													? `${(preferredMaxMemory() / 1024).toFixed(1)}GB`
+													: `${preferredMaxMemory()}MB`}
 											</div>
 										</div>
 										<SliderTrack>
@@ -173,9 +185,10 @@ export function InstanceDefaultsTab() {
 								{preferredMaxMemory() > generatedMemoryLimit() && (
 									<div class={styles["memory-default-warning"]}>
 										<span>
-											{t("settings-defaults-memory-warning", {
-												recommended: formatMemoryLabel(generatedMemoryLimit()),
-											})}
+											<strong>Warning:</strong> Allowing Minecraft to use this
+											much memory may leave too little for the rest of the
+											computer. Vesta recommends staying below{" "}
+											<strong>{formatMemory(generatedMemoryLimit())}</strong>.
 										</span>
 									</div>
 								)}
@@ -185,24 +198,24 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header={t("settings-defaults-launcher-action-title")}
-					subHeader={t("settings-defaults-launcher-action-subheader")}
+					header="Launcher Behavior After Launch"
+					subHeader="Choose what the launcher does once a game starts."
 				>
 					<Select
-						options={launchOptions()}
+						options={[
+							{ label: "Stay Open", value: "stay-open" },
+							{ label: "Minimize Window", value: "minimize" },
+							{ label: "Hide To Tray", value: "hide-to-tray" },
+							{ label: "Request Quit", value: "quit" },
+						]}
 						optionValue={"value" as any}
 						optionTextValue={"label" as any}
 						value={
-							findLaunchBehaviorOption(
-								instanceDefaults().default_launcher_action_on_launch ||
-									"stay-open",
-							) as any
+							(instanceDefaults().default_launcher_action_on_launch ||
+								"stay-open") as string
 						}
-						onChange={(option: any) =>
-							updateDefaultField(
-								"default_launcher_action_on_launch",
-								option?.value,
-							)
+						onChange={(value: any) =>
+							updateDefaultField("default_launcher_action_on_launch", value)
 						}
 						itemComponent={(selectProps: any) => (
 							<SelectItem item={selectProps.item}>
@@ -212,9 +225,7 @@ export function InstanceDefaultsTab() {
 					>
 						<SelectTrigger>
 							<SelectValue<any>>
-								{(state) =>
-									state.selectedOption()?.label ?? t("common-select-placeholder")
-								}
+								{(state) => state.selectedOption()?.label || "Select..."}
 							</SelectValue>
 						</SelectTrigger>
 						<SelectContent />
@@ -222,8 +233,8 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header={t("settings-defaults-java-args-title")}
-					subHeader={t("settings-defaults-java-args-subheader")}
+					header="Launch Arguments"
+					subHeader="Global Java arguments applied to linked instances."
 				>
 					<TextFieldRoot>
 						<TextFieldTextArea
@@ -241,8 +252,8 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header={t("settings-defaults-env-title")}
-					subHeader={t("settings-defaults-env-subheader")}
+					header="Environment Variables"
+					subHeader="Global environment variables for the game process. One per line (e.g. KEY=VALUE)."
 				>
 					<TextFieldRoot>
 						<TextFieldTextArea
@@ -261,6 +272,66 @@ export function InstanceDefaultsTab() {
 							}}
 						/>
 					</TextFieldRoot>
+				</SettingsCard>
+
+				<SettingsCard
+					header="Sandbox"
+					subHeader="Default OS sandbox policy for new instances."
+				>
+					<div class={sandboxStyles.fieldStack}>
+						<SandboxHostNotice support={sandboxSupport()} />
+						<SettingsField
+							label="Preset"
+							description="Capability profile applied at launch."
+							body={
+								<SandboxPresetSelect
+									value={normalizeSandboxPreset(
+										instanceDefaults().default_sandbox_preset,
+									)}
+									onChange={(value: SandboxPresetValue) =>
+										updateDefaultField("default_sandbox_preset", value)
+									}
+								/>
+							}
+						/>
+						<SettingsField
+							label="Include wrapper in the sandbox"
+							description="When enabled, the wrapper runs inside the game sandbox. When disabled, the wrapper runs outside the sandbox with your normal user access."
+							headerRight={
+								<Switch
+									checked={
+										normalizeSandboxWrapperNesting(
+											instanceDefaults().default_sandbox_wrapper_nesting,
+										) === "sandbox-outside"
+									}
+									onCheckedChange={(checked: boolean) =>
+										updateDefaultField(
+											"default_sandbox_wrapper_nesting",
+											checked ? "sandbox-outside" : "wrapper-outside",
+										)
+									}
+								>
+									<SwitchControl>
+										<SwitchThumb />
+									</SwitchControl>
+								</Switch>
+							}
+						/>
+						<SettingsField
+							label="Extra read-write folders"
+							description="The game may read from and write to these folders in addition to its instance folder."
+							body={
+								<PathListEditor
+									paths={instanceDefaults().default_sandbox_extra_paths ?? []}
+									onChange={(paths) =>
+										updateDefaultField("default_sandbox_extra_paths", paths)
+									}
+									addLabel="Add read-write folder…"
+									emptyLabel="No extra read-write folders."
+								/>
+							}
+						/>
+					</div>
 				</SettingsCard>
 
 				<SettingsCard

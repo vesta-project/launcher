@@ -4,7 +4,10 @@
 pub mod auth;
 mod commands;
 pub mod discord;
+pub mod game_options;
+mod game_options_file;
 mod instance;
+mod instance_file;
 mod launcher_import;
 mod localization;
 mod logging;
@@ -15,6 +18,7 @@ mod notifications;
 pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod sentry_init;
+mod settings_sync;
 mod setup;
 mod startup;
 mod sync;
@@ -122,7 +126,6 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             let _ = crate::utils::windows::ensure_main_window_visible(app);
@@ -136,6 +139,9 @@ fn main() {
             }
         }))
         .invoke_handler(tauri::generate_handler![
+            commands::game_options::get_game_options_catalog,
+            commands::game_options::get_instance_game_options,
+            commands::game_options::save_instance_game_options,
             launch_window,
             utils::windows::prime_mini_window,
             utils::windows::preload_mini_window_route,
@@ -151,6 +157,10 @@ fn main() {
             commands::keybindings::set_keybinding,
             commands::keybindings::clear_keybinding,
             commands::keybindings::reset_keybinding,
+            settings_sync::get_settings_sync,
+            settings_sync::save_settings_sync,
+            settings_sync::servers::add_synced_server,
+            settings_sync::servers::remove_synced_server,
             commands::app::open_app_config_dir,
             commands::app::open_app_runtime_storage_dir,
             commands::app::clear_cache,
@@ -173,6 +183,7 @@ fn main() {
             commands::app::path_exists,
             commands::github::get_changelog,
             commands::app::get_network_status,
+            commands::app::get_sandbox_host_support,
             commands::app::set_network_status,
             commands::app::refresh_network_status,
             commands::app::test_proxy_connection,

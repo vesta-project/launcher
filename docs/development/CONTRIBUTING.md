@@ -82,7 +82,8 @@ Create a pull request with:
 - Use TypeScript for all new code
 - Follow the existing component patterns
 - Use SolidJS best practices for reactivity
-- Run `bunx biome check --apply .` for formatting
+- Run `bun run check` and `bun run typecheck` before opening a pull request
+- Run `bun run format` to apply frontend formatting
 
 ### Database Changes
 - Use Diesel migrations for schema changes

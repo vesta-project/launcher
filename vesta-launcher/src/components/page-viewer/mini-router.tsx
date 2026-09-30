@@ -14,7 +14,6 @@ import {
 	createMemo,
 	createSignal,
 	getOwner,
-	type JSXElement,
 	onCleanup,
 	Suspense,
 	type ValidComponent,

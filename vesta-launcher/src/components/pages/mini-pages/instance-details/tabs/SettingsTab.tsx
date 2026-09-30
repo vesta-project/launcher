@@ -1,5 +1,18 @@
-import { SettingsCard, SettingsField } from "@components/settings";
+import {
+	normalizeSandboxPreset,
+	PathListEditor,
+	SandboxHostNotice,
+	SandboxPresetOptionLabel,
+	SandboxPresetSelect,
+	type SandboxPresetValue,
+	type SandboxWrapperNestingValue,
+	SettingsCard,
+	SettingsField,
+	useSandboxHostSupport,
+} from "@components/settings";
+import sandboxStyles from "@components/settings/sandbox-policy.module.css";
 import panelStyles from "@components/settings/settings.module.css";
+import { instanceDefaults } from "@stores/settings";
 import Button from "@ui/button/button";
 import {
 	ContextMenu,
@@ -106,6 +119,18 @@ interface SettingsTabProps {
 	setLauncherActionOnLaunch: (v: string) => void;
 	setIsLaunchActionDirty: (v: boolean) => void;
 
+	useGlobalSandbox: boolean;
+	setUseGlobalSandbox: (v: boolean) => void;
+	sandboxPreset: SandboxPresetValue;
+	setSandboxPreset: (v: SandboxPresetValue) => void;
+	sandboxWrapperNesting: SandboxWrapperNestingValue;
+	setSandboxWrapperNesting: (v: SandboxWrapperNestingValue) => void;
+	sandboxExtraPaths: string[];
+	setSandboxExtraPaths: (v: string[]) => void;
+	inheritedSandboxExtraPaths: string[];
+	setIsSandboxDirty: (v: boolean) => void;
+	onOpenGameOptions: () => void;
+
 	handleSave: () => void;
 	saving: () => boolean;
 	totalRam: number;
@@ -121,8 +146,8 @@ interface SettingsTabProps {
 }
 
 export const SettingsTab = (p: SettingsTabProps) => {
+	const [sandboxSupport] = useSandboxHostSupport();
 	const launchBehaviorOptions = createMemo(() => getLaunchBehaviorOptions());
-
 	const currentSelection = createMemo(() => {
 		if (p.useGlobalJavaPath) return "__default__";
 		if (p.isCustomMode) return "__custom__";
@@ -204,6 +229,18 @@ export const SettingsTab = (p: SettingsTabProps) => {
 			</div>
 
 			<div class={panelStyles["settings-panel"]}>
+				<SettingsCard header="Game options">
+					<SettingsField
+						label="Minecraft options"
+						description="Edit the options saved by this instance."
+						headerRight={
+							<Button variant="outline" onClick={p.onOpenGameOptions}>
+								Edit
+							</Button>
+						}
+					/>
+				</SettingsCard>
+
 				<SettingsCard header={t("instances-settings-java-title")}>
 					<SettingsField
 						label={t("instances-settings-java-executable-label")}
@@ -682,7 +719,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							>
 								{/* SelectContent needs itemComponent to render options; derive value from the same options list to avoid object mismatch bugs. */}
 								<Select
-									options={launchBehaviorOptions}
+									options={launchBehaviorOptions()}
 									optionValue="value"
 									optionTextValue="label"
 									value={selectedLaunchBehavior()}
@@ -797,15 +834,148 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					</Show>
 				</SettingsCard>
 
-				<SettingsCard header={t("instances-settings-maintenance-title")}>
-					<SettingsField label={t("instances-settings-export-label")} description={t("instances-settings-export-description")} actionLabel={t("instances-settings-export-action")} onAction={() => p.setShowExportDialog(true)} disabled={p.isGuest || p.busy || p.isInstalling} />
-					<SettingsField label={t("instances-settings-duplicate-label")} description={t("instances-settings-duplicate-description")} actionLabel={t("instances-settings-duplicate-action")} onAction={p.handleDuplicate} disabled={p.busy || p.isInstalling} />
-					<SettingsField label={p.instance.modpackId ? t("instances-settings-repair-modpack-label") : t("instances-settings-repair-instance-label")} description={t("instances-settings-repair-description")} actionLabel={t("instances-settings-repair-action")} onAction={() => p.repairInstance(p.instance.id)} disabled={p.isGuest || p.busy || p.isInstalling} />
+				<SettingsCard header="Sandbox">
+					<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 4px;">
+						<div style="display: flex; flex-direction: column; gap: 2px;">
+							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
+								Use Global Preset
+							</span>
+							<span style="font-size: 11px; opacity: 0.6;">
+								Link preset and wrapper inclusion only. Extra read-write folders
+								stay instance-editable.
+							</span>
+						</div>
+						<Switch
+							checked={p.useGlobalSandbox}
+							onCheckedChange={(val: boolean) => {
+								batch(() => {
+									p.setUseGlobalSandbox(val);
+									p.setIsSandboxDirty(true);
+								});
+							}}
+						>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					</div>
+
+					<div class={sandboxStyles.fieldStack}>
+						<SandboxHostNotice support={sandboxSupport()} />
+						<Show
+							when={!p.useGlobalSandbox}
+							fallback={
+								<div style="padding: 12px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.75; margin-bottom: 4px;">
+									<SandboxPresetOptionLabel
+										preset={normalizeSandboxPreset(
+											instanceDefaults().default_sandbox_preset,
+										)}
+									/>
+								</div>
+							}
+						>
+							<SettingsField
+								label="Preset"
+								body={
+									<SandboxPresetSelect
+										value={p.sandboxPreset}
+										onChange={(value) => {
+											p.setSandboxPreset(value);
+											p.setIsSandboxDirty(true);
+										}}
+									/>
+								}
+							/>
+							<SettingsField
+								label="Include wrapper in the sandbox"
+								description="When enabled, the wrapper runs inside the game sandbox. When disabled, the wrapper runs outside the sandbox with your normal user access."
+								headerRight={
+									<Switch
+										checked={p.sandboxWrapperNesting === "sandbox-outside"}
+										onCheckedChange={(checked: boolean) => {
+											p.setSandboxWrapperNesting(
+												checked ? "sandbox-outside" : "wrapper-outside",
+											);
+											p.setIsSandboxDirty(true);
+										}}
+									>
+										<SwitchControl>
+											<SwitchThumb />
+										</SwitchControl>
+									</Switch>
+								}
+							/>
+						</Show>
+						<SettingsField
+							label="Extra read-write folders"
+							description="The game may read from and write to these folders in addition to its instance folder."
+							body={
+								<PathListEditor
+									paths={p.sandboxExtraPaths}
+									inheritedPaths={p.inheritedSandboxExtraPaths}
+									onChange={(paths) => {
+										p.setSandboxExtraPaths(paths);
+										p.setIsSandboxDirty(true);
+									}}
+									addLabel="Add instance-only folder…"
+									emptyLabel="No instance-only folders."
+								/>
+							}
+						/>
+					</div>
 				</SettingsCard>
 
-				<SettingsCard header={t("instances-settings-danger-title")} destructive>
-					<SettingsField label={t("instances-settings-reset-label")} description={t("instances-settings-reset-description")} actionLabel={t("instances-settings-reset-action")} destructive onAction={p.handleHardReset} disabled={p.isGuest || p.busy || p.isInstalling} />
-					<SettingsField label={t("instances-settings-delete-label")} description={t("instances-settings-delete-description")} actionLabel={t("instances-settings-delete-action")} destructive onAction={p.handleUninstall} disabled={p.isGuest || p.busy || p.isInstalling} />
+				<SettingsCard header="Maintenance">
+					<SettingsField
+						label="Export Instance"
+						description="Pack this instance into a file for sharing or backup."
+						actionLabel="Export…"
+						onAction={() => p.setShowExportDialog(true)}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
+					<SettingsField
+						label="Duplicate Instance"
+						description="Create an exact clone of this instance."
+						actionLabel="Duplicate"
+						onAction={p.handleDuplicate}
+						disabled={p.busy || p.isInstalling}
+					/>
+					<SettingsField
+						label={p.instance.modpackId ? "Repair Files" : "Repair Instance"}
+						description="Verify instance files and re-download anything missing."
+						actionLabel="Repair"
+						onAction={() => p.repairInstance(p.instance.id)}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
+				</SettingsCard>
+
+				<SettingsCard header="Danger Zone" destructive>
+					<SettingsField
+						label="Reset Instance"
+						description={
+							<span>
+								Reinstall from scratch and <strong>permanently delete</strong>{" "}
+								worlds, configs, and screenshots.
+							</span>
+						}
+						actionLabel="Reset"
+						destructive
+						onAction={p.handleHardReset}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
+					<SettingsField
+						label="Delete Instance"
+						description={
+							<span>
+								Remove this instance and all its files. This action is{" "}
+								<strong>permanent and irreversible</strong>.
+							</span>
+						}
+						actionLabel="Delete"
+						destructive
+						onAction={p.handleUninstall}
+						disabled={p.isGuest || p.busy || p.isInstalling}
+					/>
 				</SettingsCard>
 			</div>
 		</div>

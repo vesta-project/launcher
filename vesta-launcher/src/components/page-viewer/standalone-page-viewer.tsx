@@ -8,19 +8,19 @@ import {
 	prepareCommonMiniRoutes,
 	prepareMiniRoute,
 } from "@components/page-viewer/mini-router-config";
-import type { MiniWindowPayload } from "@components/page-viewer/standalone-launcher";
 import { setRouter } from "@components/page-viewer/page-viewer";
+import type { MiniWindowPayload } from "@components/page-viewer/standalone-launcher";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WindowControls } from "@tauri-controls-v2/solid";
 import { useOs } from "@utils/os";
+import { useWindowFullscreen } from "@utils/window-fullscreen";
 import {
 	afterNextPaint,
 	presentCurrentWindowAfterPaint,
 } from "@utils/window-readiness";
-import { useWindowFullscreen } from "@utils/window-fullscreen";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./standalone-page-viewer.module.css";
 

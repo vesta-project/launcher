@@ -8,10 +8,11 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { getInstanceSlug } from "@utils/instances";
 import { openInstanceTab } from "@utils/launch-intents";
+import { createNotification } from "@utils/notifications";
 import { simulateUpdateProcess } from "@utils/updater";
 import { createSignal, For, onMount, Show } from "solid-js";
-import { t } from "~/localization";
 import styles from "../settings-page.module.css";
+import { t } from "~/localization";
 import devStyles from "./developer-tab.module.css";
 
 type CrashScenarioInfo = {
@@ -39,8 +40,8 @@ export function DeveloperSettingsTab() {
 		const slug = selectedSlug();
 		if (!slug) {
 			showToast({
-				title: t("settings-developer-select-instance-title"),
-				description: t("settings-developer-select-instance-description"),
+				title: "Select an instance",
+				description: "Choose an instance before simulating a crash.",
 				severity: "warning",
 			});
 			return;
@@ -53,10 +54,8 @@ export function DeveloperSettingsTab() {
 				scenario: scenario.id,
 			});
 			showToast({
-				title: t("settings-developer-crash-simulated-title"),
-				description: t("settings-developer-crash-simulated-description", {
-					scenario: scenario.label,
-				}),
+				title: "Crash simulated",
+				description: `${scenario.label} applied to the selected instance.`,
 				severity: "info",
 			});
 			if (openCrashTab()) {
@@ -64,7 +63,7 @@ export function DeveloperSettingsTab() {
 			}
 		} catch (error) {
 			showToast({
-				title: t("settings-developer-simulation-failed-title"),
+				title: "Simulation failed",
 				description: String(error),
 				severity: "error",
 			});
@@ -73,13 +72,63 @@ export function DeveloperSettingsTab() {
 		}
 	};
 
+	const showNotificationPreview = async (severity: "warning" | "error") => {
+		const instance =
+			instancesState.instances.find(
+				(item) => getInstanceSlug(item) === selectedSlug(),
+			) ?? instancesState.instances[0];
+		const instanceName = instance?.name ?? "Example Instance";
+
+		await createNotification({
+			client_key: `developer_notification_preview_${severity}`,
+			title:
+				severity === "warning"
+					? "Update recovery required"
+					: "Modpack update failed",
+			description:
+				severity === "warning"
+					? `The previous version of ‘${instanceName}’ could not be fully restored. Reopen the instance to resume recovery and inspect the affected files.`
+					: `Failed to update the modpack for instance ‘${instanceName}’: the release archive could not be downloaded after several attempts.`,
+			severity,
+			notification_type: "patient",
+			dismissible: true,
+			metadata: {
+				context: instance
+					? {
+							kind: "instance",
+							id: String(instance.id),
+							label: instance.name,
+						}
+					: {
+							kind: "channel",
+							label: "Developer preview",
+							source: "launcher",
+						},
+			},
+		});
+	};
+
+	const showGlobeNotificationPreview = async () => {
+		await createNotification({
+			client_key: "developer_notification_preview_globe",
+			title: "Globe Icon Preview",
+			description: "This notification uses the news source globe icon.",
+			severity: "info",
+			notification_type: "patient",
+			dismissible: true,
+			metadata: {
+				context: { kind: "channel", label: "News", source: "news" },
+			},
+		});
+	};
+
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
-				<SettingsCard header={t("settings-developer-debug-settings-title")}>
+				<SettingsCard header="Debug Settings">
 					<SettingsField
-						label={t("settings-developer-debug-logging-label")}
-						description={t("settings-developer-debug-logging-description")}
+						label="Debug Logging"
+						description="Enable verbose logging for troubleshooting"
 						headerRight={
 							<Switch
 								checked={debugLogging()}
@@ -92,41 +141,37 @@ export function DeveloperSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label={t("settings-developer-reset-notifications-label")}
-						description={t("settings-developer-reset-notifications-description")}
+						label="Reset Notifications"
+						description="Force-reset seen items and clear notification history"
 						headerRight={
 							<LauncherButton
 								type="destructive"
 								onClick={async () => {
 									await invoke("reset_notification_system");
 									showToast({
-										title: t("settings-developer-notifications-reset-title"),
-										description: t(
-											"settings-developer-notifications-reset-description",
-										),
+										title: "Notifications Reset",
+										description: "Notification history and seen items cleared.",
 										severity: "success",
 									});
 								}}
 							>
-								{t("settings-developer-reset-system-button")}
+								Reset System
 							</LauncherButton>
 						}
 					/>
 				</SettingsCard>
 
-				<SettingsCard header={t("settings-developer-crash-simulation-title")}>
+				<SettingsCard header="Crash Simulation">
 					<SettingsField
-						label={t("settings-developer-target-instance-label")}
-						description={t("settings-developer-target-instance-description")}
+						label="Target instance"
+						description="Simulated crashes are stored on the selected instance (dev builds only)"
 						headerRight={
 							<select
 								class={devStyles.instanceSelect}
 								value={selectedSlug()}
 								onChange={(e) => setSelectedSlug(e.currentTarget.value)}
 							>
-								<option value="">
-									{t("settings-developer-select-instance-placeholder")}
-								</option>
+								<option value="">Select instance…</option>
 								<For each={instancesState.instances}>
 									{(instance) => (
 										<option value={getInstanceSlug(instance)}>
@@ -138,8 +183,8 @@ export function DeveloperSettingsTab() {
 						}
 					/>
 					<SettingsField
-						label={t("settings-developer-open-crash-tab-label")}
-						description={t("settings-developer-open-crash-tab-description")}
+						label="Open crash tab"
+						description="Navigate to the instance Crash tab after emitting a scenario"
 						headerRight={
 							<Switch
 								checked={openCrashTab()}
@@ -155,7 +200,7 @@ export function DeveloperSettingsTab() {
 						when={scenarios().length > 0}
 						fallback={
 							<p class={devStyles.hint}>
-								{t("settings-developer-crash-scenarios-unavailable")}
+								Crash scenarios are only available in development builds.
 							</p>
 						}
 					>
@@ -181,36 +226,34 @@ export function DeveloperSettingsTab() {
 					</Show>
 				</SettingsCard>
 
-				<SettingsCard header={t("settings-developer-updater-simulation-title")}>
+				<SettingsCard header="Updater Simulation">
 					<SettingsField
-						label={t("settings-developer-simulate-app-update-label")}
-						description={t("settings-developer-simulate-app-update-description")}
+						label="Simulate App Update"
+						description="Trigger a full update flow simulation (Toast -> Progress -> Ready)"
 						headerRight={
 							<LauncherButton onClick={() => simulateUpdateProcess()}>
-								{t("settings-developer-simulate-full-update-button")}
+								Simulate Full Update
 							</LauncherButton>
 						}
 					/>
 					<SettingsField
-						label={t("settings-developer-simulate-discovery-label")}
-						description={t("settings-developer-simulate-discovery-description")}
+						label="Simulate Discovery"
+						description="Trigger only the 'Update Available' notification (Native Notification)"
 						headerRight={
 							<LauncherButton
 								onClick={async () => {
 									const actions = [
 										{
 											id: "open_update_dialog",
-											label: t("settings-developer-update-now-action"),
+											label: "Update Now",
 											type: "primary",
 										},
 									];
 									await invoke("create_notification", {
 										payload: {
 											client_key: "app_update_available",
-											title: t("settings-developer-update-available-title"),
-											description: t(
-												"settings-developer-update-available-description",
-											),
+											title: "Update Available (Simulated)",
+											description: "Vesta Launcher v9.9.9 is now available!",
 											severity: "info",
 											notification_type: "patient",
 											dismissible: true,
@@ -219,7 +262,44 @@ export function DeveloperSettingsTab() {
 									});
 								}}
 							>
-								{t("settings-developer-simulate-discovery-button")}
+								Simulate Discovery
+							</LauncherButton>
+						}
+					/>
+				</SettingsCard>
+
+				<SettingsCard header="Notification Testing">
+					<SettingsField
+						label="Warning notification"
+						description="Create a saved warning notification using the selected crash target or first instance"
+						headerRight={
+							<LauncherButton
+								onClick={() => void showNotificationPreview("warning")}
+							>
+								Test Warning
+							</LauncherButton>
+						}
+					/>
+					<SettingsField
+						label="Error notification"
+						description="Create a saved error notification using the selected crash target or first instance"
+						headerRight={
+							<LauncherButton
+								type="destructive"
+								onClick={() => void showNotificationPreview("error")}
+							>
+								Test Error
+							</LauncherButton>
+						}
+					/>
+					<SettingsField
+						label="Globe icon"
+						description="Create a saved notification to preview the outlined news globe icon"
+						headerRight={
+							<LauncherButton
+								onClick={() => void showGlobeNotificationPreview()}
+							>
+								Test Globe
 							</LauncherButton>
 						}
 					/>
@@ -227,45 +307,45 @@ export function DeveloperSettingsTab() {
 
 				<SettingsCard header={t("settings-developer-account-testing-title")}>
 					<SettingsField
-						label={t("settings-developer-add-demo-account-label")}
-						description={t("settings-developer-add-demo-account-description")}
+						label="Add Demo Account"
+						description="Add a temporary demo account that is removed on restart"
 						headerRight={
 							<LauncherButton
 								onClick={async () => {
 									await invoke("start_demo_session");
 									showToast({
-										title: t("settings-developer-demo-account-added-title"),
-										description: t(
-											"settings-developer-demo-account-added-description",
-										),
+										title: "Demo Account Added",
+										description: "Temporal account 'DemoUser' is now active.",
 										severity: "success",
 									});
 								}}
 							>
-								{t("settings-developer-add-demo-account-button")}
+								Add Demo Account
 							</LauncherButton>
 						}
 					/>
 				</SettingsCard>
 
-				<SettingsCard header={t("settings-developer-sentry-testing-title")}>
+				<SettingsCard header="Sentry Testing">
 					<SettingsField
-						label={t("settings-developer-test-error-capture-label")}
-						description={t("settings-developer-test-error-capture-description")}
+						label="Test Error Capture"
+						description="Trigger an error to verify Sentry monitoring is working correctly"
 						headerRight={
 							<LauncherButton
 								type="destructive"
 								onClick={() => {
-									throw new Error(t("settings-developer-test-sentry-error-message"));
+									throw new Error(
+										"Test Sentry Error - Frontend Exception. Check Sentry dashboard to verify capture.",
+									);
 								}}
 							>
-								{t("settings-developer-trigger-test-error-button")}
+								Trigger Test Error
 							</LauncherButton>
 						}
 					/>
 					<SettingsField
-						label={t("settings-developer-test-backend-panic-label")}
-						description={t("settings-developer-test-backend-panic-description")}
+						label="Test Backend Panic"
+						description="Trigger a panic on the backend to test backend Sentry capture"
 						headerRight={
 							<LauncherButton
 								type="destructive"
@@ -274,16 +354,15 @@ export function DeveloperSettingsTab() {
 										await invoke("trigger_test_panic");
 									} catch (_e) {
 										showToast({
-											title: t("settings-developer-panic-triggered-title"),
-											description: t(
-												"settings-developer-panic-triggered-description",
-											),
+											title: "Panic Triggered",
+											description:
+												"Backend panic was captured. Check Sentry dashboard.",
 											severity: "info",
 										});
 									}
 								}}
 							>
-								{t("settings-developer-trigger-backend-panic-button")}
+								Trigger Backend Panic
 							</LauncherButton>
 						}
 					/>

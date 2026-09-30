@@ -1,6 +1,6 @@
+import UploadIcon from "@assets/icons/actions/upload.svg";
 import FileAddIcon from "@assets/icons/content/file-add.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
-import UploadIcon from "@assets/icons/actions/upload.svg";
 import { DropZone } from "@ui/drop-zone/drop-zone";
 import { createSignal, For } from "solid-js";
 import styles from "./file-drop-page.module.css";

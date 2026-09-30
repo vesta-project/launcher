@@ -1,8 +1,8 @@
-import BellIcon from "@assets/icons/status/bell.svg";
+import PlusIcon from "@assets/icons/actions/add.svg";
 import LibraryIcon from "@assets/icons/content/cube.svg";
 import GearIcon from "@assets/icons/content/gear.svg";
-import PlusIcon from "@assets/icons/actions/add.svg";
 import SearchIcon from "@assets/icons/content/search.svg";
+import BellIcon from "@assets/icons/status/bell.svg";
 import {
 	dismissToLibrary,
 	openMiniPage,
@@ -51,9 +51,9 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
-import type { UiChromeMode } from "~/themes/presets";
 import { ariaShortcut, displayChord } from "~/keybindings/chords";
 import { keybindingFor } from "~/keybindings/store";
+import type { UiChromeMode } from "~/themes/presets";
 import { PinnedItem } from "./pinned-items";
 import styles from "./sidebar.module.css";
 
@@ -431,9 +431,7 @@ function Sidebar(props: SidebarProps) {
 						aria-keyshortcuts={ariaShortcut(
 							keybindingFor("navigation.settings"),
 						)}
-						aria-current={
-							activeSection() === "settings" ? "page" : undefined
-						}
+						aria-current={activeSection() === "settings" ? "page" : undefined}
 						class={
 							activeSection() === "settings"
 								? styles["sidebar-tab-active"]

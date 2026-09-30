@@ -1,4 +1,5 @@
 .badge {
+	appearance: none;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -7,6 +8,7 @@
 	border: 1px solid transparent;
 	padding: 1px 6px;
 	font-size: 0.7rem;
+	font-family: inherit;
 	font-weight: 800;
 	transition:
 		background-color 0.12s ease,

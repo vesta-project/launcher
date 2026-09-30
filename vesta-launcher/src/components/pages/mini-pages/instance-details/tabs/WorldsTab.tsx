@@ -1,15 +1,13 @@
-import ReloadIcon from "@assets/icons/actions/reload.svg";
-import TimerIcon from "@assets/icons/content/timer.svg";
-import FolderIcon from "@assets/icons/content/folder.svg";
-import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
-import GridIcon from "@assets/icons/content/grid.svg";
-import ListIcon from "@assets/icons/content/list.svg";
-import StorageIcon from "@assets/icons/content/storage.svg";
-import DatapackIcon from "@assets/icons/content/layers.svg";
-import MoveIcon from "@assets/icons/actions/move.svg";
 import CopyIcon from "@assets/icons/actions/copy.svg";
-import DuplicateIcon from "@assets/icons/actions/duplicate.svg";
 import TrashIcon from "@assets/icons/actions/delete.svg";
+import DuplicateIcon from "@assets/icons/actions/duplicate.svg";
+import MoveIcon from "@assets/icons/actions/move.svg";
+import ReloadIcon from "@assets/icons/actions/reload.svg";
+import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
+import FolderIcon from "@assets/icons/content/folder.svg";
+import DatapackIcon from "@assets/icons/content/layers.svg";
+import StorageIcon from "@assets/icons/content/storage.svg";
+import TimerIcon from "@assets/icons/content/timer.svg";
 import InstanceSelectionDialog, {
 	type InstanceSelectionOption,
 } from "@components/instances/InstanceSelectionDialog";
@@ -49,7 +47,6 @@ import {
 	SelectValue,
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
-import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
 import { formatBytes } from "@utils/format-bytes";
 import {
@@ -66,7 +63,6 @@ import styles from "./WorldsTab.module.css";
 import { getWorldTransferWarnings } from "./world-transfer";
 
 type SortMode = "recency" | "name" | "size";
-type ViewMode = "grid" | "compact";
 type PendingTransfer = {
 	world: WorldSummary;
 	mode: Exclude<WorldTransferMode, "duplicate">;
@@ -204,7 +200,6 @@ export const WorldCard: Component<{
 						src={props.world.iconDataUrl}
 						name={props.world.displayName}
 					/>
-					<div class={styles["media-fade"]} aria-hidden="true" />
 					<Show when={props.world.levelStatus === "unreadable"}>
 						<Badge variant="error" class={styles["world-status"]}>
 							{t("instances-worlds-status-unreadable")}
@@ -293,9 +288,7 @@ export const WorldCard: Component<{
 										<DropdownMenuItem
 											disabled={action.disabled}
 											class={
-												action.destructive
-													? styles["delete-action"]
-													: undefined
+												action.destructive ? styles["delete-action"] : undefined
 											}
 											onSelect={action.run}
 										>
@@ -317,9 +310,7 @@ export const WorldCard: Component<{
 							</Show>
 							<ContextMenuItem
 								disabled={action.disabled}
-								class={
-									action.destructive ? styles["delete-action"] : undefined
-								}
+								class={action.destructive ? styles["delete-action"] : undefined}
 								onSelect={action.run}
 							>
 								<ActionLabel action={action} />
@@ -368,7 +359,6 @@ export const WorldsTab: Component<{
 	) => void;
 }> = (props) => {
 	const [sort, setSort] = createSignal<SortMode>("recency");
-	const [view, setView] = createSignal<ViewMode>("grid");
 	const [pending, setPending] = createSignal<PendingTransfer | null>(null);
 	const [busyWorld, setBusyWorld] = createSignal<string | null>(null);
 
@@ -520,28 +510,6 @@ export const WorldsTab: Component<{
 								</SelectTrigger>
 								<SelectContent />
 							</Select>
-							<ToggleGroup
-								value={view()}
-								onChange={(value) => value && setView(value as ViewMode)}
-								aria-label={t("instances-worlds-layout-aria")}
-							>
-								<ToggleGroupItem
-									value="grid"
-									icon_only
-									aria-label={t("instances-worlds-view-grid")}
-									title={t("instances-worlds-view-grid")}
-								>
-									<GridIcon />
-								</ToggleGroupItem>
-								<ToggleGroupItem
-									value="compact"
-									icon_only
-									aria-label={t("instances-worlds-view-compact")}
-									title={t("instances-worlds-view-compact")}
-								>
-									<ListIcon />
-								</ToggleGroupItem>
-							</ToggleGroup>
 							<Button
 								size="sm"
 								variant="ghost"
@@ -581,7 +549,7 @@ export const WorldsTab: Component<{
 									<div class={styles.empty}>{t("instances-worlds-empty")}</div>
 								}
 							>
-								<div class={styles.worlds} data-view={view()}>
+								<div class={styles.worlds}>
 									<For each={worlds()}>
 										{(world) => {
 											const busy = () =>

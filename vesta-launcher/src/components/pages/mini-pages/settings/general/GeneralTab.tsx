@@ -87,6 +87,7 @@ export function GeneralSettingsTab() {
 		if (
 			path !== "/config" ||
 			!props?.focusArtifactCacheLimit ||
+			typeof requestId !== "number" ||
 			!storageCardRef
 		)
 			return;
@@ -147,7 +148,8 @@ export function GeneralSettingsTab() {
 		...getSupportedLocales().map((locale) => locale.code),
 	]);
 	const languageOptionLabel = (preference: string) => {
-		if (preference === SYSTEM_LANGUAGE) return t("common-system-default");
+		if (preference === SYSTEM_LANGUAGE)
+			return t("generic-label-system-default");
 		const locale = getSupportedLocales().find(
 			(candidate) => candidate.code === preference,
 		);
@@ -161,8 +163,8 @@ export function GeneralSettingsTab() {
 		} catch (error) {
 			console.error("Failed to change language:", error);
 			showToast({
-				title: t("common-language-change-failed"),
-				description: t("common-language-change-failed-description"),
+				title: t("settings-language-change-failed"),
+				description: t("settings-language-change-failed-description"),
 				severity: "error",
 			});
 		}

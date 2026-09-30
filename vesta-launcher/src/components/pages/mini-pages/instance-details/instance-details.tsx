@@ -6,6 +6,16 @@ import {
 } from "@components/page-sidebar/page-sidebar";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import {
+	createGameOptionsEditor,
+	GameOptionsEditor,
+} from "@components/settings/GameOptionsEditor";
+import {
+	normalizeSandboxPreset,
+	normalizeSandboxWrapperNesting,
+	type SandboxPresetValue,
+	type SandboxWrapperNestingValue,
+} from "@components/settings/sandbox-policy-ui";
 import { WorldSelectionDialog } from "@components/worlds/WorldSelectionDialog";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
@@ -36,6 +46,7 @@ import {
 	type ResourceVersion,
 	resources,
 } from "@stores/resources";
+import { instanceDefaults } from "@stores/settings";
 import { useMinecraftVersions } from "@stores/versions";
 import type {
 	WorldDatapackSummary,
@@ -93,7 +104,6 @@ import {
 	startModpackUpdate,
 	unlinkInstance,
 	updateInstance,
-	updateInstanceModpackVersion,
 } from "@utils/instances";
 import { createMediaQuery } from "@utils/media-query";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
@@ -109,6 +119,7 @@ import {
 	createRetainedTabLoader,
 } from "@utils/preloadable-lazy";
 import { requiresWorldTarget } from "@utils/resource-install-intent";
+import { parseSandboxExtraPaths } from "@utils/sandbox-policy";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -244,6 +255,10 @@ interface InstanceDetailsProps {
 	initialPostExitHook?: string;
 	initialWrapperCommand?: string;
 	initialEnvironmentVariables?: string;
+	initialUseGlobalSandbox?: boolean;
+	initialSandboxPreset?: string;
+	initialSandboxWrapperNesting?: string;
+	initialSandboxExtraPaths?: string[];
 	_dirty?: Record<string, boolean>;
 }
 
@@ -411,6 +426,11 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		return normalizeInstanceTab(params?.activeTab as string | undefined);
 	});
+	const showingGameOptions = createMemo(
+		() =>
+			activeTab() === "settings" &&
+			activeRouter()?.currentParams.get()?.settingsPage === "game-options",
+	);
 	const selectedWorldDirectory = createMemo(() => {
 		const value = activeRouter()?.currentParams.get()?.world;
 		return typeof value === "string" && value.length > 0 ? value : null;
@@ -736,6 +756,23 @@ export default function InstanceDetails(
 	const [environmentVariables, setEnvironmentVariables] = createSignal(
 		props.initialEnvironmentVariables || "",
 	);
+	const [useGlobalSandbox, setUseGlobalSandbox] = createSignal(
+		props.initialUseGlobalSandbox ?? true,
+	);
+	const [sandboxPreset, setSandboxPreset] = createSignal<SandboxPresetValue>(
+		normalizeSandboxPreset(props.initialSandboxPreset),
+	);
+	const [sandboxWrapperNesting, setSandboxWrapperNesting] =
+		createSignal<SandboxWrapperNestingValue>(
+			normalizeSandboxWrapperNesting(props.initialSandboxWrapperNesting),
+		);
+	const [sandboxExtraPaths, setSandboxExtraPaths] = createSignal<string[]>(
+		props.initialSandboxExtraPaths ??
+			parseSandboxExtraPaths(props.initialData?.sandboxExtraPaths),
+	);
+	const inheritedSandboxExtraPaths = createMemo(
+		() => instanceDefaults().default_sandbox_extra_paths ?? [],
+	);
 
 	// Dirty flags for settings
 	const [isNameDirty, setIsNameDirty] = createSignal(
@@ -763,6 +800,9 @@ export default function InstanceDetails(
 	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
 	const [isLaunchActionDirty, setIsLaunchActionDirty] = createSignal(
 		props._dirty?.launchAction || false,
+	);
+	const [isSandboxDirty, setIsSandboxDirty] = createSignal(
+		props._dirty?.sandbox || false,
 	);
 
 	const [saving, setSaving] = createSignal(false);
@@ -799,6 +839,10 @@ export default function InstanceDetails(
 		postExitHook: postExitHook(),
 		wrapperCommand: wrapperCommand(),
 		environmentVariables: environmentVariables(),
+		useGlobalSandbox: useGlobalSandbox(),
+		sandboxPreset: sandboxPreset(),
+		sandboxWrapperNesting: sandboxWrapperNesting(),
+		sandboxExtraPaths: sandboxExtraPaths(),
 	});
 	const currentEditDirty = (): InstanceEditDirty => ({
 		name: isNameDirty(),
@@ -811,9 +855,24 @@ export default function InstanceDetails(
 		hooks: isHooksDirty(),
 		env: isEnvDirty(),
 		launchAction: isLaunchActionDirty(),
+		sandbox: isSandboxDirty(),
 	});
 
-	const isDirty = createMemo(() => isInstanceEditDirty(currentEditDirty()));
+	const gameOptions = createGameOptionsEditor({
+		get instanceId() {
+			return instance()?.id;
+		},
+		get disabled() {
+			return saving();
+		},
+		get enabled() {
+			return showingGameOptions();
+		},
+	});
+	const isDirty = createMemo(
+		() =>
+			isInstanceEditDirty(currentEditDirty()) || gameOptions.dirtyCount() > 0,
+	);
 
 	const modpackIconBase64 = useModpackIcon(() => {
 		const current = instance();
@@ -1692,6 +1751,21 @@ export default function InstanceDetails(
 					setUseGlobalLauncherAction(inst.useGlobalLauncherAction);
 					setLauncherActionOnLaunch(inst.launcherActionOnLaunch || "stay-open");
 				}
+				if (!isSandboxDirty()) {
+					setUseGlobalSandbox(inst.useGlobalSandbox ?? true);
+					setSandboxPreset(
+						normalizeSandboxPreset(
+							inst.sandboxPreset ?? instanceDefaults().default_sandbox_preset,
+						),
+					);
+					setSandboxWrapperNesting(
+						normalizeSandboxWrapperNesting(
+							inst.sandboxWrapperNesting ??
+								instanceDefaults().default_sandbox_wrapper_nesting,
+						),
+					);
+					setSandboxExtraPaths(parseSandboxExtraPaths(inst.sandboxExtraPaths));
+				}
 			});
 		}
 	});
@@ -2315,7 +2389,9 @@ export default function InstanceDetails(
 					currentVersion={info.row.original.current_version}
 					busy={busy()}
 					onMenuItemSelect={suppressRowNavigation}
-					onUpdate={handleUpdate}
+					onUpdate={async (resource, version) => {
+						await handleUpdate(resource, version);
+					}}
 					onDelete={async (resource) => {
 						if (
 							await dialogStore.confirm(
@@ -2621,10 +2697,18 @@ export default function InstanceDetails(
 	const handleSave = async () => {
 		const inst = instance();
 		if (!inst) return;
+		const instanceId = inst.id;
+		const editDraft = currentEditDraft();
+		const editDirty = currentEditDirty();
 		setSaving(true);
 		try {
-			const fresh = await getInstance(inst.id);
-			await updateInstance(applyInstanceEditDraft(fresh, currentEditDraft()));
+			const optionsSaved = await gameOptions.save();
+			if (!optionsSaved || instance()?.id !== instanceId) return;
+			if (isInstanceEditDirty(editDirty)) {
+				const fresh = await getInstance(instanceId);
+				await updateInstance(applyInstanceEditDraft(fresh, editDraft));
+			}
+			if (instance()?.id !== instanceId) return;
 			batch(() => {
 				// Clear temporary session icons once we've successfully saved to the backend
 				setCustomIconsThisSession([]);
@@ -2639,12 +2723,14 @@ export default function InstanceDetails(
 				setIsHooksDirty(false);
 				setIsEnvDirty(false);
 				setIsLaunchActionDirty(false);
+				setIsSandboxDirty(false);
 			});
 			await refetch();
 		} catch (e) {
 			console.error("Failed to save instance settings:", e);
+		} finally {
+			setSaving(false);
 		}
-		setSaving(false);
 	};
 
 	// Icon path is now handled by the IconPicker component directly
@@ -2688,7 +2774,7 @@ export default function InstanceDetails(
 	});
 
 	const handleTabChange = (tab: TabType) => {
-		if (tab === activeTab()) return;
+		if (tab === activeTab() && !showingGameOptions()) return;
 		if (tab === "resources") {
 			const instanceId = instance()?.id;
 			if (instanceId) {
@@ -2696,6 +2782,11 @@ export default function InstanceDetails(
 					instanceId,
 				});
 			}
+		}
+		// Leaving nested settings pages via the sidebar must clear them; otherwise
+		// settingsPage=game-options keeps fill layout / editor state on other tabs.
+		if (activeRouter()?.currentParams.get()?.settingsPage != null) {
+			activeRouter()?.updateQuery("settingsPage", null);
 		}
 		instanceTabLoader.prepare(tab);
 		setSelectedTab(tab);
@@ -2746,6 +2837,7 @@ export default function InstanceDetails(
 					class={styles["content-wrapper"]}
 					classList={{
 						[styles["content-wrapper--console"]]: activeTab() === "console",
+						[styles["content-wrapper--fill"]]: showingGameOptions(),
 					}}
 				>
 					<Show when={instance.loading && !instance.latest}>
@@ -2813,6 +2905,7 @@ export default function InstanceDetails(
 												<OverviewTab
 													instance={inst()}
 													instanceSlug={slug()}
+													active={activeTab() === "home"}
 													installedResources={installedResources() || []}
 													knownUpdateCount={
 														updatesKnown()
@@ -3039,8 +3132,19 @@ export default function InstanceDetails(
 									</TabsContent>
 
 									<TabsContent value="settings">
+										<Show when={showingGameOptions()}>
+											<GameOptionsEditor
+												state={gameOptions}
+												onBack={() =>
+													activeRouter()?.updateQuery("settingsPage", null)
+												}
+											/>
+										</Show>
 										<Show
-											when={instanceTabLoader.visitedTabs().has("settings")}
+											when={
+												!showingGameOptions() &&
+												instanceTabLoader.visitedTabs().has("settings")
+											}
 										>
 											<Show when={instance.loading && !instance.latest}>
 												<div class={styles["skeleton-settings"]}>
@@ -3121,6 +3225,23 @@ export default function InstanceDetails(
 															setLauncherActionOnLaunch
 														}
 														setIsLaunchActionDirty={setIsLaunchActionDirty}
+														useGlobalSandbox={useGlobalSandbox()}
+														setUseGlobalSandbox={setUseGlobalSandbox}
+														sandboxPreset={sandboxPreset()}
+														setSandboxPreset={setSandboxPreset}
+														sandboxWrapperNesting={sandboxWrapperNesting()}
+														setSandboxWrapperNesting={setSandboxWrapperNesting}
+														sandboxExtraPaths={sandboxExtraPaths()}
+														setSandboxExtraPaths={setSandboxExtraPaths}
+														inheritedSandboxExtraPaths={inheritedSandboxExtraPaths()}
+														setIsSandboxDirty={setIsSandboxDirty}
+														onOpenGameOptions={() =>
+															activeRouter()?.updateQuery(
+																"settingsPage",
+																"game-options",
+																true,
+															)
+														}
 														invoke={invoke}
 														showToast={showToast}
 														isGuest={isGuest()}
@@ -3162,6 +3283,7 @@ export default function InstanceDetails(
 				onSave={handleSave}
 				isSaving={saving()}
 				onCancel={() => {
+					gameOptions.discard();
 					const i = inst();
 					if (!i) return;
 					batch(() => {
@@ -3188,6 +3310,19 @@ export default function InstanceDetails(
 						setUseGlobalEnvironmentVariables(i.useGlobalEnvironmentVariables);
 						setUseGlobalLauncherAction(i.useGlobalLauncherAction);
 						setLauncherActionOnLaunch(i.launcherActionOnLaunch || "stay-open");
+						setUseGlobalSandbox(i.useGlobalSandbox ?? true);
+						setSandboxPreset(
+							normalizeSandboxPreset(
+								i.sandboxPreset ?? instanceDefaults().default_sandbox_preset,
+							),
+						);
+						setSandboxWrapperNesting(
+							normalizeSandboxWrapperNesting(
+								i.sandboxWrapperNesting ??
+									instanceDefaults().default_sandbox_wrapper_nesting,
+							),
+						);
+						setSandboxExtraPaths(parseSandboxExtraPaths(i.sandboxExtraPaths));
 						setIsNameDirty(false);
 						setIsIconDirty(false);
 						setIsMinMemDirty(false);
@@ -3198,6 +3333,7 @@ export default function InstanceDetails(
 						setIsHooksDirty(false);
 						setIsEnvDirty(false);
 						setIsLaunchActionDirty(false);
+						setIsSandboxDirty(false);
 					});
 				}}
 				cancelText="Reset"

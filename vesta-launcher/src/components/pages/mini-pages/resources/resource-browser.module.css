@@ -479,10 +479,16 @@
 
 .filter-chip-kind {
 	font-size: 10px;
-	font-weight: 600;
-	letter-spacing: 0.02em;
-	text-transform: uppercase;
+	font-weight: 500;
 	color: var(--text-tertiary);
+	flex-shrink: 0;
+}
+
+.filter-chip-icon {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	object-fit: cover;
 	flex-shrink: 0;
 }
 
@@ -594,6 +600,12 @@
 .filter-combobox {
 	width: 100%;
 	font-size: 13px;
+}
+
+.environment-filter-options {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px;
 }
 
 /* ===== Results Info Bar ===== */
@@ -880,6 +892,27 @@
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.card-author-button {
+	appearance: none;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.card-author-button:hover {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.card-author-button:focus-visible {
+	border-radius: 2px;
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
 }
 
 .card-stats {
@@ -1267,6 +1300,10 @@
 
 .category-group-title {
 	margin: 0;
+	border: 0;
+	background: transparent;
+	font-family: inherit;
+	text-align: left;
 	font-size: 12px;
 	line-height: 1;
 	font-weight: 500;
@@ -1279,6 +1316,10 @@
 	gap: 8px;
 	flex: 1;
 	min-width: 0;
+}
+
+.category-group-title:disabled {
+	opacity: 1;
 }
 
 .category-group-title.clickable {

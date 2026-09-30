@@ -101,6 +101,7 @@ pub struct ResourceDownloadTask {
     pub platform: SourcePlatform,
     pub project_id: String,
     pub project_name: String,
+    pub project_icon_url: Option<String>,
     pub version: ResourceVersion,
     pub resource_type: ResourceType,
     pub dependency_for: Option<String>,
@@ -428,6 +429,15 @@ impl Task for ResourceDownloadTask {
             self.platform.as_str(),
             project_id,
             version_id
+        ))
+    }
+
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::resource(
+            self.project_id.clone(),
+            self.project_name.clone(),
+            self.platform.as_str().to_string(),
+            self.project_icon_url.clone(),
         ))
     }
 
@@ -1086,6 +1096,7 @@ mod tests {
             platform: SourcePlatform::Modrinth,
             project_id: "project".to_string(),
             project_name: "Bundle".to_string(),
+            project_icon_url: None,
             version: version(vec![
                 ResourceVersionFile {
                     url: "https://example.invalid/data.zip".to_string(),
@@ -1125,6 +1136,7 @@ mod tests {
             platform: SourcePlatform::Modrinth,
             project_id: "world".to_string(),
             project_name: "World".to_string(),
+            project_icon_url: None,
             version: version(vec![]),
             resource_type: ResourceType::World,
             dependency_for: None,
@@ -1148,6 +1160,7 @@ mod tests {
             platform: SourcePlatform::Smithed,
             project_id: "pro|ject".to_string(),
             project_name: "Bundle".to_string(),
+            project_icon_url: None,
             version: remote_version,
             resource_type: ResourceType::DataPack,
             dependency_for: None,

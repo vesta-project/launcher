@@ -18,17 +18,32 @@ const mocks = vi.hoisted(() => ({
 	},
 	getVersions: vi.fn(),
 	setInstallRequest: vi.fn(),
+	setSource: vi.fn(),
+	setCreator: vi.fn(),
+	setOffset: vi.fn(),
 	install: vi.fn().mockResolvedValue("task"),
 	uninstall: vi.fn(),
 	navigate: vi.fn(),
+	updateQuery: vi.fn(),
 	showToast: vi.fn(),
 }));
 
 vi.mock("@stores/resources", () => ({
+	primaryResourceOwner: (project: ResourceProject) => ({
+		name:
+			project.organization?.name ||
+			project.author_details?.find((author) => author.is_owner)?.username ||
+			project.author,
+		iconUrl: project.organization?.icon_url || null,
+		kind: project.organization ? "organization" : "author",
+	}),
 	resources: {
 		state: mocks.state,
 		getVersions: mocks.getVersions,
 		setInstallRequest: mocks.setInstallRequest,
+		setSource: mocks.setSource,
+		setCreator: mocks.setCreator,
+		setOffset: mocks.setOffset,
 		install: mocks.install,
 		uninstall: mocks.uninstall,
 	},
@@ -46,7 +61,7 @@ vi.mock("@stores/instances", () => ({
 	},
 }));
 vi.mock("@components/page-viewer/page-viewer", () => ({
-	router: () => ({ navigate: mocks.navigate }),
+	router: () => ({ navigate: mocks.navigate, updateQuery: mocks.updateQuery }),
 }));
 vi.mock("@utils/resources", () => ({
 	getProjectCompatibilityForInstance: () => ({ type: "compatible" }),
@@ -119,6 +134,77 @@ describe("ResourceCard", () => {
 		vi.clearAllMocks();
 		mocks.state.resourceType = "resourcepack";
 		mocks.state.selectedInstanceId = 7;
+	});
+
+	it("shows only the organization as the primary owner", () => {
+		render(() => (
+			<ResourceCard
+				project={{
+					...project,
+					author: "Project owner",
+					authors: ["Project owner", "Contributor"],
+					organization: {
+						id: "vesta",
+						slug: "vesta",
+						name: "Vesta team",
+						icon_url: null,
+					},
+				}}
+				viewMode="list"
+			/>
+		));
+
+		expect(screen.getByText("by Vesta team")).toBeTruthy();
+		expect(screen.queryByText(/Project owner/)).toBeNull();
+		expect(screen.queryByText(/Contributor/)).toBeNull();
+	});
+
+	it("filters by the primary owner without opening project details", async () => {
+		render(() => (
+			<ResourceCard
+				project={{
+					...project,
+					author_details: [
+						{
+							id: "vesta-author",
+							username: "Vesta",
+							avatar_url: "https://example.test/avatar.png",
+							profile_url: null,
+							role: "Owner",
+							ordering: 0,
+							is_owner: true,
+						},
+					],
+				}}
+				viewMode="list"
+			/>
+		));
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Filter by Vesta" }),
+		);
+
+		expect(mocks.setCreator).toHaveBeenCalledWith(
+			expect.objectContaining({ kind: "author", id: "vesta-author" }),
+		);
+		expect(mocks.setOffset).toHaveBeenCalledWith(0);
+		expect(mocks.updateQuery).toHaveBeenCalledWith("creatorId", "vesta-author");
+		expect(mocks.navigate).not.toHaveBeenCalled();
+	});
+
+	it("opens project details from the keyboard", async () => {
+		render(() => <ResourceCard project={project} viewMode="list" />);
+
+		await fireEvent.keyDown(
+			screen.getByRole("link", { name: "View Test Pack" }),
+			{ key: "Enter" },
+		);
+
+		expect(mocks.navigate).toHaveBeenCalledWith(
+			"/resource-details",
+			expect.objectContaining({ projectId: project.id }),
+			expect.anything(),
+		);
 	});
 
 	it("keeps the clicked resource type while versions are loading", async () => {

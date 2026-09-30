@@ -1,7 +1,7 @@
 import AddIcon from "@assets/icons/actions/add.svg";
 import EditIcon from "@assets/icons/actions/edit.svg";
-import CheckIcon from "@assets/icons/controls/check.svg";
 import CubeIcon from "@assets/icons/content/cube.svg";
+import CheckIcon from "@assets/icons/controls/check.svg";
 import {
 	Popover,
 	PopoverCloseButton,

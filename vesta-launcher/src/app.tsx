@@ -2,10 +2,10 @@ import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 import { DialogRoot } from "@components/dialog/dialog-root";
 import { openMiniPage, router } from "@components/page-viewer/page-viewer";
 import { FatalPage } from "@components/pages/fatal/fatal-page";
-import { WorldArchiveSelectionDialog } from "@components/worlds/WorldArchiveSelectionDialog";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
+import { WorldArchiveSelectionDialog } from "@components/worlds/WorldArchiveSelectionDialog";
 import { Route, Router } from "@solidjs/router";
 import {
 	cleanupDialogSystem,
@@ -14,7 +14,6 @@ import {
 } from "@stores/dialog-store";
 import "@stores/versions"; // eager-load version metadata on boot
 import { setupInstanceListeners } from "@stores/instances";
-import { GlobalModpackInstallDialog } from "@stores/modpack-install";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -42,6 +41,7 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { onCleanup, onMount } from "solid-js";
 import { applyLanguagePreference } from "~/localization";
+import styles from "./app.module.css";
 
 export interface ExitCheckResponse {
 	can_exit: boolean;
@@ -247,14 +247,27 @@ function Root(props: ChildrenProp) {
 					await invoke("exit_app");
 				} else {
 					const confirmed = await dialogStore.confirm(
-						"Active Processes Detected",
-						`The launcher is still performing some actions or games are running:\n\n${[
-							...check.running_instances.map((i) => `• ${i}`),
-							...check.blocking_tasks.map((t) => `• ${t}`),
-						].join("\n")}\n\nClosing now may cause issues.`,
+						"Vesta is still working",
+						<div class={styles["exit-warning"]}>
+							<p>Closing now may interrupt these active tasks:</p>
+							<ul class={styles["exit-warning__list"]}>
+								{check.blocking_tasks.map((task) => (
+									<li>{task}</li>
+								))}
+							</ul>
+							{check.running_instances.length > 0 && (
+								<div class={styles["exit-warning__note"]}>
+									<strong>Running games won’t be closed</strong>
+									<p>
+										{check.running_instances.join(", ")} will keep running after
+										Vesta closes.
+									</p>
+								</div>
+							)}
+						</div>,
 						{
-							okLabel: "Exit Anyway",
-							cancelLabel: "Stay Open",
+							okLabel: "Close Anyway",
+							cancelLabel: "Keep Vesta Open",
 							isDestructive: true,
 							severity: "warning",
 						},
@@ -456,7 +469,6 @@ function Root(props: ChildrenProp) {
 			{props.children}
 			<SessionExpiredDialog />
 			<DialogRoot />
-			<GlobalModpackInstallDialog />
 			<WorldArchiveSelectionDialog />
 		</>
 	);

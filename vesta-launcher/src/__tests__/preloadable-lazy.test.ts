@@ -24,9 +24,8 @@ describe("createPreloadableLazyComponent", () => {
 describe("createRetainedTabLoader", () => {
 	it("preloads on intent and retains tabs only after a visit", async () => {
 		const settingsLoader = vi.fn().mockResolvedValue(undefined);
-		const tabs = createRetainedTabLoader<"home" | "settings">(
-			"home",
-			(tab) => (tab === "settings" ? settingsLoader : undefined),
+		const tabs = createRetainedTabLoader<"home" | "settings">("home", (tab) =>
+			tab === "settings" ? settingsLoader : undefined,
 		);
 
 		tabs.preload("settings");

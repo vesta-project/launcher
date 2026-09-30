@@ -1,5 +1,5 @@
-import ConnectionLostSvg from "@assets/icons/status/connection-lost.svg";
 import ReloadIcon from "@assets/icons/actions/reload.svg";
+import ConnectionLostSvg from "@assets/icons/status/connection-lost.svg";
 import networkStore from "@stores/network";
 import { Badge } from "@ui/badge";
 import { createMemo, Show } from "solid-js";

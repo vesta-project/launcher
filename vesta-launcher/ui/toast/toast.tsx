@@ -60,6 +60,7 @@ interface ShowToastProps {
 	total_steps?: number | null;
 	dismissible?: boolean;
 	actions?: NotificationAction[];
+	metadata?: string | null;
 	onAction?: (actionId: string, payload?: any) => void;
 }
 
@@ -84,6 +85,7 @@ function showToast(props: ShowToastProps) {
 					notification_type={props.notification_type}
 					dismissible={props.dismissible}
 					actions={props.actions}
+					metadata={props.metadata}
 					isToast={true}
 					onAction={(actionId, payload) => props.onAction?.(actionId, payload)}
 					onDismiss={() => {
@@ -117,6 +119,7 @@ function updateToast(id: number, props: ShowToastProps) {
 					notification_type={props.notification_type}
 					dismissible={props.dismissible}
 					actions={props.actions}
+					metadata={props.metadata}
 					isToast={true}
 					onAction={(actionId, payload) => props.onAction?.(actionId, payload)}
 					onDismiss={() => {

@@ -7,10 +7,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { showToast } from "@ui/toast/toast";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
-import {
-	generateVestaDeepLink,
-	isAllowedNavigatePath,
-} from "@utils/deep-links";
+import { isAllowedNavigatePath } from "@utils/deep-links";
 import { launchInstance } from "@utils/instances";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 

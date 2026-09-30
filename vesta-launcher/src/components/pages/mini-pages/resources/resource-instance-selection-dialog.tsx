@@ -201,10 +201,7 @@ const ResourceInstanceSelectionDialog: Component<
 			};
 		}
 
-		if (
-			props.installType === "mod" ||
-			props.installType === "shader"
-		) {
+		if (props.installType === "mod" || props.installType === "shader") {
 			return {
 				type: "incompatible" as const,
 				reason: "No compatible versions found.",
@@ -219,11 +216,7 @@ const ResourceInstanceSelectionDialog: Component<
 	): boolean => {
 		if (!installed || !props.project) return false;
 		if (props.version) {
-			return isResourceUpdateAvailable(
-				props.project,
-				installed,
-				props.version,
-			);
+			return isResourceUpdateAvailable(props.project, installed, props.version);
 		}
 		const best = findBestVersionForInstance(
 			props.project,
@@ -255,13 +248,14 @@ const ResourceInstanceSelectionDialog: Component<
 					tone: lookupState === "error" ? "danger" : "neutral",
 				};
 			}
-			const installed = props.project && installType() !== "datapack"
-				? findInstalledResource(
-						props.project,
-						installedMap()[instance.id] || [],
-						versionsToUse(),
-					)
-				: null;
+			const installed =
+				props.project && installType() !== "datapack"
+					? (findInstalledResource(
+							props.project,
+							installedMap()[instance.id] || [],
+							versionsToUse(),
+						) ?? null)
+					: null;
 			const updateAvailable = hasUpdate(instance, installed);
 
 			if (compatibility.type === "incompatible") {

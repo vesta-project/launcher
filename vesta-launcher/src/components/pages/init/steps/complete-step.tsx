@@ -43,4 +43,5 @@ function CompleteStep(props: CompleteStepProps) {
 }
 
 export default CompleteStep;
+
 import SuccessIcon from "@assets/icons/controls/success.svg";

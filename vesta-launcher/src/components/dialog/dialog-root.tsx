@@ -65,7 +65,9 @@ const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (
 				<DialogHeader>
 					<DialogTitle>{props.dialog.title}</DialogTitle>
 					<Show when={props.dialog.description}>
-						<DialogDescription>{props.dialog.description}</DialogDescription>
+						<DialogDescription as="div">
+							{props.dialog.description}
+						</DialogDescription>
 					</Show>
 				</DialogHeader>
 

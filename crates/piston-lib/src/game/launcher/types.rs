@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Where a prepared OS sandbox command is composed into the launch graph.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SandboxCommandPlacement {
+    /// Wrap the launcher-visible command (the portable macOS/Linux behavior).
+    #[default]
+    WholeCommand,
+    /// Keep trusted exit supervision outside and wrap the game plus each hook.
+    GameAndHooks,
+}
+
 /// Specification for launching a game instance
 #[derive(Debug, Clone)]
 pub struct LaunchSpec {
@@ -81,6 +91,21 @@ pub struct LaunchSpec {
 
     /// Post-exit hook command (optional)
     pub post_exit_hook: Option<String>,
+
+    /// Optional argv prefix that applies OS sandbox confinement (e.g. sandbox-exec).
+    /// Game-agnostic; produced by the host from `vesta-sandbox` prepare output.
+    pub sandbox_prefix: Option<Vec<String>>,
+
+    /// When true, `sandbox_prefix` wraps the entire command including any user wrapper.
+    /// When false, the user wrapper stays outermost and the prefix is inserted before Java.
+    pub sandbox_wraps_entire_command: bool,
+
+    /// Whether the prefix wraps the outer command or is delegated to the
+    /// trusted exit supervisor for the game and hooks.
+    pub sandbox_command_placement: SandboxCommandPlacement,
+
+    /// Private host-created paths to remove if launch fails or after the game exits.
+    pub sandbox_cleanup_paths: Vec<PathBuf>,
 }
 
 impl LaunchSpec {
@@ -124,6 +149,10 @@ pub struct LaunchResult {
 
     /// Handle to the child process (if available)
     pub handle: Option<ProcessHandle>,
+
+    /// When true, the child owns stdio and the app should tail `log_file`
+    /// (and eventually `latest.log`) for the live console.
+    pub console_from_log_file: bool,
 }
 
 /// Handle to a running process
@@ -134,6 +163,9 @@ pub struct ProcessHandle {
 
     /// Child process handle (optional for reattachment scenarios)
     pub child: Option<tokio::process::Child>,
+
+    /// Private host-created paths whose lifetime matches the child process.
+    pub cleanup_paths: Vec<PathBuf>,
 }
 
 /// Represents a running game instance
@@ -250,6 +282,10 @@ mod tests {
             wrapper_command: None,
             pre_launch_hook: None,
             post_exit_hook: None,
+            sandbox_prefix: None,
+            sandbox_wraps_entire_command: true,
+            sandbox_command_placement: Default::default(),
+            sandbox_cleanup_paths: Vec::new(),
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -283,6 +319,10 @@ mod tests {
             wrapper_command: None,
             pre_launch_hook: None,
             post_exit_hook: None,
+            sandbox_prefix: None,
+            sandbox_wraps_entire_command: true,
+            sandbox_command_placement: Default::default(),
+            sandbox_cleanup_paths: Vec::new(),
         };
 
         assert_eq!(spec.installed_version_id(), "forge-loader-47.2.0-1.20.1");

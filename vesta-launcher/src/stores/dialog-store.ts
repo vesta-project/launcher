@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 
 export type DialogSeverity =
@@ -25,7 +26,7 @@ export interface DialogInputConfig {
 export interface DialogInstance {
 	id: string;
 	title: string;
-	description?: string;
+	description?: JSX.Element;
 	severity: DialogSeverity;
 	actions: DialogAction[];
 	input?: DialogInputConfig;
@@ -119,7 +120,7 @@ export const dialogStore = {
 	 */
 	async confirm(
 		title: string,
-		description?: string,
+		description?: JSX.Element,
 		options?: {
 			okLabel?: string;
 			cancelLabel?: string;

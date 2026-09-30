@@ -53,6 +53,42 @@ impl fmt::Display for NotificationSeverity {
 pub const PROGRESS_INDETERMINATE: i32 = -1;
 pub const NOT_PERSISTED_ID: i32 = -1;
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationContext {
+    pub kind: String,
+    pub id: Option<String>,
+    pub label: Option<String>,
+    pub source: Option<String>,
+    pub icon_url: Option<String>,
+}
+
+impl NotificationContext {
+    pub fn instance(id: i32, label: Option<String>) -> Self {
+        Self {
+            kind: "instance".to_string(),
+            id: Some(id.to_string()),
+            label,
+            source: None,
+            icon_url: None,
+        }
+    }
+
+    pub fn resource(id: String, label: String, source: String, icon_url: Option<String>) -> Self {
+        Self {
+            kind: "resource".to_string(),
+            id: Some(id),
+            label: Some(label),
+            source: Some(source),
+            icon_url,
+        }
+    }
+
+    pub fn metadata(&self) -> Option<String> {
+        serde_json::to_string(&serde_json::json!({ "context": self })).ok()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", content = "data")]
 #[serde(rename_all = "camelCase")]

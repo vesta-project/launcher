@@ -3,6 +3,7 @@ use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
 use crate::utils::storage::{self, StorageSnapshot};
+use tauri::webview::Color;
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -57,7 +58,6 @@ pub async fn exit_check(
     match piston_lib::game::launcher::get_running_instances().await {
         Ok(instances) => {
             if !instances.is_empty() {
-                response.can_exit = false;
                 response.running_instances = instances.into_iter().map(|i| i.instance_id).collect();
             }
         }
@@ -461,10 +461,7 @@ pub async fn test_proxy_connection(input: ProxyTestInput) -> Result<ProxyTestRes
                 redact_proxy_test_message(&e.to_string(), proxy_url.as_deref())
             )
         })?;
-    let endpoints = [
-        "https://api.modrinth.com/v2/tag/game_version",
-        "https://aka.ms",
-    ];
+    let endpoints = ["https://api.modrinth.com/v3/tag/loader", "https://aka.ms"];
     let timeout = std::time::Duration::from_secs(8);
     let mut last_error: Option<(String, String)> = None;
 
@@ -615,8 +612,18 @@ pub fn present_window_when_ready(
 #[tauri::command]
 pub fn clear_window_startup_background(window: tauri::WebviewWindow) -> Result<(), String> {
     window
+        .as_ref()
+        .window()
         .set_background_color(None)
-        .map_err(|e| format!("Failed to clear startup background: {}", e))
+        .map_err(|e| format!("Failed to clear native startup background: {}", e))?;
+
+    // Tauri/Wry maps WebviewWindow::set_background_color(None) to an opaque
+    // white webview background. Keep webview transparent so native materials
+    // remain visible after startup fallback is removed.
+    window
+        .as_ref()
+        .set_background_color(Some(Color(0, 0, 0, 0)))
+        .map_err(|e| format!("Failed to clear webview startup background: {}", e))
 }
 
 pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), String> {
@@ -629,6 +636,128 @@ pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), St
     }
 
     Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxHostSupport {
+    pub host_os: String,
+    pub enforcement_available: bool,
+    pub enforcement_backend: Option<String>,
+    pub bubblewrap_available: bool,
+    pub bubblewrap_path: Option<String>,
+    pub missing_requirement_message: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_sandbox_host_support() -> SandboxHostSupport {
+    #[cfg(target_os = "linux")]
+    {
+        let bubblewrap_path = vesta_sandbox::bubblewrap_path();
+        let bubblewrap_available = bubblewrap_path.is_some();
+        let user_namespace_available = vesta_sandbox::user_namespace_available();
+        let landlock_available = vesta_sandbox::landlock_available();
+        let landlock_helper = vesta_sandbox::landlock_helper_path();
+        let enforcement_ready = vesta_sandbox::sandbox_enforcement_ready();
+        return SandboxHostSupport {
+            host_os: "linux".to_string(),
+            enforcement_available: enforcement_ready,
+            enforcement_backend: enforcement_ready.then(|| "bubblewrap+landlock".to_string()),
+            bubblewrap_available,
+            bubblewrap_path: bubblewrap_path.map(|path| path.to_string_lossy().into_owned()),
+            missing_requirement_message: if enforcement_ready {
+                None
+            } else if !bubblewrap_available {
+                Some(
+                    "Install the bubblewrap package (provides the bwrap command) to use Modded or Paranoid sandbox presets on Linux."
+                        .to_string(),
+                )
+            } else if !user_namespace_available {
+                Some(
+                    "Unprivileged user namespaces are disabled on this system. Enable kernel.unprivileged_userns_clone or adjust your distribution's bubblewrap restrictions to use Modded or Paranoid sandbox presets on Linux."
+                        .to_string(),
+                )
+            } else if !landlock_available {
+                Some(
+                    "Landlock exec allowlists are unavailable on this kernel (requires Linux 5.13+ with Landlock enabled). Modded and Paranoid presets cannot be enforced."
+                        .to_string(),
+                )
+            } else if landlock_helper.is_none() {
+                Some(
+                    "The vesta-sandbox-exec helper was not found next to the launcher. Rebuild or reinstall Vesta Launcher to use Modded or Paranoid sandbox presets on Linux."
+                        .to_string(),
+                )
+            } else {
+                Some(
+                    "Linux sandbox enforcement is not ready; verify bubblewrap, user namespaces, and Landlock support."
+                        .to_string(),
+                )
+            },
+        };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let seatbelt = std::path::Path::new("/usr/bin/sandbox-exec");
+        let enforcement_available = seatbelt.is_file();
+        return SandboxHostSupport {
+            host_os: "macos".to_string(),
+            enforcement_available,
+            enforcement_backend: enforcement_available.then(|| "seatbelt".to_string()),
+            bubblewrap_available: false,
+            bubblewrap_path: None,
+            missing_requirement_message: if enforcement_available {
+                None
+            } else {
+                Some(
+                    "macOS sandbox-exec was not found; Modded and Paranoid presets cannot be enforced."
+                        .to_string(),
+                )
+            },
+        };
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let helper_path = vesta_sandbox::windows_sandbox_helper_path();
+        let enforcement_available =
+            vesta_sandbox::sandbox_enforcement_ready() && helper_path.is_some();
+        SandboxHostSupport {
+            host_os: "windows".to_string(),
+            enforcement_available,
+            enforcement_backend: enforcement_available
+                .then(|| "appcontainer+job-object+no-child".to_string()),
+            bubblewrap_available: false,
+            bubblewrap_path: None,
+            missing_requirement_message: if helper_path.is_none() {
+                Some(
+                    "The vesta-sandbox-exec helper was not found next to the launcher. Rebuild or reinstall Vesta Launcher to use Modded or Paranoid sandbox presets on Windows."
+                        .to_string(),
+                )
+            } else if !enforcement_available {
+                Some(
+                    "Windows AppContainer sandbox enforcement is unavailable on this system. Modded and Paranoid presets remain fail-closed."
+                        .to_string(),
+                )
+            } else {
+                None
+            },
+        }
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        SandboxHostSupport {
+            host_os: std::env::consts::OS.to_string(),
+            enforcement_available: false,
+            enforcement_backend: None,
+            bubblewrap_available: false,
+            bubblewrap_path: None,
+            missing_requirement_message: Some(
+                "Sandbox enforcement is not available on this platform.".to_string(),
+            ),
+        }
+    }
 }
 
 pub fn request_guarded_exit(app_handle: &tauri::AppHandle, source: &str) -> Result<(), String> {
@@ -858,6 +987,13 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
     let (active_effect, was_coerced) =
         crate::utils::window_effects::normalize_window_effect(&effect, &capabilities);
 
+    log::info!(
+        "Applying window effect: label='{}', requested='{}', active='{}'",
+        window.label(),
+        effect,
+        active_effect
+    );
+
     if was_coerced {
         notify_unsupported_window_effect(
             app_handle,
@@ -873,6 +1009,28 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
         use window_vibrancy::{
             apply_acrylic, apply_blur, apply_mica, clear_acrylic, clear_blur, clear_mica,
         };
+        use windows_sys::Win32::{
+            Graphics::Dwm::DwmExtendFrameIntoClientArea, UI::Controls::MARGINS,
+        };
+
+        // Acrylic's transient backdrop only paints through WebView2 when the DWM frame
+        // covers the client area. Reset the margins for every other effect so switching
+        // back to Mica restores its normal system-backdrop composition.
+        let frame_margin = if active_effect == "acrylic" { -1 } else { 0 };
+        let margins = MARGINS {
+            cxLeftWidth: frame_margin,
+            cxRightWidth: frame_margin,
+            cyTopHeight: frame_margin,
+            cyBottomHeight: frame_margin,
+        };
+        let hwnd = window.hwnd().map_err(|err| err.to_string())?.0;
+        let frame_result = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
+        if frame_result < 0 {
+            return Err(format!(
+                "Failed to configure DWM frame for window effect '{}': HRESULT {:#010x}",
+                active_effect, frame_result as u32
+            ));
+        }
 
         if let Err(err) = clear_blur(&window) {
             log::warn!("Failed to clear blur window effect: {}", err);
@@ -944,6 +1102,11 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
         }
     }
 
+    log::info!(
+        "Window effect applied: label='{}', active='{}'",
+        window.label(),
+        active_effect
+    );
     Ok(())
 }
 
