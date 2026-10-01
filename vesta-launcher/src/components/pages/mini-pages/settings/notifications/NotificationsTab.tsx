@@ -75,11 +75,15 @@ export const NotificationSettingsTab = () => {
 			</div>
 
 			<div class={panelStyles["settings-panel"]}>
-				<SettingsCard header={t("settings-notifications-subscription-sources-title")}>
+				<SettingsCard
+					header={t("settings-notifications-subscription-sources-title")}
+				>
 					<div class={styles["subscriptions-list"]}>
 						<For
 							each={subscriptions()}
-							fallback={<div>{t("settings-notifications-no-subscriptions")}</div>}
+							fallback={
+								<div>{t("settings-notifications-no-subscriptions")}</div>
+							}
 						>
 							{(sub) => (
 								<div class={styles["subscription-item"]}>
@@ -132,7 +136,9 @@ export const NotificationSettingsTab = () => {
 					</div>
 				</SettingsCard>
 
-				<SettingsCard header={t("settings-notifications-official-sources-title")}>
+				<SettingsCard
+					header={t("settings-notifications-official-sources-title")}
+				>
 					<p
 						class={styles["settings-field-description"]}
 						style={{ "margin-bottom": "1rem" }}
@@ -142,7 +148,9 @@ export const NotificationSettingsTab = () => {
 					<div style={{ display: "flex", gap: "8px", "flex-wrap": "wrap" }}>
 						<For
 							each={availableSources()}
-							fallback={<div>{t("settings-notifications-loading-sources")}</div>}
+							fallback={
+								<div>{t("settings-notifications-loading-sources")}</div>
+							}
 						>
 							{(source) => {
 								// Check if already subscribed

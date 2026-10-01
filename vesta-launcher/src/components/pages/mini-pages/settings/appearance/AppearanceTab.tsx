@@ -365,7 +365,9 @@ export function AppearanceSettingsTab() {
 					/>
 					<SettingsField
 						label={t("settings-appearance-background-opacity-label")}
-						description={t("settings-appearance-background-opacity-description")}
+						description={t(
+							"settings-appearance-background-opacity-description",
+						)}
 						body={
 							<Slider
 								value={[
@@ -402,7 +404,9 @@ export function AppearanceSettingsTab() {
 						<Show when={canChangeStyle()}>
 							<SettingsField
 								label={t("settings-appearance-material-style-label")}
-								description={t("settings-appearance-material-style-description")}
+								description={t(
+									"settings-appearance-material-style-description",
+								)}
 								headerRight={
 									<ToggleGroup
 										value={styleMode()}
@@ -426,7 +430,9 @@ export function AppearanceSettingsTab() {
 
 						<SettingsField
 							label={t("settings-appearance-layout-translucency-label")}
-							description={t("settings-appearance-layout-translucency-description")}
+							description={t(
+								"settings-appearance-layout-translucency-description",
+							)}
 							body={
 								<Slider
 									value={[opacity()]}
@@ -454,7 +460,9 @@ export function AppearanceSettingsTab() {
 						<Show when={styleMode() !== "flat"}>
 							<SettingsField
 								label={t("settings-appearance-material-grain-label")}
-								description={t("settings-appearance-material-grain-description")}
+								description={t(
+									"settings-appearance-material-grain-description",
+								)}
 								body={
 									<Slider
 										value={[grainStrength()]}
@@ -480,7 +488,9 @@ export function AppearanceSettingsTab() {
 
 						<SettingsField
 							label={t("settings-appearance-background-gradient-label")}
-							description={t("settings-appearance-background-gradient-description")}
+							description={t(
+								"settings-appearance-background-gradient-description",
+							)}
 							headerRight={
 								<Switch
 									checked={gradientEnabled() ?? false}
@@ -572,7 +582,9 @@ export function AppearanceSettingsTab() {
 						<Show when={canChangeBorder()}>
 							<SettingsField
 								label={t("settings-appearance-border-sharpness-label")}
-								description={t("settings-appearance-border-sharpness-description")}
+								description={t(
+									"settings-appearance-border-sharpness-description",
+								)}
 								body={
 									<Slider
 										value={[borderThickness() ?? 1]}

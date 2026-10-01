@@ -16,7 +16,6 @@ import LauncherButton from "@ui/button/button";
 import buttonStyles from "@ui/button/button.module.css";
 import { formatBytes, formatPercent } from "@utils/format-bytes";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { t } from "~/localization";
 import {
 	type Component,
 	createEffect,
@@ -26,6 +25,7 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { t } from "~/localization";
 import styles from "./storage-usage-viewer.module.css";
 
 type StorageTab = "overview" | "instances" | "cache";
@@ -457,7 +457,9 @@ export function StorageUsageViewer() {
 			<Show
 				when={displaySnapshot()}
 				fallback={
-					<div class={styles["storage-empty"]}>{t("settings-help-loading")}</div>
+					<div class={styles["storage-empty"]}>
+						{t("settings-help-loading")}
+					</div>
 				}
 			>
 				<div class={styles["storage-tabs"]}>

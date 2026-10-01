@@ -49,13 +49,13 @@ import {
 } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
-	getManualMemoryLimitMb,
-	getMemoryWarningThresholdMb,
-} from "@utils/memory-policy";
-import {
 	findLaunchBehaviorOption,
 	launchBehaviorOptions as getLaunchBehaviorOptions,
 } from "@utils/localized-options";
+import {
+	getManualMemoryLimitMb,
+	getMemoryWarningThresholdMb,
+} from "@utils/memory-policy";
 import { batch, createMemo, Show } from "solid-js";
 import { t } from "~/localization";
 import styles from "../instance-details.module.css";
@@ -395,7 +395,9 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									<TextFieldRoot style="flex: 1">
 										<TextFieldInput
 											value={p.javaPath}
-											placeholder={t("instances-settings-java-path-placeholder")}
+											placeholder={t(
+												"instances-settings-java-path-placeholder",
+											)}
 											onInput={(e) => {
 												const val = (e.currentTarget as HTMLInputElement).value;
 												if (val === p.javaPath) return;
@@ -523,11 +525,15 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								<>
 									<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; opacity: 0.8; font-size: 13px;">
 										<div>
-											<strong>{t("instances-settings-memory-min-label")}</strong>{" "}
+											<strong>
+												{t("instances-settings-memory-min-label")}
+											</strong>{" "}
 											{p.minMemory[0]} MB
 										</div>
 										<div>
-											<strong>{t("instances-settings-memory-max-label")}</strong>{" "}
+											<strong>
+												{t("instances-settings-memory-max-label")}
+											</strong>{" "}
 											{p.maxMemory[0]} MB
 										</div>
 									</div>
@@ -687,7 +693,9 @@ export const SettingsTab = (p: SettingsTabProps) => {
 				<SettingsCard header={t("instances-settings-launcher-action-title")}>
 					<SettingsField
 						label={t("instances-settings-launcher-action-behavior-label")}
-						description={t("instances-settings-launcher-action-behavior-description")}
+						description={t(
+							"instances-settings-launcher-action-behavior-description",
+						)}
 						headerRight={
 							<div style="display: flex; align-items: center; gap: 8px;">
 								<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">

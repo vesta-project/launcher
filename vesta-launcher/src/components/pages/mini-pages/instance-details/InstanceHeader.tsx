@@ -115,7 +115,9 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 							<div class={styles.facts}>
 								<span>
 									{played()
-										? t("instances-details-header-played", { time: played()! })
+										? t("instances-details-header-played", {
+												time: played() ?? "",
+											})
 										: t("instances-details-header-never-played")}
 								</span>
 								<Show when={(props.instance.totalPlaytimeMinutes ?? 0) > 0}>

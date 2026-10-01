@@ -27,12 +27,13 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { t } from "~/localization";
 import {
 	formatLogFileMetadata,
 	getConsoleLogDisplay,
 } from "../console-log-display";
-import { t } from "~/localization";
 import styles from "../instance-details.module.css";
+
 interface ConsoleTabProps {
 	instanceSlug: string;
 	openLogsFolder: () => void;
@@ -239,7 +240,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								onClick={() => consoleStore.goLive(props.instanceSlug)}
 								class={styles["console-back-live"]}
 								aria-label={t("instances-details-console-follow-live-aria")}
-								tooltip_text={t("instances-details-console-follow-live-tooltip")}
+								tooltip_text={t(
+									"instances-details-console-follow-live-tooltip",
+								)}
 							>
 								<LiveIcon />
 								<span>{t("instances-details-console-follow-live")}</span>

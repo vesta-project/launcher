@@ -483,9 +483,12 @@ export function getInstanceOperationLabel(
 	instance: Instance,
 	fallback = t("instances-operation-installing"),
 ): string {
-	if (instance.lastOperation === "update") return t("instances-operation-updating");
-	if (instance.lastOperation === "repair") return t("instances-operation-repairing");
-	if (instance.lastOperation === "hard-reset") return t("instances-operation-resetting");
+	if (instance.lastOperation === "update")
+		return t("instances-operation-updating");
+	if (instance.lastOperation === "repair")
+		return t("instances-operation-repairing");
+	if (instance.lastOperation === "hard-reset")
+		return t("instances-operation-resetting");
 	if (instance.lastOperation === "external-import")
 		return t("instances-operation-importing");
 	return fallback;

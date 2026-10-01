@@ -11,8 +11,8 @@ import { openInstanceTab } from "@utils/launch-intents";
 import { createNotification } from "@utils/notifications";
 import { simulateUpdateProcess } from "@utils/updater";
 import { createSignal, For, onMount, Show } from "solid-js";
-import styles from "../settings-page.module.css";
 import { t } from "~/localization";
+import styles from "../settings-page.module.css";
 import devStyles from "./developer-tab.module.css";
 
 type CrashScenarioInfo = {

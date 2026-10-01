@@ -8,6 +8,7 @@ import {
 	javaOptions,
 	refreshJavas,
 } from "@stores/settings";
+import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
 import {
@@ -18,8 +19,7 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
-import { invoke } from "@tauri-apps/api/core";
-import { createMemo, createSignal, For, Show, type Component } from "solid-js";
+import { type Component, createMemo, createSignal, For, Show } from "solid-js";
 import { t } from "~/localization";
 import pageStyles from "../settings-page.module.css";
 import styles from "./JavaTab.module.css";
@@ -143,13 +143,17 @@ const JavaRuntimeRow: Component<{ option: JavaOption }> = (props) => {
 						{t(SOURCE_MESSAGE_ID[props.option.type])}
 					</span>
 					<Show when={props.option.isActive}>
-						<Badge class={styles.activeBadge}>{t("settings-java-active")}</Badge>
+						<Badge class={styles.activeBadge}>
+							{t("settings-java-active")}
+						</Badge>
 					</Show>
 				</span>
 				<Show
 					when={props.option.path}
 					fallback={
-						<span class={styles.rowMeta}>{t("settings-java-not-installed")}</span>
+						<span class={styles.rowMeta}>
+							{t("settings-java-not-installed")}
+						</span>
 					}
 				>
 					{(path) => <span class={styles.rowPath}>{path()}</span>}
@@ -204,11 +208,8 @@ const JavaVersionGroup: Component<{
 			(option) => option.version === props.requirement.major_version,
 		),
 	);
-	const active = createMemo(
-		(): JavaOption | undefined =>
-			options().find(
-				(option) => option.isActive && option.type !== "browse",
-			),
+	const active = createMemo((): JavaOption | undefined =>
+		options().find((option) => option.isActive && option.type !== "browse"),
 	);
 	const statusText = createMemo(() => {
 		const selected = active();
@@ -220,9 +221,8 @@ const JavaVersionGroup: Component<{
 	const runtimes = createMemo((): JavaOption[] =>
 		options().filter((option) => option.type !== "browse"),
 	);
-	const browse = createMemo(
-		(): JavaOption | undefined =>
-			options().find((option) => option.type === "browse"),
+	const browse = createMemo((): JavaOption | undefined =>
+		options().find((option) => option.type === "browse"),
 	);
 
 	return (
@@ -286,7 +286,9 @@ export function JavaSettingsTab() {
 							class={styles.rescanButton}
 						>
 							<ReloadIcon class={styles.rescanIcon} />
-							{isScanning() ? t("settings-java-scanning") : t("settings-java-rescan")}
+							{isScanning()
+								? t("settings-java-scanning")
+								: t("settings-java-rescan")}
 						</LauncherButton>
 					}
 				>

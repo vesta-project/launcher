@@ -2864,7 +2864,9 @@ export default function InstanceDetails(
 									<p>
 										{t("instances-details-no-data")}{" "}
 										{slug()
-											? t("instances-details-slug-label", { slug: slug()! })
+											? t("instances-details-slug-label", {
+													slug: slug() ?? "",
+												})
 											: t("instances-details-no-slug")}
 									</p>
 									<Button onClick={() => activeRouter()?.navigate("/")}>

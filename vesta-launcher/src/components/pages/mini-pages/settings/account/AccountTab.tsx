@@ -1039,7 +1039,9 @@ export function AccountSettingsTab() {
 							>
 								<ViewIcon width="16" />
 							</TooltipTrigger>
-							<TooltipContent>{t("settings-account-view-raw-texture")}</TooltipContent>
+							<TooltipContent>
+								{t("settings-account-view-raw-texture")}
+							</TooltipContent>
 						</Tooltip>
 						<Show when={isSelected()}>
 							<span class={styles.selectedBadge}>
@@ -1113,7 +1115,11 @@ export function AccountSettingsTab() {
 			<div class={styles.container}>
 				<Show
 					when={Boolean(activeAccount())}
-					fallback={<div class={styles.noAccount}>{t("settings-account-no-account")}</div>}
+					fallback={
+						<div class={styles.noAccount}>
+							{t("settings-account-no-account")}
+						</div>
+					}
 				>
 					<>
 						<Show when={isNarrowLayout()}>
@@ -1139,7 +1145,9 @@ export function AccountSettingsTab() {
 												<Show when={saving()}>
 													<RefreshIcon width="14" class="spin" />
 												</Show>
-												{saving() ? t("settings-account-syncing") : t("settings-account-apply")}
+												{saving()
+													? t("settings-account-syncing")
+													: t("settings-account-apply")}
 											</button>
 										</div>
 									}
@@ -1163,7 +1171,9 @@ export function AccountSettingsTab() {
 										>
 											<ViewIcon width="16" height="16" />
 										</TooltipTrigger>
-										<TooltipContent>{t("settings-account-browse-skins")}</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-browse-skins")}
+										</TooltipContent>
 									</Tooltip>
 
 									<Tooltip>
@@ -1179,7 +1189,9 @@ export function AccountSettingsTab() {
 										>
 											<SkinIcon width="16" height="16" />
 										</TooltipTrigger>
-										<TooltipContent>{t("settings-account-preview")}</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-preview")}
+										</TooltipContent>
 									</Tooltip>
 
 									<Tooltip>
@@ -1192,7 +1204,9 @@ export function AccountSettingsTab() {
 										>
 											<PlusIcon width="16" height="16" />
 										</TooltipTrigger>
-										<TooltipContent>{t("settings-account-upload-custom-skin")}</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-upload-custom-skin")}
+										</TooltipContent>
 									</Tooltip>
 								</div>
 							</div>
@@ -1282,7 +1296,9 @@ export function AccountSettingsTab() {
 																					e.stopPropagation();
 																					setViewerSrc(item.image_data);
 																				}}
-																				aria-label={t("settings-account-view-raw-texture")}
+																				aria-label={t(
+																					"settings-account-view-raw-texture",
+																				)}
 																			>
 																				<ViewIcon width="16" />
 																			</TooltipTrigger>
@@ -1431,7 +1447,9 @@ export function AccountSettingsTab() {
 										>
 											<PlusIcon width="18" />
 										</TooltipTrigger>
-										<TooltipContent>{t("settings-account-upload-custom-skin")}</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-upload-custom-skin")}
+										</TooltipContent>
 									</Tooltip>
 								</Show>
 

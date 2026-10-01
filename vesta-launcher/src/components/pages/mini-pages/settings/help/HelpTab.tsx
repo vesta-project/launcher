@@ -172,7 +172,9 @@ export function HelpSettingsTab(props: { close?: () => void }) {
 									gap: "0.5rem",
 								}}
 							>
-								<span>{version() || t("settings-help-version-placeholder")}</span>
+								<span>
+									{version() || t("settings-help-version-placeholder")}
+								</span>
 								<LauncherButton
 									variant="ghost"
 									size="sm"

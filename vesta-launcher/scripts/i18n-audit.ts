@@ -40,7 +40,9 @@ const PATTERNS: { name: string; regex: RegExp }[] = [
 ];
 
 function isIgnoredPath(relativePath: string): boolean {
-	return relativePath.endsWith(".test.ts") || relativePath.endsWith(".test.tsx");
+	return (
+		relativePath.endsWith(".test.ts") || relativePath.endsWith(".test.tsx")
+	);
 }
 
 async function walk(directory: string): Promise<string[]> {
@@ -79,7 +81,9 @@ async function scanFile(filePath: string) {
 		let match = regex.exec(source);
 		while (match) {
 			const valueOffset = match[0].indexOf(match[1]);
-			const line = source.slice(0, match.index + valueOffset).split("\n").length;
+			const line = source
+				.slice(0, match.index + valueOffset)
+				.split("\n").length;
 			const currentLine = lines[line - 1] ?? "";
 			if (!currentLine.includes('t("') && !currentLine.includes("t('")) {
 				findings.push({ kind: name, text: match[1], line });
@@ -120,7 +124,9 @@ async function main() {
 
 	for (const report of withFindings) {
 		totalFindings += report.findings.length;
-		console.log(`${report.relative} (${report.findings.length} candidates, ${report.tCalls} t())`);
+		console.log(
+			`${report.relative} (${report.findings.length} candidates, ${report.tCalls} t())`,
+		);
 		for (const finding of report.findings.slice(0, 12)) {
 			console.log(`  L${finding.line} [${finding.kind}] ${finding.text}`);
 		}
@@ -133,7 +139,9 @@ async function main() {
 	console.log(
 		`Summary: ${totalFindings} hardcoded string candidates across ${withFindings.length} files`,
 	);
-	console.log("Tip: extract to locales/en/<domain>.ftl and replace with t(\"message-id\").");
+	console.log(
+		'Tip: extract to locales/en/<domain>.ftl and replace with t("message-id").',
+	);
 }
 
 main().catch((error) => {

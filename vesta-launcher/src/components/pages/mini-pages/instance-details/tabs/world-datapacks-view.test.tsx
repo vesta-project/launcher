@@ -4,13 +4,13 @@ import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import type { WorldSummary } from "@stores/worlds";
 import { createSignal } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { applyLanguagePreference, t } from "~/localization";
 import { WorldDatapacksView } from "./WorldDatapacksView";
 import { WorldCard } from "./WorldsTab";
 import {
 	openWorldDatapackBrowser,
 	openWorldDatapackDetails,
 } from "./world-datapack-navigation";
-import { applyLanguagePreference, t } from "~/localization";
 
 const mocks = vi.hoisted(() => ({
 	listWorldDatapacks: vi.fn().mockResolvedValue(undefined),

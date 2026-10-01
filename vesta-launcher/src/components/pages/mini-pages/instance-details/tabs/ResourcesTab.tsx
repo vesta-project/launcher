@@ -38,8 +38,8 @@ import {
 	on,
 	Show,
 } from "solid-js";
-import styles from "../instance-details.module.css";
 import { t } from "~/localization";
+import styles from "../instance-details.module.css";
 
 const FILTER_OPTIONS = [
 	{ id: "All", messageId: "instances-details-resources-filter-all" },
@@ -50,11 +50,14 @@ const FILTER_OPTIONS = [
 
 const getFilterLabel = (id: string) => {
 	const option = FILTER_OPTIONS.find((entry) => entry.id === id);
-	return option ? t(option.messageId) : t("instances-details-resources-filter-all");
+	return option
+		? t(option.messageId)
+		: t("instances-details-resources-filter-all");
 };
 
 const getBundledTypeLabel = (filterId: string) => {
-	if (filterId === "All") return t("instances-details-resources-type-resources");
+	if (filterId === "All")
+		return t("instances-details-resources-type-resources");
 	const option = FILTER_OPTIONS.find((entry) => entry.id === filterId);
 	return option
 		? t(option.messageId).toLowerCase()

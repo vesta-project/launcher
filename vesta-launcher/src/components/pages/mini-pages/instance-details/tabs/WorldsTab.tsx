@@ -478,7 +478,10 @@ export const WorldsTab: Component<{
 		<Show
 			when={selectedWorld()}
 			fallback={
-				<section class={styles.root} aria-label={t("instances-worlds-section-aria")}>
+				<section
+					class={styles.root}
+					aria-label={t("instances-worlds-section-aria")}
+				>
 					<header class={styles.toolbar}>
 						<div class={styles.title}>
 							<h2>{t("instances-worlds-title")}</h2>

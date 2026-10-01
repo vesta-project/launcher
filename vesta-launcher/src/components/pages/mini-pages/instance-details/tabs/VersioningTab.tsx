@@ -214,7 +214,9 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						>
 							<SettingsField
 								label={t("instances-versioning-loader-version-label")}
-								description={t("instances-versioning-loader-version-description")}
+								description={t(
+									"instances-versioning-loader-version-description",
+								)}
 								body={
 									<Show
 										when={!props.mcVersions.loading}
@@ -293,29 +295,31 @@ export const VersioningTab = (props: VersioningTabProps) => {
 				</Show>
 
 				<Show when={inst().modpackId}>
-				<SettingsCard
-					header={t("instances-versioning-connection-title")}
-					subHeader={t("instances-versioning-connection-subheader")}
-				>
-					<Show when={inst().modpackId}>
-						<SettingsField
-							label={t("instances-versioning-unlink-label")}
-							description={t("instances-versioning-unlink-description")}
-							actionLabel={t("instances-versioning-unlink-action")}
-							destructive
-							onAction={props.handleUnlink}
-							disabled={props.busy || props.isInstalling || props.isGuest}
-						/>
-						<SettingsField
-							label={t("instances-versioning-delete-unlink-label")}
-							description={t("instances-versioning-delete-unlink-description")}
-							actionLabel={t("instances-versioning-delete-unlink-action")}
-							destructive
-							onAction={props.handleDeleteModpackAndUnlink}
-							disabled={props.busy || props.isInstalling || props.isGuest}
-						/>
-					</Show>
-				</SettingsCard>
+					<SettingsCard
+						header={t("instances-versioning-connection-title")}
+						subHeader={t("instances-versioning-connection-subheader")}
+					>
+						<Show when={inst().modpackId}>
+							<SettingsField
+								label={t("instances-versioning-unlink-label")}
+								description={t("instances-versioning-unlink-description")}
+								actionLabel={t("instances-versioning-unlink-action")}
+								destructive
+								onAction={props.handleUnlink}
+								disabled={props.busy || props.isInstalling || props.isGuest}
+							/>
+							<SettingsField
+								label={t("instances-versioning-delete-unlink-label")}
+								description={t(
+									"instances-versioning-delete-unlink-description",
+								)}
+								actionLabel={t("instances-versioning-delete-unlink-action")}
+								destructive
+								onAction={props.handleDeleteModpackAndUnlink}
+								disabled={props.busy || props.isInstalling || props.isGuest}
+							/>
+						</Show>
+					</SettingsCard>
 				</Show>
 			</div>
 		</div>
