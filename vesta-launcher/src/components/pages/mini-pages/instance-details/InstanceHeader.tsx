@@ -11,6 +11,7 @@ import Button from "@ui/button/button";
 import { formatRelativeTime } from "@utils/date";
 import { createAnimatedIconPreview } from "@utils/icon-animation";
 import { Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "./InstanceHeader.module.css";
 import type { ReturnTypeOfPrimaryAction } from "./instance-header-types";
 
@@ -42,19 +43,26 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 		const remainingMinutes = minutes % 60;
 		return days > 0
 			? `${days}d ${remainingHours}h total`
-			: `${hours}h ${remainingMinutes}m total`;
+			: t("instances-details-header-playtime-total", {
+					hours,
+					minutes: remainingMinutes,
+				});
 	};
 	const failureSummary = () => {
 		const reason = props.failureReason?.replace(/\s+/g, " ").trim();
-		if (!reason) return "The instance could not be installed.";
+		if (!reason) return t("instances-details-header-install-failed-default");
 		const withoutUrl = reason.replace(
 			/https?:\/\/\S+/g,
-			"the requested resource",
+			t("instances-details-header-requested-resource"),
 		);
 		return withoutUrl.length > 150
 			? `${withoutUrl.slice(0, 147).trimEnd()}…`
 			: withoutUrl;
 	};
+	const pinLabel = () =>
+		props.isPinned
+			? t("instances-details-header-unpin")
+			: t("instances-details-header-pin");
 	return (
 		<>
 			<header
@@ -87,14 +95,17 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 						<div class={styles.meta}>
 							<span>{props.instance.minecraftVersion}</span>
 							<span aria-hidden="true">·</span>
-							<span>{props.instance.modloader || "Vanilla"}</span>
+							<span>
+								{props.instance.modloader ||
+									t("instances-details-modloader-vanilla")}
+							</span>
 							<Show when={props.instance.modpackId}>
 								<button
 									type="button"
 									class={styles.linked}
 									onClick={props.onOpenVersion}
-									title="Manage linked modpack"
-									aria-label="Manage linked modpack"
+									title={t("instances-details-header-manage-modpack")}
+									aria-label={t("instances-details-header-manage-modpack")}
 								>
 									<LinkIcon width="14" height="14" />
 								</button>
@@ -102,7 +113,13 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 						</div>
 						<div class={styles.lower}>
 							<div class={styles.facts}>
-								<span>{played() ? `Played ${played()}` : "Never played"}</span>
+								<span>
+									{played()
+										? t("instances-details-header-played", {
+												time: played() ?? "",
+											})
+										: t("instances-details-header-never-played")}
+								</span>
 								<Show when={(props.instance.totalPlaytimeMinutes ?? 0) > 0}>
 									<span>{playtime()}</span>
 								</Show>
@@ -113,8 +130,8 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 									size="md"
 									icon_only
 									onClick={props.onOpenFolder}
-									title="Open instance folder"
-									aria-label="Open instance folder"
+									title={t("instances-details-header-open-folder")}
+									aria-label={t("instances-details-header-open-folder")}
 								>
 									<FolderIcon width="18" height="18" />
 								</Button>
@@ -123,10 +140,8 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 									size="md"
 									icon_only
 									onClick={props.onTogglePin}
-									title={props.isPinned ? "Unpin instance" : "Pin instance"}
-									aria-label={
-										props.isPinned ? "Unpin instance" : "Pin instance"
-									}
+									title={pinLabel()}
+									aria-label={pinLabel()}
 								>
 									<Show when={props.isPinned} fallback={<PinIcon />}>
 										<PinOffIcon />
@@ -184,18 +199,20 @@ export function InstanceHeader(props: InstanceHeaderProps) {
 						<div class={styles.statusNoticeHeading}>
 							<strong>
 								{props.failureReason
-									? "Installation failed"
-									: "Update recovery required"}
+									? t("instances-installation-failed")
+									: t("instances-details-header-update-recovery")}
 							</strong>
 							<span class={styles.statusNoticeDescription}>
 								{props.failureReason
 									? failureSummary()
-									: "The previous version could not be fully restored"}
+									: t("instances-details-header-update-recovery-description")}
 							</span>
 						</div>
 						<Show when={props.failureReason}>
 							<details class={styles.statusNoticeDetails}>
-								<summary>Show error details</summary>
+								<summary>
+									{t("instances-details-header-show-error-details")}
+								</summary>
 								<code>{props.failureReason}</code>
 							</details>
 						</Show>

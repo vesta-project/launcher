@@ -1,4 +1,4 @@
-﻿import PlusIcon from "@assets/icons/actions/add.svg";
+import PlusIcon from "@assets/icons/actions/add.svg";
 // Assets
 import RefreshIcon from "@assets/icons/actions/refresh.svg";
 import ViewIcon from "@assets/icons/content/search.svg";
@@ -43,6 +43,7 @@ import {
 	Show,
 	Suspense,
 } from "solid-js";
+import { t } from "~/localization";
 import pageStyles from "../settings-page.module.css";
 import styles from "./AccountTab.module.css";
 
@@ -1034,11 +1035,13 @@ export function AccountSettingsTab() {
 									e.stopPropagation();
 									setViewerSrc(preferredTexture);
 								}}
-								aria-label="View raw texture"
+								aria-label={t("settings-account-view-raw-texture")}
 							>
 								<ViewIcon width="16" />
 							</TooltipTrigger>
-							<TooltipContent>View raw texture</TooltipContent>
+							<TooltipContent>
+								{t("settings-account-view-raw-texture")}
+							</TooltipContent>
 						</Tooltip>
 						<Show when={isSelected()}>
 							<span class={styles.selectedBadge}>
@@ -1112,7 +1115,11 @@ export function AccountSettingsTab() {
 			<div class={styles.container}>
 				<Show
 					when={Boolean(activeAccount())}
-					fallback={<div class={styles.noAccount}>No account connected</div>}
+					fallback={
+						<div class={styles.noAccount}>
+							{t("settings-account-no-account")}
+						</div>
+					}
 				>
 					<>
 						<Show when={isNarrowLayout()}>
@@ -1127,7 +1134,7 @@ export function AccountSettingsTab() {
 												disabled={saving()}
 												onClick={revertChanges}
 											>
-												Revert
+												{t("settings-account-revert")}
 											</button>
 											<button
 												type="button"
@@ -1138,7 +1145,9 @@ export function AccountSettingsTab() {
 												<Show when={saving()}>
 													<RefreshIcon width="14" class="spin" />
 												</Show>
-												{saving() ? "Syncing..." : "Apply"}
+												{saving()
+													? t("settings-account-syncing")
+													: t("settings-account-apply")}
 											</button>
 										</div>
 									}
@@ -1158,11 +1167,13 @@ export function AccountSettingsTab() {
 												[styles.active]: narrowView() === "browse",
 											}}
 											onClick={() => setNarrowView("browse")}
-											aria-label="Browse skins"
+											aria-label={t("settings-account-browse-skins")}
 										>
 											<ViewIcon width="16" height="16" />
 										</TooltipTrigger>
-										<TooltipContent>Browse skins</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-browse-skins")}
+										</TooltipContent>
 									</Tooltip>
 
 									<Tooltip>
@@ -1174,11 +1185,13 @@ export function AccountSettingsTab() {
 												[styles.active]: narrowView() === "preview",
 											}}
 											onClick={() => setNarrowView("preview")}
-											aria-label="Preview"
+											aria-label={t("settings-account-preview")}
 										>
 											<SkinIcon width="16" height="16" />
 										</TooltipTrigger>
-										<TooltipContent>Preview</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-preview")}
+										</TooltipContent>
 									</Tooltip>
 
 									<Tooltip>
@@ -1187,11 +1200,13 @@ export function AccountSettingsTab() {
 											type="button"
 											class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
 											onClick={handleUploadSkin}
-											aria-label="Upload custom skin"
+											aria-label={t("settings-account-upload-custom-skin")}
 										>
 											<PlusIcon width="16" height="16" />
 										</TooltipTrigger>
-										<TooltipContent>Upload custom skin</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-upload-custom-skin")}
+										</TooltipContent>
 									</Tooltip>
 								</div>
 							</div>
@@ -1281,7 +1296,9 @@ export function AccountSettingsTab() {
 																					e.stopPropagation();
 																					setViewerSrc(item.image_data);
 																				}}
-																				aria-label="View raw texture"
+																				aria-label={t(
+																					"settings-account-view-raw-texture",
+																				)}
 																			>
 																				<ViewIcon width="16" />
 																			</TooltipTrigger>
@@ -1395,7 +1412,7 @@ export function AccountSettingsTab() {
 											disabled={saving()}
 											onClick={revertChanges}
 										>
-											Revert
+											{t("settings-account-revert")}
 										</button>
 										<button
 											type="button"
@@ -1426,11 +1443,13 @@ export function AccountSettingsTab() {
 											type="button"
 											class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
 											onClick={handleUploadSkin}
-											aria-label="Upload custom skin"
+											aria-label={t("settings-account-upload-custom-skin")}
 										>
 											<PlusIcon width="18" />
 										</TooltipTrigger>
-										<TooltipContent>Upload custom skin</TooltipContent>
+										<TooltipContent>
+											{t("settings-account-upload-custom-skin")}
+										</TooltipContent>
 									</Tooltip>
 								</Show>
 

@@ -49,10 +49,15 @@ import {
 } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
+	findLaunchBehaviorOption,
+	launchBehaviorOptions as getLaunchBehaviorOptions,
+} from "@utils/localized-options";
+import {
 	getManualMemoryLimitMb,
 	getMemoryWarningThresholdMb,
 } from "@utils/memory-policy";
 import { batch, createMemo, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "../instance-details.module.css";
 
 interface SettingsTabProps {
@@ -142,24 +147,15 @@ interface SettingsTabProps {
 
 export const SettingsTab = (p: SettingsTabProps) => {
 	const [sandboxSupport] = useSandboxHostSupport();
-	const launchBehaviorOptions: { label: string; value: string }[] = [
-		{ label: "Stay Open", value: "stay-open" },
-		{ label: "Minimize Window", value: "minimize" },
-		{ label: "Hide To Tray", value: "hide-to-tray" },
-		{ label: "Request Quit", value: "quit" },
-	];
-
+	const launchBehaviorOptions = createMemo(() => getLaunchBehaviorOptions());
 	const currentSelection = createMemo(() => {
 		if (p.useGlobalJavaPath) return "__default__";
 		if (p.isCustomMode) return "__custom__";
 		if (!p.javaPath) return "__default__";
 		return p.javaPath;
 	});
-	const selectedLaunchBehavior = createMemo(
-		() =>
-			launchBehaviorOptions.find(
-				(option) => option.value === p.launcherActionOnLaunch,
-			) || launchBehaviorOptions[0],
+	const selectedLaunchBehavior = createMemo(() =>
+		findLaunchBehaviorOption(p.launcherActionOnLaunch),
 	);
 
 	// Memory Multi-Thumb Logic
@@ -222,12 +218,11 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									p.setIsNameDirty(true);
 								}}
 								disabled={p.isInstalling}
-								placeholder="Instance Name"
+								placeholder={t("instances-settings-name-placeholder")}
 							/>
 						</TextFieldRoot>
 						<p class={styles["metadata-description"]}>
-							Choose an icon and a name for this instance. These will be visible
-							in your library.
+							{t("instances-settings-metadata-description")}
 						</p>
 					</div>
 				</div>
@@ -245,10 +240,11 @@ export const SettingsTab = (p: SettingsTabProps) => {
 						}
 					/>
 				</SettingsCard>
-				<SettingsCard header="Java Configuration">
+
+				<SettingsCard header={t("instances-settings-java-title")}>
 					<SettingsField
-						label="Java Executable"
-						description="The Java runtime used to launch this instance."
+						label={t("instances-settings-java-executable-label")}
+						description={t("instances-settings-java-executable-description")}
 						helpTopic="JAVA_MANAGED"
 					>
 						<div style="display: flex; flex-direction: column; gap: 8px;">
@@ -279,15 +275,18 @@ export const SettingsTab = (p: SettingsTabProps) => {
 										p.invoke("download_managed_java", { version })
 											.then(() => {
 												p.showToast({
-													title: "Download Started",
-													description: `Java ${version} is being downloaded.`,
+													title: t("common-java-download-started"),
+													description: t(
+														"common-java-download-started-description",
+														{ version },
+													),
 													severity: "info",
 												});
 											})
 											.catch(() => {
 												p.showToast({
-													title: "Error",
-													description: "Failed to start Java download.",
+													title: t("common-error"),
+													description: t("common-java-download-failed"),
 													severity: "error",
 												});
 											});
@@ -350,7 +349,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 														.find((o) => o.value === currentSelection())
 														?.description
 												}
-												fallback="No path set"
+												fallback={t("common-java-no-path-set")}
 											>
 												{(desc) => (
 													<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
@@ -377,14 +376,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 													if (path.startsWith("→ ")) path = path.substring(2);
 													navigator.clipboard.writeText(path);
 													p.showToast({
-														title: "Copied",
-														description: "Java path copied to clipboard",
+														title: t("common-copied"),
+														description: t("common-java-path-copied"),
 														severity: "success",
 													});
 												}
 											}}
 										>
-											Copy Full Path
+											{t("common-copy-full-path")}
 										</ContextMenuItem>
 									</ContextMenuContent>
 								</ContextMenu>
@@ -396,7 +395,9 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									<TextFieldRoot style="flex: 1">
 										<TextFieldInput
 											value={p.javaPath}
-											placeholder="Path to java executable"
+											placeholder={t(
+												"instances-settings-java-path-placeholder",
+											)}
 											onInput={(e) => {
 												const val = (e.currentTarget as HTMLInputElement).value;
 												if (val === p.javaPath) return;
@@ -422,7 +423,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											}
 										}}
 									>
-										Browse...
+										{t("common-browse")}
 									</Button>
 								</div>
 							</Show>
@@ -430,12 +431,12 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					</SettingsField>
 
 					<SettingsField
-						label="Java Arguments"
-						description="Custom JVM arguments for this instance."
+						label={t("instances-settings-java-args-label")}
+						description={t("instances-settings-java-args-description")}
 						headerRight={
 							<div style="display: flex; align-items: center; gap: 8px;">
 								<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-									Use Global
+									{t("common-use-global")}
 								</span>
 								<Switch
 									checked={p.useGlobalJavaArgs}
@@ -457,8 +458,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								when={!p.useGlobalJavaArgs}
 								fallback={
 									<div style="padding: 10px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px;">
-										Currently using the Java arguments defined in global
-										settings.
+										{t("settings-using-global-java-args")}
 									</div>
 								}
 							>
@@ -479,12 +479,12 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Memory Management">
+				<SettingsCard header={t("instances-settings-memory-title")}>
 					<SettingsField
-						label="Allocation Range"
-						description={`Set the minimum and maximum RAM for the game. (System Total: ${Math.round(
-							p.totalRam / 1024,
-						)}GB)`}
+						label={t("instances-settings-memory-allocation-label")}
+						description={t("instances-settings-memory-allocation-description", {
+							totalRam: Math.round(p.totalRam / 1024),
+						})}
 						body={
 							<>
 								<div style="margin-bottom: 32px; margin-top: 12px;">
@@ -519,16 +519,22 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									}
 								>
 									<div style="margin-top: -18px; margin-bottom: 16px; opacity: 0.65; font-size: 12px;">
-										This leaves little memory for the system and other apps.
+										{t("instances-settings-memory-low-system-warning")}
 									</div>
 								</Show>
 								<>
 									<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; opacity: 0.8; font-size: 13px;">
 										<div>
-											<strong>Min (-Xms):</strong> {p.minMemory[0]} MB
+											<strong>
+												{t("instances-settings-memory-min-label")}
+											</strong>{" "}
+											{p.minMemory[0]} MB
 										</div>
 										<div>
-											<strong>Max (-Xmx):</strong> {p.maxMemory[0]} MB
+											<strong>
+												{t("instances-settings-memory-max-label")}
+											</strong>{" "}
+											{p.maxMemory[0]} MB
 										</div>
 									</div>
 								</>
@@ -537,14 +543,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Resolution">
+				<SettingsCard header={t("instances-settings-resolution-title")}>
 					<SettingsField
-						label="Game Window"
-						description="Set the initial width and height of the Minecraft window."
+						label={t("instances-settings-resolution-window-label")}
+						description={t("instances-settings-resolution-window-description")}
 						headerRight={
 							<div style="display: flex; align-items: center; gap: 8px;">
 								<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-									Use Global
+									{t("common-use-global")}
 								</span>
 								<Switch
 									checked={p.useGlobalResolution}
@@ -566,7 +572,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								when={!p.useGlobalResolution}
 								fallback={
 									<div style="padding: 10px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px;">
-										Currently using the resolution defined in global settings.
+										{t("settings-using-global-resolution")}
 									</div>
 								}
 							>
@@ -595,7 +601,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 												"margin-bottom": "4px",
 											}}
 										>
-											Width
+											{t("common-width")}
 										</label>
 										<NumberFieldGroup>
 											<NumberFieldInput placeholder="1280" />
@@ -621,7 +627,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 												"margin-bottom": "4px",
 											}}
 										>
-											Height
+											{t("common-height")}
 										</label>
 										<NumberFieldGroup>
 											<NumberFieldInput placeholder="720" />
@@ -635,14 +641,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Environment Variables">
+				<SettingsCard header={t("instances-settings-env-title")}>
 					<SettingsField
-						label="Variables"
-						description="Custom environment variables for the game process. One per line (e.g. KEY=VALUE)."
+						label={t("instances-settings-env-variables-label")}
+						description={t("instances-settings-env-variables-description")}
 						headerRight={
 							<div style="display: flex; align-items: center; gap: 8px;">
 								<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-									Use Global
+									{t("common-use-global")}
 								</span>
 								<Switch
 									checked={p.useGlobalEnvironmentVariables}
@@ -664,8 +670,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								when={!p.useGlobalEnvironmentVariables}
 								fallback={
 									<div style="padding: 10px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px;">
-										Currently using the environment variables defined in global
-										settings.
+										{t("settings-using-global-env")}
 									</div>
 								}
 							>
@@ -685,14 +690,16 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Launcher Action On Game Launch">
+				<SettingsCard header={t("instances-settings-launcher-action-title")}>
 					<SettingsField
-						label="Behavior After Launch"
-						description="Set how the launcher should behave after this instance starts."
+						label={t("instances-settings-launcher-action-behavior-label")}
+						description={t(
+							"instances-settings-launcher-action-behavior-description",
+						)}
 						headerRight={
 							<div style="display: flex; align-items: center; gap: 8px;">
 								<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-									Use Global
+									{t("common-use-global")}
 								</span>
 								<Switch
 									checked={p.useGlobalLauncherAction}
@@ -714,14 +721,13 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								when={!p.useGlobalLauncherAction}
 								fallback={
 									<div style="padding: 10px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px;">
-										Currently using the launcher action defined in global
-										defaults.
+										{t("settings-using-global-launcher-action")}
 									</div>
 								}
 							>
 								{/* SelectContent needs itemComponent to render options; derive value from the same options list to avoid object mismatch bugs. */}
 								<Select
-									options={launchBehaviorOptions}
+									options={launchBehaviorOptions()}
 									optionValue="value"
 									optionTextValue="label"
 									value={selectedLaunchBehavior()}
@@ -747,14 +753,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Life-cycle Hooks">
+				<SettingsCard header={t("instances-settings-hooks-title")}>
 					<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 4px;">
 						<div style="display: flex; flex-direction: column; gap: 2px;">
 							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
-								Use Global Life-cycle Hooks
+								{t("settings-lifecycle-hooks-global-label")}
 							</span>
 							<span style="font-size: 11px; opacity: 0.6;">
-								Link all hooks to the settings defined in your global profile.
+								{t("settings-lifecycle-hooks-global-description")}
 							</span>
 						</div>
 						<Switch
@@ -776,14 +782,13 @@ export const SettingsTab = (p: SettingsTabProps) => {
 						when={!p.useGlobalHooks}
 						fallback={
 							<div style="padding: 12px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px; margin-bottom: 12px;">
-								Currently using the pre-launch, wrapper, and post-exit hooks
-								defined in global settings.
+								{t("settings-using-global-hooks-active")}
 							</div>
 						}
 					>
 						<SettingsField
-							label="Pre-launch Hook"
-							description="Command to run before the game starts. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
+							label={t("instances-settings-pre-launch-label")}
+							description={t("instances-settings-pre-launch-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -800,8 +805,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 						/>
 
 						<SettingsField
-							label="Wrapper Command"
-							description="Execute the game through a wrapper (e.g. mangohud or a debugger). Sandboxed script wrappers must use an absolute shebang interpreter, not /usr/bin/env."
+							label={t("instances-settings-wrapper-label")}
+							description={t("instances-settings-wrapper-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -818,8 +823,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 						/>
 
 						<SettingsField
-							label="Post-exit Hook"
-							description="Command to run after the game closes. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
+							label={t("instances-settings-post-exit-label")}
+							description={t("instances-settings-post-exit-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput

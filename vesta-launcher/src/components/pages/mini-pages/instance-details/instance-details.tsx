@@ -144,6 +144,7 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
+import { t } from "~/localization";
 import { InstanceHeader } from "./InstanceHeader";
 import styles from "./instance-details.module.css";
 import {
@@ -207,14 +208,14 @@ const instanceTabLoaders: Partial<Record<TabType, () => Promise<unknown>>> = {
 	versioning: VersioningTabModule.preload,
 };
 
-function InstanceTabLoading(props: { label: string }) {
+function InstanceTabLoading(props: { tabLabel: string }) {
 	return (
 		<div class={styles["instance-tab-loading"]} aria-live="polite">
 			<span
 				class={styles["instance-tab-loading__spinner"]}
 				data-essential-motion
 			/>
-			<span>Loading {props.label}…</span>
+			<span>{t("instances-details-tab-loading", { tab: props.tabLabel })}</span>
 		</div>
 	);
 }
@@ -2753,17 +2754,21 @@ export default function InstanceDetails(
 	// Handle tab changes - use updateQuery for stable state preservation
 	const instanceTabs = createMemo(() => {
 		const tabs: PageSidebarTab[] = [
-			{ value: "home", label: "Overview" },
-			{ value: "resources", label: "Resources" },
-			{ value: "worlds", label: "Worlds" },
-			{ value: "console", label: "Console" },
+			{ value: "home", label: t("instances-details-tab-overview") },
+			{ value: "resources", label: t("instances-details-tab-resources") },
+			{ value: "worlds", label: t("instances-details-tab-worlds") },
+			{ value: "console", label: t("instances-details-tab-console") },
 		];
 		if (currentCrash()) {
-			tabs.push({ value: "crash", label: "Crash", variant: "error" as const });
+			tabs.push({
+				value: "crash",
+				label: t("instances-details-tab-crash"),
+				variant: "error" as const,
+			});
 		}
 		tabs.push(
-			{ value: "versioning", label: "Version" },
-			{ value: "settings", label: "Settings" },
+			{ value: "versioning", label: t("instances-details-tab-version") },
+			{ value: "settings", label: t("instances-details-tab-settings") },
 		);
 		return tabs;
 	});
@@ -2843,7 +2848,11 @@ export default function InstanceDetails(
 					</Show>
 					<Show when={instance.error}>
 						<div class={styles["instance-error"]}>
-							<p>Failed to load instance: {String(instance.error)}</p>
+							<p>
+								{t("instances-details-load-error", {
+									error: String(instance.error),
+								})}
+							</p>
 						</div>
 					</Show>
 
@@ -2853,11 +2862,15 @@ export default function InstanceDetails(
 							<Show when={!instance.loading}>
 								<div class={styles["instance-error"]}>
 									<p>
-										No instance data available.{" "}
-										{slug() ? `(Slug: ${slug()})` : "No slug provided."}
+										{t("instances-details-no-data")}{" "}
+										{slug()
+											? t("instances-details-slug-label", {
+													slug: slug() ?? "",
+												})
+											: t("instances-details-no-slug")}
 									</p>
 									<Button onClick={() => activeRouter()?.navigate("/")}>
-										Back to Home
+										{t("instances-details-back-home")}
 									</Button>
 								</div>
 							</Show>
@@ -2920,7 +2933,11 @@ export default function InstanceDetails(
 											</Show>
 											<Show when={instance.latest}>
 												<Suspense
-													fallback={<InstanceTabLoading label="console" />}
+													fallback={
+														<InstanceTabLoading
+															tabLabel={t("instances-details-tab-console")}
+														/>
+													}
 												>
 													<ConsoleTab
 														instanceSlug={slug()}
@@ -2939,7 +2956,11 @@ export default function InstanceDetails(
 											}
 										>
 											<Suspense
-												fallback={<InstanceTabLoading label="resources" />}
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-resources")}
+													/>
+												}
 											>
 												<ResourcesTab
 													instance={inst()}
@@ -2987,7 +3008,11 @@ export default function InstanceDetails(
 											}
 										>
 											<Suspense
-												fallback={<InstanceTabLoading label="worlds" />}
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-worlds")}
+													/>
+												}
 											>
 												<WorldsTab
 													instance={inst()}
@@ -3027,7 +3052,11 @@ export default function InstanceDetails(
 											}
 										>
 											<Suspense
-												fallback={<InstanceTabLoading label="crash report" />}
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-crash")}
+													/>
+												}
 											>
 												<CrashTab
 													instanceSlug={slug()}
@@ -3056,7 +3085,11 @@ export default function InstanceDetails(
 											}
 										>
 											<Suspense
-												fallback={<InstanceTabLoading label="version tools" />}
+												fallback={
+													<InstanceTabLoading
+														tabLabel={t("instances-details-tab-version")}
+													/>
+												}
 											>
 												<VersioningTab
 													instance={inst()}
@@ -3124,7 +3157,9 @@ export default function InstanceDetails(
 											<Show when={instance.latest}>
 												<Suspense
 													fallback={
-														<InstanceTabLoading label="instance settings" />
+														<InstanceTabLoading
+															tabLabel={t("instances-details-tab-settings")}
+														/>
 													}
 												>
 													<SettingsTab

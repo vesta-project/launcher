@@ -11,6 +11,7 @@ import { openInstanceTab } from "@utils/launch-intents";
 import { createNotification } from "@utils/notifications";
 import { simulateUpdateProcess } from "@utils/updater";
 import { createSignal, For, onMount, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "../settings-page.module.css";
 import devStyles from "./developer-tab.module.css";
 
@@ -304,7 +305,7 @@ export function DeveloperSettingsTab() {
 					/>
 				</SettingsCard>
 
-				<SettingsCard header="Account Testing">
+				<SettingsCard header={t("settings-developer-account-testing-title")}>
 					<SettingsField
 						label="Add Demo Account"
 						description="Add a temporary demo account that is removed on restart"

@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { createResource, For, Show } from "solid-js";
+import { t } from "~/localization";
 import styles from "../settings-page.module.css";
 
 export const NotificationSettingsTab = () => {
@@ -69,17 +70,20 @@ export const NotificationSettingsTab = () => {
 					}}
 				/>
 				<span style={{ "font-size": "13px", "font-weight": "500" }}>
-					Notification subscriptions are currently in preview. Additional
-					sources and filtering options are being added.
+					{t("settings-notifications-preview-banner")}
 				</span>
 			</div>
 
 			<div class={panelStyles["settings-panel"]}>
-				<SettingsCard header="Subscription Sources">
+				<SettingsCard
+					header={t("settings-notifications-subscription-sources-title")}
+				>
 					<div class={styles["subscriptions-list"]}>
 						<For
 							each={subscriptions()}
-							fallback={<div>No subscriptions found.</div>}
+							fallback={
+								<div>{t("settings-notifications-no-subscriptions")}</div>
+							}
 						>
 							{(sub) => (
 								<div class={styles["subscription-item"]}>
@@ -95,7 +99,7 @@ export const NotificationSettingsTab = () => {
 														"margin-left": "8px",
 													}}
 												>
-													(Filtered)
+													{t("settings-notifications-filtered")}
 												</span>
 											)}
 										</div>
@@ -122,7 +126,7 @@ export const NotificationSettingsTab = () => {
 												size="sm"
 												onClick={() => deleteSub(sub.id)}
 											>
-												Remove
+												{t("settings-notifications-remove")}
 											</Button>
 										</Show>
 									</div>
@@ -132,18 +136,21 @@ export const NotificationSettingsTab = () => {
 					</div>
 				</SettingsCard>
 
-				<SettingsCard header="Official Sources & Presets">
+				<SettingsCard
+					header={t("settings-notifications-official-sources-title")}
+				>
 					<p
 						class={styles["settings-field-description"]}
 						style={{ "margin-bottom": "1rem" }}
 					>
-						Quickly subscribe to official news, patch notes, and modloader
-						releases.
+						{t("settings-notifications-official-sources-description")}
 					</p>
 					<div style={{ display: "flex", gap: "8px", "flex-wrap": "wrap" }}>
 						<For
 							each={availableSources()}
-							fallback={<div>Loading available sources...</div>}
+							fallback={
+								<div>{t("settings-notifications-loading-sources")}</div>
+							}
 						>
 							{(source) => {
 								// Check if already subscribed
@@ -161,7 +168,9 @@ export const NotificationSettingsTab = () => {
 										onClick={() => subscribeToSource(source)}
 									>
 										{isSubscribed
-											? `Subscribed to ${source.title}`
+											? t("settings-notifications-subscribed-to", {
+													title: source.title,
+												})
 											: source.title}
 									</Button>
 								);
@@ -170,14 +179,16 @@ export const NotificationSettingsTab = () => {
 					</div>
 				</SettingsCard>
 
-				<SettingsCard header="Manual Action">
+				<SettingsCard header={t("settings-notifications-manual-action-title")}>
 					<p
 						class={styles["settings-field-description"]}
 						style={{ "margin-bottom": "1rem" }}
 					>
-						Manually trigger a check for all subscribed update sources.
+						{t("settings-notifications-manual-action-description")}
 					</p>
-					<Button onClick={checkNow}>Check for Updates Now</Button>
+					<Button onClick={checkNow}>
+						{t("settings-notifications-check-now")}
+					</Button>
 				</SettingsCard>
 			</div>
 		</div>
