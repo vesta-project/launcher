@@ -37,6 +37,7 @@
 		"@tauri-apps/plugin-shell": "^2.3.5",
 		"@tauri-apps/plugin-updater": "^2.10.0",
 		"@tauri-controls-v2/solid": "^0.4.4",
+		"@thisbeyond/solid-dnd": "^0.7.5",
 		"chroma-js": "^3.2.0",
 		"embla-carousel-solid": "^8.6.0",
 		"marked": "^18.0.0",

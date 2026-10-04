@@ -12,6 +12,7 @@
 }
 
 .main-menu {
+	position: relative;
 	grid-column: 2 / 3;
 	grid-row: 2 / 3;
 	padding: 16px;
@@ -19,12 +20,14 @@
 	width: 100%;
 	overflow: hidden;
 
-	& > .instance-wrapper {
+	& .instance-wrapper {
+		position: relative;
 		height: 100%;
 		background: hsl(0deg 0% 30% / 20%);
 		border-radius: 7px;
 		overflow: hidden auto;
 		scroll-behavior: auto;
+		scrollbar-gutter: stable;
 		display: flex;
 
 		& > .instance-container {
@@ -43,6 +46,12 @@
 	}
 }
 
+.library-frame {
+	position: relative;
+	height: 100%;
+	width: 100%;
+}
+
 .home__root--intro-no-sidebar {
 	grid-template-columns: 0px 1fr;
 
@@ -59,7 +68,10 @@
 	padding: 12px;
 }
 
-[data-ui-chrome-enabled="false"] .main-menu > .instance-wrapper {
+[data-ui-chrome-enabled="false"]
+	.main-menu
+	> .library-frame
+	> .instance-wrapper {
 	box-shadow:
 		inset 0 0 0 1px hsl(0deg 0% 100% / 6%),
 		inset 0 2px 6px hsl(0deg 0% 0% / 12%);

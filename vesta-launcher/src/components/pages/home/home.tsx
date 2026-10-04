@@ -7,7 +7,11 @@ import {
 	setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
 import FlatNavigationControls from "@components/pages/home/flat-navigation-controls/flat-navigation-controls";
-import InstanceCard from "@components/pages/home/instance-card/instance-card";
+import {
+	LibraryBackgroundMenu,
+	LibraryDoneButton,
+} from "@components/pages/home/library-organizer/library-menu";
+import LibraryOrganizer from "@components/pages/home/library-organizer/library-organizer";
 import {
 	homeIntroShowDemoCards,
 	homeIntroSidebarVisible,
@@ -21,6 +25,12 @@ import {
 	instancesLoading,
 	instances as instancesStore,
 } from "@stores/instances";
+import {
+	initializeLibraryLayout,
+	libraryLayoutLoaded,
+	librarySaveError,
+	reconcileLibraryGroups,
+} from "@stores/library-layout";
 import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { Skeleton } from "@ui/skeleton/skeleton";
@@ -36,7 +46,6 @@ import {
 	createEffect,
 	createMemo,
 	createSignal,
-	For,
 	onCleanup,
 	onMount,
 	Show,
@@ -117,6 +126,7 @@ function HomePage() {
 		ensureLibrarySlot();
 
 		void initializePinning();
+		void initializeLibraryLayout();
 
 		if (!instancesInitialized()) {
 			void initializeInstances().catch((error) => {
@@ -224,6 +234,17 @@ function HomePage() {
 }
 
 function MainMenu() {
+	createEffect(() => {
+		if (
+			!libraryLayoutLoaded() ||
+			!instancesInitialized() ||
+			instancesLoading() ||
+			instancesError()
+		)
+			return;
+		const ids = instancesStore().map((instance) => instance.id);
+		untrack(() => reconcileLibraryGroups(ids));
+	});
 	const InstanceCardSkeleton = () => (
 		<div
 			class={"instance-card"}
@@ -260,38 +281,47 @@ function MainMenu() {
 
 	return (
 		<div class={styles["main-menu"]}>
-			<div class={styles["instance-wrapper"]}>
-				<div class={styles["instance-container"]}>
-					<Show when={instancesLoading() && instancesStore().length === 0}>
-						<>
-							{Array.from({ length: 8 }).map(() => (
-								<InstanceCardSkeleton />
-							))}
-						</>
-					</Show>
-					<Show when={instancesError()}>
-						<p style={{ color: "#ff4444", padding: "20px" }}>
-							Failed to load instances: {String(instancesError())}
-						</p>
-					</Show>
-					<Show
-						when={
-							!instancesLoading() &&
-							instancesStore().length === 0 &&
-							!homeIntroShowDemoCards()
-						}
-					>
-						<p style={{ color: "#888", padding: "20px" }}>
-							No instances found. Create one to get started!
-						</p>
-					</Show>
-					<For each={instancesStore()}>
-						{(instance) => <InstanceCard instance={instance} />}
-					</For>
-					<Show when={homeIntroShowDemoCards()}>
-						<DemoInstanceCards />
-					</Show>
-				</div>
+			<div class={styles["library-frame"]}>
+				<LibraryDoneButton />
+				<LibraryBackgroundMenu class={styles["instance-wrapper"]}>
+					<div class={styles["instance-container"]}>
+						<Show when={instancesLoading() && instancesStore().length === 0}>
+							<>
+								{Array.from({ length: 8 }).map(() => (
+									<InstanceCardSkeleton />
+								))}
+							</>
+						</Show>
+						<Show when={instancesError()}>
+							<p style={{ color: "#ff4444", padding: "20px" }}>
+								Failed to load instances: {String(instancesError())}
+							</p>
+						</Show>
+						<Show
+							when={
+								!instancesLoading() &&
+								instancesStore().length === 0 &&
+								!homeIntroShowDemoCards()
+							}
+						>
+							<p style={{ color: "#888", padding: "20px" }}>
+								No instances found. Create one to get started!
+							</p>
+						</Show>
+						{/* If the saved layout can't be read, show the default order rather than nothing. */}
+						<Show
+							when={
+								instancesStore().length > 0 &&
+								(libraryLayoutLoaded() || librarySaveError())
+							}
+						>
+							<LibraryOrganizer />
+						</Show>
+						<Show when={homeIntroShowDemoCards()}>
+							<DemoInstanceCards />
+						</Show>
+					</div>
+				</LibraryBackgroundMenu>
 			</div>
 		</div>
 	);

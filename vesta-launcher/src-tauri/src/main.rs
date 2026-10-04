@@ -157,6 +157,8 @@ fn main() {
             commands::keybindings::set_keybinding,
             commands::keybindings::clear_keybinding,
             commands::keybindings::reset_keybinding,
+            commands::library_layout::get_library_layout,
+            commands::library_layout::set_library_layout,
             settings_sync::get_settings_sync,
             settings_sync::save_settings_sync,
             settings_sync::servers::add_synced_server,

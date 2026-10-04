@@ -31,7 +31,7 @@ export function isAnimatedIconSource(source?: string | null) {
 	);
 }
 
-function createPosterFrame(source: string) {
+export function createIconPosterFrame(source: string) {
 	const cached = posterCache.get(source);
 	if (cached) return cached;
 
@@ -90,7 +90,7 @@ export function createAnimatedIconPreview(
 
 		if (!current || !isAnimatedIconSource(current)) return;
 
-		createPosterFrame(current).then((poster) => {
+		createIconPosterFrame(current).then((poster) => {
 			if (!cancelled) setPosterFrame(poster);
 		});
 

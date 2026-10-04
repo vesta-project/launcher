@@ -4,6 +4,7 @@ pub mod github;
 pub mod instances;
 pub mod keybindings;
 pub mod launcher_imports;
+pub mod library_layout;
 pub mod modpacks;
 pub mod notifications;
 pub mod onboarding;

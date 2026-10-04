@@ -13,6 +13,7 @@ import {
 	openStandaloneMiniPage,
 	preloadMiniPage,
 } from "@components/page-viewer/standalone-launcher";
+import { LibraryMenuItems } from "@components/pages/home/library-organizer/library-menu";
 import {
 	clearRunning,
 	instancesState,
@@ -87,6 +88,7 @@ import styles from "./instance-card.module.css";
 
 interface InstanceCardProps {
 	instance: Instance;
+	onNavigate?: () => void;
 }
 
 export default function InstanceCard(props: InstanceCardProps) {
@@ -313,6 +315,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 			openCrashDetails();
 			return;
 		}
+		props.onNavigate?.();
 		openMiniPage(
 			"/instance",
 			{ slug: instanceSlug() },
@@ -321,10 +324,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 	};
 
 	const openCrashDetails = () => {
+		props.onNavigate?.();
 		openInstanceTab(instanceSlug(), "crash");
 	};
 
 	const openInstanceDetailsStandalone = () => {
+		props.onNavigate?.();
 		void openStandaloneMiniPage(
 			"/instance",
 			{ slug: instanceSlug() },
@@ -333,6 +338,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	};
 
 	const openAddContent = () => {
+		props.onNavigate?.();
 		openMiniPage("/resources", { selectedInstanceId: props.instance.id });
 	};
 
@@ -729,6 +735,15 @@ export default function InstanceCard(props: InstanceCardProps) {
 									<span>Fake Crash</span>
 								</ContextMenuItem>
 							</Show>
+						</ContextMenuSubContent>
+					</ContextMenuSub>
+
+					<ContextMenuSub>
+						<ContextMenuSubTrigger>
+							<span>Library</span>
+						</ContextMenuSubTrigger>
+						<ContextMenuSubContent>
+							<LibraryMenuItems />
 						</ContextMenuSubContent>
 					</ContextMenuSub>
 
