@@ -7,7 +7,7 @@ version = "0.1.0-alpha.31"
 authors = ["Eatham532"]
 edition = "2021"
 description = "A Minecraft launcher built with Tauri and SolidJS"
-license = "MIT"
+license = "GPL-3.0-or-later"
 
 [profile.release]
 panic = "abort"
