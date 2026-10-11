@@ -183,3 +183,7 @@ dist
 **/target/**
 vesta-launcher/src-tauri/binaries/
 .skin-packs-cache/
+
+# Local AI-tool and audit output (not project source)
+.codex-audit/
+.cursor/hooks/
