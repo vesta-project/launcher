@@ -18,6 +18,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getActiveAccount } from "@utils/auth";
 import { invalidateSandboxHostSupportCache } from "@utils/sandbox-host";
+import { t } from "~/localization";
 
 export const DEMO_INSTANCE_ID = -1;
 export const DEMO_INSTANCE_SLUG = "vesta-explorer-demo";
@@ -468,10 +469,10 @@ export function getInstanceInstallationFailureReason(
 ): string | null {
 	if (!isInstanceInstallationFailed(instance)) return null;
 	const status = instance.installationStatus;
-	if (!status?.startsWith("failed:")) return "Installation failed";
+	if (!status?.startsWith("failed:")) return t("instances-installation-failed");
 
 	const reason = status.slice("failed:".length).trim();
-	return reason || "Installation failed";
+	return reason || t("instances-installation-failed");
 }
 
 export function needsInstanceInstallation(instance: Instance): boolean {
@@ -480,12 +481,16 @@ export function needsInstanceInstallation(instance: Instance): boolean {
 
 export function getInstanceOperationLabel(
 	instance: Instance,
-	fallback = "Installing",
+	fallback = t("instances-operation-installing"),
 ): string {
-	if (instance.lastOperation === "update") return "Updating";
-	if (instance.lastOperation === "repair") return "Repairing";
-	if (instance.lastOperation === "hard-reset") return "Resetting";
-	if (instance.lastOperation === "external-import") return "Importing";
+	if (instance.lastOperation === "update")
+		return t("instances-operation-updating");
+	if (instance.lastOperation === "repair")
+		return t("instances-operation-repairing");
+	if (instance.lastOperation === "hard-reset")
+		return t("instances-operation-resetting");
+	if (instance.lastOperation === "external-import")
+		return t("instances-operation-importing");
 	return fallback;
 }
 

@@ -50,6 +50,7 @@ import {
 	getGeneratedMemoryLimitMb,
 	MAX_GENERATED_MEMORY_MB,
 } from "@utils/memory-policy";
+import { t } from "~/localization";
 import styles from "../settings-page.module.css";
 
 export function InstanceDefaultsTab() {
@@ -334,15 +335,15 @@ export function InstanceDefaultsTab() {
 				</SettingsCard>
 
 				<SettingsCard
-					header="Lifecycle Hooks"
-					subHeader="Commands to run at different stages of the instance lifecycle."
+					header={t("settings-defaults-hooks-title")}
+					subHeader={t("settings-defaults-hooks-subheader")}
 				>
 					<div
 						style={{ display: "flex", "flex-direction": "column", gap: "16px" }}
 					>
 						<SettingsField
-							label="Pre-launch Command"
-							description="Runs before the game starts. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
+							label={t("settings-defaults-pre-launch-label")}
+							description={t("settings-defaults-pre-launch-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -360,8 +361,8 @@ export function InstanceDefaultsTab() {
 						/>
 						<Separator />
 						<SettingsField
-							label="Wrapper Command"
-							description="Wraps the Java process (e.g. mangohud, optirun). Sandboxed script wrappers must use an absolute shebang interpreter, not /usr/bin/env."
+							label={t("settings-defaults-wrapper-label")}
+							description={t("settings-defaults-wrapper-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput
@@ -379,8 +380,8 @@ export function InstanceDefaultsTab() {
 						/>
 						<Separator />
 						<SettingsField
-							label="Post-exit Command"
-							description="Runs after the game process terminates. Under Modded or Paranoid, shell built-ins work but other programs remain blocked by the sandbox executable allowlist."
+							label={t("settings-defaults-post-exit-label")}
+							description={t("settings-defaults-post-exit-description")}
 							body={
 								<TextFieldRoot>
 									<TextFieldInput

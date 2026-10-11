@@ -3,7 +3,19 @@
 import { ResourcesTab } from "@components/pages/mini-pages/instance-details/tabs/ResourcesTab";
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { applyLanguagePreference, t } from "~/localization";
+
+function bundledResourcesLabel(count: number) {
+	return t("instances-details-resources-bundled-count", {
+		count,
+		type: t("instances-details-resources-type-resources"),
+	});
+}
+
+beforeEach(() => {
+	applyLanguagePreference("en");
+});
 
 vi.mock("@assets/icons/actions/reload.svg", () => ({
 	default: (props: any) => <svg data-testid="reload-icon" {...props} />,
@@ -188,7 +200,7 @@ describe("ResourcesTab virtualized modpack rows", () => {
 		expect(screen.getByText("Custom One")).toBeTruthy();
 		expect(screen.queryByText("Bundled One")).toBeNull();
 
-		const groupRow = screen.getByText("1 bundled resources").closest("tr");
+		const groupRow = screen.getByText(bundledResourcesLabel(1)).closest("tr");
 		if (!groupRow) throw new Error("expected bundled resource group row");
 		await fireEvent.click(groupRow);
 
@@ -275,7 +287,7 @@ describe("ResourcesTab virtualized modpack rows", () => {
 		expect(screen.getByText("Bundled Two")).toBeTruthy();
 		expect(
 			screen
-				.getByText("2 bundled resources")
+				.getByText(bundledResourcesLabel(2))
 				.closest("tr")
 				?.getAttribute("aria-expanded"),
 		).toBe("true");
@@ -432,7 +444,7 @@ describe("ResourcesTab virtualized modpack rows", () => {
 				);
 				expect(spacerHeight).toBeGreaterThan(1_000);
 			});
-			expect(screen.getByText("200 bundled resources")).toBeTruthy();
+			expect(screen.getByText(bundledResourcesLabel(200))).toBeTruthy();
 			expect(document.querySelectorAll("tbody tr").length).toBeLessThan(80);
 
 			scrollContainer.scrollTop = 49 * 80;
@@ -632,12 +644,12 @@ describe("ResourcesTab virtualized modpack rows", () => {
 
 		try {
 			render(() => <Harness />);
-			await screen.findByText("500 bundled resources");
+			await screen.findByText(bundledResourcesLabel(500));
 			await fireEvent.click(screen.getByText("Expand test group"));
 			await waitFor(() =>
 				expect(
 					screen
-						.getByText("500 bundled resources")
+						.getByText(bundledResourcesLabel(500))
 						.closest("tr")
 						?.getAttribute("aria-expanded"),
 				).toBe("true"),
