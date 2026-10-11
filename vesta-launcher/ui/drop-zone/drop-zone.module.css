@@ -22,6 +22,13 @@
 	border-radius: inherit; /* Pulse takes the shape of the component */
 }
 
+/* Applied when a drag is over the zone but nothing in it is accepted. Static, no pulse. */
+.drop-zone--rejected {
+	outline: 2px dashed hsl(var(--color__error-hue) 55% 50% / 0.7) !important;
+	outline-offset: -2px !important;
+	background-color: hsl(var(--color__error-hue) 55% 50% / 0.05) !important;
+}
+
 @keyframes pulse {
 	0%,
 	100% {

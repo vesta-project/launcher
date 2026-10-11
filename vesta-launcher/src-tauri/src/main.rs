@@ -201,6 +201,7 @@ fn main() {
             commands::app::get_window_effect_capabilities,
             commands::app::set_window_effect,
             utils::db::get_db_status,
+            commands::file_drop::classify_dropped_paths,
             utils::file_drop::create_file_drop_overlay,
             utils::file_drop::position_overlay,
             commands::pinning::get_pinned_pages,

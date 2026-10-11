@@ -1,4 +1,5 @@
 pub mod app;
+pub mod file_drop;
 pub mod game_options;
 pub mod github;
 pub mod instances;

@@ -27,6 +27,8 @@ import {
 } from "@utils/config-sync";
 import { subscribeToCrashEvents } from "@utils/crash-handler";
 import { cleanupFileDropSystem, getDropZoneManager } from "@utils/file-drop";
+import { startNativeFileDrop } from "@utils/file-drop/native-bridge";
+import { initializeNativeDropProbe } from "@utils/file-drop/native-probe";
 import {
 	handleDeepLink,
 	handleQueuedIntents,
@@ -78,6 +80,12 @@ function Root(props: ChildrenProp) {
 	let unlistenNavigate: UnlistenFn | null = null;
 
 	let hasCheckedForUpdatesOnStartup = false;
+
+	// Stage 0 diagnostics only (debug builds with VESTA_NATIVE_FILE_DROP_PROBE=1).
+	// A no-op everywhere else.
+	const disposeNativeDropProbe = initializeNativeDropProbe();
+	// Routes native OS drops to registered DropZones. Same opt-in flag as the probe.
+	const disposeNativeFileDrop = startNativeFileDrop();
 
 	// Global window-level drag events to manage the sniffer
 	const manager = getDropZoneManager();
@@ -455,6 +463,8 @@ function Root(props: ChildrenProp) {
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
 		cleanupFileDropSystem();
+		disposeNativeDropProbe();
+		disposeNativeFileDrop();
 
 		window.removeEventListener("dragenter", handleWindowDragEnter);
 		window.removeEventListener("dragover", handleWindowDragOver);

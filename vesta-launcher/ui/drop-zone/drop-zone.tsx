@@ -1,7 +1,12 @@
-import { getDropZoneManager } from "@utils/file-drop";
+import {
+	type DropAccept,
+	type DropZoneRegistration,
+	type DropZoneState,
+	type RejectedDropItem,
+} from "@utils/file-drop/drop-controller";
+import { getDropController } from "@utils/file-drop/native-bridge";
 import {
 	children as accessChildren,
-	createEffect,
 	type JSX,
 	onCleanup,
 	onMount,
@@ -11,113 +16,88 @@ import styles from "./drop-zone.module.css";
 export interface DropZoneProps {
 	onFileDrop: (files: string[]) => void;
 	children: JSX.Element;
-	accept?: "files" | "folders" | "all"; // Type of drops to accept
+	accept?: DropAccept; // Type of drops to accept
 	allowedExtensions?: string[]; // e.g. [".png", ".jpg", ".zip"]
+	disabled?: boolean; // Disabled zones are never highlighted or delivered to
+	onFilesRejected?: (items: RejectedDropItem[]) => void;
 }
 
+let zoneCounter = 0;
+
+/**
+ * Drop target for native file drops. Drops arrive through the native bridge
+ * (utils/file-drop/native-bridge), and the shared controller routes them here.
+ *
+ * DOM dragenter/dragover/drop handling is deliberately absent, so a drop is never
+ * processed twice.
+ *
+ * Known limitation: there is no browser-dev fallback. Outside the Tauri desktop
+ * build, or when the bridge is not running, this zone never receives drops.
+ */
 export function DropZone(props: DropZoneProps) {
 	const resolved = accessChildren(() => props.children);
+	const id = `drop-zone-${++zoneCounter}`;
+	let appliedElement: HTMLElement | null = null;
+	let unregister: (() => void) | undefined;
 
-	let childElement: HTMLElement | undefined;
-	const manager = getDropZoneManager();
-	let dragCounter = 0;
-
-	createEffect(() => {
+	const resolveElement = (): HTMLElement | null => {
 		const child = resolved();
 		if (child instanceof HTMLElement) {
-			childElement = child;
-		} else if (Array.isArray(child) && child[0] instanceof HTMLElement) {
-			childElement = child[0];
+			return child;
 		}
-	});
+		if (Array.isArray(child) && child[0] instanceof HTMLElement) {
+			return child[0];
+		}
+		return null;
+	};
+
+	const clearState = (element: HTMLElement) => {
+		element.classList.remove(
+			styles["drop-zone--active"],
+			styles["drop-zone--rejected"],
+		);
+		element.removeAttribute("data-drop-state");
+	};
+
+	const applyState = (state: DropZoneState) => {
+		const next = state === "idle" ? null : resolveElement();
+		if (appliedElement && appliedElement !== next) {
+			clearState(appliedElement);
+		}
+		if (next) {
+			next.classList.toggle(styles["drop-zone--active"], state === "active");
+			next.classList.toggle(
+				styles["drop-zone--rejected"],
+				state === "rejected",
+			);
+			next.setAttribute("data-drop-state", state);
+		}
+		appliedElement = next;
+	};
 
 	onMount(() => {
-		if (!childElement) {
+		if (!resolveElement()) {
 			console.error("DropZone: No valid HTML element found as child");
-			return;
 		}
 
-		const element = childElement;
-
-		const handleDragEnter = (e: DragEvent) => {
-			e.preventDefault();
-			dragCounter++;
-
-			if (dragCounter === 1) {
-				// Only highlight if we ALREADY have sniffed paths
-				const paths = manager.getSniffedPaths();
-				const filtered = manager.filterPaths(paths, props);
-
-				if (paths.length > 0 && filtered.length > 0) {
-					element.classList.add(styles["drop-zone--active"]);
-				}
-
-				manager.setIsDragActive(true);
-			}
+		// Accessors read the current props on every call, so prop changes apply to the next drag.
+		const registration: DropZoneRegistration = {
+			id,
+			getElement: resolveElement,
+			getAccept: () => props.accept ?? "all",
+			getAllowedExtensions: () => props.allowedExtensions ?? [],
+			isDisabled: () => props.disabled === true,
+			onFileDrop: (files) => props.onFileDrop(files),
+			onRejected: (items) => props.onFilesRejected?.(items),
+			onStateChange: applyState,
 		};
+		unregister = getDropController().register(registration);
+	});
 
-		const handleDragOver = (e: DragEvent) => {
-			e.preventDefault();
-
-			if (e.dataTransfer) {
-				const paths = manager.getSniffedPaths();
-				const filtered = manager.filterPaths(paths, props);
-
-				// Only show "copy" cursor and highlight if we have matching paths
-				if (paths.length > 0 && filtered.length > 0) {
-					e.dataTransfer.dropEffect = "copy";
-					if (!element.classList.contains(styles["drop-zone--active"])) {
-						element.classList.add(styles["drop-zone--active"]);
-					}
-				} else {
-					e.dataTransfer.dropEffect = "none";
-					element.classList.remove(styles["drop-zone--active"]);
-				}
-			}
-		};
-
-		const handleDragLeave = (e: DragEvent) => {
-			e.preventDefault();
-			dragCounter--;
-			if (dragCounter <= 0) {
-				dragCounter = 0;
-				element.classList.remove(styles["drop-zone--active"]);
-			}
-		};
-
-		const handleDrop = (e: DragEvent) => {
-			e.preventDefault();
-			dragCounter = 0;
-			element.classList.remove(styles["drop-zone--active"]);
-
-			const paths = manager.getSniffedPaths();
-			const filtered = manager.filterPaths(paths, props);
-
-			console.log(
-				"[DropZone] Files dropped, paths:",
-				paths,
-				"filtered:",
-				filtered,
-			);
-
-			if (filtered.length > 0) {
-				props.onFileDrop(filtered.map((p) => p.path));
-			}
-			manager.clearSniffedPaths();
-		};
-
-		element.addEventListener("dragenter", handleDragEnter);
-		element.addEventListener("dragover", handleDragOver);
-		element.addEventListener("dragleave", handleDragLeave);
-		element.addEventListener("drop", handleDrop);
-
-		onCleanup(() => {
-			element.removeEventListener("dragenter", handleDragEnter);
-			element.removeEventListener("dragover", handleDragOver);
-			element.removeEventListener("dragleave", handleDragLeave);
-			element.removeEventListener("drop", handleDrop);
-			element.classList.remove("drop-zone--active");
-		});
+	onCleanup(() => {
+		unregister?.();
+		unregister = undefined;
+		applyState("idle");
 	});
 
 	return resolved();
