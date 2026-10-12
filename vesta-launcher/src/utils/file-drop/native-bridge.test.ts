@@ -71,6 +71,7 @@ function installTauri({ label = "main", scaleFactor = 2 } = {}) {
 	};
 	const appWindow = {
 		label,
+		setFocus: vi.fn(() => Promise.resolve()),
 		scaleFactor: vi.fn(() => Promise.resolve(scaleFactor)),
 		onScaleChanged: vi.fn((handler: ScaleHandler) => {
 			scaleHandlers.push(handler);
@@ -96,6 +97,7 @@ function installTauri({ label = "main", scaleFactor = 2 } = {}) {
 function fakeController() {
 	return {
 		register: vi.fn(() => () => undefined),
+		observe: vi.fn(() => () => undefined),
 		handle: vi.fn(),
 		cancel: vi.fn(),
 		dispose: vi.fn(),
@@ -118,6 +120,71 @@ beforeEach(async () => {
 afterEach(() => {
 	delete (window as BridgeTestWindow).__VESTA_NATIVE_FILE_DROP_PROBE__;
 	delete (window as BridgeTestWindow).__VESTA_OS__;
+});
+
+describe("window focus on drop", () => {
+	it("focuses the window when files are dropped, and only then", async () => {
+		const { dragHandlers, appWindow } = installTauri();
+		const controller = fakeController();
+		bridge.startNativeFileDrop({
+			controller: controller as unknown as DropController,
+		});
+		await flush();
+
+		emitDrag(dragHandlers, {
+			type: "enter",
+			paths: ["/a.jar"],
+			position: pos(1, 1),
+		});
+		emitDrag(dragHandlers, { type: "over", position: pos(2, 2) });
+		emitDrag(dragHandlers, { type: "leave" });
+		expect(appWindow.setFocus).not.toHaveBeenCalled();
+
+		emitDrag(dragHandlers, {
+			type: "drop",
+			paths: ["/a.jar"],
+			position: pos(3, 3),
+		});
+		expect(appWindow.setFocus).toHaveBeenCalledTimes(1);
+	});
+
+	it("still routes the drop when focusing is refused", async () => {
+		const { dragHandlers, appWindow } = installTauri();
+		appWindow.setFocus.mockRejectedValue(new Error("denied"));
+		const controller = fakeController();
+		bridge.startNativeFileDrop({
+			controller: controller as unknown as DropController,
+		});
+		await flush();
+
+		emitDrag(dragHandlers, {
+			type: "drop",
+			paths: ["/a.jar"],
+			position: pos(3, 3),
+		});
+		await flush();
+
+		expect(controller.handle).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "drop" }),
+		);
+	});
+
+	it("does not focus after the bridge is disposed", async () => {
+		const { dragHandlers, appWindow } = installTauri();
+		const controller = fakeController();
+		const stop = bridge.startNativeFileDrop({
+			controller: controller as unknown as DropController,
+		});
+		await flush();
+		stop();
+
+		emitDrag(dragHandlers, {
+			type: "drop",
+			paths: ["/a.jar"],
+			position: pos(3, 3),
+		});
+		expect(appWindow.setFocus).not.toHaveBeenCalled();
+	});
 });
 
 describe("coordinate conversion before the controller", () => {

@@ -54,8 +54,25 @@ export interface DropControllerDeps {
 	onDiagnostic?(diagnostic: DropControllerDiagnostic): void;
 }
 
+/**
+ * A raw view of the drag for features that are not drop targets themselves, such
+ * as opening a folder while a file is held over it. `hits` is the same
+ * top-first element list the controller hit-tests, computed once per event.
+ * "end" means the drag left the window or was cancelled. "drop" means the
+ * files were released and delivery is under way.
+ */
+export interface DragObservation {
+	type: "move" | "drop" | "end";
+	point: Point | null;
+	hits: Element[];
+}
+
+export type DragObserver = (observation: DragObservation) => void;
+
 export interface DropController {
 	register(registration: DropZoneRegistration): () => void;
+	/** Observers are called synchronously and never see file paths. */
+	observe(observer: DragObserver): () => void;
 	handle(event: NativeDropEvent): void;
 	cancel(): void;
 	dispose(): void;
@@ -188,6 +205,7 @@ function innermost(candidates: ZoneSnapshot[]): ZoneSnapshot {
 
 export function createDropController(deps: DropControllerDeps): DropController {
 	const zones = new Map<string, Entry>();
+	const observers = new Set<DragObserver>();
 	let activeSession: Session | null = null;
 	let nextSessionId = 1;
 	let disposed = false;
@@ -226,6 +244,16 @@ export function createDropController(deps: DropControllerDeps): DropController {
 		});
 	}
 
+	function hitsAt(point: Point): Element[] {
+		return deps.elementsFromPoint(point.x, point.y);
+	}
+
+	function notifyObservers(observation: DragObservation): void {
+		for (const observer of [...observers]) {
+			safeCall("observer", () => observer(observation));
+		}
+	}
+
 	function attachedElement(entry: Entry): HTMLElement | null {
 		const element = entry.reg.getElement();
 		return element && element.isConnected ? element : null;
@@ -255,9 +283,9 @@ export function createDropController(deps: DropControllerDeps): DropController {
 	 * the target. An element inside only disabled zones is transparent. An element
 	 * inside no zone is an overlay above the zones, so the point is blocked.
 	 */
-	function findTarget(point: Point): Entry | null {
+	function findTarget(hits: Element[]): Entry | null {
 		const snapshots = snapshotZones();
-		for (const element of deps.elementsFromPoint(point.x, point.y)) {
+		for (const element of hits) {
 			const containing = snapshots.filter((zone) =>
 				zone.element.contains(element),
 			);
@@ -335,9 +363,11 @@ export function createDropController(deps: DropControllerDeps): DropController {
 
 	function onEnter(paths: string[], position: Point): Outcome {
 		const session = openSession("dragging");
-		session.hovered = findTarget(position);
+		const hits = hitsAt(position);
+		session.hovered = findTarget(hits);
 		// Idle until classification resolves.
 		refreshStates();
+		notifyObservers({ type: "move", point: position, hits });
 		void classifyPaths(paths).then((classified) => {
 			if (!isLive(session) || session.phase !== "dragging") {
 				return;
@@ -366,8 +396,10 @@ export function createDropController(deps: DropControllerDeps): DropController {
 				pending: false,
 			};
 		}
-		session.hovered = findTarget(position);
+		const hits = hitsAt(position);
+		session.hovered = findTarget(hits);
 		refreshStates();
+		notifyObservers({ type: "move", point: position, hits });
 		return {
 			sessionId: session.id,
 			cssPoint: position,
@@ -393,8 +425,10 @@ export function createDropController(deps: DropControllerDeps): DropController {
 		const session = current ?? openSession("dropping");
 		session.phase = "dropping";
 		session.hovered = null;
-		const target = findTarget(position);
+		const hits = hitsAt(position);
+		const target = findTarget(hits);
 		refreshStates();
+		notifyObservers({ type: "drop", point: position, hits });
 		// Re-classify the drop's own paths. The enter cache is not trusted.
 		void classifyPaths(paths).then((classified) =>
 			finishDrop(session, target, position, classified),
@@ -461,6 +495,7 @@ export function createDropController(deps: DropControllerDeps): DropController {
 			session.phase = "finished";
 		}
 		refreshStates();
+		notifyObservers({ type: "end", point: null, hits: [] });
 		return {
 			sessionId: session?.id ?? 0,
 			cssPoint: null,
@@ -514,6 +549,16 @@ export function createDropController(deps: DropControllerDeps): DropController {
 			};
 		},
 
+		observe(observer) {
+			if (disposed) {
+				return noop;
+			}
+			observers.add(observer);
+			return () => {
+				observers.delete(observer);
+			};
+		},
+
 		handle(event) {
 			if (disposed) {
 				return;
@@ -540,8 +585,12 @@ export function createDropController(deps: DropControllerDeps): DropController {
 			if (disposed) {
 				return;
 			}
+			const hadSession = activeSession !== null;
 			activeSession = null;
 			refreshStates();
+			if (hadSession) {
+				notifyObservers({ type: "end", point: null, hits: [] });
+			}
 		},
 
 		dispose() {
@@ -550,6 +599,7 @@ export function createDropController(deps: DropControllerDeps): DropController {
 			}
 			disposed = true;
 			activeSession = null;
+			observers.clear();
 			const entries = [...zones.values()];
 			zones.clear();
 			for (const entry of entries) {

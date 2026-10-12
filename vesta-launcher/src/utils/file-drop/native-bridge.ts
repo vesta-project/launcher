@@ -75,6 +75,7 @@ export function getDropController(): DropController {
 interface BridgeSession {
 	closed: boolean;
 	controller: DropController;
+	appWindow: WindowHandle;
 	scaleFactor: number | null;
 	unlisteners: UnlistenFn[];
 }
@@ -99,6 +100,7 @@ export function startNativeFileDrop(
 	const session: BridgeSession = {
 		closed: false,
 		controller: options.controller ?? getDropController(),
+		appWindow: null as unknown as WindowHandle,
 		scaleFactor: null,
 		unlisteners: [],
 	};
@@ -108,6 +110,7 @@ export function startNativeFileDrop(
 			return noop;
 		}
 		const appWindow = getCurrentWindow();
+		session.appWindow = appWindow;
 		activeBridge = session;
 		void registerListeners(session, webview, appWindow);
 		return () => closeBridge(session);
@@ -183,6 +186,7 @@ function handleNativeEvent(
 		case "drop": {
 			const cssPoint = toCss(payload.position, unit, session.scaleFactor);
 			publishPointer(cssPoint, os, unit, session.scaleFactor, false);
+			focusWindow(session);
 			session.controller.handle({
 				type: "drop",
 				paths: payload.paths,
@@ -197,6 +201,19 @@ function handleNativeEvent(
 			session.controller.handle({ type: "leave" });
 			return;
 		}
+	}
+}
+
+/**
+ * A drag from the file manager hovers a window that may not be focused. Bring it
+ * forward on drop so the result (a notification, a navigation) is actually seen.
+ * Fire and forget: the handler stays synchronous and a refused focus is harmless.
+ */
+function focusWindow(session: BridgeSession): void {
+	try {
+		void session.appWindow.setFocus().catch(() => undefined);
+	} catch {
+		// Focus is best effort.
 	}
 }
 

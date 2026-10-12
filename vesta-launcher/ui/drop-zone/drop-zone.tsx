@@ -11,6 +11,7 @@ import {
 	onCleanup,
 	onMount,
 } from "solid-js";
+import { dropTargetForZoneState } from "../drop-target/drop-target";
 import styles from "./drop-zone.module.css";
 
 export interface DropZoneProps {
@@ -20,6 +21,14 @@ export interface DropZoneProps {
 	allowedExtensions?: string[]; // e.g. [".png", ".jpg", ".zip"]
 	disabled?: boolean; // Disabled zones are never highlighted or delivered to
 	onFilesRejected?: (items: RejectedDropItem[]) => void;
+	/**
+	 * Skip the shared drop-target look (`data-drop-target`, see ui/drop-target). The
+	 * element still gets `data-drop-state` ("active" | "rejected"), so a host that
+	 * combines this with other drop feedback can set `data-drop-target` itself.
+	 */
+	unstyled?: boolean;
+	/** Called whenever the zone's highlight state changes, including back to "idle". */
+	onStateChange?: (state: DropZoneState) => void;
 }
 
 let zoneCounter = 0;
@@ -57,6 +66,7 @@ export function DropZone(props: DropZoneProps) {
 			styles["drop-zone--rejected"],
 		);
 		element.removeAttribute("data-drop-state");
+		element.removeAttribute("data-drop-target");
 	};
 
 	const applyState = (state: DropZoneState) => {
@@ -65,14 +75,25 @@ export function DropZone(props: DropZoneProps) {
 			clearState(appliedElement);
 		}
 		if (next) {
-			next.classList.toggle(styles["drop-zone--active"], state === "active");
+			const styled = !props.unstyled;
+			next.classList.toggle(
+				styles["drop-zone--active"],
+				styled && state === "active",
+			);
 			next.classList.toggle(
 				styles["drop-zone--rejected"],
-				state === "rejected",
+				styled && state === "rejected",
 			);
 			next.setAttribute("data-drop-state", state);
+			const target = styled ? dropTargetForZoneState(state) : undefined;
+			if (target) {
+				next.setAttribute("data-drop-target", target);
+			} else {
+				next.removeAttribute("data-drop-target");
+			}
 		}
 		appliedElement = next;
+		props.onStateChange?.(state);
 	};
 
 	onMount(() => {

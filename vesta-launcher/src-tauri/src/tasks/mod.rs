@@ -1,3 +1,4 @@
+pub mod add_dropped_mods;
 pub mod installers;
 pub mod maintenance;
 pub mod manager;

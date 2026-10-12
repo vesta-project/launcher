@@ -74,6 +74,7 @@
 
 .card {
 	position: relative;
+	isolation: isolate;
 	width: 100%;
 	max-width: 200px;
 	align-self: start;
@@ -132,39 +133,6 @@
 .folder[data-dragging="true"] {
 	opacity: 0.25;
 }
-.card[data-group-pending="true"]::after {
-	content: "";
-	position: absolute;
-	inset: -5px;
-	border-radius: 12px;
-	outline: 2px solid var(--primary-low);
-	pointer-events: none;
-	transition:
-		inset 240ms cubic-bezier(0.22, 1.4, 0.36, 1),
-		border-radius 240ms;
-}
-.card[data-group-target="true"]::after {
-	inset: -9px;
-	border-radius: 20px;
-	background: var(--primary-low);
-	outline-color: var(--primary-accent);
-}
-.groupHint {
-	position: absolute;
-	top: 10px;
-	left: 50%;
-	transform: translateX(-50%);
-	white-space: nowrap;
-	background: var(--surface-sunken);
-	color: var(--text-primary);
-	border: 1px solid var(--primary-accent);
-	border-radius: 999px;
-	padding: 5px 10px;
-	font-size: 11px;
-	pointer-events: none;
-	z-index: 2;
-}
-
 .folder {
 	position: relative;
 	isolation: isolate;
@@ -191,10 +159,6 @@
 }
 .folder[data-editing="true"] {
 	animation: wiggle 520ms ease-in-out infinite alternate;
-}
-.folder[data-over="true"] {
-	border-color: hsl(var(--folder-hue) 75% 75% / 80%);
-	box-shadow: 0 0 0 4px hsl(var(--folder-hue) 65% 60% / 18%);
 }
 .folderTile {
 	position: relative;
@@ -343,9 +307,6 @@
 .folderPopup[data-closed] {
 	animation: folder-out 140ms ease-in forwards;
 	pointer-events: none;
-}
-.folderPopup[data-over="true"] {
-	border-color: hsl(var(--folder-hue) 75% 75% / 80%);
 }
 .folderPopup .folderHeader {
 	column-gap: 6px;

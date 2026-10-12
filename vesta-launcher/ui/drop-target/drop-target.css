@@ -1,0 +1,147 @@
+/*
+ * The one look for "something can be dropped here", whether the thing in hand is a
+ * file from the OS or a card being rearranged. Set `data-drop-target` on the
+ * element and this draws the feedback on top of it.
+ *
+ *   pending   a drop is possible but not yet committed (held, about to open or group)
+ *   ready     releasing now will do something
+ *   rejected  releasing now would be refused
+ *
+ * The feedback is contained: it never extends past the element, so it cannot
+ * resize a container or add a scrollbar to one.
+ */
+:where([data-drop-target]) {
+	position: relative;
+}
+
+[data-drop-target]::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	border-radius: inherit;
+	pointer-events: none;
+	background: var(--drop-target-tint, transparent);
+	box-shadow:
+		inset 0 0 0 2px var(--drop-target-edge),
+		inset 0 0 22px 0 var(--drop-target-glow);
+	animation: drop-target-in 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-drop-target="pending"] {
+	--drop-target-edge: hsl(var(--color__primary-hue) 80% 60% / 45%);
+	--drop-target-glow: hsl(var(--color__primary-hue) 80% 60% / 18%);
+}
+
+[data-drop-target="ready"] {
+	--drop-target-edge: var(--primary-accent);
+	--drop-target-glow: hsl(var(--color__primary-hue) 80% 60% / 38%);
+	--drop-target-tint: var(--primary-low);
+}
+
+/* A different animation name restarts the animation, so moving from pending to
+   ready (the drop is now committed) plays again. */
+[data-drop-target="ready"]::after {
+	animation-name: drop-target-in-ready;
+}
+
+[data-drop-target="rejected"] {
+	--drop-target-edge: hsl(var(--color__error-hue) 60% 60% / 85%);
+	--drop-target-glow: hsl(var(--color__error-hue) 60% 60% / 30%);
+	--drop-target-tint: hsl(var(--color__error-hue) 55% 50% / 12%);
+}
+
+.drop-target-hint {
+	position: absolute;
+	top: 10px;
+	left: 50%;
+	z-index: 4;
+	transform: translateX(-50%);
+	max-width: calc(100% - 16px);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	background: var(--surface-sunken);
+	color: var(--text-primary);
+	border: 1px solid var(--primary-accent);
+	border-radius: 999px;
+	padding: 5px 10px;
+	font-size: 11px;
+	pointer-events: none;
+
+	/* Enters after the ring has started, and slowly enough to read as following it. */
+	animation: drop-target-hint-in 460ms cubic-bezier(0.22, 1, 0.36, 1) 140ms
+		backwards;
+}
+
+.drop-target-hint[data-state="pending"] {
+	border-color: hsl(var(--color__primary-hue) 80% 60% / 45%);
+}
+
+.drop-target-hint[data-state="rejected"] {
+	border-color: hsl(var(--color__error-hue) 60% 60% / 85%);
+}
+
+/* Scales in from inside the element and never past it, so it cannot overflow a
+   scroll container even for a frame. */
+@keyframes drop-target-in {
+	from {
+		opacity: 0;
+		transform: scale(0.94);
+		box-shadow:
+			inset 0 0 0 2px var(--drop-target-edge),
+			inset 0 0 0 0 var(--drop-target-glow);
+	}
+
+	to {
+		opacity: 1;
+		transform: scale(1);
+		box-shadow:
+			inset 0 0 0 2px var(--drop-target-edge),
+			inset 0 0 22px 0 var(--drop-target-glow);
+	}
+}
+
+@keyframes drop-target-in-ready {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+		box-shadow:
+			inset 0 0 0 2px var(--drop-target-edge),
+			inset 0 0 0 0 var(--drop-target-glow);
+	}
+
+	to {
+		opacity: 1;
+		transform: scale(1);
+		box-shadow:
+			inset 0 0 0 2px var(--drop-target-edge),
+			inset 0 0 22px 0 var(--drop-target-glow);
+	}
+}
+
+@keyframes drop-target-hint-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -6px) scale(0.92);
+	}
+
+	to {
+		opacity: 1;
+		transform: translate(-50%, 0) scale(1);
+	}
+}
+
+/* Reduced motion, from the system or the app's own setting: no animation, and
+   so no entrance delay either. The ring and its text appear together. */
+@media (prefers-reduced-motion: reduce) {
+	[data-drop-target]::after,
+	.drop-target-hint {
+		animation: none;
+	}
+}
+
+:root[data-reduced-motion="true"] [data-drop-target]::after,
+:root[data-reduced-motion="true"] .drop-target-hint {
+	animation: none;
+}

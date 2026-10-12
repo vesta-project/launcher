@@ -871,3 +871,105 @@ describe("policy", () => {
 		});
 	});
 });
+
+describe("observe", () => {
+	function record(ctx: Ctx) {
+		const seen: Array<{
+			type: string;
+			point: Point | null;
+			hits: Element[];
+		}> = [];
+		const stop = ctx.controller.observe((observation) => {
+			seen.push(observation);
+		});
+		return { seen, stop };
+	}
+
+	it("reports each enter and over with the same top-first hit list", () => {
+		const ctx = setup();
+		const target = el();
+		ctx.setHits([target]);
+		const { seen } = record(ctx);
+
+		ctx.controller.handle({ type: "enter", paths: ["/a.jar"], position: at });
+		ctx.controller.handle({ type: "over", position: { x: 9, y: 9 } });
+
+		expect(seen.map((o) => o.type)).toEqual(["move", "move"]);
+		expect(seen[1].point).toEqual({ x: 9, y: 9 });
+		expect(seen[1].hits).toEqual([target]);
+	});
+
+	it("works with no registered zones", () => {
+		const ctx = setup();
+		const { seen } = record(ctx);
+		ctx.controller.handle({ type: "enter", paths: ["/a.jar"], position: at });
+		expect(seen).toHaveLength(1);
+	});
+
+	it("reports drop with the drop hit list, then end on leave", async () => {
+		const ctx = setup();
+		const target = el();
+		ctx.setHits([target]);
+		const { seen } = record(ctx);
+		await startDrag(ctx, ["/a.jar"], [item("/a.jar")]);
+		seen.length = 0;
+
+		ctx.controller.handle({ type: "drop", paths: ["/a.jar"], position: at });
+		expect(seen.map((o) => o.type)).toEqual(["drop"]);
+		expect(seen[0].hits).toEqual([target]);
+
+		// A leave while the drop is still resolving is ignored, so finish it first.
+		resolvePending(ctx, 1, [item("/a.jar")]);
+		await ctx.settle();
+		ctx.controller.handle({ type: "leave" });
+		expect(seen.at(-1)?.type).toBe("end");
+		expect(seen.at(-1)?.hits).toEqual([]);
+	});
+
+	it("reports end when the drag is cancelled, but only if one was live", () => {
+		const ctx = setup();
+		const { seen } = record(ctx);
+
+		ctx.controller.cancel();
+		expect(seen).toEqual([]);
+
+		ctx.controller.handle({ type: "enter", paths: ["/a.jar"], position: at });
+		ctx.controller.cancel();
+		expect(seen.map((o) => o.type)).toEqual(["move", "end"]);
+	});
+
+	it("does not report moves for an over with no live session", () => {
+		const ctx = setup();
+		const { seen } = record(ctx);
+		ctx.controller.handle({ type: "over", position: at });
+		expect(seen).toEqual([]);
+	});
+
+	it("stops reporting after unsubscribe and after dispose", () => {
+		const ctx = setup();
+		const { seen, stop } = record(ctx);
+		stop();
+		ctx.controller.handle({ type: "enter", paths: ["/a.jar"], position: at });
+		expect(seen).toEqual([]);
+
+		const second = record(ctx);
+		ctx.controller.dispose();
+		ctx.controller.handle({ type: "over", position: at });
+		expect(second.seen).toEqual([]);
+	});
+
+	it("a throwing observer does not break routing or other observers", async () => {
+		const ctx = setup();
+		const a = makeZone("a", el());
+		ctx.controller.register(a.reg);
+		ctx.setHits([a.element]);
+		ctx.controller.observe(() => {
+			throw new Error("boom");
+		});
+		const { seen } = record(ctx);
+
+		await startDrag(ctx, ["/a.jar"], [item("/a.jar")]);
+		expect(seen).toHaveLength(1);
+		expect(a.states).toEqual(["active"]);
+	});
+});

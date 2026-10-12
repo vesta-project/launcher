@@ -158,6 +158,7 @@ describe("state classes", () => {
 		await flush();
 		expect(isActive(zone)).toBe(true);
 		expect(zone.getAttribute("data-drop-state")).toBe("active");
+		expect(zone.getAttribute("data-drop-target")).toBe("ready");
 
 		over();
 		expect(isActive(zone)).toBe(true);
@@ -182,10 +183,59 @@ describe("state classes", () => {
 		expect(isRejected(zone)).toBe(true);
 		expect(isActive(zone)).toBe(false);
 		expect(zone.getAttribute("data-drop-state")).toBe("rejected");
+		expect(zone.getAttribute("data-drop-target")).toBe("rejected");
 
 		leave();
 		expect(isRejected(zone)).toBe(false);
 		expect(zone.hasAttribute("data-drop-state")).toBe(false);
+		expect(zone.hasAttribute("data-drop-target")).toBe(false);
+	});
+
+	it("unstyled zones expose the state attribute but get no built-in classes", async () => {
+		render(() => (
+			<DropZone onFileDrop={() => undefined} accept="files" unstyled>
+				<div data-testid="zone" />
+			</DropZone>
+		));
+		const zone = screen.getByTestId("zone");
+		mocks.elementsFromPoint.mockReturnValue([zone]);
+
+		enter(["/a.zip"]);
+		await flush();
+		expect(zone.getAttribute("data-drop-state")).toBe("active");
+		expect(isActive(zone)).toBe(false);
+		// The host draws its own feedback, so the shared look is not applied for it.
+		expect(zone.hasAttribute("data-drop-target")).toBe(false);
+
+		leave();
+		enter(["/folder/"]);
+		await flush();
+		expect(zone.getAttribute("data-drop-state")).toBe("rejected");
+		expect(isRejected(zone)).toBe(false);
+
+		leave();
+		expect(zone.hasAttribute("data-drop-state")).toBe(false);
+	});
+
+	it("reports every state change through onStateChange", async () => {
+		const states: string[] = [];
+		render(() => (
+			<DropZone
+				onFileDrop={() => undefined}
+				accept="files"
+				onStateChange={(state) => states.push(state)}
+			>
+				<div data-testid="zone" />
+			</DropZone>
+		));
+		const zone = screen.getByTestId("zone");
+		mocks.elementsFromPoint.mockReturnValue([zone]);
+
+		enter(["/a.zip"]);
+		await flush();
+		leave();
+
+		expect(states).toEqual(["active", "idle"]);
 	});
 
 	it("clears its highlight on unmount mid-hover", async () => {
