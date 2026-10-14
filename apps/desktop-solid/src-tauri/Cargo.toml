@@ -1,0 +1,30 @@
+[package]
+name = "vesta-launcher-rewrite"
+version = "0.2.0-alpha.1"
+description = "Vesta Launcher Rewrite"
+authors = ["Vesta Project"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.77.2"
+
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2.6.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.0", features = ["protocol-asset", "macos-private-api", "tray-icon"] }
+serde_json = "1.0"
+tauri-plugin-autostart = "2.5"
+tauri-plugin-clipboard-manager = "2.3"
+tauri-plugin-deep-link = "2.4"
+tauri-plugin-dialog = "2.7"
+tauri-plugin-fs = "2.5"
+tauri-plugin-log = "2.8"
+tauri-plugin-os = "2.3.2"
+tauri-plugin-shell = "2.3"
+tauri-plugin-single-instance = { version = "2.4", features = ["deep-link"] }
+tauri-plugin-sentry = "0.5"
+tauri-plugin-updater = "2.10"
+tauri-plugin-window-state = "2.4"
+vesta-launcher = { path = "../../../vesta-launcher/src-tauri" }

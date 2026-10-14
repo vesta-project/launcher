@@ -10,14 +10,11 @@ if (command !== 'dev' && command !== 'build') {
 }
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const tauriProjectRoot = path.resolve(appRoot, '../../vesta-launcher');
 const tauriArgs = [
   'run',
-  `--cwd=${tauriProjectRoot}`,
+  `--cwd=${appRoot}`,
   'tauri',
   command,
-  '--config',
-  path.join(appRoot, 'tauri.conf.json'),
   ...extraArgs,
 ];
 

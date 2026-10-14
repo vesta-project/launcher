@@ -1,0 +1,92 @@
+{
+  "productName": "Vesta Launcher Rewrite",
+  "version": "0.2.0-alpha.1",
+  "identifier": "com.vesta.launcher.rewrite",
+  "build": {
+    "beforeDevCommand": {
+      "script": "bun run dev",
+      "cwd": ".."
+    },
+    "devUrl": "http://localhost:1430",
+    "beforeBuildCommand": {
+      "script": "bun run build",
+      "cwd": ".."
+    },
+    "frontendDist": "../dist/client"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' https: asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com; media-src 'self'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPLOCALDATA/**",
+          "$APPCACHE/**",
+          "$APPDATA/.VestaLauncher/**"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "vesta"
+        ]
+      }
+    },
+    "updater": {
+      "endpoints": [
+        "https://r2.vestalauncher.com/launcher/releases/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUxNUU3NUE0MjVERTI1NUUKUldSZUpkNGxwSFZlVVY3QWRoeS9HeU81bDVibG9Md2NTM2w4cjZ5WGZuRzZ6bDdoMHI3MmFyb0MK"
+    },
+    "os": {}
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "externalBin": [
+      "../../../vesta-launcher/src-tauri/binaries/vesta-sandbox-exec"
+    ],
+    "windows": {
+      "wix": {
+        "version": "0.1.0.31"
+      }
+    },
+    "macOS": {
+      "entitlements": "../../../vesta-launcher/src-tauri/entitlements/default.plist"
+    },
+    "shortDescription": "Vesta Launcher",
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../../../vesta-launcher/resources/exit-handler/exit-handler.jar": "exit-handler.jar",
+      "icons/icon.png": "icons/icon.png"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "mrpack"
+        ],
+        "name": "Modrinth Modpack",
+        "mimeType": "application/x-modrinth-modpack+zip",
+        "role": "Editor",
+        "exportedType": {
+          "identifier": "com.vesta.launcher.mrpack",
+          "conformsTo": [
+            "public.zip-archive",
+            "public.data"
+          ]
+        }
+      }
+    ]
+  }
+}

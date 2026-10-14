@@ -1,0 +1,422 @@
+pub mod auth;
+mod commands;
+pub mod discord;
+pub mod game_options;
+mod game_options_file;
+mod instance;
+mod instance_file;
+mod launcher_import;
+mod localization;
+mod logging;
+mod metadata_cache;
+pub mod models;
+mod modpack;
+mod notifications;
+pub mod resources;
+pub mod schema; // Diesel schema definitions
+mod sentry_init;
+mod settings_sync;
+mod setup;
+mod startup;
+mod sync;
+mod tasks;
+pub mod utils;
+pub mod worlds;
+
+use tauri::Manager;
+#[allow(unused_imports)]
+use utils::config::{
+    get_app_config, get_config, set_config, update_config_field, update_config_fields,
+};
+#[allow(unused_imports)]
+use utils::windows::launch_window;
+
+pub fn run(context: tauri::Context) {
+    // Early checks for debug logging and telemetry settings.
+    let mut log_level = log::LevelFilter::Info;
+    let mut telemetry_enabled = true;
+    if let Ok(config_dir) = utils::db_manager::get_app_config_dir() {
+        // Try to init pool early to check settings. setup::init will safely re-init or handle it.
+        let _ = utils::db::init_config_pool(config_dir);
+        if let Ok(config) = utils::config::get_app_config() {
+            if config.debug_logging {
+                log_level = log::LevelFilter::Debug;
+            }
+            telemetry_enabled = config.telemetry_enabled;
+            if let Err(e) = piston_lib::client::configure_proxy(piston_lib::client::ProxyConfig {
+                enabled: config.proxy_enabled,
+                url: config.proxy_url.clone(),
+            }) {
+                log::warn!(
+                    "Failed to configure HTTP proxy during early startup for {}: {}",
+                    config
+                        .proxy_url
+                        .as_deref()
+                        .map(piston_lib::client::redact_proxy_url)
+                        .unwrap_or_else(|| "<direct>".to_string()),
+                    piston_lib::client::redact_configured_proxy_secrets(&e)
+                );
+            }
+        }
+    }
+
+    let sentry_client = if telemetry_enabled {
+        Some(sentry_init::init_sentry())
+    } else {
+        log::info!("Telemetry disabled by user config. Skipping Sentry initialization.");
+        None
+    };
+
+    std::panic::set_hook(Box::new(move |e| {
+        let message = format!("Vesta Launcher closed unexpectedly: {e:?}");
+        eprintln!("{message}");
+        if telemetry_enabled {
+            sentry::capture_message(&message, sentry::Level::Fatal);
+        }
+    }));
+
+    #[cfg(not(target_os = "ios"))]
+    let _sentry_minidump_guard = if sentry_client.is_some() {
+        sentry::Hub::current()
+            .client()
+            .map(|client| tauri_plugin_sentry::minidump::init(client.as_ref()))
+    } else {
+        None
+    };
+
+    let mut builder = tauri::Builder::default();
+    if let Some(sentry_client) = sentry_client.as_ref() {
+        builder = builder.plugin(tauri_plugin_sentry::init(sentry_client));
+    }
+
+    builder
+        .plugin(tauri_plugin_fs::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                // Visibility is controlled by the painted-surface handshake. Restoring
+                // it here would show hidden startup and prewarmed windows prematurely.
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        .difference(tauri_plugin_window_state::StateFlags::VISIBLE),
+                )
+                // Reusable mini windows own their lifecycle in MiniWindowRegistry.
+                .with_filter(|label| !label.starts_with("page-viewer-"))
+                .build(),
+        )
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .setup(move |app| {
+            logging::register_log_plugin(app, log_level)?;
+            setup::init(app)?;
+            resources::manual_drop::register_notification_actions(app.handle());
+            Ok(())
+        })
+        .manage(utils::dialog_manager::DialogManager::new())
+        .manage(utils::windows::MiniWindowRegistry::default())
+        .manage(utils::launch_intents::PendingLaunchIntents::new())
+        .manage(resources::manual_drop::ManualDropManager::default())
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            let _ = crate::utils::windows::ensure_main_window_visible(app);
+
+            if args.len() > 1 {
+                crate::utils::launch_intents::ingest_launch_args(&args);
+                let state = app.state::<utils::launch_intents::PendingLaunchIntents>();
+                if state.is_frontend_ready() {
+                    utils::launch_intents::flush_pending_intents(app);
+                }
+            }
+        }))
+        .invoke_handler(tauri::generate_handler![
+            commands::game_options::get_game_options_catalog,
+            commands::game_options::get_instance_game_options,
+            commands::game_options::save_instance_game_options,
+            launch_window,
+            utils::windows::prime_mini_window,
+            utils::windows::preload_mini_window_route,
+            utils::windows::take_mini_window_payload,
+            utils::windows::hide_mini_window,
+            get_config,
+            set_config,
+            update_config_field,
+            update_config_fields,
+            localization::set_language,
+            commands::keybindings::reconcile_keybinding_catalog,
+            commands::keybindings::list_keybinding_commands,
+            commands::keybindings::set_keybinding,
+            commands::keybindings::clear_keybinding,
+            commands::keybindings::reset_keybinding,
+            commands::library_layout::get_library_layout,
+            commands::library_layout::set_library_layout,
+            settings_sync::get_settings_sync,
+            settings_sync::save_settings_sync,
+            settings_sync::servers::add_synced_server,
+            settings_sync::servers::remove_synced_server,
+            commands::app::open_app_config_dir,
+            commands::app::open_app_runtime_storage_dir,
+            commands::app::clear_cache,
+            commands::app::get_storage_snapshot,
+            commands::app::prune_storage_cache,
+            commands::app::get_cache_size,
+            commands::app::open_logs_folder,
+            commands::app::open_instance_folder,
+            commands::app::trigger_test_panic,
+            commands::screenshots::get_screenshots,
+            commands::screenshots::delete_screenshot,
+            commands::screenshots::copy_screenshot_to_clipboard,
+            commands::screenshots::open_screenshot_in_folder,
+            commands::app::restart_app,
+            commands::app::exit_check,
+            commands::app::test_blocking_dialog,
+            commands::app::exit_app,
+            commands::app::close_all_windows_and_reset,
+            commands::app::get_default_instance_dir,
+            commands::app::path_exists,
+            commands::github::get_changelog,
+            commands::app::get_network_status,
+            commands::app::get_sandbox_host_support,
+            commands::app::set_network_status,
+            commands::app::refresh_network_status,
+            commands::app::test_proxy_connection,
+            commands::app::get_tray_settings,
+            commands::app::set_tray_icon_visibility,
+            commands::app::set_minimize_to_tray,
+            commands::app::show_window_from_tray,
+            commands::app::present_window_when_ready,
+            commands::app::clear_window_startup_background,
+            commands::app::parse_vesta_url,
+            utils::launch_intents::consume_pending_intents,
+            utils::launch_intents::signal_frontend_ready,
+            commands::app::get_window_effect_capabilities,
+            commands::app::set_window_effect,
+            utils::db::get_db_status,
+            commands::file_drop::classify_dropped_paths,
+            commands::file_drop::start_resource_drop,
+            commands::file_drop::submit_resource_drop_choice,
+            commands::file_drop::cancel_resource_drop,
+            utils::file_drop::create_file_drop_overlay,
+            utils::file_drop::position_overlay,
+            commands::pinning::get_pinned_pages,
+            commands::pinning::add_pinned_page,
+            commands::pinning::remove_pinned_page,
+            commands::pinning::reorder_pinned_pages,
+            commands::pinning::update_pinned_metadata,
+            commands::shortcuts::create_desktop_shortcut,
+            utils::file_drop::show_overlay,
+            utils::file_drop::hide_overlay,
+            utils::file_drop::set_overlay_visual_state,
+            utils::file_drop::reset_file_drop_sniffer,
+            auth::start_login,
+            auth::cancel_login,
+            auth::get_accounts,
+            auth::get_active_account,
+            auth::set_active_account,
+            auth::start_guest_session,
+            auth::start_demo_session,
+            auth::remove_account,
+            auth::get_account_profile,
+            auth::get_player_head_path,
+            auth::preload_account_heads,
+            commands::skins::force_sync_account_profile,
+            commands::skins::upload_account_skin,
+            commands::skins::apply_history_skin,
+            commands::skins::get_skin_history,
+            commands::skins::sync_current_skin_history,
+            commands::skins::delete_history_skin,
+            commands::skins::reset_account_skin,
+            commands::skins::apply_preset_skin,
+            commands::skins::change_skin_variant,
+            commands::skins::change_account_cape,
+            commands::skins::hide_account_cape,
+            commands::notifications::create_notification,
+            commands::notifications::update_notification_progress,
+            commands::notifications::list_notifications,
+            commands::notifications::mark_notification_read,
+            commands::notifications::delete_notification,
+            commands::notifications::invoke_notification_action,
+            commands::notifications::cleanup_notifications,
+            commands::notifications::clear_immediate_notifications,
+            commands::notifications::clear_all_dismissible_notifications,
+            commands::notifications::get_notification_subscriptions,
+            commands::notifications::get_available_notification_sources,
+            commands::notifications::subscribe_to_preset_source,
+            commands::notifications::reset_notification_system,
+            commands::skins::get_default_skins,
+            commands::skins::get_complete_skin_data,
+            commands::themes::list_saved_themes,
+            commands::themes::save_theme_to_library,
+            commands::themes::import_theme_from_file,
+            commands::themes::delete_saved_theme,
+            commands::themes::export_theme,
+            commands::skins::compute_texture_key_from_url,
+            commands::skins::compute_texture_key_from_base64,
+            commands::skins::detect_local_skin_variant,
+            commands::skins::detect_base64_skin_variant,
+            commands::notifications::toggle_notification_subscription,
+            commands::notifications::update_notification_subscription_metadata,
+            commands::notifications::delete_notification_subscription,
+            commands::notifications::subscribe_to_resource_updates,
+            commands::notifications::subscribe_to_rss,
+            commands::notifications::check_notifications_now,
+            commands::tasks::set_worker_limit,
+            commands::tasks::cancel_task,
+            commands::instances::install_instance,
+            commands::instances::list_instances,
+            commands::instances::create_instance,
+            commands::instances::update_instance,
+            commands::instances::delete_instance,
+            commands::instances::get_instance,
+            commands::instances::get_instance_by_slug,
+            commands::instances::get_instance_required_java,
+            commands::instances::launch_instance,
+            commands::instances::kill_instance,
+            commands::instances::get_running_instances,
+            commands::instances::is_instance_running,
+            commands::instances::update_instance_modpack_version,
+            commands::instances::get_minecraft_versions,
+            commands::instances::regenerate_piston_manifest,
+            commands::instances::read_instance_log,
+            commands::instances::get_instance_log_history,
+            commands::instances::read_specific_log_file,
+            commands::instances::clear_instance_crash,
+            commands::instances::open_crash_report,
+            commands::instances::upload_crash_to_mclogs,
+            commands::instances::emit_fake_crash,
+            commands::instances::emit_fake_crash_scenario,
+            commands::instances::list_crash_scenarios,
+            commands::instances::duplicate_instance,
+            commands::instances::repair_instance,
+            commands::instances::reset_instance,
+            commands::instances::resume_instance_operation,
+            commands::modpacks::get_modpack_info,
+            commands::modpacks::get_modpack_info_from_url,
+            commands::modpacks::get_modpack_archive_summary_from_url,
+            commands::modpacks::match_local_modpack_source,
+            commands::modpacks::get_system_memory_mb,
+            commands::modpacks::get_hardware_info,
+            commands::modpacks::install_modpack_from_zip,
+            commands::modpacks::install_modpack_from_url,
+            commands::modpacks::list_export_candidates,
+            commands::modpacks::export_instance_to_modpack,
+            commands::onboarding::get_required_java_versions,
+            commands::onboarding::detect_java,
+            commands::onboarding::get_managed_javas,
+            commands::onboarding::select_java_file,
+            commands::onboarding::verify_java_path,
+            commands::onboarding::set_global_java_path,
+            commands::onboarding::get_global_java_paths,
+            commands::onboarding::complete_onboarding,
+            commands::onboarding::reset_onboarding,
+            commands::onboarding::set_setup_step,
+            commands::onboarding::download_managed_java,
+            commands::resources::get_resource_categories,
+            commands::resources::list_resource_sources,
+            commands::resources::search_resources,
+            commands::resources::get_resource_project,
+            commands::resources::cache_resource_metadata,
+            commands::resources::get_cached_resource_project,
+            commands::resources::get_cached_resource_projects,
+            commands::resources::hydrate_resource_project_icons,
+            commands::resources::get_or_hydrate_resource_projects,
+            commands::resources::get_cached_resource_projects_by_provider,
+            commands::resources::get_resource_projects,
+            commands::resources::get_resource_versions,
+            commands::resources::get_resource_version_details,
+            commands::resources::find_peer_resource,
+            commands::resources::install_resource,
+            commands::resources::delete_resource,
+            commands::resources::toggle_resource,
+            commands::resources::clear_modpack_resource_provenance,
+            commands::resources::backfill_modpack_resource_provenance_fast,
+            commands::resources::backfill_modpack_resource_provenance,
+            commands::resources::check_instance_updates_lightweight,
+            commands::resources::get_instance_update_snapshot,
+            commands::resources::rescan_instance_resources,
+            commands::resources::get_installed_resources,
+            commands::resources::get_instance_resource_overview,
+            commands::resources::check_resource_updates,
+            commands::resources::resolve_image_url,
+            commands::resources::resolve_image_urls,
+            commands::worlds::list_instance_worlds,
+            commands::worlds::open_world_folder,
+            commands::worlds::delete_world,
+            commands::worlds::list_world_datapacks,
+            commands::worlds::check_world_datapack_updates,
+            commands::worlds::open_world_datapacks_folder,
+            commands::worlds::toggle_world_datapack,
+            commands::worlds::delete_world_datapack,
+            commands::worlds::transfer_world,
+            commands::worlds::submit_world_archive_selection,
+            commands::sync::check_modpack_update,
+            commands::sync::start_modpack_update,
+            commands::launcher_imports::detect_external_launchers,
+            commands::launcher_imports::list_external_instances,
+            commands::launcher_imports::import_external_instance,
+            utils::dialog_manager::submit_dialog_response,
+        ])
+        .on_window_event(|window, event| {
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. }
+                    if window.label() == "main" => {
+                        api.prevent_close();
+                        match crate::utils::config::get_app_config() {
+                            Ok(config) if config.minimize_to_tray => {
+                                // If close-to-tray is enabled but the persistent tray setting is off,
+                                // temporarily expose the tray so users can restore the app.
+                                if !config.show_tray_icon {
+                                    if let Some(tray) = window.app_handle().tray_by_id("main-tray") {
+                                        let _ = tray.set_visible(true);
+                                    }
+                                }
+                                log::info!(
+                                    "Close requested: hiding to tray (minimize_to_tray enabled, show_tray_icon: {})",
+                                    config.show_tray_icon,
+                                );
+                                let _ = window.hide();
+                            }
+                            Ok(_) => {
+                                let _ = crate::commands::app::request_guarded_exit(
+                                    window.app_handle(),
+                                    "window-close",
+                                );
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to read config for close behavior (falling back to guarded exit): {}",
+                                    e
+                                );
+                                let _ = crate::commands::app::request_guarded_exit(
+                                    window.app_handle(),
+                                    "window-close-config-error",
+                                );
+                            }
+                        }
+                    }
+                _ => {}
+            }
+        })
+        .build(context)
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = event {
+                crate::utils::launch_intents::ingest_opened_urls(&urls);
+                if let Some(state) = app.try_state::<utils::launch_intents::PendingLaunchIntents>() {
+                    if state.is_frontend_ready() {
+                        utils::launch_intents::flush_pending_intents(app);
+                    }
+                }
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+            {
+                let _ = (app, event);
+            }
+        });
+}
