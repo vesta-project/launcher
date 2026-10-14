@@ -17,6 +17,24 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
+// Test-only conversion by parsed Windows prefix; production preserves all paths.
+#[cfg(all(test, windows))]
+pub(crate) fn ordinary_windows_test_path(path: &Path) -> PathBuf {
+    use std::path::{Component, Prefix};
+    let mut components = path.components();
+    match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(drive) | Prefix::Disk(drive) => {
+                let mut ordinary = PathBuf::from(format!("{}:\\", drive as char));
+                ordinary.extend(components.filter(|part| !matches!(part, Component::RootDir)));
+                ordinary
+            }
+            _ => panic!("test requires a local drive path"),
+        },
+        _ => panic!("test requires an absolute Windows path"),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PublishedSource {
     instance_id: i32,
@@ -319,26 +337,58 @@ fn peer_evidence(
     peers
 }
 
+// Validate the declared root before resolving aliases, then walk without following
+// links. Trusted aliases above the root (for example /var) remain supported.
+fn checked_target(root: &Path, path: &Path) -> Option<(PathBuf, fs::Metadata)> {
+    let root_metadata = fs::symlink_metadata(root).ok()?;
+    if !root_metadata.is_dir() || crate::instance_file::is_link(&root_metadata) {
+        return None;
+    }
+    let canonical_root = root.canonicalize().ok()?;
+    let relative = path
+        .strip_prefix(root)
+        .or_else(|_| path.strip_prefix(&canonical_root))
+        .ok()?;
+    let parts = relative.components().collect::<Vec<_>>();
+    if parts
+        .iter()
+        .any(|part| !matches!(part, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let mut current = canonical_root.clone();
+    let mut metadata = root_metadata;
+    for (index, part) in parts.iter().enumerate() {
+        current.push(part);
+        metadata = fs::symlink_metadata(&current).ok()?;
+        if crate::instance_file::is_link(&metadata)
+            || (index + 1 < parts.len() && !metadata.is_dir())
+        {
+            return None;
+        }
+    }
+    if !current.canonicalize().ok()?.starts_with(&canonical_root) {
+        return None;
+    }
+    Some((relative.to_path_buf(), metadata))
+}
+
 pub(crate) fn real_target_path(root: &Path, path: &Path) -> bool {
-    let Ok(relative) = path.strip_prefix(root) else {
+    checked_target(root, path).is_some()
+}
+
+pub(crate) fn real_direct_child_file(game_root: &Path, directory: &Path, path: &Path) -> bool {
+    // Check the declared resource directory before its canonical spelling can
+    // conceal a linked directory inside the game root.
+    let Some((_, metadata)) = checked_target(game_root, directory) else {
         return false;
     };
-    let mut current = root.to_path_buf();
-    if fs::symlink_metadata(&current)
-        .map_or(true, |meta| !meta.is_dir() || meta.file_type().is_symlink())
-    {
+    if !metadata.is_dir() {
         return false;
     }
-    for part in relative.components() {
-        if !matches!(part, std::path::Component::Normal(_)) {
-            return false;
-        }
-        current.push(part);
-        if fs::symlink_metadata(&current).map_or(true, |meta| meta.file_type().is_symlink()) {
-            return false;
-        }
-    }
-    true
+    checked_target(directory, path).is_some_and(|(relative, metadata)| {
+        relative.components().count() == 1 && metadata.is_file()
+    })
 }
 
 fn same_world(world_root: &Path, world_id: Uuid) -> bool {
@@ -602,6 +652,184 @@ pub(crate) async fn enrich(app: &AppHandle, published: Vec<PublishedSource>) -> 
 mod tests {
     use super::*;
     use crate::models::resource::ResourceVersionFile;
+
+    #[test]
+    fn checked_targets_accept_declared_aliases_and_canonical_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir(temp.path().join("anchor")).unwrap();
+        let game = temp.path().join("anchor/../game");
+        let mods = game.join("mods");
+        fs::create_dir_all(&mods).unwrap();
+        let declared = mods.join("a.jar");
+        fs::write(&declared, b"mod").unwrap();
+        let published = declared.canonicalize().unwrap();
+        assert_ne!(published.parent(), Some(mods.as_path()));
+        for path in [&declared, &published] {
+            assert!(real_target_path(&game, path));
+            assert!(real_direct_child_file(&game, &mods, path));
+        }
+        assert!(real_target_path(&game, &mods.canonicalize().unwrap()));
+        assert!(real_target_path(&game, &game.canonicalize().unwrap()));
+        assert!(!real_direct_child_file(&game, &mods, &mods));
+        assert!(!real_target_path(&game, &mods.join("../mods/a.jar")));
+        assert!(!real_target_path(
+            &game,
+            &game.canonicalize().unwrap().join("mods/../mods/a.jar")
+        ));
+        fs::create_dir_all(game.join("saves/World/.vesta")).unwrap();
+        fs::write(game.join("saves/World/.vesta/world.json"), b"{}").unwrap();
+        assert!(real_target_path(
+            &game,
+            &game.join("saves/World").canonicalize().unwrap()
+        ));
+        assert!(real_target_path(
+            &game.join("saves/World"),
+            &game
+                .join("saves/World/.vesta/world.json")
+                .canonicalize()
+                .unwrap()
+        ));
+        fs::create_dir_all(game.join("resourcepacks")).unwrap();
+        fs::write(game.join("resourcepacks/pack.zip"), b"pack").unwrap();
+        assert!(real_target_path(
+            &game,
+            &game.join("resourcepacks/pack.zip").canonicalize().unwrap()
+        ));
+    }
+
+    #[test]
+    fn direct_child_files_reject_missing_outside_nested_and_directory_targets() {
+        let temp = tempfile::tempdir().unwrap();
+        let game = temp.path().join("game");
+        let mods = game.join("mods");
+        fs::create_dir_all(mods.join("nested")).unwrap();
+        fs::write(mods.join("nested/a.jar"), b"mod").unwrap();
+        fs::write(temp.path().join("outside.jar"), b"mod").unwrap();
+        fs::write(mods.join("file.jar"), b"mod").unwrap();
+        for path in [
+            mods.join("missing.jar"),
+            mods.join("nested/a.jar"),
+            mods.join("nested"),
+            mods.clone(),
+            temp.path().join("outside.jar"),
+            mods.join("../mods/file.jar"),
+        ] {
+            assert!(
+                !real_direct_child_file(&game, &mods, &path),
+                "{}",
+                path.display()
+            );
+        }
+        assert!(!real_target_path(&game, &mods.join("file.jar/child")));
+        assert!(!real_target_path(&game, &mods.join("absent/child")));
+        assert!(!real_target_path(
+            &temp.path().join("missing"),
+            &mods.join("file.jar")
+        ));
+        assert!(!real_target_path(
+            &mods.join("file.jar"),
+            &mods.join("file.jar")
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn checked_targets_reject_root_folder_and_leaf_links_even_for_canonical_candidates() {
+        use std::os::unix::fs::symlink;
+        let temp = tempfile::tempdir().unwrap();
+        let game = temp.path().join("game");
+        let mods = game.join("mods");
+        fs::create_dir_all(&mods).unwrap();
+        fs::write(mods.join("a.jar"), b"mod").unwrap();
+        symlink(&game, temp.path().join("linked-game")).unwrap();
+        assert!(!real_target_path(
+            &temp.path().join("linked-game"),
+            &mods.join("a.jar").canonicalize().unwrap()
+        ));
+        assert!(!real_direct_child_file(
+            &temp.path().join("linked-game"),
+            &temp.path().join("linked-game/mods"),
+            &mods.join("a.jar").canonicalize().unwrap()
+        ));
+        symlink(mods.join("a.jar"), mods.join("leaf.jar")).unwrap();
+        assert!(!real_direct_child_file(
+            &game,
+            &mods,
+            &mods.join("leaf.jar")
+        ));
+        symlink(&mods, game.join("folder")).unwrap();
+        assert!(!real_target_path(&game, &game.join("folder/a.jar")));
+        assert!(!real_direct_child_file(
+            &game,
+            &game.join("folder"),
+            &mods.join("a.jar").canonicalize().unwrap()
+        ));
+        symlink(&game, temp.path().join("parent-link")).unwrap();
+        assert!(!real_direct_child_file(
+            temp.path(),
+            &temp.path().join("parent-link/mods"),
+            &mods.join("a.jar").canonicalize().unwrap()
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn ordinary_windows_root_accepts_verbatim_published_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let game = ordinary_windows_test_path(temp.path());
+        let mods = game.join("mods");
+        fs::create_dir(&mods).unwrap();
+        fs::write(mods.join("a.jar"), b"mod").unwrap();
+        let published = mods.join("a.jar").canonicalize().unwrap();
+        assert!(
+            matches!(game.components().next(), Some(std::path::Component::Prefix(prefix)) if matches!(prefix.kind(), std::path::Prefix::Disk(_)))
+        );
+        assert!(
+            matches!(published.components().next(), Some(std::path::Component::Prefix(prefix)) if matches!(prefix.kind(), std::path::Prefix::VerbatimDisk(_)))
+        );
+        assert_ne!(published.parent(), Some(mods.as_path()));
+        assert!(real_target_path(&game, &published));
+        assert!(real_direct_child_file(&game, &mods, &published));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn junction_roots_and_folders_reject_canonical_candidates() {
+        let temp = tempfile::tempdir().unwrap();
+        let game = ordinary_windows_test_path(temp.path()).join("game");
+        let mods = game.join("mods");
+        fs::create_dir_all(&mods).unwrap();
+        fs::write(mods.join("a.jar"), b"mod").unwrap();
+        let published = mods.join("a.jar").canonicalize().unwrap();
+        for (link, target) in [
+            (game.join("linked-mods"), mods.clone()),
+            (game.with_file_name("linked-game"), game.clone()),
+        ] {
+            let result = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(&link)
+                .arg(&target)
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "junction creation failed: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            assert!(!real_target_path(&link, &published));
+            if target == mods {
+                assert!(!real_direct_child_file(&game, &link, &published));
+                assert!(!real_target_path(&game, &link.join("a.jar")));
+            } else {
+                assert!(!real_direct_child_file(
+                    &link,
+                    &link.join("mods"),
+                    &published
+                ));
+            }
+            fs::remove_dir(&link).unwrap();
+        }
+    }
 
     fn archive(path: &Path, entries: &[(&str, &[u8])]) {
         use std::io::Write;

@@ -210,9 +210,9 @@ fn inventory(instance_id: i32, mods: &Path) -> Result<Vec<InventoryEntry>, Strin
 fn inventory_entry(row: InstalledResource, mods: &Path) -> InventoryEntry {
     let path = Path::new(&row.local_path);
     let present = path.is_file();
-    let inside_mods = path
-        .parent()
-        .is_some_and(|parent| normalize_path(parent) == normalize_path(mods));
+    let inside_mods = mods.parent().is_some_and(|game| {
+        crate::resources::source_enrichment::real_direct_child_file(game, mods, path)
+    });
     let eligible = present
         && inside_mods
         && row.is_enabled
@@ -714,11 +714,7 @@ pub async fn plan_for_paths(
         if !seen_paths.insert(normalize_path(path)) {
             continue;
         }
-        if !path.is_file()
-            || !path
-                .parent()
-                .is_some_and(|parent| normalize_path(parent) == normalize_path(&mods))
-        {
+        if !crate::resources::source_enrichment::real_direct_child_file(&game, &mods, path) {
             warnings.push("A published mod file is missing or outside the instance mod directory; its dependencies could not be checked.".into());
             continue;
         }
@@ -1131,6 +1127,74 @@ impl Task for GuardedDependencyTask {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inventory_accepts_canonical_candidate_under_declared_root_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(temp.path().join("anchor")).unwrap();
+        let mods = temp.path().join("anchor/../game/mods");
+        std::fs::create_dir_all(&mods).unwrap();
+        std::fs::write(mods.join("a.jar"), b"mod").unwrap();
+        let path = mods.join("a.jar").canonicalize().unwrap();
+        let entry = inventory_entry(row(&path, "a", "a1"), &mods);
+        assert!(entry.present && entry.eligible);
+        assert_eq!(entry.row.local_path, path.to_string_lossy());
+    }
+
+    #[test]
+    fn inventory_presence_remains_independent_of_scope_and_enabled_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir_all(mods.join("nested")).unwrap();
+        for path in [
+            temp.path().join("outside.jar"),
+            mods.join("nested/a.jar"),
+            mods.join("a.jar.disabled"),
+        ] {
+            std::fs::write(&path, b"mod").unwrap();
+            let entry = inventory_entry(row(&path, "a", "a1"), &mods);
+            assert!(entry.present);
+            assert!(!entry.eligible);
+        }
+        let entry = inventory_entry(row(&mods.join("missing.jar"), "a", "a1"), &mods);
+        assert!(!entry.present && !entry.eligible);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linked_inventory_is_present_but_ineligible() {
+        use std::os::unix::fs::symlink;
+        let temp = tempfile::tempdir().unwrap();
+        let mods = temp.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        std::fs::write(mods.join("a.jar"), b"mod").unwrap();
+        symlink(mods.join("a.jar"), mods.join("linked.jar")).unwrap();
+        symlink(&mods, temp.path().join("linked-mods")).unwrap();
+        for (directory, path) in [
+            (&mods, mods.join("linked.jar")),
+            (
+                &temp.path().join("linked-mods"),
+                mods.join("a.jar").canonicalize().unwrap(),
+            ),
+        ] {
+            let entry = inventory_entry(row(&path, "a", "a1"), directory);
+            assert!(entry.present && !entry.eligible);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn inventory_accepts_verbatim_candidate_under_ordinary_windows_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let mods = crate::resources::source_enrichment::ordinary_windows_test_path(temp.path())
+            .join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        std::fs::write(mods.join("a.jar"), b"mod").unwrap();
+        let path = mods.join("a.jar").canonicalize().unwrap();
+        assert_ne!(path.parent(), Some(mods.as_path()));
+        let entry = inventory_entry(row(&path, "a", "a1"), &mods);
+        assert!(entry.present && entry.eligible);
+    }
 
     #[test]
     fn approval_ignores_counts_but_rejects_changed_release_facts() {

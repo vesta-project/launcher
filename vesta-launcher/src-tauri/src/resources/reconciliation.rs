@@ -678,13 +678,13 @@ pub(crate) async fn reconcile_prepared_candidates_with_evidence(
             .map(|root| root.join("mods"));
         locals.retain(|local| {
             mods.as_ref().is_some_and(|mods| {
-                local.candidate.path.parent() == Some(mods.as_path())
-                    && mods.parent().is_some_and(|game| {
-                        crate::resources::source_enrichment::real_target_path(
-                            game,
-                            &local.candidate.path,
-                        )
-                    })
+                mods.parent().is_some_and(|game| {
+                    crate::resources::source_enrichment::real_direct_child_file(
+                        game,
+                        mods,
+                        &local.candidate.path,
+                    )
+                })
             }) && ledger::get_resource_by_path(instance_id, &local.candidate.path)
                 .ok()
                 .flatten()
