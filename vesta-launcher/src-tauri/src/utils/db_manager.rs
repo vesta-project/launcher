@@ -223,7 +223,27 @@ pub fn get_app_config_dir() -> Result<PathBuf> {
     let base_dirs = BaseDirs::new()
         .ok_or_else(|| anyhow::anyhow!("Failed to determine user's config directory"))?;
 
-    let base_config_dir = base_dirs.config_dir();
+    // The rewrite's debug runner uses an isolated profile. Release builds keep
+    // the existing location and migration behavior regardless of this variable.
+    #[cfg(debug_assertions)]
+    let dev_profile = std::env::var_os("VESTA_DEV_PROFILE_DIR").map(PathBuf::from);
+    #[cfg(not(debug_assertions))]
+    let dev_profile: Option<PathBuf> = None;
+
+    resolve_app_config_dir(base_dirs.config_dir(), dev_profile.as_deref())
+}
+
+fn resolve_app_config_dir(base_config_dir: &Path, dev_profile: Option<&Path>) -> Result<PathBuf> {
+    if let Some(config_dir) = dev_profile {
+        anyhow::ensure!(
+            config_dir.is_absolute(),
+            "VESTA_DEV_PROFILE_DIR must be an absolute path"
+        );
+        std::fs::create_dir_all(config_dir)?;
+        // Never migrate the user's existing databases into a development profile.
+        return Ok(config_dir.to_path_buf());
+    }
+
     let config_dir = base_config_dir.join(app_config_folder_name());
 
     migrate_legacy_non_windows_config_dir(base_config_dir, &config_dir)?;
@@ -266,6 +286,40 @@ mod tests {
             std::process::id(),
             timestamp
         ))
+    }
+
+    #[test]
+    fn development_profile_does_not_migrate_existing_config() {
+        let root = unique_temp_dir("development-profile");
+        let base = root.join("config");
+        let legacy = base.join(".VestaLauncher");
+        let profile = root.join("rewrite-profile");
+        fs::create_dir_all(&legacy).expect("create legacy config");
+        fs::write(legacy.join("app_config.db"), b"existing").expect("write existing config");
+
+        let actual = resolve_app_config_dir(&base, Some(&profile)).expect("resolve profile");
+
+        assert_eq!(actual, profile);
+        assert!(profile.is_dir());
+        assert!(!profile.join("app_config.db").exists());
+        assert_eq!(
+            fs::read(legacy.join("app_config.db")).expect("existing config stays in place"),
+            b"existing"
+        );
+        #[cfg(not(target_os = "windows"))]
+        assert!(!base.join(app_config_folder_name()).exists());
+
+        fs::remove_dir_all(root).expect("remove test directory");
+    }
+
+    #[test]
+    fn relative_development_profile_is_rejected_without_default_fallback() {
+        let root = unique_temp_dir("relative-development-profile");
+
+        let result = resolve_app_config_dir(&root, Some(Path::new("relative-profile")));
+
+        assert!(result.is_err());
+        assert!(!root.exists());
     }
 
     #[test]

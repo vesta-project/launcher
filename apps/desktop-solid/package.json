@@ -1,15 +1,18 @@
 {
-  "name": "example-bare",
+  "name": "vesta-desktop-solid",
   "version": "0.0.0",
   "description": "",
   "type": "module",
+  "packageManager": "bun@1.3.10",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "lint": "oxlint src"
+    "lint": "oxlint src",
+    "tauri:dev": "bun scripts/tauri.mjs dev",
+    "tauri:build": "bun scripts/tauri.mjs build"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "devDependencies": {
     "@solidjs/diagnostics": "^2.0.0-rc.14",
     "@solidjs/vite-plugin": "^3.0.0-next.48",
@@ -20,6 +23,7 @@
   },
   "dependencies": {
     "@solidjs/web": "^2.0.0-rc.14",
+    "@tauri-apps/api": "^2.11.0",
     "solid-js": "^2.0.0-rc.14"
   }
 }

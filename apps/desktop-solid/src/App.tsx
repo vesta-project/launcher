@@ -1,9 +1,12 @@
-import { createSignal } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
+import { startDesktop } from './platform/desktop';
 import logo from './logo.svg';
 import './App.css';
 
 export default function App() {
   const [count, setCount] = createSignal(0);
+
+  createEffect(() => undefined, () => startDesktop());
 
   return (
     <header class="header">

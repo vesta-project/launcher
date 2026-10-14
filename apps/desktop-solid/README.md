@@ -1,56 +1,29 @@
-## Solid `bare` template
+# Vesta Launcher frontend (Solid 2)
 
-The smallest useful Solid 2.0 app: `solid-js` + `@solidjs/web`, no router, no server dependencies.
+This directory holds the new Solid 2 client. It reuses the existing Rust/Tauri project in `vesta-launcher/src-tauri`; it does not create a second native backend.
 
-**Deployment contract:** `vite build` emits a purely static site — deploy `dist/client` to any static host. No server, no `start` script: Node hosts that run `npm start` after building (Firebase App Hosting, most buildpacks) need either the platform's static product or the SSR flip — see `basic`'s README. The client ships only Solid and your component.
+Install and run the web client from this directory:
 
-## How it works
-
-There is no `index.html` and no mount file. `@solidjs/vite-plugin`'s turnkey mode (`start: true` in `vite.config.ts`) generates the entries around two conventions:
-
-- **`src/App.tsx`** — the app. A plain default-exported component; everything you build lives under it.
-- **`src/Document.tsx`** — the document shell, the new `index.html`. It renders the full `<html>` and is where head tags go (title, meta, favicon). It is compiled only into the prerendered static shell and adds **zero client-side JS**. Delete it to fall back to the plugin's built-in shell.
-
-`vite build` prerenders the shell into `dist/client/index.html` and emits the client assets alongside it.
-
-## Usage
-
-Those templates dependencies are maintained via [pnpm](https://pnpm.io) via `pnpm up -Lri`.
-
-This is the reason you see a `pnpm-lock.yaml`. That being said, any package manager will work. This file can be safely be removed once you clone a template.
-
-```bash
-$ npm install # or pnpm install or yarn install
+```sh
+bun install
+bun dev
 ```
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+Vite binds to `http://localhost:1430` and fails if that port is already occupied. To run the same frontend inside the existing Tauri application, use:
 
-## Available Scripts
+```sh
+bun run tauri:dev
+```
 
-In the project directory, you can run:
+The native command selects the overlay at `apps/desktop-solid/tauri.conf.json`. Tauri merges it with the existing `vesta-launcher/src-tauri/tauri.conf.json`, keeping the existing version, capabilities, plugins, and Rust backend while overriding the frontend hooks, dev URL, static asset directory, and fixture identity. Updater artifacts are disabled for this development fixture, so local builds do not need release signing keys. Rust build output is isolated under `.tauri-target/` in this directory.
 
-### `npm run dev`
+The overlay gives this rewrite fixture a separate `Vesta Launcher (Rewrite)` product name and `com.vesta.launcher.rewrite` identifier. Native dev uses a fresh `.dev-profile/` data directory unless `VESTA_DEV_PROFILE_DIR` is already set. The Rust profile override is debug-only; release builds continue using the existing profile behavior.
 
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Build the static client and native application with:
 
-The page will reload if you make edits.<br>
+```sh
+bun run build
+bun run tauri:build
+```
 
-### `npm run build`
-
-Builds the static production site to `dist/client`.
-
-### `npm run serve`
-
-Serves the production build locally.
-
-## The `ssr` flip
-
-Streaming SSR is one boolean: add `ssr: true` next to `start: true` in `vite.config.ts`. `src/App.tsx` and `src/Document.tsx` carry over unchanged — `<HydrationScript />` is already in place in the Document (in client mode it is stripped from the static shell). The build then emits a request handler to `dist/server` instead of a purely static site; to run it on Node, use `start: { node: true }` so the build also emits a ready-to-run `dist/server/node.js` (`fullstack`'s README covers deployment).
-
-## Growing out of `bare`
-
-- **A router, file-system routes, per-page titles, and testing** come with the `basic` template — same structure, more floors.
-- **A server** (data loading, mutations, sessions, API routes) is the `fullstack` template.
-
-## This project was created with the [Solid CLI](https://github.com/solidjs-community/solid-cli)
+The static client is emitted to `dist/client`. The new frontend imports native APIs from `@tauri-apps/api`; command coverage and launch behavior remain owned by the existing Rust application.

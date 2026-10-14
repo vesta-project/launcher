@@ -12,6 +12,8 @@ app.config.timestamp_*.js
 
 # dependencies
 /node_modules
+/.tauri-target
+/.dev-profile
 
 # IDEs and editors
 /.idea

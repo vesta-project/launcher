@@ -9,7 +9,8 @@ export default defineConfig({
     solid({ start: true, diagnostics: true }), // add `ssr: true` for streaming SSR
   ],
   server: {
-    port: 3000,
+    port: 1430,
+    strictPort: true,
   },
   build: {
     target: 'esnext',
