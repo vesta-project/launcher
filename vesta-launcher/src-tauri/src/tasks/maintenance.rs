@@ -317,6 +317,7 @@ where
             source_modpack_id: resource.source_modpack_id,
             source_modpack_version_id: resource.source_modpack_version_id,
             source_modpack_platform: resource.source_modpack_platform,
+            manual_source_evidence: None,
         };
 
         diesel::insert_into(ir_dsl::installed_resource)

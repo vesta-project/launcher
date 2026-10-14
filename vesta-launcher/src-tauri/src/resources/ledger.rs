@@ -1,4 +1,6 @@
-use crate::models::installed_resource::{InstalledResource, NewInstalledResource};
+use crate::models::installed_resource::{
+    InstalledResource, ManualSourceEvidence, NewInstalledResource,
+};
 use crate::models::instance::Instance;
 use crate::models::resource::{ResourceProject, ResourceVersion, SourcePlatform};
 use crate::schema::installed_resource::dsl as ir_dsl;
@@ -1053,6 +1055,7 @@ fn record_discovered_with_conn(
                     ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
                     ir_dsl::release_type.eq("release"),
                     ir_dsl::hash.eq(Option::<String>::None),
+                    ir_dsl::manual_source_evidence.eq(Option::<ManualSourceEvidence>::None),
                     ir_dsl::file_size.eq(metadata.0),
                     ir_dsl::file_mtime.eq(metadata.1),
                     ir_dsl::source_kind.eq(&effective_provenance.source_kind),
@@ -1103,6 +1106,7 @@ fn record_discovered_with_conn(
             source_modpack_id: provenance.source_modpack_id,
             source_modpack_version_id: provenance.source_modpack_version_id,
             source_modpack_platform: provenance.source_modpack_platform,
+            manual_source_evidence: None,
         })
         .execute(conn)?;
     Ok(true)
@@ -1186,6 +1190,12 @@ fn record_manual_with_conn(
                 ir_dsl::is_enabled.eq(enabled),
                 ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
                 ir_dsl::release_type.eq("release"),
+                ir_dsl::manual_source_evidence.eq(resource.manual_source_evidence.filter(
+                    |evidence| {
+                        hash.as_deref()
+                            .is_some_and(|hash| hash.eq_ignore_ascii_case(&evidence.installed_sha1))
+                    },
+                )),
                 ir_dsl::hash.eq(hash),
                 ir_dsl::file_size.eq(metadata.0),
                 ir_dsl::file_mtime.eq(metadata.1),
@@ -1217,6 +1227,7 @@ fn record_manual_with_conn(
                 source_modpack_id: provenance.source_modpack_id,
                 source_modpack_version_id: provenance.source_modpack_version_id,
                 source_modpack_platform: provenance.source_modpack_platform,
+                manual_source_evidence: None,
             })
             .execute(conn)?;
     }
@@ -1249,6 +1260,81 @@ pub fn record_remote(
         resource_type,
     )?;
     Ok(())
+}
+
+/// Late manual enrichment never creates a row or guesses another same-project
+/// target. The caller holds filesystem mutation exclusion and verifies bytes.
+pub(crate) fn enrich_manual_source(
+    instance_id: i32,
+    resource_id: i32,
+    path: &Path,
+    evidence: &ManualSourceEvidence,
+    resolution: Option<&(ResourceProject, ResourceVersion)>,
+) -> Result<bool> {
+    let mut conn = get_vesta_conn()?;
+    enrich_manual_source_with_conn(
+        &mut conn,
+        instance_id,
+        resource_id,
+        path,
+        evidence,
+        resolution,
+    )
+}
+
+fn enrich_manual_source_with_conn(
+    conn: &mut SqliteConnection,
+    instance_id: i32,
+    resource_id: i32,
+    path: &Path,
+    evidence: &ManualSourceEvidence,
+    resolution: Option<&(ResourceProject, ResourceVersion)>,
+) -> Result<bool> {
+    conn.transaction::<bool, anyhow::Error, _>(|conn| {
+        let Some(row) = ir_dsl::installed_resource
+            .filter(ir_dsl::id.eq(resource_id))
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .filter(ir_dsl::local_path.eq(normalize_path(path)))
+            .first::<InstalledResource>(conn)
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        if row.source_kind != "custom"
+            || row.resource_type != evidence.resource_type
+            || !row
+                .hash
+                .as_deref()
+                .is_some_and(|hash| hash.eq_ignore_ascii_case(&evidence.installed_sha1))
+        {
+            return Ok(false);
+        }
+        if let Some((project, version)) = resolution {
+            anyhow::ensure!(
+                crate::resources::reconciliation::version_matches_sha1(
+                    version,
+                    Some(&evidence.installed_sha1)
+                ),
+                "Source-only evidence cannot authorize installed release identity"
+            );
+            record_remote_with_conn(
+                conn,
+                instance_id,
+                path,
+                project,
+                version,
+                project.source,
+                Some(evidence.installed_sha1.clone()),
+                (row.file_size, row.file_mtime),
+                Some(ResourceProvenance::custom()),
+                Some(&evidence.resource_type),
+            )?;
+        }
+        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
+            .set(ir_dsl::manual_source_evidence.eq(Some(evidence)))
+            .execute(conn)?;
+        Ok(true)
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1310,6 +1396,13 @@ fn record_remote_with_conn(
         }
     }
 
+    let retained_evidence = by_path
+        .as_ref()
+        .and_then(|row| row.manual_source_evidence.clone())
+        .filter(|evidence| {
+            hash.as_deref()
+                .is_some_and(|hash| hash.eq_ignore_ascii_case(&evidence.installed_sha1))
+        });
     let values = (
         ir_dsl::platform.eq(platform),
         ir_dsl::remote_id.eq(&project.id),
@@ -1322,6 +1415,7 @@ fn record_remote_with_conn(
         ir_dsl::is_manual.eq(false),
         ir_dsl::is_enabled.eq(enabled),
         ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
+        ir_dsl::manual_source_evidence.eq(retained_evidence),
         ir_dsl::hash.eq(hash),
         ir_dsl::file_size.eq(metadata.0),
         ir_dsl::file_mtime.eq(metadata.1),
@@ -1507,6 +1601,7 @@ fn record_download_with_conn(
         ir_dsl::is_enabled.eq(true),
         ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
         ir_dsl::hash.eq(Some(hash)),
+        ir_dsl::manual_source_evidence.eq(Option::<ManualSourceEvidence>::None),
         ir_dsl::file_size.eq(metadata.0),
         ir_dsl::file_mtime.eq(metadata.1),
         ir_dsl::source_kind.eq("custom"),
@@ -1588,6 +1683,7 @@ pub fn clone_subtree(
                 continue;
             }
             let local_path = normalize_path(&remap_path(old_path, old_root, new_root)?);
+            let manual_source_evidence = cloned_source_evidence(&row, Path::new(&local_path));
             diesel::insert_into(ir_dsl::installed_resource)
                 .values(NewInstalledResource {
                     instance_id: destination_instance,
@@ -1609,6 +1705,7 @@ pub fn clone_subtree(
                     source_modpack_id: row.source_modpack_id,
                     source_modpack_version_id: row.source_modpack_version_id,
                     source_modpack_platform: row.source_modpack_platform,
+                    manual_source_evidence,
                 })
                 .execute(conn)?;
             changed += 1;
@@ -1686,6 +1783,7 @@ fn insert_cloned_row(
     destination_instance: i32,
     local_path: String,
 ) -> Result<()> {
+    let manual_source_evidence = cloned_source_evidence(row, Path::new(&local_path));
     diesel::insert_into(ir_dsl::installed_resource)
         .values(NewInstalledResource {
             instance_id: destination_instance,
@@ -1707,9 +1805,28 @@ fn insert_cloned_row(
             source_modpack_id: row.source_modpack_id.clone(),
             source_modpack_version_id: row.source_modpack_version_id.clone(),
             source_modpack_platform: row.source_modpack_platform.clone(),
+            manual_source_evidence,
         })
         .execute(conn)?;
     Ok(())
+}
+
+fn cloned_source_evidence(
+    row: &InstalledResource,
+    destination: &Path,
+) -> Option<ManualSourceEvidence> {
+    let mut evidence = row.manual_source_evidence.clone()?;
+    if let crate::models::installed_resource::ManualSourceScope::World { world_id } =
+        &mut evidence.scope
+    {
+        let root = destination.parent()?.parent()?;
+        let read = crate::worlds::manifest::read_manifest(root);
+        if read.status != crate::worlds::manifest::MetadataStatus::Valid {
+            return None;
+        }
+        *world_id = read.manifest?.world_id;
+    }
+    Some(evidence)
 }
 
 pub fn toggled_path(path: &Path, enabled: bool) -> PathBuf {
@@ -1723,7 +1840,7 @@ pub fn toggled_path(path: &Path, enabled: bool) -> PathBuf {
     }
 }
 
-fn resource_type_for_path(path: &Path) -> Option<&'static str> {
+pub(crate) fn resource_type_for_path(path: &Path) -> Option<&'static str> {
     match path
         .parent()
         .and_then(|parent| parent.file_name())
@@ -1752,7 +1869,11 @@ mod tests {
     use std::path::Path;
 
     fn test_connection() -> SqliteConnection {
-        let mut conn = SqliteConnection::establish(":memory:").expect("in-memory sqlite");
+        test_connection_at(":memory:")
+    }
+
+    fn test_connection_at(url: &str) -> SqliteConnection {
+        let mut conn = SqliteConnection::establish(url).expect("test sqlite");
         conn.batch_execute(
             "CREATE TABLE installed_resource (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1774,7 +1895,8 @@ mod tests {
                 source_kind TEXT NOT NULL,
                 source_modpack_id TEXT,
                 source_modpack_version_id TEXT,
-                source_modpack_platform TEXT
+                source_modpack_platform TEXT,
+                manual_source_evidence TEXT
             );",
         )
         .expect("installed_resource schema");
@@ -1834,6 +1956,290 @@ mod tests {
             toggled_path(Path::new("mods/a.jar.disabled"), true),
             Path::new("mods/a.jar")
         );
+    }
+
+    #[test]
+    fn offline_source_evidence_survives_database_reopen_without_remote_identity() {
+        use crate::models::installed_resource::{ManualSourceEvidence, ManualSourceScope};
+        use crate::schema::installed_resource::dsl as ir;
+        let temp = tempfile::tempdir().unwrap();
+        let db = temp.path().join("ledger.sqlite");
+        let path = temp.path().join("resourcepacks/wrapped.zip");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"normalized installed bytes").unwrap();
+        let hash = crate::utils::hash::calculate_sha1(&path).unwrap();
+        let evidence = ManualSourceEvidence {
+            original_sha1: "original-wrapped-archive-sha1".into(),
+            installed_sha1: hash.clone(),
+            resource_type: "resourcepack".into(),
+            scope: ManualSourceScope::Instance,
+            source: None,
+        };
+        let row_id;
+        {
+            let mut conn = test_connection_at(db.to_str().unwrap());
+            super::record_manual_with_conn(
+                &mut conn,
+                1,
+                &path,
+                Some(hash.clone()),
+                (26, 1),
+                "manual",
+                None,
+            )
+            .unwrap();
+            row_id = ir::installed_resource
+                .select(ir::id)
+                .first::<i32>(&mut conn)
+                .unwrap();
+            // Empty provider results follow this same source-only write path.
+            assert!(super::enrich_manual_source_with_conn(
+                &mut conn, 1, row_id, &path, &evidence, None
+            )
+            .unwrap());
+        }
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        let row = ir::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert_eq!(row.manual_source_evidence, Some(evidence.clone()));
+        assert_eq!(row.hash, Some(hash));
+        assert!(row.is_manual);
+        assert!(row.remote_id.is_empty());
+        assert_eq!(std::fs::read(&path).unwrap(), b"normalized installed bytes");
+        let wrong_path = super::toggled_path(&path, false);
+        assert!(!super::enrich_manual_source_with_conn(
+            &mut conn,
+            1,
+            row_id,
+            &wrong_path,
+            &evidence,
+            None
+        )
+        .unwrap());
+        let mut changed = evidence.clone();
+        changed.installed_sha1 = "changed".into();
+        assert!(!super::enrich_manual_source_with_conn(
+            &mut conn, 1, row_id, &path, &changed, None
+        )
+        .unwrap());
+        diesel::delete(ir::installed_resource.filter(ir::id.eq(row_id)))
+            .execute(&mut conn)
+            .unwrap();
+        assert!(!super::enrich_manual_source_with_conn(
+            &mut conn, 1, row_id, &path, &evidence, None
+        )
+        .unwrap());
+        assert_eq!(
+            ir::installed_resource
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn malformed_optional_source_evidence_does_not_hide_installed_rows() {
+        use crate::models::installed_resource::InstalledResource;
+        use crate::schema::installed_resource::dsl as ir;
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![discovered(1, Path::new("/game/mods/local.jar"))],
+        )
+        .unwrap();
+        for evidence in [
+            None,
+            Some("not-json"),
+            Some("[]"),
+            Some(r#"{"originalSha1":"partial"}"#),
+        ] {
+            diesel::sql_query("UPDATE installed_resource SET manual_source_evidence = ?")
+                .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(evidence)
+                .execute(&mut conn)
+                .unwrap();
+            let row = ir::installed_resource
+                .first::<InstalledResource>(&mut conn)
+                .unwrap();
+            assert_eq!(row.local_path, "/game/mods/local.jar");
+            assert!(row.manual_source_evidence.is_none());
+            assert_eq!(
+                ir::installed_resource
+                    .select(InstalledResource::as_select())
+                    .load::<InstalledResource>(&mut conn)
+                    .unwrap()
+                    .len(),
+                1
+            );
+            let mut value = serde_json::to_value(&row).unwrap();
+            value["manualSourceEvidence"] = serde_json::json!({"scope": "malformed"});
+            let decoded: InstalledResource = serde_json::from_value(value).unwrap();
+            assert_eq!(decoded.local_path, row.local_path);
+            assert!(decoded.manual_source_evidence.is_none());
+        }
+    }
+
+    #[test]
+    fn migration_loads_existing_rows_with_nullable_source_evidence() {
+        use crate::schema::installed_resource::dsl as ir;
+        let mut conn = test_connection();
+        record_many_with_conn(
+            &mut conn,
+            vec![discovered(1, Path::new("/game/mods/old.jar"))],
+        )
+        .unwrap();
+        conn.batch_execute("ALTER TABLE installed_resource DROP COLUMN manual_source_evidence;")
+            .unwrap();
+        conn.batch_execute(include_str!(
+            "../../migrations/vesta/2026-10-13-000000_manual_source_evidence/up.sql"
+        ))
+        .unwrap();
+        let row = ir::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert!(row.manual_source_evidence.is_none());
+        assert_eq!(row.local_path, "/game/mods/old.jar");
+    }
+
+    #[test]
+    fn copied_datapack_source_evidence_binds_to_destination_world_identity() {
+        use crate::models::installed_resource::{ManualSourceEvidence, ManualSourceScope};
+        use crate::schema::installed_resource::dsl as ir;
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("saves/Source");
+        let target_root = temp.path().join("saves/Copy");
+        let source_manifest = crate::worlds::manifest::WorldManifest::new(None);
+        let target_manifest = source_manifest.clone_with_new_identity();
+        crate::worlds::manifest::write_manifest(&source_root, &source_manifest).unwrap();
+        crate::worlds::manifest::write_manifest(&target_root, &target_manifest).unwrap();
+        let path = source_root.join("datapacks/pack.zip");
+        let target = target_root.join("datapacks/pack.zip");
+        let mut conn = test_connection();
+        super::record_manual_with_conn(
+            &mut conn,
+            1,
+            &path,
+            Some("installed".into()),
+            (1, 1),
+            "manual",
+            None,
+        )
+        .unwrap();
+        let row_id = ir::installed_resource
+            .select(ir::id)
+            .first::<i32>(&mut conn)
+            .unwrap();
+        let evidence = ManualSourceEvidence {
+            original_sha1: "original".into(),
+            installed_sha1: "installed".into(),
+            resource_type: "datapack".into(),
+            scope: ManualSourceScope::World {
+                world_id: source_manifest.world_id,
+            },
+            source: None,
+        };
+        super::enrich_manual_source_with_conn(&mut conn, 1, row_id, &path, &evidence, None)
+            .unwrap();
+        let row = ir::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        super::insert_cloned_row(&mut conn, &row, 2, target.to_string_lossy().into_owned())
+            .unwrap();
+        let copied = ir::installed_resource
+            .filter(ir::instance_id.eq(2))
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        let copied_evidence = copied.manual_source_evidence.unwrap();
+        assert_eq!(
+            copied_evidence.scope,
+            ManualSourceScope::World {
+                world_id: target_manifest.world_id
+            }
+        );
+        assert_eq!(copied_evidence.original_sha1, evidence.original_sha1);
+        assert_eq!(copied_evidence.installed_sha1, evidence.installed_sha1);
+    }
+
+    #[test]
+    fn source_only_evidence_cannot_be_used_as_installed_release_identity() {
+        use crate::models::installed_resource::{ManualSourceEvidence, ManualSourceScope};
+        use crate::schema::installed_resource::dsl as ir;
+        let mut conn = test_connection();
+        let path = Path::new("/game/saves/World/datapacks/pack.zip");
+        super::record_manual_with_conn(
+            &mut conn,
+            1,
+            path,
+            Some("installed".into()),
+            (1, 1),
+            "manual",
+            None,
+        )
+        .unwrap();
+        let row_id = ir::installed_resource
+            .select(ir::id)
+            .first::<i32>(&mut conn)
+            .unwrap();
+        let mut project: crate::models::resource::ResourceProject = serde_json::from_value(serde_json::json!({
+            "id":"project", "source":"modrinth", "resource_type":"mod", "name":"Pack", "summary":"", "author":"",
+            "authors":[], "download_count":0, "follower_count":0, "categories":[], "web_url":"", "gallery":[]
+        })).unwrap();
+        let mut version = download(path, "datapack", "original").version;
+        version.project_id = project.id.clone();
+        let evidence = ManualSourceEvidence {
+            original_sha1: "original".into(),
+            installed_sha1: "installed".into(),
+            resource_type: "datapack".into(),
+            scope: ManualSourceScope::World {
+                world_id: uuid::Uuid::new_v4(),
+            },
+            source: Some(crate::models::installed_resource::RecognizedSource {
+                platform: "modrinth".into(),
+                project_id: project.id.clone(),
+                version_id: version.id.clone(),
+                version_number: version.version_number.clone(),
+                display_name: project.name.clone(),
+                icon_url: None,
+                web_url: "https://example.invalid/project".into(),
+            }),
+        };
+        assert!(
+            super::enrich_manual_source_with_conn(&mut conn, 1, row_id, path, &evidence, None)
+                .unwrap()
+        );
+        let source_only = ir::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert!(source_only.is_manual && source_only.remote_id.is_empty());
+        assert_eq!(source_only.manual_source_evidence, Some(evidence.clone()));
+        assert!(super::enrich_manual_source_with_conn(
+            &mut conn,
+            1,
+            row_id,
+            path,
+            &evidence,
+            Some(&(project.clone(), version.clone()))
+        )
+        .is_err());
+        version.hash = "installed".into();
+        project.resource_type = crate::models::resource::ResourceType::Mod;
+        assert!(super::enrich_manual_source_with_conn(
+            &mut conn,
+            1,
+            row_id,
+            path,
+            &evidence,
+            Some(&(project, version))
+        )
+        .unwrap());
+        let row = ir::installed_resource
+            .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
+            .unwrap();
+        assert_eq!(row.resource_type, "datapack");
+        assert_eq!(row.source_kind, "custom");
+        assert_eq!(row.local_path, path.to_string_lossy());
+        assert_eq!(row.manual_source_evidence.unwrap().scope, evidence.scope);
     }
 
     #[test]

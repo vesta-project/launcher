@@ -64,3 +64,36 @@ generic-label-skin = Skin
 generic-label-sound = Sound
 generic-label-threaded = Threaded
 generic-label-video = Video
+
+# Manual resource drops.
+resource-drop-add = Add resources
+resource-drop-files-hint = Only .jar or .zip files
+resource-drop-supported-files = Drop .jar mods or .zip resource archives onto an instance.
+resource-drop-unreadable = Some dropped files could not be read.
+resource-drop-not-added = Not added
+resource-drop-start-failed = Couldn't add dropped resources
+resource-drop-unexpected-error = Unexpected error.
+resource-drop-review-title = Choose resources to add
+resource-drop-review-description = Review the contents before adding them to { $instance }. Datapacks will need a world.
+resource-drop-choose-type = Choose a type
+resource-drop-type-for = Resource type for { $name }
+resource-drop-kind-mod = Mods
+resource-drop-kind-datapack = Datapack
+resource-drop-kind-resourcepack = Resource pack
+resource-drop-kind-shader = Shader pack
+resource-drop-kind-world = World
+resource-drop-kind-modpack = Modpack — not supported here
+resource-drop-datapack-batch = { $count ->
+    [one] this datapack
+   *[other] these { $count } datapacks
+}
+resource-drop-install-selected = Add selected resources
+resource-drop-modpack-rejected = Modpacks cannot be added to an existing instance. They have been excluded from this drop.
+resource-drop-dependencies-title = Download missing dependencies?
+resource-drop-dependencies-description = Your dropped mods have been added. These required dependencies are missing. Download them, or keep only the mods you dropped.
+resource-drop-download-dependencies = Download dependencies
+resource-drop-keep-only = Keep only dropped mods
+resource-drop-remember = Remember my choice for manual mod drops
+resource-drop-source-match = Recognized source: { $name } ({ $platform }, { $version })
+resource-drop-source-archive = Source archive: { $name } ({ $platform }, { $version })
+resource-drop-source-explanation = A provider-listed artifact matches the import. This does not prove the download website or authorize replacing normalized content.

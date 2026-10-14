@@ -10,6 +10,15 @@ settings-tab-defaults = Defaults
 settings-tab-developer = Developer
 settings-tab-help = Help
 
+# Manual resource dependencies.
+settings-manual-dependencies-label = Manual mod dependency downloads
+settings-manual-dependencies-description = Choose whether required dependencies are downloaded after identifying mods dropped onto an instance. Optional dependencies are never downloaded automatically.
+settings-manual-dependencies-always = Always
+settings-manual-dependencies-ask = Ask each time
+settings-manual-dependencies-never = Never
+settings-manual-dependencies-save-failed = Couldn't save dependency preference
+settings-manual-dependencies-save-reverted = Your previous preference is still active.
+
 settings-loading = Loading settings…
 settings-general-loading = Loading General Settings…
 settings-general-error = General settings could not be displayed.

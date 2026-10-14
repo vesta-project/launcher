@@ -10,6 +10,16 @@ pub const WORLD_MANIFEST_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct WorldArchiveEvidence {
+    pub original_sha1: String,
+    pub installed_content_sha1: String,
+    pub world_id: Uuid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<crate::models::installed_resource::RecognizedSource>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorldSource {
     pub platform: String,
     pub project_id: String,
@@ -58,6 +68,12 @@ pub struct WorldManifest {
     pub updated_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<WorldSource>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::models::installed_resource::optional_evidence"
+    )]
+    pub archive_evidence: Option<WorldArchiveEvidence>,
     #[serde(default)]
     pub managed_components: Vec<ManagedComponent>,
 }
@@ -71,6 +87,7 @@ impl WorldManifest {
             created_at: now,
             updated_at: now,
             source,
+            archive_evidence: None,
             managed_components: Vec::new(),
         }
     }
@@ -79,6 +96,9 @@ impl WorldManifest {
         let now = Utc::now();
         let mut cloned = self.clone();
         cloned.world_id = Uuid::new_v4();
+        if let Some(evidence) = &mut cloned.archive_evidence {
+            evidence.world_id = cloned.world_id;
+        }
         cloned.created_at = now;
         cloned.updated_at = now;
         let mut bundle_ids = HashMap::new();
@@ -170,7 +190,11 @@ pub fn read_manifest(world_root: &Path) -> ManifestRead {
             manifest: None,
         };
     };
-    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+    read_manifest_bytes(&bytes)
+}
+
+pub(crate) fn read_manifest_bytes(bytes: &[u8]) -> ManifestRead {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return ManifestRead {
             status: MetadataStatus::Corrupt,
             manifest: None,
@@ -336,6 +360,95 @@ fn preserve_corrupt_manifest(world_root: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn old_manifest_and_unmatched_archive_evidence_reload_without_provider_identity() {
+        let temp = TempDir::new().unwrap();
+        let mut manifest = WorldManifest::new(None);
+        write_manifest(temp.path(), &manifest).unwrap();
+        assert!(read_manifest(temp.path())
+            .manifest
+            .unwrap()
+            .archive_evidence
+            .is_none());
+        manifest.archive_evidence = Some(WorldArchiveEvidence {
+            original_sha1: "original-archive".into(),
+            installed_content_sha1: "world-tree".into(),
+            world_id: manifest.world_id,
+            source: None,
+        });
+        write_manifest(temp.path(), &manifest).unwrap();
+        let reloaded = read_manifest(temp.path()).manifest.unwrap();
+        assert_eq!(reloaded, manifest);
+        assert!(reloaded.source.is_none());
+        assert!(reloaded.managed_components.is_empty());
+        let clone = reloaded.clone_with_new_identity();
+        assert_eq!(clone.archive_evidence.unwrap().world_id, clone.world_id);
+    }
+
+    #[test]
+    fn recognized_archive_metadata_roundtrips_with_compatible_world_source() {
+        let temp = TempDir::new().unwrap();
+        let source = WorldSource {
+            platform: "modrinth".into(),
+            project_id: "world".into(),
+            version_id: "release".into(),
+            version_number: "1".into(),
+            sha1: "original".into(),
+            installed_at: Utc::now(),
+        };
+        let mut manifest = WorldManifest::new(Some(source));
+        manifest.archive_evidence = Some(WorldArchiveEvidence {
+            original_sha1: "original".into(),
+            installed_content_sha1: "tree".into(),
+            world_id: manifest.world_id,
+            source: Some(crate::models::installed_resource::RecognizedSource {
+                platform: "modrinth".into(),
+                project_id: "world".into(),
+                version_id: "release".into(),
+                version_number: "1".into(),
+                display_name: "World".into(),
+                icon_url: None,
+                web_url: "https://example.invalid/world".into(),
+            }),
+        });
+        write_manifest(temp.path(), &manifest).unwrap();
+        assert_eq!(read_manifest(temp.path()).manifest, Some(manifest));
+    }
+
+    #[test]
+    fn malformed_optional_archive_evidence_preserves_valid_manifest() {
+        let temp = TempDir::new().unwrap();
+        let manifest = WorldManifest::new(Some(WorldSource {
+            platform: "modrinth".into(),
+            project_id: "world".into(),
+            version_id: "release".into(),
+            version_number: "1".into(),
+            sha1: "original".into(),
+            installed_at: Utc::now(),
+        }));
+        write_manifest(temp.path(), &manifest).unwrap();
+        for evidence in [
+            serde_json::json!("not evidence"),
+            serde_json::json!({"originalSha1": "incomplete"}),
+            serde_json::json!([]),
+            serde_json::Value::Null,
+        ] {
+            let mut value = serde_json::to_value(&manifest).unwrap();
+            value["archiveEvidence"] = evidence;
+            let bytes = serde_json::to_vec(&value).unwrap();
+            fs::write(manifest_path(temp.path()), &bytes).unwrap();
+            let read = read_manifest(temp.path());
+            assert_eq!(read.status, MetadataStatus::Valid);
+            assert_eq!(read.manifest, Some(manifest.clone()));
+            assert_eq!(
+                ensure_manifest_for_management(temp.path()).unwrap(),
+                manifest
+            );
+            assert_eq!(fs::read(manifest_path(temp.path())).unwrap(), bytes);
+            assert_eq!(fs::read_dir(temp.path().join(".vesta")).unwrap().count(), 1);
+        }
+    }
 
     #[test]
     fn listing_read_does_not_create_metadata() {

@@ -230,6 +230,14 @@ pub fn saves_conflict_key(instance_id: i32) -> String {
     format!("saves:{instance_id}")
 }
 
+pub fn mods_conflict_key(instance_id: i32) -> String {
+    format!("mods:{instance_id}")
+}
+
+pub fn shaderpacks_conflict_key(instance_id: i32) -> String {
+    format!("shaderpacks:{instance_id}")
+}
+
 pub fn resourcepacks_conflict_key(instance_id: i32) -> String {
     format!("resourcepacks:{instance_id}")
 }

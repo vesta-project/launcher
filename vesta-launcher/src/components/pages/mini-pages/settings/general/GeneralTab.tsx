@@ -13,6 +13,7 @@ import {
 	handleCloseToTrayToggle,
 	handleDiscordToggle,
 	handleGpuToggle,
+	handleManualModDependencyPolicyChange,
 	handleMaxDownloadThreadsChange,
 	handleProxyApplyToGamesToggle,
 	handleProxyEnabledToggle,
@@ -20,6 +21,8 @@ import {
 	handleReducedMotionToggle,
 	handleShowTrayIconToggle,
 	handleTelemetryToggle,
+	manualModDependencyPolicy,
+	type ManualModDependencyPolicy,
 	maxDownloadThreads,
 	proxyApplyToGames,
 	proxyEnabled,
@@ -60,6 +63,16 @@ import {
 import styles from "../settings-page.module.css";
 
 export function GeneralSettingsTab() {
+	const manualDependencyPolicyLabel = (policy: ManualModDependencyPolicy) => {
+		switch (policy) {
+			case "always":
+				return t("settings-manual-dependencies-always");
+			case "never":
+				return t("settings-manual-dependencies-never");
+			case "ask":
+				return t("settings-manual-dependencies-ask");
+		}
+	};
 	const privacyPolicyUrl =
 		"https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
 
@@ -299,7 +312,7 @@ export function GeneralSettingsTab() {
 				<SettingsCard header="Resources">
 					<SettingsField
 						label="Automatically Install Dependencies"
-						description="Automatically download and install required mods and engines when adding a new resource."
+						description="Download required mods and engines when installing through the resource browser. Manual mod drops use the preference below."
 						headerRight={
 							<Switch
 								checked={autoInstallDependencies()}
@@ -309,6 +322,37 @@ export function GeneralSettingsTab() {
 									<SwitchThumb />
 								</SwitchControl>
 							</Switch>
+						}
+					/>
+					<SettingsField
+						label={t("settings-manual-dependencies-label")}
+						description={t("settings-manual-dependencies-description")}
+						headerRight={
+							<Select<ManualModDependencyPolicy>
+								options={["ask", "always", "never"]}
+								value={manualModDependencyPolicy()}
+								onChange={(value) =>
+									value && void handleManualModDependencyPolicyChange(value)
+								}
+								optionValue={(value) => value}
+								optionTextValue={manualDependencyPolicyLabel}
+								itemComponent={(props) => (
+									<SelectItem item={props.item}>
+										{manualDependencyPolicyLabel(props.item.rawValue)}
+									</SelectItem>
+								)}
+							>
+								<SelectTrigger style={{ "min-width": "180px" }}>
+									<SelectValue<ManualModDependencyPolicy>>
+										{(state) =>
+											manualDependencyPolicyLabel(
+												state.selectedOption() ?? manualModDependencyPolicy(),
+											)
+										}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
 						}
 					/>
 					<SettingsField

@@ -1,0 +1,85 @@
+.dialog {
+	width: min(640px, 92vw);
+	max-width: 640px;
+}
+
+.list {
+	display: grid;
+	gap: 8px;
+	max-height: min(440px, 52vh);
+	margin: 16px 0;
+	overflow-y: auto;
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface-low);
+}
+
+.choice {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	flex: 1;
+}
+
+.name {
+	min-width: 0;
+	overflow: hidden;
+	font-size: 14px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.meta,
+.note {
+	color: var(--text-secondary);
+	font-size: 12px;
+}
+
+.meta {
+	flex-shrink: 0;
+}
+
+.note {
+	margin: 8px 0;
+	overflow-wrap: anywhere;
+}
+
+.remember {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 16px 0;
+	font-size: 13px;
+}
+
+.choice input,
+.remember input {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	accent-color: var(--primary);
+}
+
+.error {
+	color: var(--destructive);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}

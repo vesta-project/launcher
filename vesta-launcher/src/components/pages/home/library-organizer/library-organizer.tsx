@@ -41,11 +41,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
 import {
-	addDroppedMods,
-	canAcceptDroppedMods,
-	DROPPED_MOD_EXTENSIONS,
-	notifyDroppedModsRejected,
-} from "@utils/dropped-mods";
+	addDroppedResources,
+	canAcceptDroppedResources,
+	DROPPED_RESOURCE_EXTENSIONS,
+	notifyDroppedResourcesRejected,
+} from "@utils/dropped-resources";
 import type { DropZoneState } from "@utils/file-drop/drop-controller";
 import { getDropController } from "@utils/file-drop/native-bridge";
 import {
@@ -63,6 +63,7 @@ import {
 	Show,
 } from "solid-js";
 import { Portal } from "solid-js/web";
+import { t } from "~/localization";
 import { watchFileDragOverGroups } from "./file-drag-groups";
 import styles from "./library-organizer.module.css";
 
@@ -760,8 +761,8 @@ function MovableCard(
 			return { state: "ready", label: "Release to group" };
 		if (props.groupPending === props.instance.id) return { state: "pending" };
 		const state = dropTargetForZoneState(dropState());
-		if (state === "ready") return { state, label: "Add mod" };
-		if (state === "rejected") return { state, label: "Only .jar files" };
+		if (state === "ready") return { state, label: t("resource-drop-add") };
+		if (state === "rejected") return { state, label: t("resource-drop-files-hint") };
 	};
 	const move = (groupId: string | null) => {
 		props.mutate(() =>
@@ -796,10 +797,10 @@ function MovableCard(
 		<DropZone
 			unstyled
 			accept="files"
-			allowedExtensions={DROPPED_MOD_EXTENSIONS}
-			disabled={props.editing || !canAcceptDroppedMods(props.instance)}
-			onFileDrop={(paths) => void addDroppedMods(props.instance, paths)}
-			onFilesRejected={notifyDroppedModsRejected}
+			allowedExtensions={DROPPED_RESOURCE_EXTENSIONS}
+			disabled={props.editing || !canAcceptDroppedResources(props.instance)}
+			onFileDrop={(paths) => void addDroppedResources(props.instance, paths)}
+			onFilesRejected={notifyDroppedResourcesRejected}
 			onStateChange={setDropState}
 		>
 			<div

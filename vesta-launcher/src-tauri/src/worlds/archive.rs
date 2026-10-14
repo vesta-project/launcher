@@ -2,14 +2,15 @@ use crate::worlds::level_dat;
 use crate::worlds::manifest::{self, WorldManifest, WorldSource};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs::{self, File, OpenOptions};
-use std::io::{Cursor, Read, Write};
+use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use sysinfo::Disks;
 use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
+use zip::read::HasZipMetadata;
 use zip::ZipArchive;
 
 const MAX_ARCHIVE_ENTRIES: usize = 100_000;
@@ -50,11 +51,240 @@ pub struct InstalledWorld {
     pub path: PathBuf,
 }
 
+/// Preserve buffering across ZIP's current-position and local-header seeks.
+/// The ZIP crate remains responsible for parsing and local-header validation.
+pub(crate) struct ArchiveReader(BufReader<File>);
+impl ArchiveReader {
+    pub(crate) fn open(path: &Path) -> io::Result<Self> {
+        Ok(Self(BufReader::with_capacity(
+            128 * 1024,
+            File::open(path)?,
+        )))
+    }
+}
+impl Read for ArchiveReader {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.0.read(bytes)
+    }
+}
+impl Seek for ArchiveReader {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        let offset = match position {
+            SeekFrom::Current(offset) => Some(offset),
+            SeekFrom::Start(target) => {
+                let current = self.0.stream_position()?;
+                i64::try_from(i128::from(target) - i128::from(current)).ok()
+            }
+            SeekFrom::End(_) => None,
+        };
+        if let Some(offset) = offset {
+            self.0.seek_relative(offset)?;
+            self.0.stream_position()
+        } else {
+            self.0.seek(position)
+        }
+    }
+    fn stream_position(&mut self) -> io::Result<u64> {
+        self.0.stream_position()
+    }
+}
+
+/// Opt-in debug diagnostics contain only static phase names and counters.
+pub(crate) struct ArchiveTiming {
+    start: Option<std::time::Instant>,
+    phase: &'static str,
+    pub(crate) entries: usize,
+    pub(crate) evidence: usize,
+    pub(crate) raw_reads: usize,
+    assignments: usize,
+    pub(crate) bytes: u64,
+}
+impl ArchiveTiming {
+    pub(crate) fn new(phase: &'static str) -> Self {
+        Self {
+            start: (cfg!(debug_assertions)
+                && std::env::var_os("VESTA_ARCHIVE_TIMING").is_some_and(|value| value == "1"))
+            .then(std::time::Instant::now),
+            phase,
+            entries: 0,
+            evidence: 0,
+            raw_reads: 0,
+            assignments: 0,
+            bytes: 0,
+        }
+    }
+}
+impl Drop for ArchiveTiming {
+    fn drop(&mut self) {
+        if let Some(start) = self.start {
+            eprintln!(
+                "vesta-archive phase={} ms={:.3} entries={} raw_reads={} evidence={} bytes={} ownership_assignments={}",
+                self.phase,
+                start.elapsed().as_secs_f64() * 1000.0,
+                self.entries,
+                self.raw_reads,
+                self.evidence,
+                self.bytes,
+                self.assignments
+            );
+        }
+    }
+}
+
+/// Validated central metadata and bounded evidence, shared with manual drops.
+pub(crate) struct WorldArchiveEntry {
+    pub(crate) path: PathBuf,
+    pub(crate) size: u64,
+    pub(crate) directory: bool,
+    pub(crate) level: Option<level_dat::LevelDat>,
+    pub(crate) icon: Option<String>,
+}
+
+/// Central-name lookup only; does not open any payload or embedded archive.
+pub(crate) fn world_icon_entry<R: Read + Seek>(archive: &ZipArchive<R>, path: &Path) -> bool {
+    if !path.file_name().is_some_and(|name| name == "icon.png") || is_wrapper_noise(path) {
+        return false;
+    }
+    let root = path.parent().unwrap_or(Path::new(""));
+    ["level.dat", "level.dat_old"].iter().any(|marker| {
+        root.join(marker)
+            .to_str()
+            .is_some_and(|name| archive.index_for_name(name).is_some())
+    })
+}
+
+pub(crate) fn archive_icon(bytes: &[u8]) -> Option<String> {
+    let dimensions = image::ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()
+        .and_then(|reader| reader.into_dimensions().ok());
+    dimensions
+        .filter(|(width, height)| *width <= 4096 && *height <= 4096)
+        .map(|_| {
+            let mime = crate::utils::image::detect_image_mime(bytes);
+            format!(
+                "data:{mime};base64,{}",
+                general_purpose::STANDARD.encode(bytes)
+            )
+        })
+}
+
+#[derive(Default)]
+struct WorldSummary {
+    size: u64,
+    primary: Option<level_dat::LevelDat>,
+    backup: Option<level_dat::LevelDat>,
+    icon: Option<String>,
+}
+
+/// Assign each entry once, walking its ancestors to find the deepest world.
+/// No archive scans or payload reads are performed by this aggregation.
+pub(crate) fn summarize_inventory(
+    entries: &[WorldArchiveEntry],
+    cancelled: &dyn Fn() -> bool,
+) -> Result<ArchiveInspection, String> {
+    let mut timing = ArchiveTiming::new("world-ownership-summaries");
+    timing.entries = entries.len();
+    let mut roots = BTreeSet::new();
+    for entry in entries {
+        if cancelled() {
+            return Err("Resource inspection cancelled.".into());
+        }
+        if !entry.directory
+            && !is_wrapper_noise(&entry.path)
+            && entry
+                .path
+                .file_name()
+                .is_some_and(|name| name == "level.dat" || name == "level.dat_old")
+        {
+            roots.insert(entry.path.parent().unwrap_or(Path::new("")).to_path_buf());
+            if roots.len() > MAX_WORLD_CANDIDATES {
+                return Err(format!(
+                    "Archive contains more than {MAX_WORLD_CANDIDATES} Java worlds"
+                ));
+            }
+        }
+    }
+    let mut summaries: BTreeMap<PathBuf, WorldSummary> = roots
+        .into_iter()
+        .map(|root| (root, WorldSummary::default()))
+        .collect();
+    for entry in entries {
+        if cancelled() {
+            return Err("Resource inspection cancelled.".into());
+        }
+        for owner in entry.path.ancestors() {
+            if let Some(summary) = summaries.get_mut(owner) {
+                timing.assignments += 1;
+                summary.size = summary
+                    .size
+                    .checked_add(entry.size)
+                    .ok_or("World size overflowed")?;
+                let relative = entry.path.strip_prefix(owner).unwrap();
+                if relative == Path::new("level.dat") {
+                    summary.primary = entry.level.clone();
+                } else if relative == Path::new("level.dat_old") {
+                    summary.backup = entry.level.clone();
+                } else if relative == Path::new("icon.png") {
+                    summary.icon = entry.icon.clone();
+                }
+                break;
+            }
+        }
+    }
+    let roots: Vec<_> = summaries
+        .into_iter()
+        .enumerate()
+        .map(|(index, (root, summary))| {
+            let folder = root
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| !name.is_empty())
+                .unwrap_or("World")
+                .to_string();
+            let level = summary.primary.or(summary.backup);
+            let name = level
+                .as_ref()
+                .and_then(|level| level.level_name.clone())
+                .unwrap_or_else(|| folder.clone());
+            let game_version = level.as_ref().and_then(|level| {
+                level.version_name.clone().or_else(|| {
+                    level
+                        .data_version
+                        .map(|value| format!("DataVersion {value}"))
+                })
+            });
+            let summary = WorldArchiveCandidate {
+                id: format!("candidate-{}", index + 1),
+                name,
+                folder,
+                size_bytes: summary.size,
+                game_version,
+                data_version: level.and_then(|level| level.data_version),
+                icon_data_url: summary.icon,
+            };
+            CandidateRoot { root, summary }
+        })
+        .collect();
+    Ok(ArchiveInspection {
+        candidates: roots.iter().map(|root| root.summary.clone()).collect(),
+        roots,
+    })
+}
+
 pub fn inspect_archive(
     archive_path: &Path,
     saves_directory: &Path,
 ) -> Result<ArchiveInspection, String> {
-    let file = File::open(archive_path)
+    let (inspection, declared_size) = inspect_archive_contents(archive_path)?;
+    // Keep the existing full-source disk preflight for provider inspection.
+    ensure_available_space(saves_directory, declared_size)?;
+    Ok(inspection)
+}
+
+fn inspect_archive_contents(archive_path: &Path) -> Result<(ArchiveInspection, u64), String> {
+    let mut timing = ArchiveTiming::new("world-index-evidence");
+    let file = ArchiveReader::open(archive_path)
         .map_err(|error| format!("Failed to open {}: {error}", archive_path.display()))?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| format!("World download is not a valid ZIP archive: {error}"))?;
@@ -66,14 +296,41 @@ pub fn inspect_archive(
     }
 
     let mut normalized_names = HashSet::new();
+    let mut inventory = Vec::with_capacity(archive.len());
     let mut roots = HashSet::new();
     let mut declared_size = 0_u64;
     let mut declared_compressed_size = 0_u64;
     for index in 0..archive.len() {
-        let entry = archive
-            .by_index(index)
-            .map_err(|error| format!("Failed to inspect archive entry: {error}"))?;
-        let path = safe_entry_path(entry.name())?;
+        let path = safe_entry_path(archive.name_for_index(index).ok_or("Missing ZIP entry")?)?;
+        let is_level = !is_wrapper_noise(&path)
+            && path
+                .file_name()
+                .is_some_and(|name| name == "level.dat" || name == "level.dat_old");
+        let is_icon = world_icon_entry(&archive, &path);
+        // Delegate uncommon codecs to the existing decoded API for exactly the
+        // same support/error behavior as before; common non-evidence is raw.
+        let common_method = if is_level || is_icon {
+            false
+        } else {
+            timing.raw_reads += 1;
+            let raw = archive
+                .by_index_raw(index)
+                .map_err(|error| error.to_string())?;
+            if raw.encrypted() || raw.get_metadata().aes_mode.is_some() {
+                return Err("Encrypted ZIP entry.".into());
+            }
+            matches!(
+                raw.compression(),
+                zip::CompressionMethod::Stored | zip::CompressionMethod::Deflated
+            )
+        };
+        let mut entry = if !is_level && !is_icon && common_method {
+            timing.raw_reads += 1;
+            archive.by_index_raw(index)
+        } else {
+            archive.by_index(index)
+        }
+        .map_err(|error| format!("Failed to inspect archive entry: {error}"))?;
         let folded = portable_collision_key(&path);
         if !normalized_names.insert(folded) {
             return Err(format!(
@@ -100,11 +357,9 @@ pub fn inspect_archive(
                 path.display()
             ));
         }
-        if !is_wrapper_noise(&path)
-            && path
-                .file_name()
-                .is_some_and(|name| name == "level.dat" || name == "level.dat_old")
-        {
+        let is_level = is_level && !entry.is_dir();
+        let is_icon = is_icon && !entry.is_dir();
+        if is_level {
             roots.insert(path.parent().unwrap_or(Path::new("")).to_path_buf());
             if roots.len() > MAX_WORLD_CANDIDATES {
                 return Err(format!(
@@ -112,6 +367,40 @@ pub fn inspect_archive(
                 ));
             }
         }
+        let capture = (is_level && entry.size() <= 16 * 1024 * 1024)
+            || (is_icon && entry.size() <= MAX_ARCHIVE_ICON_BYTES);
+        let size = entry.size();
+        let directory = entry.is_dir();
+        if directory && size != 0 {
+            return Err("Archive directory contains file data.".into());
+        }
+        let mut bytes = Vec::new();
+        if capture {
+            (&mut entry)
+                .take(size + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|error| error.to_string())?;
+            if bytes.len() as u64 != size {
+                return Err("Archive evidence expanded to an unexpected size".into());
+            }
+            timing.evidence += 1;
+            timing.bytes += size;
+        }
+        inventory.push(WorldArchiveEntry {
+            path,
+            size,
+            directory,
+            level: if is_level && capture {
+                level_dat::read_level_gzip_bytes(&bytes).ok()
+            } else {
+                None
+            },
+            icon: if is_icon && capture {
+                archive_icon(&bytes)
+            } else {
+                None
+            },
+        });
     }
     if declared_size > 1024 * 1024
         && (declared_compressed_size == 0
@@ -119,22 +408,9 @@ pub fn inspect_archive(
     {
         return Err("Archive has a suspicious aggregate compression ratio".to_string());
     }
-    ensure_available_space(saves_directory, declared_size)?;
-
-    let mut roots: Vec<_> = roots.into_iter().collect();
-    roots.sort();
-    let all_roots = roots.clone();
-    let mut candidates = Vec::with_capacity(roots.len());
-    let mut candidate_roots = Vec::with_capacity(roots.len());
-    for (index, root) in roots.into_iter().enumerate() {
-        let summary = summarize_candidate(&mut archive, &root, &all_roots, index)?;
-        candidates.push(summary.clone());
-        candidate_roots.push(CandidateRoot { summary, root });
-    }
-    Ok(ArchiveInspection {
-        candidates,
-        roots: candidate_roots,
-    })
+    timing.entries = inventory.len();
+    drop(timing);
+    summarize_inventory(&inventory, &|| false).map(|inspection| (inspection, declared_size))
 }
 
 pub fn install_archive<F>(
@@ -149,7 +425,9 @@ where
 {
     fs::create_dir_all(saves_directory)
         .map_err(|error| format!("Failed to create {}: {error}", saves_directory.display()))?;
-    let inspection = inspect_archive(archive_path, saves_directory)?;
+    // Publication checks selected bytes at their destination, rather than
+    // requiring space for independent worlds/packs that were not selected.
+    let (inspection, _) = inspect_archive_contents(archive_path)?;
     let all_candidate_roots: Vec<PathBuf> = inspection
         .roots
         .iter()
@@ -200,6 +478,7 @@ where
         .iter()
         .map(|candidate| candidate.summary.size_bytes)
         .sum();
+    ensure_available_space(saves_directory, total)?;
     let mut written = 0_u64;
     let mut staged = Vec::new();
 
@@ -357,89 +636,6 @@ fn publish_directory_no_replace(source: &Path, destination: &Path) -> std::io::R
     fs::rename(source, destination)
 }
 
-fn summarize_candidate(
-    archive: &mut ZipArchive<File>,
-    root: &Path,
-    all_roots: &[PathBuf],
-    index: usize,
-) -> Result<WorldArchiveCandidate, String> {
-    let mut size_bytes = 0_u64;
-    let mut primary_level = None;
-    let mut backup_level = None;
-    let mut icon = None;
-    for entry_index in 0..archive.len() {
-        let mut entry = archive
-            .by_index(entry_index)
-            .map_err(|error| error.to_string())?;
-        let path = safe_entry_path(entry.name())?;
-        if belongs_to_descendant_candidate(&path, root, all_roots) {
-            continue;
-        }
-        if strip_candidate_root(&path, root).is_none() {
-            continue;
-        }
-        size_bytes = size_bytes.saturating_add(entry.size());
-        let relative = strip_candidate_root(&path, root).unwrap();
-        if relative == Path::new("level.dat") || relative == Path::new("level.dat_old") {
-            if entry.size() <= 16 * 1024 * 1024 {
-                let mut bytes = Vec::with_capacity(entry.size() as usize);
-                entry
-                    .read_to_end(&mut bytes)
-                    .map_err(|error| error.to_string())?;
-                let parsed = level_dat::read_level_gzip_bytes(&bytes).ok();
-                if relative == Path::new("level.dat") {
-                    primary_level = parsed;
-                } else {
-                    backup_level = parsed;
-                }
-            }
-        } else if relative == Path::new("icon.png") && entry.size() <= MAX_ARCHIVE_ICON_BYTES {
-            let mut bytes = Vec::with_capacity(entry.size() as usize);
-            entry
-                .read_to_end(&mut bytes)
-                .map_err(|error| error.to_string())?;
-            let dimensions = image::ImageReader::new(Cursor::new(&bytes))
-                .with_guessed_format()
-                .ok()
-                .and_then(|reader| reader.into_dimensions().ok());
-            if dimensions.is_some_and(|(width, height)| width <= 4096 && height <= 4096) {
-                let mime = crate::utils::image::detect_image_mime(&bytes);
-                icon = Some(format!(
-                    "data:{mime};base64,{}",
-                    general_purpose::STANDARD.encode(bytes)
-                ));
-            }
-        }
-    }
-    let folder = root
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or("World")
-        .to_string();
-    let level = primary_level.or(backup_level);
-    let name = level
-        .as_ref()
-        .and_then(|level| level.level_name.clone())
-        .unwrap_or_else(|| folder.clone());
-    let game_version = level.as_ref().and_then(|level| {
-        level.version_name.clone().or_else(|| {
-            level
-                .data_version
-                .map(|value| format!("DataVersion {value}"))
-        })
-    });
-    Ok(WorldArchiveCandidate {
-        id: format!("candidate-{}", index + 1),
-        name,
-        folder,
-        size_bytes,
-        game_version,
-        data_version: level.and_then(|level| level.data_version),
-        icon_data_url: icon,
-    })
-}
-
 fn belongs_to_descendant_candidate(path: &Path, root: &Path, all_roots: &[PathBuf]) -> bool {
     all_roots.iter().any(|other| {
         other != root
@@ -449,7 +645,7 @@ fn belongs_to_descendant_candidate(path: &Path, root: &Path, all_roots: &[PathBu
     })
 }
 
-fn safe_entry_path(name: &str) -> Result<PathBuf, String> {
+pub(crate) fn safe_entry_path(name: &str) -> Result<PathBuf, String> {
     if name.contains('\\') || name.as_bytes().contains(&0) {
         return Err(format!("Archive contains unsafe path {name:?}"));
     }
@@ -526,7 +722,7 @@ fn validate_portable_component(component: &str, full_path: &str) -> Result<(), S
     Ok(())
 }
 
-fn portable_collision_key(path: &Path) -> String {
+pub(crate) fn portable_collision_key(path: &Path) -> String {
     let normalized: String = path
         .components()
         .filter_map(|component| match component {
@@ -541,8 +737,8 @@ fn portable_collision_key(path: &Path) -> String {
     normalized.nfc().collect()
 }
 
-fn reject_unsupported_entry_kind(
-    entry: &zip::read::ZipFile<'_, File>,
+pub(crate) fn reject_unsupported_entry_kind<R: Read>(
+    entry: &zip::read::ZipFile<'_, R>,
     path: &Path,
 ) -> Result<(), String> {
     if let Some(mode) = entry.unix_mode() {
@@ -574,7 +770,7 @@ fn is_wrapper_noise(path: &Path) -> bool {
         .any(|component| component.as_os_str() == "__MACOSX")
 }
 
-fn ensure_available_space(destination: &Path, declared_size: u64) -> Result<(), String> {
+pub(crate) fn ensure_available_space(destination: &Path, declared_size: u64) -> Result<(), String> {
     let probe = destination
         .canonicalize()
         .or_else(|_| destination.parent().unwrap_or(destination).canonicalize())
@@ -988,5 +1184,105 @@ mod tests {
                 .len(),
             1
         );
+    }
+    #[test]
+    fn summaries_assign_descendants_once_and_preserve_ids_backup_and_icons() {
+        let mut png = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgba8(16, 16)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let parent_level = level_bytes("Parent");
+        let child_level = level_bytes("Child");
+        let parent_payload = vec![7; 100];
+        let child_payload = vec![8; 200];
+        let (temp, path) = zip_with(&[
+            ("wrap/wrap/Parent/level.dat", b"bad NBT".to_vec()),
+            ("wrap/wrap/Parent/level.dat_old", parent_level.clone()),
+            ("wrap/wrap/Parent/icon.png", png.get_ref().clone()),
+            ("wrap/wrap/Parent/region/a", parent_payload.clone()),
+            ("wrap/wrap/Parent/Child/level.dat", child_level.clone()),
+            ("wrap/wrap/Parent/Child/region/b", child_payload.clone()),
+            ("wrap/wrap/Parent/Child/opaque.zip", b"not a ZIP".to_vec()),
+            ("unowned/icon.png", b"invalid image".to_vec()),
+        ]);
+        let inspection = inspect_archive(&path, temp.path()).unwrap();
+        assert_eq!(inspection.candidates.len(), 2);
+        let parent = &inspection.candidates[0];
+        let child = &inspection.candidates[1];
+        assert_eq!(
+            (&parent.id, &parent.name),
+            (&"candidate-1".into(), &"Parent".into())
+        );
+        assert_eq!(
+            (&child.id, &child.name),
+            (&"candidate-2".into(), &"Child".into())
+        );
+        assert_eq!(
+            parent.size_bytes,
+            7 + parent_level.len() as u64 + png.get_ref().len() as u64 + 100
+        );
+        assert_eq!(child.size_bytes, child_level.len() as u64 + 200 + 9);
+        assert_eq!(parent.data_version, Some(3465));
+        assert!(parent
+            .icon_data_url
+            .as_ref()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
+        assert!(child.icon_data_url.is_none());
+        let saves = TempDir::new().unwrap();
+        let installed = install_archive(
+            &path,
+            saves.path(),
+            &[parent.id.clone(), child.id.clone()],
+            None,
+            |_, _| Ok(()),
+        )
+        .unwrap();
+        assert!(!installed[0].path.join("Child").exists());
+        assert_eq!(
+            fs::read(installed[1].path.join("opaque.zip")).unwrap(),
+            b"not a ZIP"
+        );
+    }
+
+    #[test]
+    fn provider_inspection_retains_supported_non_deflate_codecs() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("world.zip");
+        let mut writer = zip::ZipWriter::new(File::create(&path).unwrap());
+        for (name, bytes) in [
+            ("World/level.dat", level_bytes("Bzip")),
+            ("World/region/a", vec![7; 128]),
+        ] {
+            writer
+                .start_file(
+                    name,
+                    zip::write::SimpleFileOptions::default()
+                        .compression_method(zip::CompressionMethod::Bzip2),
+                )
+                .unwrap();
+            writer.write_all(&bytes).unwrap();
+        }
+        writer.finish().unwrap();
+        assert_eq!(
+            inspect_archive(&path, temp.path()).unwrap().candidates[0].name,
+            "Bzip"
+        );
+    }
+
+    #[test]
+    fn buffered_reader_retains_bytes_across_current_and_absolute_seeks() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("reader.bin");
+        fs::write(&path, vec![7; 1024]).unwrap();
+        let mut reader = ArchiveReader::open(&path).unwrap();
+        let mut bytes = [0; 32];
+        reader.read_exact(&mut bytes).unwrap();
+        fs::write(&path, vec![8; 1024]).unwrap();
+        assert_eq!(reader.seek(SeekFrom::Current(0)).unwrap(), 32);
+        assert_eq!(reader.seek(SeekFrom::Start(16)).unwrap(), 16);
+        reader.read_exact(&mut bytes).unwrap();
+        assert_eq!(bytes, [7; 32]); // cached bytes, rather than a discarded buffer
+        assert_eq!(reader.stream_position().unwrap(), 48);
     }
 }

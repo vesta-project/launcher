@@ -396,3 +396,31 @@ mod add_dropped_mods_tests {
         }
     }
 }
+
+/// Inspect and apply a mixed manual resource drop. The operation owns its
+/// notification and UI decisions independently of Task Manager workers.
+#[tauri::command]
+pub async fn start_resource_drop(
+    app: tauri::AppHandle,
+    instance_id: i32,
+    paths: Vec<String>,
+) -> Result<String, String> {
+    crate::resources::manual_drop::start(app, instance_id, paths)
+}
+
+#[tauri::command]
+pub async fn submit_resource_drop_choice(
+    app: tauri::AppHandle,
+    decision_id: String,
+    response: crate::resources::manual_drop::ManualDropResponse,
+) -> Result<(), String> {
+    crate::resources::manual_drop::submit(&app, &decision_id, response)
+}
+
+#[tauri::command]
+pub async fn cancel_resource_drop(
+    app: tauri::AppHandle,
+    operation_id: String,
+) -> Result<(), String> {
+    crate::resources::manual_drop::cancel(&app, &operation_id)
+}

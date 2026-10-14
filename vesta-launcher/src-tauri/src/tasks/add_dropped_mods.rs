@@ -11,12 +11,12 @@ use crate::resources::reconciliation::{
     unresolved_candidates_for_instance,
 };
 use crate::resources::watcher::ResourceWatcher;
-use crate::tasks::manager::{BoxFuture, Task, TaskContext};
+use crate::tasks::manager::{mods_conflict_key, BoxFuture, Task, TaskContext};
 use crate::utils::instance_helpers::normalize_path;
 use crate::utils::network::{NetworkManager, NetworkStatus};
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{self, ErrorKind};
+use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
@@ -39,7 +39,7 @@ pub(crate) enum SkipReason {
 }
 
 impl SkipReason {
-    fn describe(self) -> &'static str {
+    pub(crate) fn describe(self) -> &'static str {
         match self {
             SkipReason::NotAbsolute => "path is not absolute",
             SkipReason::Unreadable => "could not be read",
@@ -90,12 +90,6 @@ impl AddDroppedModsTask {
             outcome: Arc::new(Mutex::new(None)),
         }
     }
-}
-
-/// Serialises drops into one instance's mods folder. Follows the
-/// `<area>:<instance_id>` shape of the keys in `tasks/manager.rs`.
-fn mods_conflict_key(instance_id: i32) -> String {
-    format!("mods:{instance_id}")
 }
 
 impl Task for AddDroppedModsTask {
@@ -229,7 +223,7 @@ fn add_source(source: &Path, mods_dir: &Path) -> Result<PathBuf, SkipReason> {
 
 /// Checks that `source` is an absolute, non-empty, regular `.jar` file that
 /// parses as a zip archive. Only the archive directory is read.
-fn validate_source(source: &Path) -> Result<(), SkipReason> {
+pub(crate) fn validate_source(source: &Path) -> Result<(), SkipReason> {
     if !source.is_absolute() {
         return Err(SkipReason::NotAbsolute);
     }
@@ -301,7 +295,18 @@ fn numbered_file_name(file_name: &str, number: usize) -> String {
 /// then claimed with a no-replace rename (`tempfile::persist_noclobber`), which
 /// fails rather than overwriting if the name appeared in the meantime. The temp
 /// file is removed on every failure path.
-fn publish_jar(source: &Path, mods_dir: &Path) -> io::Result<PathBuf> {
+pub(crate) fn publish_jar(source: &Path, mods_dir: &Path) -> io::Result<PathBuf> {
+    publish_file_with_cancel(source, mods_dir, || Ok(()))
+}
+
+/// Same atomic no-clobber publication for normalized packs and jars. The caller
+/// validates format and destination scope; cancellation is checked per chunk
+/// and immediately before claiming the final name.
+pub(crate) fn publish_file_with_cancel(
+    source: &Path,
+    mods_dir: &Path,
+    mut check_cancel: impl FnMut() -> io::Result<()>,
+) -> io::Result<PathBuf> {
     let file_name = safe_file_name(source)
         .map_err(|reason| io::Error::new(ErrorKind::InvalidInput, reason.describe()))?;
     let mut input = File::open(source)?;
@@ -317,10 +322,19 @@ fn publish_jar(source: &Path, mods_dir: &Path) -> io::Result<PathBuf> {
         .prefix(".vesta-drop-")
         .suffix(".tmp")
         .tempfile_in(mods_dir)?;
-    io::copy(&mut input, staged.as_file_mut())?;
+    let mut buffer = [0_u8; 128 * 1024];
+    loop {
+        check_cancel()?;
+        let read = input.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        staged.as_file_mut().write_all(&buffer[..read])?;
+    }
     staged.as_file().sync_all()?;
 
     for number in 1..=MAX_NAME_ATTEMPTS {
+        check_cancel()?;
         let destination = mods_dir.join(numbered_file_name(&file_name, number));
         match staged.persist_noclobber(&destination) {
             Ok(_) => return Ok(destination),

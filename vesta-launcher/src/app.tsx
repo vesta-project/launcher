@@ -5,6 +5,7 @@ import { FatalPage } from "@components/pages/fatal/fatal-page";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
+import { ManualResourceDropDialog } from "@components/resources/ManualResourceDropDialog";
 import { WorldArchiveSelectionDialog } from "@components/worlds/WorldArchiveSelectionDialog";
 import { Route, Router } from "@solidjs/router";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@stores/dialog-store";
 import "@stores/versions"; // eager-load version metadata on boot
 import { setupInstanceListeners } from "@stores/instances";
+import { startManualDropChoiceListener } from "@stores/manual-resource-drops";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -86,6 +88,7 @@ function Root(props: ChildrenProp) {
 	const disposeNativeDropProbe = initializeNativeDropProbe();
 	// Routes native OS drops to registered DropZones. Same opt-in flag as the probe.
 	const disposeNativeFileDrop = startNativeFileDrop();
+	const disposeManualDropChoices = startManualDropChoiceListener();
 
 	// Global window-level drag events to manage the sniffer
 	const manager = getDropZoneManager();
@@ -465,6 +468,7 @@ function Root(props: ChildrenProp) {
 		cleanupFileDropSystem();
 		disposeNativeDropProbe();
 		disposeNativeFileDrop();
+		disposeManualDropChoices();
 
 		window.removeEventListener("dragenter", handleWindowDragEnter);
 		window.removeEventListener("dragover", handleWindowDragOver);
@@ -480,6 +484,7 @@ function Root(props: ChildrenProp) {
 			<SessionExpiredDialog />
 			<DialogRoot />
 			<WorldArchiveSelectionDialog />
+			<ManualResourceDropDialog />
 		</>
 	);
 }

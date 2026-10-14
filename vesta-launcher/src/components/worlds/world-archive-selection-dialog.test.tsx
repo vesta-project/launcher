@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
 	listener: undefined as
 		| ((event: { payload: Record<string, any> }) => void)
 		| undefined,
+	closedListener: undefined as
+		| ((event: { payload: { installId: string } }) => void)
+		| undefined,
 	submit: vi.fn().mockResolvedValue(undefined),
 	unlisten: vi.fn(),
 }));
@@ -16,16 +19,20 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn(
 		(
-			_event: string,
+			event: string,
 			listener: (event: { payload: Record<string, any> }) => void,
 		) => {
-			mocks.listener = listener;
+			if (event === "core://world-install-selection-required")
+				mocks.listener = listener;
+			if (event === "core://world-install-selection-closed")
+				mocks.closedListener = listener;
 			return Promise.resolve(mocks.unlisten);
 		},
 	),
 }));
 
 vi.mock("@stores/worlds", () => ({
+	registerWorldArchiveChoiceReadiness: () => () => undefined,
 	submitWorldArchiveSelection: mocks.submit,
 }));
 
@@ -90,6 +97,7 @@ describe("WorldArchiveSelectionDialog", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mocks.listener = undefined;
+		mocks.closedListener = undefined;
 		mocks.submit.mockResolvedValue(undefined);
 	});
 
@@ -136,6 +144,63 @@ describe("WorldArchiveSelectionDialog", () => {
 
 		await screen.findByText(/Second Collection/);
 		expect(mocks.submit).toHaveBeenCalledWith("install-1", []);
+	});
+
+	it("retires external cancellation without cancelling the next request", async () => {
+		await openRequest();
+		mocks.listener?.({
+			payload: {
+				...request,
+				installId: "install-2",
+				project: { name: "Second Collection" },
+			},
+		});
+		mocks.closedListener?.({ payload: { installId: "install-1" } });
+
+		await screen.findByText(/Second Collection/);
+		expect(mocks.submit).not.toHaveBeenCalled();
+		mocks.closedListener?.({ payload: { installId: "install-1" } });
+		expect(screen.getByText(/Second Collection/)).toBeTruthy();
+	});
+
+	it("does not let a stale submission advance an externally opened next request", async () => {
+		await openRequest();
+		let resolveSubmission!: () => void;
+		mocks.submit.mockReturnValueOnce(
+			new Promise<void>((resolve) => {
+				resolveSubmission = resolve;
+			}),
+		);
+		mocks.listener?.({
+			payload: {
+				...request,
+				installId: "install-2",
+				project: { name: "Second Collection" },
+			},
+		});
+		await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		mocks.closedListener?.({ payload: { installId: "install-1" } });
+		await screen.findByText(/Second Collection/);
+		resolveSubmission();
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Cancel" })).toHaveProperty(
+				"disabled",
+				false,
+			),
+		);
+		expect(screen.getByText(/Second Collection/)).toBeTruthy();
+		expect(mocks.submit).toHaveBeenCalledTimes(1);
+	});
+
+	it("cancels current and queued requests and both subscriptions on cleanup", async () => {
+		const { unmount } = render(() => <WorldArchiveSelectionDialog />);
+		await waitFor(() => expect(mocks.closedListener).toBeTypeOf("function"));
+		mocks.listener?.({ payload: request });
+		mocks.listener?.({ payload: { ...request, installId: "install-2" } });
+		unmount();
+		expect(mocks.submit).toHaveBeenCalledWith("install-1", []);
+		expect(mocks.submit).toHaveBeenCalledWith("install-2", []);
+		expect(mocks.unlisten).toHaveBeenCalledTimes(2);
 	});
 
 	it("dismisses an expired backend request", async () => {

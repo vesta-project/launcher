@@ -11,6 +11,7 @@ import TimerIcon from "@assets/icons/content/timer.svg";
 import InstanceSelectionDialog, {
 	type InstanceSelectionOption,
 } from "@components/instances/InstanceSelectionDialog";
+import { ManualSourceLabel } from "@components/resources/ManualSourceLabel";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
 import { type Instance, instancesState } from "@stores/instances";
@@ -49,6 +50,7 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { formatDate } from "@utils/date";
 import { formatBytes } from "@utils/format-bytes";
+import { worldManualSource } from "@utils/manual-source-evidence";
 import {
 	type Component,
 	createEffect,
@@ -195,6 +197,10 @@ export const WorldCard: Component<{
 						>
 							{props.world.displayName}
 						</h3>
+						<ManualSourceLabel
+							source={worldManualSource(props.world)}
+							originalArtifact
+						/>
 					</div>
 					<div class={styles.metadata}>
 						<span

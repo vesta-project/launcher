@@ -30,6 +30,9 @@ pub async fn request_selection(
     candidates: Vec<WorldArchiveCandidate>,
     mut cancel_rx: tokio::sync::watch::Receiver<bool>,
 ) -> Result<Vec<String>, String> {
+    if *cancel_rx.borrow() {
+        return Err("World installation cancelled".to_string());
+    }
     let install_id = Uuid::new_v4().to_string();
     let (sender, receiver) = oneshot::channel();
     pending()
@@ -59,11 +62,18 @@ pub async fn request_selection(
             std::time::Duration::from_secs((SELECTION_TIMEOUT_MINUTES * 60) as u64),
             receiver,
         ) => response,
-        _ = cancel_rx.changed() => {
+        _ = async {
+            if !*cancel_rx.borrow() { let _ = cancel_rx.changed().await; }
+        } => {
             pending().lock().ok().and_then(|mut map| map.remove(&install_id));
+            let _ = app_handle.emit("core://world-install-selection-closed", serde_json::json!({"installId": install_id}));
             return Err("World installation cancelled".to_string());
         }
     };
+    let _ = app_handle.emit(
+        "core://world-install-selection-closed",
+        serde_json::json!({"installId": install_id}),
+    );
     match response {
         Ok(Ok(selected)) if !selected.is_empty() => Ok(selected),
         Ok(Ok(_)) => Err("World installation was cancelled".to_string()),

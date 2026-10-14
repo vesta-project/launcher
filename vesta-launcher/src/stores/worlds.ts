@@ -1,7 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { createStore, reconcile } from "solid-js/store";
-import type { ResourceVersion } from "./resources";
+import type {
+	ManualSourceEvidence,
+	RecognizedSource,
+	ResourceVersion,
+} from "./resources";
 
 export type WorldRef = {
 	instanceId: number;
@@ -15,6 +19,13 @@ export type ResourceInstallTarget =
 export type WorldStorageFamily = "alpha" | "mcregion" | "anvil" | "unknown";
 export type WorldLevelStatus = "valid" | "recovered" | "unreadable";
 export type WorldMetadataStatus = "absent" | "valid" | "corrupt" | "future";
+
+export type WorldArchiveEvidence = {
+	originalSha1: string;
+	installedContentSha1: string;
+	worldId: string;
+	source?: RecognizedSource | null;
+};
 
 export type WorldSummary = {
 	ref: WorldRef;
@@ -33,6 +44,7 @@ export type WorldSummary = {
 	datapackCount: number;
 	managedDatapackCount: number;
 	running: boolean;
+	archiveEvidence?: WorldArchiveEvidence | null;
 };
 
 export type WorldTransferMode = "move" | "copy" | "duplicate";
@@ -62,6 +74,28 @@ export type WorldArchiveSelectionRequest = {
 	expiresAt: string;
 };
 
+let archiveChoiceListener: { ready: Promise<void> } | undefined;
+
+/** The root dialog owns subscriptions; import callers wait before starting work. */
+export function registerWorldArchiveChoiceReadiness(
+	ready: Promise<void>,
+): () => void {
+	const current = { ready };
+	archiveChoiceListener = current;
+	void ready.catch(() => undefined);
+	return () => {
+		if (archiveChoiceListener === current) archiveChoiceListener = undefined;
+	};
+}
+
+export async function waitForWorldArchiveChoices(): Promise<void> {
+	const current = archiveChoiceListener;
+	if (!current) throw new Error("World archive selection is unavailable.");
+	await current.ready;
+	if (archiveChoiceListener !== current)
+		throw new Error("World archive selection is unavailable.");
+}
+
 export type InstanceWorldsChangedEvent = {
 	instanceId: number;
 	revision: number;
@@ -84,6 +118,7 @@ export type WorldDatapackSummary = {
 	readOnly: boolean;
 	sizeBytes: number;
 	modifiedAt: string | null;
+	manualSourceEvidence?: ManualSourceEvidence | null;
 };
 
 export type WorldDatapackOverview = {

@@ -5,6 +5,7 @@ import ReloadIcon from "@assets/icons/actions/reload.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
 import FolderIcon from "@assets/icons/content/folder.svg";
 import PackIcon from "@assets/icons/content/layers.svg";
+import { ManualSourceLabel } from "@components/resources/ManualSourceLabel";
 import { SubpageBackButton } from "@components/settings/SubpageBackButton";
 import { WorldIcon } from "@components/worlds/WorldIcon";
 import { dialogStore } from "@stores/dialog-store";
@@ -40,6 +41,7 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { formatDate } from "@utils/date";
 import { formatBytes } from "@utils/format-bytes";
+import { datapackManualSource } from "@utils/manual-source-evidence";
 import {
 	type Component,
 	createEffect,
@@ -241,6 +243,13 @@ const DatapackRow: Component<{
 						<span>{formatDate(props.entry.modifiedAt)}</span>
 					</Show>
 				</div>
+				<ManualSourceLabel
+					source={datapackManualSource(props.entry, props.world)}
+					originalArtifact={
+						props.entry.manualSourceEvidence?.originalSha1 !==
+						props.entry.manualSourceEvidence?.installedSha1
+					}
+				/>
 				<Show when={props.entry.fileName !== props.entry.displayName}>
 					<div class={styles.filename} title={props.entry.fileName}>
 						{props.entry.fileName}

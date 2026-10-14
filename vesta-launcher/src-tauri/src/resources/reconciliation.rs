@@ -35,6 +35,48 @@ pub struct KnownResourceResolution {
     pub platform: SourcePlatform,
 }
 
+/// Release identity is evidence only for an exact advertised artifact, including
+/// alternate files. A CurseForge fingerprint alone is not content identity.
+pub(crate) fn version_matches_sha1(version: &ResourceVersion, sha1: Option<&str>) -> bool {
+    let Some(sha1) = sha1.filter(|hash| !hash.is_empty()) else {
+        return false;
+    };
+    (!version.hash.is_empty() && version.hash.eq_ignore_ascii_case(sha1))
+        || version
+            .files
+            .iter()
+            .any(|file| !file.hash.is_empty() && file.hash.eq_ignore_ascii_case(sha1))
+}
+
+/// Shared strict artifact seam. Neither a lookup key nor a CF fingerprint is
+/// identity without an advertised SHA-1 and consistent project/version facts.
+pub(crate) fn verified_artifact(
+    found: &(ResourceProject, ResourceVersion),
+    platform: SourcePlatform,
+    sha1: &str,
+) -> bool {
+    found.0.source == platform
+        && found.1.project_id == found.0.id
+        && !found.0.id.is_empty()
+        && !found.1.id.is_empty()
+        && version_matches_sha1(&found.1, Some(sha1))
+}
+
+fn validate_retained_resolution(
+    candidate: &mut ResourceCandidate,
+    sha1: Option<&str>,
+    expected: Option<&str>,
+) {
+    if candidate.resolved.as_ref().is_some_and(|resolved| {
+        !version_matches_sha1(&resolved.version, sha1)
+            || expected.is_some_and(|expected| {
+                !sha1.is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+            })
+    }) {
+        candidate.resolved = None;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedResourceCandidate {
     candidate: ResourceCandidate,
@@ -113,6 +155,21 @@ pub struct ReconciliationSummary {
     pub identified: usize,
     pub unresolved: usize,
     pub metadata_refs: Vec<ResourceProjectRef>,
+}
+
+/// Actual matched file/version facts retained for manual dependency planning.
+#[derive(Debug, Clone)]
+pub(crate) struct IdentifiedResource {
+    pub path: PathBuf,
+    pub project: ResourceProject,
+    pub version: ResourceVersion,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ReconciliationEvidence {
+    pub summary: ReconciliationSummary,
+    pub resolutions: Vec<IdentifiedResource>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -248,6 +305,31 @@ pub(crate) async fn prepare_candidates_with_progress(
     candidates: Vec<ResourceCandidate>,
     progress: Option<LocalFactProgress>,
 ) -> Vec<PreparedResourceCandidate> {
+    prepare_candidates_inner(instance_id, candidates, progress, None).await
+}
+
+/// Explicit manual roots must yield evidence even for unchanged identified rows.
+/// Retained metadata is bound to the content verified before provider awaits.
+pub(crate) async fn prepare_manual_dependency_candidates(
+    instance_id: i32,
+    candidates: Vec<ResourceCandidate>,
+    retained_hashes: HashMap<String, String>,
+) -> Vec<PreparedResourceCandidate> {
+    prepare_candidates_inner(
+        instance_id,
+        candidates,
+        None,
+        Some(Arc::new(retained_hashes)),
+    )
+    .await
+}
+
+async fn prepare_candidates_inner(
+    instance_id: i32,
+    candidates: Vec<ResourceCandidate>,
+    progress: Option<LocalFactProgress>,
+    retained_hashes: Option<Arc<HashMap<String, String>>>,
+) -> Vec<PreparedResourceCandidate> {
     let total = candidates.len();
     let existing = Arc::new(
         crate::utils::db::get_vesta_conn()
@@ -266,43 +348,20 @@ pub(crate) async fn prepare_candidates_with_progress(
 
     let mut pending = stream::iter(candidates.into_iter().map(|candidate| {
         let existing = existing.clone();
+        let retained_hashes = retained_hashes.clone();
         async move {
             let path = candidate.path.clone();
             let existing = existing.get(&normalize_path(&path)).cloned();
             tokio::task::spawn_blocking(move || {
-                let metadata = std::fs::metadata(&path)
-                    .map(|metadata| {
-                        (
-                            metadata.len() as i64,
-                            metadata
-                                .modified()
-                                .ok()
-                                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|duration| duration.as_secs() as i64)
-                                .unwrap_or(0),
-                        )
-                    })
-                    .unwrap_or((0, 0));
-                let enabled = !path.to_string_lossy().to_lowercase().ends_with(".disabled");
-                if existing.as_ref().is_some_and(|resource| {
-                    resource.file_size == metadata.0
-                        && resource.file_mtime == metadata.1
-                        && resource.is_enabled == enabled
-                        && !resource.remote_id.is_empty()
-                        && matches!(resource.platform.as_str(), "modrinth" | "curseforge")
-                }) {
-                    return None;
-                }
-                let sha1 = calculate_sha1(&path).ok();
-                let curseforge_fingerprint = calculate_curseforge_fingerprint(&path)
-                    .ok()
-                    .map(|value| value.to_string());
-                Some(PreparedResourceCandidate {
+                prepare_candidate(
                     candidate,
-                    sha1,
-                    curseforge_fingerprint,
-                    metadata,
-                })
+                    existing.as_ref(),
+                    retained_hashes.is_some(),
+                    retained_hashes
+                        .as_ref()
+                        .and_then(|hashes| hashes.get(&normalize_path(&path)))
+                        .map(String::as_str),
+                )
             })
             .await
             .ok()
@@ -323,6 +382,54 @@ pub(crate) async fn prepare_candidates_with_progress(
         }
     }
     prepared
+}
+
+fn prepare_candidate(
+    mut candidate: ResourceCandidate,
+    existing: Option<&InstalledResource>,
+    explicit: bool,
+    expected_hash: Option<&str>,
+) -> Option<PreparedResourceCandidate> {
+    let path = candidate.path.clone();
+    let metadata = std::fs::metadata(&path)
+        .map(|metadata| {
+            (
+                metadata.len() as i64,
+                metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|duration| duration.as_secs() as i64)
+                    .unwrap_or(0),
+            )
+        })
+        .unwrap_or((0, 0));
+    let enabled = !path.to_string_lossy().to_lowercase().ends_with(".disabled");
+    if existing.is_some_and(|resource| {
+        !explicit
+            && candidate.resolved.is_none()
+            && resource.file_size == metadata.0
+            && resource.file_mtime == metadata.1
+            && resource.is_enabled == enabled
+            && !resource.remote_id.is_empty()
+            && matches!(resource.platform.as_str(), "modrinth" | "curseforge")
+            && resource.hash.as_ref().is_some_and(|hash| {
+                calculate_sha1(&path).is_ok_and(|actual| actual.eq_ignore_ascii_case(hash))
+            })
+    }) {
+        return None;
+    }
+    let sha1 = calculate_sha1(&path).ok();
+    validate_retained_resolution(&mut candidate, sha1.as_deref(), expected_hash);
+    let curseforge_fingerprint = calculate_curseforge_fingerprint(&path)
+        .ok()
+        .map(|value| value.to_string());
+    Some(PreparedResourceCandidate {
+        candidate,
+        sha1,
+        curseforge_fingerprint,
+        metadata,
+    })
 }
 
 pub(crate) fn publish_local_rows(
@@ -349,7 +456,7 @@ pub(crate) fn publish_local_rows(
     Ok(result)
 }
 
-fn push_peer(
+pub(crate) fn push_peer(
     peers: &mut Vec<ResourceProjectPeerRecord>,
     source: SourcePlatform,
     project_id: &str,
@@ -376,7 +483,7 @@ fn push_peer(
     });
 }
 
-fn select_platform_match<T>(
+pub(crate) fn select_platform_match<T>(
     preferred: Option<SourcePlatform>,
     modrinth: Option<T>,
     curseforge: Option<T>,
@@ -389,7 +496,7 @@ fn select_platform_match<T>(
     }
 }
 
-fn persist_peer_links(records: Vec<ResourceProjectPeerRecord>) -> Result<()> {
+pub(crate) fn persist_peer_links(records: Vec<ResourceProjectPeerRecord>) -> Result<()> {
     if records.is_empty() {
         return Ok(());
     }
@@ -427,6 +534,54 @@ pub fn find_persisted_peer(
     }))
 }
 
+pub(crate) type ArtifactMatches = HashMap<String, (ResourceProject, ResourceVersion)>;
+
+/// Provider lookup only: callers revalidate publication under mutation exclusion
+/// before persisting any returned identity. Fingerprints remain provisional.
+pub(crate) async fn lookup_artifacts(
+    app: &AppHandle,
+    sha1s: &[String],
+    fingerprints: &[String],
+) -> (ArtifactMatches, ArtifactMatches, Vec<String>) {
+    let mut warnings = Vec::new();
+    let network = app.state::<crate::utils::network::NetworkManager>();
+    let online = network.get_status() != crate::utils::network::NetworkStatus::Offline;
+    let manager = app.state::<ResourceManager>();
+    let (modrinth, curseforge) = if online {
+        let (modrinth, curseforge) = tokio::join!(
+            manager.get_by_hashes_with_evidence(SourcePlatform::Modrinth, sha1s),
+            manager.get_by_hashes_with_evidence(SourcePlatform::CurseForge, fingerprints),
+        );
+        let mut retain = |platform: &str,
+                          result: Result<(
+            HashMap<String, (ResourceProject, ResourceVersion)>,
+            usize,
+        )>| {
+            match result {
+                Ok((matches, failed)) => {
+                    if failed > 0 {
+                        warnings.push(format!("{platform} identification failed for {failed} file lookup(s); identification is partial."));
+                    }
+                    matches
+                }
+                Err(_) => {
+                    warnings.push(format!("{platform} identification is unavailable; some resources may remain unrecognized."));
+                    HashMap::new()
+                }
+            }
+        };
+        (
+            retain("Modrinth", modrinth),
+            retain("CurseForge", curseforge),
+        )
+    } else {
+        warnings.push("Offline: remote resource identification is unavailable.".to_string());
+        (HashMap::new(), HashMap::new())
+    };
+
+    (modrinth, curseforge, warnings)
+}
+
 pub async fn reconcile_candidates(
     app: &AppHandle,
     instance_id: i32,
@@ -447,10 +602,23 @@ pub(crate) async fn reconcile_prepared_candidates(
     locals: Vec<PreparedResourceCandidate>,
     reason: &str,
 ) -> Result<ReconciliationSummary> {
+    Ok(
+        reconcile_prepared_candidates_with_evidence(app, instance_id, locals, reason)
+            .await?
+            .summary,
+    )
+}
+
+pub(crate) async fn reconcile_prepared_candidates_with_evidence(
+    app: &AppHandle,
+    instance_id: i32,
+    locals: Vec<PreparedResourceCandidate>,
+    reason: &str,
+) -> Result<ReconciliationEvidence> {
     let locals = refresh_prepared_candidates(locals).await;
     let attempted = locals.len();
     if attempted == 0 {
-        return Ok(ReconciliationSummary::default());
+        return Ok(ReconciliationEvidence::default());
     }
     let sha1s = locals
         .iter()
@@ -475,41 +643,85 @@ pub(crate) async fn reconcile_prepared_candidates(
         .filter_map(|candidate| candidate.curseforge_fingerprint.clone())
         .collect::<Vec<_>>();
 
-    let network = app.state::<crate::utils::network::NetworkManager>();
-    let online = network.get_status() != crate::utils::network::NetworkStatus::Offline;
-    let manager = app.state::<ResourceManager>();
-    let (modrinth, curseforge) = if online {
-        let (modrinth, curseforge) = tokio::join!(
-            manager.get_by_hashes(SourcePlatform::Modrinth, &sha1s),
-            manager.get_by_hashes(SourcePlatform::CurseForge, &fingerprints),
-        );
-        (
-            modrinth.unwrap_or_else(|error| {
-                log::warn!("[ResourceReconciliation] Modrinth batch failed: {error}");
-                HashMap::new()
-            }),
-            curseforge.unwrap_or_else(|error| {
-                log::warn!("[ResourceReconciliation] CurseForge batch failed: {error}");
-                HashMap::new()
-            }),
+    let (modrinth, curseforge, mut warnings) = lookup_artifacts(app, &sha1s, &fingerprints).await;
+
+    // Network is complete. Share the mutation barrier with publication, world
+    // transfer and resource toggles, then rehash before writing late identity.
+    let keys = locals
+        .iter()
+        .filter_map(
+            |local| match ledger::resource_type_for_path(&local.candidate.path)? {
+                "mod" => Some(crate::tasks::manager::mods_conflict_key(instance_id)),
+                "resourcepack" => Some(crate::tasks::manager::resourcepacks_conflict_key(
+                    instance_id,
+                )),
+                "shader" => Some(crate::tasks::manager::shaderpacks_conflict_key(instance_id)),
+                _ => None,
+            },
         )
-    } else {
-        (HashMap::new(), HashMap::new())
+        .collect::<Vec<_>>();
+    // Legacy reconciliation may already run inside a locking task. The manual
+    // coordinator calls this only after its publication task has released locks.
+    let tasks = (reason == "manual-dependency-identification")
+        .then(|| app.try_state::<crate::tasks::manager::TaskManager>())
+        .flatten();
+    let _guard = match tasks.as_ref() {
+        Some(tasks) => Some(tasks.acquire_conflicts(keys).await),
+        None => None,
     };
 
-    let locals = refresh_prepared_candidates(locals).await;
+    let mut locals = refresh_prepared_candidates(locals).await;
+    if reason == "manual-dependency-identification" {
+        let mods = crate::commands::instances::get_instance(instance_id)
+            .ok()
+            .and_then(|instance| crate::worlds::instance_game_directory(&instance).ok())
+            .map(|root| root.join("mods"));
+        locals.retain(|local| {
+            mods.as_ref().is_some_and(|mods| {
+                local.candidate.path.parent() == Some(mods.as_path())
+                    && mods.parent().is_some_and(|game| {
+                        crate::resources::source_enrichment::real_target_path(
+                            game,
+                            &local.candidate.path,
+                        )
+                    })
+            }) && ledger::get_resource_by_path(instance_id, &local.candidate.path)
+                .ok()
+                .flatten()
+                .is_some_and(|row| row.resource_type == "mod" && row.hash == local.sha1)
+        });
+    }
     let mut facts = Vec::with_capacity(locals.len());
     let mut peer_records = Vec::new();
     let mut metadata_refs = Vec::new();
     let mut seen_refs = HashSet::new();
     let mut identified = 0;
+    let mut resolutions = Vec::new();
 
     for local in locals {
-        let known_resolution = local.candidate.resolved.clone();
+        if local
+            .curseforge_fingerprint
+            .as_ref()
+            .and_then(|fingerprint| curseforge.get(fingerprint))
+            .is_some_and(|(_, version)| !version_matches_sha1(version, local.sha1.as_deref()))
+        {
+            warnings.push("A CurseForge fingerprint match did not verify against the local SHA-1; it was excluded from dependency and shared-content evidence.".into());
+        }
+        let known_resolution = local
+            .candidate
+            .resolved
+            .clone()
+            .filter(|resolved| version_matches_sha1(&resolved.version, local.sha1.as_deref()));
         let modrinth_match = local
             .sha1
             .as_ref()
             .and_then(|hash| modrinth.get(hash))
+            .filter(|found| {
+                local
+                    .sha1
+                    .as_deref()
+                    .is_some_and(|sha1| verified_artifact(found, SourcePlatform::Modrinth, sha1))
+            })
             .cloned()
             .or_else(|| {
                 known_resolution.as_ref().and_then(|resolved| {
@@ -521,6 +733,12 @@ pub(crate) async fn reconcile_prepared_candidates(
             .curseforge_fingerprint
             .as_ref()
             .and_then(|hash| curseforge.get(hash))
+            .filter(|found| {
+                local
+                    .sha1
+                    .as_deref()
+                    .is_some_and(|sha1| verified_artifact(found, SourcePlatform::CurseForge, sha1))
+            })
             .cloned()
             .or_else(|| {
                 known_resolution.as_ref().and_then(|resolved| {
@@ -578,6 +796,11 @@ pub(crate) async fn reconcile_prepared_candidates(
                     id: project.id.clone(),
                 });
             }
+            resolutions.push(IdentifiedResource {
+                path: local.candidate.path.clone(),
+                project: project.clone(),
+                version: version.clone(),
+            });
             facts.push(InstalledResourceFact::Remote {
                 instance_id,
                 path: local.candidate.path,
@@ -587,7 +810,7 @@ pub(crate) async fn reconcile_prepared_candidates(
                 hash: local.sha1,
                 metadata: local.metadata,
                 provenance: local.candidate.provenance,
-                resource_type: None,
+                resource_type: (reason == "manual-dependency-identification").then(|| "mod".into()),
             });
         } else {
             facts.push(InstalledResourceFact::Manual {
@@ -619,12 +842,20 @@ pub(crate) async fn reconcile_prepared_candidates(
         )?;
     }
 
-    Ok(ReconciliationSummary {
-        attempted,
-        changed,
-        identified,
-        unresolved: attempted.saturating_sub(identified),
-        metadata_refs,
+    let unresolved = attempted.saturating_sub(identified);
+    if unresolved > 0 {
+        warnings.push(format!("{unresolved} file(s) were not recognized; their required dependencies could not be checked."));
+    }
+    Ok(ReconciliationEvidence {
+        resolutions,
+        warnings,
+        summary: ReconciliationSummary {
+            attempted,
+            changed,
+            identified,
+            unresolved: attempted.saturating_sub(identified),
+            metadata_refs,
+        },
     })
 }
 
@@ -695,6 +926,116 @@ pub fn unresolved_candidates_for_instance(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn resolution(hash: &str) -> KnownResourceResolution {
+        KnownResourceResolution {
+            platform: SourcePlatform::Modrinth,
+            project: serde_json::from_value(serde_json::json!({
+                "id": "project", "source": "modrinth", "resource_type": "mod",
+                "name": "project", "summary": "", "author": "", "authors": [],
+                "download_count": 0, "follower_count": 0, "categories": [],
+                "web_url": "", "gallery": []
+            }))
+            .unwrap(),
+            version: serde_json::from_value(serde_json::json!({
+                "id": "release", "project_id": "project", "version_number": "1",
+                "game_versions": ["1.21.1"], "loaders": ["fabric"],
+                "download_url": "https://example.invalid/primary.jar", "file_name": "primary.jar",
+                "release_type": "release", "hash": hash, "dependencies": []
+            }))
+            .unwrap(),
+        }
+    }
+
+    #[test]
+    fn retained_resolution_is_bound_to_pre_request_content_including_alternates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("alternate.jar");
+        std::fs::write(&path, b"alternate").unwrap();
+        let verified_hash = calculate_sha1(&path).unwrap();
+        let mut known = resolution("primary-hash");
+        known
+            .version
+            .files
+            .push(crate::models::resource::ResourceVersionFile {
+                url: "https://example.invalid/alternate.jar".into(),
+                file_name: "alternate.jar".into(),
+                hash: verified_hash.clone(),
+                file_size: None,
+                role: "alternate".into(),
+            });
+        let candidate = ResourceCandidate {
+            path: path.clone(),
+            provenance: None,
+            preferred_platform: None,
+            resolved: Some(known.clone()),
+        };
+        let prepared =
+            prepare_candidate(candidate.clone(), None, true, Some(&verified_hash)).unwrap();
+        assert!(prepared.candidate.resolved.is_some());
+        // Replacement with another advertised artifact must still discard the
+        // resolution retained for the bytes checked before provider requests.
+        std::fs::write(&path, b"primary").unwrap();
+        known.version.hash = calculate_sha1(&path).unwrap();
+        let mut changed = candidate;
+        changed.resolved = Some(known);
+        let prepared = prepare_candidate(changed, None, true, Some(&verified_hash)).unwrap();
+        assert!(prepared.candidate.resolved.is_none());
+        assert_ne!(prepared.sha1.as_deref(), Some(verified_hash.as_str()));
+    }
+
+    #[test]
+    fn explicit_unchanged_alternate_root_is_prepared_for_actual_hash_lookup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("alternate.jar");
+        std::fs::write(&path, b"alternate").unwrap();
+        let hash = calculate_sha1(&path).unwrap();
+        let candidate = ResourceCandidate {
+            path: path.clone(),
+            provenance: None,
+            preferred_platform: None,
+            resolved: None,
+        };
+        let prepared = prepare_candidate(candidate.clone(), None, false, None).unwrap();
+        let installed: InstalledResource = serde_json::from_value(serde_json::json!({
+            "id": 1, "instance_id": 1, "platform": "modrinth", "remote_id": "project",
+            "remote_version_id": "release", "resource_type": "mod", "local_path": normalize_path(&path),
+            "display_name": "project", "current_version": "1", "is_manual": true,
+            "is_enabled": true, "last_updated": "", "release_type": "release", "hash": hash,
+            "file_size": prepared.metadata.0, "file_mtime": prepared.metadata.1, "source_kind": "manual"
+        })).unwrap();
+        assert!(!version_matches_sha1(
+            &resolution("primary-hash").version,
+            installed.hash.as_deref()
+        ));
+        assert!(prepare_candidate(candidate.clone(), Some(&installed), false, None).is_none());
+        let explicit = prepare_candidate(candidate, Some(&installed), true, None).unwrap();
+        assert_eq!(explicit.sha1, installed.hash);
+        assert!(explicit.candidate.resolved.is_none());
+    }
+
+    #[test]
+    fn curseforge_whitespace_fingerprint_is_not_strict_content_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let advertised = dir.path().join("advertised.jar");
+        let local = dir.path().join("local.jar");
+        std::fs::write(&advertised, b"mod content").unwrap();
+        std::fs::write(&local, b"mod\ncontent").unwrap();
+        assert_eq!(
+            calculate_curseforge_fingerprint(&advertised).unwrap(),
+            calculate_curseforge_fingerprint(&local).unwrap()
+        );
+        let release = resolution(&calculate_sha1(&advertised).unwrap()).version;
+        let local_hash = calculate_sha1(&local).unwrap();
+        assert!(!version_matches_sha1(&release, Some(&local_hash)));
+        assert!(version_matches_sha1(
+            &release,
+            Some(&calculate_sha1(&advertised).unwrap())
+        ));
+        let mut missing_hash = release;
+        missing_hash.hash.clear();
+        assert!(!version_matches_sha1(&missing_hash, Some(&local_hash)));
+    }
 
     #[test]
     fn enrichment_follows_disabled_renames_without_resurrecting_missing_files() {
