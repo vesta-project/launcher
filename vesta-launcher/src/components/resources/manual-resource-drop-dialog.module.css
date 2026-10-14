@@ -83,3 +83,29 @@
 	gap: 8px;
 	margin-top: 16px;
 }
+
+/* Keep dependency consent compact without stacking margins onto dialog gaps. */
+.dialog.dependencies {
+	width: min(560px, 92vw);
+	max-width: 560px;
+	gap: 12px;
+	padding: 20px;
+}
+
+.dependencies .list,
+.dependencies .remember,
+.dependencies .note,
+.dependencies .error,
+.dependencies .footer {
+	margin: 0;
+}
+
+.dependencies .row {
+	padding: 8px 12px;
+}
+
+.dependencies .meta {
+	max-width: 45%;
+	overflow-wrap: anywhere;
+	text-align: right;
+}

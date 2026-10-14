@@ -151,7 +151,9 @@ export function ManualResourceDropDialog() {
 				open={Boolean(manualDropRequest()) && step() === "review"}
 				onOpenChange={(open) => !open && cancel()}
 			>
-				<DialogContent class={styles.dialog}>
+				<DialogContent
+					class={`${styles.dialog} ${manualDropRequest()?.phase === "dependencies" ? styles.dependencies : ""}`}
+				>
 					<DialogHeader>
 						<DialogTitle>
 							{manualDropRequest()?.phase === "dependencies"

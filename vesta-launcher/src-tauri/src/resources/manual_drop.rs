@@ -833,7 +833,7 @@ async fn process_dependencies(
                 })
                 .collect();
             let mut notes = vec![format!(
-                "Required dependencies for {}. The local mods are already installed.",
+                "Required dependencies for {}.",
                 report
                     .mods
                     .iter()
