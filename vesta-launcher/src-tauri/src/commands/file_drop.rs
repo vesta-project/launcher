@@ -8,12 +8,9 @@
 //! This is NOT a security boundary. Consumers must re-validate paths in Rust
 //! before any import; the classification returned here is advisory only.
 
-use crate::tasks::add_dropped_mods::AddDroppedModsTask;
-use crate::tasks::manager::TaskManager;
 use serde::Serialize;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
-use tauri::State;
+use std::path::Path;
 
 /// Upper bound on paths accepted in one call. Larger batches are rejected whole.
 const MAX_DROPPED_PATHS: usize = 1000;
@@ -295,105 +292,6 @@ mod tests {
             classify_one(input),
             expected(input, DropPathKind::Other, false)
         );
-    }
-}
-
-/// Upper bound on files accepted by one `add_dropped_mods` call.
-const MAX_DROPPED_MOD_PATHS: usize = 50;
-
-fn validate_dropped_mod_count(count: usize) -> Result<(), String> {
-    if count == 0 {
-        return Err("No files were dropped".to_string());
-    }
-    if count > MAX_DROPPED_MOD_PATHS {
-        return Err(format!(
-            "Too many dropped files: {count} (maximum is {MAX_DROPPED_MOD_PATHS})"
-        ));
-    }
-    Ok(())
-}
-
-/// Installation states during which an instance's mods folder must not change.
-fn instance_accepts_dropped_mods(installation_status: Option<&str>) -> bool {
-    !matches!(
-        installation_status,
-        Some("installing" | "pending" | "verifying-runtime" | "launch-preflight-repair")
-    )
-}
-
-/// Adds dropped `.jar` files to an instance's mods folder, then identifies them.
-///
-/// Returns as soon as the task is queued. Paths are re-validated by the task;
-/// invalid files are skipped and reported in the completion notification.
-#[tauri::command]
-pub async fn add_dropped_mods(
-    task_manager: State<'_, TaskManager>,
-    instance_id: i32,
-    paths: Vec<String>,
-) -> Result<(), String> {
-    let count = paths.len();
-    if let Err(message) = validate_dropped_mod_count(count) {
-        log::warn!("[add_dropped_mods] rejected {} path(s): {}", count, message);
-        return Err(message);
-    }
-
-    let inst = crate::commands::instances::get_instance(instance_id)?;
-    if !instance_accepts_dropped_mods(inst.installation_status.as_deref()) {
-        return Err(
-            "This instance is still being prepared. Try again when it finishes.".to_string(),
-        );
-    }
-    let game_dir = inst
-        .game_directory
-        .filter(|dir| !dir.trim().is_empty())
-        .ok_or_else(|| "Instance has no game directory".to_string())?;
-
-    let sources: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
-    let task = AddDroppedModsTask::new(instance_id, inst.name, PathBuf::from(game_dir), sources);
-    task_manager.submit(Box::new(task)).await?;
-    log::info!(
-        "[add_dropped_mods] queued {} file(s) for instance {}",
-        count,
-        instance_id
-    );
-    Ok(())
-}
-
-#[cfg(test)]
-mod add_dropped_mods_tests {
-    use super::*;
-
-    #[test]
-    fn path_count_bounds_are_enforced() {
-        assert!(validate_dropped_mod_count(0).is_err());
-        assert!(validate_dropped_mod_count(1).is_ok());
-        assert!(validate_dropped_mod_count(MAX_DROPPED_MOD_PATHS).is_ok());
-        assert!(validate_dropped_mod_count(MAX_DROPPED_MOD_PATHS + 1).is_err());
-    }
-
-    #[test]
-    fn busy_installation_states_reject_drops() {
-        for status in [
-            "installing",
-            "pending",
-            "verifying-runtime",
-            "launch-preflight-repair",
-        ] {
-            assert!(!instance_accepts_dropped_mods(Some(status)), "{status}");
-        }
-    }
-
-    #[test]
-    fn settled_installation_states_accept_drops() {
-        assert!(instance_accepts_dropped_mods(None));
-        for status in [
-            "installed",
-            "interrupted",
-            "failed:boom",
-            "skip-initial-watch",
-        ] {
-            assert!(instance_accepts_dropped_mods(Some(status)), "{status}");
-        }
     }
 }
 

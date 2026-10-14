@@ -205,7 +205,6 @@ fn main() {
             commands::app::set_window_effect,
             utils::db::get_db_status,
             commands::file_drop::classify_dropped_paths,
-            commands::file_drop::add_dropped_mods,
             commands::file_drop::start_resource_drop,
             commands::file_drop::submit_resource_drop_choice,
             commands::file_drop::cancel_resource_drop,

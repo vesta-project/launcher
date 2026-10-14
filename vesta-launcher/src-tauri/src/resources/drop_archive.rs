@@ -2112,6 +2112,30 @@ mod tests {
     }
 
     #[test]
+    fn jar_source_mutation_after_inspection_cannot_change_published_resource() {
+        use crate::resources::drop_publication::{publish_file_with_cancel, validate_source};
+
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("mod.jar");
+        let original = jar();
+        fs::write(&path, &original).unwrap();
+        let inspection = inspect_paths(vec![path.clone()]).unwrap();
+        fs::remove_file(&path).unwrap();
+        fs::write(&path, b"invalid replacement archive").unwrap();
+        assert!(validate_source(&path).is_err());
+
+        let output = TempDir::new().unwrap();
+        let prepared = prepare(&inspection, 0, DropKind::Mod, output.path());
+        assert_ne!(prepared[0], path);
+        assert_eq!(validate_source(&prepared[0]), Ok(()));
+        let mods = TempDir::new().unwrap();
+        let installed = publish_file_with_cancel(&prepared[0], mods.path(), || Ok(())).unwrap();
+        assert_eq!(fs::read(&installed).unwrap(), original);
+        assert_eq!(validate_source(&installed), Ok(()));
+        assert_eq!(fs::read_dir(mods.path()).unwrap().count(), 1);
+    }
+
+    #[test]
     fn partial_source_failure_removes_candidates_and_staged_files() {
         let temp = TempDir::new().unwrap();
         let broken = source(

@@ -56,6 +56,16 @@ async function start() {
 	await waitForManualDropChoices();
 }
 
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason: Error) => void;
+	const promise = new Promise<T>((ready, fail) => {
+		resolve = ready;
+		reject = fail;
+	});
+	return { promise, resolve, reject };
+}
+
 describe("manual resource decision queue", () => {
 	it("serializes and deduplicates requests, submitting each exactly once", async () => {
 		await start();
@@ -172,5 +182,191 @@ describe("manual resource decision queue", () => {
 		mocks.listen.mockRejectedValueOnce(new Error("IPC unavailable"));
 		dispose = startManualDropChoiceListener();
 		await expect(waitForManualDropChoices()).rejects.toThrow("IPC unavailable");
+	});
+});
+
+describe("manual resource listener ownership", () => {
+	it("retries failed registration on a later wait without restarting the root", async () => {
+		const error = new Error("IPC unavailable");
+		mocks.listen.mockRejectedValueOnce(error);
+		dispose = startManualDropChoiceListener();
+		await expect(waitForManualDropChoices()).rejects.toBe(error);
+		expect(mocks.listen).toHaveBeenCalledTimes(2);
+		expect(mocks.unlisten).toHaveBeenCalledTimes(1);
+		await waitForManualDropChoices();
+		expect(mocks.listen).toHaveBeenCalledTimes(4);
+		deliver({ payload: request() });
+		expect(manualDropRequest()?.decisionId).toBe("decision-1");
+	});
+
+	it("shares one retry registration pair across concurrent waits", async () => {
+		mocks.listen.mockRejectedValueOnce(new Error("IPC unavailable"));
+		dispose = startManualDropChoiceListener();
+		await expect(waitForManualDropChoices()).rejects.toThrow("IPC unavailable");
+		const choice = deferred<() => void>();
+		const closed = deferred<() => void>();
+		mocks.listen
+			.mockReturnValueOnce(choice.promise)
+			.mockReturnValueOnce(closed.promise);
+		const first = waitForManualDropChoices();
+		const second = waitForManualDropChoices();
+		expect(mocks.listen).toHaveBeenCalledTimes(4);
+		choice.resolve(mocks.unlisten);
+		closed.resolve(mocks.unlisten);
+		await Promise.all([first, second]);
+		await waitForManualDropChoices();
+		expect(mocks.listen).toHaveBeenCalledTimes(4);
+	});
+
+	it("cleans partial registration and immediately unlistens a late registration", async () => {
+		const late = deferred<() => void>();
+		const failed = deferred<() => void>();
+		const lateUnlisten = vi.fn();
+		mocks.listen
+			.mockReturnValueOnce(late.promise)
+			.mockReturnValueOnce(failed.promise);
+		dispose = startManualDropChoiceListener();
+		const waiting = waitForManualDropChoices();
+		failed.reject(new Error("IPC unavailable"));
+		await expect(waiting).rejects.toThrow("IPC unavailable");
+		await waitForManualDropChoices();
+		late.resolve(lateUnlisten);
+		await Promise.resolve();
+		expect(lateUnlisten).toHaveBeenCalledOnce();
+		expect(mocks.unlisten).not.toHaveBeenCalled();
+	});
+
+	it("cancels partial-registration choices and clears timers and submission on failure", async () => {
+		const closed = deferred<() => void>();
+		const submitted = deferred<void>();
+		mocks.listen.mockImplementationOnce((_event, handler) => {
+			deliver = handler;
+			return Promise.resolve(mocks.unlisten);
+		});
+		mocks.listen.mockReturnValueOnce(closed.promise);
+		dispose = startManualDropChoiceListener();
+		const waiting = waitForManualDropChoices();
+		await Promise.resolve();
+		deliver({ payload: request() });
+		deliver({ payload: request("2") });
+		mocks.invoke.mockReturnValueOnce(submitted.promise);
+		const submission = submitManualDropChoice(request(), { cancel: true });
+		expect(manualDropSubmitting()).toBe(true);
+		expect(vi.getTimerCount()).toBe(2);
+		closed.reject(new Error("IPC unavailable"));
+		await expect(waiting).rejects.toThrow("IPC unavailable");
+		expect(mocks.unlisten).toHaveBeenCalledOnce();
+		expect(manualDropRequest()).toBeNull();
+		expect(manualDropSubmitting()).toBe(false);
+		expect(vi.getTimerCount()).toBe(0);
+		for (const id of ["1", "2"])
+			expect(mocks.invoke).toHaveBeenCalledWith("cancel_resource_drop", {
+				operationId: `operation-${id}`,
+			});
+		submitted.resolve(undefined);
+		await submission;
+	});
+
+	it("disposes the retried session and prevents waits from restarting it", async () => {
+		mocks.listen.mockRejectedValueOnce(new Error("IPC unavailable"));
+		dispose = startManualDropChoiceListener();
+		await expect(waitForManualDropChoices()).rejects.toThrow("IPC unavailable");
+		await waitForManualDropChoices();
+		deliver({ payload: request() });
+		dispose();
+		dispose();
+		expect(mocks.unlisten).toHaveBeenCalledTimes(3);
+		expect(manualDropRequest()).toBeNull();
+		expect(vi.getTimerCount()).toBe(0);
+		await expect(waitForManualDropChoices()).rejects.toThrow("unavailable");
+		expect(mocks.listen).toHaveBeenCalledTimes(4);
+	});
+
+	it("keeps stale callbacks and duplicate or stale disposers away from a new root", async () => {
+		await start();
+		const oldDeliver = deliver;
+		const oldClose = closeChoice;
+		const oldDispose = dispose;
+		const duplicateDispose = startManualDropChoiceListener();
+		duplicateDispose();
+		await waitForManualDropChoices();
+		expect(mocks.listen).toHaveBeenCalledTimes(2);
+		oldDispose?.();
+		await start();
+		const currentRequest = request();
+		deliver({ payload: currentRequest });
+		oldDeliver({ payload: request("stale") });
+		oldClose({ payload: { decisionId: currentRequest.decisionId } });
+		oldDispose?.();
+		duplicateDispose();
+		expect(manualDropRequest()).toEqual(currentRequest);
+		expect(mocks.unlisten).toHaveBeenCalledTimes(2);
+		await waitForManualDropChoices();
+	});
+
+	it("rejects stale readiness and cleans late registration without changing a new root", async () => {
+		const late = deferred<() => void>();
+		const lateUnlisten = vi.fn();
+		mocks.listen.mockReturnValueOnce(late.promise);
+		dispose = startManualDropChoiceListener();
+		const waiting = waitForManualDropChoices();
+		dispose();
+		await start();
+		deliver({ payload: request() });
+		late.resolve(lateUnlisten);
+		await expect(waiting).rejects.toThrow("unavailable");
+		expect(lateUnlisten).toHaveBeenCalledOnce();
+		expect(manualDropRequest()?.decisionId).toBe("decision-1");
+		await waitForManualDropChoices();
+	});
+
+	it("does not retry a failed registration after root disposal", async () => {
+		mocks.listen.mockRejectedValueOnce(new Error("IPC unavailable"));
+		dispose = startManualDropChoiceListener();
+		await expect(waitForManualDropChoices()).rejects.toThrow("IPC unavailable");
+		dispose();
+		await expect(waitForManualDropChoices()).rejects.toThrow("unavailable");
+		expect(mocks.listen).toHaveBeenCalledTimes(2);
+	});
+
+	it("keeps a late failure from clearing a newer root's queue", async () => {
+		const failed = deferred<() => void>();
+		mocks.listen.mockReturnValueOnce(failed.promise);
+		dispose = startManualDropChoiceListener();
+		const waiting = waitForManualDropChoices();
+		dispose();
+		await start();
+		deliver({ payload: request() });
+		const error = new Error("old IPC failure");
+		failed.reject(error);
+		await expect(waiting).rejects.toBe(error);
+		expect(manualDropRequest()?.decisionId).toBe("decision-1");
+		expect(vi.getTimerCount()).toBe(1);
+		expect(mocks.invoke).not.toHaveBeenCalled();
+		await waitForManualDropChoices();
+		expect(mocks.listen).toHaveBeenCalledTimes(4);
+	});
+
+	it("keeps an old submission completion from clearing a new root's submission", async () => {
+		await start();
+		const first = request();
+		deliver({ payload: first });
+		const oldResult = deferred<void>();
+		mocks.invoke.mockReturnValueOnce(oldResult.promise);
+		const oldSubmission = submitManualDropChoice(first, { cancel: true });
+		dispose?.();
+		await start();
+		deliver({ payload: first });
+		const newResult = deferred<void>();
+		mocks.invoke.mockReturnValueOnce(newResult.promise);
+		const newSubmission = submitManualDropChoice(first, { cancel: true });
+		oldResult.resolve(undefined);
+		await oldSubmission;
+		expect(manualDropSubmitting()).toBe(true);
+		expect(manualDropRequest()).toEqual(first);
+		newResult.resolve(undefined);
+		await newSubmission;
+		expect(manualDropSubmitting()).toBe(false);
+		expect(manualDropRequest()).toBeNull();
 	});
 });

@@ -55,6 +55,11 @@ interface ListenerSession {
 	timers: Map<string, ReturnType<typeof setTimeout>>;
 }
 
+interface ListenerOwner {
+	session?: ListenerSession;
+}
+
+let owner: ListenerOwner | undefined;
 let session: ListenerSession | undefined;
 const MAX_PENDING_CHOICES = 50;
 
@@ -72,29 +77,42 @@ function cancelRequest(request: ManualDropRequest) {
 	}).catch(() => undefined);
 }
 
-/** Root-owned subscription; late registration and stale cleanup are safe. */
-export function startManualDropChoiceListener(): () => void {
-	if (!hasTauriRuntime() || session) return () => undefined;
+function closeSession(current: ListenerSession) {
+	current.closed = true;
+	for (const unlisten of current.unlisteners.splice(0)) unlisten();
+	for (const timer of current.timers.values()) clearTimeout(timer);
+	current.timers.clear();
+	if (session === current) {
+		for (const request of requests()) cancelRequest(request);
+		setRequests([]);
+		setSubmitting(null);
+		session = undefined;
+	}
+}
+
+function registerSession(root: ListenerOwner): ListenerSession {
 	const current: ListenerSession = {
 		closed: false,
 		ready: Promise.resolve(),
 		timers: new Map(),
 		unlisteners: [],
 	};
+	root.session = current;
 	session = current;
-	const register = <T>(
+	const active = () => !current.closed && owner === root && session === current;
+	const register = async <T>(
 		event: string,
 		callback: (event: { payload: T }) => void,
-	) =>
-		listen<T>(event, callback).then((unlisten) => {
-			if (current.closed) unlisten();
-			else current.unlisteners.push(unlisten);
-		});
+	) => {
+		const unlisten = await listen<T>(event, callback);
+		if (!active()) unlisten();
+		else current.unlisteners.push(unlisten);
+	};
 	current.ready = Promise.all([
 		register<ManualDropRequest>(
 			"core://manual-resource-drop-choice",
 			(event) => {
-				if (current.closed) return;
+				if (!active()) return;
 				const request = event.payload;
 				if (requests().some((item) => item.decisionId === request.decisionId))
 					return;
@@ -112,6 +130,7 @@ export function startManualDropChoiceListener(): () => void {
 					request.decisionId,
 					setTimeout(
 						() => {
+							if (!active()) return;
 							retire(current, request.decisionId);
 							cancelRequest(request);
 						},
@@ -123,40 +142,44 @@ export function startManualDropChoiceListener(): () => void {
 		register<{ decisionId: string }>(
 			"core://manual-resource-drop-choice-closed",
 			(event) => {
-				if (!current.closed) retire(current, event.payload.decisionId);
+				if (active()) retire(current, event.payload.decisionId);
 			},
 		),
 	])
 		.then(() => undefined)
 		.catch((error) => {
-			current.closed = true;
-			for (const unlisten of current.unlisteners.splice(0)) unlisten();
+			closeSession(current);
+			if (root.session === current) root.session = undefined;
 			throw error;
 		});
 	// A failed subscription is surfaced by waitForManualDropChoices on drop.
 	void current.ready.catch(() => undefined);
+	return current;
+}
 
-	return () => {
-		current.closed = true;
-		for (const unlisten of current.unlisteners.splice(0)) unlisten();
-		for (const timer of current.timers.values()) clearTimeout(timer);
-		current.timers.clear();
-		if (session === current) {
-			for (const request of requests()) cancelRequest(request);
-			setRequests([]);
-			setSubmitting(null);
-			session = undefined;
-		}
-	};
+function closeOwner(root: ListenerOwner) {
+	if (owner !== root) return;
+	owner = undefined;
+	if (root.session) closeSession(root.session);
+	root.session = undefined;
+}
+
+/** Root ownership outlives failed listener registration attempts. */
+export function startManualDropChoiceListener(): () => void {
+	if (!hasTauriRuntime() || owner) return () => undefined;
+	const root: ListenerOwner = {};
+	owner = root;
+	registerSession(root);
+	return () => closeOwner(root);
 }
 
 /** Register the decision listener before the backend can emit a choice. */
 export async function waitForManualDropChoices(): Promise<void> {
-	const current = session;
-	if (!current || current.closed)
-		throw new Error("Resource import is unavailable.");
+	const root = owner;
+	if (!root) throw new Error("Resource import is unavailable.");
+	const current = root.session ?? registerSession(root);
 	await current.ready;
-	if (current.closed || session !== current)
+	if (current.closed || owner !== root || session !== current)
 		throw new Error("Resource import is unavailable.");
 }
 
@@ -181,20 +204,13 @@ export async function submitManualDropChoice(
 		if (!current.closed && session === current)
 			retire(current, request.decisionId);
 	} finally {
-		if (submitting() === request.decisionId) setSubmitting(null);
+		if (session === current && submitting() === request.decisionId)
+			setSubmitting(null);
 	}
 }
 
 if (import.meta.hot) {
 	import.meta.hot.dispose(() => {
-		const current = session;
-		if (!current) return;
-		current.closed = true;
-		for (const unlisten of current.unlisteners.splice(0)) unlisten();
-		for (const timer of current.timers.values()) clearTimeout(timer);
-		for (const request of requests()) cancelRequest(request);
-		setRequests([]);
-		session = undefined;
-		setSubmitting(null);
+		if (owner) closeOwner(owner);
 	});
 }

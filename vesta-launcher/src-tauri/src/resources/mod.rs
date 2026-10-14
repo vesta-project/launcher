@@ -1,4 +1,5 @@
 pub mod drop_archive;
+pub(crate) mod drop_publication;
 pub mod ledger;
 pub mod manager;
 pub mod manual_dependencies;

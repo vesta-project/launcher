@@ -6,9 +6,9 @@ use crate::notifications::models::{
     NotificationType,
 };
 use crate::resources::drop_archive::{self, DropCandidate, DropKind, InspectedDrop};
+use crate::resources::drop_publication::{publish_file_with_cancel, validate_source};
 use crate::resources::manual_dependencies::{self, ManualDependencyPlan};
 use crate::resources::source_enrichment::{self, PublishedSource};
-use crate::tasks::add_dropped_mods::{publish_file_with_cancel, validate_source};
 use crate::tasks::manager::{
     mods_conflict_key, resourcepacks_conflict_key, saves_conflict_key, shaderpacks_conflict_key,
     world_conflict_key, BoxFuture, Task, TaskContext, TaskManager,
