@@ -60,6 +60,7 @@ diesel::table! {
         default_sandbox_preset -> Text,
         default_sandbox_wrapper_nesting -> Text,
         default_sandbox_extra_paths -> Text,
+        manual_mod_dependency_policy -> Text,
     }
 }
 

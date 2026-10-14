@@ -31,8 +31,23 @@ import {
 	type Droppable,
 	useDragDropContext,
 } from "@thisbeyond/solid-dnd";
+import {
+	type DropTarget,
+	DropTargetHint,
+	dropTargetForZoneState,
+} from "@ui/drop-target/drop-target";
+import { DropZone } from "@ui/drop-zone/drop-zone";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
+import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
+import {
+	addDroppedResources,
+	canAcceptDroppedResources,
+	DROPPED_RESOURCE_EXTENSIONS,
+	notifyDroppedResourcesRejected,
+} from "@utils/dropped-resources";
+import type { DropZoneState } from "@utils/file-drop/drop-controller";
+import { getDropController } from "@utils/file-drop/native-bridge";
 import {
 	createIconPosterFrame,
 	isAnimatedIconSource,
@@ -48,6 +63,8 @@ import {
 	Show,
 } from "solid-js";
 import { Portal } from "solid-js/web";
+import { t } from "~/localization";
+import { watchFileDragOverGroups } from "./file-drag-groups";
 import styles from "./library-organizer.module.css";
 
 // How long a card must be held over another's middle before it becomes a folder,
@@ -125,6 +142,24 @@ export default function LibraryOrganizer() {
 	};
 	const toggleGroup = (id: string) =>
 		setOpenGroup((current) => (current === id ? null : id));
+	// Files dragged in from the OS open a group while hovered and close it again
+	// when the pointer leaves. Separate from the pointer-driven reordering below.
+	const [fileHoverGroup, setFileHoverGroup] = createSignal<string | null>(null);
+	onCleanup(
+		watchFileDragOverGroups({
+			controller: getDropController(),
+			getOpenGroup: openGroup,
+			setOpenGroup,
+			isEnabled: () => !editing(),
+			onHoverGroup: setFileHoverGroup,
+			onDropOnClosedGroup: () =>
+				showToast({
+					title: "Open the group first",
+					description: "Drop the mod onto an instance inside the group.",
+					severity: "info",
+				}),
+		}),
+	);
 	createEffect(
 		on(
 			editing,
@@ -511,6 +546,7 @@ export default function LibraryOrganizer() {
 				groupTarget={groupTarget()}
 				groupPending={groupPending()}
 				folderTarget={folderTarget()}
+				fileHoverGroup={fileHoverGroup()}
 				openGroup={openGroup()}
 				toggleGroup={toggleGroup}
 				mutate={mutate}
@@ -624,6 +660,7 @@ interface EntriesProps {
 	groupTarget: number | null;
 	groupPending: number | null;
 	folderTarget: string | null;
+	fileHoverGroup: string | null;
 	openGroup: string | null;
 	toggleGroup: (id: string) => void;
 	mutate: (action: () => void) => void;
@@ -716,6 +753,17 @@ function MovableCard(
 		},
 	});
 	const [open, setOpen] = createSignal(false);
+	const [dropState, setDropState] = createSignal<DropZoneState>("idle");
+	// One drop-target look for everything dropped on a card: a card being grouped
+	// with it, or a file from the OS.
+	const dropTarget = (): DropTarget | undefined => {
+		if (props.groupTarget === props.instance.id)
+			return { state: "ready", label: "Release to group" };
+		if (props.groupPending === props.instance.id) return { state: "pending" };
+		const state = dropTargetForZoneState(dropState());
+		if (state === "ready") return { state, label: t("resource-drop-add") };
+		if (state === "rejected") return { state, label: t("resource-drop-files-hint") };
+	};
 	const move = (groupId: string | null) => {
 		props.mutate(() =>
 			moveLibraryEntry(props.instance.id, groupId, null, instances()),
@@ -743,119 +791,129 @@ function MovableCard(
 		);
 	};
 	return (
-		<div
-			ref={(node) => {
-				draggable.ref(node);
-				droppable.ref(node);
-				const suppress = (event: MouseEvent) => {
-					if (props.suppressClick()) {
-						event.preventDefault();
-						event.stopPropagation();
-					}
-				};
-				node.addEventListener("click", suppress, true);
-				onCleanup(() => node.removeEventListener("click", suppress, true));
-			}}
-			class={styles.card}
-			data-library-item={`instance:${props.instance.id}`}
-			data-editing={props.editing}
-			data-dragging={draggable.isActiveDraggable}
-			data-group-pending={props.groupPending === props.instance.id}
-			data-group-target={props.groupTarget === props.instance.id}
+		// Native OS file drops (external). Separate from the pointer-driven
+		// reordering, which only reacts to in-app drags. The card draws its own
+		// drop state, so the zone's built-in highlight is off.
+		<DropZone
+			unstyled
+			accept="files"
+			allowedExtensions={DROPPED_RESOURCE_EXTENSIONS}
+			disabled={props.editing || !canAcceptDroppedResources(props.instance)}
+			onFileDrop={(paths) => void addDroppedResources(props.instance, paths)}
+			onFilesRejected={notifyDroppedResourcesRejected}
+			onStateChange={setDropState}
 		>
-			<div class={styles.cardContent} inert={props.editing}>
-				<InstanceCard
-					instance={props.instance}
-					onNavigate={props.closeFolder}
-				/>
-			</div>
-			<Show when={props.editing}>
-				<button
-					type="button"
-					class={styles.cardHandle}
-					{...draggable.dragActivators}
-					aria-label={`Move ${props.instance.name}. Arrow keys reorder.`}
-					onKeyDown={(event) => {
-						if (
-							["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(
-								event.key,
-							)
-						) {
+			<div
+				ref={(node) => {
+					draggable.ref(node);
+					droppable.ref(node);
+					const suppress = (event: MouseEvent) => {
+						if (props.suppressClick()) {
 							event.preventDefault();
-							step(["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1);
+							event.stopPropagation();
 						}
-					}}
-				/>
-				<Popover open={open()} onOpenChange={setOpen} placement="bottom">
-					<PopoverTrigger
-						data-edit-control
-						class={styles.cardMore}
-						aria-label={`Group options for ${props.instance.name}`}
-					>
-						<EllipsisIcon />
-					</PopoverTrigger>
-					<PopoverContent
-						class={styles.menu}
-						aria-label={`Group options for ${props.instance.name}`}
-					>
-						<Show when={props.groupId}>
-							<button
-								type="button"
-								class={styles.menuItem}
-								onClick={() => move(null)}
-							>
-								Remove from group
-							</button>
-						</Show>
-						<For
-							each={libraryLayout().groups.filter(
-								(group) => group.id !== props.groupId,
-							)}
+					};
+					node.addEventListener("click", suppress, true);
+					onCleanup(() => node.removeEventListener("click", suppress, true));
+				}}
+				class={styles.card}
+				data-library-item={`instance:${props.instance.id}`}
+				data-editing={props.editing}
+				data-dragging={draggable.isActiveDraggable}
+				data-drop-target={dropTarget()?.state}
+			>
+				<div class={styles.cardContent} inert={props.editing}>
+					<InstanceCard
+						instance={props.instance}
+						onNavigate={props.closeFolder}
+					/>
+				</div>
+				<Show when={props.editing}>
+					<button
+						type="button"
+						class={styles.cardHandle}
+						{...draggable.dragActivators}
+						aria-label={`Move ${props.instance.name}. Arrow keys reorder.`}
+						onKeyDown={(event) => {
+							if (
+								["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(
+									event.key,
+								)
+							) {
+								event.preventDefault();
+								step(["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1);
+							}
+						}}
+					/>
+					<Popover open={open()} onOpenChange={setOpen} placement="bottom">
+						<PopoverTrigger
+							data-edit-control
+							class={styles.cardMore}
+							aria-label={`Group options for ${props.instance.name}`}
 						>
-							{(group) => (
+							<EllipsisIcon />
+						</PopoverTrigger>
+						<PopoverContent
+							class={styles.menu}
+							aria-label={`Group options for ${props.instance.name}`}
+						>
+							<Show when={props.groupId}>
 								<button
 									type="button"
 									class={styles.menuItem}
-									onClick={() => move(group.id)}
+									onClick={() => move(null)}
 								>
-									Move to {group.name}
+									Remove from group
 								</button>
-							)}
-						</For>
-						<button
-							type="button"
-							class={styles.menuItem}
-							onClick={() => {
-								props.mutate(() =>
-									createLibraryGroup(instances(), [props.instance.id]),
-								);
-								setOpen(false);
-							}}
-						>
-							Add to a new group
-						</button>
-						<div class={styles.divider} />
-						<button
-							type="button"
-							class={styles.menuItem}
-							onClick={() => step(-1)}
-						>
-							Move earlier
-						</button>
-						<button
-							type="button"
-							class={styles.menuItem}
-							onClick={() => step(1)}
-						>
-							Move later
-						</button>
-					</PopoverContent>
-				</Popover>
-			</Show>
-			<Show when={props.groupTarget === props.instance.id}>
-				<span class={styles.groupHint}>Release to group</span>
-			</Show>
-		</div>
+							</Show>
+							<For
+								each={libraryLayout().groups.filter(
+									(group) => group.id !== props.groupId,
+								)}
+							>
+								{(group) => (
+									<button
+										type="button"
+										class={styles.menuItem}
+										onClick={() => move(group.id)}
+									>
+										Move to {group.name}
+									</button>
+								)}
+							</For>
+							<button
+								type="button"
+								class={styles.menuItem}
+								onClick={() => {
+									props.mutate(() =>
+										createLibraryGroup(instances(), [props.instance.id]),
+									);
+									setOpen(false);
+								}}
+							>
+								Add to a new group
+							</button>
+							<div class={styles.divider} />
+							<button
+								type="button"
+								class={styles.menuItem}
+								onClick={() => step(-1)}
+							>
+								Move earlier
+							</button>
+							<button
+								type="button"
+								class={styles.menuItem}
+								onClick={() => step(1)}
+							>
+								Move later
+							</button>
+						</PopoverContent>
+					</Popover>
+				</Show>
+				<DropTargetHint target={dropTarget()} />
+			</div>
+		</DropZone>
 	);
 }
 
@@ -867,6 +925,12 @@ function Folder(
 		kind: "group",
 		folderId: props.group.id,
 	});
+	// Same drop-target look as a card, without a label: a card released here, or a
+	// file held over it long enough to open.
+	const dropTarget = (): DropTarget | undefined => {
+		if (props.folderTarget === props.group.id) return { state: "ready" };
+		if (props.fileHoverGroup === props.group.id) return { state: "pending" };
+	};
 	const step = (direction: number) => {
 		const order = customLibraryOrder(instances());
 		const index = order.indexOf(props.group.id);
@@ -890,9 +954,10 @@ function Folder(
 				class={styles.folder}
 				style={{ "--folder-hue": props.group.color }}
 				data-library-item={props.group.id}
+				data-folder-tile={props.group.id}
 				data-editing={props.editing}
 				data-dragging={draggable.isActiveDraggable}
-				data-over={props.folderTarget === props.group.id}
+				data-drop-target={dropTarget()?.state}
 				aria-label={props.group.name}
 			>
 				<button
@@ -1005,7 +1070,9 @@ function FolderPopup(
 			class={styles.folderPopup}
 			style={{ "--folder-hue": props.group.color }}
 			data-folder-popup={props.group.id}
-			data-over={props.editing && droppable.isActiveDroppable}
+			data-drop-target={
+				props.editing && droppable.isActiveDroppable ? "ready" : undefined
+			}
 			onInteractOutside={(event) => {
 				if (context?.[0].active.draggable || props.suppressClick())
 					event.preventDefault();

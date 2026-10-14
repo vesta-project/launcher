@@ -1,3 +1,4 @@
+import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import { instancesState } from "@stores/instances";
@@ -155,6 +156,18 @@ export function DeveloperSettingsTab() {
 								}}
 							>
 								Reset System
+							</LauncherButton>
+						}
+					/>
+				</SettingsCard>
+
+				<SettingsCard header="File Drop Testing">
+					<SettingsField
+						label="File Drop Test Page"
+						description="Open the page with single-file, multi-file and folder drop zones for testing files dragged in from the OS"
+						headerRight={
+							<LauncherButton onClick={() => openMiniPage("/file-drop")}>
+								Open File Drop Test
 							</LauncherButton>
 						}
 					/>

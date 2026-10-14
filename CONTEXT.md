@@ -396,6 +396,49 @@ Primary modules:
 - `vesta-launcher/src/stores/instance-resource-overview.ts`
 - `vesta-launcher/src/components/pages/mini-pages/instance-details/`
 
+### Manual Resource Drop
+
+The instance-card workflow for local JARs and ZIP-contained mods, packs and
+Java Worlds. Its coordinator owns private snapshots, bounded evidence-only
+archive inspection, resource/world decisions, operation notices and cancellation.
+User waits run outside Task Manager workers and conflict locks; only local
+publication and dependency downloads use Tasks. Resource/World roots own their
+subtrees. Already-rooted packs preserve bytes, wrapped packs normalize their
+selected root, and World installation reuses World Management's safe importer.
+Enclosing folder wrappers (including repeated names) are supported; embedded
+ZIPs are not recursively inspected. Pack/World-owned inner ZIPs remain opaque
+payload. Recognized modpacks are rejected/excluded on instance cards, without a
+new-instance import detour. Native OS delivery remains debug-only opt-in and
+requires independent target-device verification.
+
+Post-publication source recognition runs outside mutation locks and revalidates
+the target before persistence. Exact installed-artifact matches can enrich remote
+identity with the selected destination type; source-only matches of original
+wrapped ZIPs remain separate typed `manualSourceEvidence` bound to the installed
+hash. They do not authorize replacement/update identity. Worlds use optional
+`archiveEvidence` bound to World identity and imported content, and verified
+original-archive matches alone can populate World source identity. Mixed outer
+containers are not provider identities for their children. Unmatched evidence
+can persist offline, without fabricated provider IDs or managed bundle links.
+
+Manual required-dependency planning is separate from provider install intent.
+It consumes hash-bound Resource Reconciliation evidence, verifies installed
+content/identity/enabled state and strict compatibility/pins, and queues only
+approved additions. Local root publication survives lookup or download failures;
+queued downloads are not completed downloads. The manual `ask`/`always`/`never`
+preference is independent of provider `auto_install_dependencies`. Remote lookup,
+consent and operation policy remain outside the Installed Resource Ledger.
+
+Primary modules:
+
+- `vesta-launcher/src-tauri/src/resources/drop_archive.rs`
+- `vesta-launcher/src-tauri/src/resources/manual_drop.rs`
+- `vesta-launcher/src-tauri/src/resources/source_enrichment.rs`
+- `vesta-launcher/src-tauri/src/resources/manual_dependencies.rs`
+- `vesta-launcher/src/stores/manual-resource-drops.ts`
+- `vesta-launcher/src/components/resources/ManualResourceDropDialog.tsx`
+- `docs/features/FILE_DROP.md`
+
 ### Resource Browse Session
 
 The frontend state around browsing Resources. It includes query text, filters,

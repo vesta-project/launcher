@@ -52,10 +52,12 @@ fn build_main_window(
         "os": os,
         "config": config,
     });
+    let native_file_drop_probe = native_file_drop_probe_enabled();
     let initialization_script = format!(
-        "window.__VESTA_OS__ = {os}; window.__VESTA_BOOTSTRAP__ = {bootstrap};",
+        "window.__VESTA_OS__ = {os}; window.__VESTA_BOOTSTRAP__ = {bootstrap}; window.__VESTA_NATIVE_FILE_DROP_PROBE__ = {probe};",
         os = serde_json::to_string(os).expect("serialize startup OS"),
         bootstrap = serde_json::to_string(&bootstrap).expect("serialize startup snapshot"),
+        probe = native_file_drop_probe,
     );
     let builder =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
@@ -66,10 +68,20 @@ fn build_main_window(
                 config.last_window_height as f64,
             )
             .min_inner_size(520_f64, 465_f64)
-            .disable_drag_drop_handler()
             .visible(false)
             .transparent(true)
             .decorations(false);
+    // Keep Tauri's native drag handler disabled unless the Stage 0 probe is
+    // explicitly enabled. Enabling it is gated because Tauri replaces the
+    // WebView2 drop handler on Windows, which conflicts with HTML5 DnD
+    // (tauri-apps/tauri#15138), and the main window is created hidden at
+    // runtime (tauri-apps/tauri#14643). The probe stays opt-in until verified
+    // on real OSes.
+    let builder = if native_file_drop_probe {
+        builder
+    } else {
+        builder.disable_drag_drop_handler()
+    };
 
     #[cfg(not(target_os = "windows"))]
     let builder = builder.background_color(Color(20, 20, 20, 255));
@@ -81,6 +93,16 @@ fn build_main_window(
         .title_bar_style(tauri::TitleBarStyle::Overlay);
 
     builder.build()
+}
+
+/// Stage 0 native file drop probe gate. Debug builds only, and only when
+/// VESTA_NATIVE_FILE_DROP_PROBE is exactly "1". Release builds never enable it.
+fn native_file_drop_probe_enabled() -> bool {
+    cfg!(debug_assertions)
+        && matches!(
+            std::env::var("VESTA_NATIVE_FILE_DROP_PROBE"),
+            Ok(value) if value == "1"
+        )
 }
 
 fn create_tray(

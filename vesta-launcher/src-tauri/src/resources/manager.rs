@@ -910,6 +910,17 @@ impl ResourceManager {
         platform: SourcePlatform,
         hashes: &[String],
     ) -> Result<HashMap<String, (ResourceProject, ResourceVersion)>> {
+        self.get_by_hashes_with_evidence(platform, hashes)
+            .await
+            .map(|(matches, _)| matches)
+    }
+
+    /// Retains partial batch failures so explicit identification can explain unresolved files.
+    pub(crate) async fn get_by_hashes_with_evidence(
+        &self,
+        platform: SourcePlatform,
+        hashes: &[String],
+    ) -> Result<(HashMap<String, (ResourceProject, ResourceVersion)>, usize)> {
         let mut matches = HashMap::new();
         let mut missing = Vec::new();
         let mut missing_seen = HashSet::new();
@@ -926,7 +937,7 @@ impl ResourceManager {
         }
 
         if missing.is_empty() {
-            return Ok(matches);
+            return Ok((matches, 0));
         }
 
         let source = self.get_source(platform).await?;
@@ -948,10 +959,12 @@ impl ResourceManager {
         .collect::<Vec<_>>()
         .await;
         let mut projects_to_cache = HashMap::new();
+        let mut failed_hashes = 0;
         for (batch_len, result) in batches {
             let fetched = match result {
                 Ok(fetched) => fetched,
                 Err(error) => {
+                    failed_hashes += batch_len;
                     log::warn!(
                         "[ResourceManager] {:?} identification batch failed ({} hashes): {}",
                         platform,
@@ -976,7 +989,7 @@ impl ResourceManager {
         }
         let projects = projects_to_cache.into_values().collect::<Vec<_>>();
         let _ = self.cache_project_metadata_many(platform, &projects).await;
-        Ok(matches)
+        Ok((matches, failed_hashes))
     }
 
     pub async fn get_or_hydrate_project_records(

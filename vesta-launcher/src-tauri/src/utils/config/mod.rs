@@ -171,6 +171,9 @@ pub struct AppConfig {
     pub default_sandbox_preset: String,
     pub default_sandbox_wrapper_nesting: String,
     pub default_sandbox_extra_paths: String,
+    /// Consent for required dependencies of manually dropped mods, independent of provider installs.
+    #[serde(default = "default_manual_mod_dependency_policy")]
+    pub manual_mod_dependency_policy: String,
 }
 
 impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite>
@@ -237,6 +240,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         String,         // default_sandbox_preset
         String,         // default_sandbox_wrapper_nesting
         String,         // default_sandbox_extra_paths
+        String,         // manual_mod_dependency_policy
     );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
@@ -310,6 +314,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             default_sandbox_preset: row.55,
             default_sandbox_wrapper_nesting: row.56,
             default_sandbox_extra_paths: row.57,
+            manual_mod_dependency_policy: row.58,
         })
     }
 }
@@ -379,8 +384,28 @@ impl Default for AppConfig {
             default_sandbox_preset: "trusted".to_string(),
             default_sandbox_wrapper_nesting: "sandbox-outside".to_string(),
             default_sandbox_extra_paths: "[]".to_string(),
+            manual_mod_dependency_policy: default_manual_mod_dependency_policy(),
         }
     }
+}
+
+fn default_manual_mod_dependency_policy() -> String {
+    "ask".to_string()
+}
+
+fn validate_manual_mod_dependency_policy(value: &str) -> Result<(), String> {
+    if matches!(value, "ask" | "always" | "never") {
+        Ok(())
+    } else {
+        Err("manual_mod_dependency_policy must be ask, always, or never".to_string())
+    }
+}
+
+fn validate_config_field(field: &str, value: &Value) -> Result<(), String> {
+    if field == "manual_mod_dependency_policy" {
+        validate_manual_mod_dependency_policy(value.as_str().unwrap_or(""))?;
+    }
+    Ok(())
 }
 
 fn theme_name_from_id(theme_id: &str) -> String {
@@ -981,6 +1006,8 @@ pub fn get_app_config() -> Result<AppConfig, anyhow::Error> {
 pub fn update_app_config(config: &AppConfig) -> Result<(), anyhow::Error> {
     use crate::schema::config::app_config::dsl::*;
 
+    validate_manual_mod_dependency_policy(&config.manual_mod_dependency_policy)
+        .map_err(anyhow::Error::msg)?;
     let mut conn = get_config_conn()?;
 
     diesel::update(app_config.filter(id.eq(1)))
@@ -1090,6 +1117,7 @@ pub fn update_config_field(
     field: String,
     value: serde_json::Value,
 ) -> Result<(), String> {
+    validate_config_field(&field, &value)?;
     let config = get_app_config().map_err(|e| e.to_string())?;
 
     // Convert config to serde_json::Value for manipulation
@@ -1140,6 +1168,9 @@ pub fn update_config_fields(
     app_handle: tauri::AppHandle,
     updates: std::collections::HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
+    for (field, value) in &updates {
+        validate_config_field(field, value)?;
+    }
     let config = get_app_config().map_err(|e| e.to_string())?;
 
     // Convert config to serde_json::Value for manipulation
@@ -1191,26 +1222,95 @@ pub fn update_config_fields(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicU32, Ordering};
+    use super::*;
+    use diesel::connection::SimpleConnection;
+    use diesel_migrations::MigrationHarness;
 
-    // Generate unique database names for each test to avoid lock conflicts
-    static _TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
-
-    fn _get_test_db_name() -> String {
-        let id = _TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        format!("test_config_{}.db", id)
+    fn database() -> SqliteConnection {
+        let mut conn = SqliteConnection::establish(":memory:").unwrap();
+        conn.run_pending_migrations(crate::utils::db::CONFIG_MIGRATIONS)
+            .unwrap();
+        conn
     }
 
-    // Tests heavily relied on SQLiteDB struct which is gone.
-    // We should rewrite tests to use the new Diesel pool system or skip for now.
-    // For now, I'll comment out the test body that relies on SQLiteDB to allow compilation,
-    // and mark tests as todo.
+    #[test]
+    fn fresh_config_and_diesel_roundtrip_preserve_independent_policy() {
+        let mut conn = database();
+        let fresh = app_config::table
+            .find(1)
+            .first::<AppConfig>(&mut conn)
+            .unwrap();
+        assert_eq!(fresh.manual_mod_dependency_policy, "ask");
+        let mut saved = AppConfig::default();
+        saved.manual_mod_dependency_policy = "always".into();
+        saved.auto_install_dependencies = false;
+        saved.default_sandbox_extra_paths = "[\"/example\"]".into();
+        diesel::update(app_config::table.find(1))
+            .set(&saved)
+            .execute(&mut conn)
+            .unwrap();
+        let loaded = app_config::table
+            .find(1)
+            .first::<AppConfig>(&mut conn)
+            .unwrap();
+        assert_eq!(loaded.manual_mod_dependency_policy, "always");
+        assert!(!loaded.auto_install_dependencies);
+        assert_eq!(
+            loaded.default_sandbox_extra_paths,
+            saved.default_sandbox_extra_paths
+        );
+        let mut json = serde_json::to_value(&loaded).unwrap();
+        json.as_object_mut()
+            .unwrap()
+            .remove("manual_mod_dependency_policy");
+        assert_eq!(
+            serde_json::from_value::<AppConfig>(json)
+                .unwrap()
+                .manual_mod_dependency_policy,
+            "ask"
+        );
+    }
 
     #[test]
-    #[ignore = "TODO: Rewrite test for Diesel"]
-    fn test_config_initialization() {}
+    fn policy_migration_roundtrip_preserves_other_settings() {
+        let mut conn = database();
+        conn.batch_execute("UPDATE app_config SET auto_install_dependencies = 0, manual_mod_dependency_policy = 'never'").unwrap();
+        conn.batch_execute(include_str!(
+            "../../../migrations/config/2026-10-12-000000_manual_mod_dependency_policy/down.sql"
+        ))
+        .unwrap();
+        conn.batch_execute(include_str!(
+            "../../../migrations/config/2026-10-12-000000_manual_mod_dependency_policy/up.sql"
+        ))
+        .unwrap();
+        let loaded = app_config::table
+            .find(1)
+            .first::<AppConfig>(&mut conn)
+            .unwrap();
+        assert_eq!(loaded.manual_mod_dependency_policy, "ask");
+        assert!(!loaded.auto_install_dependencies);
+    }
 
     #[test]
-    #[ignore = "TODO: Rewrite test for Diesel"]
-    fn test_config_update() {}
+    fn policy_rejects_invalid_values_in_rust_and_sql() {
+        for value in [
+            serde_json::json!("sometimes"),
+            serde_json::json!(true),
+            serde_json::Value::Null,
+            serde_json::json!("ASK"),
+        ] {
+            assert!(validate_config_field("manual_mod_dependency_policy", &value).is_err());
+        }
+        for value in ["ask", "always", "never"] {
+            assert!(validate_config_field(
+                "manual_mod_dependency_policy",
+                &serde_json::json!(value)
+            )
+            .is_ok());
+        }
+        let mut conn = database();
+        assert!(conn
+            .batch_execute("UPDATE app_config SET manual_mod_dependency_policy = 'invalid'")
+            .is_err());
+    }
 }

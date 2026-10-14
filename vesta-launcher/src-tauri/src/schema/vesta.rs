@@ -60,6 +60,7 @@ diesel::table! {
         source_modpack_id -> Nullable<Text>,
         source_modpack_version_id -> Nullable<Text>,
         source_modpack_platform -> Nullable<Text>,
+        manual_source_evidence -> Nullable<Text>,
     }
 }
 

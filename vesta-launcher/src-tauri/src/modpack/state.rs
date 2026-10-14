@@ -289,6 +289,7 @@ mod tests {
             source_modpack_id: None,
             source_modpack_version_id: None,
             source_modpack_platform: None,
+            manual_source_evidence: None,
         }
     }
 

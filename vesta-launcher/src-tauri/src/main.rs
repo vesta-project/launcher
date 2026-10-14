@@ -116,11 +116,14 @@ fn main() {
         ))
         .setup(move |app| {
             logging::register_log_plugin(app, log_level)?;
-            setup::init(app)
+            setup::init(app)?;
+            resources::manual_drop::register_notification_actions(app.handle());
+            Ok(())
         })
         .manage(utils::dialog_manager::DialogManager::new())
         .manage(utils::windows::MiniWindowRegistry::default())
         .manage(utils::launch_intents::PendingLaunchIntents::new())
+        .manage(resources::manual_drop::ManualDropManager::default())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -201,6 +204,10 @@ fn main() {
             commands::app::get_window_effect_capabilities,
             commands::app::set_window_effect,
             utils::db::get_db_status,
+            commands::file_drop::classify_dropped_paths,
+            commands::file_drop::start_resource_drop,
+            commands::file_drop::submit_resource_drop_choice,
+            commands::file_drop::cancel_resource_drop,
             utils::file_drop::create_file_drop_overlay,
             utils::file_drop::position_overlay,
             commands::pinning::get_pinned_pages,

@@ -24,6 +24,7 @@
 		"core:window:allow-set-position",
 		"core:window:allow-set-size",
 		"core:window:allow-show",
+		"core:window:allow-set-focus",
 		"core:webview:allow-webview-position",
 		"core:webview:allow-webview-size",
 		"os:default",

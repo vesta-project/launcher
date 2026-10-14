@@ -47,6 +47,8 @@ pub struct WorldSummary {
     #[serde(rename = "ref")]
     pub world_ref: WorldRef,
     pub world_id: Option<String>,
+    #[serde(default)]
+    pub archive_evidence: Option<manifest::WorldArchiveEvidence>,
     pub instance_name: String,
     pub folder_name: String,
     pub display_name: String,
@@ -229,6 +231,10 @@ fn summarize_world(
             .as_ref()
             .map(|manifest| manifest.world_id.to_string()),
         instance_name: instance.name.clone(),
+        archive_evidence: manifest_read
+            .manifest
+            .as_ref()
+            .and_then(|manifest| manifest.archive_evidence.clone()),
         folder_name: folder_name.clone(),
         display_name: level.level_name.unwrap_or(folder_name),
         last_played_at: last_played.map(|value| value.to_rfc3339()),

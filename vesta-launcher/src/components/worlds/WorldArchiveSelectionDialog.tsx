@@ -1,4 +1,5 @@
 import {
+	registerWorldArchiveChoiceReadiness,
 	submitWorldArchiveSelection,
 	type WorldArchiveSelectionRequest,
 } from "@stores/worlds";
@@ -31,7 +32,9 @@ export const WorldArchiveSelectionDialog: Component = () => {
 	const [queued, setQueued] = createSignal<WorldArchiveSelectionRequest[]>([]);
 	const [submitting, setSubmitting] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
-	let unlisten: (() => void) | undefined;
+	const unlisteners: (() => void)[] = [];
+	let disposed = false;
+	let clearReadiness: (() => void) | undefined;
 	let expiryTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const advance = () => {
@@ -42,23 +45,63 @@ export const WorldArchiveSelectionDialog: Component = () => {
 		setError(null);
 	};
 
-	onMount(async () => {
-		unlisten = await listen<WorldArchiveSelectionRequest>(
-			"core://world-install-selection-required",
-			(event) => {
-				if (request()) {
-					setQueued((current) => [...current, event.payload]);
-				} else {
-					setRequest(event.payload);
-					setSelected([]);
-					setError(null);
-				}
-			},
-		);
+	const retire = (installId: string) => {
+		setQueued((queue) => queue.filter((item) => item.installId !== installId));
+		if (request()?.installId === installId) advance();
+	};
+	const register = <T,>(
+		event: string,
+		callback: (event: { payload: T }) => void,
+	) =>
+		listen<T>(event, callback).then((unlisten) => {
+			if (disposed) unlisten();
+			else unlisteners.push(unlisten);
+		});
+	onMount(() => {
+		const ready = Promise.all([
+			register<WorldArchiveSelectionRequest>(
+				"core://world-install-selection-required",
+				(event) => {
+					if (
+						disposed ||
+						request()?.installId === event.payload.installId ||
+						queued().some((item) => item.installId === event.payload.installId)
+					)
+						return;
+					if (request()) setQueued((current) => [...current, event.payload]);
+					else {
+						setRequest(event.payload);
+						setSelected([]);
+						setError(null);
+					}
+				},
+			),
+			register<{ installId: string }>(
+				"core://world-install-selection-closed",
+				(event) => {
+					if (!disposed) retire(event.payload.installId);
+				},
+			),
+		])
+			.then(() => undefined)
+			.catch((error) => {
+				disposed = true;
+				for (const unlisten of unlisteners.splice(0)) unlisten();
+				throw error;
+			});
+		clearReadiness = registerWorldArchiveChoiceReadiness(ready);
 	});
 	onCleanup(() => {
-		unlisten?.();
+		disposed = true;
+		clearReadiness?.();
+		for (const unlisten of unlisteners.splice(0)) unlisten();
 		if (expiryTimer) clearTimeout(expiryTimer);
+		for (const pending of [request(), ...queued()]) {
+			if (pending)
+				void submitWorldArchiveSelection(pending.installId, []).catch(
+					() => undefined,
+				);
+		}
 	});
 
 	createEffect(() => {
@@ -77,7 +120,7 @@ export const WorldArchiveSelectionDialog: Component = () => {
 					void submitWorldArchiveSelection(current.installId, []).catch(
 						() => undefined,
 					);
-					advance();
+					retire(current.installId);
 				},
 				Math.max(0, remaining),
 			);
@@ -100,9 +143,10 @@ export const WorldArchiveSelectionDialog: Component = () => {
 		setError(null);
 		try {
 			await submitWorldArchiveSelection(current.installId, ids);
-			advance();
+			if (!disposed) retire(current.installId);
 		} catch (reason) {
-			setError(String(reason));
+			if (!disposed && request()?.installId === current.installId)
+				setError(String(reason));
 		} finally {
 			setSubmitting(false);
 		}

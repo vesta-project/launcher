@@ -1,7 +1,7 @@
 /* @refresh skip */
 
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
-import type { WorldSummary } from "@stores/worlds";
+import type { WorldDatapackOverview, WorldSummary } from "@stores/worlds";
 import { createSignal } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorldDatapacksView } from "./WorldDatapacksView";
@@ -288,6 +288,38 @@ describe("world datapack navigation", () => {
 		expect(onOpen).toHaveBeenCalledTimes(2);
 	});
 
+	it("shows recognized world archive provenance without changing the world name", () => {
+		render(() => (
+			<WorldCard
+				world={world({
+					worldId: "world-id",
+					archiveEvidence: {
+						worldId: "world-id",
+						originalSha1: "archive",
+						installedContentSha1: "tree",
+						source: {
+							platform: "modrinth",
+							projectId: "world",
+							versionId: "release",
+							versionNumber: "1.0",
+							displayName: "Provider World",
+							webUrl: "https://modrinth.com/world/world",
+						},
+					},
+				})}
+				busy={false}
+				onMove={vi.fn()}
+				onCopy={vi.fn()}
+				onDuplicate={vi.fn()}
+				onDelete={vi.fn()}
+				onManageDatapacks={vi.fn()}
+				onOpen={vi.fn()}
+			/>
+		));
+		expect(screen.getByText(/Source archive:.*Provider World/)).toBeTruthy();
+		expect(screen.getByRole("heading", { name: "Test World" })).toBeTruthy();
+	});
+
 	it("uses the whole card instead of a separate datapack-count button", async () => {
 		const onOpen = vi.fn();
 		const onManageDatapacks = vi.fn();
@@ -479,6 +511,51 @@ describe("WorldDatapacksView", () => {
 		expect(
 			screen.getByRole("switch", { name: "Disable Managed Pack" }),
 		).toBeTruthy();
+	});
+
+	it("displays source-only datapack recognition without fabricating provider navigation", () => {
+		const overview = mocks.worldDatapacksState.byWorld[
+			"7:World One"
+		] as WorldDatapackOverview;
+		const entry = overview.entries[0];
+		overview.entries = [
+			{
+				...entry,
+				platform: null,
+				projectId: null,
+				versionId: null,
+				versionNumber: null,
+				managed: false,
+				manualSourceEvidence: {
+					originalSha1: "original",
+					installedSha1: "normalized",
+					resourceType: "datapack",
+					scope: { kind: "world", worldId: "world-id" },
+					source: {
+						platform: "modrinth",
+						projectId: "pack",
+						versionId: "release",
+						versionNumber: "1.0",
+						displayName: "Provider Pack",
+						webUrl: "https://modrinth.com/datapack/pack",
+					},
+				},
+			},
+		];
+		render(() => (
+			<WorldDatapacksView
+				world={world({ worldId: "world-id" })}
+				onBack={vi.fn()}
+				onAddDatapack={vi.fn()}
+				onOpenDatapackDetails={vi.fn()}
+			/>
+		));
+		expect(screen.getByText(/Source archive:.*Provider Pack/)).toBeTruthy();
+		expect(screen.getByText("Local pack")).toBeTruthy();
+		expect(
+			screen.queryByRole("button", { name: "View details for Managed Pack" }),
+		).toBeNull();
+		expect(screen.queryByRole("button", { name: /Update to/ })).toBeNull();
 	});
 
 	it("opens managed project details from the whole row", async () => {

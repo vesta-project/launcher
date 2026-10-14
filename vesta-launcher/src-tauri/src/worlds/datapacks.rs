@@ -32,6 +32,8 @@ pub struct WorldDatapackSummary {
     pub project_id: Option<String>,
     pub version_id: Option<String>,
     pub version_number: Option<String>,
+    #[serde(default)]
+    pub manual_source_evidence: Option<crate::models::installed_resource::ManualSourceEvidence>,
     pub enabled: bool,
     pub managed: bool,
     pub read_only: bool,
@@ -776,6 +778,7 @@ fn list_entries(
             project_id: row.and_then(|row| non_empty(&row.remote_id)),
             version_id: row.and_then(|row| non_empty(&row.remote_version_id)),
             version_number: row.and_then(|row| non_empty(&row.current_version)),
+            manual_source_evidence: row.and_then(|row| row.manual_source_evidence.clone()),
             enabled: is_directory || !file_name.ends_with(".disabled"),
             managed,
             read_only: is_directory || row.is_none(),
@@ -893,6 +896,7 @@ mod tests {
             source_modpack_id: None,
             source_modpack_version_id: None,
             source_modpack_platform: None,
+            manual_source_evidence: None,
         }
     }
 

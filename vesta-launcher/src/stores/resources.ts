@@ -165,6 +165,24 @@ export type ResourceDependency = {
 	dependency_type: "required" | "optional" | "incompatible" | "embedded";
 };
 
+export type RecognizedSource = {
+	platform: string;
+	projectId: string;
+	versionId: string;
+	versionNumber: string;
+	displayName: string;
+	iconUrl?: string | null;
+	webUrl: string;
+};
+
+export type ManualSourceEvidence = {
+	originalSha1: string;
+	installedSha1: string;
+	resourceType: string;
+	scope: { kind: "instance" } | { kind: "world"; worldId: string };
+	source?: RecognizedSource | null;
+};
+
 export type InstalledResource = {
 	id: number;
 	instance_id: number;
@@ -184,6 +202,7 @@ export type InstalledResource = {
 	source_modpack_id?: string | null;
 	source_modpack_version_id?: string | null;
 	source_modpack_platform?: string | null;
+	manualSourceEvidence?: ManualSourceEvidence | null;
 };
 
 export type ResourceRescanSummary = {

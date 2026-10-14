@@ -154,3 +154,58 @@
 .file-drop-page__file-list::-webkit-scrollbar-thumb:hover {
 	background: hsl(var(--color__primary-hue) 50% 50%);
 }
+
+.file-drop-page__diagnostic {
+	white-space: pre-wrap;
+}
+
+.file-drop-page__rejected {
+	margin-top: 0.5rem;
+	font-size: 0.875rem;
+	color: hsl(var(--color__error-hue) 70% 75%);
+}
+
+/* Calibration marker. Fixed to the viewport at the converted native drag point, never intercepts input. */
+.file-drop-page__pointer {
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+	pointer-events: none;
+	z-index: 9999;
+}
+
+.file-drop-page__pointer-dot {
+	position: absolute;
+	left: -6px;
+	top: -6px;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 2px solid hsl(var(--color__primary-hue) 90% 95%);
+	background-color: hsl(var(--color__primary-hue) 60% 50% / 0.6);
+	box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
+}
+
+.file-drop-page__pointer::before,
+.file-drop-page__pointer::after {
+	content: "";
+	position: absolute;
+	background-color: hsl(var(--color__primary-hue) 90% 95%);
+	box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
+}
+
+.file-drop-page__pointer::before {
+	left: -12px;
+	top: 0;
+	width: 24px;
+	height: 1px;
+}
+
+.file-drop-page__pointer::after {
+	left: 0;
+	top: -12px;
+	width: 1px;
+	height: 24px;
+}

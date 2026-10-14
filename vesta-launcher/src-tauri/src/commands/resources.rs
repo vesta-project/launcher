@@ -19,7 +19,9 @@ use crate::resources::update_cache::{
     load_instance_update_snapshot, save_instance_update_snapshot, snapshot_to_result,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
-use crate::tasks::manager::{resourcepacks_conflict_key, TaskManager};
+use crate::tasks::manager::{
+    mods_conflict_key, resourcepacks_conflict_key, shaderpacks_conflict_key, TaskManager,
+};
 use crate::tasks::resource_download::{
     plan_artifacts, requires_world_target, ResourceDownloadTask,
 };
@@ -1021,12 +1023,16 @@ pub async fn delete_resource(
             anyhow!("Datapacks are managed from their world; use delete_world_datapack").into(),
         );
     }
-    let _resourcepack_guard = if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
-        let guard = task_manager
-            .acquire_conflicts([resourcepacks_conflict_key(instance_id)])
-            .await;
-        resource = crate::resources::ledger::get_resource(instance_id, resource_id)
-            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Use the same mutation exclusion as publication and late source enrichment.
+    let conflict_key = match resource.resource_type.to_ascii_lowercase().as_str() {
+        "mod" => mods_conflict_key(instance_id),
+        "shader" => shaderpacks_conflict_key(instance_id),
+        _ => resourcepacks_conflict_key(instance_id),
+    };
+    let _mutation_guard = task_manager.acquire_conflicts([conflict_key]).await;
+    resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
         if crate::worlds::datapacks::companion_resourcepack_may_be_referenced(
             instance_id,
             std::path::Path::new(&resource.local_path),
@@ -1038,10 +1044,7 @@ pub async fn delete_resource(
             )
             .into());
         }
-        Some(guard)
-    } else {
-        None
-    };
+    }
     let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
         .map_err(anyhow::Error::msg)?;
     let mut backup = None;
@@ -1109,12 +1112,16 @@ pub async fn toggle_resource(
             anyhow!("Datapacks are managed from their world; use toggle_world_datapack").into(),
         );
     }
-    let _resourcepack_guard = if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
-        let guard = task_manager
-            .acquire_conflicts([resourcepacks_conflict_key(instance_id)])
-            .await;
-        resource = crate::resources::ledger::get_resource(instance_id, resource_id)
-            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Use the same mutation exclusion as publication and late source enrichment.
+    let conflict_key = match resource.resource_type.to_ascii_lowercase().as_str() {
+        "mod" => mods_conflict_key(instance_id),
+        "shader" => shaderpacks_conflict_key(instance_id),
+        _ => resourcepacks_conflict_key(instance_id),
+    };
+    let _mutation_guard = task_manager.acquire_conflicts([conflict_key]).await;
+    resource = crate::resources::ledger::get_resource(instance_id, resource_id)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
         if crate::worlds::datapacks::companion_resourcepack_may_be_referenced(
             instance_id,
             std::path::Path::new(&resource.local_path),
@@ -1126,10 +1133,7 @@ pub async fn toggle_resource(
             )
             .into());
         }
-        Some(guard)
-    } else {
-        None
-    };
+    }
     let managed = crate::worlds::manifest::managed_datapack_manifest(&resource)
         .map_err(anyhow::Error::msg)?;
     let current_path = std::path::PathBuf::from(&resource.local_path);

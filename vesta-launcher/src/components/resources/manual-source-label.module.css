@@ -1,0 +1,9 @@
+.label {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	color: var(--text-secondary);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

@@ -11,6 +11,7 @@ import {
 	systemMemory,
 } from "@stores/settings-cache";
 import { getVersion } from "@tauri-apps/api/app";
+import { t } from "~/localization";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -110,6 +111,7 @@ export interface AppConfig {
 	telemetry_enabled: boolean;
 	discord_presence_enabled: boolean;
 	auto_install_dependencies: boolean;
+	manual_mod_dependency_policy: ManualModDependencyPolicy;
 	proxy_enabled: boolean;
 	proxy_url: string | null;
 	proxy_apply_to_games: boolean;
@@ -169,6 +171,14 @@ export const [discordPresenceEnabled, setDiscordPresenceEnabled] =
 	createSignal(true);
 export const [autoInstallDependencies, setAutoInstallDependencies] =
 	createSignal(true);
+export type ManualModDependencyPolicy = "ask" | "always" | "never";
+export function normalizeManualModDependencyPolicy(
+	value: unknown,
+): ManualModDependencyPolicy {
+	return value === "always" || value === "never" ? value : "ask";
+}
+export const [manualModDependencyPolicy, setManualModDependencyPolicy] =
+	createSignal<ManualModDependencyPolicy>("ask");
 export const [proxyEnabled, setProxyEnabled] = createSignal(false);
 export const [proxyUrl, setProxyUrl] = createSignal("");
 export const [proxyApplyToGames, setProxyApplyToGames] = createSignal(false);
@@ -1391,6 +1401,33 @@ export async function handleTelemetryToggle(checked: boolean) {
 	});
 }
 
+let manualDependencyPolicyRevision = 0;
+export async function handleManualModDependencyPolicyChange(
+	value: ManualModDependencyPolicy,
+) {
+	const revision = ++manualDependencyPolicyRevision;
+	const previous = manualModDependencyPolicy();
+	setManualModDependencyPolicy(value);
+	if (!hasTauriRuntime()) return;
+	try {
+		await invoke("update_config_field", {
+			field: "manual_mod_dependency_policy",
+			value,
+		});
+	} catch (error) {
+		if (revision !== manualDependencyPolicyRevision) return;
+		setManualModDependencyPolicy(previous);
+		showToast({
+			title: t("settings-manual-dependencies-save-failed"),
+			description:
+				typeof error === "string"
+					? error
+					: t("settings-manual-dependencies-save-reverted"),
+			severity: "error",
+		});
+	}
+}
+
 export async function handleAutoInstallDepsToggle(checked: boolean) {
 	const prev = autoInstallDependencies();
 	setAutoInstallDependencies(checked);
@@ -1617,6 +1654,11 @@ async function initializeSettings() {
 				setTelemetryEnabled(config.telemetry_enabled ?? true);
 				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
 				setAutoInstallDependencies(config.auto_install_dependencies ?? true);
+				setManualModDependencyPolicy(
+					normalizeManualModDependencyPolicy(
+						config.manual_mod_dependency_policy,
+					),
+				);
 				setProxyEnabled(config.proxy_enabled ?? false);
 				setProxyUrl(config.proxy_url ?? "");
 				setProxyApplyToGames(config.proxy_apply_to_games ?? false);
@@ -1778,6 +1820,12 @@ async function initializeSettings() {
 		if (field === "telemetry_enabled") setTelemetryEnabled(value ?? true);
 		if (field === "discord_presence_enabled")
 			setDiscordPresenceEnabled(value ?? true);
+		if (field === "auto_install_dependencies")
+			setAutoInstallDependencies(value ?? true);
+		if (field === "manual_mod_dependency_policy") {
+			manualDependencyPolicyRevision += 1;
+			setManualModDependencyPolicy(normalizeManualModDependencyPolicy(value));
+		}
 		if (field === "reduced_motion") setReducedMotion(value ?? false);
 		if (field === "autostart_enabled") setAutostartEnabled(value ?? false);
 		if (field === "show_tray_icon") setShowTrayIcon(value ?? true);

@@ -1,33 +1,12 @@
-/* Applied to elements with data-drop-zone attribute */
-[data-drop-zone] {
-	transition: all 150ms ease-in-out;
-}
-
-/* Applied when dragging over the zone */
+/*
+ * Marker classes for a zone's highlight state. The look itself is the shared
+ * drop-target standard (ui/drop-target/drop-target.css), applied through the
+ * `data-drop-target` attribute that DropZone sets.
+ */
 .drop-zone--active {
-	outline: 2px dashed hsl(var(--color__primary-hue) 60% 50%) !important;
-	outline-offset: -2px !important;
-	background-color: hsl(var(--color__primary-hue) 60% 50% / 0.05) !important;
-	position: relative;
+	--drop-zone-state: active;
 }
 
-.drop-zone--active::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	background-color: hsl(var(--color__primary-hue) 60% 50% / 0.1);
-	pointer-events: none;
-	animation: pulse 1s ease-in-out infinite;
-	z-index: 1;
-	border-radius: inherit; /* Pulse takes the shape of the component */
-}
-
-@keyframes pulse {
-	0%,
-	100% {
-		opacity: 1;
-	}
-	50% {
-		opacity: 0.5;
-	}
+.drop-zone--rejected {
+	--drop-zone-state: rejected;
 }

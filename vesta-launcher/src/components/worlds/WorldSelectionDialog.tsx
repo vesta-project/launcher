@@ -31,6 +31,8 @@ export type WorldSelectionDialogProps = {
 	isOpen: boolean;
 	initialInstanceId?: number | null;
 	projectName?: string;
+	selectionPending?: boolean;
+	selectionError?: string | null;
 	onClose: () => void;
 	onSelect?: (world: WorldRef) => void | Promise<void>;
 	onSelectWorld?: (world: WorldSummary) => void | Promise<void>;
@@ -123,6 +125,9 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 					</DialogHeader>
 
 					<div class={styles.body}>
+						<Show when={props.selectionError}>
+							{(message) => <p role="alert">{message()}</p>}
+						</Show>
 						<Show when={props.initialInstanceId == null}>
 							<button
 								class={styles.back}
@@ -161,7 +166,9 @@ export const WorldSelectionDialog: Component<WorldSelectionDialogProps> = (
 												<button
 													class={styles.row}
 													type="button"
-													disabled={Boolean(disabled())}
+													disabled={
+														Boolean(disabled()) || props.selectionPending
+													}
 													title={disabled() ?? ""}
 													onClick={() =>
 														void (

@@ -3,7 +3,8 @@ use crate::notifications::models::PROGRESS_INDETERMINATE;
 use crate::resources::ledger::DownloadLedgerEntry;
 use crate::schema::instance::dsl as instances_dsl;
 use crate::tasks::manager::{
-    resourcepacks_conflict_key, saves_conflict_key, world_conflict_key, Task, TaskContext,
+    mods_conflict_key, resourcepacks_conflict_key, saves_conflict_key, shaderpacks_conflict_key,
+    world_conflict_key, Task, TaskContext,
 };
 use crate::utils::db::get_vesta_conn;
 pub use crate::worlds::ResourceInstallTarget;
@@ -452,6 +453,18 @@ impl Task for ResourceDownloadTask {
         let instance_id = target_instance_id(&self.target);
         let mut keys = Vec::new();
 
+        if artifacts
+            .iter()
+            .any(|artifact| artifact.resource_type == ResourceType::Mod)
+        {
+            keys.push(mods_conflict_key(instance_id));
+        }
+        if artifacts
+            .iter()
+            .any(|artifact| artifact.resource_type == ResourceType::Shader)
+        {
+            keys.push(shaderpacks_conflict_key(instance_id));
+        }
         if artifacts
             .iter()
             .any(|artifact| artifact.resource_type == ResourceType::DataPack)
@@ -1127,6 +1140,27 @@ mod tests {
                 world_conflict_key(7, "New World"),
             ]
         );
+    }
+
+    #[test]
+    fn mod_and_shader_downloads_share_manual_publication_locks() {
+        for (resource_type, expected) in [
+            (ResourceType::Mod, mods_conflict_key(9)),
+            (ResourceType::Shader, shaderpacks_conflict_key(9)),
+        ] {
+            let task = ResourceDownloadTask {
+                target: ResourceInstallTarget::Instance { instance_id: 9 },
+                platform: SourcePlatform::Modrinth,
+                project_id: "project".into(),
+                project_name: "Resource".into(),
+                project_icon_url: None,
+                version: version(vec![]),
+                resource_type,
+                dependency_for: None,
+                replacement_resource_id: None,
+            };
+            assert_eq!(task.conflict_keys(), vec![expected]);
+        }
     }
 
     #[test]
