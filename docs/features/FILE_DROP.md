@@ -1,17 +1,19 @@
 # File drops and manual resource imports
 
-## Native delivery is still opt-in
+## Native delivery is enabled by default
 
-The native Tauri 2 path uses WebView drag/drop events, a single frontend bridge and a central drop-target controller. It is enabled only in a **debug build launched with** `VESTA_NATIVE_FILE_DROP_PROBE=1`:
+The native Tauri 2 path uses WebView drag/drop events, a single frontend bridge and a central drop-target controller. Native dropping is enabled in the main window in **both debug and release builds**, without an environment variable:
 
 ```sh
 # From the repository root
-VESTA_NATIVE_FILE_DROP_PROBE=1 bun run vesta:dev
+bun run vesta:dev
 ```
 
-Normal release builds do **not** enable native dropping. Setting the variable only while compiling does not embed it into the executable. The retained legacy sniffer is not removed by this resource-import feature; replacement cleanup and packaged-build enablement are separate work. Native and DOM handlers must never both process the same desktop drop.
+`VESTA_NATIVE_FILE_DROP_PROBE=1` optionally enables path-free diagnostics and the calibration marker when starting a **debug** build. It does not control file delivery, and release builds leave these diagnostics disabled. Setting the variable only while compiling does not embed it into the executable.
 
-Actual OS delivery and internal organisation with native dropping enabled require target-machine verification. Browser/unit tests do not establish Windows, macOS or Linux native compatibility.
+The root no longer installs the legacy sniffer's global DOM drag handlers. Dormant legacy implementation/commands remain, but are not an active fallback. Native and DOM handlers must never both process the same desktop drop. Internal library organisation remains pointer-driven.
+
+Native delivery has been confirmed during device testing. Browser/unit tests do not establish Windows, macOS or Linux native compatibility; record the build mode and platform for each target-machine check, including packaged builds.
 
 ## Instance-card imports
 
@@ -119,10 +121,10 @@ To rerun the ignored benchmark from the repository root:
 cargo test -p vesta-launcher benchmark_archive_inspection -- --ignored --nocapture --test-threads=1
 ```
 
-Set `VESTA_ARCHIVE_TIMING=1` at debug-app startup for path-free archive phase durations and entry/evidence/byte counters. This diagnostics flag does not enable native drops; `VESTA_NATIVE_FILE_DROP_PROBE=1` remains separate. Cancellation is cooperative in long snapshot/index/evidence/ownership loops, not preemptive inside third-party ZIP construction or bounded NBT parsing.
+Set `VESTA_ARCHIVE_TIMING=1` at debug-app startup for path-free archive phase durations and entry/evidence/byte counters. Native drops are enabled independently; `VESTA_NATIVE_FILE_DROP_PROBE=1` separately enables debug-only delivery diagnostics. Cancellation is cooperative in long snapshot/index/evidence/ownership loops, not preemptive inside third-party ZIP construction or bounded NBT parsing.
 
 ## Verification
 
 Run frontend tests/build/typecheck and focused Rust resource, config and world tests. Fixtures cover rooted/folder-wrapped resources, opaque owned inner ZIPs, world ownership, malformed/unsafe ZIPs, no-clobber publication, duplicates, strict dependency conflicts, expiry, stale decisions and preference rollback/synchronization. Generate portable inert fixtures with `python3 -I scripts/generate-drop-fixtures.py --performance` from the repository root; see [the device testing checklist](FILE_DROP_TESTING.md) for expected outcomes and platform-specific startup commands.
 
-On a target desktop, launch with the opt-in flag and drop real fixtures onto grouped/ungrouped cards. Verify on-disk contents and resource/world views, world selection, dependency consent/remembering, cancellation, notification completion, internal reordering, modal blocking and reduced motion. Do not remove the legacy delivery path or enable packaged native drops solely because automated tests pass.
+On a target desktop, launch normally with no probe variable and drop real fixtures onto grouped/ungrouped cards. Repeat with a packaged release. Verify on-disk contents and resource/world views, world selection, dependency consent/remembering, cancellation, notification completion, internal reordering, modal blocking and reduced motion. Enable the optional debug probe only when event counters or coordinate calibration are needed.

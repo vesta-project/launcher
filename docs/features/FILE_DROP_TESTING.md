@@ -2,26 +2,34 @@
 
 Use a disposable instance and save folder. The generated fixtures are **inert import fixtures**, not functioning mods or complete playable worlds. Do not launch Minecraft with them. Provider recognition/dependency tests need real, known provider-listed artifacts as a separate step.
 
-## Start the native debug path
+## Start the native path
 
-From the **repository root**, with the project's normal Bun/Rust/Tauri prerequisites installed:
-
-macOS / Linux:
+Native file drops are enabled by default in the main window in both debug and release builds. From the **repository root**, with the project's normal Bun/Rust/Tauri prerequisites installed, start normally on macOS, Linux or Windows PowerShell:
 
 ```sh
+bun run vesta:dev
+```
+
+Test first with `VESTA_NATIVE_FILE_DROP_PROBE` **unset**. Repeat the checklist with a normal packaged release: no environment variable is required. Dormant legacy sniffer code is not an active fallback. A browser preview is not a native-drop test.
+
+### Optional debug diagnostics
+
+For event counters and coordinate calibration only, set the variable when **starting a debug build**:
+
+```sh
+# macOS / Linux
 VESTA_NATIVE_FILE_DROP_PROBE=1 bun run vesta:dev
 ```
 
-Windows PowerShell:
-
 ```powershell
+# Windows PowerShell
 $env:VESTA_NATIVE_FILE_DROP_PROBE = "1"
 bun run vesta:dev
 # After closing the test app:
 Remove-Item Env:VESTA_NATIVE_FILE_DROP_PROBE
 ```
 
-Set the variable when **starting** the app. A release executable does not activate native drops even with this variable; compiling with it does not embed enablement. Do not use a normal release package to judge this gated native path. The existing legacy route remains available outside this opt-in. A browser preview is not a native-drop test.
+This flag controls diagnostics, not file delivery. Release builds keep diagnostics disabled even when the variable is set; compiling with it does not embed enablement.
 
 ## Generate portable fixtures
 
@@ -90,7 +98,7 @@ Obtain known Modrinth/CurseForge files yourself through the normal provider work
 ```text
 Device / OS / architecture:
 Build and startup command:
-Native opt-in confirmed:
+Native delivery confirmed (probe variable unset):
 Fixture / action:
 Expected:
 Observed:
@@ -110,4 +118,4 @@ Pass / fail / not tested:
 - Typecheck still fails only on the existing asynchronous Vite configuration typing at `vesta-launcher/vite.config.ts:7`. Workspace Rust format-check still reports the existing macro layout in `src-tauri/src/schema/config.rs:96`; the metadata files changed in this final pass are formatted.
 - No new real desktop-drop verification was performed in this pass. macOS UI automation accessibility reports disabled; Windows/Linux OS delivery and live provider recognition still require the device checks above.
 
-Cross-platform OS delivery remains **unverified until these checks are performed on that platform**. Automated tests and an app/browser smoke test cannot substitute for real file-manager drops. Testing readiness does not authorize release enablement, legacy sniffer removal, committing, or shipping.
+Native drag-and-drop has been confirmed during device testing and is now enabled by default. Cross-platform/build-mode coverage remains **unverified until these checks are performed for that platform and build**. Automated tests and an app/browser smoke test cannot substitute for real file-manager drops; record exactly which device and build was tested.

@@ -1,7 +1,7 @@
 /**
  * Native file-drop bridge for the main window.
  *
- * Opt-in through the same flag as the Stage 0 probe (isNativeDropProbeEnabled).
+ * Enabled by default in the main Tauri webview, independently of diagnostics.
  * Owns one getCurrentWebview().onDragDropEvent listener and a cached scale factor.
  * Event handlers are synchronous: no awaits and no scale IPC inside them. Positions
  * are converted to CSS pixels and fed to the shared drop controller. The controller's
@@ -13,6 +13,7 @@
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { type DragDropEvent, getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { createSignal } from "solid-js";
 import { classifyDroppedPaths } from "./classify";
 import {
@@ -25,7 +26,6 @@ import {
 	type DropController,
 	type Point,
 } from "./drop-controller";
-import { isNativeDropProbeEnabled } from "./native-probe";
 
 type BridgeWindow = Window & { __VESTA_OS__?: string };
 type WebviewHandle = ReturnType<typeof getCurrentWebview>;
@@ -87,13 +87,13 @@ const noop = (): void => undefined;
 
 /**
  * Starts the bridge. Synchronous: returns a disposer at once, while listener
- * registration completes in the background. Idempotent. Does nothing unless the
- * probe flag is set and the current webview is "main".
+ * registration completes in the background. Idempotent. Does nothing outside
+ * the Tauri runtime or when the current webview is not "main".
  */
 export function startNativeFileDrop(
 	options: NativeFileDropOptions = {},
 ): () => void {
-	if (activeBridge || !isNativeDropProbeEnabled()) {
+	if (activeBridge || !hasTauriRuntime()) {
 		return noop;
 	}
 

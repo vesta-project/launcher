@@ -71,17 +71,8 @@ fn build_main_window(
             .visible(false)
             .transparent(true)
             .decorations(false);
-    // Keep Tauri's native drag handler disabled unless the Stage 0 probe is
-    // explicitly enabled. Enabling it is gated because Tauri replaces the
-    // WebView2 drop handler on Windows, which conflicts with HTML5 DnD
-    // (tauri-apps/tauri#15138), and the main window is created hidden at
-    // runtime (tauri-apps/tauri#14643). The probe stays opt-in until verified
-    // on real OSes.
-    let builder = if native_file_drop_probe {
-        builder
-    } else {
-        builder.disable_drag_drop_handler()
-    };
+    // Keep Tauri's default native file-drop handler enabled in every build.
+    // Internal library organization uses pointer events, not HTML5 DnD.
 
     #[cfg(not(target_os = "windows"))]
     let builder = builder.background_color(Color(20, 20, 20, 255));
@@ -95,8 +86,8 @@ fn build_main_window(
     builder.build()
 }
 
-/// Stage 0 native file drop probe gate. Debug builds only, and only when
-/// VESTA_NATIVE_FILE_DROP_PROBE is exactly "1". Release builds never enable it.
+/// Optional diagnostics only; native file delivery does not depend on this gate.
+/// Debug builds only, and only when VESTA_NATIVE_FILE_DROP_PROBE is exactly "1".
 fn native_file_drop_probe_enabled() -> bool {
     cfg!(debug_assertions)
         && matches!(

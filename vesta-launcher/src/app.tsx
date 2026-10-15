@@ -28,7 +28,6 @@ import {
 	unsubscribeFromConfigUpdates,
 } from "@utils/config-sync";
 import { subscribeToCrashEvents } from "@utils/crash-handler";
-import { cleanupFileDropSystem, getDropZoneManager } from "@utils/file-drop";
 import { startNativeFileDrop } from "@utils/file-drop/native-bridge";
 import { initializeNativeDropProbe } from "@utils/file-drop/native-probe";
 import {
@@ -86,111 +85,9 @@ function Root(props: ChildrenProp) {
 	// Stage 0 diagnostics only (debug builds with VESTA_NATIVE_FILE_DROP_PROBE=1).
 	// A no-op everywhere else.
 	const disposeNativeDropProbe = initializeNativeDropProbe();
-	// Routes native OS drops to registered DropZones. Same opt-in flag as the probe.
+	// Routes native OS drops to registered DropZones in debug and release builds.
 	const disposeNativeFileDrop = startNativeFileDrop();
 	const disposeManualDropChoices = startManualDropChoiceListener();
-
-	// Global window-level drag events to manage the sniffer
-	const manager = getDropZoneManager();
-	let leaveTimeout: any;
-
-	// Hover clock removed: stopped tracking hovered elements and periodic logging
-
-	const handleWindowDragEnter = (e: DragEvent) => {
-		e.preventDefault();
-		if (leaveTimeout) {
-			clearTimeout(leaveTimeout);
-			leaveTimeout = undefined;
-		}
-
-		// Detect if it's a file drag
-		const isFileDrag = e.dataTransfer?.types.includes("Files");
-		if (!isFileDrag) {
-			// If they drag text or something else, we reset the sniffer session
-			// so they can drag a file again later without having to fully leave the window
-			if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
-				console.log("[App] Non-file drag detected: resetting sniffer state");
-				manager.clearSniffedPaths();
-				manager.hideSniffer();
-			}
-			return;
-		}
-
-		// Add global dragging class for UI feedback
-		document.body.classList.add("window--dragging");
-
-		// Summon if we haven't sniffed yet AND the window isn't already active
-		if (
-			manager.getSniffedPaths().length === 0 &&
-			!manager.isSnifferVisible() &&
-			!manager.isDragging()
-		) {
-			manager.showSniffer();
-		}
-	};
-
-	const handleWindowDragLeave = (e: DragEvent) => {
-		e.preventDefault();
-		// Only clear if we actually left the window (no relatedTarget)
-		if (!e.relatedTarget) {
-			if (leaveTimeout) clearTimeout(leaveTimeout);
-			leaveTimeout = setTimeout(() => {
-				console.log("[App] Final DragLeave: clearing state");
-				document.body.classList.remove("window--dragging");
-				manager.clearSniffedPaths();
-				manager.hideSniffer();
-				leaveTimeout = undefined;
-			}, 300); // Increased timeout to handle focus swap jitter
-		}
-	};
-
-	const handleWindowDrop = (e: DragEvent) => {
-		if (leaveTimeout) {
-			clearTimeout(leaveTimeout);
-			leaveTimeout = undefined;
-		}
-		document.body.classList.remove("window--dragging");
-		// Component handles the actual drop data, but we make sure state is reset
-		// for next drag session if they dropped on a non-zone area
-		manager.hideSniffer();
-		setTimeout(() => {
-			if (!manager.isDragging()) {
-				manager.clearSniffedPaths();
-			}
-		}, 100);
-	};
-
-	const handleWindowDragOver = (e: DragEvent) => {
-		e.preventDefault();
-
-		if (leaveTimeout) {
-			clearTimeout(leaveTimeout);
-			leaveTimeout = undefined;
-		}
-
-		// Detect if it's a file drag
-		const isFileDrag = e.dataTransfer?.types.includes("Files");
-		if (!isFileDrag) {
-			if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
-				manager.clearSniffedPaths();
-				manager.hideSniffer();
-			}
-			return;
-		}
-
-		if (!document.body.classList.contains("window--dragging")) {
-			document.body.classList.add("window--dragging");
-		}
-
-		// Summon if we haven't sniffed yet AND the window isn't already active
-		if (
-			manager.getSniffedPaths().length === 0 &&
-			!manager.isSnifferVisible() &&
-			!manager.isDragging()
-		) {
-			manager.showSniffer();
-		}
-	};
 
 	onMount(() => {
 		// Read startup config for update checks only.
@@ -438,20 +335,7 @@ function Root(props: ChildrenProp) {
 				.catch((error) => {
 					console.error("Failed to initialize config sync:", error);
 				});
-
-			// Initialize file drop system
-			// Temporarily disabled
-			// initializeFileDropSystem().catch((error) => {
-			// 	console.error("Failed to initialize file drop system:", error);
-			// });
 		});
-
-		window.addEventListener("dragenter", handleWindowDragEnter);
-		window.addEventListener("dragover", handleWindowDragOver);
-		window.addEventListener("dragleave", handleWindowDragLeave);
-		window.addEventListener("drop", handleWindowDrop);
-
-		// (Hover clock logic intentionally removed)
 	});
 
 	onCleanup(() => {
@@ -465,17 +349,9 @@ function Root(props: ChildrenProp) {
 		cleanupDialogSystem();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
-		cleanupFileDropSystem();
 		disposeNativeDropProbe();
 		disposeNativeFileDrop();
 		disposeManualDropChoices();
-
-		window.removeEventListener("dragenter", handleWindowDragEnter);
-		window.removeEventListener("dragover", handleWindowDragOver);
-		window.removeEventListener("dragleave", handleWindowDragLeave);
-		window.removeEventListener("drop", handleWindowDrop);
-
-		// (Hover clock cleanup removed)
 	});
 
 	return (

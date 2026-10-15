@@ -2,7 +2,7 @@
  * Tests for the native drop bridge.
  *
  * These use MOCKED Tauri getters, listeners, scale factors and drag payloads. They
- * verify this module's wiring only: flag and label guards, conversion before the
+ * verify this module's wiring only: runtime and label guards, conversion before the
  * controller, pointer publishing, and cleanup. They are NOT proof of native OS
  * drag-and-drop behaviour, and native behaviour stays unverified until run on real
  * builds.
@@ -112,7 +112,7 @@ beforeEach(async () => {
 	vi.resetAllMocks();
 	mocks.hasTauriRuntime.mockReturnValue(true);
 	mocks.classify.mockResolvedValue([]);
-	(window as BridgeTestWindow).__VESTA_NATIVE_FILE_DROP_PROBE__ = true;
+	delete (window as BridgeTestWindow).__VESTA_NATIVE_FILE_DROP_PROBE__;
 	(window as BridgeTestWindow).__VESTA_OS__ = "windows";
 	bridge = await import("@utils/file-drop/native-bridge");
 });
@@ -319,22 +319,37 @@ describe("calibration pointer", () => {
 });
 
 describe("guards", () => {
-	it("makes no Tauri calls and returns a no-op when the probe flag is off", async () => {
-		delete (window as BridgeTestWindow).__VESTA_NATIVE_FILE_DROP_PROBE__;
-		const { webview, appWindow } = installTauri();
+	it.each([
+		undefined,
+		false,
+	])("routes drops with diagnostics disabled when the probe flag is %s", async (flag) => {
+		if (flag !== undefined)
+			(window as BridgeTestWindow).__VESTA_NATIVE_FILE_DROP_PROBE__ = flag;
+		const { webview, appWindow, dragHandlers } = installTauri();
 		const controller = fakeController();
-
+		const probe = await import("@utils/file-drop/native-probe");
+		const disposeProbe = probe.initializeNativeDropProbe();
 		const dispose = bridge.startNativeFileDrop({
 			controller: controller as unknown as DropController,
 		});
 		await flush();
 
-		expect(mocks.getCurrentWebview).not.toHaveBeenCalled();
-		expect(mocks.getCurrentWindow).not.toHaveBeenCalled();
-		expect(webview.onDragDropEvent).not.toHaveBeenCalled();
-		expect(appWindow.onScaleChanged).not.toHaveBeenCalled();
-		expect(bridge.nativeDropPointer()).toBeNull();
-		expect(() => dispose()).not.toThrow();
+		expect(webview.onDragDropEvent).toHaveBeenCalledTimes(1);
+		expect(appWindow.onScaleChanged).toHaveBeenCalledTimes(1);
+		emitDrag(dragHandlers, {
+			type: "drop",
+			paths: ["/a.jar"],
+			position: pos(20, 40),
+		});
+		expect(controller.handle).toHaveBeenCalledTimes(1);
+		expect(controller.handle).toHaveBeenCalledWith({
+			type: "drop",
+			paths: ["/a.jar"],
+			position: { x: 10, y: 20 },
+		});
+		expect(probe.nativeDropDiagnostic()).toBeNull();
+		dispose();
+		disposeProbe();
 	});
 
 	it("makes no Tauri calls outside the Tauri runtime", async () => {
