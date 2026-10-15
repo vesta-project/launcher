@@ -1,0 +1,83 @@
+/*
+ * Settings layout primitives.
+ * Hooks: [data-vesta=settings-section] -header -title -description -body
+ *        [data-vesta=setting-row] -copy -label -description -control
+ * Knobs: --settings-max-width, --setting-row-gap
+ */
+@layer launcher {
+  :where([data-vesta='settings-section']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    max-inline-size: var(--settings-max-width, 680px);
+  }
+
+  :where([data-vesta='settings-section'] + [data-vesta='settings-section']) {
+    margin-block-start: var(--vesta-space-6);
+  }
+
+  :where([data-vesta='settings-section-title']) {
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='settings-section-description']) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  /* Rows sit on one raised surface, separated by hairlines. */
+  :where([data-vesta='settings-section-body']) {
+    display: flex;
+    flex-direction: column;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-surface) 88%, transparent);
+  }
+
+  :where([data-vesta='setting-row']) {
+    --setting-row-gap: var(--vesta-space-4);
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--setting-row-gap);
+    min-block-size: 48px;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+  }
+
+  :where([data-vesta='setting-row'] + [data-vesta='setting-row']) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='setting-row-copy']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-0-5);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='setting-row-label']) {
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='setting-row-description']) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='setting-row-control']) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  /* Narrow windows: stack the control under its label. */
+  @container (max-width: 520px) {
+    :where([data-vesta='setting-row']) {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+}

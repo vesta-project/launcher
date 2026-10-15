@@ -1,0 +1,35 @@
+/* Hooks: [data-vesta=empty-state] -icon -title -description */
+@layer launcher {
+  :where([data-vesta='empty-state']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-2);
+    min-block-size: 240px;
+    padding: var(--vesta-space-8);
+    text-align: center;
+  }
+
+  :where([data-vesta='empty-state-icon']) {
+    display: grid;
+    place-items: center;
+    inline-size: 44px;
+    block-size: 44px;
+    margin-block-end: var(--vesta-space-1);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='empty-state-title']) {
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='empty-state-description']) {
+    max-inline-size: 42ch;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+}

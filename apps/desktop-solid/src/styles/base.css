@@ -1,0 +1,42 @@
+/* Document-level reset for the desktop shell. */
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    block-size: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    background: var(--vesta-color-canvas);
+    color: var(--vesta-color-text);
+    font-family: var(--vesta-font-sans);
+    font-size: var(--vesta-text-md);
+    line-height: var(--vesta-leading-normal);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  button {
+    font: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}

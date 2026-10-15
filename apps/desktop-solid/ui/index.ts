@@ -7,6 +7,7 @@
 import './foundation/index.css';
 
 export type { ControlSize, Tone } from './foundation/types';
+export { mergeElementProps } from './internal/props';
 export * from './components/button';
 export * from './components/text-field';
 export * from './components/textarea';

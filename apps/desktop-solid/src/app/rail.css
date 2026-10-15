@@ -1,0 +1,136 @@
+/*
+ * Rail: persistent navigation, 64px wide. Hidden in narrow windows, where the
+ * titlebar carries the account and add buttons instead (see shell.css).
+ *
+ * Hooks: [data-vesta=rail] -top -account -nav -button -pinned -divider -pin -bottom
+ * States: rail-button / rail-pin: aria-current=page
+ * Knobs: --rail-width, --rail-button-size, --rail-button-radius, --rail-gap
+ */
+@layer launcher {
+  :where([data-vesta='rail']) {
+    --rail-width: 64px;
+    --rail-button-size: 40px;
+    --rail-button-radius: 8px;
+    --rail-tile-border: 2px;
+    --rail-gap: 12px;
+    --rail-bg: color-mix(in oklab, var(--vesta-color-canvas) 45%, transparent);
+    --rail-button-hover-bg: color-mix(in oklab, var(--vesta-color-accent) 12%, transparent);
+    --rail-button-active-bg: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    justify-content: space-between;
+    inline-size: var(--rail-width);
+    min-block-size: 0;
+    padding: 12px 10px 13px;
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--rail-bg);
+  }
+
+  :where([data-vesta='rail-top']) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    min-block-size: 0;
+  }
+
+  /* The profile button is one of the rail's tiles: same size, radius and border weight. */
+  :where([data-vesta='rail-account']) {
+    --profile-size: var(--rail-button-size);
+    --profile-radius: var(--rail-button-radius);
+
+    display: grid;
+    place-items: center;
+    flex: none;
+    margin-block-end: var(--rail-gap);
+  }
+
+  :where([data-vesta='rail-nav']),
+  :where([data-vesta='rail-bottom']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--rail-gap);
+  }
+
+  :where([data-vesta='rail-button']) {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--rail-button-size);
+    block-size: var(--rail-button-size);
+    border: var(--rail-tile-border) solid transparent;
+    border-radius: var(--rail-button-radius);
+    color: var(--vesta-color-text-muted);
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='rail-button']:hover) {
+    background: var(--rail-button-hover-bg);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='rail-button'][aria-current='page']) {
+    border-color: color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
+    background: var(--rail-button-active-bg);
+    color: var(--vesta-color-accent-text);
+  }
+
+  /* Pinned instances: art thumbnails. Hover and current page show a ring; nothing scales. */
+  :where([data-vesta='rail-pinned']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--rail-gap);
+    inline-size: 100%;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding-block: 0;
+    scrollbar-width: none;
+  }
+
+  :where([data-vesta='rail-pinned'])::-webkit-scrollbar {
+    display: none;
+  }
+
+  :where([data-vesta='rail-divider']) {
+    flex: none;
+    inline-size: 28px;
+    block-size: 1px;
+    /* Same gap above and below, matching the gap between tiles. */
+    margin-block: var(--rail-gap);
+    background: var(--vesta-color-border-strong);
+  }
+
+  :where([data-vesta='rail-pin']) {
+    display: block;
+    flex: none;
+    inline-size: var(--rail-button-size);
+    block-size: var(--rail-button-size);
+    border: var(--rail-tile-border) solid oklch(1 0 0 / 0.15);
+    border-radius: var(--rail-button-radius);
+    /* The art stops at the border, so the ring is a clean line like the profile button's. */
+    background: var(--pin-image) center / cover no-repeat, var(--vesta-color-fill);
+    background-clip: padding-box;
+    background-origin: padding-box;
+    transition: border-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='rail-pin']:hover) {
+    border-color: oklch(1 0 0 / 0.3);
+  }
+
+  :where([data-vesta='rail-pin'][aria-current='page']) {
+    border-color: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='rail-bottom']) {
+    flex: none;
+    padding-block-start: 15px;
+  }
+}

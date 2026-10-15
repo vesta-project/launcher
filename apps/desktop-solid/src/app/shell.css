@@ -1,0 +1,68 @@
+/*
+ * Shell frame.
+ * Hooks: [data-vesta=shell] -body, [data-vesta=scene]
+ * Knobs: --shell-spot-strength (0% for a flat solid canvas), --shell-narrow (hide the rail below this width)
+ *
+ * The background is the solid canvas with soft spots of the three brand colours;
+ * a theme can retune the strength or the brand stops.
+ *
+ * The shell is a size container: below 640px the rail is hidden and the titlebar
+ * shows the add and account buttons instead.
+ */
+@layer launcher {
+  :where([data-vesta='shell']) {
+    --shell-spot-strength: 13%;
+    --shell-bg: var(--vesta-color-canvas);
+
+    container: app / inline-size;
+    display: flex;
+    flex-direction: column;
+    block-size: 100dvh;
+    background:
+      radial-gradient(
+        55% 50% at 0% 0%,
+        color-mix(in oklab, var(--vesta-brand-start) var(--shell-spot-strength), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        50% 55% at 100% 100%,
+        color-mix(in oklab, var(--vesta-brand-mid) var(--shell-spot-strength), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        30% 30% at 62% 108%,
+        color-mix(in oklab, var(--vesta-brand-end) calc(var(--shell-spot-strength) * 0.9), transparent),
+        transparent 75%
+      ),
+      var(--shell-bg);
+  }
+
+  :where([data-vesta-scheme='light']) :where([data-vesta='shell']) {
+    --shell-spot-strength: 17%;
+  }
+
+  :where([data-vesta='shell-body']) {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  :where([data-vesta='scene']) {
+    position: relative;
+    flex: 1;
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: hidden;
+    outline: none;
+  }
+
+  @container app (max-width: 640px) {
+    :where([data-vesta='rail']) {
+      display: none;
+    }
+
+    :where([data-vesta='titlebar-compact']) {
+      display: flex;
+    }
+  }
+}

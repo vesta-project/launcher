@@ -1,0 +1,24 @@
+/*
+ * Settings page.
+ * Hooks: [data-vesta=settings-content]; the section list is a vertical Tabs.
+ * Knobs: --settings-tabs-width
+ */
+@layer launcher {
+  .settings-tabs {
+    --settings-tabs-width: 168px;
+
+    gap: var(--vesta-space-6);
+    padding: var(--vesta-space-6);
+  }
+
+  .settings-tabs [data-vesta='tab-list'] {
+    inline-size: var(--settings-tabs-width);
+    flex: none;
+  }
+
+  /* Rows stack under their label when the content column gets narrow. */
+  :where([data-vesta='settings-content']) {
+    container-type: inline-size;
+    padding-block-end: var(--vesta-space-6);
+  }
+}

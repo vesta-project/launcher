@@ -1,0 +1,94 @@
+/*
+ * Titlebar.
+ * Hooks: [data-vesta=titlebar] -start -end -compact, the .titlebar-destination button and .titlebar-breadcrumb, [data-vesta=window-controls]
+ * States: data-platform (macos | windows | linux | web)
+ * Knobs: --titlebar-height, --titlebar-inset-start (room for macOS traffic lights)
+ */
+@layer launcher {
+  :where([data-vesta='titlebar']) {
+    /* 32px puts the bar's centre on the native macOS traffic lights (about 16px down). */
+    --titlebar-height: 32px;
+    --titlebar-inset-start: 10px;
+    --titlebar-inset-end: 10px;
+
+    /* Back and destination on the left, the breadcrumb centred, actions on the right. */
+    display: grid;
+    flex: none;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--vesta-space-2);
+    block-size: var(--titlebar-height);
+    /* Side padding lives in the start and end cells, so the middle column is centred on the window. */
+    padding-inline: 0;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: color-mix(in oklab, var(--vesta-color-surface) 80%, transparent);
+    user-select: none;
+  }
+
+  /* The native traffic lights sit over the left edge of an overlay titlebar. */
+  :where([data-vesta='titlebar'][data-platform='macos']) {
+    --titlebar-inset-start: 78px;
+  }
+
+  :where([data-vesta='titlebar-start']),
+  :where([data-vesta='titlebar-center']),
+  :where([data-vesta='titlebar-end']),
+  :where([data-vesta='titlebar-compact']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='titlebar-center']) {
+    justify-content: center;
+  }
+
+  :where([data-vesta='titlebar-start']) {
+    padding-inline-start: var(--titlebar-inset-start);
+  }
+
+  :where([data-vesta='titlebar-end']) {
+    justify-content: flex-end;
+    padding-inline-end: var(--titlebar-inset-end);
+  }
+
+  /* Wide windows show a breadcrumb; narrow windows swap it for the destination menu. */
+  .titlebar-destination {
+    display: none;
+    max-inline-size: 220px;
+  }
+
+  .titlebar-breadcrumb {
+    min-inline-size: 0;
+    font-size: var(--vesta-text-sm);
+  }
+
+  /* Add and account only appear when the rail is hidden. */
+  @container app (max-width: 640px) {
+    .titlebar-breadcrumb {
+      display: none;
+    }
+
+    .titlebar-destination {
+      display: inline-flex;
+    }
+  }
+
+  :where([data-vesta='titlebar-compact']) {
+    display: none;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='titlebar-compact']) :where([data-vesta='profile-button']) {
+    --profile-size: 26px;
+    --profile-radius: 5px;
+  }
+
+  :where([data-vesta='window-controls']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-0-5);
+    margin-inline-start: var(--vesta-space-2);
+  }
+}

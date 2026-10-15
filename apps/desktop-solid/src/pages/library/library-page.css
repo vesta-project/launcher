@@ -1,0 +1,51 @@
+/*
+ * Library grid, tightening as the window narrows, as in the demo.
+ * Hooks: [data-vesta=library-grid]
+ * Knobs: --library-grid-min, --library-grid-gap, --library-grid-padding
+ */
+@layer launcher {
+  :where([data-vesta='library-grid']) {
+    --library-grid-min: 180px;
+    --library-grid-gap: 20px;
+    --library-grid-padding: 40px;
+
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--library-grid-min), 1fr));
+    gap: var(--library-grid-gap);
+    align-content: start;
+    justify-items: center;
+    margin: 0;
+    padding: var(--library-grid-padding);
+    list-style: none;
+  }
+
+  :where([data-vesta='library-grid'] > li) {
+    inline-size: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  @container app (max-width: 980px) {
+    :where([data-vesta='library-grid']) {
+      --library-grid-min: 158px;
+      --library-grid-gap: 16px;
+      --library-grid-padding: 25px;
+    }
+  }
+
+  @container app (max-width: 720px) {
+    :where([data-vesta='library-grid']) {
+      --library-grid-min: 135px;
+      --library-grid-gap: 12px;
+      --library-grid-padding: 17px;
+    }
+  }
+
+  @container app (max-width: 430px) {
+    :where([data-vesta='library-grid']) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      --library-grid-gap: 9px;
+      --library-grid-padding: 12px;
+    }
+  }
+}

@@ -1,0 +1,12 @@
+/*
+ * Brand stops: the three colours of the Vesta mark. Themes change these three
+ * values; backgrounds and accents are derived from them. Nothing component-level
+ * reads them directly except the shell's tinting spots.
+ */
+@layer launcher.tokens {
+  :where(:root, [data-vesta-scheme]) {
+    --vesta-brand-start: oklch(0.74 0.13 185);
+    --vesta-brand-mid: oklch(0.6 0.2 285);
+    --vesta-brand-end: oklch(0.76 0.15 60);
+  }
+}

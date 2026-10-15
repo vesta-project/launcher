@@ -1,30 +1,13 @@
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect } from 'solid-js';
+import './styles/base.css';
+import './styles/tokens/palette.css';
+import './styles/tokens/semantic.css';
+import './styles/tokens/brand.css';
+import '@vesta/ui';
 import { startDesktop } from './platform/desktop';
-import logo from './logo.svg';
-import './App.css';
+import { Shell } from './app/shell';
 
 export default function App() {
-  const [count, setCount] = createSignal(0);
-
   createEffect(() => undefined, () => startDesktop());
-
-  return (
-    <header class="header">
-      <img src={logo} class="logo" alt="Solid logo" />
-      <p>
-        Edit <code>src/App.tsx</code> and save to reload.
-      </p>
-      <button class="increment" onClick={() => setCount(count() + 1)}>
-        Clicks: {count()}
-      </button>
-      <a
-        class="link"
-        href="https://v2.solidjs.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Learn Solid
-      </a>
-    </header>
-  );
+  return <Shell />;
 }

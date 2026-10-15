@@ -1,0 +1,192 @@
+/*
+ * Profile button and account popover.
+ * Hooks: [data-vesta=profile-button] -spinner, [data-vesta=account-head]
+ *        [data-vesta=account-top|face|copy|actions|line|divider|section-title|list|expired]
+ * States: profile-button: data-open; account-line: data-tone=danger; account-face: data-size=small
+ * Knobs: --profile-size, --profile-radius, --profile-border
+ */
+@layer launcher {
+  :where([data-vesta='profile-button']) {
+    /* --profile-size and --profile-radius come from the container (rail or titlebar). */
+    --profile-border: oklch(1 0 0 / 0.15);
+
+    position: relative;
+    display: block;
+    flex: none;
+    inline-size: var(--profile-size, 40px);
+    block-size: var(--profile-size, 40px);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 2px solid var(--profile-border);
+    border-radius: var(--profile-radius, 6px);
+    background: transparent;
+    cursor: default;
+    transition:
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      transform var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='profile-button']:hover) {
+    --profile-border: oklch(1 0 0 / 0.3);
+  }
+
+  :where([data-vesta='profile-button'][data-open]) {
+    --profile-border: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='profile-button']:active) {
+    transform: scale(0.95);
+  }
+
+  /* Head image on a grey gradient until (or unless) it loads. */
+  :where([data-vesta='account-head']) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    background-color: oklch(0.5 0 0);
+    background-image: var(--head-image), linear-gradient(to bottom, oklch(0.55 0 0), oklch(0.38 0 0));
+    background-size: cover;
+    background-position: center;
+    image-rendering: pixelated;
+  }
+
+  :where([data-vesta='profile-spinner']) {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    inline-size: 18px;
+    block-size: 18px;
+    border: 2px solid oklch(1 0 0 / 0.3);
+    border-top-color: oklch(1 0 0);
+    border-radius: 50%;
+    animation: vesta-profile-spin 1s linear infinite;
+  }
+
+  @keyframes vesta-profile-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* ---- Popover content ---- */
+  .account-popover {
+    --overlay-padding: var(--vesta-space-2);
+    --popover-width: 296px;
+    --popover-gap: 0;
+  }
+
+  :where([data-vesta='account-top']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='account-face']) {
+    display: block;
+    flex: none;
+    inline-size: 45px;
+    block-size: 45px;
+    overflow: hidden;
+    border-radius: 5px;
+  }
+
+  :where([data-vesta='account-face'][data-size='small']) {
+    inline-size: 22px;
+    block-size: 22px;
+    border-radius: 4px;
+  }
+
+  :where([data-vesta='account-copy']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='account-copy']) > strong {
+    overflow: hidden;
+    font-size: var(--vesta-text-lg);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='account-copy']) > small {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='account-actions']),
+  :where([data-vesta='account-list']) {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  :where([data-vesta='account-line']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    inline-size: 100%;
+    padding: var(--vesta-space-2);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='account-line']) > :where(span:not([data-vesta])) {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='account-line']:not(:disabled):hover) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='account-line']:disabled) {
+    opacity: var(--vesta-opacity-disabled);
+  }
+
+  :where([data-vesta='account-line'][data-tone='danger']) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='account-divider']) {
+    margin: var(--vesta-space-2) var(--vesta-space-1);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='account-section-title']) {
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta='account-empty']) {
+    padding: var(--vesta-space-2);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='account-expired']) {
+    padding: 2px var(--vesta-space-1-5);
+    border-radius: var(--vesta-radius-sm);
+    background: color-mix(in oklab, var(--vesta-color-danger) 18%, transparent);
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+  }
+}
