@@ -8,6 +8,9 @@ export default defineConfig({
   plugins: [
     solid({ start: true, diagnostics: true }), // add `ssr: true` for streaming SSR
   ],
+  resolve: {
+    tsconfigPaths: true,
+  },
   server: {
     port: 1430,
     strictPort: true,

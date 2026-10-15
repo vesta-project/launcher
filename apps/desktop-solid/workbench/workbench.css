@@ -42,6 +42,7 @@ body {
   color: #7d828b;
 }
 .wb-nav-item {
+  cursor: default;
   display: block;
   padding: 4px 8px;
   border-radius: 4px;

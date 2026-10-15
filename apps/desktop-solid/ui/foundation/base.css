@@ -24,6 +24,11 @@
     outline-offset: var(--vesta-focus-offset);
   }
 
+  /* Desktop controls and links keep the arrow instead of a web-style hand. */
+  :where(a[data-vesta], button[data-vesta], [data-vesta][role='button'], [data-vesta][role='link']) {
+    cursor: default;
+  }
+
   :where([data-vesta][data-disabled]) {
     opacity: var(--vesta-opacity-disabled);
   }

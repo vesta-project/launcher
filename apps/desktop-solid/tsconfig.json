@@ -16,6 +16,14 @@
     // Type Checking & Safety
     "strict": true,
     "skipLibCheck": true,
-    "types": ["vite/client"]
-  }
+    "types": ["vite/client"],
+
+    // The independent UI library is imported by the app and workbench through one alias.
+    "paths": {
+      "@vesta/ui": ["./ui/index.ts"],
+      "@vesta/ui/*": ["./ui/*"],
+      "@workbench/*": ["./workbench/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".tauri-target", "src-tauri"]
 }

@@ -1,0 +1,22 @@
+/* Launcher icon wrapper. Icons take the surrounding colour and size. */
+@layer launcher {
+  :where([data-vesta='icon']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--icon-size, 16px);
+    block-size: var(--icon-size, 16px);
+    color: inherit;
+    line-height: 0;
+  }
+
+  :where([data-vesta='icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  /* Preserve each asset's fill/stroke contract, especially fill="none" outlines.
+     Legacy filled SVGs without an explicit fill still inherit the UI colour. */
+  :where([data-vesta='icon']) > :where(svg:not([fill])) {
+    fill: currentColor;
+  }
+}
