@@ -8,6 +8,8 @@ import SearchIcon from "@assets/icons/content/search.svg";
 import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { flexRender } from "@tanstack/solid-table";
 import { createVirtualizer } from "@tanstack/solid-virtual";
+import { ContextMenu, ContextMenuTrigger } from "@ui/context-menu/context-menu";
+import type { JSX } from "solid-js";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import {
@@ -71,6 +73,7 @@ function getColumnClass(columnId: string): string | undefined {
 }
 
 interface ResourcesTabProps {
+	renderContextMenu?: (row: any) => JSX.Element;
 	instance: any;
 	resourceTypeFilter: string;
 	setResourceTypeFilter: (type: string) => void;
@@ -150,40 +153,44 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			measure?: (element: HTMLTableRowElement) => void;
 		},
 	) => (
-		<tr
-			ref={(element) => {
-				// Solid invokes refs before applying JSX attributes. TanStack reads
-				// data-index synchronously, so seed it before measurement.
-				if (options?.virtualIndex !== undefined) {
-					element.dataset.index = String(options.virtualIndex);
-				}
-				if (options?.measure) {
-					queueMicrotask(() => options.measure?.(element));
-				}
-			}}
-			data-index={options?.virtualIndex}
-			onClick={(e) => props.onRowClick(row, e)}
-			style={{ cursor: "default" }}
-			hidden={options?.hidden?.()}
-			aria-hidden={options?.hidden?.() ? "true" : undefined}
-			classList={{
-				[styles["row-selected"]]: row.getIsSelected(),
-				[styles["row-disabled"]]: !row.original.is_enabled,
-				[styles["row-modpack-child"]]: isModpackOwnedResource(row.original),
-				[styles["row-modpack-child-hidden"]]:
-					isModpackOwnedResource(row.original) && !!options?.hidden?.(),
-				[styles["row-modpack-child-expanded"]]:
-					isModpackOwnedResource(row.original) && !options?.hidden?.(),
-			}}
-		>
-			<For each={row.getVisibleCells()}>
-				{(cell) => (
-					<td class={getColumnClass(cell.column.id)}>
-						{flexRender(cell.column.columnDef.cell, cell.getContext())}
-					</td>
-				)}
-			</For>
-		</tr>
+		<ContextMenu>
+			<ContextMenuTrigger
+				as="tr"
+				ref={(element) => {
+					// Solid invokes refs before applying JSX attributes. TanStack reads
+					// data-index synchronously, so seed it before measurement.
+					if (options?.virtualIndex !== undefined) {
+						element.dataset.index = String(options.virtualIndex);
+					}
+					if (options?.measure) {
+						queueMicrotask(() => options.measure?.(element));
+					}
+				}}
+				data-index={options?.virtualIndex}
+				onClick={(e) => props.onRowClick(row, e)}
+				style={{ cursor: "default" }}
+				hidden={options?.hidden?.()}
+				aria-hidden={options?.hidden?.() ? "true" : undefined}
+				classList={{
+					[styles["row-selected"]]: row.getIsSelected(),
+					[styles["row-disabled"]]: !row.original.is_enabled,
+					[styles["row-modpack-child"]]: isModpackOwnedResource(row.original),
+					[styles["row-modpack-child-hidden"]]:
+						isModpackOwnedResource(row.original) && !!options?.hidden?.(),
+					[styles["row-modpack-child-expanded"]]:
+						isModpackOwnedResource(row.original) && !options?.hidden?.(),
+				}}
+			>
+				<For each={row.getVisibleCells()}>
+					{(cell) => (
+						<td class={getColumnClass(cell.column.id)}>
+							{flexRender(cell.column.columnDef.cell, cell.getContext())}
+						</td>
+					)}
+				</For>
+			</ContextMenuTrigger>
+			{props.renderContextMenu?.(row)}
+		</ContextMenu>
 	);
 
 	const renderModpackGroupCell = (columnId: string) => {

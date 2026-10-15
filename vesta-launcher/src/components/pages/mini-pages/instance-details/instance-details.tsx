@@ -2270,6 +2270,79 @@ export default function InstanceDetails(
 	// TanStack Table setup for Resources
 	const columnHelper = createColumnHelper<InstalledResource>();
 
+	const renderResourceActions = (info: any, contextMenu = false) => (
+		<ResourceRowActions
+			contextMenu={contextMenu}
+			resource={info.row.original}
+			update={updates()[info.row.original.id]}
+			isCheckingForUpdates={checkingPerResource().has(info.row.original.id)}
+			hasCheckedForUpdates={checkedPerResource().has(info.row.original.id)}
+			isIdentifying={rescanningResourceIds().has(info.row.original.id)}
+			showVersionInfo={isCompactTable()}
+			currentVersion={info.row.original.current_version}
+			busy={busy()}
+			onMenuItemSelect={suppressRowNavigation}
+			onUpdate={async (resource, version) => {
+				await handleUpdate(resource, version);
+			}}
+			onDelete={async (resource) => {
+				if (
+					await dialogStore.confirm(
+						"Delete Resource",
+						`Are you sure you want to delete ${resource.display_name}? This will remove the file from your instance.`,
+						{ severity: "warning", isDestructive: true },
+					)
+				) {
+					const previous = installedResources.latest;
+					mutateResources((prev) => prev?.filter((r) => r.id !== resource.id));
+
+					try {
+						await invoke("delete_resource", {
+							instanceId: resource.instance_id,
+							resourceId: resource.id,
+						});
+					} catch (e) {
+						console.error("Failed to delete resource:", e);
+						mutateResources(previous);
+					}
+				}
+			}}
+			onCheckUpdates={async (resource) => {
+				if (isModpackOwnedResource(resource)) return;
+				setCheckingPerResource((prev) => new Set([...prev, resource.id]));
+				const inst = instance();
+				if (!inst) return;
+				try {
+					const result = await invoke<LightweightUpdateCheckResult>(
+						"check_instance_updates_lightweight",
+						{
+							instanceId: inst.id,
+							forceRefresh: false,
+							resourceIds: [resource.id],
+							forceResourceIds: [resource.id],
+						},
+					);
+					applyUpdateCheckResult(result);
+				} catch (e) {
+					console.error(
+						`Failed to check updates for ${resource.display_name}:`,
+						e,
+					);
+				} finally {
+					setCheckingPerResource((prev) => {
+						const next = new Set(prev);
+						next.delete(resource.id);
+						return next;
+					});
+					setCheckedPerResource((prev) => new Set([...prev, resource.id]));
+				}
+			}}
+			onIdentify={async (resource) => {
+				await identifyResource(resource.id);
+			}}
+		/>
+	);
+
 	const columns = [
 		columnHelper.display({
 			id: "select",
@@ -2377,79 +2450,7 @@ export default function InstanceDetails(
 			id: "actions",
 			header: "",
 			size: 68,
-			cell: (info) => (
-				<ResourceRowActions
-					resource={info.row.original}
-					update={updates()[info.row.original.id]}
-					isCheckingForUpdates={checkingPerResource().has(info.row.original.id)}
-					hasCheckedForUpdates={checkedPerResource().has(info.row.original.id)}
-					isIdentifying={rescanningResourceIds().has(info.row.original.id)}
-					showVersionInfo={isCompactTable()}
-					currentVersion={info.row.original.current_version}
-					busy={busy()}
-					onMenuItemSelect={suppressRowNavigation}
-					onUpdate={async (resource, version) => {
-						await handleUpdate(resource, version);
-					}}
-					onDelete={async (resource) => {
-						if (
-							await dialogStore.confirm(
-								"Delete Resource",
-								`Are you sure you want to delete ${resource.display_name}? This will remove the file from your instance.`,
-								{ severity: "warning", isDestructive: true },
-							)
-						) {
-							const previous = installedResources.latest;
-							mutateResources((prev) =>
-								prev?.filter((r) => r.id !== resource.id),
-							);
-
-							try {
-								await invoke("delete_resource", {
-									instanceId: resource.instance_id,
-									resourceId: resource.id,
-								});
-							} catch (e) {
-								console.error("Failed to delete resource:", e);
-								mutateResources(previous);
-							}
-						}
-					}}
-					onCheckUpdates={async (resource) => {
-						if (isModpackOwnedResource(resource)) return;
-						setCheckingPerResource((prev) => new Set([...prev, resource.id]));
-						const inst = instance();
-						if (!inst) return;
-						try {
-							const result = await invoke<LightweightUpdateCheckResult>(
-								"check_instance_updates_lightweight",
-								{
-									instanceId: inst.id,
-									forceRefresh: false,
-									resourceIds: [resource.id],
-									forceResourceIds: [resource.id],
-								},
-							);
-							applyUpdateCheckResult(result);
-						} catch (e) {
-							console.error(
-								`Failed to check updates for ${resource.display_name}:`,
-								e,
-							);
-						} finally {
-							setCheckingPerResource((prev) => {
-								const next = new Set(prev);
-								next.delete(resource.id);
-								return next;
-							});
-							setCheckedPerResource((prev) => new Set([...prev, resource.id]));
-						}
-					}}
-					onIdentify={async (resource) => {
-						await identifyResource(resource.id);
-					}}
-				/>
-			),
+			cell: (info) => renderResourceActions(info),
 		}),
 	];
 
@@ -2942,6 +2943,9 @@ export default function InstanceDetails(
 												fallback={<InstanceTabLoading label="resources" />}
 											>
 												<ResourcesTab
+													renderContextMenu={(row: any) =>
+														renderResourceActions({ row }, true)
+													}
 													instance={inst()}
 													resourceTypeFilter={resourceTypeFilter()}
 													resourceSearch={resourceSearch()}

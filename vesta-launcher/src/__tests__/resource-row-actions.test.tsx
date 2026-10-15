@@ -24,6 +24,18 @@ vi.mock("@ui/dropdown-menu/dropdown-menu", () => ({
 	DropdownMenuTrigger: (props: any) => <button>{props.children}</button>,
 }));
 
+vi.mock("@ui/context-menu/context-menu", () => ({
+	ContextMenuContent: (props: any) => (
+		<div data-testid="resource-context-menu">{props.children}</div>
+	),
+	ContextMenuItem: (props: any) => (
+		<button onClick={props.onSelect} disabled={props.disabled}>
+			{props.children}
+		</button>
+	),
+	ContextMenuSeparator: () => <hr />,
+}));
+
 const baseProps = {
 	update: undefined,
 	isCheckingForUpdates: false,
@@ -62,4 +74,28 @@ describe("ResourceRowActions", () => {
 
 		expect(screen.queryByText("Identify Resource")).toBeNull();
 	});
+});
+
+it("uses the resource callbacks from the right-click menu without rendering action buttons", async () => {
+	const onDelete = vi.fn().mockResolvedValue(undefined);
+	const resource = {
+		id: 7,
+		display_name: "Sodium",
+		platform: "modrinth",
+		remote_id: "sodium",
+	};
+	render(() => (
+		<ResourceRowActions
+			{...baseProps}
+			contextMenu
+			resource={resource}
+			onDelete={onDelete}
+		/>
+	));
+	expect(screen.getByTestId("resource-context-menu")).toBeTruthy();
+	expect(
+		screen.queryByRole("button", { name: "Actions for Sodium" }),
+	).toBeNull();
+	await fireEvent.click(screen.getByText("Delete"));
+	expect(onDelete).toHaveBeenCalledWith(resource);
 });

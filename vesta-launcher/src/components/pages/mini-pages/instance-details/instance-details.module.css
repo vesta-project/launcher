@@ -2125,3 +2125,12 @@
 		height: 34px;
 	}
 }
+
+.row-actions-menu [role="menuitem"] {
+	justify-content: flex-start;
+}
+.row-actions-menu [role="menuitem"] > svg {
+	width: 14px;
+	height: 14px;
+	flex: 0 0 14px;
+}
