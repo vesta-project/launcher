@@ -1,0 +1,42 @@
+/*
+ * TextArea — multiline field using the shared field shell.
+ *
+ * Hooks:   [data-vesta=field][data-multiline] [data-vesta=field-control][data-multiline]
+ * Knobs:   --textarea-min-height, --textarea-padding-y
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='field'][data-multiline]) {
+    --textarea-min-height: calc(var(--field-height) * 2.5);
+    --textarea-padding-y: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='field'][data-size='sm'][data-multiline]) {
+    --textarea-min-height: calc(var(--field-height) * 2.25);
+    --textarea-padding-y: var(--vesta-space-1-5);
+  }
+
+  :where([data-vesta='field'][data-size='lg'][data-multiline]) {
+    --textarea-min-height: calc(var(--field-height) * 3);
+    --textarea-padding-y: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='field-control'][data-multiline]) {
+    align-items: stretch;
+    min-block-size: var(--textarea-min-height);
+    padding-block: var(--textarea-padding-y);
+  }
+
+  :where([data-vesta='field-control'][data-multiline]) :where([data-vesta='field-input']) {
+    resize: vertical;
+    min-block-size: calc(var(--textarea-min-height) - var(--textarea-padding-y) * 2);
+    line-height: var(--vesta-leading-normal);
+    white-space: pre-wrap;
+  }
+
+  :where([data-vesta='field-control'][data-multiline]) :where([data-vesta='field-input'][data-auto-resize]) {
+    resize: none;
+    overflow: hidden;
+  }
+}

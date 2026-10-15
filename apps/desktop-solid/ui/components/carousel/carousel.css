@@ -1,0 +1,78 @@
+/*
+ * Carousel — scroll-snap slides with prev/next.
+ *
+ * Hooks:   [data-vesta=carousel] [data-vesta=carousel-viewport]
+ *          [data-vesta=carousel-track] [data-vesta=carousel-slide]
+ *          [data-vesta=carousel-controls] [data-vesta=carousel-previous]
+ *          [data-vesta=carousel-next]
+ * Knobs:   --carousel-gap, --carousel-slide-size
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='carousel']) {
+    --carousel-gap: var(--vesta-space-3);
+    --carousel-slide-size: 100%;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='carousel-viewport']) {
+    overflow: auto;
+    min-inline-size: 0;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    cursor: grab;
+    user-select: none;
+  }
+
+  :where([data-vesta='carousel-viewport'][data-orientation='vertical']) {
+    scroll-snap-type: y mandatory;
+    max-block-size: 280px;
+    touch-action: pan-x;
+  }
+
+  :where([data-vesta='carousel-viewport'][data-dragging]) {
+    cursor: grabbing;
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+  }
+
+  :where([data-vesta='carousel-viewport'])::-webkit-scrollbar {
+    display: none;
+  }
+
+  :where([data-vesta='carousel-track']) {
+    display: flex;
+    gap: var(--carousel-gap);
+  }
+
+  :where([data-vesta='carousel-track'][data-orientation='vertical']) {
+    flex-direction: column;
+  }
+
+  :where([data-vesta='carousel-slide']) {
+    flex: none;
+    inline-size: var(--carousel-slide-size);
+    min-inline-size: 0;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  :where([data-vesta='carousel-track'][data-orientation='vertical']) :where([data-vesta='carousel-slide']) {
+    inline-size: 100%;
+    block-size: var(--carousel-slide-size);
+  }
+
+  :where([data-vesta='carousel-controls']) {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--vesta-space-1);
+  }
+}

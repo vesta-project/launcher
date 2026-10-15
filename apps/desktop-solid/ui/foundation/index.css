@@ -1,0 +1,9 @@
+/*
+ * Library cascade order. A consumer may declare a wider order first, e.g.
+ * `@layer reset, ui, launcher, theme, preferences;` — these sub-layers then
+ * sit inside its `ui` layer.
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@import './tokens.css';
+@import './base.css';

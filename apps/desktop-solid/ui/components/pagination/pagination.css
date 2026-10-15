@@ -1,0 +1,104 @@
+/*
+ * Pagination — previous/next plus page numbers.
+ *
+ * Kobalte wraps items in ul/li; style that list, not only the nav root.
+ *
+ * Hooks:   [data-vesta=pagination] [data-vesta=pagination-item]
+ *          [data-vesta=pagination-previous] [data-vesta=pagination-next]
+ *          [data-vesta=pagination-ellipsis] [data-vesta=pagination-icon]
+ * Knobs:   --pagination-gap, --pagination-item-size, --pagination-radius
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='pagination']) {
+    --pagination-gap: var(--vesta-space-1);
+    --pagination-item-size: var(--vesta-size-control-md);
+    --pagination-radius: var(--vesta-radius-control);
+  }
+
+  :where([data-vesta='pagination']) :where(ul) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pagination-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='pagination']) :where(li) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='pagination-item']),
+  :where([data-vesta='pagination-previous']),
+  :where([data-vesta='pagination-next']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-1);
+    min-block-size: var(--pagination-item-size);
+    min-inline-size: var(--pagination-item-size);
+    margin: 0;
+    padding-inline: var(--vesta-space-2);
+    border: var(--vesta-border-width) solid transparent;
+    border-radius: var(--pagination-radius);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    line-height: var(--vesta-leading-tight);
+    cursor: default;
+  }
+
+  :where([data-vesta='pagination-item']:hover),
+  :where([data-vesta='pagination-previous']:hover),
+  :where([data-vesta='pagination-next']:hover) {
+    background: var(--vesta-color-fill-hover);
+  }
+
+  :where([data-vesta='pagination-item'][data-current]) {
+    border-color: var(--vesta-color-accent);
+    background: color-mix(in oklab, var(--vesta-color-accent) 14%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='pagination-item'][data-disabled]),
+  :where([data-vesta='pagination-previous'][data-disabled]),
+  :where([data-vesta='pagination-next'][data-disabled]),
+  :where([data-vesta='pagination'][data-disabled]) :where([data-vesta='pagination-item']),
+  :where([data-vesta='pagination'][data-disabled]) :where([data-vesta='pagination-previous']),
+  :where([data-vesta='pagination'][data-disabled]) :where([data-vesta='pagination-next']) {
+    opacity: var(--vesta-opacity-disabled);
+    pointer-events: none;
+  }
+
+  :where([data-vesta='pagination-ellipsis']) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: var(--pagination-item-size);
+    min-inline-size: var(--pagination-item-size);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='pagination-icon']) {
+    display: inline-flex;
+    inline-size: var(--vesta-size-icon-sm);
+    block-size: var(--vesta-size-icon-sm);
+  }
+
+  :where([data-vesta='pagination-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}

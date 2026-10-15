@@ -1,0 +1,116 @@
+/*
+ * Slider — labelled range control using the field shell for label/error copy.
+ *
+ * Hooks:   [data-vesta=slider-header] [data-vesta=slider-value]
+ *          [data-vesta=slider-control] [data-vesta=slider-track]
+ *          [data-vesta=slider-fill] [data-vesta=slider-thumb]
+ * States:  data-disabled, data-invalid (on field); thumb: :focus-visible
+ * Knobs:   --slider-track-size, --slider-thumb-size, --slider-track-bg,
+ *          --slider-fill-bg, --slider-thumb-bg, --slider-thumb-border
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='field']:has([data-vesta='slider-track'])) {
+    --slider-track-size: 6px;
+    --slider-thumb-size: 16px;
+    --slider-track-bg: var(--vesta-color-fill);
+    --slider-fill-bg: var(--vesta-color-accent);
+    --slider-thumb-bg: var(--vesta-color-surface-raised);
+    --slider-thumb-border: var(--vesta-color-accent);
+    /* Match progress: header → control gap is space-1; height is the thumb, not the track. */
+    gap: var(--vesta-space-1);
+    user-select: none;
+    touch-action: none;
+  }
+
+  :where([data-vesta='field'][data-size='sm']:has([data-vesta='slider-track'])) {
+    --slider-track-size: 4px;
+    --slider-thumb-size: 14px;
+  }
+
+  :where([data-vesta='field'][data-size='lg']:has([data-vesta='slider-track'])) {
+    --slider-track-size: 8px;
+    --slider-thumb-size: 18px;
+  }
+
+  :where([data-vesta='slider-header']) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='slider-value']) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='slider-control']) {
+    display: flex;
+    align-items: center;
+    /* Layout to the thumb height — the handle overhangs the track vertically. */
+    block-size: var(--slider-thumb-size);
+  }
+
+  :where([data-vesta='slider-track']) {
+    position: relative;
+    flex: 1;
+    block-size: var(--slider-track-size);
+    border-radius: var(--vesta-radius-full);
+    background: var(--slider-track-bg);
+    cursor: default;
+    touch-action: none;
+  }
+
+  :where([data-vesta='slider-fill']) {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 0;
+    border-radius: inherit;
+    background: var(--slider-fill-bg);
+    pointer-events: none;
+  }
+
+  :where([data-vesta='slider-thumb']) {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    inline-size: var(--slider-thumb-size);
+    block-size: var(--slider-thumb-size);
+    margin-block-start: calc(var(--slider-thumb-size) / -2);
+    translate: -50% 0;
+    border: var(--vesta-border-width) solid var(--slider-thumb-border);
+    border-radius: var(--vesta-radius-full);
+    background: var(--slider-thumb-bg);
+    box-shadow: var(--vesta-shadow-sm);
+    cursor: grab;
+    touch-action: none;
+    outline: none;
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='slider-thumb']:focus-visible) {
+    --slider-thumb-border: var(--vesta-color-accent-hover);
+    box-shadow: var(--vesta-shadow-sm), 0 0 0 2px var(--vesta-color-accent-soft, var(--vesta-color-accent));
+  }
+
+  :where([data-vesta='slider-thumb']:hover) {
+    --slider-thumb-border: var(--vesta-color-accent-hover);
+  }
+
+  :where([data-vesta='slider-thumb']:active) {
+    --slider-thumb-border: var(--vesta-color-accent-active);
+    cursor: grabbing;
+  }
+
+  :where([data-vesta='field'][data-disabled]) :where([data-vesta='slider-track']),
+  :where([data-vesta='field'][data-disabled]) :where([data-vesta='slider-thumb']) {
+    opacity: var(--vesta-opacity-disabled);
+  }
+}

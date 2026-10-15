@@ -1,0 +1,72 @@
+/*
+ * Breadcrumbs — location trail.
+ *
+ * Hooks:   [data-vesta=breadcrumbs] [data-vesta=breadcrumb-list]
+ *          [data-vesta=breadcrumb-item] [data-vesta=breadcrumb-link]
+ *          [data-vesta=breadcrumb-separator]
+ * Knobs:   --breadcrumb-gap, --breadcrumb-fg, --breadcrumb-fg-current,
+ *          --breadcrumb-fg-hover, --breadcrumb-separator-size
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='breadcrumbs']) {
+    --breadcrumb-gap: var(--vesta-space-1);
+    --breadcrumb-fg: var(--vesta-color-text-muted);
+    --breadcrumb-fg-current: var(--vesta-color-text);
+    --breadcrumb-fg-hover: var(--vesta-color-text);
+    --breadcrumb-separator-size: var(--vesta-size-icon-sm);
+  }
+
+  :where([data-vesta='breadcrumb-list']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--breadcrumb-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='breadcrumb-item']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--breadcrumb-gap);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='breadcrumb-link']) {
+    min-inline-size: 0;
+    color: var(--breadcrumb-fg);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where(a[data-vesta='breadcrumb-link']:hover) {
+    color: var(--breadcrumb-fg-hover);
+  }
+
+  :where([data-vesta='breadcrumb-link'][data-current]) {
+    color: var(--breadcrumb-fg-current);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='breadcrumb-separator']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--breadcrumb-separator-size);
+    block-size: var(--breadcrumb-separator-size);
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='breadcrumb-separator']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}

@@ -1,0 +1,52 @@
+/*
+ * Skeleton — placeholder pulse for loading content.
+ *
+ * Hooks:   [data-vesta=skeleton]
+ * States:  data-animate, data-visible
+ * Knobs:   --skeleton-bg, --skeleton-highlight, --skeleton-radius
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='skeleton']) {
+    --skeleton-bg: var(--vesta-color-fill);
+    --skeleton-highlight: var(--vesta-color-fill-hover);
+    --skeleton-radius: var(--vesta-radius-sm);
+
+    display: inline-block;
+    max-inline-size: 100%;
+    border-radius: var(--skeleton-radius);
+    background: linear-gradient(
+      90deg,
+      var(--skeleton-bg) 25%,
+      var(--skeleton-highlight) 37%,
+      var(--skeleton-bg) 63%
+    );
+    background-size: 400% 100%;
+    vertical-align: middle;
+  }
+
+  :where([data-vesta='skeleton'][data-animate]) {
+    animation: vesta-skeleton-pulse 1.4s var(--vesta-ease-standard) infinite;
+  }
+
+  :where([data-vesta='skeleton']:not([data-visible])) {
+    visibility: hidden;
+  }
+
+  @keyframes vesta-skeleton-pulse {
+    0% {
+      background-position: 100% 0;
+    }
+
+    100% {
+      background-position: 0 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='skeleton'][data-animate]) {
+      animation: none;
+    }
+  }
+}

@@ -1,0 +1,397 @@
+/*
+ * ImageViewer — fullscreen lightbox (gallery, zoom/pan, idle chrome).
+ *
+ * Hooks:   [data-vesta=image-viewer-backdrop] [data-vesta=image-viewer]
+ *          [data-vesta=image-viewer-header] [data-vesta=image-viewer-footer]
+ *          [data-vesta=image-viewer-viewport] [data-vesta=image-viewer-track]
+ *          [data-vesta=image-viewer-slide] [data-vesta=image-viewer-image]
+ *          [data-vesta=image-viewer-nav]
+ * States:  data-hidden, data-zoomed, data-panned, data-dragging, data-pixelated
+ * Knobs:   --image-viewer-scrim, --image-viewer-blur, --image-viewer-shade,
+ *          --image-viewer-fg(-muted|-subtle), --image-viewer-control-bg(-hover),
+ *          --image-viewer-control-border(-hover), --image-viewer-nav-bg(-hover),
+ *          --image-viewer-image-shadow
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  /*
+   * Always dark (media reads best on black), but tinted by the theme accent so it
+   * belongs to the active theme. Light-on-dark controls are intentionally fixed.
+   */
+  :where([data-vesta='image-viewer-backdrop'], [data-vesta='image-viewer']) {
+    --image-viewer-scrim: color-mix(in oklab, oklch(0.1 0 0 / 0.78), var(--vesta-color-accent) 8%);
+    --image-viewer-blur: 12px;
+    --image-viewer-shade: color-mix(in oklab, oklch(0 0 0 / 0.6), var(--vesta-color-accent) 6%);
+    --image-viewer-fg: oklch(0.99 0 0);
+    --image-viewer-fg-muted: oklch(1 0 0 / 0.6);
+    --image-viewer-fg-subtle: oklch(1 0 0 / 0.5);
+    --image-viewer-control-bg: oklch(1 0 0 / 0.06);
+    --image-viewer-control-bg-hover: oklch(1 0 0 / 0.16);
+    --image-viewer-control-border: oklch(1 0 0 / 0.12);
+    --image-viewer-control-border-hover: oklch(1 0 0 / 0.28);
+    --image-viewer-nav-bg: color-mix(in oklab, oklch(0 0 0 / 0.4), var(--vesta-color-accent) 8%);
+    --image-viewer-nav-bg-hover: color-mix(in oklab, oklch(0 0 0 / 0.7), var(--vesta-color-accent) 10%);
+    --image-viewer-image-shadow: 0 20px 50px oklch(0 0 0 / 0.5);
+  }
+
+  :where([data-vesta='image-viewer-backdrop']) {
+    position: fixed;
+    inset: 0;
+    z-index: var(--vesta-z-modal);
+    background: var(--image-viewer-scrim);
+    backdrop-filter: blur(var(--image-viewer-blur));
+  }
+
+  :where([data-vesta='image-viewer-backdrop'][data-expanded]) {
+    animation: vesta-image-viewer-fade-in var(--vesta-duration-normal) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='image-viewer-backdrop'][data-closed]) {
+    animation: vesta-image-viewer-fade-out var(--vesta-duration-fast) var(--vesta-ease-standard) forwards;
+  }
+
+  :where([data-vesta='image-viewer-positioner']) {
+    position: fixed;
+    inset: 0;
+    z-index: var(--vesta-z-modal);
+  }
+
+  :where([data-vesta='image-viewer']) {
+    position: fixed;
+    inset: 0;
+    display: block;
+    overflow: hidden;
+    outline: none;
+    background: transparent;
+    color: var(--image-viewer-fg);
+  }
+
+  :where([data-vesta='image-viewer'][data-expanded]) {
+    animation: vesta-image-viewer-show var(--vesta-duration-normal) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='image-viewer'][data-closed]) {
+    animation: vesta-image-viewer-hide var(--vesta-duration-fast) var(--vesta-ease-standard) forwards;
+  }
+
+  :where([data-vesta='image-viewer-header']),
+  :where([data-vesta='image-viewer-footer']) {
+    position: absolute;
+    inset-inline: 0;
+    z-index: 30;
+    display: flex;
+    pointer-events: none;
+    transition:
+      opacity var(--vesta-duration-normal) var(--vesta-ease-standard),
+      transform var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='image-viewer-header']) {
+    top: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-3);
+    block-size: 80px;
+    padding-inline: var(--vesta-space-6);
+    background: linear-gradient(to bottom, var(--image-viewer-shade), transparent);
+  }
+
+  :where([data-vesta='image-viewer-footer']) {
+    bottom: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-1);
+    block-size: 80px;
+    background: linear-gradient(to top, var(--image-viewer-shade), transparent);
+  }
+
+  :where([data-vesta='image-viewer-header']) > *,
+  :where([data-vesta='image-viewer-footer']) > * {
+    pointer-events: auto;
+  }
+
+  :where([data-vesta='image-viewer-header'][data-hidden]) {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  :where([data-vesta='image-viewer-footer'][data-hidden]) {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  :where([data-vesta='image-viewer-info']) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    text-shadow: 0 1px 4px var(--image-viewer-shade);
+  }
+
+  :where([data-vesta='image-viewer-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold, 600);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='image-viewer-date']) {
+    color: var(--image-viewer-fg-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='image-viewer-actions']) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='image-viewer-actions']) :where([data-vesta='button']) {
+    color: var(--image-viewer-fg);
+    background: var(--image-viewer-control-bg);
+    border-color: var(--image-viewer-control-border);
+  }
+
+  :where([data-vesta='image-viewer-actions']) :where([data-vesta='button']:hover) {
+    background: var(--image-viewer-control-bg-hover);
+    border-color: var(--image-viewer-control-border-hover);
+  }
+
+  :where([data-vesta='image-viewer-viewport']) {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  /* A native horizontal scroller: trackpads, touch and Shift+wheel get the
+     platform's own smoothing, momentum and snapping. */
+  :where([data-vesta='image-viewer-track']) {
+    display: flex;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  :where([data-vesta='image-viewer-track'])::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Mouse drag sets scrollLeft directly; snapping resumes on release. Zoomed
+     images pan instead, so the gallery stops scrolling. */
+  :where([data-vesta='image-viewer-track'][data-dragging]) {
+    scroll-snap-type: none;
+  }
+
+  :where([data-vesta='image-viewer-track'][data-zoomed]) {
+    overflow-x: hidden;
+  }
+
+  :where([data-vesta='image-viewer-slide']) {
+    flex: none;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='image-viewer-slide-content']) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    block-size: 100%;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    cursor: grab;
+  }
+
+  :where([data-vesta='image-viewer-track'][data-dragging]) :where([data-vesta='image-viewer-slide-content']) {
+    cursor: grabbing;
+  }
+
+  :where([data-vesta='image-viewer-image-wrap']) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: hidden;
+  }
+
+  :where([data-vesta='image-viewer-image']) {
+    display: block;
+    max-inline-size: 85%;
+    max-block-size: 80%;
+    object-fit: contain;
+    border-radius: var(--vesta-radius-sm);
+    box-shadow: var(--image-viewer-image-shadow);
+    user-select: none;
+    -webkit-user-drag: none;
+    touch-action: manipulation;
+    cursor: zoom-in;
+    transform-origin: var(--zoom-x, center) var(--zoom-y, center);
+    transform: translate(var(--pan-x, 0px), var(--pan-y, 0px)) scale(var(--image-scale, 1));
+    transition: transform 0.4s var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='image-viewer'][data-pixelated]) :where([data-vesta='image-viewer-image']) {
+    image-rendering: pixelated;
+  }
+
+  :where([data-vesta='image-viewer-image-wrap'][data-zoomed]) :where([data-vesta='image-viewer-image']) {
+    border-radius: 0;
+    box-shadow: none;
+    cursor: grab;
+    transform: translate(var(--pan-x, 0px), var(--pan-y, 0px))
+      scale(calc(2.2 * var(--image-scale, 1)));
+    transition: transform 0.1s linear;
+  }
+
+  :where([data-vesta='image-viewer-image-wrap'][data-zoomed][data-panned]) :where([data-vesta='image-viewer-image']) {
+    transform-origin: center center;
+  }
+
+  :where([data-vesta='image-viewer-image-wrap'][data-zoomed][data-dragging]) :where([data-vesta='image-viewer-image']) {
+    cursor: grabbing;
+    transition: none;
+  }
+
+  /* Previous/next: library IconButtons, retuned through Button's knobs. */
+  :where([data-vesta='image-viewer-nav']) {
+    position: absolute;
+    top: 50%;
+    z-index: 100;
+    transform: translateY(-50%);
+    transition: opacity var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='image-viewer-nav'][data-slot='prev']) {
+    left: var(--vesta-space-6);
+  }
+
+  :where([data-vesta='image-viewer-nav'][data-slot='next']) {
+    right: var(--vesta-space-6);
+  }
+
+  :where([data-vesta='image-viewer-nav'][data-hidden]) {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :where([data-vesta='image-viewer-nav']) > :where([data-vesta='button']) {
+    --button-height: 40px;
+    --button-radius: var(--vesta-radius-full);
+    --button-icon-size: 20px;
+    --button-bg: var(--image-viewer-nav-bg);
+    --button-bg-hover: var(--image-viewer-nav-bg-hover);
+    --button-bg-active: var(--image-viewer-nav-bg-hover);
+    --button-fg: var(--image-viewer-fg);
+    --button-border-color: var(--image-viewer-control-border);
+
+    backdrop-filter: blur(calc(var(--image-viewer-blur) * 0.66));
+  }
+
+  :where([data-vesta='image-viewer-nav']) > :where([data-vesta='button']:hover) {
+    --button-border-color: var(--image-viewer-control-border-hover);
+  }
+
+  :where([data-vesta='image-viewer-error']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    color: var(--image-viewer-fg-muted);
+  }
+
+  :where([data-vesta='image-viewer-error-icon']) {
+    display: inline-flex;
+    inline-size: 48px;
+    block-size: 48px;
+    color: var(--vesta-color-danger);
+    opacity: 0.85;
+  }
+
+  :where([data-vesta='image-viewer-error-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='image-viewer-error-path']) {
+    max-inline-size: 400px;
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    overflow: hidden;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--image-viewer-control-bg);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='image-viewer-counter']) {
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold, 600);
+  }
+
+  :where([data-vesta='image-viewer-hint']) {
+    color: var(--image-viewer-fg-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  @keyframes vesta-image-viewer-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes vesta-image-viewer-fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes vesta-image-viewer-show {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes vesta-image-viewer-hide {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='image-viewer-track']),
+    :where([data-vesta='image-viewer-image']),
+    :where([data-vesta='image-viewer-header']),
+    :where([data-vesta='image-viewer-footer']),
+    :where([data-vesta='image-viewer-nav']) {
+      transition: none;
+    }
+  }
+}

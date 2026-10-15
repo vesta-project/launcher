@@ -1,0 +1,127 @@
+/*
+ * Select — a field whose control box opens an overlay list.
+ *
+ * The trigger is a [data-vesta=field-control] (../field/field.css) and the list
+ * reuses the menu container and item styles (../menu/menu.css), so selects match
+ * text fields when closed and menus when open.
+ *
+ * Hooks:   [data-vesta=select-value] [data-vesta=select-value-text] [data-vesta=select-chevron]
+ *          [data-vesta=select-content] [data-vesta=select-listbox] [data-vesta=select-item]
+ *          [data-vesta=select-item-text] [data-vesta=select-item-label]
+ *          [data-vesta=select-item-description] [data-vesta=select-item-indicator]
+ * States:  trigger: data-expanded, data-placeholder-shown (on value);
+ *          item: data-selected, data-highlighted, data-disabled
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  /* The trigger is a <button>; make it behave like the text field box. */
+  :where(button[data-vesta='field-control']) {
+    inline-size: 100%;
+    margin: 0;
+    font: inherit;
+    font-size: var(--field-font-size);
+    text-align: start;
+    cursor: default;
+  }
+
+  :where(button[data-vesta='field-control'])[data-expanded] {
+    border-color: var(--field-border-color-hover);
+  }
+
+  :where([data-vesta='select-value']) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--field-gap);
+    min-inline-size: 0;
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='select-value'])[data-placeholder-shown] {
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='select-value-text']) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='select-chevron']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--field-icon-size);
+    block-size: var(--field-icon-size);
+    margin-inline-end: calc(var(--vesta-space-0-5) * -1);
+    color: var(--vesta-color-text-muted);
+    transition: transform var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='select-chevron'])[data-expanded] {
+    transform: rotate(180deg);
+  }
+
+  :where([data-vesta='select-chevron']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  /* The list is at least as wide as its trigger. */
+  :where([data-vesta='select-content']) {
+    --menu-min-width: var(--kb-popper-anchor-width, 180px);
+
+    z-index: var(--vesta-z-dropdown);
+  }
+
+  :where([data-vesta='select-listbox']) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    outline: none;
+  }
+
+  :where([data-vesta='select-item']) {
+    padding-block: var(--vesta-space-1);
+  }
+
+  :where([data-vesta='select-item'][data-selected]:not([data-highlighted])) {
+    color: var(--vesta-color-accent-text);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='select-item-text']) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='select-item-label']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='select-item-icon']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--menu-icon-size);
+    block-size: var(--menu-icon-size);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='select-item-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='select-item-description']) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='select-item'][data-highlighted] [data-vesta='select-item-description']) {
+    color: color-mix(in oklab, var(--vesta-color-on-accent) 85%, transparent);
+  }
+}

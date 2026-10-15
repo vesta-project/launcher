@@ -1,0 +1,79 @@
+/*
+ * Switch — layout is shared with checkbox (../choice/choice.css).
+ *
+ * Hooks:   [data-vesta=switch] [data-vesta=switch-track] [data-vesta=switch-thumb]
+ *          [data-vesta=switch-label]
+ * States:  data-size, data-tone, data-checked, data-invalid, data-disabled,
+ *          data-readonly
+ * Knobs:   --switch-height, --switch-width, --switch-padding, --switch-track-bg,
+ *          --switch-thumb-bg, --switch-thumb-shadow
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='switch']) {
+    --switch-height: 16px;
+    --switch-width: 28px;
+    --switch-padding: 2px;
+    --switch-track-bg: var(--vesta-color-border-strong);
+    --switch-thumb-bg: var(--vesta-color-on-accent);
+    --switch-thumb-shadow: var(--vesta-shadow-sm);
+    --choice-control-size: var(--switch-height);
+  }
+
+  :where([data-vesta='switch'][data-size='sm']) {
+    --switch-height: 14px;
+    --switch-width: 24px;
+  }
+
+  :where([data-vesta='switch'][data-size='lg']) {
+    --switch-height: 20px;
+    --switch-width: 34px;
+  }
+
+  /* States only reassign knobs. */
+  :where([data-vesta='switch']:not([data-disabled], [data-readonly])):hover {
+    --switch-track-bg: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='switch'][data-checked]) {
+    --switch-track-bg: var(--tone-solid);
+  }
+
+  :where([data-vesta='switch'][data-checked]:not([data-disabled], [data-readonly])):hover {
+    --switch-track-bg: var(--tone-solid-hover);
+  }
+
+  :where([data-vesta='switch-track']) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    inline-size: var(--switch-width);
+    block-size: var(--switch-height);
+    padding: var(--switch-padding);
+    border: 0;
+    border-radius: var(--vesta-radius-full);
+    background: var(--switch-track-bg);
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='switch'][data-invalid]) :where([data-vesta='switch-track']) {
+    /* A ring that leaves the outline free for the shared focus ring. */
+    box-shadow: 0 0 0 var(--vesta-border-width) var(--vesta-color-danger-border);
+  }
+
+  :where([data-vesta='switch-thumb']) {
+    flex: none;
+    inline-size: calc(var(--switch-height) - 2 * var(--switch-padding));
+    block-size: calc(var(--switch-height) - 2 * var(--switch-padding));
+    border-radius: var(--vesta-radius-full);
+    background: var(--switch-thumb-bg);
+    box-shadow: var(--switch-thumb-shadow);
+    transition: transform var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='switch'][data-checked]) :where([data-vesta='switch-thumb']) {
+    transform: translateX(calc(var(--switch-width) - var(--switch-height)));
+  }
+}

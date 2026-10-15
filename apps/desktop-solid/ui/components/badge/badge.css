@@ -1,0 +1,87 @@
+/*
+ * Badge — small static label for a status or count.
+ *
+ * Hooks:   [data-vesta=badge] [data-vesta=badge-icon] [data-vesta=badge-label]
+ * States:  data-variant, data-tone, data-size
+ * Knobs:   --badge-height, --badge-padding-x, --badge-gap, --badge-radius,
+ *          --badge-font-size, --badge-icon-size, --badge-bg, --badge-fg,
+ *          --badge-border-color
+ *
+ * Variant and size rules only reassign knobs; the base rule is the single
+ * place that turns knobs into properties.
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='badge']) {
+    --badge-height: 20px;
+    --badge-padding-x: var(--vesta-space-1-5);
+    --badge-gap: var(--vesta-space-1);
+    --badge-radius: var(--vesta-radius-sm);
+    --badge-font-size: var(--vesta-text-sm);
+    --badge-icon-size: 12px;
+    --badge-bg: var(--tone-soft);
+    --badge-fg: var(--tone-text);
+    --badge-border-color: transparent;
+
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--badge-gap);
+    box-sizing: border-box;
+    block-size: var(--badge-height);
+    max-inline-size: 100%;
+    padding-block: 0;
+    padding-inline: var(--badge-padding-x);
+    border: var(--vesta-border-width) solid var(--badge-border-color);
+    border-radius: var(--badge-radius);
+    background: var(--badge-bg);
+    color: var(--badge-fg);
+    font-size: var(--badge-font-size);
+    font-weight: var(--vesta-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: default;
+    user-select: none;
+  }
+
+  /* Variants */
+  :where([data-vesta='badge'][data-variant='solid']) {
+    --badge-bg: var(--tone-solid);
+    --badge-fg: var(--tone-on-solid);
+  }
+
+  :where([data-vesta='badge'][data-variant='outline']) {
+    --badge-bg: transparent;
+    --badge-border-color: var(--tone-border);
+  }
+
+  /* Sizes */
+  :where([data-vesta='badge'][data-size='sm']) {
+    --badge-height: 16px;
+    --badge-padding-x: var(--vesta-space-1);
+    --badge-font-size: var(--vesta-text-xs);
+    --badge-icon-size: 10px;
+  }
+
+  /* Parts */
+  :where([data-vesta='badge-icon']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--badge-icon-size);
+    block-size: var(--badge-icon-size);
+  }
+
+  :where([data-vesta='badge-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='badge-label']) {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

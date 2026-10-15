@@ -1,0 +1,90 @@
+/*
+ * Progress — determinate or indeterminate task progress.
+ *
+ * Hooks:   [data-vesta=progress] [data-vesta=progress-header] [data-vesta=progress-label]
+ *          [data-vesta=progress-value] [data-vesta=progress-track] [data-vesta=progress-fill]
+ * States:  data-tone, data-size, data-indeterminate, data-progress (loading | complete)
+ * Knobs:   --progress-height, --progress-radius, --progress-track-bg, --progress-fill-bg
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='progress']) {
+    --progress-height: 4px;
+    --progress-radius: var(--vesta-radius-full);
+    --progress-track-bg: var(--vesta-color-fill);
+    --progress-fill-bg: var(--tone-solid);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='progress'][data-size='sm']) {
+    --progress-height: 3px;
+  }
+
+  :where([data-vesta='progress-header']) {
+    display: flex;
+    align-items: baseline;
+    gap: var(--vesta-space-2);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='progress-label']) {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--vesta-color-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='progress-value']) {
+    margin-inline-start: auto;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='progress-track']) {
+    position: relative;
+    block-size: var(--progress-height);
+    overflow: hidden;
+    border-radius: var(--progress-radius);
+    background: var(--progress-track-bg);
+  }
+
+  :where([data-vesta='progress-fill']) {
+    block-size: 100%;
+    inline-size: var(--kb-progress-fill-width, 0%);
+    border-radius: inherit;
+    background: var(--progress-fill-bg);
+    transition: inline-size var(--vesta-duration-slow) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='progress-fill'])[data-indeterminate] {
+    inline-size: 35%;
+    animation: vesta-progress-indeterminate 1.4s var(--vesta-ease-standard) infinite;
+  }
+
+  @keyframes vesta-progress-indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+
+    to {
+      transform: translateX(290%);
+    }
+  }
+
+  /* Reduced motion: a static partial bar still reads as "working". */
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='progress-fill'])[data-indeterminate] {
+      animation: none;
+      opacity: 0.6;
+    }
+  }
+}

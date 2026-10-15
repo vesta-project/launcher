@@ -1,0 +1,194 @@
+/*
+ * Vesta UI default tokens.
+ *
+ * These are complete standalone defaults: components render correctly with no
+ * other stylesheet. Consumers (the launcher, themes) override the same names in
+ * a later cascade layer. Scale tokens live on :root; colour tokens are declared
+ * on every scheme root so a nested [data-vesta-scheme] subtree resolves its own
+ * palette and everything derived from it.
+ */
+@layer ui.tokens {
+  :where(:root) {
+    /* Space — multiples of one unit, so density can be tuned in one place. */
+    --vesta-space-unit: 4px;
+    --vesta-space-0-5: calc(var(--vesta-space-unit) * 0.5);
+    --vesta-space-1: var(--vesta-space-unit);
+    --vesta-space-1-5: calc(var(--vesta-space-unit) * 1.5);
+    --vesta-space-2: calc(var(--vesta-space-unit) * 2);
+    --vesta-space-3: calc(var(--vesta-space-unit) * 3);
+    --vesta-space-4: calc(var(--vesta-space-unit) * 4);
+    --vesta-space-5: calc(var(--vesta-space-unit) * 5);
+    --vesta-space-6: calc(var(--vesta-space-unit) * 6);
+    --vesta-space-8: calc(var(--vesta-space-unit) * 8);
+    --vesta-space-10: calc(var(--vesta-space-unit) * 10);
+    --vesta-space-12: calc(var(--vesta-space-unit) * 12);
+
+    /* Sizing — fixed control heights keep rows aligned across component families. */
+    --vesta-size-control-sm: 24px;
+    --vesta-size-control-md: 28px;
+    --vesta-size-control-lg: 32px;
+    --vesta-size-icon-sm: 14px;
+    --vesta-size-icon-md: 16px;
+    --vesta-size-icon-lg: 18px;
+
+    /* Typography — desktop-scale text, 13px body. */
+    --vesta-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+    --vesta-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --vesta-text-xs: 11px;
+    --vesta-text-sm: 12px;
+    --vesta-text-md: 13px;
+    --vesta-text-lg: 15px;
+    --vesta-text-xl: 18px;
+    --vesta-text-2xl: 22px;
+    --vesta-leading-tight: 1.2;
+    --vesta-leading-normal: 1.45;
+    --vesta-weight-regular: 400;
+    --vesta-weight-medium: 500;
+    --vesta-weight-semibold: 600;
+    --vesta-weight-bold: 700;
+
+    /* Radii — one factor scales every corner (0 = square theme). */
+    --vesta-radius-factor: 1;
+    --vesta-radius-sm: calc(4px * var(--vesta-radius-factor));
+    --vesta-radius-md: calc(6px * var(--vesta-radius-factor));
+    --vesta-radius-lg: calc(8px * var(--vesta-radius-factor));
+    --vesta-radius-xl: calc(12px * var(--vesta-radius-factor));
+    --vesta-radius-full: 9999px;
+    --vesta-radius-control: var(--vesta-radius-md);
+    --vesta-radius-container: var(--vesta-radius-lg);
+
+    /* Borders and focus. */
+    --vesta-border-width: 1px;
+    --vesta-focus-width: 2px;
+    --vesta-focus-offset: 1px;
+
+    /* State feedback — percentages mixed into transparent/solid colours. */
+    --vesta-state-hover: 9%;
+    --vesta-state-active: 15%;
+    --vesta-state-soft: 14%;
+    --vesta-opacity-disabled: 0.45;
+
+    /* Motion. */
+    --vesta-duration-fast: 90ms;
+    --vesta-duration-normal: 160ms;
+    --vesta-duration-slow: 240ms;
+    --vesta-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --vesta-ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+    /* Layering. */
+    --vesta-z-dropdown: 1000;
+    --vesta-z-overlay: 1100;
+    --vesta-z-modal: 1200;
+    --vesta-z-toast: 1300;
+    --vesta-z-tooltip: 1400;
+  }
+
+  /* Dark is the default scheme. */
+  :where(:root, [data-vesta-scheme='dark']) {
+    color-scheme: dark;
+    --vesta-color-canvas: oklch(0.17 0.006 260);
+    --vesta-color-surface: oklch(0.205 0.007 260);
+    --vesta-color-surface-raised: oklch(0.24 0.008 260);
+    --vesta-color-surface-sunken: oklch(0.15 0.006 260);
+    --vesta-color-text: oklch(0.95 0.004 260);
+    --vesta-color-text-muted: oklch(0.74 0.01 260);
+    --vesta-color-text-subtle: oklch(0.58 0.012 260);
+    --vesta-color-border: oklch(1 0 0 / 0.1);
+    --vesta-color-border-strong: oklch(1 0 0 / 0.18);
+    --vesta-color-fill: oklch(1 0 0 / 0.08);
+    --vesta-color-fill-hover: oklch(1 0 0 / 0.12);
+    --vesta-color-fill-active: oklch(1 0 0 / 0.16);
+    --vesta-color-state-mix: white;
+    --vesta-color-focus: oklch(0.72 0.14 250);
+    --vesta-color-scrim: oklch(0 0 0 / 0.55);
+
+    --vesta-color-accent: oklch(0.55 0.15 250);
+    --vesta-color-on-accent: oklch(0.99 0 0);
+    --vesta-color-accent-text: oklch(0.76 0.12 250);
+    --vesta-color-danger: oklch(0.55 0.18 25);
+    --vesta-color-on-danger: oklch(0.99 0 0);
+    --vesta-color-danger-text: oklch(0.74 0.14 25);
+    --vesta-color-warning: oklch(0.8 0.15 80);
+    --vesta-color-on-warning: oklch(0.24 0.05 80);
+    --vesta-color-warning-text: oklch(0.83 0.13 85);
+    --vesta-color-success: oklch(0.55 0.13 155);
+    --vesta-color-on-success: oklch(0.99 0 0);
+    --vesta-color-success-text: oklch(0.76 0.13 155);
+
+    --vesta-shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
+    --vesta-shadow-md: 0 4px 12px oklch(0 0 0 / 0.35);
+    --vesta-shadow-lg: 0 12px 32px oklch(0 0 0 / 0.45);
+  }
+
+  :where([data-vesta-scheme='light']) {
+    color-scheme: light;
+    --vesta-color-canvas: oklch(0.965 0.003 260);
+    --vesta-color-surface: oklch(0.995 0.001 260);
+    --vesta-color-surface-raised: oklch(1 0 0);
+    --vesta-color-surface-sunken: oklch(0.945 0.004 260);
+    --vesta-color-text: oklch(0.22 0.01 260);
+    --vesta-color-text-muted: oklch(0.44 0.012 260);
+    --vesta-color-text-subtle: oklch(0.58 0.012 260);
+    --vesta-color-border: oklch(0 0 0 / 0.1);
+    --vesta-color-border-strong: oklch(0 0 0 / 0.2);
+    --vesta-color-fill: oklch(0 0 0 / 0.05);
+    --vesta-color-fill-hover: oklch(0 0 0 / 0.08);
+    --vesta-color-fill-active: oklch(0 0 0 / 0.12);
+    --vesta-color-state-mix: black;
+    --vesta-color-focus: oklch(0.55 0.16 250);
+    --vesta-color-scrim: oklch(0.2 0.01 260 / 0.35);
+
+    --vesta-color-accent: oklch(0.55 0.15 250);
+    --vesta-color-on-accent: oklch(0.99 0 0);
+    --vesta-color-accent-text: oklch(0.5 0.15 250);
+    --vesta-color-danger: oklch(0.55 0.18 25);
+    --vesta-color-on-danger: oklch(0.99 0 0);
+    --vesta-color-danger-text: oklch(0.5 0.17 25);
+    --vesta-color-warning: oklch(0.8 0.15 80);
+    --vesta-color-on-warning: oklch(0.24 0.05 80);
+    --vesta-color-warning-text: oklch(0.5 0.11 70);
+    --vesta-color-success: oklch(0.55 0.13 155);
+    --vesta-color-on-success: oklch(0.99 0 0);
+    --vesta-color-success-text: oklch(0.48 0.12 155);
+
+    --vesta-shadow-sm: 0 1px 2px oklch(0 0 0 / 0.08);
+    --vesta-shadow-md: 0 4px 12px oklch(0 0 0 / 0.1);
+    --vesta-shadow-lg: 0 12px 32px oklch(0 0 0 / 0.16);
+  }
+
+  /*
+   * Derived colours. Declared on every scheme root after the palettes so an
+   * override of a base colour (e.g. --vesta-color-accent) carries its states.
+   */
+  :where(:root, [data-vesta-scheme]) {
+    /*
+     * Overlay family surface (menus, popovers, dialogs, selects, toasts, tooltips).
+     * Near the raised surface with a light accent tint — readable, not a loud wash.
+     */
+    --vesta-color-overlay: color-mix(in oklab, var(--vesta-color-surface-raised), var(--vesta-color-accent) 10%);
+    --vesta-color-overlay-text: var(--vesta-color-text);
+    /* Tooltip stays a touch stronger than the overlay family. */
+    --vesta-color-tooltip: color-mix(in oklab, var(--vesta-color-surface-raised), var(--vesta-color-accent) 14%);
+    --vesta-color-tooltip-text: var(--vesta-color-overlay-text);
+    --vesta-color-accent-hover: color-mix(in oklab, var(--vesta-color-accent), var(--vesta-color-state-mix) var(--vesta-state-hover));
+    --vesta-color-accent-active: color-mix(in oklab, var(--vesta-color-accent), var(--vesta-color-state-mix) var(--vesta-state-active));
+    --vesta-color-accent-border: color-mix(in oklab, var(--vesta-color-accent-text) 55%, transparent);
+    --vesta-color-danger-hover: color-mix(in oklab, var(--vesta-color-danger), var(--vesta-color-state-mix) var(--vesta-state-hover));
+    --vesta-color-danger-active: color-mix(in oklab, var(--vesta-color-danger), var(--vesta-color-state-mix) var(--vesta-state-active));
+    --vesta-color-danger-border: color-mix(in oklab, var(--vesta-color-danger-text) 55%, transparent);
+    --vesta-color-warning-hover: color-mix(in oklab, var(--vesta-color-warning), var(--vesta-color-state-mix) var(--vesta-state-hover));
+    --vesta-color-warning-active: color-mix(in oklab, var(--vesta-color-warning), var(--vesta-color-state-mix) var(--vesta-state-active));
+    --vesta-color-warning-border: color-mix(in oklab, var(--vesta-color-warning-text) 55%, transparent);
+    --vesta-color-success-hover: color-mix(in oklab, var(--vesta-color-success), var(--vesta-color-state-mix) var(--vesta-state-hover));
+    --vesta-color-success-active: color-mix(in oklab, var(--vesta-color-success), var(--vesta-color-state-mix) var(--vesta-state-active));
+    --vesta-color-success-border: color-mix(in oklab, var(--vesta-color-success-text) 55%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where(:root) {
+      --vesta-duration-fast: 0ms;
+      --vesta-duration-normal: 0ms;
+      --vesta-duration-slow: 0ms;
+    }
+  }
+}

@@ -1,0 +1,78 @@
+/*
+ * Checkbox — layout is shared with switch (../choice/choice.css).
+ *
+ * Hooks:   [data-vesta=checkbox] [data-vesta=checkbox-control]
+ *          [data-vesta=checkbox-indicator] [data-vesta=checkbox-label]
+ * States:  data-size, data-tone, data-checked, data-indeterminate,
+ *          data-invalid, data-disabled, data-readonly
+ * Knobs:   --checkbox-size, --checkbox-radius, --checkbox-bg,
+ *          --checkbox-border-color, --checkbox-fg
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='checkbox']) {
+    --checkbox-size: var(--vesta-size-icon-md);
+    --checkbox-radius: var(--vesta-radius-sm);
+    --checkbox-bg: var(--vesta-color-surface-sunken);
+    --checkbox-border-color: var(--vesta-color-border-strong);
+    --checkbox-fg: var(--tone-on-solid);
+    --choice-control-size: var(--checkbox-size);
+  }
+
+  :where([data-vesta='checkbox'][data-size='sm']) {
+    --checkbox-size: var(--vesta-size-icon-sm);
+  }
+
+  :where([data-vesta='checkbox'][data-size='lg']) {
+    --checkbox-size: var(--vesta-size-icon-lg);
+  }
+
+  /* States only reassign knobs. */
+  :where([data-vesta='checkbox']:not([data-disabled], [data-readonly])):hover {
+    --checkbox-border-color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='checkbox'][data-checked], [data-vesta='checkbox'][data-indeterminate]) {
+    --checkbox-bg: var(--tone-solid);
+    --checkbox-border-color: var(--tone-solid);
+  }
+
+  :where([data-vesta='checkbox'][data-checked], [data-vesta='checkbox'][data-indeterminate]):where(:not([data-disabled], [data-readonly])):hover {
+    --checkbox-bg: var(--tone-solid-hover);
+    --checkbox-border-color: var(--tone-solid-hover);
+  }
+
+  :where([data-vesta='checkbox'][data-invalid]),
+  :where([data-vesta='checkbox'][data-invalid]:not([data-disabled], [data-readonly])):hover {
+    --checkbox-border-color: var(--vesta-color-danger-border);
+  }
+
+  :where([data-vesta='checkbox-control']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--checkbox-size);
+    block-size: var(--checkbox-size);
+    border: var(--vesta-border-width) solid var(--checkbox-border-color);
+    border-radius: var(--checkbox-radius);
+    background: var(--checkbox-bg);
+    color: var(--checkbox-fg);
+    transition-property: background-color, border-color;
+    transition-duration: var(--vesta-duration-fast);
+    transition-timing-function: var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='checkbox-indicator']) {
+    display: grid;
+    place-items: center;
+    inline-size: 80%;
+    block-size: 80%;
+  }
+
+  :where([data-vesta='checkbox-indicator']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}

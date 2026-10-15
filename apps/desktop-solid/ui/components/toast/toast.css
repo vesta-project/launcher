@@ -1,0 +1,190 @@
+/*
+ * Toast — transient notifications stacked in a region at a screen edge.
+ *
+ * Status is carried by a tone-coloured icon (and progress colour) on the
+ * shared overlay surface, not by tinting the whole toast.
+ *
+ * Hooks:   [data-vesta=toast-region] [data-vesta=toast-list] [data-vesta=toast]
+ *          [data-vesta=toast-icon] [data-vesta=toast-body] [data-vesta=toast-title]
+ *          [data-vesta=toast-description] [data-vesta=toast-actions]
+ * States:  region: data-placement; toast: data-tone, data-opened, data-closed,
+ *          data-swipe (start | move | cancel | end)
+ * Knobs:   region: --toast-width, --toast-margin, --toast-gap;
+ *          toast: overlay surface knobs (--overlay-bg, …) plus --toast-icon-well
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='toast-region']) {
+    --toast-width: 340px;
+    --toast-margin: var(--vesta-space-4);
+    --toast-gap: var(--vesta-space-2);
+    --toast-enter-x: 0px;
+    --toast-enter-y: 0px;
+
+    position: fixed;
+    z-index: var(--vesta-z-toast);
+    inline-size: var(--toast-width);
+    max-inline-size: calc(100% - var(--toast-margin) * 2);
+    pointer-events: none;
+  }
+
+  :where([data-vesta='toast-region'][data-placement^='top']) {
+    top: var(--toast-margin);
+  }
+
+  :where([data-vesta='toast-region'][data-placement^='bottom']) {
+    bottom: var(--toast-margin);
+  }
+
+  :where([data-vesta='toast-region'][data-placement$='start']) {
+    inset-inline-start: var(--toast-margin);
+    --toast-enter-x: -16px;
+  }
+
+  :where([data-vesta='toast-region'][data-placement$='end']) {
+    inset-inline-end: var(--toast-margin);
+    --toast-enter-x: 16px;
+  }
+
+  :where([data-vesta='toast-region'][data-placement$='center']) {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  :where([data-vesta='toast-region'][data-placement='top-center']) {
+    --toast-enter-y: -12px;
+  }
+
+  :where([data-vesta='toast-region'][data-placement='bottom-center']) {
+    --toast-enter-y: 12px;
+  }
+
+  /* Newest toast sits closest to the screen edge. */
+  :where([data-vesta='toast-list']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--toast-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    outline: none;
+  }
+
+  :where([data-vesta='toast-region'][data-placement^='top']) :where([data-vesta='toast-list']) {
+    flex-direction: column-reverse;
+  }
+
+  :where([data-vesta='toast']) {
+    /* Roomier than menu padding; surface colour comes from the overlay family. */
+    --overlay-padding: var(--vesta-space-3);
+    /* Match control-sm so the tone chip lines up with the dismiss button. */
+    --toast-icon-well: var(--vesta-size-control-sm);
+
+    z-index: auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: var(--vesta-space-2);
+    row-gap: 0;
+    pointer-events: auto;
+  }
+
+  /* Neutral toasts have no icon column. */
+  :where([data-vesta='toast']:not(:has([data-vesta='toast-icon']))) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  :where([data-vesta='toast'])[data-opened] {
+    animation: vesta-toast-enter var(--vesta-duration-slow) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='toast'])[data-swipe='move'] {
+    transform: translate(var(--kb-toast-swipe-move-x, 0px), var(--kb-toast-swipe-move-y, 0px));
+  }
+
+  :where([data-vesta='toast'])[data-swipe='cancel'] {
+    transform: none;
+    transition: transform var(--vesta-duration-normal) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='toast'])[data-swipe='end'] {
+    animation: vesta-toast-swipe-out var(--vesta-duration-fast) var(--vesta-ease-out) forwards;
+  }
+
+  :where([data-vesta='toast-icon']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--toast-icon-well);
+    block-size: var(--toast-icon-well);
+    /* Centre the chip on the title's first line (same math as the dismiss button). */
+    margin-block: calc((var(--vesta-text-md) * var(--vesta-leading-tight) - var(--toast-icon-well)) / 2);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--tone-soft);
+    color: var(--tone-text);
+  }
+
+  :where([data-vesta='toast-icon']) > :where(svg) {
+    inline-size: var(--vesta-size-icon-sm);
+    block-size: var(--vesta-size-icon-sm);
+  }
+
+  :where([data-vesta='toast-body']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='toast-title']) {
+    font-weight: var(--vesta-weight-semibold);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='toast-description']) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='toast-body']) > :where([data-vesta='progress']) {
+    margin-block-start: var(--vesta-space-1);
+  }
+
+  :where([data-vesta='toast-actions']) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-1-5);
+    margin-block-start: var(--vesta-space-1-5);
+  }
+
+  /* Position only — leave variant/tone/size to the IconButton. */
+  :where([data-vesta='toast']) > :where([data-vesta='button']) {
+    grid-column: -2;
+    grid-row: 1;
+    margin-block: calc((var(--vesta-text-md) * var(--vesta-leading-tight) - var(--vesta-size-control-sm)) / 2);
+    margin-inline-end: calc(var(--vesta-space-1) * -1);
+  }
+
+  @keyframes vesta-toast-enter {
+    from {
+      opacity: 0;
+      transform: translate(var(--toast-enter-x), var(--toast-enter-y)) scale(0.98);
+    }
+  }
+
+  @keyframes vesta-toast-swipe-out {
+    from {
+      transform: translate(var(--kb-toast-swipe-end-x, 0px), var(--kb-toast-swipe-end-y, 0px));
+    }
+
+    to {
+      opacity: 0;
+      transform: translate(
+        calc(var(--kb-toast-swipe-end-x, 0px) + var(--toast-enter-x) * 4),
+        calc(var(--kb-toast-swipe-end-y, 0px) + var(--toast-enter-y) * 4)
+      );
+    }
+  }
+}

@@ -1,0 +1,135 @@
+/*
+ * Button
+ *
+ * Hooks:   [data-vesta=button] [data-vesta=button-icon] [data-vesta=button-label]
+ * States:  data-variant, data-tone, data-size, data-icon-only, data-disabled,
+ *          aria-expanded, :hover, :active, :focus-visible
+ * Knobs:   --button-height, --button-padding-x, --button-gap, --button-radius,
+ *          --button-font-size, --button-font-weight, --button-icon-size,
+ *          --button-bg, --button-bg-hover, --button-bg-active, --button-fg,
+ *          --button-border-color
+ *
+ * Variant and size rules only reassign knobs; the base rule is the single
+ * place that turns knobs into properties.
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='button']) {
+    --button-height: var(--vesta-size-control-md);
+    --button-padding-x: var(--vesta-space-3);
+    --button-gap: var(--vesta-space-1-5);
+    --button-radius: var(--vesta-radius-control);
+    --button-font-size: var(--vesta-text-md);
+    --button-font-weight: var(--vesta-weight-medium);
+    --button-icon-size: var(--vesta-size-icon-md);
+    --button-bg: var(--tone-solid);
+    --button-bg-hover: var(--tone-solid-hover);
+    --button-bg-active: var(--tone-solid-active);
+    --button-fg: var(--tone-on-solid);
+    --button-border-color: transparent;
+
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: var(--button-gap);
+    min-block-size: var(--button-height);
+    max-inline-size: 100%;
+    margin: 0;
+    padding-block: 0;
+    padding-inline: var(--button-padding-x);
+    border: var(--vesta-border-width) solid var(--button-border-color);
+    border-radius: var(--button-radius);
+    background: var(--button-bg);
+    color: var(--button-fg);
+    font-family: inherit;
+    font-size: var(--button-font-size);
+    font-weight: var(--button-font-weight);
+    line-height: var(--vesta-leading-tight);
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+    transition-property: background-color, border-color, color;
+    transition-duration: var(--vesta-duration-fast);
+    transition-timing-function: var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='button']:not([data-disabled])):hover {
+    background: var(--button-bg-hover);
+  }
+
+  /* Pressed, or holding an open menu/popover (tooltips don't set aria-expanded). */
+  :where([data-vesta='button']:not([data-disabled])):active,
+  :where([data-vesta='button'])[aria-expanded='true'] {
+    background: var(--button-bg-active);
+  }
+
+  /* Variants */
+  :where([data-vesta='button'][data-variant='outline']) {
+    --button-bg: transparent;
+    --button-bg-hover: var(--tone-hover);
+    --button-bg-active: var(--tone-active);
+    --button-fg: var(--tone-text);
+    --button-border-color: var(--tone-border);
+  }
+
+  :where([data-vesta='button'][data-variant='ghost']) {
+    --button-bg: transparent;
+    --button-bg-hover: var(--tone-hover);
+    --button-bg-active: var(--tone-active);
+    --button-fg: var(--tone-text);
+  }
+
+  /* Sizes */
+  :where([data-vesta='button'][data-size='sm']) {
+    --button-height: var(--vesta-size-control-sm);
+    --button-padding-x: var(--vesta-space-2);
+    --button-gap: var(--vesta-space-1);
+    --button-font-size: var(--vesta-text-sm);
+    --button-icon-size: var(--vesta-size-icon-sm);
+  }
+
+  :where([data-vesta='button'][data-size='lg']) {
+    --button-height: var(--vesta-size-control-lg);
+    --button-padding-x: var(--vesta-space-4);
+    --button-gap: var(--vesta-space-2);
+    --button-icon-size: var(--vesta-size-icon-lg);
+  }
+
+  /* Icons sit optically closer to the edge than text does. */
+  :where([data-vesta='button']:has(> [data-slot='start'])) {
+    padding-inline-start: calc(var(--button-padding-x) - var(--vesta-space-0-5));
+  }
+
+  :where([data-vesta='button']:has(> [data-slot='end'])) {
+    padding-inline-end: calc(var(--button-padding-x) - var(--vesta-space-0-5));
+  }
+
+  :where([data-vesta='button'][data-icon-only]) {
+    inline-size: var(--button-height);
+    /* Beat the base max-inline-size: 100% so grid/flex parents cannot squash the square. */
+    max-inline-size: var(--button-height);
+    padding-inline: 0;
+  }
+
+  /* Parts */
+  :where([data-vesta='button-icon']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--button-icon-size);
+    block-size: var(--button-icon-size);
+  }
+
+  :where([data-vesta='button-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='button-label']) {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

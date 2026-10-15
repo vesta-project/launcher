@@ -1,0 +1,178 @@
+/*
+ * Tabs — navigation between panels. The selected tab is marked by an
+ * underline bar that slides between tabs.
+ *
+ * Hooks:   [data-vesta=tabs] [data-vesta=tab-list] [data-vesta=tab-indicator]
+ *          [data-vesta=tab] [data-vesta=tab-icon] [data-vesta=tab-label]
+ *          [data-vesta=tab-badge] [data-vesta=tab-panel]
+ * States:  on tabs: data-size, data-orientation, data-tone; on tab: data-selected,
+ *          data-disabled, data-highlighted, :hover, :focus-visible
+ * Knobs:   --tabs-indicator-size, --tabs-indicator-color, --tab-height,
+ *          --tab-padding-x, --tab-gap, --tab-radius, --tab-font-size, --tab-icon-size,
+ *          --tab-fg, --tab-fg-hover, --tab-fg-selected, --tab-bg-hover
+ *
+ * Knobs are declared once on the root and inherited, so a theme can retune a
+ * whole tab set (or a single tab) from either level.
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='tabs']) {
+    --tabs-indicator-size: 2px;
+    --tabs-indicator-color: var(--tone-solid);
+    --tab-height: var(--vesta-size-control-md);
+    --tab-padding-x: var(--vesta-space-2);
+    --tab-gap: var(--vesta-space-1-5);
+    --tab-radius: var(--vesta-radius-sm);
+    --tab-font-size: var(--vesta-text-md);
+    --tab-icon-size: var(--vesta-size-icon-sm);
+    --tab-fg: var(--vesta-color-text-muted);
+    --tab-fg-hover: var(--vesta-color-text);
+    --tab-fg-selected: var(--vesta-color-text);
+    --tab-bg-hover: var(--vesta-color-fill);
+
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='tabs'][data-orientation='vertical']) {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  :where([data-vesta='tabs'][data-size='sm']) {
+    --tab-height: var(--vesta-size-control-sm);
+    --tab-padding-x: var(--vesta-space-1-5);
+    --tab-font-size: var(--vesta-text-sm);
+  }
+
+  /* The list is the indicator's offset parent, so it must be positioned. */
+  :where([data-vesta='tab-list']) {
+    position: relative;
+    display: flex;
+    flex: none;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  :where([data-vesta='tab-list'])::-webkit-scrollbar {
+    display: none;
+  }
+
+  :where([data-vesta='tab-list'][data-orientation='vertical']) {
+    flex-direction: column;
+    gap: var(--vesta-space-0-5);
+    border-block-end: 0;
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    overflow-x: visible;
+    overflow-y: auto;
+  }
+
+  /* Kobalte sets the indicator's width/height and translate; CSS supplies the rest. */
+  :where([data-vesta='tab-indicator']) {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-start: 0;
+    block-size: var(--tabs-indicator-size);
+    border-radius: var(--vesta-radius-full);
+    background: var(--tabs-indicator-color);
+    pointer-events: none;
+    transition-property: transform, inline-size, block-size;
+    transition-duration: var(--vesta-duration-normal);
+    transition-timing-function: var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='tab-indicator'][data-orientation='vertical']) {
+    inset-block: 0 auto;
+    inset-inline: auto 0;
+    inline-size: var(--tabs-indicator-size);
+    block-size: auto;
+  }
+
+  /* Skip the slide while the selected tab itself is resizing. */
+  :where([data-vesta='tab-indicator'][data-resizing='true']) {
+    transition-duration: 0ms;
+  }
+
+  :where([data-vesta='tab']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--tab-gap);
+    min-block-size: var(--tab-height);
+    margin: 0;
+    padding-block: 0;
+    padding-inline: var(--tab-padding-x);
+    border: 0;
+    border-radius: var(--tab-radius);
+    background: transparent;
+    color: var(--tab-fg);
+    font-family: inherit;
+    font-size: var(--tab-font-size);
+    font-weight: var(--vesta-weight-medium);
+    line-height: var(--vesta-leading-tight);
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+    transition-property: background-color, color;
+    transition-duration: var(--vesta-duration-fast);
+    transition-timing-function: var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='tabs'][data-orientation='vertical'] [data-vesta='tab']) {
+    justify-content: flex-start;
+    text-align: start;
+  }
+
+  :where([data-vesta='tab']:not([data-disabled], [data-selected])):hover {
+    --tab-fg: var(--tab-fg-hover);
+    background: var(--tab-bg-hover);
+  }
+
+  :where([data-vesta='tab'][data-selected]) {
+    --tab-fg: var(--tab-fg-selected);
+  }
+
+  /* Tabs sit edge to edge, so the ring is drawn inside the tab. */
+  :where([data-vesta='tab']):focus-visible {
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='tab-icon']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--tab-icon-size);
+    block-size: var(--tab-icon-size);
+    color: inherit;
+  }
+
+  :where([data-vesta='tab-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='tab-label']) {
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='tab-badge']) {
+    display: inline-flex;
+    flex: none;
+  }
+
+  :where([data-vesta='tab-panel']) {
+    min-inline-size: 0;
+    padding-block-start: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='tabs'][data-orientation='vertical'] > [data-vesta='tab-panel']) {
+    flex: 1;
+    padding-block-start: 0;
+    padding-inline-start: var(--vesta-space-4);
+  }
+}

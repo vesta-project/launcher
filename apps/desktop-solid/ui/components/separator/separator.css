@@ -1,0 +1,36 @@
+/*
+ * Separator — a thin rule between content groups.
+ *
+ * Hooks:   [data-vesta=separator]
+ * States:  data-orientation=horizontal|vertical
+ * Knobs:   --separator-color, --separator-size, --separator-margin
+ *
+ * Menu/ContextMenu separators reuse this hook and only override margins so the
+ * rule spans the overlay padding.
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='separator']) {
+    --separator-color: var(--vesta-color-border);
+    --separator-size: var(--vesta-border-width);
+    --separator-margin: 0;
+
+    flex-shrink: 0;
+    margin: var(--separator-margin);
+    border: 0;
+    background: var(--separator-color);
+  }
+
+  :where([data-vesta='separator'][data-orientation='horizontal']),
+  :where([data-vesta='separator']:not([data-orientation])) {
+    block-size: var(--separator-size);
+    inline-size: 100%;
+  }
+
+  :where([data-vesta='separator'][data-orientation='vertical']) {
+    inline-size: var(--separator-size);
+    block-size: 100%;
+    min-block-size: 1em;
+  }
+}

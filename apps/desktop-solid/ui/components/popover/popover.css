@@ -1,0 +1,33 @@
+/*
+ * Popover — a non-menu panel anchored to a trigger. Shares the overlay surface knobs.
+ * Hooks: [data-vesta=popover] [data-vesta=popover-title] [data-vesta=popover-description]
+ * Knobs: --popover-width, --popover-gap
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='popover']) {
+    --overlay-padding: var(--vesta-space-3);
+    --popover-width: 280px;
+    --popover-gap: var(--vesta-space-2);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--popover-gap);
+    inline-size: var(--popover-width);
+    max-inline-size: var(--kb-popper-content-available-width, 100vw);
+  }
+
+  :where([data-vesta='popover-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='popover-description']) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+}

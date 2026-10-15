@@ -1,0 +1,62 @@
+# Vesta UI
+
+Independent Solid 2 component library built on Kobalte. It never imports launcher code (`src/`), native APIs or the workbench — `oxlint` enforces this. The launcher themes it through tokens and hooks; customisation lives in the launcher, not here.
+
+```
+ui/
+  index.ts                 public exports (also loads foundation CSS)
+  foundation/              tokens.css, base.css (tones, focus), types.ts
+  components/<name>/       <name>.tsx, <name>.css, <name>.stories.tsx, index.ts
+```
+
+Run the visual workbench with `bun run workbench` (http://localhost:1431).
+
+## Cascade layers
+
+`@layer reset, ui, launcher, theme, preferences;` is declared once by the host page. The library fills `ui.tokens`, `ui.base` and `ui.components`. Because later layers always win, the launcher and advanced themes override anything here **without `!important` or specificity tricks**. Never use `!important` in the library.
+
+## Tokens
+
+One vocabulary, `--vesta-*`. The library ships complete defaults; the launcher redeclares the same names in `launcher.tokens` (it does not invent parallel ones).
+
+| Family | Examples |
+| --- | --- |
+| Colour roles | `--vesta-color-{canvas,surface,surface-raised,surface-sunken,text,text-muted,text-subtle,border,border-strong,fill,fill-hover,fill-active,focus,overlay,overlay-text,tooltip,tooltip-text}` |
+| Tones | `--vesta-color-{accent,danger,warning,success}`, `-hover`, `-active`, `-text`, `-border`, `--vesta-color-on-{tone}` |
+| Space | `--vesta-space-{0-5,1,1-5,2,3,4,5,6,8,10,12}` from `--vesta-space-unit` |
+| Sizing | `--vesta-size-control-{sm,md,lg}` (24/28/32), `--vesta-size-icon-{sm,md,lg}` |
+| Type | `--vesta-font-{sans,mono}`, `--vesta-text-{xs…2xl}`, `--vesta-leading-*`, `--vesta-weight-*` |
+| Radii | `--vesta-radius-{sm,md,lg,xl,full}` scaled by `--vesta-radius-factor`; `--vesta-radius-{control,container}` |
+| Lines, states | `--vesta-border-width`, `--vesta-focus-{width,offset}`, `--vesta-state-{hover,active,soft}`, `--vesta-opacity-disabled` |
+| Elevation | `--vesta-shadow-{sm,md,lg}` |
+| Motion | `--vesta-duration-{fast,normal,slow}`, `--vesta-ease-{standard,out}` (zeroed for reduced motion) |
+| Layering | `--vesta-z-{dropdown,overlay,modal,toast,tooltip}` |
+
+Colour tokens are declared on scheme roots, `:where(:root, [data-vesta-scheme])`; `data-vesta-scheme="light|dark"` can switch a subtree. Add a token only when a component needs it.
+
+## Hooks
+
+Every stable node carries `data-vesta="<component>"` or `data-vesta="<component>-<part>"`. State is exposed through `data-variant`, `data-tone`, `data-size` and Kobalte's state attributes (`data-disabled`, `data-invalid`, `data-expanded`, …). Generated class names and DOM nesting are not part of the contract.
+
+## Component checklist
+
+Follow `button` (reference implementation) and `field` (shared form anatomy):
+
+1. Wrap the matching Kobalte primitive; never re-implement keyboard, focus or ARIA behaviour.
+2. Axes are independent props: `variant`, `tone` (`Tone`), `size` (`ControlSize`). Reuse existing values before adding new ones.
+3. Colour comes only from the tone roles (`--tone-solid`, `--tone-on-solid`, `--tone-text`, `--tone-border`, `--tone-soft`, `--tone-hover`, `--tone-active`) or `--vesta-color-*` roles — no literal colours.
+4. Each component exposes `--<component>-*` knobs. Variant/size/state rules only reassign knobs; one base rule turns knobs into properties.
+5. Selectors are `:where(...)` attribute selectors inside `@layer ui.components`, preceded by the `@layer ui.tokens, ui.base, ui.components;` order statement.
+6. Heights use `--vesta-size-control-*` so mixed rows align; text never wraps inside controls; desktop cursor (`default`).
+7. Focus uses the shared ring from `base.css`. Hover/active never move the element.
+8. Apply prop defaults with `??` where they are used (`data-size={props.size ?? 'md'}`), not with `merge()`: wrappers forward optional props as explicit `undefined`, which `merge()` treats as set.
+9. Never forward an optional `id` as `id={props.id}` when it may be unset — Kobalte stringifies `undefined` into the literal id `"undefined"`, colliding every instance. Spread only when present: `{...(props.id != null ? { id: props.id } : {})}`.
+10. Add a story file that shows every axis plus long labels and an in-context composition.
+
+### Overlays and composition
+
+- Overlays (menu, popover, dialog, tooltip) take a `trigger` render prop and spread its props onto any library control: `trigger={(props) => <Button {...props}>Options</Button>}`.
+- They portal into the nearest `<OverlayMount>` (default `document.body`); wrap a themed or `[data-vesta-scheme]` subtree in one so overlays inherit its tokens.
+- They share the `--overlay-*` surface knobs (`overlay/overlay.css`). Enter/exit motion must be keyframe animations on `data-expanded`/`data-closed`; Kobalte waits for `animationend` before unmounting.
+- When one element receives two sets of Kobalte props (e.g. an IconButton's tooltip plus a menu trigger), merge them with `mergeElementProps` (`internal/props.ts`) so handlers chain and Solid 2 ref arrays survive.
+- Form toggles share `choice/choice.css`; labelled inputs share `field/field.css`.

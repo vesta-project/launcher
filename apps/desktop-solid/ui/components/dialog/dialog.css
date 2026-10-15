@@ -1,0 +1,117 @@
+/*
+ * Dialog — modal panel centred over a scrim. Shares the overlay surface knobs.
+ *
+ * Hooks:   [data-vesta=dialog-backdrop] [data-vesta=dialog-positioner] [data-vesta=dialog]
+ *          [data-vesta=dialog-header] [data-vesta=dialog-title] [data-vesta=dialog-description]
+ *          [data-vesta=dialog-body] [data-vesta=dialog-footer]
+ * States:  data-size (sm | md | lg), data-expanded, data-closed
+ * Knobs:   --dialog-width, --dialog-padding, --dialog-gap, --dialog-margin (window edge spacing)
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='dialog-backdrop']) {
+    position: fixed;
+    inset: 0;
+    z-index: var(--vesta-z-modal);
+    background: var(--vesta-color-scrim);
+  }
+
+  :where([data-vesta='dialog-backdrop'])[data-expanded] {
+    animation: vesta-fade-enter var(--vesta-duration-normal) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='dialog-backdrop'])[data-closed] {
+    animation: vesta-fade-exit var(--vesta-duration-fast) var(--vesta-ease-standard) forwards;
+  }
+
+  :where([data-vesta='dialog-positioner']) {
+    position: fixed;
+    inset: 0;
+    z-index: var(--vesta-z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--dialog-margin, var(--vesta-space-6));
+    pointer-events: none;
+  }
+
+  :where([data-vesta='dialog']) {
+    --overlay-padding: 0;
+    --dialog-width: 480px;
+    --dialog-padding: var(--vesta-space-4);
+    --dialog-gap: var(--vesta-space-3);
+
+    z-index: var(--vesta-z-modal);
+    display: flex;
+    flex-direction: column;
+    gap: var(--dialog-gap);
+    inline-size: min(var(--dialog-width), 100%);
+    /* The positioner has a definite height, so the dialog never outgrows the
+       window: header and footer stay put and only the body scrolls. */
+    max-block-size: 100%;
+    min-block-size: 0;
+    padding-block: var(--dialog-padding);
+    pointer-events: auto;
+  }
+
+  :where([data-vesta='dialog'][data-size='sm']) {
+    --dialog-width: 360px;
+  }
+
+  :where([data-vesta='dialog'][data-size='lg']) {
+    --dialog-width: 640px;
+  }
+
+  :where([data-vesta='dialog-header']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding-inline: var(--dialog-padding);
+  }
+
+  /* The close button sits in the header without adding to its height. */
+  :where([data-vesta='dialog-header']) > :where([data-vesta='button']) {
+    margin-block: calc(var(--vesta-space-1) * -1);
+    margin-inline-start: auto;
+    margin-inline-end: calc(var(--vesta-space-1) * -1);
+  }
+
+  :where([data-vesta='dialog-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='dialog-description']) {
+    margin: 0;
+    margin-block-start: calc(var(--dialog-gap) * -0.5);
+    padding-inline: var(--dialog-padding);
+    color: var(--vesta-color-text-muted);
+  }
+
+  /* A hairline divider shows at an edge only while content is scrolled past it:
+     the opaque covers move with the content (local) and hide the lines
+     (scroll) when the body is at that end. */
+  :where([data-vesta='dialog-body']) {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-inline: var(--dialog-padding);
+    background:
+      linear-gradient(var(--overlay-bg), var(--overlay-bg)) top / 100% 2px no-repeat local,
+      linear-gradient(var(--overlay-bg), var(--overlay-bg)) bottom / 100% 2px no-repeat local,
+      linear-gradient(var(--overlay-border-color), var(--overlay-border-color)) top / 100% var(--vesta-border-width) no-repeat scroll,
+      linear-gradient(var(--overlay-border-color), var(--overlay-border-color)) bottom / 100% var(--vesta-border-width) no-repeat scroll;
+  }
+
+  :where([data-vesta='dialog-footer']) {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--vesta-space-2);
+    padding-inline: var(--dialog-padding);
+    padding-block-start: var(--vesta-space-1);
+  }
+}

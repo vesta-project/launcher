@@ -1,0 +1,25 @@
+/*
+ * Tooltip — a small overlay label. Shares the overlay surface knobs.
+ * Hooks: [data-vesta=tooltip]
+ * Knobs: --tooltip-max-width
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='tooltip']) {
+    --overlay-bg: var(--vesta-color-tooltip);
+    --overlay-fg: var(--vesta-color-tooltip-text);
+    --overlay-padding: var(--vesta-space-1) var(--vesta-space-2);
+    --overlay-radius: var(--vesta-radius-sm);
+    --overlay-shadow: var(--vesta-shadow-md);
+    --overlay-enter: vesta-fade-enter;
+    --overlay-exit: vesta-fade-exit;
+    --tooltip-max-width: 280px;
+
+    z-index: var(--vesta-z-tooltip);
+    max-inline-size: var(--tooltip-max-width);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-tight);
+    pointer-events: none;
+  }
+}

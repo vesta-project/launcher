@@ -1,0 +1,81 @@
+/*
+ * Table — scrollable data table.
+ *
+ * Hooks:   [data-vesta=table-scroll] [data-vesta=table] [data-vesta=table-caption]
+ *          [data-vesta=table-header] [data-vesta=table-body] [data-vesta=table-footer]
+ *          [data-vesta=table-row] [data-vesta=table-head] [data-vesta=table-cell]
+ * States:  data-numeric
+ * Knobs:   --table-cell-padding-x, --table-cell-padding-y, --table-border-color,
+ *          --table-header-bg, --table-row-hover-bg
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='table-scroll']) {
+    --table-cell-padding-x: var(--vesta-space-3);
+    --table-cell-padding-y: var(--vesta-space-2);
+    --table-border-color: var(--vesta-color-border);
+    --table-header-bg: var(--vesta-color-surface);
+    --table-row-hover-bg: var(--vesta-color-fill);
+
+    overflow: auto;
+    min-inline-size: 0;
+    border: var(--vesta-border-width) solid var(--table-border-color);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='table']) {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-tight);
+    text-align: start;
+  }
+
+  :where([data-vesta='table-caption']) {
+    padding: var(--vesta-space-2) var(--table-cell-padding-x);
+    color: var(--vesta-color-text-muted);
+    text-align: start;
+    caption-side: bottom;
+  }
+
+  :where([data-vesta='table-head']),
+  :where([data-vesta='table-cell']) {
+    padding: var(--table-cell-padding-y) var(--table-cell-padding-x);
+    border-block-end: var(--vesta-border-width) solid var(--table-border-color);
+    vertical-align: middle;
+  }
+
+  :where([data-vesta='table-head']) {
+    background: var(--table-header-bg);
+    color: var(--vesta-color-text-muted);
+    font-weight: var(--vesta-weight-medium);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='table-cell']) {
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='table-head'][data-numeric]),
+  :where([data-vesta='table-cell'][data-numeric]) {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='table-body']) :where([data-vesta='table-row']:hover) {
+    background: var(--table-row-hover-bg);
+  }
+
+  :where([data-vesta='table-footer']) :where([data-vesta='table-cell']) {
+    border-block-end: 0;
+    border-block-start: var(--vesta-border-width) solid var(--table-border-color);
+    color: var(--vesta-color-text-muted);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='table-body']) :where([data-vesta='table-row']:last-child) :where([data-vesta='table-cell']) {
+    border-block-end: 0;
+  }
+}

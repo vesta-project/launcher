@@ -1,0 +1,30 @@
+/*
+ * Combobox — searchable field that opens an overlay list.
+ *
+ * Closed it matches text fields (field.css); open it matches select/menu lists
+ * (select.css + menu.css). Only the trigger chevron beside the input is unique.
+ *
+ * Hooks:   [data-vesta=combobox-trigger] (plus select-* / field-* from siblings)
+ * States:  trigger: data-expanded
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='combobox-trigger']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    margin-inline-end: calc(var(--vesta-space-0-5) * -1);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: default;
+  }
+
+  :where([data-vesta='field-control']:has([data-vesta='combobox-trigger']))[data-expanded] {
+    border-color: var(--field-border-color-hover);
+  }
+}

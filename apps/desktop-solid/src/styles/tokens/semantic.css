@@ -1,0 +1,52 @@
+/*
+ * Launcher semantic colours: the UI library's --vesta-color-* roles mapped onto
+ * the generated palettes. Status tones (danger/warning/success) keep the UI
+ * defaults until the theme engine exposes them. Overlay surfaces (menus,
+ * dialogs, toasts, tooltips): near black / near white with a light accent tint
+ * so they stay readable.
+ */
+@layer launcher.tokens {
+  :where(:root, [data-vesta-scheme='dark']) {
+    --vesta-color-canvas: var(--vesta-neutral-1);
+    --vesta-color-surface: var(--vesta-neutral-2);
+    --vesta-color-surface-raised: var(--vesta-neutral-3);
+    --vesta-color-surface-sunken: var(--vesta-neutral-1);
+    --vesta-color-text: var(--vesta-neutral-12);
+    --vesta-color-text-muted: var(--vesta-neutral-11);
+    --vesta-color-text-subtle: var(--vesta-neutral-9);
+    --vesta-color-border: var(--vesta-neutral-5);
+    --vesta-color-border-strong: var(--vesta-neutral-7);
+    --vesta-color-fill: var(--vesta-neutral-4);
+    --vesta-color-fill-hover: var(--vesta-neutral-5);
+    --vesta-color-fill-active: var(--vesta-neutral-6);
+    --vesta-color-focus: var(--vesta-accent-10);
+    --vesta-color-accent: var(--vesta-accent-9);
+    --vesta-color-on-accent: oklch(0.99 0 0);
+    --vesta-color-accent-text: var(--vesta-accent-11);
+    /* Near-black surface + light accent tint. */
+    --vesta-color-overlay: color-mix(in oklab, var(--vesta-neutral-2), var(--vesta-accent-9) 12%);
+    --vesta-color-tooltip: color-mix(in oklab, var(--vesta-neutral-3), var(--vesta-accent-9) 16%);
+  }
+
+  :where([data-vesta-scheme='light']) {
+    --vesta-color-canvas: var(--vesta-neutral-2);
+    --vesta-color-surface: var(--vesta-neutral-1);
+    --vesta-color-surface-raised: var(--vesta-neutral-1);
+    --vesta-color-surface-sunken: var(--vesta-neutral-3);
+    --vesta-color-text: var(--vesta-neutral-12);
+    --vesta-color-text-muted: var(--vesta-neutral-11);
+    --vesta-color-text-subtle: var(--vesta-neutral-9);
+    --vesta-color-border: var(--vesta-neutral-6);
+    --vesta-color-border-strong: var(--vesta-neutral-8);
+    --vesta-color-fill: var(--vesta-neutral-4);
+    --vesta-color-fill-hover: var(--vesta-neutral-5);
+    --vesta-color-fill-active: var(--vesta-neutral-6);
+    --vesta-color-focus: var(--vesta-accent-9);
+    --vesta-color-accent: var(--vesta-accent-9);
+    --vesta-color-on-accent: oklch(0.99 0 0);
+    --vesta-color-accent-text: var(--vesta-accent-11);
+    /* Near-white surface + light accent tint. */
+    --vesta-color-overlay: color-mix(in oklab, var(--vesta-neutral-1), var(--vesta-accent-9) 8%);
+    --vesta-color-tooltip: color-mix(in oklab, var(--vesta-neutral-1), var(--vesta-accent-9) 12%);
+  }
+}

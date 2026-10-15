@@ -1,0 +1,50 @@
+/*
+ * Number field — numeric input with optional steppers inside the field box.
+ *
+ * Hooks:   [data-vesta=number-field-steppers] [data-vesta=number-field-step]
+ * States:  step: data-disabled
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='number-field-steppers']) {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-self: stretch;
+    margin-inline-end: calc(var(--field-padding-x) * -1);
+    border-inline-start: var(--vesta-border-width) solid var(--field-border-color);
+  }
+
+  :where([data-vesta='number-field-step']) {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--field-height);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    cursor: default;
+  }
+
+  :where([data-vesta='number-field-step']:first-child) {
+    border-block-end: var(--vesta-border-width) solid var(--field-border-color);
+  }
+
+  :where([data-vesta='number-field-step']:not([data-disabled]):hover) {
+    background: var(--vesta-color-fill-hover);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='number-field-step']:not([data-disabled]):active) {
+    background: var(--vesta-color-fill-active);
+  }
+
+  :where([data-vesta='number-field-step']) > :where(svg) {
+    inline-size: var(--vesta-size-icon-sm);
+    block-size: var(--vesta-size-icon-sm);
+  }
+}

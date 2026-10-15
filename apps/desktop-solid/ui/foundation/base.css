@@ -1,0 +1,81 @@
+/*
+ * Shared behaviour for every library node ([data-vesta]).
+ *
+ * Tones: an element with data-tone receives a fixed set of --tone-* roles.
+ * Components only consume these roles, so every component family speaks the
+ * same colour language and a theme can retune a tone in one place.
+ *
+ *   --tone-solid / -hover / -active   filled background
+ *   --tone-on-solid                   text and icons on the fill
+ *   --tone-text                       text-only use on a surface
+ *   --tone-border                     outlines
+ *   --tone-soft                       tinted resting background
+ *   --tone-hover / --tone-active      transparent state layers
+ */
+@layer ui.base {
+  :where([data-vesta]),
+  :where([data-vesta])::before,
+  :where([data-vesta])::after {
+    box-sizing: border-box;
+  }
+
+  :where([data-vesta]):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta][data-disabled]) {
+    opacity: var(--vesta-opacity-disabled);
+  }
+
+  :where([data-tone='neutral']) {
+    --tone-solid: var(--vesta-color-fill);
+    --tone-solid-hover: var(--vesta-color-fill-hover);
+    --tone-solid-active: var(--vesta-color-fill-active);
+    --tone-on-solid: var(--vesta-color-text);
+    --tone-text: var(--vesta-color-text);
+    --tone-border: var(--vesta-color-border-strong);
+  }
+
+  :where([data-tone='accent']) {
+    --tone-solid: var(--vesta-color-accent);
+    --tone-solid-hover: var(--vesta-color-accent-hover);
+    --tone-solid-active: var(--vesta-color-accent-active);
+    --tone-on-solid: var(--vesta-color-on-accent);
+    --tone-text: var(--vesta-color-accent-text);
+    --tone-border: var(--vesta-color-accent-border);
+  }
+
+  :where([data-tone='danger']) {
+    --tone-solid: var(--vesta-color-danger);
+    --tone-solid-hover: var(--vesta-color-danger-hover);
+    --tone-solid-active: var(--vesta-color-danger-active);
+    --tone-on-solid: var(--vesta-color-on-danger);
+    --tone-text: var(--vesta-color-danger-text);
+    --tone-border: var(--vesta-color-danger-border);
+  }
+
+  :where([data-tone='warning']) {
+    --tone-solid: var(--vesta-color-warning);
+    --tone-solid-hover: var(--vesta-color-warning-hover);
+    --tone-solid-active: var(--vesta-color-warning-active);
+    --tone-on-solid: var(--vesta-color-on-warning);
+    --tone-text: var(--vesta-color-warning-text);
+    --tone-border: var(--vesta-color-warning-border);
+  }
+
+  :where([data-tone='success']) {
+    --tone-solid: var(--vesta-color-success);
+    --tone-solid-hover: var(--vesta-color-success-hover);
+    --tone-solid-active: var(--vesta-color-success-active);
+    --tone-on-solid: var(--vesta-color-on-success);
+    --tone-text: var(--vesta-color-success-text);
+    --tone-border: var(--vesta-color-success-border);
+  }
+
+  :where([data-tone]) {
+    --tone-soft: color-mix(in oklab, var(--tone-text) var(--vesta-state-soft), transparent);
+    --tone-hover: color-mix(in oklab, var(--tone-text) var(--vesta-state-hover), transparent);
+    --tone-active: color-mix(in oklab, var(--tone-text) var(--vesta-state-active), transparent);
+  }
+}

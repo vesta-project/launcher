@@ -1,0 +1,262 @@
+/* Workbench chrome: unlayered on purpose, class-based, independent of the UI library. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: #17181a;
+  color: #d4d6da;
+  font: 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.wb-app {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  height: 100%;
+}
+
+/* Sidebar */
+.wb-sidebar {
+  overflow-y: auto;
+  padding: 8px 8px 16px;
+  background: #1d1f22;
+  border-right: 1px solid #2d3035;
+}
+.wb-brand {
+  padding: 6px 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f0f1f3;
+}
+.wb-group {
+  margin-bottom: 10px;
+}
+.wb-group-title {
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7d828b;
+}
+.wb-nav-item {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #b4b8bf;
+  text-decoration: none;
+}
+.wb-nav-item:hover {
+  background: #26292d;
+  color: #f0f1f3;
+}
+.wb-nav-item.wb-active {
+  background: #2f3a4d;
+  color: #fff;
+}
+.wb-nav-story {
+  padding-left: 22px;
+  font-size: 11.5px;
+}
+
+/* Toolbar */
+.wb-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  height: 100%;
+}
+.wb-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 6px 12px;
+  background: #1d1f22;
+  border-bottom: 1px solid #2d3035;
+}
+.wb-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wb-label {
+  color: #7d828b;
+}
+.wb-value {
+  min-width: 28px;
+  font-variant-numeric: tabular-nums;
+  color: #b4b8bf;
+}
+.wb-toolbar select,
+.wb-toolbar button {
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid #383c42;
+  border-radius: 4px;
+  background: #26292d;
+  color: #d4d6da;
+  font: inherit;
+}
+.wb-toolbar select {
+  padding: 0 6px;
+}
+.wb-toolbar button:hover:not(:disabled) {
+  background: #2f3338;
+}
+.wb-toolbar button:disabled,
+.wb-toolbar select:disabled,
+.wb-toolbar input:disabled {
+  opacity: 0.45;
+}
+.wb-toolbar input[type='range'] {
+  width: 120px;
+  height: 28px;
+  margin: 0;
+}
+.wb-segmented {
+  display: flex;
+}
+.wb-segmented button {
+  border-radius: 0;
+  margin-left: -1px;
+}
+.wb-segmented button:first-child {
+  border-radius: 4px 0 0 4px;
+  margin-left: 0;
+}
+.wb-segmented button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.wb-segmented button.wb-active {
+  background: #2f3a4d;
+  border-color: #4a5d7d;
+  color: #fff;
+}
+
+/* Canvas */
+.wb-canvas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  overflow: auto;
+}
+.wb-canvas-both {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.wb-empty {
+  padding: 32px;
+  color: #7d828b;
+}
+.wb-scheme {
+  min-width: 0;
+  min-height: 100%;
+  background: var(--vesta-color-canvas);
+  color: var(--vesta-color-text);
+  font-family: var(--vesta-font-sans);
+  font-size: var(--vesta-text-md);
+}
+.wb-scheme[data-vesta-scheme='dark'] {
+  color-scheme: dark;
+}
+.wb-scheme[data-vesta-scheme='light'] {
+  color-scheme: light;
+}
+/*
+ * Backdrops stand in for the launcher's wallpaper, so transparent controls and
+ * text can be checked against something other than a flat canvas.
+ */
+.wb-scheme[data-wb-backdrop='gradient'][data-vesta-scheme='dark'] {
+  background:
+    linear-gradient(135deg, oklch(0.5 0.12 195) 0%, oklch(0.36 0.18 275) 48%, oklch(0.45 0.24 340) 100%);
+}
+.wb-scheme[data-wb-backdrop='gradient'][data-vesta-scheme='light'] {
+  background:
+    linear-gradient(135deg, oklch(0.88 0.1 190) 0%, oklch(0.78 0.12 275) 48%, oklch(0.84 0.14 340) 100%);
+}
+.wb-scheme[data-wb-backdrop='busy'][data-vesta-scheme='dark'] {
+  background:
+    radial-gradient(circle at 20% 25%, oklch(0.97 0.02 90) 0 70px, transparent 71px),
+    radial-gradient(circle at 78% 62%, oklch(0.95 0.04 200) 0 110px, transparent 111px),
+    radial-gradient(circle at 45% 90%, oklch(0.75 0.2 30) 0 60px, transparent 61px),
+    repeating-linear-gradient(45deg, oklch(0.1 0 0) 0 18px, oklch(0.88 0.02 260) 18px 36px),
+    oklch(0.1 0 0);
+}
+.wb-scheme[data-wb-backdrop='busy'][data-vesta-scheme='light'] {
+  background:
+    radial-gradient(circle at 20% 25%, oklch(0.2 0.02 270) 0 70px, transparent 71px),
+    radial-gradient(circle at 78% 62%, oklch(0.35 0.14 250) 0 110px, transparent 111px),
+    radial-gradient(circle at 45% 90%, oklch(0.9 0.18 95) 0 60px, transparent 61px),
+    repeating-linear-gradient(-45deg, oklch(0.98 0 0) 0 18px, oklch(0.2 0.02 260) 18px 36px),
+    oklch(0.98 0 0);
+}
+.wb-content {
+  padding: 16px 20px;
+}
+.wb-story {
+  margin-bottom: 32px;
+}
+.wb-story-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.wb-story-description {
+  margin: 0 0 12px;
+  opacity: 0.7;
+}
+.wb-padded {
+  padding: 16px;
+  border: 1px dashed color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 6px;
+}
+
+/* Story kit */
+.wb-kit-stack {
+  display: flex;
+  flex-direction: column;
+}
+.wb-kit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wb-kit-row-label {
+  flex: none;
+  width: 96px;
+}
+.wb-kit-row-items {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.wb-kit-label {
+  color: var(--vesta-color-text-muted, #888);
+  font-size: var(--vesta-text-xs, 11px);
+}
+.wb-kit-matrix {
+  display: grid;
+  align-items: center;
+  justify-items: start;
+  gap: 8px 16px;
+}
+.wb-kit-cell {
+  display: flex;
+  align-items: center;
+}
+.wb-kit-section {
+  margin-bottom: 24px;
+}
+.wb-kit-section-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.wb-kit-section-description {
+  margin: 0 0 10px;
+  color: var(--vesta-color-text-muted, #888);
+  font-size: var(--vesta-text-xs, 11px);
+}

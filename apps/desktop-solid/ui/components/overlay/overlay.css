@@ -1,0 +1,76 @@
+/*
+ * Overlay family — shared surface for popover, menu, tooltip, dialog and toast.
+ *
+ * Hooks:   [data-vesta=popover] [data-vesta=menu] [data-vesta=select-content]
+ *          [data-vesta=tooltip] [data-vesta=dialog] [data-vesta=toast]
+ * States:  data-expanded (opening/open), data-closed (closing)
+ * Knobs:   --overlay-bg, --overlay-fg, --overlay-border-color, --overlay-radius,
+ *          --overlay-shadow, --overlay-padding, --overlay-backdrop (backdrop-filter,
+ *          e.g. blur for translucent material themes), --overlay-enter, --overlay-exit
+ *
+ * Kobalte keeps closing content mounted until its exit *animation* ends, so
+ * motion uses keyframes (not transitions). Reduced motion zeroes the durations.
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='tooltip'], [data-vesta='dialog'], [data-vesta='toast']) {
+    --overlay-bg: var(--vesta-color-overlay);
+    --overlay-fg: var(--vesta-color-overlay-text);
+    --overlay-border-color: var(--vesta-color-border);
+    --overlay-radius: var(--vesta-radius-container);
+    --overlay-shadow: var(--vesta-shadow-lg);
+    --overlay-padding: var(--vesta-space-1);
+    --overlay-backdrop: none;
+    --overlay-enter: vesta-overlay-enter;
+    --overlay-exit: vesta-overlay-exit;
+
+    z-index: var(--vesta-z-dropdown);
+    padding: var(--overlay-padding);
+    border: var(--vesta-border-width) solid var(--overlay-border-color);
+    border-radius: var(--overlay-radius);
+    background: var(--overlay-bg);
+    box-shadow: var(--overlay-shadow);
+    backdrop-filter: var(--overlay-backdrop);
+    color: var(--overlay-fg);
+    font-family: var(--vesta-font-sans);
+    font-size: var(--vesta-text-md);
+    line-height: var(--vesta-leading-normal);
+    outline: none;
+    transform-origin: var(--kb-popper-content-transform-origin, var(--kb-menu-content-transform-origin, var(--kb-select-content-transform-origin, center)));
+  }
+
+  :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='tooltip'], [data-vesta='dialog'])[data-expanded] {
+    animation: var(--overlay-enter) var(--vesta-duration-normal) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='tooltip'], [data-vesta='dialog'], [data-vesta='toast'])[data-closed] {
+    animation: var(--overlay-exit) var(--vesta-duration-fast) var(--vesta-ease-standard) forwards;
+  }
+
+  @keyframes vesta-overlay-enter {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+
+  @keyframes vesta-overlay-exit {
+    to {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+
+  @keyframes vesta-fade-enter {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes vesta-fade-exit {
+    to {
+      opacity: 0;
+    }
+  }
+}

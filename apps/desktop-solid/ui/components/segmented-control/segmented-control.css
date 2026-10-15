@@ -1,0 +1,185 @@
+/*
+ * Segmented control — choose one value among a few options. A recessed track
+ * holds the items; a raised thumb slides under the selected one.
+ *
+ * Hooks:   [data-vesta=segmented-field] [data-vesta=field-label]
+ *          [data-vesta=segmented-control] (the track) [data-vesta=segmented-thumb]
+ *          [data-vesta=segmented-item] [data-vesta=segmented-icon]
+ *          [data-vesta=segmented-label]
+ * States:  data-size, data-fill, data-icon-only; on items: data-checked, data-disabled,
+ *          :hover, and the item containing a :focus-visible input
+ * Knobs:   --segmented-height, --segmented-padding, --segmented-radius,
+ *          --segmented-track-bg, --segmented-thumb-bg, --segmented-thumb-shadow,
+ *          --segmented-item-fg, --segmented-item-fg-hover, --segmented-item-fg-selected,
+ *          --segmented-item-padding-x, --segmented-item-gap, --segmented-font-size,
+ *          --segmented-icon-size
+ *
+ * Kobalte positions the thumb with an inline width/height/translate measured
+ * from the track, so the track carries no border: the thumb's hairline is
+ * drawn inside its own box-shadow instead.
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='segmented-field']) {
+    --segmented-height: var(--vesta-size-control-md);
+    --segmented-padding: 2px;
+    --segmented-radius: var(--vesta-radius-control);
+    --segmented-track-bg: var(--vesta-color-fill);
+    --segmented-thumb-bg: var(--vesta-color-surface-raised);
+    --segmented-thumb-shadow: var(--vesta-shadow-sm), inset 0 0 0 var(--vesta-border-width) var(--vesta-color-border);
+    --segmented-item-fg: var(--vesta-color-text-muted);
+    --segmented-item-fg-hover: var(--vesta-color-text);
+    --segmented-item-fg-selected: var(--vesta-color-text);
+    --segmented-item-padding-x: var(--vesta-space-2);
+    --segmented-item-gap: var(--vesta-space-1-5);
+    --segmented-font-size: var(--vesta-text-sm);
+    --segmented-icon-size: var(--vesta-size-icon-md);
+
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    align-self: flex-start;
+    gap: var(--vesta-space-1-5);
+    max-inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='segmented-field'][data-size='sm']) {
+    --segmented-height: var(--vesta-size-control-sm);
+    --segmented-item-padding-x: var(--vesta-space-1-5);
+    --segmented-item-gap: var(--vesta-space-1);
+    --segmented-icon-size: var(--vesta-size-icon-sm);
+  }
+
+  :where([data-vesta='segmented-field'][data-size='lg']) {
+    --segmented-height: var(--vesta-size-control-lg);
+    --segmented-item-padding-x: var(--vesta-space-3);
+    --segmented-font-size: var(--vesta-text-md);
+    --segmented-icon-size: var(--vesta-size-icon-lg);
+  }
+
+  :where([data-vesta='segmented-field'][data-size='md']) {
+    --segmented-font-size: var(--vesta-text-md);
+  }
+
+  :where([data-vesta='segmented-field'][data-fill]) {
+    display: flex;
+    align-items: stretch;
+    align-self: auto;
+    inline-size: 100%;
+  }
+
+  /* The root is the track; it is also the thumb's offset parent. */
+  :where([data-vesta='segmented-control']) {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    gap: 0;
+    box-sizing: border-box;
+    block-size: var(--segmented-height);
+    max-inline-size: 100%;
+    padding: var(--segmented-padding);
+    border-radius: var(--segmented-radius);
+    background: var(--segmented-track-bg);
+    color: var(--segmented-item-fg);
+    font-size: var(--segmented-font-size);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='segmented-control'][data-fill]) {
+    display: flex;
+    inline-size: 100%;
+  }
+
+  :where([data-vesta='segmented-thumb']) {
+    position: absolute;
+    inset: 0 auto auto 0;
+    border-radius: calc(var(--segmented-radius) - var(--segmented-padding));
+    background: var(--segmented-thumb-bg);
+    box-shadow: var(--segmented-thumb-shadow);
+    pointer-events: none;
+    transition-property: transform, inline-size, block-size;
+    transition-duration: var(--vesta-duration-normal);
+    transition-timing-function: var(--vesta-ease-standard);
+  }
+
+  /* Kobalte zeroes the duration inline while the track resizes. */
+  :where([data-vesta='segmented-thumb'][data-resizing='true']) {
+    transition-duration: 0ms;
+  }
+
+  :where([data-vesta='segmented-item']) {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: var(--segmented-item-gap);
+    min-inline-size: 0;
+    padding-inline: var(--segmented-item-padding-x);
+    border-radius: calc(var(--segmented-radius) - var(--segmented-padding));
+    color: var(--segmented-item-fg);
+    font-weight: var(--vesta-weight-medium);
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+    transition: color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='segmented-control'][data-fill] [data-vesta='segmented-item']) {
+    flex: 1 1 0;
+  }
+
+  :where([data-vesta='segmented-item']:not([data-disabled], [data-checked])):hover {
+    --segmented-item-fg: var(--segmented-item-fg-hover);
+  }
+
+  :where([data-vesta='segmented-item'][data-checked]) {
+    --segmented-item-fg: var(--segmented-item-fg-selected);
+  }
+
+  /* The native radio is visually hidden, so the ring moves to the item. */
+  :where([data-vesta='segmented-item']:has(input:focus-visible)) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='segmented-icon']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--segmented-icon-size);
+    block-size: var(--segmented-icon-size);
+  }
+
+  :where([data-vesta='segmented-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='segmented-label']) {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: inherit;
+  }
+
+  /* Icon-only: the label stays in the DOM as the accessible name. */
+  :where([data-vesta='segmented-control'][data-icon-only] [data-vesta='segmented-label']) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='segmented-control'][data-icon-only] [data-vesta='segmented-item']) {
+    min-inline-size: calc(var(--segmented-height) - var(--segmented-padding) * 2);
+    padding-inline: var(--vesta-space-1-5);
+  }
+}

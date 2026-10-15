@@ -1,0 +1,136 @@
+/*
+ * Menu — action list in an overlay. Shares the overlay surface knobs.
+ *
+ * Hooks:   [data-vesta=menu] [data-vesta=menu-item] [data-vesta=menu-item-icon]
+ *          [data-vesta=menu-item-label] [data-vesta=menu-item-shortcut]
+ *          [data-vesta=menu-item-chevron] [data-vesta=menu-item-indicator]
+ *          [data-vesta=menu-group] [data-vesta=menu-group-label]
+ *          separators: [data-vesta=separator] (../separator)
+ * States:  item: data-tone, data-highlighted, data-expanded (open submenu),
+ *          data-checked, data-disabled
+ * Knobs:   --menu-min-width, --menu-item-height, --menu-item-padding-x,
+ *          --menu-item-radius, --menu-item-highlight, --menu-icon-size, --menu-icon-color
+ *
+ * Select (../select) reuses these rules for its listbox: [data-vesta=select-content]
+ * and [data-vesta=select-item] share the menu container and item styling, so
+ * every overlay list looks and behaves the same.
+ *
+ * Items are a three-column grid (icon · label · shortcut). The icon column only
+ * opens when some item in this menu has an icon or check indicator, so plain
+ * menus are not indented and mixed menus stay aligned.
+ */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='menu'], [data-vesta='select-content']) {
+    --menu-min-width: 180px;
+    --menu-item-height: var(--vesta-size-control-sm);
+    --menu-item-padding-x: var(--vesta-space-2);
+    --menu-item-radius: var(--vesta-radius-sm);
+    --menu-icon-size: var(--vesta-size-icon-sm);
+    --menu-icon-column: 0px;
+    --menu-icon-gap: 0px;
+
+    min-inline-size: var(--menu-min-width);
+    max-block-size: var(--kb-popper-content-available-height, 80vh);
+    overflow-y: auto;
+  }
+
+  /* Submenus are portalled separately, so this only sees this menu's items.
+     Checkbox items always reserve the indicator column. */
+  :where([data-vesta='menu']:has([data-vesta='menu-item-icon']:not(:empty), [role='menuitemcheckbox']), [data-vesta='select-content']) {
+    --menu-icon-column: var(--menu-icon-size);
+    --menu-icon-gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='menu-item'], [data-vesta='select-item']) {
+    /* Accent fill on highlight — matches launcher select/menu hover. */
+    --menu-item-highlight: var(--vesta-color-accent);
+    --menu-item-highlight-fg: var(--vesta-color-on-accent);
+    --menu-icon-color: var(--tone-text);
+
+    display: grid;
+    grid-template-columns: calc(var(--menu-icon-column) + var(--menu-icon-gap)) minmax(0, 1fr) auto;
+    align-items: center;
+    min-block-size: var(--menu-item-height);
+    padding-inline: var(--menu-item-padding-x);
+    border-radius: var(--menu-item-radius);
+    color: var(--tone-text);
+    cursor: default;
+    outline: none;
+    user-select: none;
+  }
+
+  :where([data-vesta='menu-item'][data-tone='neutral'], [data-vesta='select-item']) {
+    --menu-icon-color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='menu-item'], [data-vesta='select-item'])[data-highlighted],
+  :where([data-vesta='menu-item'])[data-expanded] {
+    background: var(--menu-item-highlight);
+    color: var(--menu-item-highlight-fg);
+    --menu-icon-color: var(--menu-item-highlight-fg);
+  }
+
+  :where([data-vesta='menu-item'], [data-vesta='select-item'])[data-highlighted] :where(*),
+  :where([data-vesta='menu-item'])[data-expanded] :where(*) {
+    color: inherit;
+  }
+
+  :where([data-vesta='menu-item-icon'], [data-vesta='select-item-icon']) {
+    display: inline-flex;
+    inline-size: var(--menu-icon-column);
+    block-size: var(--menu-icon-size);
+    color: var(--menu-icon-color);
+  }
+
+  :where([data-vesta='menu-item-icon'], [data-vesta='select-item-icon']) :where(svg),
+  :where([data-vesta='menu-item-chevron']) :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='menu-item-indicator'], [data-vesta='select-item-indicator']) {
+    display: inline-flex;
+    inline-size: 100%;
+    block-size: 100%;
+    color: var(--tone-text);
+  }
+
+  :where([data-vesta='menu-item-label'], [data-vesta='select-item-label']) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='menu-item-shortcut']) {
+    margin-inline-start: var(--vesta-space-4);
+    color: var(--vesta-color-text-subtle);
+    font-family: inherit;
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='menu-item-chevron']) {
+    display: inline-flex;
+    inline-size: var(--menu-icon-size);
+    block-size: var(--menu-icon-size);
+    margin-inline-start: var(--vesta-space-4);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='menu-group-label']) {
+    padding-block: var(--vesta-space-1) var(--vesta-space-0-5);
+    padding-inline: calc(var(--menu-item-padding-x) + var(--menu-icon-column) + var(--menu-icon-gap)) var(--menu-item-padding-x);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  /* Menu separators stretch edge-to-edge; stronger rule so they read on tinted overlays. */
+  :where([data-vesta='menu'] [data-vesta='separator'], [data-vesta='select-content'] [data-vesta='separator']) {
+    --separator-color: var(--vesta-color-border-strong);
+
+    margin-block: var(--vesta-space-1);
+    margin-inline: calc(var(--overlay-padding) * -1);
+  }
+}

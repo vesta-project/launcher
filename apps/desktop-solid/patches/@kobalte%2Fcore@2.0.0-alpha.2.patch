@@ -1,0 +1,30 @@
+diff --git a/dist/create-dom-collection/F5MPGch0.js b/dist/create-dom-collection/F5MPGch0.js
+index a915aa33b221ba033856b483e99fb1ad5a38e14f..afea14725afb8955e6c2802fede85f1ad57e3e8a 100644
+--- a/dist/create-dom-collection/F5MPGch0.js
++++ b/dist/create-dom-collection/F5MPGch0.js
+@@ -91,7 +91,9 @@ function createSortBasedOnDOMPosition(items, setItems) {
+ //#endregion
+ //#region src/primitives/create-dom-collection/create-dom-collection.ts
+ function createDomCollection(props = {}) {
+-	const [items, setItems] = createSignal([]);
++	// Items unregister from their cleanup, i.e. during disposal; Solid 2 rejects
++	// that write unless the signal opts in (REACTIVE_WRITE_IN_OWNED_SCOPE halts the app).
++	const [items, setItems] = createSignal([], { ownedWrite: true });
+ 	createSortBasedOnDOMPosition(items, setItems);
+ 	createEffect(() => items(), (currentItems) => {
+ 		props.onItemsChange?.(currentItems);
+diff --git a/dist/create-dom-collection/F5MPGch0.jsx b/dist/create-dom-collection/F5MPGch0.jsx
+index a915aa33b221ba033856b483e99fb1ad5a38e14f..afea14725afb8955e6c2802fede85f1ad57e3e8a 100644
+--- a/dist/create-dom-collection/F5MPGch0.jsx
++++ b/dist/create-dom-collection/F5MPGch0.jsx
+@@ -91,7 +91,9 @@ function createSortBasedOnDOMPosition(items, setItems) {
+ //#endregion
+ //#region src/primitives/create-dom-collection/create-dom-collection.ts
+ function createDomCollection(props = {}) {
+-	const [items, setItems] = createSignal([]);
++	// Items unregister from their cleanup, i.e. during disposal; Solid 2 rejects
++	// that write unless the signal opts in (REACTIVE_WRITE_IN_OWNED_SCOPE halts the app).
++	const [items, setItems] = createSignal([], { ownedWrite: true });
+ 	createSortBasedOnDOMPosition(items, setItems);
+ 	createEffect(() => items(), (currentItems) => {
+ 		props.onItemsChange?.(currentItems);

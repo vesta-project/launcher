@@ -1,0 +1,66 @@
+/*
+ * Choice — shared layout for single-value toggles (checkbox, switch). The
+ * control sits in column 1, the label in column 2; description and error stack
+ * under the label. Each component supplies its own control size through
+ * --choice-control-size.
+ *
+ * Hooks:   [data-vesta=checkbox|switch] [data-vesta=checkbox-label|switch-label]
+ *          [data-vesta=field-description] [data-vesta=field-error]
+ * States:  on root: data-size, data-tone, data-checked, data-invalid,
+ *          data-disabled, data-readonly
+ * Knobs:   --choice-font-size, --choice-gap
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='checkbox'], [data-vesta='switch']) {
+    --choice-font-size: var(--vesta-text-md);
+    --choice-gap: var(--vesta-space-2);
+
+    display: inline-grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--choice-gap);
+    row-gap: var(--vesta-space-0-5);
+    align-items: start;
+    max-inline-size: 100%;
+    color: var(--vesta-color-text);
+    font-size: var(--choice-font-size);
+    line-height: var(--vesta-leading-normal);
+    cursor: default;
+  }
+
+  :where([data-vesta='checkbox'][data-size='sm'], [data-vesta='switch'][data-size='sm']) {
+    --choice-font-size: var(--vesta-text-sm);
+  }
+
+  /*
+   * The control is centred on the label's first line. The line box height is
+   * computed from the same knobs the root uses, so the two always agree.
+   */
+  :where([data-vesta='checkbox-control'], [data-vesta='switch-track']) {
+    grid-column: 1;
+    grid-row: 1;
+    margin-block-start: calc(
+      (var(--choice-font-size) * var(--vesta-leading-normal) - var(--choice-control-size)) / 2
+    );
+  }
+
+  :where([data-vesta='checkbox-label'], [data-vesta='switch-label']) {
+    grid-column: 2;
+    grid-row: 1;
+    min-inline-size: 0;
+    user-select: none;
+  }
+
+  :where([data-vesta='checkbox'], [data-vesta='switch']) > :where([data-vesta='field-description'], [data-vesta='field-error']) {
+    grid-column: 2;
+  }
+
+  /* The native input is visually hidden, so the ring moves to the visible control. */
+  :where([data-vesta='checkbox']:has(input:focus-visible)) :where([data-vesta='checkbox-control']),
+  :where([data-vesta='switch']:has(input:focus-visible)) :where([data-vesta='switch-track']) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+}

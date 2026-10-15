@@ -1,0 +1,129 @@
+/*
+ * Field — shared anatomy for every labelled form control (text field, select,
+ * number field…). Each component renders the same hooks so one theme rule
+ * restyles all of them.
+ *
+ * Hooks:   [data-vesta=field] [data-vesta=field-label] [data-vesta=field-control]
+ *          [data-vesta=field-input] [data-vesta=field-icon]
+ *          [data-vesta=field-description] [data-vesta=field-error]
+ * States:  on field: data-size, data-invalid, data-disabled, data-readonly, data-required
+ * Knobs:   --field-height, --field-padding-x, --field-gap, --field-radius,
+ *          --field-font-size, --field-icon-size, --field-bg, --field-fg,
+ *          --field-border-color, --field-border-color-hover
+ */
+/* Repeated so the order holds even if this file loads first. */
+@layer ui.tokens, ui.base, ui.components;
+
+@layer ui.components {
+  :where([data-vesta='field']) {
+    --field-height: var(--vesta-size-control-md);
+    --field-padding-x: var(--vesta-space-2);
+    --field-gap: var(--vesta-space-1-5);
+    --field-radius: var(--vesta-radius-control);
+    --field-font-size: var(--vesta-text-md);
+    --field-icon-size: var(--vesta-size-icon-md);
+    --field-bg: var(--vesta-color-surface-sunken);
+    --field-fg: var(--vesta-color-text);
+    --field-border-color: var(--vesta-color-border);
+    --field-border-color-hover: var(--vesta-color-border-strong);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1-5);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='field'][data-size='sm']) {
+    --field-height: var(--vesta-size-control-sm);
+    --field-padding-x: var(--vesta-space-1-5);
+    --field-gap: var(--vesta-space-1);
+    --field-font-size: var(--vesta-text-sm);
+    --field-icon-size: var(--vesta-size-icon-sm);
+  }
+
+  :where([data-vesta='field'][data-size='lg']) {
+    --field-height: var(--vesta-size-control-lg);
+    --field-padding-x: var(--vesta-space-3);
+    --field-gap: var(--vesta-space-2);
+    --field-icon-size: var(--vesta-size-icon-lg);
+  }
+
+  :where([data-vesta='field'][data-invalid]) {
+    --field-border-color: var(--vesta-color-danger-border);
+    --field-border-color-hover: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='field-label']) {
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='field-control']) {
+    display: flex;
+    align-items: center;
+    gap: var(--field-gap);
+    min-block-size: var(--field-height);
+    padding-inline: var(--field-padding-x);
+    border: var(--vesta-border-width) solid var(--field-border-color);
+    border-radius: var(--field-radius);
+    background: var(--field-bg);
+    color: var(--field-fg);
+    font-size: var(--field-font-size);
+    transition: border-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='field']:not([data-disabled], [data-readonly])) :where([data-vesta='field-control']):hover {
+    border-color: var(--field-border-color-hover);
+  }
+
+  /* The ring belongs to the box, so icons and adornments sit inside it. */
+  :where([data-vesta='field-control']):has(:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta='field-input']) {
+    flex: 1;
+    min-inline-size: 0;
+    align-self: stretch;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='field-input'])::placeholder {
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='field-icon']) {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--field-icon-size);
+    block-size: var(--field-icon-size);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='field-icon']) > :where(svg) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='field-description']) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
+  }
+
+  :where([data-vesta='field-error']) {
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
+  }
+}
