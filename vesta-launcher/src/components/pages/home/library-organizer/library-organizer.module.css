@@ -161,6 +161,7 @@
 	animation: wiggle 520ms ease-in-out infinite alternate;
 }
 .folderTile {
+	display: block;
 	position: relative;
 	width: 100%;
 	height: 100%;
