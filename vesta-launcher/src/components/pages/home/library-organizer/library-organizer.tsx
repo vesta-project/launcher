@@ -762,7 +762,8 @@ function MovableCard(
 		if (props.groupPending === props.instance.id) return { state: "pending" };
 		const state = dropTargetForZoneState(dropState());
 		if (state === "ready") return { state, label: t("resource-drop-add") };
-		if (state === "rejected") return { state, label: t("resource-drop-files-hint") };
+		if (state === "rejected")
+			return { state, label: t("resource-drop-files-hint") };
 	};
 	const move = (groupId: string | null) => {
 		props.mutate(() =>

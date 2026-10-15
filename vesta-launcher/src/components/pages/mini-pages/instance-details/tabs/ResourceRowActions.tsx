@@ -4,17 +4,17 @@ import ReloadIcon from "@assets/icons/actions/reload.svg";
 import MoreIcon from "@assets/icons/content/ellipsis-v.svg";
 import type { ResourceVersion } from "@stores/resources";
 import {
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+} from "@ui/context-menu/context-menu";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@ui/dropdown-menu/dropdown-menu";
-import {
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-} from "@ui/context-menu/context-menu";
 import { Show } from "solid-js";
 import styles from "../instance-details.module.css";
 

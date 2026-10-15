@@ -8,10 +8,9 @@ import SearchIcon from "@assets/icons/content/search.svg";
 import RightArrowIcon from "@assets/icons/navigation/arrow-forward.svg";
 import { flexRender } from "@tanstack/solid-table";
 import { createVirtualizer } from "@tanstack/solid-virtual";
-import { ContextMenu, ContextMenuTrigger } from "@ui/context-menu/context-menu";
-import type { JSX } from "solid-js";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
+import { ContextMenu, ContextMenuTrigger } from "@ui/context-menu/context-menu";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -32,6 +31,7 @@ import {
 	RESOURCES_FILTER_COMPACT_WIDTH,
 	RESOURCES_TABLE_COMPACT_WIDTH,
 } from "@utils/media-query";
+import type { JSX } from "solid-js";
 import {
 	createEffect,
 	createMemo,

@@ -51,11 +51,16 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.96.0
+
       - id: bump
         name: Bump Version and Tag
         run: |
           echo "::group::Bumping Version"
           bun run version:bump ${{ github.event.inputs.bump }}
+          cargo update --workspace
           AFTER=$(jq -r '.version' ./vesta-launcher/src-tauri/tauri.conf.json)
 
           if [ -z "$AFTER" ] || [ "$AFTER" == "null" ]; then

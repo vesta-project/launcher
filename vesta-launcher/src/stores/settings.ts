@@ -11,7 +11,6 @@ import {
 	systemMemory,
 } from "@stores/settings-cache";
 import { getVersion } from "@tauri-apps/api/app";
-import { t } from "~/localization";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -45,6 +44,7 @@ import {
 	untrack,
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
+import { t } from "~/localization";
 import {
 	applyTheme,
 	type ColorModePreference,
