@@ -822,6 +822,23 @@ pub fn get_accounts() -> Result<Vec<Account>, String> {
     Ok(accounts)
 }
 
+/// Display data only: used by startup snapshots and the rewrite request cache.
+#[tauri::command]
+pub async fn get_account_summaries() -> Result<Vec<crate::models::account::AccountSummary>, String> {
+    tauri::async_runtime::spawn_blocking(load_account_summaries)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+pub(crate) fn load_account_summaries() -> Result<Vec<crate::models::account::AccountSummary>, String> {
+    use crate::models::account::AccountSummary;
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    account
+        .select(AccountSummary::as_select())
+        .load(&mut conn)
+        .map_err(|e| e.to_string())
+}
+
 /// Get active account (first active one found)
 #[tauri::command]
 pub fn get_active_account() -> Result<Option<Account>, String> {

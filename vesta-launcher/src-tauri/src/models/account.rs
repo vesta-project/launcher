@@ -31,6 +31,18 @@ pub struct Account {
     pub theme_background_opacity: Option<i32>,
 }
 
+/// Display-only account projection. Never contains credentials or skin payloads.
+#[derive(Selectable, Queryable, Serialize, Debug, Clone)]
+#[diesel(table_name = account)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct AccountSummary {
+    pub uuid: String,
+    pub username: String,
+    pub account_type: String,
+    pub is_active: bool,
+    pub is_expired: bool,
+}
+
 /// New account (without id for insertion)
 #[derive(Insertable, Serialize, Deserialize, Debug, Clone)]
 #[diesel(table_name = account)]
@@ -106,5 +118,39 @@ impl Default for NewAccount {
             theme_window_effect: None,
             theme_background_opacity: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::AccountSummary;
+
+    #[test]
+    fn account_display_snapshot_has_only_public_fields() {
+        let summary = AccountSummary {
+            uuid: "player-id".into(),
+            username: "Player".into(),
+            account_type: "Microsoft".into(),
+            is_active: true,
+            is_expired: false,
+        };
+        let value = serde_json::to_value(summary).unwrap();
+        let mut keys: Vec<_> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "account_type",
+                "is_active",
+                "is_expired",
+                "username",
+                "uuid"
+            ]
+        );
     }
 }

@@ -48,9 +48,24 @@ fn build_main_window(
     os: &str,
     config: &crate::utils::config::AppConfig,
 ) -> Result<tauri::WebviewWindow, tauri::Error> {
+    // A small local projection avoids a blank account rail before the first IPC.
+    // Failure is recoverable: the frontend retries after rendering. No network here.
+    let snapshot_started = std::time::Instant::now();
+    let account_summaries = crate::auth::load_account_summaries()
+        .map_err(|error| {
+            log::warn!("Unable to prepare account display snapshot: {}", error);
+            error
+        })
+        .ok();
+    log::debug!(
+        "Account display snapshot prepared in {:?}",
+        snapshot_started.elapsed()
+    );
     let bootstrap = serde_json::json!({
+        "snapshot_id": uuid::Uuid::new_v4().to_string(),
         "os": os,
         "config": config,
+        "account_summaries": account_summaries,
     });
     let native_file_drop_probe = native_file_drop_probe_enabled();
     let initialization_script = format!(

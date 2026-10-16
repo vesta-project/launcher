@@ -216,6 +216,7 @@ pub fn run(context: tauri::Context) {
             auth::start_login,
             auth::cancel_login,
             auth::get_accounts,
+            auth::get_account_summaries,
             auth::get_active_account,
             auth::set_active_account,
             auth::start_guest_session,

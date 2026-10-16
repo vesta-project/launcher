@@ -1,15 +1,10 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onSettled } from 'solid-js';
+import { CacheInvalidatedError, RequestCache } from '../../platform/cache/request-cache';
 
-/** The slice of the backend's Account the shell needs. */
-export interface Account {
-  uuid: string;
-  username: string;
-  account_type: string;
-  is_active: boolean;
-  is_expired: boolean;
-}
+import { takeAccountBootstrap, type Account } from './account-bootstrap';
+export type { Account } from './account-bootstrap';
 
 export const ACCOUNT_TYPE_GUEST = 'Guest';
 
@@ -22,20 +17,38 @@ const fixtures: Account[] = [
   { uuid: 'f84c6a790a4e45e0879bcd49ebd4c4e2', username: 'OldAccount', account_type: 'Microsoft', is_active: false, is_expired: true },
 ];
 
-const [accounts, setAccounts] = createSignal<Account[]>(hasWindow && isTauri() ? [] : fixtures, { name: 'accounts' });
-const [loaded, setLoaded] = createSignal(!(hasWindow && isTauri()), { name: 'accountsLoaded' });
+const native = hasWindow && isTauri();
+const accountCache = new RequestCache<Account[]>({ maxEntries: 1, staleTimeMs: 30_000, retentionMs: 300_000 });
+const headCache = new RequestCache<string>({ maxEntries: 128, staleTimeMs: 300_000, retentionMs: 1_800_000 });
+const ACCOUNT_KEY = 'account-summaries';
+
+// This injected snapshot is display-only. Never store credentials in frontend caches.
+function initialAccounts() {
+  if (!native) return undefined;
+  try {
+    return takeAccountBootstrap(
+      (window as Window & { __VESTA_BOOTSTRAP__?: Parameters<typeof takeAccountBootstrap>[0] }).__VESTA_BOOTSTRAP__,
+      window.sessionStorage,
+    );
+  } catch { return undefined; }
+}
+const bootstrap = initialAccounts();
+if (bootstrap) accountCache.seed(ACCOUNT_KEY, bootstrap, false);
+const [accounts, setAccounts] = createSignal<Account[]>(native ? bootstrap ?? [] : fixtures, { name: 'accounts' });
+const [loaded, setLoaded] = createSignal(!native || !!bootstrap, { name: 'accountsLoaded' });
 
 export { accounts, loaded as accountsLoaded };
-
+export const accountCacheMetrics = () => ({ accounts: { ...accountCache.metrics }, heads: { ...headCache.metrics } });
 export const activeAccount = (): Account | undefined => accounts().find((account) => account.is_active) ?? accounts()[0];
 
-/** Fetch accounts from the backend. Safe to call repeatedly. */
-export async function refreshAccounts(): Promise<void> {
-  if (!isTauri()) return;
+/** Explicit refresh invalidates once; routine reads reuse fresh results and concurrent IPC. */
+export async function refreshAccounts(force = false): Promise<void> {
+  if (!native) return;
+  if (force) accountCache.invalidate(ACCOUNT_KEY);
   try {
-    setAccounts(await invoke<Account[]>('get_accounts'));
+    await accountCache.read(ACCOUNT_KEY, () => invoke<Account[]>('get_account_summaries'));
   } catch (error) {
-    console.error('Failed to load accounts:', error);
+    if (!(error instanceof CacheInvalidatedError)) console.error('Failed to load accounts:', error);
   } finally {
     setLoaded(true);
   }
@@ -47,7 +60,7 @@ export async function switchAccount(uuid: string): Promise<void> {
     return;
   }
   await invoke('set_active_account', { targetUuid: uuid });
-  await refreshAccounts();
+  await refreshAccounts(true);
 }
 
 export async function removeAccount(uuid: string): Promise<void> {
@@ -56,56 +69,68 @@ export async function removeAccount(uuid: string): Promise<void> {
     return;
   }
   await invoke('remove_account', { targetUuid: uuid });
-  await refreshAccounts();
+  headCache.invalidate(uuid.replaceAll('-', ''), true);
+  await refreshAccounts(true);
 }
 
 export async function addAccount(): Promise<void> {
   if (isTauri()) await invoke('start_login');
 }
 
-/** Keep the list fresh while the shell is mounted. Call once from the shell. */
+/** Keep all window listeners within the shell lifetime, including late registrations. */
 export function useAccountSync() {
-  if (!hasWindow || !isTauri()) return;
-  void refreshAccounts();
-  const stops: (() => void)[] = [];
-  onCleanup(() => stops.forEach((stop) => stop()));
-  void listen<{ field: string }>('config-updated', (event) => {
-    if (event.payload?.field === 'active_account_uuid') void refreshAccounts();
-  }).then((stop) => stops.push(stop));
+  if (!native) return;
+  onSettled(() => {
+    let disposed = false;
+    const stops: (() => void)[] = [];
+    const retain = (stop: () => void) => { if (disposed) stop(); else stops.push(stop); };
+    const refresh = () => { if (!disposed) void refreshAccounts(); };
+    window.addEventListener('focus', refresh);
+    retain(accountCache.subscribe(ACCOUNT_KEY, (snapshot) => {
+      if (snapshot.hasData) { setAccounts(snapshot.data!); setLoaded(true); }
+    }));
+    // Attach invalidation before the initial read to close the subscription/startup gap.
+    void Promise.all([
+      listen<{ field: string }>('config-updated', (event) => {
+        if (!disposed && event.payload?.field === 'active_account_uuid') void refreshAccounts(true);
+      }).then(retain),
+      listen('core://accounts-changed', () => {
+        if (!disposed) void refreshAccounts(true);
+      }).then(retain),
+      listen('core://account-heads-updated', () => {
+        if (disposed) return;
+        headCache.invalidateAll();
+        setHeadVersion((version) => version + 1);
+      }).then(retain),
+    ]).catch((error: unknown) => console.error('Account event subscription failed:', error))
+      .finally(refresh);
+    return () => {
+      disposed = true;
+      window.removeEventListener('focus', refresh);
+      stops.forEach((stop) => stop());
+    };
+  });
 }
 
+let headRevision = 0;
 const [headVersion, setHeadVersion] = createSignal(0, { name: 'headVersion' });
-if (hasWindow && isTauri()) {
-  void listen('core://account-heads-updated', () => setHeadVersion((version) => version + 1));
-}
 
-/**
- * URL of a player's head image, or undefined while loading or when unavailable.
- * The backend downloads and caches heads; the file is served through the asset protocol.
- */
+/** Rust owns/downloads head files. Only their asset URLs are reused here. */
 export function usePlayerHead(uuid: () => string | undefined) {
   const [url, setUrl] = createSignal<string | undefined>(undefined, { name: 'headUrl' });
-
-  let latest = 0;
-  const load = async (id: string | undefined, version: number) => {
-    const request = ++latest;
-    if (!id || !isTauri()) return setUrl(undefined);
-    try {
-      const path = await invoke<string>('get_player_head_path', { playerUuid: id, forceDownload: false });
-      // A newer request started while this one was in flight; drop the stale result.
-      if (request === latest) setUrl(`${convertFileSrc(path)}?t=${version}`);
-    } catch (error) {
-      console.error('Failed to load player head:', error);
-      if (request === latest) setUrl(undefined);
-    }
-  };
-
   createEffect(
-    () => ({ id: uuid(), version: headVersion() }),
-    ({ id, version }) => {
-      void load(id, version);
+    () => ({ id: uuid()?.replaceAll('-', ''), version: headVersion() }),
+    ({ id }) => {
+      if (!id || !native) { setUrl(undefined); return; }
+      const stop = headCache.subscribe(id, (snapshot) => setUrl(snapshot.data));
+      void headCache.read(id, async () => {
+        const path = await invoke<string>('get_player_head_path', { playerUuid: id, forceDownload: false });
+        return `${convertFileSrc(path)}?v=${Date.now()}-${++headRevision}`;
+      }).catch((error: unknown) => {
+        if (!(error instanceof CacheInvalidatedError)) console.error('Failed to load player head:', error);
+      });
+      return stop;
     },
   );
-
   return url;
 }
