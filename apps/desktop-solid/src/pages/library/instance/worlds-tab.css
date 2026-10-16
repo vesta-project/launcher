@@ -1,0 +1,148 @@
+@layer launcher {
+  :where([data-vesta="worlds"]) {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+  .world-search {
+    flex: 1;
+    min-inline-size: 140px;
+  }
+  :where([data-vesta="world-list"]) {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: var(--vesta-space-2) var(--instance-gutter)
+      var(--instance-pane-padding-block);
+    scrollbar-width: thin;
+  }
+  :where([data-vesta="world-row"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding-block: var(--vesta-space-2);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="world-open"]) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+    padding: var(--vesta-space-1);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="world-open"]:hover) {
+    background: var(--vesta-color-fill);
+  }
+  :where([data-vesta="world-thumb"]) {
+    flex: none;
+    inline-size: 64px;
+    block-size: 48px;
+    object-fit: cover;
+    border-radius: var(--vesta-radius-sm);
+  }
+  :where([data-vesta="world-copy"]) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    gap: var(--vesta-space-1);
+  }
+  :where([data-vesta="world-copy"] strong) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--vesta-weight-semibold);
+  }
+  :where([data-vesta="world-copy"] > span) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="world-copy"] > span, [data-vesta="world-meta"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="world-meta"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    text-align: end;
+  }
+  :where([data-vesta="world-detail"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+  /* World header: identity strip above the datapack list, raised off the chrome. */
+  :where([data-vesta="world-detail-header"]) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--instance-gutter) var(--vesta-space-3)
+      calc(var(--instance-gutter) - var(--vesta-space-2));
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--vesta-color-surface-raised);
+  }
+  :where([data-vesta="world-detail-header"] > img) {
+    flex: none;
+    inline-size: 64px;
+    block-size: 40px;
+    border-radius: 6px;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px var(--vesta-color-border-strong);
+  }
+  :where([data-vesta="world-detail-copy"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+  :where([data-vesta="world-detail-copy"] h2) {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-vesta="world-detail-copy"] > span) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    white-space: nowrap;
+  }
+  :where([data-vesta="world-detail-section"]) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="world-transfer-warning"]) {
+    margin-block: var(--vesta-space-3);
+    color: var(--vesta-color-warning-text);
+  }
+  :where([data-vesta="world-detail"] > [data-vesta="resources"]) {
+    flex: 1;
+    block-size: auto;
+  }
+}

@@ -1,0 +1,389 @@
+/*
+ * Resources tab: toolbar over a fixed-layout table that always fits the pane.
+ * Hooks: [data-vesta=resources] -toolbar -tools -selection -list
+ *        [data-vesta=resource-identity] -copy -title -sub -kind -file -version
+ *        [data-vesta=resource-group] -group-meta -group-count
+ * States: toolbar: data-selecting; kind: data-kind
+ * Knobs: --resource-row-height, --resource-icon-size, --resource-pack-tint
+ *
+ * Rows are exactly icon + padding tall. Modpack resources sit in a tinted group with
+ * an accent rail, so it is always clear what the pack owns and what you added.
+ */
+@layer launcher {
+  :where([data-vesta="resources"]) {
+    --resource-row-height: 44px;
+    --resource-icon-size: 28px;
+    --resource-pack-tint: color-mix(
+      in oklab,
+      var(--vesta-color-accent) 7%,
+      transparent
+    );
+
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  :where([data-vesta="resources-toolbar"]) {
+    overflow: hidden;
+    transition: background-color var(--vesta-duration-normal)
+      var(--vesta-ease-standard);
+  }
+
+  :where(.resources-bar) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    animation: resources-bar-in 180ms var(--vesta-ease-out) both;
+  }
+
+  /* Selecting tints the whole strip, so the mode change is obvious at a glance. */
+  :where([data-vesta="resources-toolbar"][data-selecting]) {
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-accent) 14%,
+      var(--instance-bar-bg)
+    );
+  }
+
+  :where([data-vesta="resources-selection"] > strong) {
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="resources-selection-actions"]) {
+    display: flex;
+    gap: var(--vesta-space-2);
+    margin-inline-start: auto;
+  }
+
+  @keyframes resources-bar-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+  }
+
+  .resources-type {
+    flex: none;
+    inline-size: 140px;
+  }
+
+  .resources-search {
+    flex: 1;
+    min-inline-size: 120px;
+  }
+
+  :where([data-vesta="resources-list"]) {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding-block-end: var(--instance-pane-padding-block);
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+
+  /* ---- Table ---- */
+  .resource-table {
+    --table-header-bg: var(--vesta-color-surface);
+    --table-cell-padding-y: 0;
+    --table-cell-padding-x: var(--vesta-space-2);
+    --table-row-hover-bg: var(--vesta-color-fill);
+
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .resource-table [data-vesta="table"] {
+    inline-size: 100%;
+    table-layout: fixed;
+  }
+
+  /* The outer columns carry the gutter, so the table lines up with the toolbar. */
+  .resource-table col.col-check {
+    inline-size: calc(var(--instance-gutter) + 24px);
+  }
+
+  .resource-table col.col-version {
+    inline-size: 128px;
+  }
+
+  .resource-table col.col-size {
+    inline-size: 84px;
+  }
+
+  .resource-table col.col-enabled {
+    inline-size: 56px;
+  }
+
+  .resource-table col.col-menu {
+    inline-size: calc(var(--instance-gutter) + 32px);
+  }
+
+  .resource-table .col-check {
+    padding-inline-start: var(--instance-gutter);
+  }
+
+  .resource-table .col-menu {
+    padding-inline-end: var(--instance-gutter);
+    text-align: end;
+  }
+
+  .resource-table [data-vesta="table-head"] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    block-size: 32px;
+    padding-block: 0;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-align: start;
+    text-transform: uppercase;
+  }
+
+  .resource-table [data-vesta="table-head"][data-numeric] {
+    text-align: end;
+  }
+
+  .resource-table .resource-row [data-vesta="table-cell"] {
+    block-size: var(--resource-row-height);
+    vertical-align: middle;
+  }
+
+  .resource-table .row-selected,
+  .resource-table .row-selected:hover {
+    background: color-mix(in oklab, var(--vesta-color-accent) 12%, transparent);
+  }
+
+  .resource-table
+    .row-disabled
+    :where([data-vesta="resource-identity"], .col-version > *, .col-size) {
+    opacity: 0.5;
+  }
+
+  .resource-table .col-version,
+  .resource-table .col-size {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="resource-identity"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="resource-identity"] > img) {
+    flex: none;
+    inline-size: var(--resource-icon-size);
+    block-size: var(--resource-icon-size);
+    border-radius: 6px;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px var(--vesta-color-border);
+  }
+
+  :where([data-vesta="resource-copy"]) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    line-height: 1.25;
+  }
+
+  :where([data-vesta="resource-title"], [data-vesta="resource-file"]) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="resource-title"]) {
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta="resource-sub"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+    min-inline-size: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  /* Kind tags: a colour per type, so a mixed list scans quickly. */
+  :where([data-vesta="resource-kind"]) {
+    --kind-hue: 250;
+
+    flex: none;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: oklch(0.6 0.12 var(--kind-hue) / 0.18);
+    color: oklch(0.8 0.1 var(--kind-hue));
+    font-size: 10px;
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 15px;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta="resource-kind"][data-kind="resourcepack"]) {
+    --kind-hue: 150;
+  }
+
+  :where([data-vesta="resource-kind"][data-kind="shader"]) {
+    --kind-hue: 85;
+  }
+
+  :where([data-vesta="resource-kind"][data-kind="datapack"]) {
+    --kind-hue: 310;
+  }
+
+  :where([data-vesta-scheme="light"]) :where([data-vesta="resource-kind"]) {
+    color: oklch(0.45 0.12 var(--kind-hue));
+  }
+
+  :where([data-vesta="resource-version"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="resource-version"] > span) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .resource-update {
+    --button-fg: var(--vesta-color-accent-text);
+    --button-bg: color-mix(
+      in oklab,
+      var(--vesta-color-accent) 16%,
+      transparent
+    );
+  }
+
+  /* ---- Groups ---- */
+  .resource-group-row,
+  .resource-group-row:hover {
+    background: var(--vesta-color-surface);
+  }
+
+  .resource-group-row [data-vesta="table-cell"] {
+    padding: 0;
+  }
+
+  :where([data-vesta="resource-group"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    inline-size: 100%;
+    min-block-size: 36px;
+    padding: var(--vesta-space-2) var(--instance-gutter);
+    border: 0;
+    background: none;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta="resource-group"]) > :where([data-vesta="icon"]) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="resource-group-meta"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="resource-group-count"]) {
+    margin-inline-start: auto;
+    padding: 0 7px;
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    line-height: 18px;
+  }
+
+  /* The modpack header and its rows share a tint and an accent rail on the left. */
+  .resource-table .resource-pack-row,
+  .resource-table .resource-pack-row:hover,
+  .resource-table .row-bundled {
+    background: var(--resource-pack-tint);
+    box-shadow: inset 3px 0 0 var(--vesta-color-accent);
+  }
+
+  .resource-table .row-bundled:hover {
+    background: color-mix(in oklab, var(--vesta-color-accent) 11%, transparent);
+  }
+
+  .resource-pack-row :where([data-vesta="resource-group"]) {
+    min-block-size: 52px;
+  }
+
+  .resource-pack-row :where([data-vesta="resource-group"] > img) {
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: 6px;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px var(--vesta-color-border-strong);
+  }
+
+  .resource-pack-row :where([data-vesta="resource-group-count"]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 22%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  .resource-group-chevron {
+    transition: transform var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta="resource-group"][aria-expanded="false"])
+    .resource-group-chevron {
+    transform: rotate(-90deg);
+  }
+
+  :where([data-vesta="sr-only"]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ---- Narrower panes: drop size, then version ---- */
+  @container pane (max-width: 640px) {
+    .resource-table .col-size {
+      display: none;
+    }
+  }
+
+  @container pane (max-width: 480px) {
+    .resource-table .col-version {
+      display: none;
+    }
+
+    .resources-type {
+      inline-size: 112px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where(.resources-bar) {
+      animation: none;
+    }
+  }
+}

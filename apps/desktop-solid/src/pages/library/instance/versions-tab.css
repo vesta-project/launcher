@@ -1,0 +1,278 @@
+@layer launcher {
+  :where([data-vesta="version-controls"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-3);
+    align-items: center;
+  }
+  :where([data-vesta="version-controls"] > [data-vesta="field"]) {
+    min-inline-size: 160px;
+  }
+  :where([data-vesta="version-actions"]) {
+    display: flex;
+    gap: var(--vesta-space-2);
+    margin-block-start: var(--vesta-space-3);
+  }
+  :where([data-vesta="version-warning"]) {
+    margin-block: var(--vesta-space-3);
+    color: var(--vesta-color-warning-text);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="linked-pack"] > header) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    margin-block-end: var(--vesta-space-5);
+  }
+  :where([data-vesta="linked-pack"] > header img) {
+    inline-size: 48px;
+    block-size: 48px;
+    object-fit: cover;
+    border-radius: var(--vesta-radius-sm);
+  }
+  :where([data-vesta="versions"] h2, [data-vesta="versions"] h3) {
+    margin: 0;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+  }
+  :where([data-vesta="linked-pack"] > header p) {
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="version-release-heading"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-3);
+    margin-block-end: var(--vesta-space-2);
+  }
+  :where([data-vesta="version-releases"]) {
+    border-block: var(--vesta-border-width) solid var(--vesta-color-border);
+    margin-block-end: var(--vesta-space-3);
+  }
+  :where([data-vesta="version-release"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    padding: var(--vesta-space-3);
+    border: 0;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="version-release"]:hover) {
+    background: var(--vesta-color-fill);
+  }
+  :where([data-vesta="version-release"][aria-pressed="true"]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 12%, transparent);
+    box-shadow: inset 2px 0 var(--vesta-color-accent);
+  }
+  :where([data-vesta="version-release"] > span:first-child) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+  }
+  :where(
+    [data-vesta="version-release"] small,
+    [data-vesta="version-release"] > span:last-child
+  ) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="version-release-detail"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    margin-block-end: var(--vesta-space-5);
+  }
+  :where([data-vesta="version-comparison"]) {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    margin-block: var(--vesta-space-3);
+  }
+  :where([data-vesta="version-comparison"] dd) {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+@layer launcher {
+  :where([data-vesta="versions"]) {
+    --settings-max-width: none;
+  }
+  :where([data-vesta="version-core"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-5);
+    padding: var(--vesta-space-4);
+  }
+  :where([data-vesta="version-field"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+  :where(
+    [data-vesta="version-field"] > label,
+    [data-vesta="version-field"] > header
+  ) {
+    font-weight: var(--vesta-weight-medium);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="version-field"] > header) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="version-core"] [data-vesta="segmented-item"]) {
+    min-block-size: 60px;
+  }
+  :where([data-vesta="version-core"] [data-vesta="segmented-label"]) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="pack-summary"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3);
+  }
+  :where([data-vesta="pack-summary"] > img) {
+    flex: none;
+    inline-size: 56px;
+    block-size: 56px;
+    border-radius: 10px;
+    object-fit: cover;
+    box-shadow:
+      0 0 0 1px var(--vesta-color-border-strong),
+      0 4px 12px oklch(0 0 0 / 0.3);
+  }
+  :where([data-vesta="pack-summary"] strong) {
+    font-size: var(--vesta-text-md);
+  }
+  /* Source tags carry the platform's own colour. */
+  :where([data-vesta="source-tag"]) {
+    --source-hue: 250;
+
+    align-self: flex-start;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: oklch(0.65 0.14 var(--source-hue) / 0.18);
+    color: oklch(0.8 0.12 var(--source-hue));
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 18px;
+  }
+  :where([data-vesta="source-tag"][data-source="modrinth"]) {
+    --source-hue: 155;
+  }
+  :where([data-vesta="source-tag"][data-source="curseforge"]) {
+    --source-hue: 45;
+  }
+  :where([data-vesta-scheme="light"]) :where([data-vesta="source-tag"]) {
+    color: oklch(0.45 0.12 var(--source-hue));
+  }
+  :where(
+    [data-vesta="pack-summary"] > div,
+    [data-vesta="pack-version-trigger"] > span
+  ) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+  }
+  :where([data-vesta="pack-summary"] small) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="pack-version-trigger"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-4);
+    margin-inline-start: auto;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: 0;
+    border-inline-start: var(--vesta-border-width) solid
+      var(--vesta-color-border);
+    background: none;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="pack-version-trigger"]:hover) {
+    background: var(--vesta-color-fill);
+  }
+  :where([data-vesta="pack-update"]) {
+    display: flex;
+    align-items: center;
+    background: color-mix(in oklab, var(--vesta-color-accent) 10%, transparent);
+    color: var(--vesta-color-accent-text);
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-block-start: var(--vesta-border-width) solid
+      var(--vesta-color-border);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="pack-update"] > span:not([data-vesta])) {
+    flex: 1;
+    text-align: start;
+  }
+  :where([data-vesta="pack-selector"] [data-vesta="version-release-heading"]) {
+    padding: var(--vesta-space-3);
+    margin: 0;
+  }
+  :where(
+    [data-vesta="pack-selector"]
+      [data-vesta="version-release-heading"]
+      > :first-child
+  ) {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  :where([data-vesta="pack-selector"] [data-vesta="version-releases"]) {
+    max-block-size: 300px;
+    overflow: auto;
+    margin: 0;
+  }
+  :where([data-vesta="version-release"]) {
+    cursor: default;
+  }
+  :where([data-vesta="version-actions"]) {
+    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
+  }
+  @container pane (max-width:540px) {
+    :where([data-vesta="pack-summary"]) {
+      flex-wrap: wrap;
+    }
+    :where([data-vesta="pack-version-trigger"]) {
+      flex-basis: 100%;
+      border-inline-start: 0;
+      border-block-start: var(--vesta-border-width) solid
+        var(--vesta-color-border);
+      margin: 0;
+    }
+    :where([data-vesta="version-core"] [data-vesta="segmented-label"]) {
+      font-size: var(--vesta-text-xs);
+    }
+  }
+}
+
+@layer launcher {
+  :where([data-vesta="version-core"] [data-vesta="segmented-field"]) {
+    --segmented-height: 68px;
+  }
+  :where([data-vesta="version-core"] [data-vesta="segmented-item"]) {
+    flex-direction: column;
+  }
+}

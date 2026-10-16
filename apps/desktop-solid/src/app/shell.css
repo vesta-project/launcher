@@ -58,11 +58,52 @@
 
   @container app (max-width: 640px) {
     :where([data-vesta='rail']) {
-      display: none;
+      --rail-width: 52px;
+      --rail-button-size: 36px;
+      --rail-gap: 4px;
+      padding-inline: 6px;
     }
+  }
 
-    :where([data-vesta='titlebar-compact']) {
-      display: flex;
+  /*
+   * Page transitions (View Transitions API). The titlebar and rail are captured as their
+   * own layers so they hold still; the page crossfades quickly, and the instance art
+   * morphs between the card and the header instead of fading.
+   */
+  :where([data-vesta='titlebar']) {
+    view-transition-name: titlebar;
+  }
+
+  :where([data-vesta='rail']) {
+    view-transition-name: rail;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--vesta-ease-standard);
+  }
+
+  ::view-transition-group(instance-art) {
+    animation-duration: 440ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+    overflow: hidden;
+    border-radius: var(--vesta-radius-container);
+  }
+
+  /* Different shapes at each end: fill and crop the snapshots instead of stretching them. */
+  ::view-transition-old(instance-art),
+  ::view-transition-new(instance-art) {
+    block-size: 100%;
+    inline-size: 100%;
+    object-fit: cover;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation: none;
     }
   }
 }

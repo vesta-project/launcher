@@ -20,7 +20,7 @@ import { navigate, route } from '../../app/router';
 import { Icon } from '../../components/icon';
 import { Board } from '../../components/board';
 import { isSection, type SectionId } from './sections';
-import { SettingRow, SettingsSection } from './setting-row';
+import { SettingRow, SettingsSection } from '../../components/setting-row';
 import './settings-page.css';
 
 

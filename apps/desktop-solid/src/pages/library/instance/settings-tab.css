@@ -1,0 +1,405 @@
+/*
+ * Instance settings page.
+ * Hooks: [data-vesta=instance-settings] -nav -link -scroll -title
+ *        [data-vesta=settings-panel] -panel-body -subheading -reveal -block -identity
+ *        -identity-icon -memory -memory-scale -memory-readout -resolution -note -savebar
+ * States: link: aria-current, data-danger; panel: data-danger; note: data-tone
+ *
+ * Same frame as the tabs: a chrome column of sections beside one scrolling pane. Each
+ * section is a raised panel; the danger zone is tinted red so it never blends in.
+ */
+@layer launcher {
+  :where([data-vesta="instance-settings"]) {
+    display: grid;
+    grid-template-columns: 188px minmax(0, 1fr);
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  /* ---- Section list (mirrors the instance section sidebar) ---- */
+  :where([data-vesta="instance-settings-nav"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--vesta-space-3) var(--vesta-space-2);
+    overflow-y: auto;
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--instance-bar-bg);
+  }
+
+  :where([data-vesta="instance-settings-nav"]) > :where([data-vesta="button"]) {
+    justify-content: flex-start;
+    margin-block-end: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="instance-settings-link"]) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-block-size: 32px;
+    padding-inline: var(--vesta-space-3);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta="instance-settings-link"]:hover) {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta="instance-settings-link"][aria-current="true"]) {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta="instance-settings-link"][aria-current="true"])::after {
+    content: "";
+    position: absolute;
+    inset-block: 8px;
+    inset-inline-start: -8px;
+    inline-size: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta="instance-settings-link"][aria-current="true"])
+    > :where([data-vesta="icon"]) {
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta="instance-settings-link"][data-danger]) {
+    margin-block-start: var(--vesta-space-2);
+    color: color-mix(in oklab, var(--vesta-color-danger-text) 80%, transparent);
+  }
+
+  /* ---- Scrolling content ---- */
+  :where([data-vesta="instance-settings-scroll"]) {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: var(--instance-pane-padding-block) var(--instance-gutter);
+    container: pane / inline-size;
+    scroll-padding-block-start: var(--instance-pane-padding-block);
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+
+  :where([data-vesta="settings-content"]) {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    min-inline-size: 0;
+  }
+  :where(
+    [data-vesta="settings-content"] [data-vesta="instance-settings-scroll"]
+  ) {
+    flex: 1;
+  }
+  :where(
+    [data-vesta="settings-content"][data-dirty]
+      [data-vesta="instance-settings-scroll"]
+  ) {
+    padding-block-end: 76px;
+  }
+
+  :where([data-vesta="instance-settings-title"]) {
+    display: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="instance-settings-title"] h2) {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+  }
+
+  :where([data-vesta="settings-panel"]) {
+    flex: none;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta="settings-panel"] > h3) {
+    margin: 0;
+    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-1);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta="settings-panel"][data-danger]) {
+    border-color: color-mix(
+      in oklab,
+      var(--vesta-color-danger) 40%,
+      transparent
+    );
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-danger) 6%,
+      var(--vesta-color-surface-raised)
+    );
+  }
+
+  :where([data-vesta="settings-panel"][data-danger] > h3) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta="settings-panel-body"]) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :where([data-vesta="settings-panel-body"] [data-vesta="setting-row"]) {
+    min-block-size: 52px;
+  }
+
+  :where(
+    [data-vesta="settings-panel-body"] [data-vesta="setting-row-control"]
+  ) {
+    flex: 0 1 320px;
+    justify-content: flex-end;
+  }
+
+  :where([data-vesta="settings-panel-body"] [data-vesta="setting-row-control"])
+    > :where([data-vesta="field"]) {
+    flex: 1;
+  }
+
+  :where([data-vesta="settings-subheading"]) {
+    margin: 0;
+    padding: var(--vesta-space-3) var(--vesta-space-4) 0;
+    border-block-start: var(--vesta-border-width) solid
+      var(--vesta-color-border);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="settings-subheading"]:first-child) {
+    border-block-start: 0;
+  }
+
+  /* Fields revealed by turning a default off: indented, on a faint inset, animated in. */
+  :where([data-vesta="settings-reveal"]) {
+    margin: 0 var(--vesta-space-2) var(--vesta-space-2);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    animation: settings-reveal 180ms var(--vesta-ease-out) both;
+  }
+
+  :where([data-vesta="settings-reveal"]) :where([data-vesta="setting-row"]) {
+    padding-inline: var(--vesta-space-3);
+  }
+
+  @keyframes settings-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  :where([data-vesta="settings-block"], [data-vesta="settings-memory"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3);
+  }
+
+  /* ---- General: icon + name ---- */
+  :where([data-vesta="settings-identity"]) {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-3);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="settings-identity"] > div) {
+    flex: 1;
+    max-inline-size: 360px;
+  }
+
+  :where([data-vesta="settings-identity-icon"]) {
+    flex: none;
+    inline-size: 56px;
+    block-size: 56px;
+    border-radius: 10px;
+    background: center / cover no-repeat;
+    box-shadow: 0 0 0 1px var(--vesta-color-border-strong);
+  }
+
+  /* ---- Memory ---- */
+  :where([data-vesta="settings-memory-scale"]) {
+    display: flex;
+    justify-content: space-between;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="settings-memory-readout"]) {
+    display: flex;
+    gap: var(--vesta-space-2);
+    margin: 0;
+  }
+
+  :where([data-vesta="settings-memory-readout"] > div) {
+    display: flex;
+    flex: 1;
+    justify-content: space-between;
+    padding: var(--vesta-space-1-5) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-surface);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="settings-memory-readout"] dt) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="settings-memory-readout"] dd) {
+    margin: 0;
+    font-family: var(--vesta-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="settings-note"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-sm);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="settings-note"][data-tone="warning"]) {
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-warning) 12%,
+      transparent
+    );
+    color: var(--vesta-color-warning-text);
+  }
+
+  :where([data-vesta="settings-resolution"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta="settings-resolution"] [data-vesta="field"]) {
+    inline-size: 96px;
+  }
+
+  /* ---- Save bar: floats at the bottom of the pane while there are changes ---- */
+  :where([data-vesta="settings-savebar"]) {
+    position: absolute;
+    inset-block-end: 12px;
+    inset-inline: 0;
+    inline-size: max-content;
+    max-inline-size: calc(100% - 24px);
+    margin-inline: auto;
+    z-index: 2;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    align-self: center;
+    margin-block: 0;
+    padding: var(--vesta-space-1-5) var(--vesta-space-1-5)
+      var(--vesta-space-1-5) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.35);
+    font-size: var(--vesta-text-sm);
+    animation: settings-savebar 200ms var(--vesta-ease-out) both;
+  }
+
+  :where([data-vesta="settings-savebar"] > span:nth-child(2)) {
+    margin-inline-end: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="settings-savebar-dot"]) {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--vesta-color-warning);
+  }
+
+  @keyframes settings-savebar {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+
+  /* ---- Narrow: the section list goes; a back button heads the page ---- */
+  @container app (max-width: 959px) {
+    :where([data-vesta="instance-settings"]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    :where([data-vesta="instance-settings-nav"]) {
+      display: none;
+    }
+
+    :where([data-vesta="instance-settings-title"]) {
+      display: flex;
+    }
+  }
+
+  @container pane (max-width: 520px) {
+    :where(
+      [data-vesta="settings-panel-body"] [data-vesta="setting-row-control"]
+    ) {
+      flex-basis: auto;
+    }
+
+    :where([data-vesta="settings-identity"]) {
+      flex-wrap: wrap;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="settings-reveal"], [data-vesta="settings-savebar"]) {
+      animation: none;
+    }
+  }
+}
+
+@layer launcher {
+  :where([data-vesta="settings-feedback"]) {
+    margin: 0;
+    padding: 0 var(--vesta-space-3) var(--vesta-space-3);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="settings-feedback"][data-tone="danger"]) {
+    color: var(--vesta-color-danger-text);
+  }
+  :where([data-vesta="settings-feedback"][data-tone="success"]) {
+    color: var(--vesta-color-success-text);
+  }
+  :where(
+    [data-vesta="settings-identity"] > [data-vesta="icon-picker-trigger"]
+  ) {
+    flex: none;
+  }
+}

@@ -1,0 +1,213 @@
+/*
+ * Instance page frame: header, tab strip, one scrolling pane.
+ * Knobs (on the board): --instance-gutter (inline space shared by header, tabs and
+ * panes), --instance-pane-padding-block, --instance-bar-bg (tab strip and pane toolbars).
+ *
+ * Three layers read as separate surfaces: the art header, a darker chrome strip
+ * (tabs, then any pane toolbar), and the content surface. Panes are the only scroll
+ * containers and the only padded layer.
+ */
+@layer launcher {
+  .instance-board {
+    --instance-gutter: 24px;
+    --instance-pane-padding-block: 20px;
+    --instance-bar-bg: color-mix(
+      in oklab,
+      var(--vesta-color-surface-sunken) 70%,
+      var(--vesta-color-surface)
+    );
+    --board-bg: var(--vesta-color-surface);
+
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  @media (max-height: 700px) {
+    .instance-board {
+      --instance-pane-padding-block: 12px;
+    }
+  }
+
+  @container app (max-width: 720px) {
+    .instance-board {
+      --instance-gutter: 16px;
+    }
+  }
+
+  @container app (max-width: 430px) {
+    .instance-board {
+      --instance-gutter: 12px;
+    }
+  }
+
+  :where([data-vesta="instance-layout"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  /* Tab strip: chrome, not content. Underline marks the active tab. */
+  .instance-tabs {
+    --tab-height: 40px;
+    --tab-padding-x: var(--vesta-space-3);
+
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .instance-tabs [data-vesta="tab-list"] {
+    gap: var(--vesta-space-1);
+    padding-inline: calc(var(--instance-gutter) - var(--tab-padding-x));
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--instance-bar-bg);
+  }
+
+  .instance-tabs [data-vesta="tab"] {
+    position: relative;
+    flex: none;
+    color: var(--vesta-color-text-muted);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  .instance-tabs [data-vesta="tab"]:hover {
+    color: var(--vesta-color-text);
+  }
+
+  .instance-tabs [data-vesta="tab"][data-selected] {
+    color: var(--vesta-color-text);
+  }
+
+  .instance-tabs [data-vesta="tab-indicator"] {
+    display: none;
+  }
+
+  .instance-tabs [data-vesta="tab"][data-selected]::after {
+    content: "";
+    position: absolute;
+    inset-inline: var(--tab-padding-x);
+    inset-block-end: -1px;
+    block-size: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--vesta-color-accent);
+  }
+
+  .instance-tabs [data-vesta="tab-badge"] {
+    margin-inline-start: var(--vesta-space-0-5);
+  }
+
+  :where([data-vesta="instance-tab-count"]) {
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Section sidebar (wide windows): a chrome column beside the pane. */
+  .instance-tabs[data-orientation="vertical"] [data-vesta="tab-list"] {
+    inline-size: 188px;
+    gap: 2px;
+    padding: var(--vesta-space-3) var(--vesta-space-2);
+    border-block-end: 0;
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  .instance-tabs[data-orientation="vertical"] [data-vesta="tab"] {
+    --tab-height: 34px;
+    --tab-gap: var(--vesta-space-2-5, 10px);
+
+    border-radius: var(--vesta-radius-sm);
+  }
+
+  .instance-tabs[data-orientation="vertical"] [data-vesta="tab-label"] {
+    flex: 1;
+  }
+
+  .instance-tabs[data-orientation="vertical"]
+    [data-vesta="tab"][data-selected] {
+    background: var(--vesta-color-fill);
+  }
+
+  .instance-tabs[data-orientation="vertical"]
+    [data-vesta="tab"][data-selected]::after {
+    inset-block: 8px;
+    inset-inline: -8px auto;
+    inline-size: 3px;
+    block-size: auto;
+    border-radius: 0 2px 2px 0;
+  }
+
+  .instance-tabs[data-orientation="vertical"]
+    [data-vesta="tab"][data-selected]
+    [data-vesta="tab-icon"] {
+    color: var(--vesta-color-accent-text);
+  }
+
+  @container app (max-width: 780px) {
+    .instance-tabs {
+      --tab-padding-x: var(--vesta-space-2);
+    }
+
+    .instance-tabs [data-vesta="tab-icon"] {
+      display: none;
+    }
+  }
+
+  /* The pane is a size container, so tab contents adapt to the room they actually have. */
+  .instance-pane {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: var(--instance-pane-padding-block) var(--instance-gutter);
+    container: pane / inline-size;
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+
+  .instance-pane-flush {
+    padding: 0;
+  }
+
+  /*
+   * Pane toolbar: shared by every tab that filters or acts on a list. It continues the
+   * chrome strip directly under the tabs, so controls never float on the content.
+   */
+  :where(
+    [data-vesta="resources-toolbar"],
+    [data-vesta="console-toolbar"],
+    [data-vesta="pane-toolbar"]
+  ) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-block-size: 44px;
+    padding: var(--vesta-space-1-5) var(--instance-gutter);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--instance-bar-bg);
+  }
+
+  /* Game-mode tags, shared by every tab that lists worlds. */
+  :where([data-vesta="mode-tag"]) {
+    --mode-hue: 145;
+
+    flex: none;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: oklch(0.65 0.13 var(--mode-hue) / 0.18);
+    color: oklch(0.8 0.12 var(--mode-hue));
+    font-size: 11px;
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 17px;
+  }
+
+  :where([data-vesta="mode-tag"][data-mode="creative"]) {
+    --mode-hue: 240;
+  }
+
+  :where([data-vesta="mode-tag"][data-mode="hardcore"]) {
+    --mode-hue: 25;
+  }
+
+  :where([data-vesta-scheme="light"]) :where([data-vesta="mode-tag"]) {
+    color: oklch(0.45 0.13 var(--mode-hue));
+  }
+}

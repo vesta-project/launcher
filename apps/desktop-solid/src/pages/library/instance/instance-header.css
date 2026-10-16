@@ -1,0 +1,225 @@
+/*
+ * Instance header: a compact art band with identity and actions in one row.
+ * Hooks: [data-vesta=instance-header] -art -main -icon -copy -title -meta -loader -playtime -actions
+ *        [data-vesta=instance-notice]
+ * States: notice: data-tone (danger | warning)
+ * Knobs: --header-height, --header-icon-size, --header-art-opacity
+ *
+ * Height follows the window: roomy when tall, tight when short. All inline spacing
+ * comes from --instance-gutter, shared with the tabs and panels below.
+ */
+@layer launcher {
+  :where([data-vesta="instance-header"]) {
+    --header-height: 132px;
+    --header-icon-size: 56px;
+
+    position: relative;
+    flex: none;
+    overflow: hidden;
+    background: oklch(0.22 0.015 190);
+    color: oklch(0.98 0 0);
+    text-shadow: 0 1px 6px oklch(0 0 0 / 0.6);
+  }
+
+  /* The blurred art is a separate layer so it alone morphs during the page transition. */
+  :where([data-vesta="instance-header-art"]) {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      linear-gradient(to top, oklch(0 0 0 / 0.78), oklch(0 0 0 / 0.28) 80%),
+      var(--header-image, none) center 35% / cover no-repeat;
+  }
+
+  :where([data-vesta="instance-header-main"]) {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: var(--vesta-space-3);
+    min-block-size: var(--header-height);
+    padding: var(--vesta-space-4) var(--instance-gutter);
+    transition:
+      min-block-size var(--vesta-duration-normal) var(--vesta-ease-standard),
+      padding-block var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta="instance-header-icon"]) {
+    flex: none;
+    inline-size: var(--header-icon-size);
+    block-size: var(--header-icon-size);
+    display: block;
+    aspect-ratio: 1;
+    object-fit: cover;
+    object-position: center;
+    transition:
+      inline-size var(--vesta-duration-normal) var(--vesta-ease-standard),
+      block-size var(--vesta-duration-normal) var(--vesta-ease-standard);
+    border: 1px solid oklch(1 0 0 / 0.2);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-sunken);
+    box-shadow: 0 4px 14px oklch(0 0 0 / 0.4);
+  }
+
+  :where([data-vesta="instance-header-copy"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="instance-header-title"]) {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--vesta-text-xl);
+    font-weight: 800;
+    line-height: var(--vesta-leading-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="instance-header-meta"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-1) var(--vesta-space-3);
+    margin: 0;
+    color: oklch(0.93 0 0 / 0.85);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="instance-header-loader"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    text-transform: capitalize;
+  }
+
+  :where([data-vesta="instance-header-actions"]) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  /* Header controls sit on art, so ghost icon buttons get a legible light tint. */
+  :where([data-vesta="instance-header-actions"])
+    :where([data-vesta="button"][data-variant="ghost"]) {
+    --button-fg: oklch(0.98 0 0);
+    --button-bg-hover: oklch(1 0 0 / 0.16);
+    --button-bg-active: oklch(1 0 0 / 0.22);
+  }
+
+  /* Problem strip: sits under the art, in the same gutter. */
+  :where([data-vesta="instance-notice"]) {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--instance-gutter);
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-danger) 24%,
+      oklch(0 0 0 / 0.65)
+    );
+    font-size: var(--vesta-text-sm);
+    text-shadow: none;
+  }
+
+  :where([data-vesta="instance-notice"][data-tone="warning"]) {
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-warning) 20%,
+      oklch(0 0 0 / 0.65)
+    );
+  }
+
+  :where([data-vesta="instance-notice"]) > :where([data-vesta="icon"]) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta="instance-notice"][data-tone="warning"])
+    > :where([data-vesta="icon"]) {
+    color: var(--vesta-color-warning);
+  }
+
+  :where([data-vesta="instance-notice"]) > p {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 0 var(--vesta-space-2);
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  :where([data-vesta="instance-notice"]) span {
+    color: oklch(0.92 0 0 / 0.85);
+  }
+
+  /* Short windows: smaller art band and icon, so tabs and content keep the room. */
+  @media (max-height: 700px) {
+    :where([data-vesta="instance-header"]) {
+      --header-height: 112px;
+      --header-icon-size: 40px;
+    }
+
+    :where([data-vesta="instance-header-main"]) {
+      padding-block: var(--vesta-space-3);
+    }
+  }
+
+  @media (min-height: 860px) {
+    :where([data-vesta="instance-header"]) {
+      --header-height: 156px;
+      --header-icon-size: 64px;
+    }
+  }
+
+  :where([data-vesta="instance-header"][data-compact]) {
+    --header-height: 72px;
+    --header-icon-size: 40px;
+  }
+  :where([data-vesta="instance-header"][data-compact])
+    [data-vesta="instance-header-main"] {
+    align-items: center;
+    padding-block: var(--vesta-space-2);
+  }
+  :where([data-vesta="instance-header-actions"]) {
+    text-shadow: none;
+  }
+
+  /* Narrow: labels drop out of the actions and the playtime fact goes. */
+  @container app (max-width: 720px) {
+    :where([data-vesta="instance-header-playtime"]) {
+      display: none;
+    }
+  }
+
+  @container app (max-width: 520px) {
+    :where([data-vesta="instance-header-icon"]) {
+      display: none;
+    }
+  }
+
+  @keyframes vesta-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="instance-header-copy"]),
+    :where([data-vesta="instance-header-actions"]) {
+      animation: none;
+    }
+    :where(
+      [data-vesta="instance-header-main"],
+      [data-vesta="instance-header-icon"]
+    ) {
+      transition: none;
+    }
+  }
+}

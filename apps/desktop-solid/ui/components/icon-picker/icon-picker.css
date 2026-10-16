@@ -1,0 +1,102 @@
+@layer ui.components {
+  :where(
+    [data-vesta="icon-picker-trigger"],
+    [data-vesta="icon-picker-option"],
+    [data-vesta="icon-picker-upload"]
+  ) {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 56px;
+    block-size: 56px;
+    padding: 0;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text);
+    cursor: default;
+    font: inherit;
+  }
+  :where(
+    [data-vesta="icon-picker-trigger"] img,
+    [data-vesta="icon-picker-option"] img
+  ) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  :where([data-vesta="icon-picker-edit"]) {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: oklch(0 0 0 / 0.45);
+    color: white;
+    font-size: var(--vesta-text-xs);
+    opacity: 0;
+  }
+  :where(
+    [data-vesta="icon-picker-trigger"]:hover [data-vesta="icon-picker-edit"],
+    [data-vesta="icon-picker-trigger"]:focus-visible
+      [data-vesta="icon-picker-edit"]
+  ) {
+    opacity: 1;
+  }
+  :where(.ui-icon-picker-popover) {
+    --popover-width: max-content;
+  }
+  :where([data-vesta="icon-picker-grid"]) {
+    display: grid;
+    grid-template-columns: repeat(4, 56px);
+    justify-content: center;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="icon-picker-upload"]) {
+    border-style: dashed;
+    font-size: 28px;
+  }
+  :where(
+    [data-vesta="icon-picker-option"]:hover,
+    [data-vesta="icon-picker-upload"]:hover
+  ) {
+    border-color: var(--vesta-color-accent);
+  }
+  :where([data-vesta="icon-picker-option"][aria-pressed="true"]) {
+    border-color: var(--vesta-color-accent);
+  }
+  :where([data-vesta="icon-picker-check"]) {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: oklch(0 0 0 / 0.3);
+    color: white;
+  }
+  :where([data-vesta="icon-picker-check"] svg) {
+    inline-size: 20px;
+    block-size: 20px;
+  }
+  :where([data-vesta="icon-picker-badge"]) {
+    position: absolute;
+    inset: 2px 2px auto auto;
+    display: grid;
+    place-items: center;
+    padding: 2px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-surface);
+  }
+}
+
+@layer ui.components {
+  :where(
+    [data-vesta="icon-picker-edit"] svg,
+    [data-vesta="icon-picker-upload"] svg
+  ) {
+    display: block;
+    inline-size: 20px;
+    block-size: 20px;
+  }
+}

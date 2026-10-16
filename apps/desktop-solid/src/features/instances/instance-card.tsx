@@ -13,7 +13,12 @@ export type InstanceCardState =
   | { kind: 'installing'; label: string }
   | { kind: 'failed'; reason: string; retrying?: boolean }
   /** Unfinished installations and updates share the interrupted/resume flow. */
-  | { kind: 'interrupted'; label: string; recovery?: boolean; resuming?: boolean }
+  | {
+      kind: 'interrupted';
+      label: string;
+      recovery?: boolean;
+      resuming?: boolean;
+    }
   | { kind: 'warming' }
   | { kind: 'running' }
   | { kind: 'crashed'; summary?: string };
@@ -49,6 +54,8 @@ export interface InstanceCardActions {
 export interface InstanceCardProps extends InstanceCardActions {
   instance: InstanceCardData;
   state?: InstanceCardState;
+  /** Set while the card takes part in a view transition. */
+  transitionName?: string;
 }
 
 const modloaderLogos: Record<string, string> = {
@@ -177,7 +184,7 @@ export function InstanceCard(props: InstanceCardProps) {
       case 'crash':
         return 'icons/status/error';
       case 'resume':
-        return 'icons/actions/reload';
+        return 'icons/actions/play';
       case 'busy':
         return null;
       default:
@@ -222,7 +229,12 @@ export function InstanceCard(props: InstanceCardProps) {
       role="group"
       aria-label={props.instance.name}
       tabindex={0}
-      style={{ '--instance-card-image': `url('${props.instance.image}')` } as JSX.CSSProperties}
+      style={
+        {
+          '--instance-card-image': `url('${props.instance.image}')`,
+          'view-transition-name': props.transitionName,
+        } as JSX.CSSProperties
+      }
       onClick={handleCardClick}
       onKeyDown={handleKey}
       onPointerLeave={handlePointerLeave}
@@ -264,7 +276,7 @@ export function InstanceCard(props: InstanceCardProps) {
                   else props.onResume?.();
                 }}
               >
-                <Icon name="icons/actions/reload" size={12} />
+                <Icon name="icons/actions/play" size={12} />
                 <span>{actionLabel()}</span>
               </button>
             </Show>
@@ -296,23 +308,27 @@ export function InstanceCard(props: InstanceCardProps) {
               </span>
             </Show>
           </div>
-          <Tooltip content={playLabel()} placement="top" trigger={(triggerProps) => (
-            <button
-              {...triggerProps}
-              type="button"
-              data-vesta="instance-card-play"
-              data-variant={variant()}
-              aria-label={playLabel()}
-              aria-busy={busy() ? 'true' : undefined}
-              aria-pressed={kind() === 'running' ? 'true' : undefined}
-              disabled={busy()}
-              onClick={handlePlay}
-            >
-              <Show when={playIcon()} fallback={<span data-vesta="instance-card-spinner" aria-hidden="true" />}>
-                {(name) => <Icon name={name()} size={14} />}
-              </Show>
-            </button>
-          )} />
+          <Tooltip
+            content={playLabel()}
+            placement="top"
+            trigger={(triggerProps) => (
+              <button
+                {...triggerProps}
+                type="button"
+                data-vesta="instance-card-play"
+                data-variant={variant()}
+                aria-label={playLabel()}
+                aria-busy={busy() ? 'true' : undefined}
+                aria-pressed={kind() === 'running' ? 'true' : undefined}
+                disabled={busy()}
+                onClick={handlePlay}
+              >
+                <Show when={playIcon()} fallback={<span data-vesta="instance-card-spinner" aria-hidden="true" />}>
+                  {(name) => <Icon name={name()} size={14} />}
+                </Show>
+              </button>
+            )}
+          />
         </div>
 
         <div data-vesta="instance-card-bottom">

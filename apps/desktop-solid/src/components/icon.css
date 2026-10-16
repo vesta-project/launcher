@@ -19,4 +19,18 @@
   :where([data-vesta='icon']) > :where(svg:not([fill])) {
     fill: currentColor;
   }
+
+  /* Inside a library icon slot the icon takes the slot's size, so it is always centred
+     and scales with the control (button size, menu density) instead of a fixed number. */
+  :where(
+      [data-vesta='button-icon'],
+      [data-vesta='menu-item-icon'],
+      [data-vesta='tab-icon'],
+      [data-vesta='field-icon'],
+      [data-vesta='badge-icon']
+    )
+    > :where([data-vesta='icon']) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
 }

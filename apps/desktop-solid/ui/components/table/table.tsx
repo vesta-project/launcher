@@ -59,7 +59,7 @@ export function TableFooter(props: TableSectionProps) {
 }
 
 export interface TableRowProps {
-  class?: string;
+  class?: JSX.ClassValue;
   style?: JSX.CSSProperties;
   children?: JSX.Element;
 }

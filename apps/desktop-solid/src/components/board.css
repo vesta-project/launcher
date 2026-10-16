@@ -33,6 +33,17 @@
     }
   }
 
+  :where([data-vesta='board-frame'][data-still]) {
+    animation: none;
+  }
+
+  /* Fixed boards lay their children out as a column that never scrolls itself. */
+  :where([data-vesta='board'][data-fixed]) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
   @keyframes vesta-scene-in {
     from {
       opacity: 0;

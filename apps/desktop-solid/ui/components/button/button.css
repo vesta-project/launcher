@@ -116,7 +116,8 @@
 
   /* Parts */
   :where([data-vesta='button-icon']) {
-    display: inline-flex;
+    display: inline-grid;
+    place-items: center;
     flex: none;
     inline-size: var(--button-icon-size);
     block-size: var(--button-icon-size);

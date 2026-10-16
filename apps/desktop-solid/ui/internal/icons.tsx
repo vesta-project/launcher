@@ -1,14 +1,14 @@
-import type { JSX } from '@solidjs/web';
+import type { JSX } from "@solidjs/web";
 
 // Glyphs the library draws itself (indicators, chevrons, close). Consumers pass
 // their own icons through `icon` props; these are not a public icon set.
-function Glyph(props: { children: JSX.Element; 'stroke-width'?: number }) {
+function Glyph(props: { children: JSX.Element; "stroke-width"?: number }) {
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      stroke-width={props['stroke-width'] ?? 2}
+      stroke-width={props["stroke-width"] ?? 2}
       stroke-linecap="round"
       stroke-linejoin="round"
       aria-hidden="true"
@@ -110,5 +110,19 @@ export const FolderGlyph = () => (
 export const TrashGlyph = () => (
   <Glyph>
     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </Glyph>
+);
+
+/** Original Vesta icon-picker edit mark. */
+export const EditGlyph = () => (
+  <Glyph>
+    <path d="M11 4H4C2.895 4 2 4.895 2 6v14c0 1.105.895 2 2 2h14c1.105 0 2-.895 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+  </Glyph>
+);
+
+export const AddGlyph = () => (
+  <Glyph>
+    <path d="M12 5v14M5 12h14" />
   </Glyph>
 );

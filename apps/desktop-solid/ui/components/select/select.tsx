@@ -1,14 +1,14 @@
-import { Select as KobalteSelect } from '@kobalte/core/select';
-import type { JSX } from '@solidjs/web';
-import { children, Show } from 'solid-js';
-import type { ControlSize } from '../../foundation/types';
-import { CheckGlyph, ChevronDownGlyph } from '../../internal/icons';
-import { useOverlayMount } from '../overlay/mount';
-import type { Placement } from '../overlay/types';
-import '../field/field.css';
-import '../overlay/overlay.css';
-import '../menu/menu.css';
-import './select.css';
+import { Select as KobalteSelect } from "@kobalte/core/select";
+import type { JSX } from "@solidjs/web";
+import { children, createMemo, Show } from "solid-js";
+import type { ControlSize } from "../../foundation/types";
+import { CheckGlyph, ChevronDownGlyph } from "../../internal/icons";
+import { useOverlayMount } from "../overlay/mount";
+import type { Placement } from "../overlay/types";
+import "../field/field.css";
+import "../overlay/overlay.css";
+import "../menu/menu.css";
+import "./select.css";
 
 export interface SelectOption {
   value: string;
@@ -36,7 +36,7 @@ export interface SelectProps {
   id?: string;
   placement?: Placement;
   /** Accessible name when there is no visible label. */
-  'aria-label'?: string;
+  "aria-label"?: string;
   class?: string;
   style?: JSX.CSSProperties;
 }
@@ -46,31 +46,40 @@ export function Select(props: SelectProps) {
   const label = children(() => props.label);
   const description = children(() => props.description);
   const error = children(() => props.error);
-  const find = (value: string | undefined) => props.options.find((option) => option.value === value);
+  // Keep option identities stable across reads, including callers with mapped JSX props.
+  const options = createMemo(() => props.options);
+  const find = (value: string | undefined) =>
+    options().find((option) => option.value === value);
 
   return (
     <KobalteSelect<SelectOption>
       data-vesta="field"
-      data-size={props.size ?? 'md'}
+      data-size={props.size ?? "md"}
       class={props.class}
       style={props.style}
       // Omit unset id — Kobalte stringifies undefined into the literal "undefined".
       {...(props.id != null ? { id: props.id } : {})}
       name={props.name}
-      options={props.options}
+      options={options()}
       optionValue="value"
       optionTextValue="label"
       optionDisabled="disabled"
-      {...(props.value !== undefined ? { value: find(props.value) ?? null } : {})}
+      {...(props.value !== undefined
+        ? { value: find(props.value) ?? null }
+        : {})}
       {...(props.value === undefined && props.defaultValue !== undefined
         ? { defaultValue: find(props.defaultValue) }
         : {})}
-      onChange={(option) => option && props.onChange?.(option.value)}
-      placeholder={props.placeholder ?? 'Select…'}
+      onChange={(option) => {
+        // Controlled selection synchronization must not echo an unchanged value.
+        if (option && option.value !== props.value)
+          props.onChange?.(option.value);
+      }}
+      placeholder={props.placeholder ?? "Select…"}
       disabled={props.disabled}
       required={props.required}
-      validationState={error() == null ? 'valid' : 'invalid'}
-      placement={props.placement ?? 'bottom-start'}
+      validationState={error() == null ? "valid" : "invalid"}
+      placement={props.placement ?? "bottom-start"}
       gutter={4}
       itemComponent={(itemProps) => (
         <KobalteSelect.Item item={itemProps.item} data-vesta="select-item">
@@ -98,10 +107,15 @@ export function Select(props: SelectProps) {
       )}
     >
       <Show when={label()}>
-        <KobalteSelect.Label data-vesta="field-label">{label()}</KobalteSelect.Label>
+        <KobalteSelect.Label data-vesta="field-label">
+          {label()}
+        </KobalteSelect.Label>
       </Show>
       <KobalteSelect.HiddenSelect />
-      <KobalteSelect.Trigger data-vesta="field-control" aria-label={props['aria-label']}>
+      <KobalteSelect.Trigger
+        data-vesta="field-control"
+        aria-label={props["aria-label"]}
+      >
         <KobalteSelect.Value<SelectOption> data-vesta="select-value">
           {(state) => (
             <>
@@ -110,7 +124,9 @@ export function Select(props: SelectProps) {
                   {state.selectedOption()?.icon}
                 </span>
               </Show>
-              <span data-vesta="select-value-text">{state.selectedOption()?.label}</span>
+              <span data-vesta="select-value-text">
+                {state.selectedOption()?.label}
+              </span>
             </>
           )}
         </KobalteSelect.Value>
@@ -119,10 +135,14 @@ export function Select(props: SelectProps) {
         </KobalteSelect.Icon>
       </KobalteSelect.Trigger>
       <Show when={description()}>
-        <KobalteSelect.Description data-vesta="field-description">{description()}</KobalteSelect.Description>
+        <KobalteSelect.Description data-vesta="field-description">
+          {description()}
+        </KobalteSelect.Description>
       </Show>
       <Show when={error()}>
-        <KobalteSelect.ErrorMessage data-vesta="field-error">{error()}</KobalteSelect.ErrorMessage>
+        <KobalteSelect.ErrorMessage data-vesta="field-error">
+          {error()}
+        </KobalteSelect.ErrorMessage>
       </Show>
       <KobalteSelect.Portal mount={mount}>
         <KobalteSelect.Content data-vesta="select-content">
