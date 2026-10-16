@@ -1,6 +1,7 @@
 import { Match, Switch, onCleanup } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { findInstance } from '../features/instances/fixtures';
+import { AccountLoginDialog } from '../features/accounts/account-login-dialog';
 import { useAccountSync } from '../features/accounts/accounts';
 import { BrowsePage } from '../pages/browse/browse-page';
 import { CreatePage } from '../pages/create/create-page';
@@ -22,6 +23,7 @@ export function Shell() {
   return (
     <div data-vesta="shell">
       <Titlebar />
+      <AccountLoginDialog />
       <div data-vesta="shell-body">
         <Rail />
         <main data-vesta="scene" id="scene" tabindex={-1}>

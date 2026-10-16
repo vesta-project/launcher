@@ -27,6 +27,8 @@ export interface DialogProps {
   closeButton?: boolean;
   /** Label for the close button. Defaults to "Close". */
   closeLabel?: string;
+  /** Override where focus returns when a programmatic dialog closes. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function Dialog(props: DialogProps) {
@@ -40,7 +42,7 @@ export function Dialog(props: DialogProps) {
       <KobalteDialog.Portal mount={mount}>
         <KobalteDialog.Overlay data-vesta="dialog-backdrop" />
         <div data-vesta="dialog-positioner">
-          <KobalteDialog.Content data-vesta="dialog" data-size={props.size ?? 'md'}>
+          <KobalteDialog.Content onCloseAutoFocus={props.onCloseAutoFocus} data-vesta="dialog" data-size={props.size ?? 'md'}>
             <header data-vesta="dialog-header">
               <KobalteDialog.Title data-vesta="dialog-title">{props.title}</KobalteDialog.Title>
               <Show when={props.closeButton !== false}>

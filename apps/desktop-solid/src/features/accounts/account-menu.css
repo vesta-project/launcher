@@ -103,6 +103,7 @@
   :where([data-vesta="account-copy"]) {
     display: flex;
     flex-direction: column;
+    flex: 1;
     gap: var(--vesta-space-1);
     min-inline-size: 0;
   }
@@ -119,7 +120,6 @@
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta="account-actions"]),
   :where([data-vesta="account-list"]) {
     display: flex;
     flex-direction: column;
@@ -174,8 +174,8 @@
     color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: normal;
+    text-transform: none;
   }
 
   :where([data-vesta="account-empty"]) {
@@ -204,5 +204,108 @@
     box-shadow:
       inset 0 0 0 1px oklch(1 0 0 / 0.12),
       inset 0 0 4px oklch(0 0 0 / 0.18);
+  }
+}
+
+@layer launcher {
+  .account-popover :where([data-vesta="popover-title"]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :where([data-vesta="account-list"]) {
+    max-block-size: min(240px, 35vh);
+    overflow-y: auto;
+  }
+  :where([data-vesta="account-line"][data-current]) { background: var(--vesta-color-fill); }
+  :where([data-vesta="account-line"][data-action="add-account"]) { color: var(--vesta-color-accent-text); }
+  :where([data-vesta="account-line"]:focus-visible, [data-vesta="account-device-code"]:focus-visible) {
+    outline: 2px solid var(--vesta-color-focus);
+    outline-offset: -2px;
+  }
+  :where([data-vesta="account-action-error"]) {
+    margin: var(--vesta-space-2);
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="account-login"]) { display: grid; gap: var(--vesta-space-3); }
+  :where([data-vesta="account-login"]) p { margin: 0; }
+  :where([data-vesta="account-device-code"]) {
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xl);
+    letter-spacing: .12em;
+    text-align: center;
+    cursor: default;
+    user-select: text;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="profile-spinner"]) { animation: none; }
+  }
+}
+@layer launcher {
+  :where([data-vesta="account-load-error"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2);
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+  }
+}
+@layer launcher {
+  .account-close {
+    --button-height: 24px;
+    --button-icon-size: 12px;
+    align-self: flex-start;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="account-uuid"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    margin-inline: var(--vesta-space-1);
+    padding: var(--vesta-space-1);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    cursor: default;
+    text-align: start;
+  }
+  :where([data-vesta="account-uuid"]) code {
+    min-inline-size: 0;
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="account-uuid"]:hover) { background: var(--vesta-color-fill); color: var(--vesta-color-text); }
+  :where([data-vesta="account-uuid"]:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: -2px;
+  }
+  :where([data-vesta="account-actions"]) {
+    display: flex;
+    flex-direction: row;
+    gap: var(--vesta-space-1);
+    padding: var(--vesta-space-2) var(--vesta-space-1) 0;
+  }
+  :where([data-vesta="account-actions"]) > * { flex: 1; }
+  :where([data-vesta="account-copy-status"]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 }

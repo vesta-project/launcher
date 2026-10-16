@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { createEffect, createSignal, onSettled } from 'solid-js';
 import { CacheInvalidatedError, RequestCache } from '../../platform/cache/request-cache';
 
+import { startAccountLogin } from './login';
 import { takeAccountBootstrap, type Account } from './account-bootstrap';
 export type { Account } from './account-bootstrap';
 
@@ -37,7 +38,8 @@ if (bootstrap) accountCache.seed(ACCOUNT_KEY, bootstrap, false);
 const [accounts, setAccounts] = createSignal<Account[]>(native ? bootstrap ?? [] : fixtures, { name: 'accounts' });
 const [loaded, setLoaded] = createSignal(!native || !!bootstrap, { name: 'accountsLoaded' });
 
-export { accounts, loaded as accountsLoaded };
+const [accountsError, setAccountsError] = createSignal(false, { name: 'accountsLoadError' });
+export { accounts, accountsError, loaded as accountsLoaded };
 export const accountCacheMetrics = () => ({ accounts: { ...accountCache.metrics }, heads: { ...headCache.metrics } });
 export const activeAccount = (): Account | undefined => accounts().find((account) => account.is_active) ?? accounts()[0];
 
@@ -48,7 +50,7 @@ export async function refreshAccounts(force = false): Promise<void> {
   try {
     await accountCache.read(ACCOUNT_KEY, () => invoke<Account[]>('get_account_summaries'));
   } catch (error) {
-    if (!(error instanceof CacheInvalidatedError)) console.error('Failed to load accounts:', error);
+    if (!(error instanceof CacheInvalidatedError)) { setAccountsError(true); console.error('Failed to load accounts:', error); }
   } finally {
     setLoaded(true);
   }
@@ -74,7 +76,7 @@ export async function removeAccount(uuid: string): Promise<void> {
 }
 
 export async function addAccount(): Promise<void> {
-  if (isTauri()) await invoke('start_login');
+  await startAccountLogin();
 }
 
 /** Keep all window listeners within the shell lifetime, including late registrations. */
@@ -85,8 +87,11 @@ export function useAccountSync() {
     const stops: (() => void)[] = [];
     const retain = (stop: () => void) => { if (disposed) stop(); else stops.push(stop); };
     const refresh = () => { if (!disposed) void refreshAccounts(); };
+    const completed = () => { if (!disposed) void refreshAccounts(true); };
     window.addEventListener('focus', refresh);
+    window.addEventListener('vesta:account-login-complete', completed);
     retain(accountCache.subscribe(ACCOUNT_KEY, (snapshot) => {
+      setAccountsError(!!snapshot.error);
       if (snapshot.hasData) { setAccounts(snapshot.data!); setLoaded(true); }
     }));
     // Attach invalidation before the initial read to close the subscription/startup gap.
@@ -107,6 +112,7 @@ export function useAccountSync() {
     return () => {
       disposed = true;
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('vesta:account-login-complete', completed);
       stops.forEach((stop) => stop());
     };
   });
