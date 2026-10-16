@@ -41,6 +41,7 @@ import {
   importInstanceIcon,
 } from "../../../features/instances/icon-catalog";
 import { versionStore } from "../../../features/instances/versions";
+import { formatNumber, t } from "../../../localization";
 import {
   verifyJavaExecutable,
   canBrowseJava,
@@ -50,43 +51,46 @@ import "./settings-tab.css";
 
 /** Fixture host facts until the settings page reads them from the backend. */
 const systemMemoryMb = 16384;
-const javaOptions = [
+const javaOptions = () => [
   {
     value: "default",
-    label: "Launcher default",
-    description: "Java 21 · bundled",
+    label: t("instance-settings.launcher-default"),
+    description: t("instance-settings.java-bundled", { version: "21" }),
   },
   {
     value: "managed-21",
-    label: "Java 21 (managed)",
+    label: t("instance-settings.java-managed", { version: "21" }),
     description: "~/.vesta/java/21/bin/java",
   },
   {
     value: "managed-17",
-    label: "Java 17 (managed)",
+    label: t("instance-settings.java-managed", { version: "17" }),
     description: "~/.vesta/java/17/bin/java",
   },
   {
     value: "system",
-    label: "Java 21 (system)",
+    label: t("instance-settings.java-system", { version: "21" }),
     description: "/usr/bin/java",
   },
-  { value: "custom", label: "Custom…", description: "Choose an executable" },
+  { value: "custom", label: t("instance-settings.java-custom"), description: t("instance-settings.choose-executable") },
 ];
 
 const sections = [
-  { id: "general", label: "General", icon: "icons/content/gear" },
-  { id: "java", label: "Java", icon: "icons/content/code" },
-  { id: "memory", label: "Memory", icon: "icons/content/storage" },
-  { id: "window", label: "Window", icon: "icons/content/monitor" },
-  { id: "launch", label: "Launch", icon: "icons/actions/play" },
-  { id: "hooks", label: "Hooks", icon: "icons/content/terminal" },
-  { id: "sandbox", label: "Sandbox", icon: "icons/security/shield" },
-  { id: "maintenance", label: "Maintenance", icon: "icons/content/sliders" },
-  { id: "danger", label: "Danger zone", icon: "icons/status/error" },
-];
+  { id: "general", label: "instance-settings.general", icon: "icons/content/gear" },
+  { id: "java", label: "instance-settings.java", icon: "icons/content/code" },
+  { id: "memory", label: "instance-settings.memory", icon: "icons/content/storage" },
+  { id: "window", label: "instance-settings.window", icon: "icons/content/monitor" },
+  { id: "launch", label: "instance-settings.launch", icon: "icons/actions/play" },
+  { id: "hooks", label: "instance-settings.hooks", icon: "icons/content/terminal" },
+  { id: "sandbox", label: "instance-settings.sandbox", icon: "icons/security/shield" },
+  { id: "maintenance", label: "instance-settings.maintenance", icon: "icons/content/sliders" },
+  { id: "danger", label: "instance-settings.danger-zone", icon: "icons/status/error" },
+] as const;
 
-const formatGb = (mb: number) => `${(mb / 1024).toFixed(mb % 1024 ? 1 : 0)} GB`;
+const formatGb = (mb: number) =>
+  t("instance-settings.gigabytes", {
+    amount: formatNumber(mb / 1024, { maximumFractionDigits: mb % 1024 ? 1 : 0 }),
+  });
 
 /**
  * Instance settings: a full page opened from the header. A section list on the left
@@ -112,7 +116,7 @@ export function InstanceSettingsTab(props: {
         options.unshift({
           value: stableIconId(src),
           src,
-          label: src === packIcon() ? "Modpack icon" : "Uploaded icon",
+          label: src === packIcon() ? t("instance-settings.modpack-icon") : t("instance-settings.uploaded-icon"),
         });
     }
     return options.map((option) => ({
@@ -130,7 +134,7 @@ export function InstanceSettingsTab(props: {
       setUploadedInstanceIcons((icons) => [...new Set([...icons, src])]);
       setIcon(src);
     } catch {
-      setIconError("Could not open this image. Try a PNG or JPEG.");
+      setIconError(t("instance-settings.image-error"));
     }
   };
   const [javaTest, setJavaTest] = createSignal<{
@@ -150,13 +154,16 @@ export function InstanceSettingsTab(props: {
   const testJava = async () => {
     const request = ++javaRequest;
     const path = draft().javaPath.trim();
-    setJavaTest({ pending: true, text: "Testing Java…", failed: false });
+    setJavaTest({ pending: true, text: t("instance-settings.testing-java"), failed: false });
     try {
       const result = await verifyJavaExecutable(path);
       if (request === javaRequest)
         setJavaTest({
           pending: false,
-          text: `Java ${result.major_version} · ${result.is_64bit ? "64-bit" : "32-bit"}`,
+          text: t("instance-settings.java-verified", {
+            version: result.major_version,
+            bits: result.is_64bit ? "64" : "32",
+          }),
           failed: false,
         });
     } catch (error) {
@@ -248,14 +255,14 @@ export function InstanceSettingsTab(props: {
     <>
       <SettingRow
         label={label}
-        description={
-          draft()[key] ? `Launcher default · ${fallback}` : undefined
+          description={
+          draft()[key] ? t("instance-settings.inherited", { fallback }) : undefined
         }
       >
         <Switch
           size="sm"
-          label="Custom"
-          aria-label={`Custom ${label.toLowerCase()}`}
+          label={t("instance-settings.custom")}
+          aria-label={t("instance-settings.custom-aria", { label: label.toLowerCase() })}
           checked={!draft()[key]}
           onChange={(custom) => patch({ [key]: !custom })}
         />
@@ -268,14 +275,14 @@ export function InstanceSettingsTab(props: {
 
   return (
     <div data-vesta="instance-settings">
-      <nav data-vesta="instance-settings-nav" aria-label="Settings sections">
+      <nav data-vesta="instance-settings-nav" aria-label={t("instance-settings.sections-aria")}>
         <Button
           size="sm"
           variant="ghost"
           icon={<Icon name="icons/navigation/arrow-back" />}
           onClick={props.onBack}
         >
-          Back
+          {t("instance-settings.back")}
         </Button>
         <For each={sections}>
           {(section) => (
@@ -287,7 +294,7 @@ export function InstanceSettingsTab(props: {
               onClick={() => jump(section.id)}
             >
               <Icon name={section.icon} size={15} />
-              {section.label}
+              {t(section.label)}
             </button>
           )}
         </For>
@@ -305,14 +312,14 @@ export function InstanceSettingsTab(props: {
               size="sm"
               variant="ghost"
               class="instance-settings-back"
-              label="Back"
+              label={t("instance-settings.back")}
               icon={<Icon name="icons/navigation/arrow-back" />}
               onClick={props.onBack}
             />
-            <h2>Settings</h2>
+            <h2>{t("instance-settings.settings")}</h2>
           </header>
 
-          <Panel id="general" title="General">
+          <Panel id="general" title={t("instance-settings.general")}>
             <div data-vesta="settings-identity">
               <IconPicker
                 value={stableIconId(icon())}
@@ -324,10 +331,10 @@ export function InstanceSettingsTab(props: {
               <div>
                 <TextField
                   size="sm"
-                  label="Instance name"
+                  label={t("instance-settings.name")}
                   value={name()}
                   onChange={setName}
-                  error={name().trim() ? undefined : "Enter a name."}
+                  error={name().trim() ? undefined : t("instance-settings.enter-name")}
                 />
               </div>
             </div>
@@ -337,38 +344,38 @@ export function InstanceSettingsTab(props: {
               </p>
             </Show>
             <SettingRow
-              label="Minecraft options"
-              description="Video, controls and sound for this instance (options.txt)."
+              label={t("instance-settings.minecraft-options")}
+              description={t("instance-settings.minecraft-options-description")}
             >
               <Button size="sm" variant="outline" disabled>
-                Edit…
+                {t("instance-settings.edit")}
               </Button>
             </SettingRow>
           </Panel>
 
-          <Panel id="java" title="Java">
+          <Panel id="java" title={t("instance-settings.java")}>
             <SettingRow
-              label="Java executable"
-              description="The runtime that starts the game."
+              label={t("instance-settings.java-executable")}
+              description={t("instance-settings.runtime-description")}
             >
               <Select
                 size="sm"
-                aria-label="Java executable"
+                aria-label={t("instance-settings.java-executable")}
                 value={draft().java}
                 onChange={(java) => {
                   javaRequest++;
                   setJavaTest(undefined);
                   patch({ java });
                 }}
-                options={javaOptions}
+                options={javaOptions()}
               />
             </SettingRow>
             <Show when={draft().java === "custom"}>
               <div data-vesta="settings-reveal">
-                <SettingRow label="Executable path">
+                <SettingRow label={t("instance-settings.executable-path")}>
                   <TextField
                     size="sm"
-                    aria-label="Java executable path"
+                    aria-label={t("instance-settings.java-path-aria")}
                     placeholder="/path/to/bin/java"
                     value={draft().javaPath}
                     onChange={changeJavaPath}
@@ -379,7 +386,7 @@ export function InstanceSettingsTab(props: {
                     disabled={!canBrowseJava()}
                     onClick={() => void browseJava()}
                   >
-                    Browse…
+                    {t("instance-settings.browse")}
                   </Button>
                   <Show when={draft().javaPath.trim()}>
                     <Button
@@ -388,7 +395,7 @@ export function InstanceSettingsTab(props: {
                       disabled={javaTest()?.pending}
                       onClick={() => void testJava()}
                     >
-                      {javaTest()?.pending ? "Testing…" : "Test"}
+                      {javaTest()?.pending ? t("instance-settings.testing") : t("instance-settings.test")}
                     </Button>
                   </Show>
                 </SettingRow>
@@ -411,11 +418,11 @@ export function InstanceSettingsTab(props: {
                 </Show>
               </div>
             </Show>
-            {inherit("inheritArgs", "JVM arguments", "none", () => (
-              <SettingRow label="Arguments">
+            {inherit("inheritArgs", t("instance-settings.jvm-arguments"), t("common.none"), () => (
+              <SettingRow label={t("instance-settings.arguments")}>
                 <TextField
                   size="sm"
-                  aria-label="JVM arguments"
+                  aria-label={t("instance-settings.jvm-arguments")}
                   placeholder="-XX:+UseG1GC"
                   value={draft().args}
                   onChange={(args) => patch({ args })}
@@ -424,11 +431,11 @@ export function InstanceSettingsTab(props: {
             ))}
           </Panel>
 
-          <Panel id="memory" title="Memory">
-            {inherit("inheritMemory", "Allocation", "2 – 4 GB", () => (
+          <Panel id="memory" title={t("instance-settings.memory")}>
+            {inherit("inheritMemory", t("instance-settings.allocation"), t("instance-settings.memory-range", { min: "2", max: "4" }), () => (
               <div data-vesta="settings-memory">
                 <Slider
-                  label="Allocation"
+                  label={t("instance-settings.allocation")}
                   min={512}
                   max={systemMemoryMb}
                   step={512}
@@ -438,41 +445,43 @@ export function InstanceSettingsTab(props: {
                     patch({ minMemory, maxMemory })
                   }
                   getValueLabel={([low, high]) =>
-                    `${formatGb(low)} – ${formatGb(high)}`
+                    t("instance-settings.memory-range", {
+                      min: formatGb(low).replace(/ GB$/, ""),
+                      max: formatGb(high).replace(/ GB$/, ""),
+                    })
                   }
                 />
                 <div data-vesta="settings-memory-scale">
-                  <span>512 MB</span>
-                  <span>{formatGb(systemMemoryMb)} installed</span>
+                  <span>{t("instance-settings.megabytes", { amount: formatNumber(512) })}</span>
+                  <span>{t("instance-settings.gb-installed", { value: formatGb(systemMemoryMb) })}</span>
                 </div>
                 <dl data-vesta="settings-memory-readout">
                   <div>
-                    <dt>Start (-Xms)</dt>
-                    <dd>{draft().minMemory} MB</dd>
+                    <dt>{t("instance-settings.memory-start")}</dt>
+                    <dd>{t("instance-settings.megabytes", { amount: formatNumber(draft().minMemory) })}</dd>
                   </div>
                   <div>
-                    <dt>Limit (-Xmx)</dt>
-                    <dd>{draft().maxMemory} MB</dd>
+                    <dt>{t("instance-settings.memory-limit")}</dt>
+                    <dd>{t("instance-settings.megabytes", { amount: formatNumber(draft().maxMemory) })}</dd>
                   </div>
                 </dl>
                 <Show when={memoryHigh()}>
                   <p data-vesta="settings-note" data-tone="warning">
                     <Icon name="icons/controls/warning" size={14} />
-                    Leaving less than 10% of memory for your system can make
-                    everything slow.
+                    {t("instance-settings.memory-warning")}
                   </p>
                 </Show>
               </div>
             ))}
           </Panel>
 
-          <Panel id="window" title="Game window">
-            {inherit("inheritResolution", "Resolution", "1280 × 720", () => (
-              <SettingRow label="Width × height">
+          <Panel id="window" title={t("instance-settings.game-window")}>
+            {inherit("inheritResolution", t("instance-settings.resolution"), "1280 × 720", () => (
+              <SettingRow label={t("instance-settings.width-height")}>
                 <div data-vesta="settings-resolution">
                   <NumberField
                     size="sm"
-                    aria-label="Width"
+                    aria-label={t("instance-settings.width")}
                     value={draft().width}
                     onChange={(width) => patch({ width })}
                     min={0}
@@ -480,7 +489,7 @@ export function InstanceSettingsTab(props: {
                   <span aria-hidden="true">×</span>
                   <NumberField
                     size="sm"
-                    aria-label="Height"
+                    aria-label={t("instance-settings.height")}
                     value={draft().height}
                     onChange={(height) => patch({ height })}
                     min={0}
@@ -490,23 +499,23 @@ export function InstanceSettingsTab(props: {
             ))}
           </Panel>
 
-          <Panel id="launch" title="Launch">
+          <Panel id="launch" title={t("instance-settings.launch")}>
             {inherit(
               "inheritLauncherAction",
-              "Launcher window",
-              "stays open",
+              t("instance-settings.launcher-window"),
+              t("instance-settings.stays-open"),
               () => (
-                <SettingRow label="When the game starts">
+                <SettingRow label={t("instance-settings.when-game-starts")}>
                   <Select
                     size="sm"
-                    aria-label="Launcher window"
+                    aria-label={t("instance-settings.launcher-window")}
                     value={draft().launcherAction}
                     onChange={(launcherAction) => patch({ launcherAction })}
                     options={[
-                      { value: "keep", label: "Stay open" },
-                      { value: "minimize", label: "Minimize" },
-                      { value: "hide", label: "Hide to tray" },
-                      { value: "quit", label: "Quit the launcher" },
+                      { value: "keep", label: t("instance-settings.stay-open") },
+                      { value: "minimize", label: t("instance-settings.minimize") },
+                      { value: "hide", label: t("instance-settings.hide-to-tray") },
+                      { value: "quit", label: t("instance-settings.quit-launcher") },
                     ]}
                   />
                 </SettingRow>
@@ -514,14 +523,14 @@ export function InstanceSettingsTab(props: {
             )}
             {inherit(
               "inheritEnvironment",
-              "Environment variables",
+              t("instance-settings.environment-variables"),
               "none",
               () => (
                 <div data-vesta="settings-block">
                   <TextArea
                     size="sm"
-                    aria-label="Environment variables"
-                    description="One KEY=value per line."
+                    aria-label={t("instance-settings.environment-variables")}
+                    description={t("instance-settings.environment-format")}
                     placeholder={"KEY=value\nOTHER_KEY=value"}
                     value={draft().environment}
                     onChange={(environment) => patch({ environment })}
@@ -532,39 +541,39 @@ export function InstanceSettingsTab(props: {
             )}
           </Panel>
 
-          <Panel id="hooks" title="Hooks">
-            {inherit("inheritCommands", "Launch hooks", "none", () => (
+          <Panel id="hooks" title={t("instance-settings.hooks")}>
+            {inherit("inheritCommands", t("instance-settings.launch-hooks"), t("common.none"), () => (
               <>
                 <SettingRow
-                  label="Before launch"
-                  description="Runs before the game starts."
+                  label={t("instance-settings.before-launch")}
+                  description={t("instance-settings.before-launch-description")}
                 >
                   <TextField
                     size="sm"
-                    aria-label="Pre-launch hook"
+                    aria-label={t("instance-settings.pre-launch-hook")}
                     value={draft().preLaunch}
                     onChange={(preLaunch) => patch({ preLaunch })}
                   />
                 </SettingRow>
                 <SettingRow
-                  label="Wrapper"
-                  description="Prefixes the Java command."
+                  label={t("instance-settings.wrapper")}
+                  description={t("instance-settings.wrapper-description")}
                 >
                   <TextField
                     size="sm"
-                    aria-label="Wrapper command"
+                    aria-label={t("instance-settings.wrapper-command")}
                     placeholder="mangohud --dlsym"
                     value={draft().wrapper}
                     onChange={(wrapper) => patch({ wrapper })}
                   />
                 </SettingRow>
                 <SettingRow
-                  label="After exit"
-                  description="Runs when the game closes."
+                  label={t("instance-settings.after-exit")}
+                  description={t("instance-settings.after-exit-description")}
                 >
                   <TextField
                     size="sm"
-                    aria-label="Post-exit hook"
+                    aria-label={t("instance-settings.post-exit-hook")}
                     value={draft().postExit}
                     onChange={(postExit) => patch({ postExit })}
                   />
@@ -573,32 +582,32 @@ export function InstanceSettingsTab(props: {
             ))}
           </Panel>
 
-          <Panel id="sandbox" title="Sandbox">
-            {inherit("inheritSandbox", "Sandbox", "Standard preset", () => (
+          <Panel id="sandbox" title={t("instance-settings.sandbox")}>
+            {inherit("inheritSandbox", t("instance-settings.sandbox"), t("instance-settings.standard-preset"), () => (
               <>
                 <SettingRow
-                  label="Preset"
-                  description="What the game can read and write."
+                  label={t("instance-settings.preset")}
+                  description={t("instance-settings.preset-description")}
                 >
                   <Select
                     size="sm"
-                    aria-label="Sandbox preset"
+                    aria-label={t("instance-settings.sandbox-preset")}
                     value={draft().sandboxPreset}
                     onChange={(sandboxPreset) => patch({ sandboxPreset })}
                     options={[
-                      { value: "off", label: "Off" },
-                      { value: "standard", label: "Standard" },
-                      { value: "strict", label: "Strict" },
+                      { value: "off", label: t("instance-settings.off") },
+                      { value: "standard", label: t("instance-settings.standard") },
+                      { value: "strict", label: t("instance-settings.strict") },
                     ]}
                   />
                 </SettingRow>
                 <SettingRow
-                  label="Sandbox the wrapper"
-                  description="Run the wrapper command inside the sandbox too."
+                  label={t("instance-settings.sandbox-wrapper")}
+                  description={t("instance-settings.sandbox-wrapper-description")}
                 >
                   <Switch
                     size="sm"
-                    aria-label="Sandbox the wrapper"
+                    aria-label={t("instance-settings.sandbox-wrapper")}
                     checked={draft().sandboxWrapper}
                     onChange={(sandboxWrapper) => patch({ sandboxWrapper })}
                   />
@@ -607,37 +616,37 @@ export function InstanceSettingsTab(props: {
             ))}
           </Panel>
 
-          <Panel id="maintenance" title="Maintenance">
+          <Panel id="maintenance" title={t("instance-settings.maintenance")}>
             <SettingRow
-              label="Export"
-              description="Share this instance as a modpack file."
+              label={t("instance-settings.export")}
+              description={t("instance-settings.export-description")}
             >
               <Button size="sm" variant="outline" disabled={busy()}>
-                Export…
+                {t("instance-settings.export-action")}
               </Button>
             </SettingRow>
             <SettingRow
-              label="Duplicate"
-              description="A separate copy with its own worlds."
+              label={t("instance-settings.duplicate")}
+              description={t("instance-settings.duplicate-description")}
             >
               <Button size="sm" variant="outline" disabled={busy()}>
-                Duplicate
+                {t("instance-settings.duplicate")}
               </Button>
             </SettingRow>
             <SettingRow
-              label="Repair"
-              description="Re-download missing or damaged game files."
+              label={t("instance-settings.repair")}
+              description={t("instance-settings.repair-description")}
             >
               <Button size="sm" variant="outline" disabled={busy()}>
-                Repair
+                {t("instance-settings.repair")}
               </Button>
             </SettingRow>
           </Panel>
 
-          <Panel id="danger" title="Danger zone" danger>
+          <Panel id="danger" title={t("instance-settings.danger-zone")} danger>
             <SettingRow
-              label="Reset instance"
-              description="Reinstalls from scratch. Worlds, configs and screenshots are deleted."
+              label={t("instance-settings.reset-instance")}
+              description={t("instance-settings.reset-instance-description")}
             >
               <Button
                 size="sm"
@@ -646,12 +655,12 @@ export function InstanceSettingsTab(props: {
                 disabled={busy()}
                 onClick={() => setConfirm("reset")}
               >
-                Reset…
+                {t("instance-settings.reset-action")}
               </Button>
             </SettingRow>
             <SettingRow
-              label="Delete instance"
-              description="Removes everything, permanently."
+              label={t("instance-settings.delete-instance")}
+              description={t("instance-settings.delete-instance-description")}
             >
               <Button
                 size="sm"
@@ -659,7 +668,7 @@ export function InstanceSettingsTab(props: {
                 disabled={busy()}
                 onClick={() => setConfirm("delete")}
               >
-                Delete…
+                {t("instance-settings.delete-action")}
               </Button>
             </SettingRow>
           </Panel>
@@ -668,15 +677,15 @@ export function InstanceSettingsTab(props: {
           <div
             data-vesta="settings-savebar"
             role="region"
-            aria-label="Unsaved changes"
+            aria-label={t("instance-settings.unsaved-changes")}
           >
             <span data-vesta="settings-savebar-dot" />
-            <span>Unsaved changes</span>
+            <span>{t("instance-settings.unsaved-changes")}</span>
             <Button size="sm" variant="ghost" onClick={discard}>
-              Discard
+              {t("instance-settings.discard")}
             </Button>
             <Button size="sm" tone="accent" disabled={invalid()} onClick={save}>
-              Save
+              {t("instance-settings.save")}
             </Button>
           </div>
         </Show>
@@ -685,13 +694,13 @@ export function InstanceSettingsTab(props: {
       <Dialog
         title={
           confirm() === "delete"
-            ? `Delete “${props.entry.instance.name}”?`
-            : `Reset “${props.entry.instance.name}”?`
+            ? t("instance-settings.delete-title", { name: props.entry.instance.name })
+            : t("instance-settings.reset-title", { name: props.entry.instance.name })
         }
         description={
           confirm() === "delete"
-            ? "The instance, its resources, worlds and screenshots are removed. This can't be undone."
-            : "The instance is reinstalled. Worlds, configs and screenshots are deleted."
+            ? t("instance-settings.delete-confirm-description")
+            : t("instance-settings.reset-confirm-description")
         }
         open={!!confirm()}
         onOpenChange={(open) => {
@@ -701,7 +710,7 @@ export function InstanceSettingsTab(props: {
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(undefined)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               tone="danger"
@@ -714,7 +723,7 @@ export function InstanceSettingsTab(props: {
                 }
               }}
             >
-              {confirm() === "delete" ? "Delete" : "Reset"}
+              {confirm() === "delete" ? t("common.delete") : t("settings.reset")}
             </Button>
           </>
         }

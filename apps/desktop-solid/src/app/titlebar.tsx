@@ -8,6 +8,7 @@ import { detectPlatform } from './platform';
 import { route } from './router';
 import { goBack, transitionTo } from './transition';
 import { sectionLabels } from '../pages/settings/sections';
+import { t } from '../localization';
 import './titlebar.css';
 
 const platform = detectPlatform();
@@ -35,33 +36,34 @@ function location(): {
       return instance
         ? {
             label: instance.name,
-            trail: [{ label: 'Library', href: '#/library' }, { label: instance.name }],
-            back: { to: '/library', label: 'Back to Library' },
+            trail: [{ label: t('nav.library'), href: '#/library' }, { label: instance.name }],
+            back: { to: '/library', label: t('nav.back-to-library') },
           }
         : {
-            label: 'Library',
+            label: t('nav.library'),
             icon: 'icons/rail/library',
-            trail: [{ label: 'Library' }],
+            trail: [{ label: t('nav.library') }],
           };
     }
     case 'browse':
       return {
-        label: 'Browse',
+        label: t('nav.browse'),
         icon: 'icons/rail/browse',
-        trail: [{ label: 'Browse' }],
+        trail: [{ label: t('nav.browse') }],
       };
     case 'create':
       return {
-        label: 'New instance',
-        trail: [{ label: 'Library', href: '#/library' }, { label: 'New instance' }],
-        back: { to: '/library', label: 'Back to Library' },
+        label: t('settings.new-instance-title'),
+        trail: [{ label: t('nav.library'), href: '#/library' }, { label: t('settings.new-instance-title') }],
+        back: { to: '/library', label: t('nav.back-to-library') },
       };
     default: {
-      const section = current.section ? sectionLabels[current.section] : undefined;
+      const sectionId = current.section ? sectionLabels[current.section] : undefined;
+      const section = sectionId ? t(sectionId) : undefined;
       return {
-        label: 'Settings',
+        label: t('nav.settings'),
         icon: 'icons/rail/settings',
-        trail: section ? [{ label: 'Settings', href: '#/settings' }, { label: section }] : [{ label: 'Settings' }],
+        trail: section ? [{ label: t('nav.settings'), href: '#/settings' }, { label: section }] : [{ label: t('nav.settings') }],
       };
     }
   }
@@ -75,7 +77,7 @@ function WindowControls() {
       <IconButton
         variant="ghost"
         size="sm"
-        label="Minimize"
+        label={t('nav.minimize')}
         tooltip={false}
         icon={<Icon name="icons/controls/minus" size={14} />}
         onClick={() => win().minimize()}
@@ -83,7 +85,7 @@ function WindowControls() {
       <IconButton
         variant="ghost"
         size="sm"
-        label="Maximize"
+        label={t('nav.maximize')}
         tooltip={false}
         icon={
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -96,7 +98,7 @@ function WindowControls() {
         variant="ghost"
         size="sm"
         tone="danger"
-        label="Close"
+        label={t('nav.close')}
         tooltip={false}
         icon={<Icon name="icons/actions/close" size={14} />}
         onClick={() => win().close()}
@@ -119,7 +121,7 @@ export function Titlebar() {
             <IconButton
               variant="ghost"
               size="sm"
-              label="Back"
+            label={t('common.back')}
               icon={<Icon name="icons/navigation/arrow-back" size={14} />}
               onClick={() => goBack(back().to, findInstance(route().section)?.instance.id)}
             />
@@ -141,14 +143,14 @@ export function Titlebar() {
           )}
         >
           <MenuItem icon={<Icon name="icons/rail/library" size={14} />} onSelect={() => transitionTo('/library')}>
-            Library
+            {t('nav.library')}
           </MenuItem>
           <MenuItem icon={<Icon name="icons/rail/browse" size={14} />} onSelect={() => transitionTo('/browse')}>
-            Browse
+            {t('nav.browse')}
           </MenuItem>
           <MenuSeparator />
           <MenuItem icon={<Icon name="icons/rail/settings" size={14} />} onSelect={() => transitionTo('/settings')}>
-            Settings
+            {t('nav.settings')}
           </MenuItem>
         </Menu>
       </div>
@@ -164,7 +166,7 @@ export function Titlebar() {
           transitionTo(link.getAttribute('href')!.slice(1), findInstance(route().section)?.instance.id);
         }}
       >
-        <Breadcrumbs aria-label="Location" class="titlebar-breadcrumb">
+        <Breadcrumbs aria-label={t('nav.location')} class="titlebar-breadcrumb">
           <For each={location().trail}>
             {(crumb) => <BreadcrumbItem href={crumb.href}>{crumb.label}</BreadcrumbItem>}
           </For>
@@ -176,7 +178,7 @@ export function Titlebar() {
           <IconButton
             variant="ghost"
             size="sm"
-            label="Add instance"
+            label={t('nav.create')}
             icon={<Icon name="icons/actions/add" size={14} />}
             onClick={() => transitionTo('/create')}
           />

@@ -9,6 +9,7 @@ import {
   type InstanceEntry,
 } from "../../../features/instances/fixtures";
 import { route } from "../../../app/router";
+import { t } from "../../../localization";
 import "./instance-header.css";
 
 const loaderLogos: Record<string, string> = {
@@ -24,7 +25,7 @@ function primaryAction(entry: InstanceEntry) {
   switch (state.kind) {
     case "running":
       return {
-        label: "Stop",
+        label: t("instance.stop"),
         icon: "icons/actions/stop",
         tone: "danger" as const,
         disabled: false,
@@ -32,7 +33,7 @@ function primaryAction(entry: InstanceEntry) {
       };
     case "warming":
       return {
-        label: "Starting…",
+        label: t("common.starting"),
         icon: "icons/actions/play",
         tone: "accent" as const,
         disabled: true,
@@ -48,7 +49,7 @@ function primaryAction(entry: InstanceEntry) {
       };
     case "failed":
       return {
-        label: "Retry installation",
+        label: t("instance.retry-installation"),
         icon: "icons/actions/play",
         tone: "accent" as const,
         disabled: !!state.retrying,
@@ -56,7 +57,7 @@ function primaryAction(entry: InstanceEntry) {
       };
     case "interrupted":
       return {
-        label: state.recovery ? "Resume recovery" : "Resume",
+        label: state.recovery ? t("instance.resume-recovery") : t("instance.resume"),
         icon: "icons/actions/play",
         tone: "accent" as const,
         disabled: !!state.resuming,
@@ -64,7 +65,7 @@ function primaryAction(entry: InstanceEntry) {
       };
     default:
       return {
-        label: "Play",
+        label: t("instance.play"),
         icon: "icons/actions/play",
         tone: "accent" as const,
         disabled: false,
@@ -80,14 +81,14 @@ function notice(entry: InstanceEntry) {
     case "crashed":
       return {
         tone: "danger",
-        title: "The game crashed",
+        title: t("instance.crashed-title"),
         text: state.summary,
-        action: "View details",
+        action: t("instance.view-details"),
       };
     case "failed":
       return {
         tone: "danger",
-        title: "Installation failed",
+        title: t("instance.installation-failed"),
         text: state.reason,
         action: undefined,
       };
@@ -95,9 +96,9 @@ function notice(entry: InstanceEntry) {
       return {
         tone: "warning",
         title: state.recovery
-          ? "Recovery is incomplete"
-          : `${state.label} was interrupted`,
-        text: "Resume to finish where it stopped.",
+          ? t("instance.recovery-incomplete")
+          : t("instance.interrupted", { label: state.label }),
+        text: t("instance.resume-to-finish"),
         action: undefined,
       };
     default:
@@ -154,7 +155,7 @@ export function InstanceHeader(props: {
               {instance().modloader}
             </span>
             <span data-vesta="instance-header-playtime">
-              {formatPlaytime(statsFor(instance().id).playtimeMinutes)} played
+              {t("instance.played-time", { time: formatPlaytime(statsFor(instance().id).playtimeMinutes) })}
             </span>
           </p>
         </div>
@@ -162,7 +163,7 @@ export function InstanceHeader(props: {
         <div data-vesta="instance-header-actions">
           <IconButton
             variant="ghost"
-            label="Instance settings"
+            label={t("instance.settings")}
             icon={<Icon name="icons/content/gear" />}
             onClick={props.onOpenSettings}
           />
@@ -172,14 +173,14 @@ export function InstanceHeader(props: {
               <IconButton
                 {...menuProps}
                 variant="ghost"
-                label="Instance actions"
+                label={t("instance.actions")}
                 tooltip={false}
                 icon={<Icon name="icons/content/ellipsis-v" />}
               />
             )}
           >
             <MenuItem icon={<Icon name="icons/content/folder" />} disabled>
-              Open instance folder
+              {t("instance.open-folder")}
             </MenuItem>
           </Menu>
           <Button

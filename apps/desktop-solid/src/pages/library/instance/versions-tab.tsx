@@ -21,6 +21,7 @@ import {
 } from "../../../features/instances/versions";
 import type { InstanceEntry } from "../../../features/instances/fixtures";
 import { Icon } from "../../../components/icon";
+import { t } from "../../../localization";
 import "./versions-tab.css";
 
 export function VersionsTab(props: { entry: InstanceEntry }) {
@@ -71,8 +72,8 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         value,
         label: value,
         description: experimentalVersion(value)
-          ? "Snapshot / experimental"
-          : "Release",
+          ? t("versions.experimental")
+          : t("versions.release"),
       }));
 
   const chooseMinecraft = (value: string) => {
@@ -84,12 +85,12 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
       <Show
         when={pack()}
         fallback={
-          <SettingsSection title="Core configuration">
+          <SettingsSection title={t("versions.core-configuration")}>
             <div data-vesta="version-core">
               <div data-vesta="version-field">
-                <label>Modloader</label>
+                <label>{t("versions.modloader")}</label>
                 <SegmentedControl
-                  aria-label="Modloader"
+                  aria-label={t("versions.modloader")}
                   fill
                   value={loader()}
                   onChange={(value) => {
@@ -125,16 +126,16 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
               </div>
               <div data-vesta="version-field">
                 <header>
-                  <label>Minecraft version</label>
+                  <label>{t("versions.minecraft-version")}</label>
                   <Switch
                     size="sm"
-                    label="Show snapshots"
+                    label={t("versions.show-snapshots")}
                     checked={experimental()}
                     onChange={setExperimental}
                   />
                 </header>
                 <Combobox
-                  aria-label="Minecraft version"
+                  aria-label={t("versions.minecraft-version")}
                   options={mcOptions()}
                   value={minecraft()}
                   onChange={chooseMinecraft}
@@ -142,9 +143,9 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
               </div>
               <Show when={loader() !== "vanilla"}>
                 <div data-vesta="version-field">
-                  <label>Loader version</label>
+                  <label>{t("versions.loader-version")}</label>
                   <Combobox
-                    aria-label="Compatible loader version"
+                    aria-label={t("versions.loader-version")}
                     value={loaderVersion()}
                     onChange={setLoaderVersion}
                     options={compatibleLoaderVersions(
@@ -158,8 +159,8 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
             <Show when={!valid()}>
               <p data-vesta="version-warning">
                 {compatibleLoaderVersions(minecraft(), loader()).length
-                  ? "Choose a loader version."
-                  : `No ${loader().charAt(0).toUpperCase() + loader().slice(1)} versions found for Minecraft ${minecraft()}.`}
+                  ? t("versions.choose-loader-version")
+                  : t("versions.none-found", { loader: loader().charAt(0).toUpperCase() + loader().slice(1), minecraft: minecraft() })}
               </p>
             </Show>
             <Show when={dirty()}>
@@ -169,7 +170,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                   disabled={!valid() || busy()}
                   onClick={() => setPending({ engine: engine() })}
                 >
-                  Review changes
+                  {t("versions.review-changes")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -180,7 +181,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                     setLoaderVersion(installed.loaderVersion);
                   }}
                 >
-                  Discard
+                  {t("versions.discard")}
                 </Button>
               </div>
             </Show>
@@ -189,7 +190,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
       >
         {(linked) => (
           <section data-vesta="linked-pack">
-            <SettingsSection title="Linked modpack">
+            <SettingsSection title={t("versions.linked-modpack")}>
               <div data-vesta="pack-selector">
                 <div data-vesta="pack-summary">
                   <img src={linked().icon} alt="" />
@@ -221,10 +222,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 <Show when={linked().releases[0].id !== linked().installed}>
                   <div data-vesta="pack-update">
                     <Icon name="icons/actions/download" size={14} />
-                    <span>
-                      Version <strong>{linked().releases[0].label}</strong> is
-                      available
-                    </span>
+                    <span>{t("versions.version-available", { version: linked().releases[0].label })}</span>
                     <Button
                       size="sm"
                       tone="accent"
@@ -236,27 +234,27 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                         })
                       }
                     >
-                      Update pack
+                      {t("versions.update-pack")}
                     </Button>
                   </div>
                 </Show>
                 <Show when={releasesOpen()}>
                   <div data-vesta="version-release-heading">
                     <TextField
-                      aria-label="Search pack versions"
-                      placeholder="Search versions"
+                      aria-label={t("versions.search-pack-versions")}
+                      placeholder={t("versions.search-versions")}
                       size="sm"
                       value={releaseQuery()}
                       onChange={setReleaseQuery}
                     />
                     <Select
                       size="sm"
-                      aria-label="Pack release type"
+                      aria-label={t("versions.release-type")}
                       value={releaseFilter()}
                       onChange={setReleaseFilter}
                       options={[
-                        { value: "stable", label: "Stable releases" },
-                        { value: "all", label: "All releases" },
+                        { value: "stable", label: t("versions.stable-releases") },
+                        { value: "all", label: t("versions.all-releases") },
                       ]}
                     />
                   </div>
@@ -269,21 +267,21 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                             .toLowerCase()
                             .includes(releaseQuery().toLowerCase()),
                       )}
-                      fallback={<p>No matching versions.</p>}
+                      fallback={<p>{t("versions.no-matching-versions")}</p>}
                     >
                       {(item) => (
                         <div data-vesta="version-release">
                           <span>
                             <strong>{item.label}</strong>
                             <small>
-                              {item.experimental ? "Experimental · " : ""}
+                              {item.experimental ? `${t("versions.experimental-tag")} · ` : ""}
                               Minecraft {item.minecraft} · {item.loader}{" "}
                               {item.loaderVersion}
                             </small>
                           </span>
                           <Show
                             when={item.id !== linked().installed}
-                            fallback={<small>Installed</small>}
+                            fallback={<small>{t("versions.installed")}</small>}
                           >
                             <Button
                               size="sm"
@@ -293,7 +291,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                                 setPending({ engine: item, release: item })
                               }
                             >
-                              Switch version
+                              {t("versions.switch-version")}
                             </Button>
                           </Show>
                         </div>
@@ -303,10 +301,10 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 </Show>
               </div>
             </SettingsSection>
-            <SettingsSection title="Modpack connection">
+            <SettingsSection title={t("versions.connection")}>
               <SettingRow
-                label="Unlink modpack"
-                description="Keep installed files and manage them individually."
+                label={t("versions.unlink-modpack")}
+                description={t("versions.unlink-description")}
               >
                 <Button
                   size="sm"
@@ -314,12 +312,12 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                   disabled={busy()}
                   onClick={() => setUnlinking("keep")}
                 >
-                  Unlink…
+                  {t("versions.unlink-action")}
                 </Button>
               </SettingRow>
               <SettingRow
-                label="Delete bundled files and unlink"
-                description="Your individually added resources and worlds are kept."
+                label={t("versions.delete-bundled-unlink")}
+                description={t("versions.delete-unlink-description")}
               >
                 <Button
                   size="sm"
@@ -328,7 +326,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                   disabled={busy()}
                   onClick={() => setUnlinking("delete")}
                 >
-                  Delete and unlink…
+                  {t("versions.delete-unlink-action")}
                 </Button>
               </SettingRow>
             </SettingsSection>
@@ -337,12 +335,11 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
       </Show>
       <Show when={busy()}>
         <p data-vesta="version-warning">
-          Stop the game and finish any ongoing installation before changing
-          versions.
+          {t("versions.stop-before-changing")}
         </p>
       </Show>
       <Dialog
-        title="Change instance version?"
+        title={t("versions.change-title")}
         open={!!pending()}
         onOpenChange={(open) => {
           if (!open) setPending(undefined);
@@ -351,7 +348,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         footer={
           <>
             <Button variant="ghost" onClick={() => setPending(undefined)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               tone="accent"
@@ -363,14 +360,13 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 setPending(undefined);
               }}
             >
-              Apply version change
+              {t("versions.apply-change")}
             </Button>
           </>
         }
       >
         <p>
-          Back up your worlds before changing Minecraft versions, especially
-          when downgrading.
+          {t("versions.back-up-worlds")}
         </p>
         <Show when={pending()}>
           {(next) => (
@@ -386,7 +382,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 {next().engine.loaderVersion}
               </dd>
               <Show when={next().release}>
-                <dt>Pack version</dt>
+              <dt>{t("versions.pack-version")}</dt>
                 <dd>
                   {pack()?.installed} → {next().release?.label}
                 </dd>
@@ -395,20 +391,19 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
           )}
         </Show>
         <p>
-          Your worlds and custom resources are kept. Bundled resources follow
-          the selected pack release.
+          {t("versions.worlds-resources-kept")} {t("versions.bundled-follow-release")}
         </p>
       </Dialog>
       <Dialog
         title={
           unlinking() === "delete"
-            ? "Delete bundled files and unlink?"
-            : "Unlink modpack?"
+            ? t("versions.delete-unlink-title")
+            : t("versions.unlink-title")
         }
         description={
           unlinking() === "delete"
-            ? "Bundled resources will be removed. Worlds and custom resources remain."
-            : "Installed files remain, but future updates are managed individually."
+            ? t("versions.delete-unlink-warning")
+            : t("versions.unlink-warning")
         }
         open={!!unlinking()}
         onOpenChange={(open) => {
@@ -418,7 +413,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         footer={
           <>
             <Button variant="ghost" onClick={() => setUnlinking(undefined)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               tone={unlinking() === "delete" ? "danger" : "accent"}
@@ -427,7 +422,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 setUnlinking(undefined);
               }}
             >
-              Confirm unlink
+              {t("versions.confirm-unlink")}
             </Button>
           </>
         }

@@ -33,20 +33,21 @@ import {
 import type { InstanceEntry } from "../../../features/instances/fixtures";
 import { selectVisible } from "../../../features/instances/interaction-utils";
 import { versionStore } from "../../../features/instances/versions";
+import { t } from "../../../localization";
 import "./resources-tab.css";
 
 type Filter = "all" | ResourceKind;
-const filters = [
-  { value: "all", label: "All types" },
-  { value: "mod", label: "Mods" },
-  { value: "resourcepack", label: "Resource packs" },
-  { value: "shader", label: "Shaders" },
+const filters = () => [
+  { value: "all", label: t("resources.all-types") },
+  { value: "mod", label: t("resources.mods") },
+  { value: "resourcepack", label: t("resources.resource-packs") },
+  { value: "shader", label: t("resources.shaders") },
 ];
-const kindLabel: Record<string, string> = {
-  mod: "Mod",
-  resourcepack: "Pack",
-  shader: "Shader",
-  datapack: "Data",
+const kindLabel: Record<string, "resources.mod" | "resources.pack" | "resources.shader" | "resources.datapack"> = {
+  mod: "resources.mod",
+  resourcepack: "resources.pack",
+  shader: "resources.shader",
+  datapack: "resources.datapack",
 };
 
 export function ResourcesTab(props: {
@@ -139,7 +140,7 @@ function ResourceList(props: {
       <TableCell class="col-check">
         <Checkbox
           size="sm"
-          aria-label={`Select ${item.name}`}
+          aria-label={t("resources.select-resource", { name: item.name })}
           checked={selectedSet().has(item.id)}
           onChange={(on) => toggle(item.id, on)}
         />
@@ -152,7 +153,7 @@ function ResourceList(props: {
             <span data-vesta="resource-sub">
               <Show when={showKind()}>
                 <span data-vesta="resource-kind" data-kind={item.kind}>
-                  {kindLabel[item.kind]}
+                  {t(kindLabel[item.kind])}
                 </span>
               </Show>
               <span data-vesta="resource-file" title={item.filename}>
@@ -170,7 +171,7 @@ function ResourceList(props: {
               size="sm"
               variant="ghost"
               class="resource-update"
-              label={`Update to ${item.update}`}
+              label={t("common.update-to", { version: item.update! })}
               icon={<Icon name="icons/actions/download" />}
               onClick={() => applyUpdates(props.scope, [item.id])}
             />
@@ -183,7 +184,7 @@ function ResourceList(props: {
       <TableCell class="col-enabled">
         <Switch
           size="sm"
-          aria-label={`Enable ${item.name}`}
+          aria-label={t("resources.enable-resource", { name: item.name })}
           checked={item.enabled}
           onChange={(on) => setResourcesEnabled(props.scope, [item.id], on)}
         />
@@ -197,7 +198,7 @@ function ResourceList(props: {
               variant="ghost"
               size="sm"
               tooltip={false}
-              label={`Actions for ${item.name}`}
+              label={t("resources.actions", { name: item.name })}
               icon={<Icon name="icons/content/ellipsis-v" />}
             />
           )}
@@ -207,11 +208,11 @@ function ResourceList(props: {
               icon={<Icon name="icons/actions/download" />}
               onSelect={() => applyUpdates(props.scope, [item.id])}
             >
-              Update to {item.update}
+              {t("common.update-to", { version: item.update! })}
             </MenuItem>
           </Show>
           <MenuItem icon={<Icon name="icons/content/folder" />} disabled>
-            Show in folder
+            {t("resources.show-in-folder")}
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -219,7 +220,7 @@ function ResourceList(props: {
             icon={<Icon name="icons/actions/delete" />}
             onSelect={() => setDeleting([item.id])}
           >
-            Remove
+            {t("resources.remove")}
           </MenuItem>
         </Menu>
       </TableCell>
@@ -239,19 +240,19 @@ function ResourceList(props: {
               <Show when={!props.world}>
                 <Select
                   size="sm"
-                  aria-label="Resource type"
+                  aria-label={t("resources.resource-type")}
                   value={filter()}
                   onChange={(value) => setFilter(value as Filter)}
-                  options={filters}
+                  options={filters()}
                   class="resources-type"
                 />
               </Show>
               <TextField
                 size="sm"
                 class="resources-search"
-                aria-label="Search resources"
+                aria-label={t("resources.search")}
                 placeholder={
-                  props.world ? "Search datapacks" : "Search resources"
+                  t(props.world ? "resources.search-datapacks" : "resources.search-resources")
                 }
                 value={query()}
                 onChange={setQuery}
@@ -263,7 +264,7 @@ function ResourceList(props: {
                   icon={<Icon name="icons/actions/download" />}
                   onClick={() => applyUpdates(props.scope, updates())}
                 >
-                  Update all ({updates().length})
+                  {t("resources.update-all-count", { count: updates().length })}
                 </Button>
               </Show>
               <Button
@@ -272,7 +273,7 @@ function ResourceList(props: {
                 icon={<Icon name="icons/actions/add" />}
                 onClick={() => navigate(`/browse/${props.entry.instance.id}`)}
               >
-                Add
+                {t("resources.add")}
               </Button>
             </div>
           }
@@ -281,11 +282,11 @@ function ResourceList(props: {
             <IconButton
               size="sm"
               variant="ghost"
-              label="Clear selection"
+              label={t("resources.clear-selection")}
               icon={<Icon name="icons/actions/close" />}
               onClick={clear}
             />
-            <strong>{count()} selected</strong>
+            <strong>{t("resources.selected", { count: count() })}</strong>
             <span data-vesta="resources-selection-actions">
               <Show when={selectedUpdates().length}>
                 <Button
@@ -294,7 +295,7 @@ function ResourceList(props: {
                   icon={<Icon name="icons/actions/download" />}
                   onClick={() => applyUpdates(props.scope, selectedUpdates())}
                 >
-                  Update {selectedUpdates().length}
+                  {t("resources.update-count", { count: selectedUpdates().length })}
                 </Button>
               </Show>
               <Button
@@ -308,7 +309,7 @@ function ResourceList(props: {
                   )
                 }
               >
-                {anyEnabled() ? "Disable" : "Enable"}
+                {t(anyEnabled() ? "common.disable" : "common.enable")}
               </Button>
               <Button
                 size="sm"
@@ -316,7 +317,7 @@ function ResourceList(props: {
                 icon={<Icon name="icons/actions/delete" />}
                 onClick={() => setDeleting([...selectedSet()])}
               >
-                Remove
+                {t("resources.remove-selected")}
               </Button>
             </span>
           </div>
@@ -330,12 +331,12 @@ function ResourceList(props: {
             <EmptyState
               icon="icons/content/layers"
               title={
-                query() ? "No matching resources" : "No resources installed"
+                t(query() ? "resources.no-matches" : "resources.none-installed")
               }
               description={
                 query()
-                  ? "Try another name or author."
-                  : "Add resources to this instance."
+                  ? t("resources.try-another-search")
+                  : t("resources.add-resources-hint")
               }
             />
           }
@@ -354,7 +355,7 @@ function ResourceList(props: {
                 <TableHead class="col-check">
                   <Checkbox
                     size="sm"
-                    aria-label="Select all shown resources"
+                    aria-label={t("resources.select-all")}
                     checked={allSelected()}
                     indeterminate={someSelected()}
                     onChange={(on) =>
@@ -362,14 +363,14 @@ function ResourceList(props: {
                     }
                   />
                 </TableHead>
-                <TableHead class="col-name">Name</TableHead>
-                <TableHead class="col-version">Version</TableHead>
+                <TableHead class="col-name">{t("resources.name-column")}</TableHead>
+                <TableHead class="col-version">{t("resources.version-column")}</TableHead>
                 <TableHead class="col-size" numeric>
-                  Size
+                  {t("resources.size-column")}
                 </TableHead>
-                <TableHead class="col-enabled">On</TableHead>
+                <TableHead class="col-enabled">{t("resources.enabled-column")}</TableHead>
                 <TableHead class="col-menu">
-                  <span data-vesta="sr-only">Actions</span>
+                  <span data-vesta="sr-only">{t("resources.actions-column")}</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -391,7 +392,7 @@ function ResourceList(props: {
                       <img src={props.entry.instance.image} alt="" />
                       <strong>{pack()?.name}</strong>
                       <span data-vesta="resource-group-meta">
-                        Modpack {pack()?.installed}
+                        {t("resources.modpack-group", { version: pack()?.installed ?? "" })}
                       </span>
                       <span data-vesta="resource-group-count">
                         {bundled().length}
@@ -407,7 +408,7 @@ function ResourceList(props: {
                     <TableCell colspan={6}>
                       <div data-vesta="resource-group">
                         <Icon name="icons/content/layers" size={14} />
-                        <strong>Added by you</strong>
+                        <strong>{t("resources.added-by-you")}</strong>
                         <span data-vesta="resource-group-count">
                           {own().length}
                         </span>
@@ -423,9 +424,9 @@ function ResourceList(props: {
       </div>
 
       <Dialog
-        title={`Remove ${deleting().length === 1 ? "resource" : `${deleting().length} resources`}?`}
+        title={t(deleting().length === 1 ? "resources.remove-title-one" : "resources.remove-title-other", { count: deleting().length })}
         size="sm"
-        description="Removed resources will no longer be loaded by this instance."
+        description={t("resources.remove-description")}
         open={deleting().length > 0}
         onOpenChange={(open) => {
           if (!open) setDeleting([]);
@@ -433,7 +434,7 @@ function ResourceList(props: {
         footer={
           <>
             <Button variant="ghost" onClick={() => setDeleting([])}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               tone="danger"
@@ -445,7 +446,7 @@ function ResourceList(props: {
                 setDeleting([]);
               }}
             >
-              Remove
+              {t("resources.remove-selected")}
             </Button>
           </>
         }

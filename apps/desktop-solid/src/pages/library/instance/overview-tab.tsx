@@ -14,6 +14,7 @@ import {
   type InstanceEntry,
 } from "../../../features/instances/fixtures";
 import { copyScreenshot } from "../../../features/instances/screenshot-clipboard";
+import { t } from "../../../localization";
 import "./overview-tab.css";
 
 /**
@@ -39,9 +40,9 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
     setCopyStatus("");
     try {
       await copyScreenshot(src);
-      setCopyStatus("Screenshot copied");
+      setCopyStatus(t("overview.screenshot-copied"));
     } catch {
-      setCopyStatus("Could not copy screenshot");
+      setCopyStatus(t("overview.screenshot-copy-failed"));
     }
   };
 
@@ -53,20 +54,20 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
           <section data-vesta="overview-panel" class="overview-empty">
             <Icon name="icons/content/globe" size={20} />
             <div>
-              <strong>No worlds yet</strong>
-              <p>Start the game to create one, or bring in an existing save.</p>
+            <strong>{t("overview.no-worlds")}</strong>
+              <p>{t("overview.create-or-import-world")}</p>
             </div>
             <Button size="sm" variant="outline" onClick={() => goto("worlds")}>
-              Go to worlds
+              {t("overview.go-to-worlds")}
             </Button>
           </section>
         }
       >
         {(world) => (
-          <section data-vesta="overview-continue" aria-label="Continue playing">
+          <section data-vesta="overview-continue" aria-label={t("overview.continue-playing")}>
             <img src={world().image} alt="" draggable="false" />
             <div data-vesta="overview-continue-copy">
-              <span data-vesta="overview-eyebrow">Continue playing</span>
+              <span data-vesta="overview-eyebrow">{t("overview.continue-playing")}</span>
               <strong>{world().name}</strong>
               <span data-vesta="overview-continue-meta">
                 <span
@@ -75,7 +76,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                 >
                   {world().mode}
                 </span>
-                Day {world().days} · {world().lastPlayed}
+                {t("worlds.day-count", { count: world().days })} · {world().lastPlayed}
               </span>
             </div>
             <div data-vesta="overview-continue-actions">
@@ -83,7 +84,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                 variant="ghost"
                 onClick={() => goto(`worlds/${world().id}`)}
               >
-                Manage
+                {t("overview.manage")}
               </Button>
               <Button
                 tone="accent"
@@ -91,7 +92,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                 icon={<Icon name="icons/actions/play" />}
                 onClick={() => playInstance(id())}
               >
-                Play world
+                {t("overview.play-world")}
               </Button>
             </div>
           </section>
@@ -101,14 +102,14 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
       <div data-vesta="overview-columns">
         <section data-vesta="overview-panel" aria-labelledby="overview-worlds">
           <header data-vesta="overview-panel-header">
-            <h2 id="overview-worlds">Other worlds</h2>
+            <h2 id="overview-worlds">{t("overview.other-worlds")}</h2>
             <Button size="sm" variant="ghost" onClick={() => goto("worlds")}>
-              View all {worlds().length}
+              {t("overview.view-all-count", { count: worlds().length })}
             </Button>
           </header>
           <Show
             when={others().length}
-            fallback={<p data-vesta="overview-quiet">No other worlds.</p>}
+            fallback={<p data-vesta="overview-quiet">{t("overview.no-other-worlds")}</p>}
           >
             <ul data-vesta="overview-world-list">
               <For each={others()}>
@@ -140,42 +141,42 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
 
         <section data-vesta="overview-panel" aria-labelledby="overview-status">
           <header data-vesta="overview-panel-header">
-            <h2 id="overview-status">Instance</h2>
+            <h2 id="overview-status">{t("overview.instance")}</h2>
           </header>
           <dl data-vesta="overview-facts">
             <div>
-              <dt>Played</dt>
+              <dt>{t("overview.played")}</dt>
               <dd>{formatPlaytime(stats().playtimeMinutes)}</dd>
             </div>
             <div>
-              <dt>Last played</dt>
+              <dt>{t("overview.last-played")}</dt>
               <dd>{stats().lastPlayed}</dd>
             </div>
             <div>
-              <dt>Resources</dt>
+              <dt>{t("overview.resources")}</dt>
               <dd>
                 {resources().length}
                 <Show when={disabled()}>
-                  <span> · {disabled()} off</span>
+                  <span>{t("overview.off-count", { count: disabled() })}</span>
                 </Show>
               </dd>
             </div>
             <div>
-              <dt>Memory</dt>
+              <dt>{t("overview.memory")}</dt>
               <dd>{(stats().memoryMb / 1024).toFixed(1)} GB</dd>
             </div>
           </dl>
           <Show when={updates()}>
             <div data-vesta="overview-updates">
               <span>
-                {updates()} {updates() === 1 ? "update" : "updates"} available
+                {t(updates() === 1 ? "overview.update-one" : "overview.update-other", { count: updates() })}
               </span>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => goto("resources")}
               >
-                Review
+                {t("common.review")}
               </Button>
             </div>
           </Show>
@@ -185,7 +186,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
       <Show when={shots().length}>
         <section aria-labelledby="overview-shots">
           <header data-vesta="overview-panel-header">
-            <h2 id="overview-shots">Screenshots</h2>
+            <h2 id="overview-shots">{t("overview.screenshots")}</h2>
             <span data-vesta="overview-quiet">{shots().length}</span>
           </header>
           <ul data-vesta="shot-grid">
@@ -195,7 +196,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                   <button
                     type="button"
                     data-vesta="shot"
-                    aria-label={`Open ${shot.title}`}
+                      aria-label={t("overview.open-screenshot", { title: shot.title })}
                     onClick={() => setViewer(index())}
                   >
                     <img
@@ -210,7 +211,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                     size="sm"
                     variant="ghost"
                     class="shot-copy"
-                    label={`Copy ${shot.title}`}
+                    label={t("overview.copy-screenshot", { title: shot.title })}
                     icon={<Icon name="icons/actions/copy" />}
                     onClick={() => void copy(shot.src)}
                   />

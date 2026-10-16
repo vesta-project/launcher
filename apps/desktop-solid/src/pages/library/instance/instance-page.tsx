@@ -18,11 +18,13 @@ import { ResourcesTab } from "./resources-tab";
 import { InstanceSettingsTab } from "./settings-tab";
 import { WorldsTab } from "./worlds-tab";
 import { VersionsTab } from "./versions-tab";
+import { t, formatNumber } from "../../../localization";
+import type { MessageId } from "../../../localization/messages";
 import "./instance-page.css";
 
 interface TabDef {
   id: string;
-  label: string;
+  label: MessageId;
   icon: string;
   view: Component<{ entry: InstanceEntry }>;
   flush?: boolean;
@@ -30,33 +32,33 @@ interface TabDef {
 const baseTabs: TabDef[] = [
   {
     id: "overview",
-    label: "Overview",
+    label: "instance.overview",
     icon: "icons/rail/library",
     view: OverviewTab,
   },
   {
     id: "resources",
-    label: "Resources",
+    label: "instance.resources",
     icon: "icons/content/layers",
     view: ResourcesTab,
     flush: true,
   },
   {
     id: "worlds",
-    label: "Worlds",
+    label: "instance.worlds",
     icon: "icons/content/globe",
     view: WorldsTab,
     flush: true,
   },
   {
     id: "versions",
-    label: "Versions",
+    label: "instance.versions",
     icon: "icons/content/history",
     view: VersionsTab,
   },
   {
     id: "console",
-    label: "Console",
+    label: "instance.console",
     icon: "icons/content/terminal",
     view: ConsoleTab,
     flush: true,
@@ -64,7 +66,7 @@ const baseTabs: TabDef[] = [
 ];
 const crashTab: TabDef = {
   id: "crash",
-  label: "Crash",
+  label: "instance.crash",
   icon: "icons/status/error",
   view: CrashTab,
 };
@@ -76,7 +78,7 @@ export function InstancePage(props: { id: string }) {
       keyed
       fallback={
         <Board>
-          <EmptyState icon="icons/rail/library" title="Instance not found" />
+          <EmptyState icon="icons/rail/library" title={t("instance.not-found")} />
         </Board>
       }
     >
@@ -142,7 +144,7 @@ function InstanceContent(props: { id: string }) {
               onChange={open}
               class="instance-tabs"
             >
-              <TabList aria-label="Instance sections">
+              <TabList aria-label={t("nav.instance-sections")}>
                 <For each={tabs()}>
                   {(tab) => (
                     <Tab
@@ -151,16 +153,16 @@ function InstanceContent(props: { id: string }) {
                       badge={
                         tab.id === "resources" && updates() ? (
                           <Badge size="sm" tone="accent">
-                            {updates()} new
+                            {t("instance.updates-count", { count: updates() })}
                           </Badge>
                         ) : count(tab.id) !== undefined ? (
                           <span data-vesta="instance-tab-count">
-                            {count(tab.id)}
+                            {formatNumber(count(tab.id)!)}
                           </span>
                         ) : undefined
                       }
                     >
-                      {tab.label}
+                      {t(tab.label)}
                     </Tab>
                   )}
                 </For>

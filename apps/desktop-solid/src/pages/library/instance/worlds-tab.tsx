@@ -27,6 +27,7 @@ import {
   type InstanceEntry,
 } from "../../../features/instances/fixtures";
 import { ResourcesTab } from "./resources-tab";
+import { t } from "../../../localization";
 import "./worlds-tab.css";
 
 export function WorldsTab(props: { entry: InstanceEntry }) {
@@ -69,20 +70,12 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
     const Item = context ? ContextMenuItem : MenuItem;
     return (
       <>
-        <Item onSelect={() => manage(world)}>Manage datapacks</Item>
-        <Item disabled>Open world folder</Item>
-        <Item onSelect={() => startTransfer(world, false)}>
-          Copy to another instance…
-        </Item>
-        <Item onSelect={() => startTransfer(world, true)}>
-          Move to another instance…
-        </Item>
-        <Item onSelect={() => copyWorldFixture(id(), id(), world.id)}>
-          Duplicate
-        </Item>
-        <Item tone="danger" onSelect={() => setDeleting(world)}>
-          Delete world…
-        </Item>
+        <Item onSelect={() => manage(world)}>{t("worlds.manage")}</Item>
+        <Item disabled>{t("worlds.open-folder")}</Item>
+        <Item onSelect={() => startTransfer(world, false)}>{t("worlds.copy-to-instance")}</Item>
+        <Item onSelect={() => startTransfer(world, true)}>{t("worlds.move-to-instance")}</Item>
+        <Item onSelect={() => copyWorldFixture(id(), id(), world.id)}>{t("worlds.duplicate")}</Item>
+        <Item tone="danger" onSelect={() => setDeleting(world)}>{t("worlds.delete")}</Item>
       </>
     );
   };
@@ -95,21 +88,21 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
             <header data-vesta="pane-toolbar">
               <TextField
                 size="sm"
-                aria-label="Search worlds"
-                placeholder="Search worlds"
+                aria-label={t("worlds.search")}
+                placeholder={t("worlds.search")}
                 value={query()}
                 onChange={setQuery}
                 class="world-search"
               />
               <Select
                 size="sm"
-                aria-label="Sort worlds"
+                aria-label={t("worlds.sort")}
                 value={sort()}
                 onChange={setSort}
                 options={[
-                  { value: "recency", label: "Recently played" },
-                  { value: "name", label: "Name" },
-                  { value: "size", label: "Size" },
+                  { value: "recency", label: t("worlds.sort-recency") },
+                  { value: "name", label: t("worlds.sort-name") },
+                  { value: "size", label: t("worlds.sort-size") },
                 ]}
               />
               <Button
@@ -117,7 +110,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 variant="outline"
                 onClick={() => importer?.click()}
               >
-                Import world
+                {t("worlds.import")}
               </Button>
               <input
                 ref={(el) => {
@@ -142,11 +135,11 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
               fallback={
                 <EmptyState
                   icon="icons/content/globe"
-                  title={query() ? "No matching worlds" : "No worlds yet"}
+                  title={t(query() ? "worlds.no-matches" : "worlds.no-worlds")}
                   description={
                     query()
-                      ? "Try another search."
-                      : "Create a world in Minecraft or import an existing save."
+                      ? t("worlds.try-search")
+                      : t("worlds.create-or-import")
                   }
                 />
               }
@@ -161,7 +154,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                             type="button"
                             data-vesta="world-open"
                             onClick={() => manage(world)}
-                            aria-label={`Manage ${world.name}`}
+                            aria-label={t("worlds.manage-world", { name: world.name })}
                           >
                             <img
                               data-vesta="world-thumb"
@@ -178,7 +171,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                                 >
                                   {world.mode}
                                 </span>
-                                Day {world.days}
+                                {t("worlds.day-count", { count: world.days })}
                               </span>
                             </span>
                           </button>
@@ -194,7 +187,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                                 variant="ghost"
                                 size="sm"
                                 tooltip={false}
-                                label={`Actions for ${world.name}`}
+                                label={t("common.actions-for", { name: world.name })}
                                 icon={<Icon name="icons/content/ellipsis-v" />}
                               />
                             )}
@@ -219,7 +212,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
               <IconButton
                 size="sm"
                 variant="ghost"
-                label="All worlds"
+                label={t("worlds.all")}
                 icon={<Icon name="icons/navigation/arrow-back" />}
                 onClick={() => manage()}
               />
@@ -233,13 +226,12 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                   >
                     {world().mode}
                   </span>
-                  Day {world().days} · {world().lastPlayed} · {world().sizeMb}{" "}
-                  MB
+                  {t("worlds.day-count", { count: world().days })} · {world().lastPlayed} · {t("worlds.megabytes", { size: world().sizeMb })}
                 </span>
               </div>
               <span data-vesta="world-detail-section">
                 <Icon name="icons/content/layers" size={14} />
-                Datapacks
+                {t("worlds.datapacks")}
               </span>
             </header>
             <ResourcesTab entry={props.entry} world={world()} />
@@ -247,8 +239,8 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         )}
       </Show>
       <Dialog
-        title={`Delete “${deleting()?.name ?? ""}”?`}
-        description="This removes the world and its datapacks. Keep a backup before deleting a save."
+        title={t("worlds.delete-title", { name: deleting()?.name ?? "" })}
+        description={t("worlds.delete-description")}
         size="sm"
         open={!!deleting()}
         onOpenChange={(open) => {
@@ -257,7 +249,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         footer={
           <>
             <Button variant="ghost" onClick={() => setDeleting(undefined)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               tone="danger"
@@ -270,13 +262,13 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 setDeleting(undefined);
               }}
             >
-              Delete world
+              {t("worlds.delete-confirm")}
             </Button>
           </>
         }
       />
       <Dialog
-        title={`${transfer()?.move ? "Move" : "Copy"} “${transfer()?.world.name ?? ""}”`}
+        title={t(transfer()?.move ? "worlds.move-title" : "worlds.copy-title", { name: transfer()?.world.name ?? "" })}
         open={!!transfer()}
         onOpenChange={(open) => {
           if (!open) setTransfer(undefined);
@@ -285,7 +277,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         footer={
           <>
             <Button variant="ghost" onClick={() => setTransfer(undefined)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               tone="accent"
@@ -302,13 +294,13 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 setTransfer(undefined);
               }}
             >
-              {transfer()?.move ? "Move world" : "Copy world"}
+              {t(transfer()?.move ? "worlds.move-world" : "worlds.copy-world")}
             </Button>
           </>
         }
       >
         <Select
-          label="Destination instance"
+          label={t("worlds.destination")}
           value={destination()}
           onChange={(value) => {
             setDestination(value);
@@ -324,11 +316,10 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         />
         <Show when={mismatch()}>
           <p data-vesta="world-transfer-warning">
-            The destination uses Minecraft {target()?.instance.minecraftVersion}
-            . Opening a save in a different version can damage it.
+            {t("worlds.version-warning", { version: target()?.instance.minecraftVersion ?? "" })}
           </p>
           <Checkbox
-            label="I have a backup and understand the risk"
+            label={t("worlds.backup-acknowledgement")}
             checked={acknowledged()}
             onChange={setAcknowledged}
           />

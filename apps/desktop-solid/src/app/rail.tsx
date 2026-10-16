@@ -6,19 +6,20 @@ import { movePin, pinnedInstances, playInstance, retryInstance, togglePin } from
 import { route } from './router';
 import { transitionTo } from './transition';
 import { mainNav, settingsNav, type NavItem } from './routes';
+import { t } from '../localization';
 import './rail.css';
 
 function RailLink(props: { item: NavItem }) {
   return (
     <Tooltip
-      content={props.item.label}
+      content={t(props.item.label)}
       placement="right"
       trigger={(triggerProps) => (
         <a
           {...triggerProps}
           data-vesta="rail-button"
           href={`#${props.item.href}`}
-          aria-label={props.item.label}
+          aria-label={t(props.item.label)}
           aria-current={
             route().page === props.item.id && !(props.item.id === 'library' && route().section) ? 'page' : undefined
           }
@@ -46,13 +47,13 @@ export function Rail() {
   };
 
   return (
-    <aside data-vesta="rail" aria-label="Primary navigation" onKeyDown={move}>
+    <aside data-vesta="rail" aria-label={t('nav.primary')} onKeyDown={move}>
       <div data-vesta="rail-top">
         <div data-vesta="rail-account">
           <AccountMenu placement="right-start" onManage={() => transitionTo('/settings/account')} />
         </div>
 
-        <nav data-vesta="rail-nav" aria-label="Launcher">
+        <nav data-vesta="rail-nav" aria-label={t('nav.launcher')}>
           <For each={mainNav}>{(item) => <RailLink item={item} />}</For>
         </nav>
 
@@ -64,7 +65,7 @@ export function Rail() {
                 <ContextMenu
                   trigger={(contextProps) => (
                     <Tooltip
-                      content={`${entry().instance.name} · ${entry().state.kind === 'running' ? 'Running' : entry().state.kind === 'crashed' ? 'Crashed' : entry().instance.minecraftVersion}`}
+                      content={`${entry().instance.name} · ${entry().state.kind === 'running' ? t('instance.running') : entry().state.kind === 'crashed' ? t('instance.crashed') : entry().instance.minecraftVersion}`}
                       placement="right"
                       trigger={(triggerProps) => (
                         <a
@@ -72,7 +73,7 @@ export function Rail() {
                           data-vesta="rail-pin"
                           data-status={entry().state.kind}
                           href={`#/library/${entry().instance.id}`}
-                          aria-label={`Open ${entry().instance.name}`}
+                          aria-label={t('common.open-instance', { name: entry().instance.name })}
                           aria-current={
                             route().page === 'library' && route().section === entry().instance.id ? 'page' : undefined
                           }
@@ -100,22 +101,22 @@ export function Rail() {
                     }}
                   >
                     {entry().state.kind === 'running'
-                      ? 'Stop'
+                      ? t('common.stop')
                       : ['interrupted', 'failed'].includes(entry().state.kind)
-                        ? 'Resume installation'
-                        : 'Play'}
+                        ? t('common.resume-installation')
+                        : t('common.play')}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem disabled={index() === 0} onSelect={() => movePin(entry().instance.id, -1)}>
-                    Move up
+                    {t('common.move-up')}
                   </ContextMenuItem>
                   <ContextMenuItem
                     disabled={index() === pinnedInstances().length - 1}
                     onSelect={() => movePin(entry().instance.id, 1)}
                   >
-                    Move down
+                    {t('common.move-down')}
                   </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => togglePin(entry().instance.id)}>Unpin from sidebar</ContextMenuItem>
+                  <ContextMenuItem onSelect={() => togglePin(entry().instance.id)}>{t('common.unpin')}</ContextMenuItem>
                 </ContextMenu>
               )}
             </For>

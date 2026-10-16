@@ -25,6 +25,7 @@
     "vite": "^8.1.5"
   },
   "dependencies": {
+    "@fluent/bundle": "^0.19.1",
     "@kobalte/core": "2.0.0-alpha.2",
     "@solid-primitives/props": "4.0.0-next.3",
     "@solidjs/web": "^2.0.0-rc.14",

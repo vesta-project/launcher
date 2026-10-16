@@ -6,8 +6,12 @@ import './styles/tokens/brand.css';
 import '@vesta/ui';
 import { startDesktop } from './platform/desktop';
 import { Shell } from './app/shell';
+import { initializeLocalization } from './localization';
 
 export default function App() {
-  createEffect(() => undefined, () => startDesktop());
+  createEffect(() => undefined, () => {
+    initializeLocalization();
+    return startDesktop();
+  });
   return <Shell />;
 }
