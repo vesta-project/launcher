@@ -61,7 +61,28 @@ export interface SyncItem {
   value: string;
   /** Unknown extras travel with the bundle and cannot be deselected. */
   fixed: boolean;
+  /** How the host says the value is edited; absent for keybinds and unknown keys. */
+  editor?: SyncEditor;
 }
+export interface SyncEditor {
+  kind: 'boolean' | 'integer' | 'decimal' | 'enum' | 'language' | string;
+  min: number | null;
+  max: number | null;
+  step: number | null;
+  values: string[];
+  unit: string | null;
+}
+const editorOf = (entry: Record<string, unknown> | undefined): SyncEditor | undefined =>
+  entry && typeof entry.kind === 'string'
+    ? {
+        kind: entry.kind,
+        min: typeof entry.min === 'number' ? entry.min : null,
+        max: typeof entry.max === 'number' ? entry.max : null,
+        step: typeof entry.step === 'number' ? entry.step : null,
+        values: Array.isArray(entry.values) ? entry.values.map(String) : [],
+        unit: typeof entry.unit === 'string' ? entry.unit : null,
+      }
+    : undefined;
 const acronyms = new Set(['ao', 'fov', 'fps', 'gui', 'gl', 'gpu', 'cpu', 'ui', 'rgb', 'msaa', 'vbo']);
 /** Format a physical options.txt key for display without changing the key. */
 export function formatOptionName(key: string): string {
@@ -93,7 +114,8 @@ export function syncItems(snapshot: SyncSnapshot): SyncItem[] {
       const entry = known.get(key);
       const group = snapshot.category === 'keybinds' ? keybindGroup(key)
         : typeof entry?.category === 'string' && entry.category ? entry.category : 'custom';
-      return { key, value, group, label: formatOptionName(key), fixed: snapshot.category === 'gameOptions' && !entry };
+      const label = formatOptionName(typeof entry?.id === 'string' ? entry.id : key);
+      return { key, value, group, label, fixed: snapshot.category === 'gameOptions' && !entry, editor: editorOf(entry) };
     })
     .sort((a, b) => a.label.localeCompare(b.label));
 }
