@@ -10,7 +10,7 @@ test("built-ins declare capabilities; only Vesta opts into glow spots", () => {
   const byId = Object.fromEntries(
     themePresets.map((preset) => [preset.id, resolveThemeTokens(preset.values)]),
   );
-  expect(themePresets.map((preset) => preset.id)).toEqual(["vesta", "slate", "mono", "aurora"]);
+  expect(themePresets.map((preset) => preset.id)).toEqual(["vesta", "slate", "mono", "aurora", "haze", "sorbet"]);
   const definitions = Object.fromEntries(themePresets.map((p) => [p.id, p.definition]));
   expect(definitions.mono.hue).toBeNull();
   expect(definitions.mono.hueAdjustable).toBe(false);
@@ -41,11 +41,11 @@ test("materials resolve to structurally different tokens", () => {
   const frosted = resolveThemeTokens({ ...defaultTheme, material: "frosted" });
   expect(glass["--vesta-theme-overlay-blur"]).toBe("blur(12px) saturate(1.4)");
   expect(frosted["--vesta-theme-overlay-blur"]).toBe("blur(28px) saturate(1.1)");
-  expect(glass["--vesta-theme-grain-opacity"]).toBe("0");
+  expect(Number(glass["--vesta-theme-grain-opacity"])).toBeGreaterThan(0);
   expect(Number(frosted["--vesta-theme-grain-opacity"])).toBeGreaterThan(0);
   expect(
     Number(resolveThemeTokens({ ...defaultTheme, material: "frosted", grain: 100 })["--vesta-theme-grain-opacity"]),
-  ).toBeCloseTo(0.14);
+  ).toBeCloseTo(0.8);
 });
 
 test("every material and background control resolves to a real token change", () => {

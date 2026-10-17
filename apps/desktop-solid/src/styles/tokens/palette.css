@@ -8,6 +8,8 @@
  * Output: 12-step scales --vesta-neutral-1…12 and --vesta-accent-1…12.
  *   1–2 backgrounds · 3–5 component fills · 6–8 borders · 9–10 solid · 11–12 text
  *
+ * --vesta-neutral-lift shifts the neutral steps 1-11 (tapering towards text) for themes that sit lighter
+ * (dark) or deeper (light) than the default.
  * Steps are lightness-fixed per scheme, so contrast holds across hues for
  * neutrals and solids; the theme engine will validate exact pairs later.
  */
@@ -20,20 +22,21 @@
   :where(:root, [data-vesta-scheme='dark']) {
     /* The theme resolves chroma per scheme; the theme's own hue wins over the user hue setting. */
     --vesta-neutral-chroma: var(--vesta-theme-neutral-chroma-dark, 0.01);
+    --vesta-neutral-lift: var(--vesta-theme-neutral-lift-dark, 0);
     --vesta-accent-chroma: var(--vesta-theme-accent-chroma-dark, 0.12);
     --vesta-accent-h: var(--vesta-theme-accent-hue, var(--vesta-accent-hue));
 
-    --vesta-neutral-1: oklch(0.16 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-2: oklch(0.19 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-3: oklch(0.225 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-4: oklch(0.255 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-5: oklch(0.285 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-6: oklch(0.32 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-7: oklch(0.38 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-8: oklch(0.47 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-9: oklch(0.56 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-10: oklch(0.62 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-11: oklch(0.76 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-1: oklch(calc(0.16 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-2: oklch(calc(0.19 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-3: oklch(calc(0.225 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-4: oklch(calc(0.255 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-5: oklch(calc(0.285 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-6: oklch(calc(0.32 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-7: oklch(calc(0.38 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-8: oklch(calc(0.47 + var(--vesta-neutral-lift) * 0.7) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-9: oklch(calc(0.56 + var(--vesta-neutral-lift) * 0.4) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-10: oklch(calc(0.62 + var(--vesta-neutral-lift) * 0.3) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-11: oklch(calc(0.76 + var(--vesta-neutral-lift) * 0.6) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
     --vesta-neutral-12: oklch(0.95 calc(var(--vesta-neutral-chroma) * 0.4) var(--vesta-neutral-hue));
 
     --vesta-accent-1: oklch(0.18 calc(var(--vesta-accent-chroma) * 0.15) var(--vesta-accent-h));
@@ -52,19 +55,20 @@
 
   :where([data-vesta-scheme='light']) {
     --vesta-neutral-chroma: var(--vesta-theme-neutral-chroma-light, 0.025);
+    --vesta-neutral-lift: var(--vesta-theme-neutral-lift-light, 0);
     --vesta-accent-chroma: var(--vesta-theme-accent-chroma-light, 0.16);
 
-    --vesta-neutral-1: oklch(0.99 calc(var(--vesta-neutral-chroma) * 0.3) var(--vesta-neutral-hue));
-    --vesta-neutral-2: oklch(0.975 calc(var(--vesta-neutral-chroma) * 0.4) var(--vesta-neutral-hue));
-    --vesta-neutral-3: oklch(0.95 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-4: oklch(0.925 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-5: oklch(0.9 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-6: oklch(0.87 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-7: oklch(0.82 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-8: oklch(0.74 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-9: oklch(0.58 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-10: oklch(0.53 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
-    --vesta-neutral-11: oklch(0.44 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-1: oklch(calc(0.99 + var(--vesta-neutral-lift)) calc(var(--vesta-neutral-chroma) * var(--vesta-theme-neutral-tint-1, 0.3)) var(--vesta-neutral-hue));
+    --vesta-neutral-2: oklch(calc(0.975 + var(--vesta-neutral-lift)) calc(var(--vesta-neutral-chroma) * var(--vesta-theme-neutral-tint-2, 0.4)) var(--vesta-neutral-hue));
+    --vesta-neutral-3: oklch(calc(0.95 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-4: oklch(calc(0.925 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-5: oklch(calc(0.9 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-6: oklch(calc(0.87 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-7: oklch(calc(0.82 + var(--vesta-neutral-lift)) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-8: oklch(calc(0.74 + var(--vesta-neutral-lift) * 0.7) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-9: oklch(calc(0.58 + var(--vesta-neutral-lift) * 0.4) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-10: oklch(calc(0.53 + var(--vesta-neutral-lift) * 0.3) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
+    --vesta-neutral-11: oklch(calc(0.44 + var(--vesta-neutral-lift) * 0.6) var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
     --vesta-neutral-12: oklch(0.22 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
 
     --vesta-accent-1: oklch(0.99 calc(var(--vesta-accent-chroma) * 0.1) var(--vesta-accent-h));

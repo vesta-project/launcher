@@ -7,7 +7,9 @@
     position: relative;
     inline-size: 100%;
     min-block-size: 16rem;
+    max-inline-size: 100%;
     overflow: hidden;
+    contain: paint;
     touch-action: none;
     cursor: grab;
   }
@@ -21,6 +23,8 @@
     inset: 0;
     inline-size: 100%;
     block-size: 100%;
+    max-inline-size: 100%;
+    max-block-size: 100%;
     background: transparent;
   }
 }

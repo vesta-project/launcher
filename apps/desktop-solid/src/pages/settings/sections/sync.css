@@ -1,7 +1,9 @@
 /*
  * Sync page.
- * Hooks: [data-vesta=prefs-sync-cards] -sync-icon -sync-instances -chips -subhead -lede
- * States: card: data-on, data-disabled
+ * Hooks: [data-vesta=prefs-sync-cards] -sync-icon -sync-summary -sync-empty -sync-loading -sync-error
+ *        -sync-editor -sync-sidebar -sync-nav -sync-pane -sync-toolbar -sync-list -sync-row -sync-value
+ *        prefs-subhead prefs-lede
+ * States: card: data-on, data-disabled; editor: data-off; nav: data-active
  */
 @layer launcher {
   :where([data-vesta='prefs-lede']) {
@@ -37,26 +39,22 @@
     opacity: 0.55;
   }
 
-  :where([data-vesta='prefs-sync-cards'] > li > div:not([data-vesta])) {
+  :where([data-vesta='prefs-sync-summary']) {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-inline-size: 0;
   }
 
-  :where([data-vesta='prefs-sync-cards'] > li > div:not([data-vesta]) > span) {
+  :where([data-vesta='prefs-sync-summary'] > span) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta='prefs-sync-cards'] small) {
+  :where([data-vesta='prefs-sync-summary'] > small) {
     margin-block-start: 2px;
     color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-xs);
-  }
-
-  :where([data-vesta='prefs-sync-cards'] > li[data-on] small) {
-    color: var(--vesta-color-accent-text);
   }
 
   :where([data-vesta='prefs-sync-icon']) {
@@ -70,86 +68,198 @@
     color: var(--vesta-color-accent-text);
   }
 
+  :where([data-vesta='prefs-sync-empty']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    padding: var(--vesta-space-6) var(--vesta-space-4);
+    border: var(--vesta-border-width) dashed var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-align: center;
+  }
+
+  :where([data-vesta='prefs-sync-empty'] strong) {
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='prefs-sync-loading']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='prefs-sync-error']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='prefs-sync-error'] > :first-child) {
+    flex: 1;
+  }
+
   :where([data-vesta='prefs-subhead']) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-3);
   }
 
-  :where([data-vesta='prefs-subhead'] h3) {
-    flex: 1;
-    margin: 0;
-    font-size: var(--vesta-text-md);
-  }
-
-  :where([data-vesta='prefs-sync-instances']) {
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  :where([data-vesta='prefs-sync-instances'] li) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    min-block-size: 48px;
-    padding: var(--vesta-space-1-5) var(--vesta-space-4);
-    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
-  }
-
-  :where([data-vesta='prefs-sync-instances'] li img) {
-    flex: none;
-    inline-size: 32px;
-    block-size: 32px;
-    border-radius: 7px;
-    object-fit: cover;
-    box-shadow: 0 0 0 1px var(--vesta-color-border);
-  }
-
-  :where([data-vesta='prefs-sync-instances'] li > div:not([data-vesta])) {
+  :where([data-vesta='prefs-subhead'] > div) {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-inline-size: 0;
   }
 
-  :where([data-vesta='prefs-sync-instances'] li > div:not([data-vesta]) > span) {
+  :where([data-vesta='prefs-subhead'] h3) {
+    margin: 0;
+    font-size: var(--vesta-text-md);
+  }
+
+  :where([data-vesta='prefs-subhead'] > div > span) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }
 
-  .prefs-sync-options {
-    max-block-size: 320px;
-    margin-block-start: var(--vesta-space-3);
+  /* Two panes: category sidebar and the checklist for the chosen category. */
+  :where([data-vesta='prefs-sync-editor']) {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: var(--vesta-space-3);
+    min-block-size: 0;
+  }
+
+  :where([data-vesta='prefs-sync-editor'][data-off]) {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  :where([data-vesta='prefs-sync-sidebar']) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-block-size: 420px;
     overflow-y: auto;
   }
 
-  .prefs-sync-options li {
-    padding-inline: var(--vesta-space-2);
-  }
-
-  .prefs-sync-options strong {
-    font-family: var(--vesta-font-mono);
-    font-size: var(--vesta-text-xs);
-    font-weight: var(--vesta-weight-medium);
-  }
-
-  :where([data-vesta='prefs-chips']) {
+  :where([data-vesta='prefs-sync-nav']) {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     gap: var(--vesta-space-1-5);
-    margin: 0;
-    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
-    list-style: none;
+    padding-inline-start: var(--vesta-space-2);
+    border-radius: var(--vesta-radius-control);
   }
 
-  :where([data-vesta='prefs-chips'] li) {
-    padding: 2px 8px;
-    border-radius: var(--vesta-radius-full);
+  :where([data-vesta='prefs-sync-nav']:hover) {
     background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-sync-nav'][data-active]) {
+    background: var(--vesta-color-fill-hover);
+  }
+
+  :where([data-vesta='prefs-sync-nav'] > button) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    min-inline-size: 0;
+    padding: var(--vesta-space-1-5) var(--vesta-space-2);
+    border: 0;
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='prefs-sync-nav'] > button small) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-sync-nav'] > button:only-child) {
+    padding-inline-start: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='prefs-sync-pane']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='prefs-sync-toolbar']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='prefs-sync-toolbar'] > :first-child) {
+    flex: 1;
+  }
+
+  :where([data-vesta='prefs-sync-list']) {
+    max-block-size: 380px;
+    min-block-size: 80px;
+    overflow-y: auto;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='prefs-sync-row']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    block-size: 100%;
+    padding-inline: var(--vesta-space-3);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-sync-row'] > [data-vesta='checkbox']:first-child) {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='prefs-sync-row'] > div) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='prefs-sync-row'] > div > span) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-sync-row'] img) {
+    flex: none;
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: 7px;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-sync-value']) {
+    flex: none;
+    inline-size: 40%;
+    min-inline-size: 0;
+    padding: 2px var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface);
+    color: var(--vesta-color-text);
     font-family: var(--vesta-font-mono);
     font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-sync-value']:disabled) {
+    color: var(--vesta-color-text-subtle);
   }
 }

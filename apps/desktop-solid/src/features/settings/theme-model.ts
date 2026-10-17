@@ -66,7 +66,14 @@ export interface ThemeDefinition {
   hue: number | null;
   /** Show the hue slider. */
   hueAdjustable: boolean;
-  neutral: { hue: "accent" | number; chroma: { dark: number; light: number } };
+  neutral: {
+    hue: "accent" | number;
+    chroma: { dark: number; light: number };
+    /** Lightness shift of the neutral scale per scheme: positive lifts dark surfaces, negative deepens light ones. */
+    lift?: { dark: number; light: number };
+    /** 0..1: how much of the full chroma the lightest light-mode surfaces carry (default: nearly white). */
+    tint?: number;
+  };
   /** 0 = achromatic accent (Mono). */
   accentChroma: { dark: number; light: number };
   /** Radius factor and density unit. */
@@ -134,6 +141,43 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
     material: "glass",
     shadows: "soft",
     fixedHues: [165, 285, 330],
+  },
+  {
+    // Softer, lighter dark: mid-tone surfaces (canvas ~L0.28) and low chroma.
+    id: "haze",
+    name: "Haze",
+    hue: 235,
+    hueAdjustable: true,
+    neutral: {
+      hue: "accent",
+      chroma: { dark: 0.012, light: 0.012 },
+      lift: { dark: 0.12, light: 0 },
+    },
+    accentChroma: { dark: 0.09, light: 0.12 },
+    radius: 1,
+    spaceUnit: "4px",
+    background: "spots",
+    material: "frosted",
+    shadows: "soft",
+  },
+  {
+    // Colourful light: surfaces clearly tinted by the hue in light mode, saturated accents.
+    id: "sorbet",
+    name: "Sorbet",
+    hue: 330,
+    hueAdjustable: true,
+    neutral: {
+      hue: "accent",
+      chroma: { dark: 0.03, light: 0.055 },
+      lift: { dark: 0, light: -0.07 },
+      tint: 0.9,
+    },
+    accentChroma: { dark: 0.15, light: 0.21 },
+    radius: 1.25,
+    spaceUnit: "4px",
+    background: "gradient",
+    material: "glass",
+    shadows: "soft",
   },
 ];
 
@@ -282,6 +326,10 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
     "--vesta-neutral-hue": String(neutralHue),
     "--vesta-theme-neutral-chroma-dark": String(def.neutral.chroma.dark),
     "--vesta-theme-neutral-chroma-light": String(def.neutral.chroma.light),
+    "--vesta-theme-neutral-lift-dark": String(def.neutral.lift?.dark ?? 0),
+    "--vesta-theme-neutral-lift-light": String(def.neutral.lift?.light ?? 0),
+    "--vesta-theme-neutral-tint-1": String(def.neutral.tint ?? 0.3),
+    "--vesta-theme-neutral-tint-2": String(def.neutral.tint ?? 0.4),
     "--vesta-theme-accent-chroma-dark": String(def.accentChroma.dark),
     "--vesta-theme-accent-chroma-light": String(def.accentChroma.light),
     "--vesta-space-unit": def.spaceUnit,

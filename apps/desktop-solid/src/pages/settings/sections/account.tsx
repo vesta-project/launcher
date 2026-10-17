@@ -1,4 +1,4 @@
-import { Badge, Button, Dialog, IconButton, SegmentedControl } from '@vesta/ui';
+import { Button, Dialog, IconButton, SegmentedControl } from '@vesta/ui';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { SkinViewer } from '../../../components/skin-viewer';
@@ -151,15 +151,6 @@ function SkinPanel(props: { account: Account }) {
       action={
         <div data-vesta="skin-actions">
           <SaveIndicator status={skins.status()} />
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={locked() || !!skins.busy()}
-            title={t('skins.reset-confirm')}
-            onClick={() => void skins.reset()}
-          >
-            {t('skins.reset')}
-          </Button>
         </div>
       }
     >
@@ -348,25 +339,6 @@ export function AccountSettings() {
   const others = () => accounts().filter((account) => account.uuid !== current()?.uuid);
   return (
     <>
-      <Show when={current()}>
-        {(account) => (
-          <section data-vesta="prefs-profile">
-            <Head uuid={account().uuid} size={72} />
-            <div data-vesta="prefs-profile-copy">
-              <h3>{account().username}</h3>
-              <p>
-                <Badge size="sm">{account().account_type}</Badge>
-                <Show when={account().is_expired}>
-                  <Badge size="sm" tone="danger">
-                    {t('prefs.account.expired')}
-                  </Badge>
-                </Show>
-              </p>
-            </div>
-          </section>
-        )}
-      </Show>
-
       <Show when={current()}>{(account) => <SkinPanel account={account()} />}</Show>
 
       <Card

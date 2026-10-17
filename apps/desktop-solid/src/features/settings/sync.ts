@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { cachedResource } from './cached-resource';
-import { categoryState, hostCategory, syncOptionKeys, syncPreferences, type CategoryState, type SyncSnapshot } from './sync-model';
+import { categoryState, hostCategory, syncItems, syncOptionKeys, syncPreferences, type CategoryState, type SyncItem, type SyncSnapshot } from './sync-model';
 
 import type { MessageId } from '../../localization/messages';
 
@@ -174,4 +174,38 @@ export function addSyncedServer(name: string, address: string) {
 export function removeSyncedServer(serverId: string) {
   if (!native) return setSyncState('servers', { servers: state().servers.servers.filter((item) => item.id !== serverId) });
   return change('servers', (snapshot) => invoke<SyncSnapshot>('remove_synced_server', { revision: snapshot.revision, serverId }));
+}
+
+const nativeSnapshot = (id: SyncCategoryId) => settingsSync.data().find((item) => item.category === hostCategory[id]);
+const previewItems: Record<'options' | 'keybinds', SyncItem[]> = {
+  options: sharedOptions.options.map((key) => ({ key, label: key, group: 'video', value: '', fixed: false })),
+  keybinds: sharedOptions.keybinds.map((key) => ({ key, label: key, group: 'movement', value: '', fixed: false })),
+};
+/** Values held by the shared bundle (empty for servers and resource packs). */
+export const syncValueItems = (id: SyncCategoryId): SyncItem[] => {
+  if (!native) return previewItems[id as 'options' | 'keybinds'] ?? [];
+  const snapshot = nativeSnapshot(id);
+  return snapshot ? syncItems(snapshot) : [];
+};
+/** Instance ids whose changes are waiting for a running instance to exit. */
+export const syncPending = (id: SyncCategoryId): string[] => (native ? nativeSnapshot(id)?.pending ?? [] : []);
+export const syncInitialized = (id: SyncCategoryId): boolean => (native ? nativeSnapshot(id)?.initialized ?? false : true);
+export const syncLoading = () => native && !settingsSync.ready();
+export const retrySync = () => settingsSync.refresh(true);
+/** Adds or removes many keys in one revisioned write, so bulk toggles never race the host. */
+export const setSyncSelection = (id: SyncCategoryId, keys: string[], on: boolean) =>
+  setSyncState(id, (current) => {
+    const set = new Set(current.selected);
+    for (const key of keys) {
+      if (on) set.add(key);
+      else set.delete(key);
+    }
+    return { selected: [...set] };
+  });
+/** Edits a shared value; the host rewrites linked instances' option files. */
+export function saveSyncValue(id: SyncCategoryId, key: string, value: string) {
+  if (!native) return;
+  return change(id, (snapshot) => invoke<SyncSnapshot>('save_settings_sync', {
+    category: snapshot.category, revision: snapshot.revision, preferences: snapshot.preferences, changes: { [key]: value },
+  }));
 }

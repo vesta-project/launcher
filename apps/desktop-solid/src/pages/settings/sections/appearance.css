@@ -30,11 +30,12 @@
   /* The sample resolves its colours from the theme's own inputs, for the current colour mode. */
   :where([data-vesta='prefs-theme-swatch']) {
     --tile-nc: var(--tile-nc-dark);
+    --tile-lift: var(--tile-lift-dark, 0);
     --tile-ac: var(--tile-ac-dark);
     --tile-al: var(--tile-al-dark);
-    --tile-canvas: oklch(0.17 var(--tile-nc) var(--tile-nh));
-    --tile-raised: oklch(0.28 var(--tile-nc) var(--tile-nh));
-    --tile-edge: oklch(0.38 var(--tile-nc) var(--tile-nh));
+    --tile-canvas: oklch(calc(0.17 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
+    --tile-raised: oklch(calc(0.28 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
+    --tile-edge: oklch(calc(0.38 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
 
     position: relative;
     display: block;
@@ -52,11 +53,12 @@
 
   :where(:root[data-vesta-scheme='light'] [data-vesta='prefs-theme-swatch']) {
     --tile-nc: var(--tile-nc-light);
+    --tile-lift: var(--tile-lift-light, 0);
     --tile-ac: var(--tile-ac-light);
     --tile-al: var(--tile-al-light);
-    --tile-canvas: oklch(0.95 var(--tile-nc) var(--tile-nh));
-    --tile-raised: oklch(0.995 calc(var(--tile-nc) * 0.3) var(--tile-nh));
-    --tile-edge: oklch(0.85 var(--tile-nc) var(--tile-nh));
+    --tile-canvas: oklch(calc(0.95 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
+    --tile-raised: oklch(calc(0.995 + var(--tile-lift)) calc(var(--tile-nc) * var(--tile-tint, 0.3)) var(--tile-nh));
+    --tile-edge: oklch(calc(0.85 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
   }
 
   /* A raised surface block. */

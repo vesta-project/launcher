@@ -1,15 +1,16 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { cachedResource } from './cached-resource';
-import { availableSources, toFeed, rssFeedTitle, type NotificationSource, type NotificationSubscription } from './notification-model';
+import { subscriptionCatalog, rssFeedTitle, type NotificationSource, type NotificationSubscription } from './notification-model';
 
 const native = typeof window !== 'undefined' && isTauri();
 const presets: NotificationSource[] = [
-  { id: 'vesta-news', title: 'Vesta announcements', provider_type: 'news', target_url: null, target_id: 'vesta', metadata: null },
-  { id: 'minecraft-news', title: 'Minecraft news', provider_type: 'news', target_url: null, target_id: 'minecraft', metadata: null },
-  { id: 'modrinth-blog', title: 'Modrinth blog', provider_type: 'rss', target_url: 'https://blog.modrinth.com/rss.xml', target_id: null, metadata: null },
+  { id: 'mojang_news', title: 'Minecraft News', provider_type: 'news', target_url: 'https://launchercontent.mojang.com/v2/news.json', target_id: null, metadata: null },
+  { id: 'patch_notes', title: 'Java Patch Notes', provider_type: 'patch_notes', target_url: null, target_id: null, metadata: null },
+  { id: 'minecraft_versions', title: 'Minecraft Version Updates', provider_type: 'game', target_url: null, target_id: null, metadata: null },
+  { id: 'fabric_news', title: 'Fabric News', provider_type: 'rss', target_url: 'https://fabricmc.net/feed.xml', target_id: null, metadata: null },
 ];
-const preview = { subscriptions: [{ ...presets[0], enabled: true }], sources: presets };
+const preview = { subscriptions: [{ ...presets[0]!, id: 'preview:mojang_news', enabled: true }], sources: presets };
 export const notificationSubscriptions = cachedResource<{ subscriptions: NotificationSubscription[]; sources: NotificationSource[] }>({
   key: 'notification-subscriptions',
   fallback: native ? { subscriptions: [] as NotificationSubscription[], sources: [] as NotificationSource[] } : preview,
@@ -22,10 +23,9 @@ export const notificationSubscriptions = cachedResource<{ subscriptions: Notific
     return { subscriptions, sources };
   },
 });
-export const notificationFeeds = () => notificationSubscriptions.data().subscriptions.map(toFeed);
-export const availableNotificationFeeds = () => {
+export const subscriptionEntries = () => {
   const { sources, subscriptions } = notificationSubscriptions.data();
-  return availableSources(sources, subscriptions).map(toFeed);
+  return subscriptionCatalog(sources, subscriptions);
 };
 const [error, setError] = createSignal('', { name: 'notificationSubscriptionError' });
 const [checkedAt, setCheckedAt] = createSignal<Date | undefined>(undefined, { name: 'notificationLastCheck' });
@@ -45,22 +45,26 @@ function mutate(command: string, args: Record<string, unknown>, fallback: () => 
   });
   return writes;
 }
-export const toggleNotificationFeed = (id: string, enabled: boolean) => mutate('toggle_notification_subscription', { id, enabled }, () => {
-  const data = notificationSubscriptions.data();
-  notificationSubscriptions.set({ ...data, subscriptions: data.subscriptions.map((item) => item.id === id ? { ...item, enabled } : item) });
-});
+/** Switches a catalogue entry: toggles the stored subscription, or subscribes to the source first. */
+export function setNotificationSubscription(entry: { sourceId?: string; subscriptionId?: string }, enabled: boolean) {
+  const { subscriptionId, sourceId } = entry;
+  if (subscriptionId) {
+    return mutate('toggle_notification_subscription', { id: subscriptionId, enabled }, () => {
+      const data = notificationSubscriptions.data();
+      notificationSubscriptions.set({ ...data, subscriptions: data.subscriptions.map((item) => item.id === subscriptionId ? { ...item, enabled } : item) });
+    });
+  }
+  const source = notificationSubscriptions.data().sources.find((item) => item.id === sourceId);
+  if (!source || !enabled) return Promise.resolve();
+  return mutate('subscribe_to_preset_source', { source }, () => {
+    const data = notificationSubscriptions.data();
+    notificationSubscriptions.set({ ...data, subscriptions: [...data.subscriptions, { ...source, id: `preview:${source.id}`, enabled: true }] });
+  });
+}
 export const deleteNotificationFeed = (id: string) => mutate('delete_notification_subscription', { id }, () => {
   const data = notificationSubscriptions.data();
   notificationSubscriptions.set({ ...data, subscriptions: data.subscriptions.filter((item) => item.id !== id) });
 });
-export function subscribeToPreset(id: string) {
-  const source = notificationSubscriptions.data().sources.find((item) => item.id === id);
-  if (!source) return Promise.resolve();
-  return mutate('subscribe_to_preset_source', { source }, () => {
-    const data = notificationSubscriptions.data();
-    notificationSubscriptions.set({ ...data, subscriptions: [...data.subscriptions, { ...source, enabled: true }] });
-  });
-}
 export function subscribeToRss(url: string, title?: string) {
   url = url.trim();
   try { title ??= rssFeedTitle(url); }

@@ -16,7 +16,7 @@ const snapshot = (patch = {}) => ({
 describe('settings sync host boundary', () => {
   test('maps camelCase categories and numeric instance IDs, expanding null selection', () => {
     expect(hostCategory).toEqual({ options: 'gameOptions', keybinds: 'keybinds', servers: 'servers', resourcepacks: 'resourcePacks' });
-    expect(categoryState(snapshot())).toEqual({ enabled: true, selected: ['fov', 'renderDistance'], linked: ['7', '10'], servers: snapshot().servers });
+    expect(categoryState(snapshot())).toEqual({ enabled: true, selected: ['fov', 'renderDistance'], linked: ['7', '10'], source: '7', servers: snapshot().servers });
   });
   test('preserves explicit empty selections and filters unseeded catalog entries', () => {
     expect(categoryState(snapshot({ preferences: { ...snapshot().preferences, selectedKeys: [] } })).selected).toEqual([]);

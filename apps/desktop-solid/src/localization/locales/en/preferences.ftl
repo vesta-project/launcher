@@ -90,7 +90,26 @@ prefs-notifications-sources = Subscriptions
 prefs-notifications-sources-description = News feeds the launcher checks for you.
 prefs-notifications-check-now = Check now
 prefs-notifications-checked = Last checked at { $time }.
-prefs-notifications-none = You are not subscribed to anything.
+prefs-notifications-none = No subscriptions are available right now.
+prefs-notifications-loading = Loading subscriptions…
+prefs-notifications-load-failed = Could not load your subscriptions.
+prefs-notifications-retry = Try again
+prefs-notifications-group-minecraft = Minecraft
+prefs-notifications-group-minecraft-description = News, patch notes and new game versions.
+prefs-notifications-group-loaders = Mod loaders
+prefs-notifications-group-loaders-description = Releases and announcements from the loaders you play with.
+prefs-notifications-group-projects = Followed projects
+prefs-notifications-group-projects-description = Updates for mods and packs you follow.
+prefs-notifications-group-custom = Your feeds
+prefs-notifications-group-custom-description = RSS feeds you added yourself.
+prefs-notifications-source-mojang-news = Articles from the official Minecraft site.
+prefs-notifications-source-patch-notes = Release notes for each new Minecraft: Java Edition version.
+prefs-notifications-source-minecraft-versions = Tells you when a new release or snapshot is out.
+prefs-notifications-source-fabric-news = Announcements from the Fabric project.
+prefs-notifications-source-quilt-news = Announcements from the Quilt project.
+prefs-notifications-source-forge-releases = New Forge releases from the Forge forums.
+prefs-notifications-source-neoforge-releases = Every post from the NeoForge news feed.
+prefs-notifications-source-neoforge-announcements = Only NeoForge releases and news posts.
 prefs-notifications-remove = Unsubscribe from { $name }
 prefs-notifications-available = More sources
 prefs-notifications-subscribe = Subscribe
@@ -252,8 +271,8 @@ prefs-storage-clear-cache = Clear cache
 prefs-storage-clear-title = Clear the cache?
 prefs-storage-clear-description = Downloaded installers and metadata are removed. Your instances, worlds and settings are not affected.
 prefs-sync-title = Sync
-prefs-sync-description = Share options between your instances.
-prefs-sync-lede = Pick what to share, then choose which instances receive it. Instances keep their own worlds and files.
+prefs-sync-description = Keep options, keybinds and servers the same across instances.
+prefs-sync-lede = Choose a source instance, pick what to share, then link the instances that should follow it. Linked instances receive changes when they next launch, or after they close if they are running.
 prefs-sync-options = Game options
 prefs-sync-options-description = Video, audio and other options from options.txt.
 prefs-sync-keybinds = Keybinds
@@ -262,32 +281,57 @@ prefs-sync-servers = Servers
 prefs-sync-servers-description = One shared server list.
 prefs-sync-resourcepacks = Resource packs
 prefs-sync-resourcepacks-description = Which packs are enabled and their order.
-prefs-sync-linked =
+prefs-sync-off = Off
+prefs-sync-manage = Manage
+prefs-sync-summary-source = Source: { $name }
+prefs-sync-no-source = No source chosen yet
+prefs-sync-summary-values = { $count } of { $max } values synced
+prefs-sync-summary-instances =
   { $count ->
       [one] Shared with 1 instance
      *[other] Shared with { $count } instances
   }
-prefs-sync-off = Off
-prefs-sync-enabled = Enabled
-prefs-sync-shared-values = Shared values
-prefs-sync-shared-values-description =
+prefs-sync-summary-servers =
   { $count ->
-      [one] 1 value is shared.
-     *[other] { $count } values are shared.
+      [one] 1 shared server
+     *[other] { $count } shared servers
   }
-prefs-sync-nothing-shared = Nothing is shared yet.
+prefs-sync-pending =
+  { $count ->
+      [one] 1 instance will update when it closes
+     *[other] { $count } instances will update when they close
+  }
+prefs-sync-loading = Loading sync settings
+prefs-sync-load-failed = Sync settings could not be loaded.
+prefs-sync-empty-title = No instances to sync
+prefs-sync-empty-description = Create an instance first. Sync shares settings between your instances.
+prefs-sync-sections = Sync sections
+prefs-sync-all-values = All values
+prefs-sync-group-custom = Mod options
+prefs-sync-group-count = { $count } of { $max }
+prefs-sync-select-all = Select all
+prefs-sync-select-none = Select none
+prefs-sync-search-values = Search values
+prefs-sync-no-values = No values match your search.
+prefs-sync-nothing-to-share = The source has no values yet. Launch it once so the game writes its options.
+prefs-sync-value-label = Value of { $name }
+prefs-sync-fixed = Mod options are always shared
+prefs-sync-disabled-hint = Turn sync on to change what is shared.
 prefs-sync-instances = Instances
+prefs-sync-instances-count = { $count } of { $max } linked
 prefs-sync-link-all = Link all
 prefs-sync-unlink-all = Unlink all
-prefs-sync-no-instances = No instances.
+prefs-sync-no-instances = No instances match.
+prefs-sync-source-badge = Source
 prefs-sync-servers-shared = Shared servers
 prefs-sync-no-servers = No shared servers.
 prefs-sync-server-name = Server name
 prefs-sync-server-address = Server address
 prefs-sync-remove-server = Remove { $name }
-prefs-sync-pick-title = Choose what to share
-prefs-sync-pick-description = Only the values you switch on are copied to linked instances.
-prefs-sync-search-options = Search options
+prefs-sync-source-title = Choose a source instance
+prefs-sync-source-description = Shared settings start with this instance's current values. Launch the instance once first.
+prefs-sync-source-label = Source instance
+prefs-sync-source-none = No idle instances are available. Close running instances first.
 prefs-account-title = Account
 prefs-account-description = Who you play as.
 prefs-account-skin = Skin and cape

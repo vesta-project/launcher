@@ -12,11 +12,13 @@ export function SyncSourceDialog() {
       value: entry.instance.id, label: entry.instance.name,
     }));
     return <Dialog open onOpenChange={(open) => { if (!open) cancelSyncSourceRequest(); }}
-      title="Choose a source instance"
-      description="Shared settings start with this instance’s current values. Launch the instance once first."
+      title={t('prefs.sync.source-title')}
+      description={t('prefs.sync.source-description')}
       footer={<><Button variant="ghost" onClick={cancelSyncSourceRequest}>{t('common.cancel')}</Button>
         <Button disabled={!options().some((item) => item.value === source())} onClick={() => void confirmSyncSource(source())}>{t('prefs.done')}</Button></>}>
-      <Select label="Source instance" value={source()} options={options()} onChange={setSource} />
+      <Show when={options().length} fallback={<p>{t('prefs.sync.source-none')}</p>}>
+        <Select label={t('prefs.sync.source-label')} value={source()} options={options()} onChange={setSource} />
+      </Show>
     </Dialog>;
   }}</Show>;
 }

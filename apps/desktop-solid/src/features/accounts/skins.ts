@@ -381,13 +381,9 @@ export function createSkinController(account: () => Account | undefined) {
   });
 
   /** Local-only or destructive actions that run straight away. */
-  const immediate = async (key: string, work: (uuid: string) => Promise<void>, discardPending = false) => {
+  const immediate = async (key: string, work: (uuid: string) => Promise<void>) => {
     const uuid = currentUuid;
     if (!uuid || busy()) return;
-    if (discardPending) {
-      clearTimer();
-      setPending(undefined);
-    }
     setBusy(key);
     setError(undefined);
     try {
@@ -459,18 +455,6 @@ export function createSkinController(account: () => Account | undefined) {
         }
         await invoke('delete_history_skin', { historyId: skin.id });
       }),
-    reset: () =>
-      immediate(
-        'reset',
-        async (uuid) => {
-          if (!native) {
-            Object.assign(fixtures(), { skin: fixtureSkin('#3a6fb0', '#c24a4a'), variant: 'classic' });
-            return;
-          }
-          await invoke('reset_account_skin', { accountUuid: uuid });
-        },
-        true,
-      ),
     /** Pick a PNG and stage it. Nothing is sent until the idle delay (or leaving) commits it. */
     upload: async () => {
       if (!currentUuid || !profile()) return;
