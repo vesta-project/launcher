@@ -145,31 +145,34 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
         style={{ height: `${window().total}px` }}
       >
         <For each={rendered()} keyed={(row) => props.key(row.item)}>
-          {(row) => (
-            <div
-              data-vesta="virtual-row"
-              role={props.rowRole}
-              aria-rowindex={props.rowRole ? row().index + 2 : undefined}
-              style={{
-                top: `${offsets()[row().index]}px`,
-                height: `${offsets()[row().index + 1] - offsets()[row().index]}px`,
-              }}
-              onFocusIn={() => setFocusedKey(props.key(row().item))}
-              onFocusOut={(event) => {
-                if (
-                  !event.currentTarget.contains(
-                    event.relatedTarget as Node | null,
+          {(row) => {
+            // `rendered` rebuilds its row objects whenever focus or the window moves. Memoize
+            // the parts so rows (and overlays opened from them) only update on real changes.
+            const item = createMemo(() => row().item);
+            const index = createMemo(() => row().index);
+            return (
+              <div
+                data-vesta="virtual-row"
+                role={props.rowRole}
+                aria-rowindex={props.rowRole ? row().index + 2 : undefined}
+                style={{
+                  top: `${offsets()[row().index]}px`,
+                  height: `${offsets()[row().index + 1] - offsets()[row().index]}px`,
+                }}
+                onFocusIn={() => setFocusedKey(props.key(row().item))}
+                onFocusOut={(event) => {
+                  if (
+                    !event.currentTarget.contains(
+                      event.relatedTarget as Node | null,
+                    )
                   )
-                )
-                  setFocusedKey(null);
-              }}
-            >
-              {props.children(
-                () => row().item,
-                () => row().index,
-              )}
-            </div>
-          )}
+                    setFocusedKey(null);
+                }}
+              >
+                {props.children(item, index)}
+              </div>
+            );
+          }}
         </For>
       </div>
     </div>

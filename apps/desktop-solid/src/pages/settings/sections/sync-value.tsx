@@ -1,5 +1,5 @@
 import { Select, Slider, Switch, TextField } from '@vesta/ui';
-import { Match, Switch as Branch, createSignal, onSettled } from 'solid-js';
+import { Match, Switch as Branch, createMemo, createSignal, onSettled } from 'solid-js';
 import {
   UNBOUND_KEY,
   minecraftKeyFromEvent,
@@ -84,6 +84,20 @@ export function SyncValueControl(props: {
   onSave: (value: string) => void;
 }) {
   const label = () => t('prefs.sync.value-label', { name: props.item.label });
+  // A new options array makes the select rebuild its list, so only rebuild when the choices change.
+  const choices = createMemo(
+    () =>
+      [...new Set([...(props.item.editor?.values ?? []), props.item.value])].map((value) => ({
+        value,
+        label: choiceLabel(props.item.key, value),
+      })),
+    {
+      name: 'syncValueChoices',
+      equals: (a, b) =>
+        a.length === b.length &&
+        a.every((option, index) => option.value === b[index].value && option.label === b[index].label),
+    },
+  );
   return (
     <div data-vesta="prefs-sync-control">
       <Branch fallback={<CommitField {...props} label={label()} numeric={false} />}>
@@ -106,10 +120,7 @@ export function SyncValueControl(props: {
             disabled={props.disabled}
             value={props.item.value}
             onChange={(value) => value !== props.item.value && props.onSave(value)}
-            options={[...new Set([...props.item.editor!.values, props.item.value])].map((value) => ({
-              value,
-              label: choiceLabel(props.item.key, value),
-            }))}
+            options={choices()}
           />
         </Match>
         <Match when={modeOf(props.item) === 'range'}>
