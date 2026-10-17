@@ -34,7 +34,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
   const stats = () => statsFor(id());
   const shots = () => screenshotsFor(id());
   const idle = () => props.entry.state.kind === "idle";
-  const goto = (section: string) => navigate(`/library/${id()}/${section}`);
+  const goto = (section: string) => navigate(`/library/${id()}/${section}`, { replace: section !== "settings" });
 
   const [viewer, setViewer] = createSignal<number | undefined>(undefined);
   const [deleteShot, setDeleteShot] = createSignal<string>();

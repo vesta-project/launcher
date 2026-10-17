@@ -132,7 +132,7 @@ export function CrashTab(props: { entry: InstanceEntry }) {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => navigate(`/library/${id()}/console`)}
+              onClick={() => navigate(`/library/${id()}/console`, { replace: true })}
             >
               {t("crash.view-full-log")}
             </Button>

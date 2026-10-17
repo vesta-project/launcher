@@ -1,5 +1,12 @@
 import { Badge, Tab, TabList, TabPanel, Tabs } from "@vesta/ui";
-import { For, Show, createSignal, onCleanup, untrack, type Component } from "solid-js";
+import {
+  For,
+  Show,
+  createSignal,
+  onCleanup,
+  untrack,
+  type Component,
+} from "solid-js";
 import { isServer } from "@solidjs/web";
 import { canGoBack, navigate, route } from "../../../app/router";
 import { Board } from "../../../components/board";
@@ -10,7 +17,10 @@ import {
   findInstance,
   type InstanceEntry,
 } from "../../../features/instances/catalog";
-import { nativeInstances, instancesLoaded } from "../../../features/instances/native-service";
+import {
+  nativeInstances,
+  instancesLoaded,
+} from "../../../features/instances/native-service";
 import { useNativeDetails } from "../../../features/instances/native-details";
 import { NativeImportDialog } from "../../../features/instances/native-import-dialog";
 import { ConsoleTab } from "./console-tab";
@@ -81,7 +91,15 @@ export function InstancePage(props: { id: string }) {
       keyed
       fallback={
         <Board>
-          <Show when={!nativeInstances || instancesLoaded()} fallback={<p role="status">{t("management.loading")}</p>}><EmptyState icon="icons/rail/library" title={t("instance.not-found")} /></Show>
+          <Show
+            when={!nativeInstances || instancesLoaded()}
+            fallback={<p role="status">{t("management.loading")}</p>}
+          >
+            <EmptyState
+              icon="icons/rail/library"
+              title={t("instance.not-found")}
+            />
+          </Show>
         </Board>
       }
     >
@@ -126,8 +144,16 @@ function InstanceContent(props: { id: string }) {
   const open = (tab: string) => {
     if (tab === "settings") setPreviousTab(active());
     else setPreviousTab(tab);
-    // Each tab is a history step, so back returns to the tab you were on.
-    navigate(`/library/${props.id}/${tab}`);
+    // Tabs swap in place; back goes up to the overview (see goBack). Settings is a sub-page
+    // that back returns from, so it keeps its own entry.
+    navigate(
+      tab === "overview"
+        ? `/library/${props.id}`
+        : `/library/${props.id}/${tab}`,
+      {
+        replace: tab !== "settings",
+      },
+    );
   };
   const settings = () => route().detail === "settings";
   return (

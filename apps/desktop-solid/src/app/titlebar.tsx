@@ -10,6 +10,7 @@ import { route } from './router';
 import { goBack, transitionTo } from './transition';
 import { isSection, sectionLabels } from '../pages/settings/sections';
 import { t } from '../localization';
+import type { MessageId } from '../localization/messages';
 import './titlebar.css';
 
 const platform = detectPlatform();
@@ -19,6 +20,15 @@ interface Crumb {
   /** Hash target; the last crumb (where you are) has none. */
   href?: string;
 }
+
+const instanceTabs: Record<string, MessageId> = {
+  resources: 'instance.resources',
+  worlds: 'instance.worlds',
+  versions: 'instance.versions',
+  console: 'instance.console',
+  crash: 'instance.crash',
+  settings: 'instance.settings',
+};
 
 /**
  * Where the user is: the breadcrumb trail (wide windows), the destination label
@@ -34,6 +44,18 @@ function location(): {
   switch (current.page) {
     case 'library': {
       const instance = findInstance(current.section)?.instance;
+      // Overview is the instance's home; any other tab sits one level below it.
+      const tab = current.detail && current.detail !== 'overview' ? instanceTabs[current.detail] : undefined;
+      if (instance && tab)
+        return {
+          label: t(tab),
+          trail: [
+            { label: t('nav.library'), href: '#/library' },
+            { label: instance.name, href: `#/library/${current.section}` },
+            { label: t(tab) },
+          ],
+          back: { to: `/library/${current.section}`, label: t('common.back') },
+        };
       return instance
         ? {
             label: instance.name,
@@ -54,11 +76,17 @@ function location(): {
       };
     case 'create': {
       const launcher = current.section === 'import' ? findLauncher(current.detail) : undefined;
-      if (launcher) return {
-        label: launcher.label,
-        trail: [{ label: t('nav.library'), href: '#/library' }, { label: t('settings.new-instance-title'), href: '#/create' }, { label: t('install.import-action'), href: `#/create/import/${launcher.value}` }, { label: launcher.label }],
-        back: { to: '/create', label: t('common.back') },
-      };
+      if (launcher)
+        return {
+          label: launcher.label,
+          trail: [
+            { label: t('nav.library'), href: '#/library' },
+            { label: t('settings.new-instance-title'), href: '#/create' },
+            { label: t('install.import-action'), href: `#/create/import/${launcher.value}` },
+            { label: launcher.label },
+          ],
+          back: { to: '/create', label: t('common.back') },
+        };
       return {
         label: t('settings.new-instance-title'),
         trail: [{ label: t('nav.library'), href: '#/library' }, { label: t('settings.new-instance-title') }],
@@ -71,7 +99,9 @@ function location(): {
       return {
         label: t('nav.settings'),
         icon: 'icons/rail/settings',
-        trail: section ? [{ label: t('nav.settings'), href: '#/settings' }, { label: section }] : [{ label: t('nav.settings') }],
+        trail: section
+          ? [{ label: t('nav.settings'), href: '#/settings' }, { label: section }]
+          : [{ label: t('nav.settings') }],
       };
     }
   }
@@ -129,7 +159,7 @@ export function Titlebar() {
             <IconButton
               variant="ghost"
               size="sm"
-            label={t('common.back')}
+              label={t('common.back')}
               icon={<Icon name="icons/navigation/arrow-back" size={14} />}
               onClick={() => goBack(back().to, findInstance(route().section)?.instance.id)}
             />

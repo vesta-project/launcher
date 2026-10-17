@@ -80,7 +80,7 @@ function transition(commit: () => void | Promise<void>, instanceId?: string, ani
   });
 }
 
-export function transitionTo(to: string, instanceId?: string) {
+export function transitionTo(to: string, instanceId?: string, options?: { replace?: boolean }) {
   if (typeof location !== 'undefined' && location.hash.slice(1) === to) return;
   const current = route();
   const next = parseRoute(to);
@@ -90,7 +90,7 @@ export function transitionTo(to: string, instanceId?: string) {
     instanceId ??
     (current.page === 'library' ? current.section : undefined) ??
     (next.page === 'library' ? next.section : undefined);
-  transition(() => navigate(to), sharedId, !sameInstance);
+  transition(() => navigate(to, options), sharedId, !sameInstance);
 }
 
 /** Back stays inside the snapshot callback until the router has received popstate. */
@@ -98,6 +98,11 @@ export function goBack(fallback: string, instanceId?: string) {
   const current = route();
   // Installation Back follows the parent flow, rather than previous providers.
   if (current.page === 'create') return transitionTo(current.section === 'import' ? '/create' : '/library');
+  // Instance tabs are levels, not history: back from one goes up to the overview, whose own
+  // entry then goes back to wherever the instance was opened from.
+  if (current.page === 'library' && current.section && current.detail && !current.item)
+    if (current.detail !== 'overview' && current.detail !== 'settings')
+      return transitionTo(`/library/${current.section}`, instanceId, { replace: true });
   if (!canGoBack()) return transitionTo(fallback, instanceId);
   transition(
     () =>

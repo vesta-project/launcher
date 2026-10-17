@@ -324,7 +324,9 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
             <MenuSeparator />
             <MenuItem
               onSelect={() =>
-                navigate(`/library/${props.entry.instance.id}/crash`)
+                navigate(`/library/${props.entry.instance.id}/crash`, {
+                  replace: true,
+                })
               }
             >
               View crash report
