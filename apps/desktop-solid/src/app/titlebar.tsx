@@ -3,7 +3,8 @@ import { BreadcrumbItem, Breadcrumbs, Button, IconButton, Menu, MenuItem, MenuSe
 import { For, Show } from 'solid-js';
 import { Icon } from '../components/icon';
 import { AccountMenu } from '../features/accounts/account-menu';
-import { peekProject } from '../features/browse/browse-projects';
+import { projectPath } from '../features/browse/browse-model';
+import { peekProject, peekVersions } from '../features/browse/browse-projects';
 import { findLauncher } from '../features/installation/launchers';
 import { findInstance } from '../features/instances/catalog';
 import { detectPlatform } from './platform';
@@ -80,7 +81,25 @@ function location(): {
     case 'browse': {
       const root = { label: t('nav.browse'), href: '#/browse' };
       if (current.section === 'project') {
-        const name = peekProject(decodeSegment(current.detail), decodeSegment(current.item))?.name ?? decodeSegment(current.item);
+        const source = decodeSegment(current.detail);
+        const id = decodeSegment(current.item);
+        const name = peekProject(source, id)?.name ?? id;
+        const [view, versionId] = current.rest;
+        // A version sits under the project's Versions tab; back returns to that list.
+        if (view === 'version' && versionId) {
+          const wanted = decodeSegment(versionId);
+          const label = peekVersions(source, id)?.find((version) => version.id === wanted)?.version_number ?? wanted;
+          return {
+            label,
+            trail: [
+              root,
+              { label: name, href: `#${projectPath(source, id)}` },
+              { label: t('browse.tab-versions'), href: `#${projectPath(source, id, 'versions')}` },
+              { label },
+            ],
+            back: { to: projectPath(source, id, 'versions'), label: t('common.back') },
+          };
+        }
         return {
           label: name,
           trail: [root, { label: name }],

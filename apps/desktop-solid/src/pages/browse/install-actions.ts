@@ -23,12 +23,19 @@ import { openInstallSource } from '../create/install-navigation';
 const [pickerProject, setPickerProject] = createSignal<ResourceProject | undefined>(undefined, {
   name: 'browsePickerProject',
 });
-export { pickerProject };
-export function closePicker(): void { setPickerProject(undefined); }
+/** Set when the picker is installing one specific version (a version page) rather than the best match. */
+const [pickerVersion, setPickerVersion] = createSignal<ResourceVersion | undefined>(undefined, {
+  name: 'browsePickerVersion',
+});
+export { pickerProject, pickerVersion };
+export function closePicker(): void {
+  setPickerProject(undefined);
+  setPickerVersion(undefined);
+}
 
 /** Opens a provider page in the system browser (or a new tab in the preview). */
 export async function openExternal(url: string) {
-  if (!/^https?:\/\//i.test(url)) return;
+  if (!/^(https?:\/\/|mailto:)/i.test(url)) return;
   if (nativeInstances) await openInShell(url);
   else window.open(url, '_blank', 'noopener');
 }
@@ -50,10 +57,9 @@ function packRelease(versions: readonly ResourceVersion[], minecraft: string | n
   )[0];
 }
 
-async function startPack(project: ResourceProject) {
+async function startPack(project: ResourceProject, pinned?: ResourceVersion) {
   try {
-    const versions = await loadVersions(project.source, project.id);
-    const release = packRelease(versions, gameVersion(), loader());
+    const release = pinned ?? packRelease(await loadVersions(project.source, project.id), gameVersion(), loader());
     const url = release
       ? hasDownloadableArtifact(release)
         ? release.download_url || release.files?.[0]?.url
@@ -84,16 +90,24 @@ export function reportOutcome(project: ResourceProject, instanceName: string, ou
   }
 }
 
-/** The Install action dispatches to the target, picker, pack flow or World chooser. */
+/**
+ * The Install action dispatches to the target, picker, pack flow or World chooser. `pinned`
+ * installs that exact version (a version page); otherwise the best match for the target is used.
+ */
 export async function runInstall(
   project: ResourceProject,
   kind: ResourceType,
   target: ({ id: string; name: string } & InstallTarget) | undefined,
+  pinned?: ResourceVersion,
 ) {
-  if (kind === 'modpack') return startPack(project);
-  if (!target) { setPickerProject(project); return; }
-  if (kind === 'datapack') return chooseWorld(project, target);
-  reportOutcome(project, target.name, await installInto(project, target, kind));
+  if (kind === 'modpack') return startPack(project, pinned);
+  if (!target) {
+    setPickerVersion(pinned);
+    setPickerProject(project);
+    return;
+  }
+  if (kind === 'datapack') return chooseWorld(project, target, pinned);
+  reportOutcome(project, target.name, await installInto(project, target, kind, pinned));
 }
 
 /** Installs into an instance chosen in the picker. */
@@ -102,24 +116,30 @@ export async function installFromPicker(
   kind: ResourceType,
   instance: { id: string; name: string } & InstallTarget,
 ) {
+  const pinned = untrack(pickerVersion);
   closePicker();
-  if (kind === 'datapack') return chooseWorld(project, instance);
-  reportOutcome(project, instance.name, await installInto(project, instance, kind));
+  if (kind === 'datapack') return chooseWorld(project, instance, pinned);
+  reportOutcome(project, instance.name, await installInto(project, instance, kind, pinned));
 }
 
-/** The picker's footer action: a new instance made for this project, seeded from the filters. */
+/**
+ * The picker's footer action: a new instance made for this project, seeded from the filters,
+ * or from the pinned version's newest Minecraft version and first loader.
+ */
 export function installIntoNew(project: ResourceProject, kind: ResourceType) {
+  const pinned = untrack(pickerVersion);
   closePicker();
-  return installIntoNewInstance(project, kind, {
-    minecraftVersion: gameVersion() ?? undefined,
-    loader: loader() ?? undefined,
-  });
+  return installIntoNewInstance(project, kind, pinned
+    ? { version: pinned }
+    : { minecraftVersion: gameVersion() ?? undefined, loader: loader() ?? undefined });
 }
 
 export type WorldOption = { id: string; name: string; icon?: string; detail?: string };
 type WorldChoice = {
   project: ResourceProject;
   instance: { id: string; name: string };
+  /** A specific version to install instead of the best match for the world. */
+  version?: ResourceVersion;
   worlds?: WorldOption[];
   error?: string;
 };
@@ -136,11 +156,16 @@ export function closeWorldChoice(): void {
   setWorldChoice(undefined);
 }
 
-async function chooseWorld(project: ResourceProject, instance: { id: string; name: string } & InstallTarget): Promise<void> {
+async function chooseWorld(
+  project: ResourceProject,
+  instance: { id: string; name: string } & InstallTarget,
+  version?: ResourceVersion,
+): Promise<void> {
   const request = ++worldRequest;
   worldTarget = instance;
   worldVersions = new Map();
-  setWorldChoice({ project, instance: { id: instance.id, name: instance.name } });
+  const base = { project, instance: { id: instance.id, name: instance.name }, ...(version ? { version } : {}) };
+  setWorldChoice(base);
   try {
     let worlds: WorldOption[];
     const versions = new Map<string, string | undefined>();
@@ -158,10 +183,10 @@ async function chooseWorld(project: ResourceProject, instance: { id: string; nam
     }
     if (request !== worldRequest) return;
     worldVersions = versions;
-    setWorldChoice({ project, instance: { id: instance.id, name: instance.name }, worlds });
+    setWorldChoice({ ...base, worlds });
   } catch (reason) {
     if (request !== worldRequest) return;
-    setWorldChoice({ project, instance: { id: instance.id, name: instance.name }, error: t('browse.world-load-failed', { message: String(reason) }) });
+    setWorldChoice({ ...base, error: t('browse.world-load-failed', { message: String(reason) }) });
   }
 }
 
@@ -174,9 +199,15 @@ export async function installIntoWorld(world: WorldOption): Promise<void> {
   const game = worldVersions.get(world.id);
   installingWorld = true;
   try {
-    const versions = await loadVersions(choice.project.source, choice.project.id);
+    const selected = choice.version
+      ? { version: choice.version }
+      : selectInstallVersion(
+          await loadVersions(choice.project.source, choice.project.id),
+          { ...target, minecraftVersion: game || target.minecraftVersion },
+          'datapack',
+          choice.project.source,
+        );
     if (request !== worldRequest) return;
-    const selected = selectInstallVersion(versions, { ...target, minecraftVersion: game || target.minecraftVersion }, 'datapack', choice.project.source);
     if (!selected) reportOutcome(choice.project, world.name, { kind: 'no-version' });
     else if (!hasDownloadableArtifact(selected.version)) reportOutcome(choice.project, world.name, { kind: 'external' });
     else {

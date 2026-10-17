@@ -14,6 +14,7 @@
  * States: list: data-pending; card: data-banner, data-enter, data-installed, data-skeleton;
  *         banner img: data-backdrop, data-loaded; target icon: data-empty;
  *         tag: aria-pressed, data-kind=more; toggle: aria-pressed; notice: data-tone;
+ *         install buttons (any Browse page): data-busy;
  *         picker row/status: data-status; category icon: data-kind (mask | image)
  * Knobs: --browse-card-min, --browse-icon-size, --browse-card-pad, --browse-hue
  *
@@ -625,7 +626,7 @@
   }
 
   /* An install in progress: the disabled button carries a slow sweep. */
-  :where([data-vesta='browse-card-action'] [data-busy]) {
+  :where([data-vesta='button'][data-busy]) {
     background-image: linear-gradient(
       90deg,
       transparent,
@@ -839,7 +840,8 @@
     color: var(--vesta-color-success-text);
   }
 
-  :where([data-vesta='browse-picker-status'][data-status='update']) {
+  :where([data-vesta='browse-picker-status'][data-status='update']),
+  :where([data-vesta='browse-picker-status'][data-status='replace']) {
     color: var(--vesta-color-accent-text);
   }
 

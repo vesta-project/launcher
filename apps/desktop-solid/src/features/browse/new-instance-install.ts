@@ -7,18 +7,19 @@ import { loadMetadata, metadata, metadataError } from '../instances/metadata';
 import type { NativeInstance } from '../instances/native-model';
 import { nativeInstances } from '../instances/native-service';
 import { hasDownloadableArtifact, loaderIds, selectInstallVersion, requiresWorldTarget,
-  type ResourceProject, type ResourceType } from './browse-model';
+  type ResourceProject, type ResourceType, type ResourceVersion } from './browse-model';
 import { loadVersions } from './browse-projects';
 import { installInto, setNotice } from './browse-store';
 
 const active = new Map<string, Promise<void>>();
-type Choice = { minecraftVersion?: string; loader?: string };
+type Choice = { minecraftVersion?: string; loader?: string; version?: ResourceVersion };
 export interface PendingResourceInstall {
   project: ResourceProject;
   kind: ResourceType;
   minecraft: string;
   loader: string;
   loaderVersion: string;
+  version?: ResourceVersion;
 }
 
 /** One-shot navigation intent. No instance exists until the user submits Create. */
@@ -36,13 +37,13 @@ export async function installIntoNewInstance(project: ResourceProject, kind: Res
 async function prepare(project: ResourceProject, kind: ResourceType, choice: Choice = {}) {
   if (!nativeInstances) throw new Error(t('browse.new-instance-desktop'));
   if (kind === 'modpack') throw new Error(t('browse.new-instance-pack'));
-  const [versions] = await Promise.all([loadVersions(project.source, project.id), loadMetadata()]);
+  const [versions] = await Promise.all([choice.version ? Promise.resolve([choice.version]) : loadVersions(project.source, project.id), loadMetadata()]);
   const catalog = untrack(metadata);
   if (!catalog) throw new Error(untrack(metadataError) || t('browse.new-instance-metadata'));
   const requestedLoader = choice.loader?.trim().toLowerCase();
   if (requestedLoader && requestedLoader !== 'vanilla' && !loaderIds.some((id) => id === requestedLoader))
     throw new Error(t('browse.new-instance-loader', { loader: requestedLoader }));
-  const games = catalog.game_versions.filter((game) => choice.minecraftVersion ? game.id === choice.minecraftVersion : game.stable);
+  const games = catalog.game_versions.filter((game) => choice.minecraftVersion ? game.id === choice.minecraftVersion : !!choice.version || game.stable);
   const rank = { release: 0, beta: 1, alpha: 2 };
   const releases = [...versions].sort((a, b) => rank[a.release_type] - rank[b.release_type]
     || String(b.published_at ?? '').localeCompare(String(a.published_at ?? '')));
@@ -55,7 +56,7 @@ async function prepare(project: ResourceProject, kind: ResourceType, choice: Cho
         if ((kind === 'shader' && loader === 'vanilla') || (loader !== 'vanilla' && !loaderVersion)) continue;
         const selected = selectInstallVersion([release], { minecraftVersion: game.id, modloader: loader }, kind, project.source);
         if (!selected || !hasDownloadableArtifact(selected.version)) continue;
-        openResourceInstall({ project, kind, minecraft: game.id, loader, loaderVersion });
+        openResourceInstall({ project, kind, minecraft: game.id, loader, loaderVersion, ...(choice.version ? { version: choice.version } : {}) });
         return;
       }
     }
@@ -72,13 +73,15 @@ export function startPendingResourceInstallation(pending: PendingResourceInstall
       return id;
     }).then(async (instance) => {
       const target = { id: String(instance.id), minecraftVersion: instance.minecraftVersion, modloader: instance.modloader || 'vanilla' };
-      const versions = await loadVersions(pending.project.source, pending.project.id);
+      const versions = pending.version ? [pending.version] : await loadVersions(pending.project.source, pending.project.id);
       const selected = selectInstallVersion(versions, target, pending.kind, pending.project.source);
       if (pending.kind === 'datapack' || (selected && requiresWorldTarget(selected.version, pending.kind))) {
         setNotice({ tone: 'warning', text: t('browse.new-instance-world', { name: pending.project.name, title: instance.name }) });
         return;
       }
-      const outcome = await installInto(pending.project, target, pending.kind);
+      const outcome = pending.version
+        ? (selected ? await installInto(pending.project, target, pending.kind, selected.version) : { kind: 'no-version' as const })
+        : await installInto(pending.project, target, pending.kind);
       if (outcome.kind === 'started') setNotice({ tone: 'success', text: t('browse.install-started', { name: pending.project.name, title: instance.name }) });
       else if (outcome.kind === 'no-version') setNotice({ tone: 'warning', text: t('browse.no-version', { name: pending.project.name, title: instance.name }) });
       else throw new Error(outcome.kind === 'failed' ? outcome.message : t('browse.external-download', { name: pending.project.name }));

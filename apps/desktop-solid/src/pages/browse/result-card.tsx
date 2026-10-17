@@ -1,4 +1,4 @@
-import { Button, Popover, Tooltip } from '@vesta/ui';
+import { Popover } from '@vesta/ui';
 import { createMemo, For, Show, untrack } from 'solid-js';
 import { transitionTo } from '../../app/transition';
 import { Icon } from '../../components/icon';
@@ -27,18 +27,11 @@ import {
   target,
   toggleCategory,
   type,
-  type InstallState,
 } from '../../features/browse/browse-store';
 import { t } from '../../localization';
-import type { MessageId } from '../../localization/messages';
 import { loaderLabels } from './filter-panel';
+import { InstallButton } from './install-button';
 import { runInstall } from './install-actions';
-
-const reasons = {
-  vanilla: 'browse.reason-vanilla',
-  loader: 'browse.reason-loader',
-  'no-version': 'browse.reason-no-version',
-} satisfies Record<string, MessageId>;
 
 /** Tags shown before the rest fold into a "+N" pill. */
 const shownTags = 3;
@@ -72,59 +65,6 @@ function TagButton(props: { tag: Tag }) {
     >
       <span>{props.tag.label}</span>
     </button>
-  );
-}
-
-function InstallAction(props: { state: () => InstallState; targetName: () => string | undefined; onRun: () => void }) {
-  const kind = () => props.state().kind;
-  const label = () =>
-    kind() === 'installed'
-      ? t('browse.action-installed')
-      : kind() === 'update'
-        ? t('browse.action-update')
-        : kind() === 'installing'
-          ? t('browse.action-installing')
-          : t('browse.action-install');
-  const icon = () =>
-    kind() === 'installed'
-      ? 'icons/controls/check'
-      : kind() === 'update'
-        ? 'icons/actions/refresh'
-        : 'icons/actions/download';
-  const button = () => (
-    <Button
-      size="sm"
-      variant={kind() === 'installed' ? 'ghost' : kind() === 'update' ? 'solid' : 'outline'}
-      tone={kind() === 'update' ? 'accent' : kind() === 'installed' ? 'success' : 'neutral'}
-      disabled={kind() === 'installed' || kind() === 'installing' || kind() === 'unavailable'}
-      data-busy={kind() === 'installing' ? '' : undefined}
-      data-tip={kind() === 'install' && props.targetName() ? t('browse.install-into', { title: props.targetName() as string }) : undefined}
-      icon={<Icon name={icon()} size={12} />}
-      onClick={() => props.onRun()}
-    >
-      {label()}
-    </Button>
-  );
-  const unavailable = createMemo(
-    () => {
-      const current = props.state();
-      return current.kind === 'unavailable' ? current.reason : undefined;
-    },
-    { name: 'browseCardReason' },
-  );
-  return (
-    <Show when={unavailable()} fallback={button()}>
-      {(reason) => (
-        <Tooltip
-          content={t(reasons[reason()])}
-          trigger={(triggerProps) => (
-            <span {...triggerProps} data-vesta="browse-card-action-wrap" tabindex={0}>
-              {button()}
-            </span>
-          )}
-        />
-      )}
-    </Show>
   );
 }
 
@@ -255,7 +195,7 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
           </div>
         </div>
         <span data-vesta="browse-card-action">
-          <InstallAction
+          <InstallButton
             state={state}
             targetName={() => target()?.name}
             onRun={() => void runInstall(project(), project().resource_type, target())}

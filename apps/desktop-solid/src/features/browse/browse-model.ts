@@ -30,7 +30,14 @@ export interface ResourceProject {
   icon_url: string | null;
   author: string;
   authors: string[];
-  author_details?: { id: string; username: string; avatar_url: string | null; is_owner?: boolean }[];
+  author_details?: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+    is_owner?: boolean;
+    /** Provider wording ("Owner", "Developer", "Artist"…), shown as is. */
+    role?: string;
+  }[];
   organization?: { id: string; slug: string; name: string; icon_url: string | null } | null;
   download_count: number;
   follower_count: number;
@@ -40,7 +47,43 @@ export interface ResourceProject {
   featured_gallery?: string | null;
   published_at: string | null;
   updated_at: string | null;
+  /** Extra links the provider lists: source, issues, wiki, Discord, donations. */
+  links?: ProjectLink[];
+  /** Where the project runs; absent when the provider does not say. */
+  environment?: { client: boolean; server: boolean } | null;
   [field: string]: unknown;
+}
+
+export interface ProjectLink {
+  kind: string;
+  label: string;
+  url: string;
+  donation?: boolean;
+}
+
+export type DependencyType = 'required' | 'optional' | 'incompatible' | 'embedded';
+
+export interface ResourceDependency {
+  project_id: string;
+  version_id: string | null;
+  file_name: string | null;
+  dependency_type: DependencyType;
+}
+
+export interface ResourceVersionFile {
+  url: string;
+  file_name?: string;
+  hash?: string;
+  file_size?: number | null;
+  /** `primary`, `datapack`, `resourcepack`… */
+  role: string;
+}
+
+export interface ResourceVersionDetails {
+  version: ResourceVersion;
+  changelog: string | null;
+  changelog_format: 'markdown' | 'html';
+  changelog_status: 'available' | 'empty' | 'unavailable';
 }
 
 export interface ResourceVersion {
@@ -53,7 +96,11 @@ export interface ResourceVersion {
   file_name: string;
   release_type: ReleaseType;
   published_at?: string | null;
-  files?: { url: string; role: string }[];
+  files?: ResourceVersionFile[];
+  dependencies?: ResourceDependency[];
+  download_count?: number | null;
+  file_size?: number | null;
+  hash?: string;
   [field: string]: unknown;
 }
 
@@ -319,7 +366,8 @@ export interface ProjectUrl {
   id: string;
 }
 
-function unwrapLinkout(url: string): string {
+/** CurseForge wraps outbound links in `/linkout?remoteUrl=`; this returns the destination. */
+export function unwrapLinkout(url: string): string {
   try {
     const parsed = new URL(url);
     const remote = parsed.pathname === '/linkout' ? parsed.searchParams.get('remoteUrl') : null;
@@ -370,8 +418,16 @@ export function parseProjectUrl(input: string): ProjectUrl | undefined {
   return undefined;
 }
 
-export const projectPath = (platform: string, id: string) =>
-  `/browse/project/${encodeURIComponent(platform)}/${encodeURIComponent(id)}`;
+/** Project page tabs; the description is the project's own path. */
+export type ProjectTab = 'description' | 'gallery' | 'versions';
+export const projectTabs: ProjectTab[] = ['description', 'gallery', 'versions'];
+export const isProjectTab = (value: unknown): value is ProjectTab => projectTabs.includes(value as ProjectTab);
+
+export const projectPath = (platform: string, id: string, tab: ProjectTab = 'description') =>
+  `/browse/project/${encodeURIComponent(platform)}/${encodeURIComponent(id)}${tab === 'description' ? '' : `/${tab}`}`;
+
+export const versionPath = (platform: string, id: string, versionId: string) =>
+  `${projectPath(platform, id)}/version/${encodeURIComponent(versionId)}`;
 
 /* ---- Categories ---- */
 
@@ -680,3 +736,187 @@ export function taskMatchesInstall(
   }
   return taskId === `download_${target}_${install.projectId}_${install.versionId}`;
 }
+
+/* ---- Project page: versions ---- */
+
+/** Brand names, so not translated. Unknown loaders are title-cased. */
+const loaderNames: Record<string, string> = {
+  fabric: 'Fabric',
+  forge: 'Forge',
+  neoforge: 'NeoForge',
+  quilt: 'Quilt',
+  liteloader: 'LiteLoader',
+  iris: 'Iris',
+  optifine: 'OptiFine',
+  canvas: 'Canvas',
+  vanilla: 'Vanilla',
+  bukkit: 'Bukkit',
+  paper: 'Paper',
+  spigot: 'Spigot',
+  folia: 'Folia',
+  purpur: 'Purpur',
+  sponge: 'Sponge',
+  velocity: 'Velocity',
+  bungeecord: 'BungeeCord',
+  waterfall: 'Waterfall',
+};
+export const loaderLabel = (id: string) =>
+  loaderNames[id.toLowerCase()] ?? id.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+
+/** Loader tags that only restate the resource type; they are not shown as loaders. */
+const typeTags = new Set(['minecraft', 'datapack', 'mrpack']);
+/** The loaders worth showing for a version, in provider order without duplicates. */
+export const displayLoaders = (loaders: readonly string[]) => [
+  ...new Set(loaders.map((loader) => loader.toLowerCase()).filter((loader) => !typeTags.has(loader))),
+];
+
+const notGameVersions = new Set(['client', 'server', 'vanilla', ...typeTags, ...loaderIds]);
+const releaseLike = /^\d+\.\d+/;
+
+/** Orders Minecraft versions; release numbers sort above snapshots and other labels. */
+export function compareGameVersions(a: string, b: string): number {
+  const releaseA = releaseLike.test(a);
+  const releaseB = releaseLike.test(b);
+  if (releaseA !== releaseB) return releaseA ? 1 : -1;
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/** The Minecraft versions among a version's tags (providers mix in loaders and sides), newest first. */
+export function minecraftVersionsOf(tags: readonly string[]): string[] {
+  const list = tags.map((tag) => tag.trim()).filter((tag) => tag && !notGameVersions.has(tag.toLowerCase()));
+  return [...new Set(list)].sort((a, b) => compareGameVersions(b, a));
+}
+
+/** "1.21.4", "1.21.4, 1.21.1" or "1.20.1 – 1.21.4" for a newest-first list. */
+export function summarizeGameVersions(newestFirst: readonly string[]): string {
+  if (newestFirst.length <= 2) return newestFirst.join(', ');
+  return `${newestFirst[newestFirst.length - 1]} – ${newestFirst[0]}`;
+}
+
+export type VersionFit =
+  | { kind: 'fits'; borrowedLoader: boolean }
+  | { kind: 'vanilla' | 'game' | 'loader' };
+
+/** Whether one specific version can go into a target, and if not, why. */
+export function versionFit(
+  version: ResourceVersion,
+  target: InstallTarget,
+  type: ResourceType,
+  source?: SourceId,
+): VersionFit {
+  const vanilla = loaderOf(target) === 'vanilla';
+  if (vanilla && (type === 'mod' || type === 'shader')) return { kind: 'vanilla' };
+  const choice = selectInstallVersion([version], target, type, source);
+  if (choice) return { kind: 'fits', borrowedLoader: choice.borrowedLoader };
+  return gameVersionMatches(version.game_versions, target.minecraftVersion) ? { kind: 'loader' } : { kind: 'game' };
+}
+
+export type ChannelFilter = 'all' | ReleaseType;
+
+export interface VersionFilter {
+  text: string;
+  gameVersion: string | null;
+  loader: string | null;
+  channel: ChannelFilter;
+  /** Only versions that fit the target instance. */
+  fits: boolean;
+}
+
+export const emptyVersionFilter: VersionFilter = { text: '', gameVersion: null, loader: null, channel: 'all', fits: false };
+
+const publishedTime = (version: ResourceVersion) => {
+  const time = version.published_at ? Date.parse(version.published_at) : NaN;
+  return Number.isFinite(time) ? time : 0;
+};
+
+/** Newest first; providers mostly send that order already, so equal dates keep theirs. */
+export const sortVersions = (versions: readonly ResourceVersion[]) =>
+  versions
+    .map((version, index) => ({ version, index, time: publishedTime(version) }))
+    .sort((a, b) => b.time - a.time || a.index - b.index)
+    .map((entry) => entry.version);
+
+/** The versions the list shows for a filter; `target` only matters when `fits` is on. */
+export function filterVersions(
+  newestFirst: readonly ResourceVersion[],
+  filter: VersionFilter,
+  context: { target?: InstallTarget; type: ResourceType; source: SourceId },
+): ResourceVersion[] {
+  const needle = filter.text.trim().toLowerCase();
+  const loader = filter.loader?.toLowerCase();
+  return newestFirst.filter((version) => {
+    if (filter.channel !== 'all' && version.release_type !== filter.channel) return false;
+    if (loader && !version.loaders.some((item) => item.toLowerCase() === loader)) return false;
+    if (filter.gameVersion && !version.game_versions.includes(filter.gameVersion)) return false;
+    if (
+      needle &&
+      !version.version_number.toLowerCase().includes(needle) &&
+      !version.file_name.toLowerCase().includes(needle) &&
+      !version.game_versions.some((game) => game.toLowerCase() === needle)
+    )
+      return false;
+    if (filter.fits && context.target)
+      return versionFit(version, context.target, context.type, context.source).kind === 'fits';
+    return true;
+  });
+}
+
+/** Every Minecraft version and loader across a project's versions, for the filter menus. */
+export function versionFacets(versions: readonly ResourceVersion[]) {
+  const games = new Set<string>();
+  const loaders = new Set<string>();
+  for (const version of versions) {
+    for (const game of minecraftVersionsOf(version.game_versions)) games.add(game);
+    for (const loader of displayLoaders(version.loaders)) loaders.add(loader);
+  }
+  return {
+    gameVersions: [...games].sort((a, b) => compareGameVersions(b, a)),
+    loaders: [...loaders].sort((a, b) => loaderLabel(a).localeCompare(loaderLabel(b))),
+  };
+}
+
+/** The file installs use: the one marked primary, else the first. */
+export function primaryFile(version: ResourceVersion): ResourceVersionFile | undefined {
+  const files = version.files ?? [];
+  return files.find((file) => file.role.toLowerCase() === 'primary') ?? files[0];
+}
+
+/** The files to list for a version; legacy cache rows only know their download URL. */
+export function versionFiles(version: ResourceVersion): ResourceVersionFile[] {
+  if (version.files?.length) return version.files;
+  if (!version.download_url) return [];
+  return [
+    {
+      url: version.download_url,
+      file_name: version.file_name,
+      hash: version.hash,
+      file_size: version.file_size ?? null,
+      role: 'primary',
+    },
+  ];
+}
+
+const byteUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
+export function formatBytes(bytes: number | null | undefined, locale?: string): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '';
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < byteUnits.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: byteUnits[unit],
+    unitDisplay: 'short',
+    maximumFractionDigits: unit < 2 ? 0 : 1,
+  }).format(value);
+}
+
+/** Descriptions from CurseForge are HTML; Modrinth and Smithed write Markdown. */
+export const descriptionFormat = (project: Pick<ResourceProject, 'source'>): 'markdown' | 'html' =>
+  project.source === 'curseforge' ? 'html' : 'markdown';
+
+/** The project banner: the featured gallery image, else the first one. */
+export const bannerOf = (project: Pick<ResourceProject, 'gallery' | 'featured_gallery'>) =>
+  project.featured_gallery || project.gallery[0] || undefined;

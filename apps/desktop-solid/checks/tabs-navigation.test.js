@@ -188,3 +188,19 @@ test('back goes from tab to overview to library without phantom entries; setting
     expect(location.hash).toBe('#/library/example/resources');
   } finally {mounted.restore();}
 });
+
+
+test('version navigation preserves its real parent when replacing sibling releases', async () => {
+  const mounted = await runtime.navigation();
+  try {
+    const {router} = mounted;
+    router.navigate('/browse/project/modrinth/p/versions'); runtime.flush();
+    router.navigate('/browse/project/modrinth/p/version/one'); runtime.flush();
+    expect(router.previousPath()).toBe('/browse/project/modrinth/p/versions');
+    router.navigate('/browse/project/modrinth/p/version/two', {replace: true}); runtime.flush();
+    expect(router.previousPath()).toBe('/browse/project/modrinth/p/versions');
+    router.navigate('/browse/project/modrinth/p'); runtime.flush();
+    router.navigate('/browse/project/modrinth/p/version/one'); runtime.flush();
+    expect(router.previousPath()).toBe('/browse/project/modrinth/p');
+  } finally {mounted.restore();}
+});

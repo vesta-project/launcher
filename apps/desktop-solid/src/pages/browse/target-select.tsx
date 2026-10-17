@@ -1,6 +1,7 @@
 import { Select } from '@vesta/ui';
 import { createMemo } from 'solid-js';
 import { Icon } from '../../components/icon';
+import type { ResourceType } from '../../features/browse/browse-model';
 import { chooseTarget, targetId, type } from '../../features/browse/browse-store';
 import { instances } from '../../features/instances/catalog';
 import { t } from '../../localization';
@@ -10,7 +11,15 @@ import { t } from '../../localization';
  * Install go straight into it; "Any instance" makes Install ask where. Modpacks always create
  * a new instance, so the control is disabled for them.
  */
-export function TargetSelect(props: { class?: string; 'aria-label'?: string }) {
+export function TargetSelect(props: {
+  class?: string;
+  'aria-label'?: string;
+  /** The resource type being installed; defaults to the Browse type. */
+  kind?: ResourceType;
+  /** Replaces the default (route) change, e.g. on a project page that must stay put. */
+  onChange?: (id: string | undefined) => void;
+}) {
+  const modpack = () => (props.kind ?? type()) === 'modpack';
   const options = createMemo(
     () => [
       {
@@ -38,9 +47,9 @@ export function TargetSelect(props: { class?: string; 'aria-label'?: string }) {
       class={props.class}
       aria-label={props['aria-label'] ?? t('browse.section-instance')}
       options={options()}
-      value={type() === 'modpack' ? '' : (targetId() ?? '')}
-      onChange={(value) => chooseTarget(value || undefined)}
-      disabled={type() === 'modpack'}
+      value={modpack() ? '' : (targetId() ?? '')}
+      onChange={(value) => (props.onChange ?? chooseTarget)(value || undefined)}
+      disabled={modpack()}
     />
   );
 }

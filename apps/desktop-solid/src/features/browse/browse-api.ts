@@ -6,6 +6,7 @@ import {
   fixtureCurseforgeCategories,
   fixtureProjects,
   fixtureSearch,
+  fixtureVersionDetails,
   fixtureVersions,
 } from './browse-fixtures';
 import type {
@@ -13,6 +14,7 @@ import type {
   ResourceProject,
   ResourceType,
   ResourceVersion,
+  ResourceVersionDetails,
   SearchResponse,
   SourceId,
   hostQuery,
@@ -62,6 +64,37 @@ export async function fetchVersions(platform: SourceId, projectId: string): Prom
     return invoke<ResourceVersion[]>('get_resource_versions', { platform, projectId, ignoreCache: false });
   await pause();
   return fixtureVersions(projectId);
+}
+
+/** Changelog and full metadata for one version; the host caches these. */
+export async function fetchVersionDetails(
+  platform: SourceId,
+  projectId: string,
+  versionId: string,
+  ignoreCache = false,
+): Promise<ResourceVersionDetails> {
+  if (nativeInstances)
+    return invoke<ResourceVersionDetails>('get_resource_version_details', { platform, projectId, versionId, ignoreCache });
+  await pause(220);
+  const found = fixtureVersionDetails(projectId, versionId);
+  if (!found) throw new Error(`Unknown version ${versionId}`);
+  return found;
+}
+
+/** Several projects of one source in one request (dependency lists). */
+export async function fetchProjects(platform: SourceId, ids: string[]): Promise<ResourceProject[]> {
+  if (!ids.length) return [];
+  if (nativeInstances) return invoke<ResourceProject[]>('get_resource_projects', { platform, ids });
+  await pause();
+  return fixtureProjects.filter((item) => item.source === platform && ids.includes(item.id));
+}
+
+/** The same project on another source (Modrinth and CurseForge), when the host can match it. */
+export async function fetchPeerProject(project: ResourceProject): Promise<ResourceProject | null> {
+  if (nativeInstances) return invoke<ResourceProject | null>('find_peer_resource', { project });
+  await pause();
+  const other = project.source === 'modrinth' ? 'curseforge' : 'modrinth';
+  return fixtureProjects.find((item) => item.source === other && item.name === project.name) ?? null;
 }
 
 const fixtureInstalled = new Map<string, InstalledRow[]>();

@@ -1,4 +1,11 @@
-import type { ResourceCategory, ResourceProject, ResourceType, ResourceVersion, SourceId } from './browse-model';
+import type {
+  ResourceCategory,
+  ResourceProject,
+  ResourceType,
+  ResourceVersion,
+  ResourceVersionDetails,
+  SourceId,
+} from './browse-model';
 
 /** Small deterministic dataset for the plain-browser preview; the host serves real data in Tauri. */
 
@@ -208,6 +215,37 @@ const curseforge: ResourceProject[] = [
   ),
 ];
 
+// One project carries a full page so the preview exercises the description, links and gallery.
+Object.assign(modrinth[0], {
+  description: [
+    '# Sodium',
+    '',
+    'Sodium is a **free and open-source** rendering engine replacement for the Minecraft client.',
+    '',
+    '- Much higher frame rates',
+    '- Fewer stutters and smoother chunk loading',
+    '- Works with [Iris Shaders](https://modrinth.com/mod/iris)',
+    '',
+    '> Sodium is not a drop-in replacement for OptiFine.',
+    '',
+    '| Feature | Status |',
+    '| --- | --- |',
+    '| Chunk rendering | Rewritten |',
+    '| Entity culling | Built in |',
+    '',
+    '```',
+    'sodium-options.json',
+    '```',
+  ].join('\n'),
+  links: [
+    { kind: 'source', label: 'Source code', url: 'https://github.com/CaffeineMC/sodium', donation: false },
+    { kind: 'issues', label: 'Issues', url: 'https://github.com/CaffeineMC/sodium/issues', donation: false },
+    { kind: 'discord', label: 'Discord', url: 'https://discord.example/sodium', donation: false },
+    { kind: 'kofi', label: 'Ko-fi', url: 'https://ko-fi.example/sodium', donation: true },
+  ],
+  environment: { client: true, server: false },
+});
+
 export const fixtureProjects: ResourceProject[] = [...modrinth, ...curseforge];
 
 const icon = (path: string) =>
@@ -306,8 +344,17 @@ export function fixtureVersions(projectId: string): ResourceVersion[] {
     file_name: `${projectId}-${number}.jar`,
     release_type: type,
     hash: '',
-    dependencies: [],
+    dependencies:
+      id === '3'
+        ? [
+            { project_id: 'modmenu', version_id: null, file_name: null, dependency_type: 'optional' },
+            { project_id: 'lithium', version_id: null, file_name: null, dependency_type: 'required' },
+            { project_id: 'optifine', version_id: null, file_name: 'OptiFine', dependency_type: 'incompatible' },
+          ]
+        : [],
     published_at: ago(age),
+    download_count: Math.round(400_000 / (Number(id) + 1)),
+    file_size: 1_200_000 + Number(id) * 40_000,
     files: [],
   });
   return [
@@ -316,4 +363,18 @@ export function fixtureVersions(projectId: string): ResourceVersion[] {
     make('2', '1.5.2', ['1.20.1'], ['fabric', 'forge'], 'release', 120),
     make('1', '1.0.0', ['1.12.2', '1.8.9'], ['forge'], 'release', 600),
   ];
+}
+
+export function fixtureVersionDetails(projectId: string, versionId: string): ResourceVersionDetails | undefined {
+  const version = fixtureVersions(projectId).find((item) => item.id === versionId);
+  if (!version) return undefined;
+  const changelog = version.release_type === 'release'
+    ? `## ${version.version_number}\n\n- Faster chunk meshing\n- Fixed a crash when resizing the window\n- Updated translations`
+    : null;
+  return {
+    version,
+    changelog,
+    changelog_format: 'markdown',
+    changelog_status: changelog ? 'available' : 'empty',
+  };
 }

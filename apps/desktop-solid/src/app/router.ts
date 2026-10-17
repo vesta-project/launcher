@@ -27,6 +27,8 @@ if (hasWindow) {
 
 /** True when history.back() returns to an earlier page of the launcher. */
 export const canGoBack = () => historyDepth() > 0;
+/** The preceding in-app entry, preserved when replacing sibling views. */
+export const previousPath = () => hasWindow ? (history.state as { from?: string } | null)?.from : undefined;
 
 export type PageId = 'library' | 'browse' | 'create' | 'settings';
 
@@ -36,19 +38,22 @@ export interface Route {
   section?: string;
   /** Third path segment: the tab of an instance. */
   detail?: string;
-  /** A world being managed inside the Worlds section. */
+  /** A world being managed inside the Worlds section, or a Browse project id. */
   item?: string;
+  /** Segments after the fourth: a project's tab, or `version/<id>` under a Browse project. */
+  rest: string[];
 }
 
 const pages: PageId[] = ['library', 'browse', 'create', 'settings'];
 
 export function parseRoute(value: string): Route {
-  const [page, section, detail, item] = value.split('/').filter(Boolean);
+  const [page, section, detail, item, ...rest] = value.split('/').filter(Boolean);
   return {
     page: pages.includes(page as PageId) ? (page as PageId) : 'library',
     section,
     detail,
     item,
+    rest,
   };
 }
 
@@ -63,10 +68,10 @@ export function navigate(to: string, options?: { replace?: boolean }) {
   if (!hasWindow || location.hash.slice(1) === to) return;
   // The History API writes the entry and its depth in one step. Assigning location.hash and
   // then stamping it races WebKit's own entry bookkeeping, which left back with a dead step.
-  if (options?.replace) history.replaceState({ vesta: historyDepth() }, '', `#${to}`);
+  if (options?.replace) history.replaceState({ ...history.state, vesta: historyDepth() }, '', `#${to}`);
   else {
     const next = historyDepth() + 1;
-    history.pushState({ vesta: next }, '', `#${to}`);
+    history.pushState({ vesta: next, from: read() }, '', `#${to}`);
     setHistoryDepth(next);
   }
   setPath(read());

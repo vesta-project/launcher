@@ -7,6 +7,7 @@ import {
   projectKey,
   selectInstallVersion,
   updateAvailable,
+  versionFit,
   type ResourceProject,
   type ResourceVersion,
 } from '../../features/browse/browse-model';
@@ -14,18 +15,25 @@ import { loadVersions } from '../../features/browse/browse-projects';
 import { instances } from '../../features/instances/catalog';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
-import { closePicker, installFromPicker, installIntoNew, pickerProject } from './install-actions';
+import { closePicker, installFromPicker, installIntoNew, pickerProject, pickerVersion } from './install-actions';
 
 type Status =
-  | { kind: 'checking' | 'ready' | 'installed' | 'update' }
+  | { kind: 'checking' | 'ready' | 'installed' | 'update' | 'replace' }
   | { kind: 'warning' | 'incompatible'; reason: MessageId };
 
-const statusLabels: Record<'checking' | 'ready' | 'installed' | 'update', MessageId> = {
+const statusLabels: Record<'checking' | 'ready' | 'installed' | 'update' | 'replace', MessageId> = {
   checking: 'browse.status-checking',
   ready: 'browse.status-ready',
   installed: 'browse.status-installed',
   update: 'browse.status-update',
+  replace: 'browse.status-replace',
 };
+
+const fitReasons = {
+  vanilla: 'browse.reason-vanilla',
+  loader: 'browse.reason-loader',
+  game: 'browse.reason-game-version',
+} satisfies Record<string, MessageId>;
 
 interface Loaded {
   project: ResourceProject;
@@ -68,22 +76,41 @@ export function InstancePickerDialog() {
   const list = createMemo(
     () => {
       const project = pickerProject();
+      const pinned = pickerVersion();
       const data = loaded();
       const needle = filter().trim().toLowerCase();
       if (!project) return [];
+      const rowFor = (rows: Loaded['rows'] | undefined, instanceId: string) =>
+        rows?.[instanceId]?.find(
+          (item) => projectKey(item.platform.toLowerCase(), item.remote_id) === projectKey(project.source, project.id),
+        );
       return instances()
         .filter((entry) => !needle || entry.instance.name.toLowerCase().includes(needle))
         .map((entry) => {
           const instance = entry.instance;
           const status = ((): Status => {
+            // One exact version: it fits or it does not; an installed copy is replaced.
+            if (pinned) {
+              const fit = versionFit(pinned, instance, project.resource_type, project.source);
+              if (fit.kind !== 'fits') return { kind: 'incompatible', reason: fitReasons[fit.kind] };
+              if (!data) return { kind: 'checking' };
+              const row = rowFor(data?.rows, instance.id);
+              if (row) return row.remote_version_id === pinned.id ? { kind: 'installed' } : { kind: 'replace' };
+              return fit.borrowedLoader
+                ? {
+                    kind: 'warning',
+                    reason:
+                      instance.modloader.toLowerCase() === 'quilt'
+                        ? 'browse.reason-fabric-on-quilt'
+                        : 'browse.reason-forge-on-neoforge',
+                  }
+                : { kind: 'ready' };
+            }
             const compatibility = projectCompatibility(project, project.resource_type, instance);
             if (compatibility.kind === 'incompatible')
               return { kind: 'incompatible', reason: `browse.reason-${compatibility.reason}` };
             if (!data) return { kind: 'checking' };
-            const row = data.rows[instance.id]?.find(
-              (item) =>
-                projectKey(item.platform.toLowerCase(), item.remote_id) === projectKey(project.source, project.id),
-            );
+            const row = rowFor(data?.rows, instance.id);
             const choice = data.versions
               ? selectInstallVersion(data.versions, instance, project.resource_type, project.source)
               : undefined;
@@ -105,7 +132,13 @@ export function InstancePickerDialog() {
       onOpenChange={(open) => !open && closePicker()}
       size="md"
       title={t('browse.picker-title')}
-      description={pickerProject() ? t('browse.picker-description', { name: pickerProject()!.name }) : undefined}
+      description={
+        pickerProject()
+          ? pickerVersion()
+            ? t('browse.picker-description-version', { name: pickerProject()!.name, version: pickerVersion()!.version_number })
+            : t('browse.picker-description', { name: pickerProject()!.name })
+          : undefined
+      }
       footer={
         <Button
           size="sm"
@@ -133,7 +166,7 @@ export function InstancePickerDialog() {
           <For each={list()} keyed={(row) => row.instance.id}>
             {(row) => {
               const status = () => row().status;
-              const disabled = () => !['ready', 'warning', 'update'].includes(status().kind);
+              const disabled = () => !['ready', 'warning', 'update', 'replace'].includes(status().kind);
               return (
                 <li data-vesta="browse-picker-row" data-status={status().kind}>
                   <button

@@ -35,7 +35,7 @@ async function harness(entry, run) {
     '../../features/browse/browse-api': 'export const installResource = async (request) => { c.installs.push(request); return "task"; };',
     '../../pages/create/install-navigation': 'export const openResourceInstall = (pending) => c.handoffs.push(pending);',
     '../create/install-navigation': 'export const openInstallSource = (source) => c.handoffs.push(source);',
-    '../../features/browse/new-instance-install': 'export const installIntoNewInstance = async () => {};',
+    '../../features/browse/new-instance-install': 'export const installIntoNewInstance = async (...args) => c.handoffs.push(args);',
   };
   try {
     const built = await Bun.build({ entrypoints: [new URL(`../src/${entry}`, import.meta.url).pathname],
@@ -140,4 +140,67 @@ test('Browse carries the provider project and selected pack release through the 
     await api.runInstall(pack, 'modpack', undefined);
     expect(c.handoffs).toEqual([{ kind: 'url', value: release.download_url,
       online: { project: pack, release: c.versions[0] } }]);
+  }));
+
+test('a version page installs exactly its version: into the target, through the picker, or as a pack', () =>
+  harness('pages/browse/install-actions.ts', async (api, c) => {
+    const older = { ...release, id: 'older', version_number: '0.9' };
+    const calls = [];
+    c.install = async (...args) => { calls.push(args); return { kind: 'started' }; };
+    await api.runInstall(project, 'mod', { ...instance, name: 'Instance' }, older);
+    expect(calls[0][3]).toEqual(older);
+
+    await api.runInstall(project, 'mod', undefined, older);
+    expect(api.pickerProject()).toEqual(project);
+    expect(api.pickerVersion()).toEqual(older);
+    await api.installFromPicker(project, 'mod', { ...instance, name: 'Instance' });
+    expect(calls[1][3]).toEqual(older);
+    expect(api.pickerVersion()).toBeUndefined();
+
+    const pack = { ...project, resource_type: 'modpack' };
+    c.versions = [{ ...release, id: 'newest', download_url: 'https://example.test/newest.mrpack' }];
+    await api.runInstall(pack, 'modpack', undefined, older);
+    expect(c.handoffs.at(-1)).toEqual({ kind: 'url', value: older.download_url, online: { project: pack, release: older } });
+  }));
+
+test('a pinned data pack goes into the chosen world as that version, not the best match for the world', () =>
+  harness('pages/browse/install-actions.ts', async (api, c) => {
+    const pinned = { ...release, id: 'pinned', loaders: ['datapack'], game_versions: ['1.20.1'] };
+    c.versions = [{ ...release, loaders: ['datapack'] }];
+    c.invoke = async () => [{ ref: { instanceId: 7, directoryName: 'World' }, displayName: 'World', gameVersion: '1.21.1', running: false }];
+    await api.runInstall(project, 'datapack', instance, pinned);
+    await api.installIntoWorld(api.worldChoice().worlds[0]);
+    expect(c.installs[0]).toMatchObject({ type: 'datapack', version: { id: 'pinned' } });
+  }));
+
+
+test('new-instance picker preserves the pinned release in its Create handoff', () =>
+  harness('pages/browse/install-actions.ts', async (api, c) => {
+    await api.runInstall(project, 'mod', undefined, release);
+    await api.installIntoNew(project, 'mod');
+    expect(c.handoffs[0][2].version).toEqual(release);
+  }));
+
+test('Create preparation keeps the pinned release even when a newer version fits', () =>
+  harness('features/browse/new-instance-install.ts', async (api, c) => {
+    c.versions = [{ ...release, id: 'newer' }, release];
+    await api.installIntoNewInstance(project, 'mod', { version: release });
+    expect(c.handoffs[0].version).toEqual(release);
+    expect(c.handoffs[0].minecraft).toBe('1.21.1');
+  }));
+
+test('Create continuation installs the pinned version and refuses an edited incompatible target', () =>
+  harness('features/browse/new-instance-install.ts', async (api, c) => {
+    c.versions = [{ ...release, id: 'newer' }, release];
+    c.invoke = async () => ({ id: 7, name: 'Created', minecraftVersion: '1.21.1', modloader: 'fabric', installationStatus: 'installed' });
+    c.install = async (...args) => { c.installs.push(args); return { kind: 'started' }; };
+    await api.startPendingResourceInstallation({ project, kind: 'mod', version: release }, async () => 7);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(c.installs[0][3]).toEqual(release);
+    c.installs = [];
+    c.invoke = async () => ({ id: 8, name: 'Edited', minecraftVersion: '1.21.4', modloader: 'fabric', installationStatus: 'installed' });
+    await api.startPendingResourceInstallation({ project, kind: 'mod', version: release }, async () => 8);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(c.installs).toEqual([]);
+    expect(c.notices.at(-1).text).toContain('browse.no-version');
   }));

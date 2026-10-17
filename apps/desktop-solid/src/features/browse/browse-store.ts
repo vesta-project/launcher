@@ -40,6 +40,7 @@ import {
   type ResourceCategory,
   type ResourceProject,
   type ResourceType,
+  type ResourceVersion,
   type SortOrder,
   type SourceId,
 } from './browse-model';
@@ -626,7 +627,7 @@ export type InstallState =
   | { kind: 'installed' }
   | { kind: 'update' }
   | { kind: 'installing' }
-  | { kind: 'unavailable'; reason: 'vanilla' | 'loader' | 'no-version' };
+  | { kind: 'unavailable'; reason: 'vanilla' | 'loader' | 'no-version' | 'game' };
 
 export const sameState = (a: InstallState, b: InstallState) =>
   a.kind === b.kind && (a.kind !== 'unavailable' || (b.kind === 'unavailable' && a.reason === b.reason));
@@ -646,6 +647,12 @@ export function installState(project: ResourceProject): InstallState {
   if (blocked().has(installingKey(info.id, project.source, project.id)))
     return { kind: 'unavailable', reason: 'no-version' };
   return { kind: 'install' };
+}
+
+/** The version being installed into the target right now, if any. */
+export function installingVersion(project: Pick<ResourceProject, 'source' | 'id'>): string | undefined {
+  const info = target();
+  return info ? installing().get(installingKey(info.id, project.source, project.id)) : undefined;
 }
 
 /* ---- Notices ---- */
@@ -672,13 +679,15 @@ export async function installInto(
   project: ResourceProject,
   instance: { id: string } & InstallTarget,
   kind: ResourceType,
+  /** A specific version (the project page's version view); otherwise the best match is chosen. */
+  pinned?: ResourceVersion,
 ): Promise<InstallOutcome> {
   listenForInstalls();
   const key = installingKey(instance.id, project.source, project.id);
   const existing = installRequests.get(key);
   if (existing) return existing;
   if (untrack(installing).has(key)) return { kind: 'started' };
-  const pending = startInstallInto(project, instance, kind).finally(() => {
+  const pending = startInstallInto(project, instance, kind, pinned).finally(() => {
     installRequests.delete(key);
     failedStartingInstalls.delete(key);
   });
@@ -690,12 +699,14 @@ async function startInstallInto(
   project: ResourceProject,
   instance: { id: string } & InstallTarget,
   kind: ResourceType,
+  pinned?: ResourceVersion,
 ): Promise<InstallOutcome> {
   const key = installingKey(instance.id, project.source, project.id);
   try {
     await installEventsReady;
-    const versions = await loadVersions(project.source, project.id);
-    const choice = selectInstallVersion(versions, instance, kind, project.source);
+    const choice = pinned
+      ? { version: pinned, borrowedLoader: false }
+      : selectInstallVersion(await loadVersions(project.source, project.id), instance, kind, project.source);
     if (!choice) {
       setBlocked((current) => new Set<string>([...current, key]));
       return { kind: 'no-version' };
@@ -732,5 +743,47 @@ export function filterByCreator(project: ResourceProject) {
   setSource(project.source);
   setCreator(found);
 }
+
+/* ---- Leaving a project page for Browse ---- */
+
+/** A category tag on a project page: its label, from the source's category list when loaded. */
+export function categoryName(platform: SourceId, raw: string): string {
+  const list = categoryData()[platform] ?? [];
+  const found = list.find((category) => category.id === raw) ?? list.find((category) => category.name.toLowerCase() === raw.toLowerCase());
+  return categoryDisplayName(found?.name ?? raw);
+}
+
+/** Search text, creator and categories go; the target and the filters it seeded stay. */
+function browseFresh(project: ResourceProject) {
+  clearTimeout(debounce);
+  setSource(project.source);
+  setType(project.resource_type);
+  setTextSignal('');
+  setCommittedText('');
+  setCreatorSignal(null);
+  setCategoriesSignal([]);
+  firstPage();
+}
+
+/** Browse the project's source and type filtered to one of its categories. */
+export function browseCategory(project: ResourceProject, raw: string) {
+  const list = untrack(categoryData)[project.source] ?? [];
+  const found = list.find((category) => category.id === raw) ?? list.find((category) => category.name.toLowerCase() === raw.toLowerCase());
+  browseFresh(project);
+  setCategoriesSignal([found?.id ?? raw]);
+}
+
+/** Browse the project's source and type filtered to one creator (the owner by default). */
+export function browseCreator(project: ResourceProject, creator: Creator | undefined = creatorOf(project)) {
+  if (!creator) return;
+  browseFresh(project);
+  setCreatorSignal(creator);
+}
+
+/** Where Browse returns to: the target instance lives in the route. */
+export const browsePath = () => {
+  const id = untrack(targetId);
+  return id ? `/browse/for/${id}` : '/browse';
+};
 
 export const activeFilterCount = () => countFilters(query(), !!targetId() && type() !== 'modpack');

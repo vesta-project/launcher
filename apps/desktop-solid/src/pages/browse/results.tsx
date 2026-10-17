@@ -15,7 +15,6 @@ import {
   failure,
   generation,
   hasActiveFilters,
-  notice,
   page,
   pageSize,
   pending,
@@ -24,13 +23,13 @@ import {
   rememberScroll,
   results,
   retry,
-  setNotice,
   banners,
   setPage,
   setPageSize,
   warning,
 } from '../../features/browse/browse-store';
 import { t } from '../../localization';
+import { NoticeBar } from './notice-bar';
 import { ResultCard } from './result-card';
 
 const sizeOptions = pageSizes.map((size) => ({ value: String(size), label: String(size) }));
@@ -100,15 +99,6 @@ export function Results() {
     },
   );
 
-  createEffect(
-    () => notice(),
-    (current) => {
-      if (!current) return;
-      const timer = setTimeout(() => setNotice(undefined), 7000);
-      return () => clearTimeout(timer);
-    },
-  );
-
   onSettled(() => () => {
     clearTimeout(hoverTimer);
     const key = results()?.key;
@@ -150,21 +140,7 @@ export function Results() {
             <Progress size="sm" aria-label={t('browse.loading')} />
           </div>
         </Show>
-        <Show when={notice()}>
-          {(current) => (
-            <p data-vesta="browse-notice" data-tone={current().tone} role="status">
-              <span>{current().text}</span>
-              <button
-                type="button"
-                data-vesta="browse-notice-close"
-                aria-label={t('browse.dismiss')}
-                onClick={() => setNotice(undefined)}
-              >
-                <Icon name="icons/actions/close" size={10} />
-              </button>
-            </p>
-          )}
-        </Show>
+        <NoticeBar />
         <Show when={warning()}>
           <p data-vesta="browse-warning" role="status">
             <Icon name="icons/controls/warning" size={12} />

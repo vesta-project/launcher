@@ -1,0 +1,178 @@
+/*
+ * Rich text: sanitised provider descriptions and changelogs (see features/browse/rich-text.ts).
+ * Element selectors are scoped to the hook, so provider markup never reaches app chrome.
+ *
+ * Hooks: [data-vesta=rich-text]; wrappers it adds: [data-embed=table] [data-embed=video]
+ */
+@layer launcher {
+  :where([data-vesta='rich-text']) {
+    min-inline-size: 0;
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-md);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='rich-text']) > :first-child {
+    margin-block-start: 0;
+  }
+
+  :where([data-vesta='rich-text']) > :last-child {
+    margin-block-end: 0;
+  }
+
+  :where([data-vesta='rich-text']) :where(p, ul, ol, blockquote, pre, details, [data-embed]) {
+    margin-block: 0 0.85em;
+  }
+
+  :where([data-vesta='rich-text']) :where(h1, h2, h3, h4, h5, h6) {
+    margin-block: 1.4em 0.5em;
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: var(--vesta-leading-tight);
+  }
+
+  :where([data-vesta='rich-text']) :where(h1) {
+    font-size: var(--vesta-text-xl);
+  }
+
+  :where([data-vesta='rich-text']) :where(h2) {
+    padding-block-end: 0.3em;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    font-size: var(--vesta-text-lg);
+  }
+
+  :where([data-vesta='rich-text']) :where(h3) {
+    font-size: var(--vesta-text-md);
+  }
+
+  :where([data-vesta='rich-text']) :where(h4, h5, h6) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='rich-text']) :where(ul, ol) {
+    padding-inline-start: 1.4em;
+  }
+
+  :where([data-vesta='rich-text']) :where(li + li) {
+    margin-block-start: 0.2em;
+  }
+
+  :where([data-vesta='rich-text']) :where(a) {
+    color: var(--vesta-color-accent-text);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, currentcolor 40%, transparent);
+    text-underline-offset: 2px;
+    cursor: default;
+  }
+
+  :where([data-vesta='rich-text']) :where(a:hover) {
+    text-decoration-color: currentcolor;
+  }
+
+  :where([data-vesta='rich-text']) :where(a:focus-visible) {
+    border-radius: 2px;
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+  }
+
+  :where([data-vesta='rich-text']) :where(img) {
+    max-inline-size: 100%;
+    block-size: auto;
+    border-radius: var(--vesta-radius-sm);
+    vertical-align: middle;
+  }
+
+  :where([data-vesta='rich-text']) :where(img:not(a img)) {
+    cursor: zoom-in;
+  }
+
+  :where([data-vesta='rich-text']) :where(blockquote) {
+    margin-inline: 0;
+    padding: 0.1em 0 0.1em 1em;
+    border-inline-start: 3px solid var(--vesta-color-border-strong);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='rich-text']) :where(code) {
+    padding: 0.1em 0.35em;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    font-family: var(--vesta-font-mono);
+    font-size: 0.88em;
+  }
+
+  :where([data-vesta='rich-text']) :where(pre) {
+    overflow-x: auto;
+    padding: var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-sunken);
+    font-size: var(--vesta-text-sm);
+    line-height: 1.5;
+    overflow-wrap: normal;
+  }
+
+  :where([data-vesta='rich-text']) :where(pre code) {
+    padding: 0;
+    background: transparent;
+    font-size: inherit;
+  }
+
+  :where([data-vesta='rich-text']) :where(hr) {
+    margin-block: 1.4em;
+    border: 0;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='rich-text']) :where([data-embed='table']) {
+    max-inline-size: 100%;
+    overflow-x: auto;
+  }
+
+  :where([data-vesta='rich-text']) :where(table) {
+    border-collapse: collapse;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='rich-text']) :where(th, td) {
+    padding: var(--vesta-space-1-5) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  :where([data-vesta='rich-text']) :where(th) {
+    background: var(--vesta-color-fill);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='rich-text']) :where(details) {
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+  }
+
+  :where([data-vesta='rich-text']) :where(summary) {
+    color: var(--vesta-color-text-muted);
+    font-weight: var(--vesta-weight-medium);
+    cursor: default;
+  }
+
+  :where([data-vesta='rich-text']) :where(details[open] > summary) {
+    margin-block-end: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='rich-text']) :where([data-embed='video']) {
+    max-inline-size: 640px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-sunken);
+  }
+
+  :where([data-vesta='rich-text']) :where([data-embed='video'] > iframe) {
+    inline-size: 100%;
+    block-size: 100%;
+    border: 0;
+  }
+}

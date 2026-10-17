@@ -120,8 +120,6 @@ browse-status-ready = Compatible
 browse-status-installed = Installed
 browse-status-update = Update available
 
-browse-project-soon = The project page is coming soon.
-
 browse-pending-resource-world = Create or import a world after setup, then install { $name } into that world from Browse.
 browse-pending-resource = After this instance is ready, install { $name } into it.
 browse-new-instance-desktop = Creating an instance requires the desktop launcher.
@@ -139,3 +137,94 @@ browse-world-empty = This instance has no worlds yet. Play once to create one, t
 browse-world-load-failed = Could not load worlds: { $message }
 browse-world-required = Datapack installation requires a world target.
 browse-install-task-failed = Resource installation failed. See notifications for details.
+
+# Project page: header, tabs, facts column, versions list and version view.
+
+browse-project-sections = Project sections
+browse-project-more = More actions
+browse-project-facts = About this project
+browse-project-failed = Could not load this project
+browse-project-missing = This project link is not valid.
+browse-loading-project = Loading project
+browse-tab-description = Description
+browse-tab-gallery = Gallery
+browse-tab-versions = Versions
+browse-kind-mod = Mod
+browse-kind-modpack = Modpack
+browse-kind-resourcepack = Resource pack
+browse-kind-shader = Shader
+browse-kind-datapack = Data pack
+browse-kind-world = World
+browse-open-on = Open on { $source }
+browse-also-on = Also on { $source }
+browse-copy-link = Copy link
+browse-link-copied = Link copied.
+browse-updated-on = Updated { $date }
+browse-no-description = The author has not written a description.
+browse-spoiler = Spoiler
+browse-gallery-open = Open image { $count }
+
+browse-fit-title = For { $title }
+browse-fit-best = Best match
+browse-fit-installed = Installed: { $version }
+browse-facts-details = Details
+browse-facts-published = Published
+browse-facts-updated = Updated
+browse-facts-creators = Creators
+browse-facts-links = Links
+browse-environment-both = Client and server
+browse-browse-category = Browse { $name }
+browse-creator-organization = Organization
+browse-creator-owner = Owner
+browse-creator-member = Member
+
+browse-search-versions = Search versions
+browse-channel-all = All
+browse-fits-target = Fits { $title }
+browse-fits-hint = Only versions that can be installed into { $title }
+browse-versions-total =
+    { $count ->
+        [one] { $count } version
+       *[other] { $count } versions
+    }
+browse-versions-shown = { $found } of { $count }
+browse-versions-failed = Could not load versions
+browse-loading-versions = Loading versions
+browse-versions-none = No versions published yet
+browse-versions-no-match = No versions match these filters
+browse-column-version = Version
+browse-column-published = Published
+browse-column-downloads = Downloads
+browse-install-replaces = Replaces the installed version in { $title }
+browse-reason-game-version = Made for other Minecraft versions.
+browse-status-replace = Replaces installed version
+browse-picker-description-version = Choose where to install { $name } { $version }.
+
+browse-all-versions = All versions
+browse-loading-version = Loading version
+browse-version-missing = This version could not be found
+browse-version-newer = Newer version
+browse-version-older = Older version
+browse-version-position = { $found } of { $count }
+browse-version-facts = About this version
+browse-version-changelog = Changelog
+browse-changelog-failed = The changelog could not be loaded.
+browse-version-compatibility = Compatibility
+browse-version-fits = Fits { $title }.
+browse-version-misfit = Does not fit { $title }.
+browse-show-all = Show all { $count }
+browse-show-fewer = Show fewer
+browse-version-files = Files
+browse-file-primary = Primary
+browse-file-role-datapack = Data pack
+browse-file-role-resourcepack = Resource pack
+browse-file-download = Download file
+browse-file-copy-hash = Copy SHA-1 hash
+browse-hash-copied = Hash copied.
+browse-version-dependencies = Dependencies
+browse-dependency-required = Required
+browse-dependency-optional = Optional
+browse-dependency-embedded = Included
+browse-dependency-incompatible = Incompatible
+browse-dependency-pinned = Exact version
+browse-dependency-unknown = Unknown project

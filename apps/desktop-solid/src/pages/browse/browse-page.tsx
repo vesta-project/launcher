@@ -15,7 +15,7 @@ import {
 import { findInstance } from '../../features/instances/catalog';
 import { InstancePickerDialog } from './instance-picker-dialog';
 import { WorldPickerDialog } from './world-picker-dialog';
-import { ProjectPlaceholder } from './project-placeholder';
+import { ProjectPage } from './project/project-page';
 import { Results } from './results';
 import { SearchField, searchInput } from './search-field';
 import { Toolbar } from './toolbar';
@@ -66,16 +66,19 @@ function Browser() {
         <SearchField />
         <Results />
       </div>
-      <InstancePickerDialog />
-      <WorldPickerDialog />
     </Board>
   );
 }
 
 export function BrowsePage() {
   return (
-    <Show when={route().section === 'project'} fallback={<Browser />}>
-      <ProjectPlaceholder platform={route().detail} id={route().item} />
-    </Show>
+    <>
+      <Show when={route().section === 'project'} fallback={<Browser />}>
+        <ProjectPage />
+      </Show>
+      {/* Both views install through the same choosers. */}
+      <InstancePickerDialog />
+      <WorldPickerDialog />
+    </>
   );
 }
