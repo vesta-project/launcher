@@ -70,7 +70,9 @@ export function Checkbox(props: CheckboxProps) {
       <Show when={description()}>
         <KobalteCheckbox.Description data-vesta="field-description">{description()}</KobalteCheckbox.Description>
       </Show>
-      <KobalteCheckbox.ErrorMessage data-vesta="field-error">{error()}</KobalteCheckbox.ErrorMessage>
+      <Show when={error()}>
+        <KobalteCheckbox.ErrorMessage data-vesta="field-error">{error()}</KobalteCheckbox.ErrorMessage>
+      </Show>
     </KobalteCheckbox>
   );
 }

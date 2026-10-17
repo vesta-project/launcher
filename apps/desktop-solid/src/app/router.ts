@@ -50,9 +50,20 @@ export function parseRoute(value: string): Route {
 
 export const route = (): Route => parseRoute(path());
 
-/** Navigates immediately: the route signal updates now, not on the later hashchange event. */
-export function navigate(to: string) {
+/**
+ * Navigates immediately: the route signal updates now, not on the later hashchange event.
+ * `replace` swaps the current entry instead of adding one, for moves between sibling views
+ * (tabs, settings sections) that back should skip over.
+ */
+export function navigate(to: string, options?: { replace?: boolean }) {
   if (!hasWindow || location.hash.slice(1) === to) return;
+  if (options?.replace) {
+    const keep = historyDepth();
+    location.replace(`#${to}`);
+    history.replaceState({ vesta: keep }, '');
+    setPath(read());
+    return;
+  }
   const next = historyDepth() + 1;
   location.hash = to;
   history.replaceState({ vesta: next }, '');

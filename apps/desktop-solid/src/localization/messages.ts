@@ -767,7 +767,6 @@ export const messageIds = [
   "prefs.sync.empty-title",
   "prefs.sync.empty-description",
   "prefs.sync.sections",
-  "prefs.sync.all-values",
   "prefs.sync.group-custom",
   "prefs.sync.group-count",
   "prefs.sync.search-values",
@@ -972,6 +971,11 @@ export const messageIds = [
   "account.active",
   "account.close",
   "account.manage-short",
+  "prefs.sync.from-source",
+  "prefs.sync.key-listening",
+  "prefs.sync.key-hint",
+  "prefs.sync.key-unbound",
+  "prefs.sync.key-conflict",
 ] as const;
 
 export type MessageId = (typeof messageIds)[number];

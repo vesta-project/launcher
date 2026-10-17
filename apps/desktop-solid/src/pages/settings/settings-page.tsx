@@ -73,7 +73,8 @@ export function SettingsPage() {
   );
   const open = (section: SectionId) => {
     setQuery('');
-    navigate(`/settings/${section}`);
+    // Sections are siblings: back leaves settings rather than stepping through each one.
+    navigate(`/settings/${section}`, { replace: route().page === 'settings' });
   };
 
   const results = createMemo(() => {

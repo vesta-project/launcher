@@ -1,6 +1,8 @@
-import { Badge, Button, Checkbox, IconButton, SegmentedControl, Select, Skeleton, Switch, TextField } from '@vesta/ui';
+import { Badge, Button, Checkbox, IconButton, SegmentedControl, Skeleton, Switch, TextField } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
+import { navigate, route } from '../../../app/router';
+import { goBack } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { VirtualList } from '../../../components/virtual-list';
 import { instances } from '../../../features/instances/catalog';
@@ -21,6 +23,7 @@ import {
   toggleInstanceLink,
   type SyncCategoryId,
 } from '../../../features/settings/sync';
+import { UNBOUND_KEY } from '../../../features/settings/minecraft-keys';
 import { formatOptionName, type SyncItem } from '../../../features/settings/sync-model';
 import { SyncSourceDialog } from '../../../features/settings/sync-source-dialog';
 import { t } from '../../../localization';
@@ -28,13 +31,16 @@ import { Callout } from '../parts';
 import { SyncValueControl } from './sync-value';
 import './sync.css';
 
-const ALL = '@all';
 const ROW = 40;
 const hasValues = (id: SyncCategoryId) => id === 'options' || id === 'keybinds';
 
 /** Share game options, keybinds and servers using the host revisioned bundles. */
 export function SyncSettings() {
-  const [open, setOpen] = createSignal<SyncCategoryId>();
+  // Each category's editor is its own route, so the titlebar, mouse and inline back all agree.
+  const open = createMemo(() => {
+    const detail = route().detail;
+    return syncCategories.find((category) => category.id === detail && !category.disabled)?.id;
+  });
   return (
     <>
       <SyncSourceDialog />
@@ -49,8 +55,8 @@ export function SyncSettings() {
         )}
       </Show>
       <Show when={!syncLoading()} fallback={<Loading />}>
-        <Show when={open()} fallback={<Overview onOpen={setOpen} />} keyed>
-          {(id) => <Detail id={id} onBack={() => setOpen(undefined)} />}
+        <Show when={open()} fallback={<Overview onOpen={(id) => navigate(`/settings/sync/${id}`)} />} keyed>
+          {(id) => <Detail id={id} onBack={() => goBack('/settings/sync')} />}
         </Show>
       </Show>
     </>
@@ -185,12 +191,7 @@ const groupIcons: Record<string, string> = {
   custom: 'icons/content/code',
 };
 const groupIcon = (group: string) => groupIcons[group] ?? 'icons/content/layers';
-const groupLabel = (group: string) =>
-  group === ALL
-    ? t('prefs.sync.all-values')
-    : group === 'custom'
-      ? t('prefs.sync.group-custom')
-      : formatOptionName(group);
+const groupLabel = (group: string) => (group === 'custom' ? t('prefs.sync.group-custom') : formatOptionName(group));
 
 function Detail(props: { id: SyncCategoryId; onBack: () => void }) {
   // The page is keyed by category, so the id never changes while this component lives.
@@ -200,6 +201,19 @@ function Detail(props: { id: SyncCategoryId; onBack: () => void }) {
   const [view, setView] = createSignal<string>(primary, { name: 'syncDetailView' });
   const state = () => syncState()[id];
   const source = () => sourceName(state().source);
+  // A fresh control per pane: the toolbar it sits in belongs to whichever pane is showing.
+  const tabs = () => (
+    <SegmentedControl
+      size="sm"
+      aria-label={t('prefs.sync.sections')}
+      value={view()}
+      onChange={setView}
+      options={[
+        { value: primary, label: hasValues(id) ? t('prefs.sync.tab-values') : t('prefs.sync.servers-shared') },
+        { value: 'instances', label: t('prefs.sync.instances') },
+      ]}
+    />
+  );
 
   return (
     <div data-vesta="prefs-sync-detail" data-off={state().enabled ? undefined : ''}>
@@ -211,27 +225,10 @@ function Detail(props: { id: SyncCategoryId; onBack: () => void }) {
           icon={<Icon name="icons/navigation/arrow-back" />}
           onClick={props.onBack}
         />
-        <div>
-          <h3>{t(category.label)}</h3>
-          <span>
-            <Show when={hasValues(id) && source()} fallback={t(category.description)}>
-              {(name) => t('prefs.sync.summary-source', { name: name() })}
-            </Show>
-          </span>
-        </div>
-        <SegmentedControl
-          size="sm"
-          aria-label={t('prefs.sync.sections')}
-          value={view()}
-          onChange={setView}
-          options={[
-            {
-              value: primary,
-              label: hasValues(id) ? t('prefs.sync.tab-values') : t('prefs.sync.servers-shared'),
-            },
-            { value: 'instances', label: t('prefs.sync.instances') },
-          ]}
-        />
+        <h3>{t(category.label)}</h3>
+        <Show when={hasValues(id) && source()}>
+          {(name) => <Badge size="sm">{t('prefs.sync.from-source', { name: name() })}</Badge>}
+        </Show>
         <Switch
           size="sm"
           aria-label={t(category.label)}
@@ -244,13 +241,13 @@ function Detail(props: { id: SyncCategoryId; onBack: () => void }) {
       </Show>
       <div data-vesta="prefs-sync-body">
         <Show when={view() === 'instances'}>
-          <InstancePane id={id} />
+          <InstancePane id={id} tabs={tabs} />
         </Show>
         <Show when={view() === 'servers'}>
-          <ServerPane />
+          <ServerPane tabs={tabs} />
         </Show>
         <Show when={view() === 'values'}>
-          <ValuePane id={id} />
+          <ValuePane id={id} tabs={tabs} />
         </Show>
       </div>
     </div>
@@ -259,10 +256,10 @@ function Detail(props: { id: SyncCategoryId; onBack: () => void }) {
 
 type ValueRow = { type: 'group'; group: string; members: SyncItem[] } | { type: 'item'; item: SyncItem };
 
-function ValuePane(props: { id: SyncCategoryId }) {
+function ValuePane(props: { id: SyncCategoryId; tabs: () => JSX.Element }) {
   const id = untrack(() => props.id);
   const [search, setSearch] = createSignal('', { name: 'syncValueSearch' });
-  const [scope, setScope] = createSignal(ALL, { name: 'syncValueScope' });
+  const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set(), { name: 'syncExpandedGroups' });
   const items = createMemo(() => syncValueItems(id));
   const selected = createMemo(() => new Set(syncState()[id].selected));
   const isOn = (item: SyncItem) => item.fixed || selected().has(item.key);
@@ -283,38 +280,47 @@ function ValuePane(props: { id: SyncCategoryId }) {
       members.filter((item) => !item.fixed).map((item) => item.key),
       on,
     );
+  const needle = () => search().trim().toLowerCase();
+  // Searching opens every matching section; otherwise sections stay as the user left them.
+  const isOpen = (group: string) => !!needle() || groups().length === 1 || expanded().has(group);
+  const toggle = (group: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(group)) next.add(group);
+      return next;
+    });
 
-  // Filtered groups flatten into header and item rows, so one windowed list shows both.
-  const visible = createMemo(() => {
-    const needle = search().trim().toLowerCase();
-    return groups()
-      .filter((entry) => scope() === ALL || entry.group === scope())
+  const visible = createMemo(() =>
+    groups()
       .map((entry) => ({
         ...entry,
-        members: entry.members.filter((item) => !needle || `${item.label} ${item.key}`.toLowerCase().includes(needle)),
+        members: entry.members.filter(
+          (item) => !needle() || `${item.label} ${item.key}`.toLowerCase().includes(needle()),
+        ),
       }))
-      .filter((entry) => entry.members.length);
-  });
+      .filter((entry) => entry.members.length),
+  );
   const rows = createMemo<ValueRow[]>(() =>
     visible().flatMap((entry) => [
       { type: 'group' as const, group: entry.group, members: entry.members },
-      ...entry.members.map((item) => ({ type: 'item' as const, item })),
+      ...(isOpen(entry.group) ? entry.members.map((item) => ({ type: 'item' as const, item })) : []),
     ]),
   );
   const shown = createMemo(() => visible().flatMap((entry) => entry.members));
   const shownAll = () => tally(shown()).all;
-
-  const scopes = createMemo(() => [
-    { value: ALL, label: `${groupLabel(ALL)} (${tally(items()).on}/${items().length})` },
-    ...groups().map((entry) => ({
-      value: entry.group,
-      label: `${groupLabel(entry.group)} (${tally(entry.members).on}/${entry.members.length})`,
-    })),
-  ]);
+  // Two keybinds on one key both fire in game; flag them the way the Controls screen does.
+  const clashes = createMemo(() => {
+    const counts = new Map<string, number>();
+    if (id === 'keybinds')
+      for (const item of items())
+        if (item.value !== UNBOUND_KEY) counts.set(item.value, (counts.get(item.value) ?? 0) + 1);
+    return counts;
+  });
 
   return (
     <>
       <div data-vesta="prefs-sync-toolbar">
+        {props.tabs()}
         <TextField
           size="sm"
           icon={<Icon name="icons/content/search" size={14} />}
@@ -322,13 +328,6 @@ function ValuePane(props: { id: SyncCategoryId }) {
           placeholder={t('prefs.sync.search-values')}
           value={search()}
           onChange={setSearch}
-        />
-        <Select
-          size="sm"
-          aria-label={t('prefs.sync.sections')}
-          options={scopes()}
-          value={scope()}
-          onChange={setScope}
         />
         <Button size="sm" variant="outline" disabled={!shown().length} onClick={() => setShared(shown(), !shownAll())}>
           {shownAll() ? t('prefs.sync.share-none') : t('prefs.sync.share-all')}
@@ -345,7 +344,7 @@ function ValuePane(props: { id: SyncCategoryId }) {
             const group = () => row() as Extract<ValueRow, { type: 'group' }>;
             const count = () => tally(group().members);
             return (
-              <div data-vesta="prefs-sync-group">
+              <div data-vesta="prefs-sync-group" data-open={isOpen(group().group) ? '' : undefined}>
                 <Checkbox
                   size="sm"
                   aria-label={t('prefs.sync.share-group', { name: groupLabel(group().group) })}
@@ -353,9 +352,17 @@ function ValuePane(props: { id: SyncCategoryId }) {
                   indeterminate={count().some}
                   onChange={() => setShared(group().members, !count().all)}
                 />
-                <Icon name={groupIcon(group().group)} size={14} />
-                <strong>{groupLabel(group().group)}</strong>
-                <small>{t('prefs.sync.group-count', { count: count().on, max: group().members.length })}</small>
+                <button
+                  type="button"
+                  aria-expanded={isOpen(group().group) ? 'true' : 'false'}
+                  disabled={!!needle()}
+                  onClick={() => toggle(group().group)}
+                >
+                  <Icon name={groupIcon(group().group)} size={15} />
+                  <strong>{groupLabel(group().group)}</strong>
+                  <small>{t('prefs.sync.group-count', { count: count().on, max: group().members.length })}</small>
+                  <Icon name="icons/controls/chevron-down" size={14} class="prefs-sync-chevron" />
+                </button>
               </div>
             );
           }
@@ -375,6 +382,7 @@ function ValuePane(props: { id: SyncCategoryId }) {
               <SyncValueControl
                 item={item()}
                 disabled={!isOn(item())}
+                conflict={(clashes().get(item().value) ?? 0) > 1}
                 onSave={(value) => void saveSyncValue(id, item().key, value)}
               />
             </div>
@@ -385,7 +393,7 @@ function ValuePane(props: { id: SyncCategoryId }) {
   );
 }
 
-function InstancePane(props: { id: SyncCategoryId }) {
+function InstancePane(props: { id: SyncCategoryId; tabs: () => JSX.Element }) {
   const id = untrack(() => props.id);
   const [search, setSearch] = createSignal('', { name: 'syncInstanceSearch' });
   const state = () => syncState()[id];
@@ -398,6 +406,7 @@ function InstancePane(props: { id: SyncCategoryId }) {
   return (
     <>
       <div data-vesta="prefs-sync-toolbar">
+        {props.tabs()}
         <TextField
           size="sm"
           icon={<Icon name="icons/content/search" size={14} />}
@@ -452,7 +461,7 @@ function InstancePane(props: { id: SyncCategoryId }) {
   );
 }
 
-function ServerPane() {
+function ServerPane(props: { tabs: () => JSX.Element }) {
   const [name, setName] = createSignal('', { name: 'syncServerName' });
   const [address, setAddress] = createSignal('', { name: 'syncServerAddress' });
   const servers = () => syncState().servers.servers;
@@ -465,7 +474,25 @@ function ServerPane() {
   };
   return (
     <>
-      <form data-vesta="prefs-sync-toolbar" onSubmit={add}>
+      <div data-vesta="prefs-sync-toolbar">{props.tabs()}</div>
+      <Checklist items={servers()} key={(server) => server.id} empty={t('prefs.sync.no-servers')}>
+        {(server) => (
+          <div data-vesta="prefs-sync-row">
+            <Icon name="icons/content/server" size={16} />
+            <span data-vesta="prefs-sync-label">{server().name}</span>
+            <span data-vesta="prefs-sync-meta">{server().address}</span>
+            <IconButton
+              size="sm"
+              variant="ghost"
+              tone="danger"
+              label={t('prefs.sync.remove-server', { name: server().name })}
+              icon={<Icon name="icons/actions/delete" size={14} />}
+              onClick={() => void removeSyncedServer(server().id)}
+            />
+          </div>
+        )}
+      </Checklist>
+      <form data-vesta="prefs-sync-add" onSubmit={add}>
         <TextField
           size="sm"
           aria-label={t('prefs.sync.server-name')}
@@ -490,23 +517,6 @@ function ServerPane() {
           {t('common.add')}
         </Button>
       </form>
-      <Checklist items={servers()} key={(server) => server.id} empty={t('prefs.sync.no-servers')}>
-        {(server) => (
-          <div data-vesta="prefs-sync-row">
-            <Icon name="icons/content/server" size={16} />
-            <span data-vesta="prefs-sync-label">{server().name}</span>
-            <span data-vesta="prefs-sync-meta">{server().address}</span>
-            <IconButton
-              size="sm"
-              variant="ghost"
-              tone="danger"
-              label={t('prefs.sync.remove-server', { name: server().name })}
-              icon={<Icon name="icons/actions/delete" size={14} />}
-              onClick={() => void removeSyncedServer(server().id)}
-            />
-          </div>
-        )}
-      </Checklist>
     </>
   );
 }

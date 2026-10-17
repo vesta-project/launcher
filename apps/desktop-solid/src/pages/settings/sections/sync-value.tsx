@@ -1,5 +1,11 @@
 import { Select, Slider, Switch, TextField } from '@vesta/ui';
-import { Match, Switch as Branch, createSignal } from 'solid-js';
+import { Match, Switch as Branch, createSignal, onSettled } from 'solid-js';
+import {
+  UNBOUND_KEY,
+  minecraftKeyFromEvent,
+  minecraftKeyFromMouse,
+  minecraftKeyLabel,
+} from '../../../features/settings/minecraft-keys';
 import { formatOptionName, type SyncEditor, type SyncItem } from '../../../features/settings/sync-model';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
@@ -54,10 +60,11 @@ const places = (step: number | null) => {
   return dot < 0 ? 0 : Math.min(4, text.length - dot - 1);
 };
 
-type Mode = 'boolean' | 'enum' | 'range' | 'number' | 'text';
+type Mode = 'key' | 'boolean' | 'enum' | 'range' | 'number' | 'text';
 
 /** Picks the richest control the host metadata and the stored value allow. */
 function modeOf(item: SyncItem): Mode {
+  if (item.key.startsWith('key_')) return 'key';
   if (item.value === 'true' || item.value === 'false') return 'boolean';
   const editor = item.editor;
   if (!editor) return 'text';
@@ -69,11 +76,20 @@ function modeOf(item: SyncItem): Mode {
 }
 
 /** One shared option's value, edited with a control that matches its type. */
-export function SyncValueControl(props: { item: SyncItem; disabled: boolean; onSave: (value: string) => void }) {
+export function SyncValueControl(props: {
+  item: SyncItem;
+  disabled: boolean;
+  /** Another shared keybind uses the same key. */
+  conflict?: boolean;
+  onSave: (value: string) => void;
+}) {
   const label = () => t('prefs.sync.value-label', { name: props.item.label });
   return (
     <div data-vesta="prefs-sync-control">
       <Branch fallback={<CommitField {...props} label={label()} numeric={false} />}>
+        <Match when={modeOf(props.item) === 'key'}>
+          <KeyCapture {...props} label={label()} />
+        </Match>
         <Match when={modeOf(props.item) === 'boolean'}>
           <Switch
             size="sm"
@@ -174,5 +190,74 @@ function CommitField(props: {
         }
       }}
     />
+  );
+}
+
+/**
+ * A keybind button, as in the game's Controls screen: click it, then press a key or mouse
+ * button. Escape unbinds, the way Minecraft does.
+ */
+function KeyCapture(props: {
+  item: SyncItem;
+  label: string;
+  disabled: boolean;
+  conflict?: boolean;
+  onSave: (value: string) => void;
+}) {
+  const [listening, setListening] = createSignal(false, { name: 'keyCaptureListening' });
+  // The press that binds a mouse button is followed by a click; that click must not re-arm.
+  let swallowClick = false;
+  const finish = (value?: string) => {
+    setListening(false);
+    if (value !== undefined && value !== props.item.value) props.onSave(value);
+  };
+  onSettled(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!listening()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape') return finish(UNBOUND_KEY);
+      const key = minecraftKeyFromEvent(event);
+      if (key) finish(key);
+    };
+    // Mouse buttons bind too, but only presses after the click that started listening.
+    const onMouse = (event: MouseEvent) => {
+      if (!listening()) {
+        swallowClick = false;
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      swallowClick = true;
+      finish(minecraftKeyFromMouse(event.button));
+    };
+    const onBlur = () => listening() && finish();
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('mousedown', onMouse, true);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('mousedown', onMouse, true);
+      window.removeEventListener('blur', onBlur);
+    };
+  });
+  return (
+    <button
+      type="button"
+      data-vesta="prefs-sync-key"
+      data-listening={listening() ? '' : undefined}
+      data-conflict={props.conflict && !listening() ? '' : undefined}
+      data-unbound={minecraftKeyLabel(props.item.value) ? undefined : ''}
+      aria-label={props.label}
+      title={listening() ? t('prefs.sync.key-hint') : props.conflict ? t('prefs.sync.key-conflict') : undefined}
+      disabled={props.disabled}
+      onContextMenu={(event) => listening() && event.preventDefault()}
+      onClick={() => {
+        if (swallowClick) swallowClick = false;
+        else setListening(true);
+      }}
+    >
+      {listening() ? t('prefs.sync.key-listening') : minecraftKeyLabel(props.item.value) || t('prefs.sync.key-unbound')}
+    </button>
   );
 }

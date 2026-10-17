@@ -126,7 +126,8 @@ function InstanceContent(props: { id: string }) {
   const open = (tab: string) => {
     if (tab === "settings") setPreviousTab(active());
     else setPreviousTab(tab);
-    navigate(`/library/${props.id}/${tab}`);
+    // Settings is a sub-page that back returns from; the other tabs are siblings back skips.
+    navigate(`/library/${props.id}/${tab}`, { replace: tab !== "settings" });
   };
   const settings = () => route().detail === "settings";
   return (

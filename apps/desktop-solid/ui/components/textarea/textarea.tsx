@@ -103,7 +103,9 @@ export function TextArea(props: TextAreaProps) {
       <Show when={description()}>
         <KobalteTextField.Description data-vesta="field-description">{description()}</KobalteTextField.Description>
       </Show>
-      <KobalteTextField.ErrorMessage data-vesta="field-error">{error()}</KobalteTextField.ErrorMessage>
+      <Show when={error()}>
+        <KobalteTextField.ErrorMessage data-vesta="field-error">{error()}</KobalteTextField.ErrorMessage>
+      </Show>
     </KobalteTextField>
   );
 }

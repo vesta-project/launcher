@@ -1,13 +1,14 @@
 /*
  * Sync page: category list, then one category's editor.
  * Hooks: [data-vesta=prefs-sync-cards] -sync-icon -sync-summary -sync-empty -sync-loading -sync-error
- *        -sync-detail -sync-body -sync-toolbar -sync-count -sync-list -sync-none
- *        -sync-group -sync-row -sync-label -sync-meta -sync-control; prefs-subhead prefs-lede
- * States: card: data-on, data-disabled; detail/row: data-off
+ *        -sync-detail -sync-body -sync-toolbar -sync-count -sync-list -sync-none -sync-add
+ *        -sync-group -sync-row -sync-label -sync-meta -sync-control -sync-key; prefs-subhead prefs-lede
+ * States: card: data-on, data-disabled; detail/row: data-off; group: data-open;
+ *         key: data-listening, data-conflict, data-unbound
  * Knobs: --sync-control-width, --sync-list-height
  *
  * The editor deliberately has no sidebar of its own: the settings nav is already one, so
- * groups live inside the list as sticky-looking header rows and a filter select.
+ * groups are collapsible sections inside the one windowed list.
  */
 @layer launcher {
   :where([data-vesta='prefs-lede']) {
@@ -135,29 +136,14 @@
     gap: var(--vesta-space-2);
   }
 
-  :where([data-vesta='prefs-subhead'] > div) {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-inline-size: 0;
-  }
-
   :where([data-vesta='prefs-subhead'] h3) {
     margin: 0;
     font-size: var(--vesta-text-md);
     font-weight: var(--vesta-weight-semibold);
   }
 
-  :where([data-vesta='prefs-subhead'] > div > span) {
-    overflow: hidden;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   :where([data-vesta='prefs-subhead'] > [data-vesta='switch']) {
-    margin-inline-start: var(--vesta-space-2);
+    margin-inline-start: auto;
   }
 
   :where([data-vesta='prefs-sync-detail'][data-off]) :where([data-vesta='prefs-sync-body']) {
@@ -178,14 +164,9 @@
     margin: 0;
   }
 
-  :where([data-vesta='prefs-sync-toolbar'] > :first-child) {
+  :where([data-vesta='prefs-sync-toolbar'] > [data-vesta='field']) {
     flex: 1;
     min-inline-size: 140px;
-  }
-
-  :where([data-vesta='prefs-sync-toolbar'] > [data-vesta='select']) {
-    flex: none;
-    inline-size: 200px;
   }
 
   :where([data-vesta='prefs-sync-count']) {
@@ -233,7 +214,27 @@
     color: var(--vesta-color-text-muted);
   }
 
-  :where([data-vesta='prefs-sync-group'] > strong) {
+  :where([data-vesta='prefs-sync-group'] > button) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    align-self: stretch;
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='prefs-sync-group']:hover) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-sync-group'] > button > strong) {
     color: var(--vesta-color-text);
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
@@ -241,10 +242,67 @@
     text-transform: uppercase;
   }
 
-  :where([data-vesta='prefs-sync-group'] > small) {
+  :where([data-vesta='prefs-sync-group'] > button > small) {
     margin-inline-start: auto;
     font-size: var(--vesta-text-xs);
     font-variant-numeric: tabular-nums;
+  }
+
+  :where(.prefs-sync-chevron) {
+    transform: rotate(-90deg);
+    transition: transform var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='prefs-sync-group'][data-open]) :where(.prefs-sync-chevron) {
+    transform: none;
+  }
+
+  /* Adding a server sits under the list, like a new last row. */
+  :where([data-vesta='prefs-sync-add']) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    gap: var(--vesta-space-2);
+    margin: 0;
+  }
+
+  /* Keybinds read like the game's Controls screen: a keycap you click, then press. */
+  :where([data-vesta='prefs-sync-key']) {
+    inline-size: 100%;
+    block-size: var(--vesta-size-control-sm);
+    padding-inline: var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-block-end-width: 2px;
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface);
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    cursor: default;
+  }
+
+  :where([data-vesta='prefs-sync-key']:hover:not(:disabled)) {
+    background: var(--vesta-color-fill-hover);
+  }
+
+  :where([data-vesta='prefs-sync-key'][data-unbound]) {
+    color: var(--vesta-color-text-subtle);
+    font-weight: var(--vesta-weight-regular);
+  }
+
+  :where([data-vesta='prefs-sync-key'][data-listening]) {
+    border-color: var(--vesta-color-accent);
+    background: color-mix(in oklab, var(--vesta-color-accent) 14%, var(--vesta-color-surface));
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='prefs-sync-key'][data-conflict]) {
+    border-color: var(--vesta-color-danger);
+    color: var(--vesta-color-danger-text, var(--vesta-color-danger));
+  }
+
+  :where([data-vesta='prefs-sync-key']:disabled) {
+    opacity: 0.6;
   }
 
   :where([data-vesta='prefs-sync-label']) {
@@ -303,8 +361,8 @@
       flex-wrap: wrap;
     }
 
-    :where([data-vesta='prefs-sync-toolbar'] > [data-vesta='select']) {
-      inline-size: 150px;
+    :where([data-vesta='prefs-sync-toolbar']) {
+      flex-wrap: wrap;
     }
   }
 }

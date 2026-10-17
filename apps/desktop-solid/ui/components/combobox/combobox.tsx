@@ -135,7 +135,9 @@ export function Combobox(props: ComboboxProps) {
         <KobalteCombobox.Description data-vesta="field-description">{description()}</KobalteCombobox.Description>
       </Show>
       <Show when={error()}>
-        <KobalteCombobox.ErrorMessage data-vesta="field-error">{error()}</KobalteCombobox.ErrorMessage>
+        <Show when={error()}>
+          <KobalteCombobox.ErrorMessage data-vesta="field-error">{error()}</KobalteCombobox.ErrorMessage>
+        </Show>
       </Show>
       <KobalteCombobox.Portal mount={mount}>
         <KobalteCombobox.Content data-vesta="select-content">

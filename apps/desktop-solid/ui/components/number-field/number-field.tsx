@@ -83,7 +83,9 @@ export function NumberField(props: NumberFieldProps) {
         <KobalteNumberField.Description data-vesta="field-description">{description()}</KobalteNumberField.Description>
       </Show>
       <Show when={error()}>
-        <KobalteNumberField.ErrorMessage data-vesta="field-error">{error()}</KobalteNumberField.ErrorMessage>
+        <Show when={error()}>
+          <KobalteNumberField.ErrorMessage data-vesta="field-error">{error()}</KobalteNumberField.ErrorMessage>
+        </Show>
       </Show>
     </KobalteNumberField>
   );

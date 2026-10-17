@@ -62,7 +62,9 @@ export function Switch(props: SwitchProps) {
       <Show when={description()}>
         <KobalteSwitch.Description data-vesta="field-description">{description()}</KobalteSwitch.Description>
       </Show>
-      <KobalteSwitch.ErrorMessage data-vesta="field-error">{error()}</KobalteSwitch.ErrorMessage>
+      <Show when={error()}>
+        <KobalteSwitch.ErrorMessage data-vesta="field-error">{error()}</KobalteSwitch.ErrorMessage>
+      </Show>
     </KobalteSwitch>
   );
 }
