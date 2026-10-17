@@ -3,6 +3,9 @@ import {
   Button,
   Combobox,
   Dialog,
+  IconButton,
+  Menu,
+  MenuItem,
   Switch,
   SegmentedControl,
   TextField,
@@ -239,127 +242,138 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
           </>
         }
       >
-        {(linked) => (
-          <section data-vesta="linked-pack">
-            <SettingsSection title={t("versions.linked-modpack")}>
-              <div data-vesta="pack-selector">
-                <div data-vesta="pack-summary">
-                  <img src={linked().icon} alt="" />
-                  <div>
+        {(linked) => {
+          const releases = createMemo(
+            () => {
+              const query = releaseQuery().trim().toLowerCase();
+              return linked().releases.filter(
+                (item) =>
+                  (releaseFilter() === "all" || item.channel === "release" || item.id === linked().installed) &&
+                  (!query || item.label.toLowerCase().includes(query) || item.minecraft.toLowerCase().includes(query)),
+              );
+            },
+            { name: "versionsPackReleases" },
+          );
+          return (
+            <section data-vesta="pack-view">
+              {/* The pack as one line: what is installed, whether it is current, and its actions. */}
+              <header data-vesta="pack-head">
+                <img data-vesta="pack-icon" src={linked().icon} alt="" />
+                <div data-vesta="pack-title">
+                  <span data-vesta="pack-name">
                     <strong>{linked().name}</strong>
-                    <span
-                      data-vesta="source-tag"
-                      data-source={linked().source.toLowerCase()}
-                    >
+                    <span data-vesta="source-tag" data-source={linked().source.toLowerCase()}>
                       {linked().source}
                     </span>
-                  </div>
-                  <span data-vesta="pack-installed">
-                    <small>
-                      {t("linking.installed-version", {
-                        version: linked().installedLabel ?? linked().installed,
-                      })}
-                    </small>
-                    <small>
-                      Minecraft {store.state().engine.minecraft} ·{" "}
-                      {store.state().engine.loader}
-                    </small>
+                  </span>
+                  <span data-vesta="pack-meta">
+                    {linked().installedLabel ?? linked().installed}
+                    <span aria-hidden="true">·</span>
+                    Minecraft {store.state().engine.minecraft}
+                    <span aria-hidden="true">·</span>
+                    {loaderName(store.state().engine.loader)}
                   </span>
                 </div>
-                <Show when={updateTarget(linked())}>
-                  {(target) => (
-                    <div data-vesta="pack-update">
-                      <Icon name="icons/actions/download" size={14} />
-                      <span>{t("versions.version-available", { version: target().label })}</span>
+                <div data-vesta="pack-status">
+                  <Show
+                    when={updateTarget(linked())}
+                    fallback={
+                      <span data-vesta="pack-current">
+                        <Icon name="icons/controls/check" size={12} />
+                        {t("versions.up-to-date")}
+                      </span>
+                    }
+                  >
+                    {(target) => (
                       <Button
                         size="sm"
                         tone="accent"
                         disabled={busy()}
+                        icon={<Icon name="icons/actions/download" size={14} />}
                         onClick={() => setPreviewing(target())}
                       >
-                        {t("linking.action-update")}
+                        {t("versions.update-to", { version: target().label })}
                       </Button>
-                    </div>
-                  )}
-                </Show>
-              </div>
-            </SettingsSection>
-            <SettingsSection
-              title={t("linking.versions-title")}
-              description={t("linking.versions-description")}
-            >
-              <div data-vesta="version-release-heading">
-                <TextField
-                  aria-label={t("versions.search-pack-versions")}
-                  placeholder={t("versions.search-versions")}
-                  value={releaseQuery()}
-                  onChange={setReleaseQuery}
-                />
-                <Combobox
-                  aria-label={t("versions.release-type")}
-                  value={releaseFilter()}
-                  onChange={setReleaseFilter}
-                  options={[
-                    { value: "stable", label: t("versions.stable-releases") },
-                    { value: "all", label: t("linking.all-channels") },
-                  ]}
-                />
-              </div>
-              <div data-vesta="version-releases">
-                <For
-                  each={linked().releases.filter(
-                    (item) =>
-                      (releaseFilter() === "all" ||
-                        item.channel === "release" ||
-                        item.id === linked().installed) &&
-                      item.label
-                        .toLowerCase()
-                        .includes(releaseQuery().toLowerCase()),
-                  )}
-                  fallback={<p data-vesta="version-empty">{t("versions.no-matching-versions")}</p>}
-                >
-                  {(item) => (
-                    <ReleaseRow
-                      pack={linked()}
-                      release={item}
-                      busy={busy()}
-                      onPreview={setPreviewing}
-                    />
-                  )}
-                </For>
-              </div>
-            </SettingsSection>
-            <SettingsSection title={t("versions.connection")}>
-              <SettingRow
-                label={t("versions.unlink-modpack")}
-                description={t("versions.unlink-description")}
-              >
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy()}
-                  onClick={() => setUnlinking("keep")}
-                >
-                  {t("versions.unlink-action")}
-                </Button>
-              </SettingRow>
-              <SettingRow
-                label={t("versions.delete-bundled-unlink")}
-                description={t("versions.delete-unlink-description")}
-              >
-                <Button
-                  size="sm"
-                  variant="outline"
-                  tone="danger"
-                  disabled={busy()}
-                  onClick={() => setUnlinking("delete")}
-                >
-                  {t("versions.delete-unlink-action")}
-                </Button>
-              </SettingRow>
-            </SettingsSection>
-          </section>
-        )}
+                    )}
+                  </Show>
+                  <Menu
+                    placement="bottom-end"
+                    trigger={(menuProps) => (
+                      <IconButton
+                        {...menuProps}
+                        size="sm"
+                        variant="ghost"
+                        label={t("versions.pack-actions")}
+                        icon={<Icon name="icons/controls/ellipsis-horizontal" size={16} />}
+                      />
+                    )}
+                  >
+                    <MenuItem
+                      icon={<Icon name="icons/content/link" size={14} />}
+                      disabled={busy()}
+                      onSelect={() => setUnlinking("keep")}
+                    >
+                      {t("versions.unlink-action")}
+                    </MenuItem>
+                    <MenuItem
+                      tone="danger"
+                      icon={<Icon name="icons/actions/delete" size={14} />}
+                      disabled={busy()}
+                      onSelect={() => setUnlinking("delete")}
+                    >
+                      {t("versions.delete-unlink-action")}
+                    </MenuItem>
+                  </Menu>
+                </div>
+              </header>
+
+              <section data-vesta="pack-releases" aria-labelledby="pack-releases-title">
+                <header data-vesta="pack-releases-head">
+                  <h3 id="pack-releases-title">
+                    {t("linking.versions-title")}
+                    <span data-vesta="pack-releases-count">{releases().length}</span>
+                  </h3>
+                  <TextField
+                    size="sm"
+                    class="pack-releases-search"
+                    aria-label={t("versions.search-pack-versions")}
+                    placeholder={t("versions.search-versions")}
+                    icon={<Icon name="icons/content/search" size={14} />}
+                    value={releaseQuery()}
+                    onChange={setReleaseQuery}
+                  />
+                  <SegmentedControl
+                    size="sm"
+                    aria-label={t("versions.release-type")}
+                    value={releaseFilter()}
+                    onChange={setReleaseFilter}
+                    options={[
+                      { value: "stable", label: t("versions.stable-releases") },
+                      { value: "all", label: t("linking.all-channels") },
+                    ]}
+                  />
+                </header>
+                <ol data-vesta="release-list">
+                  <For
+                    each={releases()}
+                    keyed={(item) => item.id}
+                    fallback={<li data-vesta="version-empty">{t("versions.no-matching-versions")}</li>}
+                  >
+                    {(item) => (
+                      <ReleaseRow
+                        pack={linked()}
+                        release={item()}
+                        minecraft={store.state().engine.minecraft}
+                        busy={busy()}
+                        onPreview={setPreviewing}
+                      />
+                    )}
+                  </For>
+                </ol>
+              </section>
+            </section>
+          );
+        }}
       </Show>
       <Show when={busy()}>
         <p data-vesta="version-warning">
@@ -582,15 +596,32 @@ function DiffGroup(props: { tone: "success" | "danger" | "accent"; label: string
   );
 }
 
+const loaderName = (id: string) =>
+  id === "neoforge" ? "NeoForge" : id ? id.charAt(0).toUpperCase() + id.slice(1) : "";
+
+const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+function formatDate(value: string | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : dateFormat.format(date);
+}
+
+/**
+ * One release on a single line: the whole line discloses its changelog; the change action
+ * (update / downgrade / switch, each opening a preview) shows on hover or focus. Releases for
+ * another Minecraft version than the installed one say so in the game column.
+ */
 function ReleaseRow(props: {
   pack: LinkedPack;
   release: PackRelease;
+  minecraft: string;
   busy: boolean;
   onPreview: (release: PackRelease) => void;
 }) {
   const [open, setOpen] = createSignal(false);
   const [changelog, setChangelog] = createSignal<string | null>();
   const installed = () => props.release.id === props.pack.installed;
+  const kind = () => changeKind(props.pack, props.release);
   const toggle = () => {
     const next = !open();
     setOpen(next);
@@ -601,57 +632,73 @@ function ReleaseRow(props: {
     }
   };
   return (
-    <div data-vesta="version-release" data-installed={installed() ? "true" : undefined}>
-      <div data-vesta="version-release-row">
-        <span>
-          <strong>
-            {props.release.label}
-            <ChannelBadge channel={props.release.channel} />
-            <Show when={installed()}>
-              <Badge size="sm" tone="accent" variant="outline">{t("versions.installed")}</Badge>
-            </Show>
-          </strong>
-          <small>
-            Minecraft {props.release.minecraft} · {props.release.loader}
-            <Show when={props.release.publishedAt}>
-              {(date) => <> · {t("linking.published", { date: date() })}</>}
-            </Show>
-          </small>
-        </span>
-        <Button
-          size="sm"
-          variant="ghost"
+    <li
+      data-vesta="release"
+      data-installed={installed() ? "" : undefined}
+      data-open={open() ? "" : undefined}
+    >
+      <div data-vesta="release-row">
+        <button
+          type="button"
+          data-vesta="release-toggle"
           aria-expanded={open() ? "true" : "false"}
-          iconEnd={<Icon name={open() ? "icons/controls/chevron-up" : "icons/controls/chevron-down"} size={14} />}
+          aria-label={`${props.release.label}, ${open() ? t("linking.hide-changelog") : t("linking.show-changelog")}`}
           onClick={toggle}
         >
-          {open() ? t("linking.hide-changelog") : t("linking.show-changelog")}
-        </Button>
-        <Show when={!installed()}>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={props.busy}
-            onClick={() => props.onPreview(props.release)}
+          <span data-vesta="release-chevron" aria-hidden="true">
+            <Icon name="icons/controls/chevron-right" size={12} />
+          </span>
+          <span data-vesta="release-name">
+            <strong>{props.release.label}</strong>
+            <Show when={props.release.channel !== "release"}>
+              <ChannelBadge channel={props.release.channel} />
+            </Show>
+            <Show when={installed()}>
+              <Badge size="sm" tone="accent" variant="soft">{t("versions.installed")}</Badge>
+            </Show>
+          </span>
+          <span
+            data-vesta="release-game"
+            data-differs={props.release.minecraft && props.release.minecraft !== props.minecraft ? "" : undefined}
           >
-            {t(`linking.action-${changeKind(props.pack, props.release)}`)}
-          </Button>
-        </Show>
+            {props.release.minecraft}
+            <span aria-hidden="true">·</span>
+            {loaderName(props.release.loader)}
+          </span>
+          <time data-vesta="release-date" datetime={props.release.publishedAt}>
+            {formatDate(props.release.publishedAt)}
+          </time>
+        </button>
+        <span data-vesta="release-action">
+          <Show when={!installed()}>
+            <Button
+              size="sm"
+              variant={kind() === "update" ? "outline" : "ghost"}
+              tone={kind() === "update" ? "accent" : "neutral"}
+              disabled={props.busy}
+              onClick={() => props.onPreview(props.release)}
+            >
+              {t(`versions.release-${kind()}`)}
+            </Button>
+          </Show>
+        </span>
       </div>
       <Show when={open()}>
-        <Show
-          when={changelog() !== undefined}
-          fallback={<p data-vesta="version-muted">{t("linking.changelog-loading")}</p>}
-        >
+        <div data-vesta="release-changelog">
           <Show
-            when={changelog()}
-            fallback={<p data-vesta="version-muted">{t("linking.changelog-empty")}</p>}
+            when={changelog() !== undefined}
+            fallback={<p data-vesta="version-muted">{t("linking.changelog-loading")}</p>}
           >
-            {(text) => <pre data-vesta="changelog">{text()}</pre>}
+            <Show
+              when={changelog()}
+              fallback={<p data-vesta="version-muted">{t("linking.changelog-empty")}</p>}
+            >
+              {(text) => <pre data-vesta="changelog">{text()}</pre>}
+            </Show>
           </Show>
-        </Show>
+        </div>
       </Show>
-    </div>
+    </li>
   );
 }
 
