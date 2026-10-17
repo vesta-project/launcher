@@ -87,7 +87,7 @@ export function transitionTo(to: string, instanceId?: string) {
   transition(() => navigate(to), sharedId, !sameInstance);
 }
 
-/** Back stays inside the snapshot callback until the router has received hashchange. */
+/** Back stays inside the snapshot callback until the router has received popstate. */
 export function goBack(fallback: string, instanceId?: string) {
   const current = route();
   // Installation Back follows the parent flow, rather than previous providers.
@@ -96,7 +96,7 @@ export function goBack(fallback: string, instanceId?: string) {
   transition(
     () =>
       new Promise<void>((resolve) => {
-        window.addEventListener('hashchange', () => resolve(), { once: true });
+        window.addEventListener('popstate', () => resolve(), { once: true });
         history.back();
       }),
     instanceId ?? (current.page === 'library' ? current.section : undefined),

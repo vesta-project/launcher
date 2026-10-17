@@ -15,11 +15,15 @@ const [historyDepth, setHistoryDepth] = createSignal(depth(), {
   name: 'historyDepth',
 });
 
-if (hasWindow)
-  window.addEventListener('hashchange', () => {
-    setPath(read());
-    setHistoryDepth(depth());
-  });
+const sync = () => {
+  setPath(read());
+  setHistoryDepth(depth());
+};
+// popstate covers back/forward over entries we pushed; hashchange covers a hand-edited hash.
+if (hasWindow) {
+  window.addEventListener('popstate', sync);
+  window.addEventListener('hashchange', sync);
+}
 
 /** True when history.back() returns to an earlier page of the launcher. */
 export const canGoBack = () => historyDepth() > 0;
@@ -51,22 +55,19 @@ export function parseRoute(value: string): Route {
 export const route = (): Route => parseRoute(path());
 
 /**
- * Navigates immediately: the route signal updates now, not on the later hashchange event.
+ * Navigates immediately: the route signal updates now, not on a later browser event.
  * `replace` swaps the current entry instead of adding one, for moves between sibling views
- * (tabs, settings sections) that back should skip over.
+ * (settings sections) that back should skip over.
  */
 export function navigate(to: string, options?: { replace?: boolean }) {
   if (!hasWindow || location.hash.slice(1) === to) return;
-  if (options?.replace) {
-    const keep = historyDepth();
-    location.replace(`#${to}`);
-    history.replaceState({ vesta: keep }, '');
-    setPath(read());
-    return;
+  // The History API writes the entry and its depth in one step. Assigning location.hash and
+  // then stamping it races WebKit's own entry bookkeeping, which left back with a dead step.
+  if (options?.replace) history.replaceState({ vesta: historyDepth() }, '', `#${to}`);
+  else {
+    const next = historyDepth() + 1;
+    history.pushState({ vesta: next }, '', `#${to}`);
+    setHistoryDepth(next);
   }
-  const next = historyDepth() + 1;
-  location.hash = to;
-  history.replaceState({ vesta: next }, '');
-  setHistoryDepth(next);
   setPath(read());
 }
