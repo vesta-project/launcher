@@ -128,8 +128,11 @@ export function useInstanceSync() {
       if (snapshot.hasData) setRecords(snapshot.data!);
       if (snapshot.error) setError(String(snapshot.error));
     });
-    void refreshNativeInstances();
-    void refreshRuntime().catch((reason) => setError(String(reason)));
+    // The refreshes read current state as a snapshot; only the account switch drives this.
+    untrack(() => {
+      void refreshNativeInstances();
+      void refreshRuntime().catch((reason) => setError(String(reason)));
+    });
   });
 }
 

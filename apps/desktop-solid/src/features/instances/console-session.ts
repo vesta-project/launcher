@@ -175,7 +175,13 @@ function createSession(id: string) {
         try {
           const history = await invoke<{name:string;path:string;size:number;last_modified:number}[]>('get_instance_log_history', { instanceIdSlug: slug });
           if (!disposed && revision === captureRevision) {
-            setSources([logSources[0], ...history.map((file) => ({ id: file.path, path: file.path, name: file.name, kind: 'file' as const, size: `${Math.ceil(file.size / 1024)} KB`, modified: new Date(file.last_modified * 1000).toLocaleString() }))]);
+            // Live output already shows the launcher's capture of this run (`data/logs/<slug>.log`),
+            // which is a superset of the game's own latest.log. Listing either again is the same
+            // text twice, so only earlier runs (the game's archived logs) stay as files.
+            const capture = (path: string) => path.replaceAll('\\', '/').endsWith(`/data/logs/${slug}.log`);
+            const captured = history.some((file) => capture(file.path));
+            const earlier = history.filter((file) => !capture(file.path) && !(captured && file.name === 'latest.log'));
+            setSources([logSources[0], ...earlier.map((file) => ({ id: file.path, path: file.path, name: file.name, kind: 'file' as const, size: `${Math.ceil(file.size / 1024)} KB`, modified: new Date(file.last_modified * 1000).toLocaleString() }))]);
             if (!sources().some((source) => source.id === state().source)) {
               setState((current) => ({ ...current, source: 'live', follow: true }));
               setFileLines([]);

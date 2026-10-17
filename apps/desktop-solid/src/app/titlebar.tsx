@@ -175,8 +175,8 @@ export function Titlebar() {
         }}
       >
         <Breadcrumbs aria-label={t('nav.location')} class="titlebar-breadcrumb">
-          <For each={location().trail}>
-            {(crumb) => <BreadcrumbItem href={crumb.href}>{crumb.label}</BreadcrumbItem>}
+          <For each={location().trail} keyed={(crumb) => crumb.href ?? crumb.label}>
+            {(crumb) => <BreadcrumbItem href={crumb().href}>{crumb().label}</BreadcrumbItem>}
           </For>
         </Breadcrumbs>
       </div>

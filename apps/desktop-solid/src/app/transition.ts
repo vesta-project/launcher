@@ -13,7 +13,13 @@ const reducedMotion = () =>
 async function renderRoute(commit: () => void | Promise<void>) {
   await commit();
   await new Promise<void>((resolve) => {
-    onSettled(() => resolve());
+    // Settling can keep deferring while something streams (console output, a live preview);
+    // the snapshot only needs the new route on screen, so cap the wait.
+    const timer = setTimeout(resolve, 300);
+    onSettled(() => {
+      clearTimeout(timer);
+      resolve();
+    });
     flush();
   });
 }
@@ -96,7 +102,15 @@ export function goBack(fallback: string, instanceId?: string) {
   transition(
     () =>
       new Promise<void>((resolve) => {
-        window.addEventListener('popstate', () => resolve(), { once: true });
+        // Transitions run one after another, so a back that never reports must not wedge
+        // every later navigation behind it.
+        const done = () => {
+          clearTimeout(timer);
+          window.removeEventListener('popstate', done);
+          resolve();
+        };
+        const timer = setTimeout(done, 500);
+        window.addEventListener('popstate', done);
         history.back();
       }),
     instanceId ?? (current.page === 'library' ? current.section : undefined),

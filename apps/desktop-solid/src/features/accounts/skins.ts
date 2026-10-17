@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { createEffect, createSignal, onSettled } from 'solid-js';
+import { createEffect, createSignal, onSettled, untrack } from 'solid-js';
 import type { Account } from './account-bootstrap';
 
 export type SkinVariant = 'classic' | 'slim';
@@ -414,7 +414,8 @@ export function createSkinController(account: () => Account | undefined) {
     dirty: () => !!pending() || !!committing(),
     flush,
     loadPresets: () => {
-      if (presets()) return;
+      // Called from effects: the check is a one-off, not a dependency.
+      if (untrack(presets)) return;
       void loadPresets().then(setPresets, (reason) => setError(messageOf(reason)));
     },
     selectLibrary: (skin: LibrarySkin) =>

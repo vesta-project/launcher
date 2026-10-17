@@ -224,7 +224,7 @@ export function InstanceSettingsTab(props: {
     setConfirm(undefined);
     if (action === "delete") {
       const removed = nativeInstances ? await deleteNativeInstance(id) : (removeInstance(id), true);
-      if (removed) navigate("/library");
+      if (removed) navigate("/library", { replace: true });
     } else if (nativeInstances && action === "reset") await resetNativeInstance(id);
   };
   const discard = () => {

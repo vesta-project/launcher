@@ -49,7 +49,7 @@ export function CrashTab(props: { entry: InstanceEntry }) {
   const clear = async () => {
     const instanceId = id();
     const cleared = await clearInstanceCrash(instanceId);
-    if (cleared !== false) navigate(`/library/${instanceId}`);
+    if (cleared !== false) navigate(`/library/${instanceId}`, { replace: true });
   };
   const copy = async () => {
     try {

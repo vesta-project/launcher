@@ -16,6 +16,7 @@ import { nativeInstances, nativeRecord, instancePending } from "../../../feature
 import { importNativeWorld } from "../../../features/instances/native-import-dialog";
 import { openNativeWorld } from "../../../features/instances/native-details";
 import { navigate, route } from "../../../app/router";
+import { goBack } from "../../../app/transition";
 import { EmptyState } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
 import {
@@ -222,7 +223,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 variant="ghost"
                 label={t("worlds.all")}
                 icon={<Icon name="icons/navigation/arrow-back" />}
-                onClick={() => manage()}
+                onClick={() => goBack(`/library/${id()}/worlds`)}
               />
               <img src={world().image} alt="" draggable="false" />
               <div data-vesta="world-detail-copy">
@@ -265,7 +266,9 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 const world = deleting();
                 if (world) {
                   deleteWorldFixture(id(), world.id);
-                  if (worldRouteId(route().item) === world.id) manage();
+                  // The deleted world's page must not stay in history for back to land on.
+                  if (worldRouteId(route().item) === world.id)
+                    navigate(`/library/${id()}/worlds`, { replace: true });
                 }
                 setDeleting(undefined);
               }}

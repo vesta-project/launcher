@@ -1,4 +1,4 @@
-import { createEffect } from 'solid-js';
+import { createEffect, untrack } from 'solid-js';
 import './styles/base.css';
 import './styles/tokens/palette.css';
 import './styles/tokens/semantic.css';
@@ -9,9 +9,14 @@ import { Shell } from './app/shell';
 import { initializeLocalization } from './localization';
 
 export default function App() {
-  createEffect(() => undefined, () => {
-    initializeLocalization();
-    return startDesktop();
-  });
+  // One-time start-up: its reads are snapshots, never dependencies.
+  createEffect(
+    () => undefined,
+    () =>
+      untrack(() => {
+        initializeLocalization();
+        return startDesktop();
+      }),
+  );
   return <Shell />;
 }

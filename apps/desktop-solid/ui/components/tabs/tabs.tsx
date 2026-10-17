@@ -22,6 +22,21 @@ export interface TabsProps {
 /** Navigation between panels of content; the selected tab carries an underline. */
 export function Tabs(props: TabsProps) {
   const orientation = () => props.orientation ?? 'horizontal';
+  // Kobalte also "selects" on its own: re-picking the first tab while its collection
+  // re-registers, or the focused trigger after a controlled value moves. Callers that route
+  // on change would push a history entry for each, so a controlled Tabs only reports a
+  // change that follows the user's own pointer or key press.
+  let input = false;
+  let inputTimer: ReturnType<typeof setTimeout> | undefined;
+  const markInput = () => {
+    input = true;
+    clearTimeout(inputTimer);
+    inputTimer = setTimeout(() => (input = false), 0);
+  };
+  const change = (value: string) => {
+    if (props.value !== undefined && (!input || value === props.value)) return;
+    props.onChange?.(value);
+  };
 
   return (
     <KobalteTabs
@@ -35,7 +50,12 @@ export function Tabs(props: TabsProps) {
       style={props.style}
       value={props.value}
       defaultValue={props.defaultValue}
-      onChange={props.onChange}
+      onChange={change}
+      ref={(element: HTMLElement) => {
+        // Capture phase: Kobalte selects inside the trigger's own handlers, before bubbling.
+        for (const type of ['pointerdown', 'pointerup', 'click', 'keydown'])
+          element.addEventListener(type, markInput, true);
+      }}
       orientation={orientation()}
     >
       {props.children}
@@ -54,12 +74,7 @@ export interface TabListProps {
 
 export function TabList(props: TabListProps) {
   return (
-    <KobalteTabs.List
-      data-vesta="tab-list"
-      aria-label={props['aria-label']}
-      class={props.class}
-      style={props.style}
-    >
+    <KobalteTabs.List data-vesta="tab-list" aria-label={props['aria-label']} class={props.class} style={props.style}>
       {props.children}
       <KobalteTabs.Indicator data-vesta="tab-indicator" />
     </KobalteTabs.List>
@@ -85,12 +100,7 @@ export function Tab(props: TabProps) {
   const badge = children(() => props.badge);
 
   return (
-    <KobalteTabs.Trigger
-      data-vesta="tab"
-      value={props.value}
-      disabled={props.disabled}
-      class={props.class}
-    >
+    <KobalteTabs.Trigger data-vesta="tab" value={props.value} disabled={props.disabled} class={props.class}>
       <Show when={icon()}>
         <span data-vesta="tab-icon" aria-hidden="true">
           {icon()}
