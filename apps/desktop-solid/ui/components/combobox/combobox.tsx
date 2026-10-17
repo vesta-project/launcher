@@ -103,7 +103,7 @@ export function Combobox(props: ComboboxProps) {
             <KobalteCombobox.ItemLabel data-vesta="select-item-label">
               <Show when={itemProps.item.rawValue.icon}>
                 <span data-vesta="select-item-icon" aria-hidden="true">
-                  {itemProps.item.rawValue.icon}
+                  {typeof itemProps.item.rawValue.icon === 'function' ? itemProps.item.rawValue.icon() : itemProps.item.rawValue.icon}
                 </span>
               </Show>
               {itemProps.item.rawValue.label}

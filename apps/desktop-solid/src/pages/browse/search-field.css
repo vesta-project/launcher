@@ -1,19 +1,21 @@
 /*
  * Browse search box and filter panel.
  * Hooks: [data-vesta=browse-search-wrap] -search -search-icon -chips -chip -chip-body
- *        -chip-remove -search-input -filters-slot -url-hint
+ *        -chip-remove -search-input -scope -search-count -filters-slot -filters-button
+ *        -filters-count -url-hint
  *        -panel -panel-body -section -section-head -section-title -section-note -row -pair
  *        -creator -groups -group -group-head -group-title -group-toggle -grid -panel-foot
  *        -panel-count (toggles share browse.css hooks); popover class: .browse-filters-popover
- * States: chip: data-kind (instance | … | more); filters button: data-active;
+ * States: chip: data-kind (version | … | more); filters button: data-active, aria-expanded;
  *         group-head: data-active; group-title: aria-pressed; group-toggle: aria-expanded;
  *         grid: data-nested
  * Knobs: --browse-search-height, --browse-panel-width
  *
  * The box borrows the ui field's tokens (height, border, radius, focus ring) so it sits
  * beside real fields. A few chips show; more collapse into a "+N" chip that opens the panel.
- * The Filters button is the box's end segment and the panel hangs from the box below it,
- * like the old launcher's search group.
+ * The box is segmented: the install target (scope) first, then the query, then the result
+ * count and the Filters segment, whose panel hangs from the whole box like the old launcher's
+ * search group.
  */
 @layer launcher {
   :where([data-vesta='browse-search-wrap']) {
@@ -79,11 +81,6 @@
     color: var(--vesta-color-text);
     font-size: var(--vesta-text-sm);
     animation: browse-chip-in var(--vesta-duration-normal) var(--vesta-ease-out) both;
-  }
-
-  :where([data-vesta='browse-chip'][data-kind='instance']) {
-    background: color-mix(in oklab, var(--vesta-color-accent) var(--vesta-state-soft), transparent);
-    color: var(--vesta-color-accent-text);
   }
 
   :where([data-vesta='browse-chip'][data-kind='more']) {
@@ -203,21 +200,133 @@
     background: var(--vesta-color-fill);
   }
 
-  /* ---- Filters button: the end segment of the box ---- */
+  /* ---- Scope: the install target as the box's first segment ("search … for this instance") ---- */
+  :where([data-vesta='browse-scope']) {
+    display: flex;
+    flex: none;
+    align-self: stretch;
+    margin-inline-start: calc(var(--vesta-space-2) * -1);
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where(.browse-scope-select) {
+    --field-bg: transparent;
+    --field-border-color: transparent;
+    --field-border-color-hover: transparent;
+    --field-radius: 0;
+    --field-padding-x: var(--vesta-space-2);
+    --field-gap: var(--vesta-space-1-5);
+  }
+
+  :where(.browse-scope-select) :where([data-vesta='field-control']) {
+    block-size: 100%;
+    color: var(--vesta-color-text-muted);
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where(.browse-scope-select) :where([data-vesta='field-control']):hover {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+  }
+
+  /* A chosen instance reads as a scope, not a placeholder. */
+  :where([data-vesta='browse-scope']:has(img[data-vesta='browse-target-icon'])) :where([data-vesta='field-control']) {
+    color: var(--vesta-color-text);
+  }
+
+  :where(.browse-scope-select) :where([data-vesta='select-value-text']) {
+    max-inline-size: 16ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where(.browse-scope-select) :where([data-vesta='field-icon']) {
+    display: inline-flex;
+  }
+
+  /* Narrow panes keep the instance as its icon alone. */
+  @container browse (max-width: 560px) {
+    :where(.browse-scope-select) :where([data-vesta='select-value-text']) {
+      display: none;
+    }
+  }
+
+  /* ---- End of the box: count, clear, then the Filters segment ---- */
+  :where([data-vesta='browse-search-count']) {
+    flex: none;
+    padding-inline: var(--vesta-space-1);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  @container browse (max-width: 480px) {
+    :where([data-vesta='browse-search-count']) {
+      display: none;
+    }
+  }
+
   :where([data-vesta='browse-filters-slot']) {
     display: flex;
     flex: none;
     align-self: stretch;
+  }
+
+  /* A square segment: the funnel, and a small count on its corner while filters apply. */
+  :where([data-vesta='browse-filters-button']) {
+    position: relative;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    inline-size: calc(var(--browse-search-height) + 2px);
+    padding: 0;
+    border: 0;
     border-inline-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    cursor: default;
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      color var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
-  :where([data-vesta='browse-filters-slot'] > [data-vesta='button']) {
-    block-size: auto;
-    border-radius: 0;
+  :where([data-vesta='browse-filters-button']):hover,
+  :where([data-vesta='browse-filters-button'][aria-expanded='true']) {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
   }
 
-  :where([data-vesta='browse-filters-slot'] > [data-vesta='button'][data-active]) {
+  :where([data-vesta='browse-filters-button'][data-active]) {
     color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-filters-button']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='browse-filters-count']) {
+    position: absolute;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
+    box-sizing: border-box;
+    min-inline-size: 14px;
+    block-size: 14px;
+    padding-inline: 3px;
+    border-radius: 7px;
+    background: var(--vesta-color-accent);
+    box-shadow: 0 0 0 2px var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-on-accent);
+    font-size: 9px;
+    font-weight: var(--vesta-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    line-height: 14px;
+    text-align: center;
+    animation: browse-chip-in var(--vesta-duration-normal) var(--vesta-ease-out) both;
   }
 
   /* ---- Filter panel ---- */

@@ -25,12 +25,19 @@ browse-sort-trending = Trending
 browse-order-ascending = Ascending
 browse-order-descending = Descending
 browse-install-to = Install to
-browse-banners = Banners
+browse-layout-label = Card layout
+browse-layout-banner = Banners
+browse-layout-compact = Compact
 
-browse-search-placeholder = Search, or type mc:1.21.1 loader:fabric
+browse-search-placeholder = Search { $type }, or type mc:1.21.1 loader:fabric
 browse-search-label = Search resources
 browse-clear-search = Clear search and filters
 browse-filters = Filters
+browse-filters-active =
+    { $count ->
+        [one] Filters, { $count } active
+       *[other] Filters, { $count } active
+    }
 browse-remove-filter = Remove filter { $name }
 browse-open-link = Open { $value }
 browse-more-filters =
@@ -45,7 +52,7 @@ browse-section-loader = Loader
 browse-section-environment = Environment
 browse-section-creator = Creator
 browse-section-categories = Categories
-browse-no-instance = No instance
+browse-no-instance = Any instance
 browse-instance-modpack-note = Modpacks create a new instance.
 browse-any-version = Any version
 browse-any-loader = Any loader
@@ -86,15 +93,12 @@ browse-more-categories =
 browse-filter-by-tag = Filter by { $name }
 browse-followers-title = { $count } followers
 browse-downloads-title = { $count } downloads
-browse-updated = Updated { $time }
 
 browse-action-install = Install
-browse-action-install-pick = Install…
+browse-install-into = Install into { $title }
 browse-action-installed = Installed
 browse-action-update = Update
 browse-action-installing = Installing…
-browse-action-create = Create instance
-browse-action-open = Details
 browse-reason-vanilla = Vanilla instances cannot use this.
 browse-reason-loader = Not available for this instance's loader.
 browse-reason-no-version = No version matches this instance.
@@ -117,3 +121,21 @@ browse-status-installed = Installed
 browse-status-update = Update available
 
 browse-project-soon = The project page is coming soon.
+
+browse-pending-resource-world = Create or import a world after setup, then install { $name } into that world from Browse.
+browse-pending-resource = After this instance is ready, install { $name } into it.
+browse-new-instance-desktop = Creating an instance requires the desktop launcher.
+browse-new-instance-pack = Use the modpack create flow for modpacks.
+browse-new-instance-metadata = Minecraft metadata is unavailable.
+browse-new-instance-loader = Unsupported loader: { $loader }
+browse-new-instance-no-version = No downloadable compatible version of { $name } is available.
+browse-new-instance-world = { $title } is ready. Create or import a world, then install { $name } from Browse into that world.
+browse-new-instance-removed = The new instance was removed; resource installation cancelled.
+browse-new-instance-stopped = Instance creation stopped: { $message }
+browse-new-instance-timeout = Timed out waiting for the new instance. Resume it from the Library, then install the resource from Browse.
+browse-world-title = Choose a world
+browse-world-description = { $name } is a data pack, so it goes into one world of { $title }.
+browse-world-empty = This instance has no worlds yet. Play once to create one, then install.
+browse-world-load-failed = Could not load worlds: { $message }
+browse-world-required = Datapack installation requires a world target.
+browse-install-task-failed = Resource installation failed. See notifications for details.

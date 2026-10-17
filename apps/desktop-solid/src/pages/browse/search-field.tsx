@@ -1,9 +1,10 @@
-import { Badge, Button, IconButton, Popover } from '@vesta/ui';
+import { IconButton, Popover } from '@vesta/ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { transitionTo } from '../../app/transition';
 import { Icon } from '../../components/icon';
 import {
   categoryLabel,
+  filterCount,
   parseOperators,
   parseProjectUrl,
   projectPath,
@@ -12,7 +13,7 @@ import {
   type ProjectUrl,
 } from '../../features/browse/browse-model';
 import {
-  activeFilterCount,
+  query,
   categories,
   client,
   commitText,
@@ -21,7 +22,6 @@ import {
   gameVersion,
   hasActiveFilters,
   loader,
-  removeTarget,
   replaceText,
   server,
   setClient,
@@ -29,9 +29,10 @@ import {
   setGameVersion,
   setLoader,
   setServer,
+  chooseTarget,
   clearFilters,
   setText,
-  target,
+  results,
   targetId,
   text,
   toggleCategory,
@@ -40,6 +41,8 @@ import {
 } from '../../features/browse/browse-store';
 import { t } from '../../localization';
 import { FilterPanel, loaderLabels, type Section } from './filter-panel';
+import { TargetSelect } from './target-select';
+import { typeLabels } from './toolbar';
 import './search-field.css';
 
 /** The input, so the `/` shortcut and the app's search command can focus it. */
@@ -47,7 +50,7 @@ export const searchInput: { element?: HTMLInputElement } = {};
 
 interface Chip {
   key: string;
-  kind: 'instance' | 'version' | 'loader' | 'environment' | 'creator' | 'category';
+  kind: 'version' | 'loader' | 'environment' | 'creator' | 'category';
   label: string;
   section: Section;
   remove: () => void;
@@ -56,15 +59,6 @@ interface Chip {
 /** Active filters as removable tokens, in the order the panel lists them. */
 function buildChips(): Chip[] {
   const chips: Chip[] = [];
-  const instance = target();
-  if (targetId() && type() !== 'modpack')
-    chips.push({
-      key: 'instance',
-      kind: 'instance',
-      label: instance?.name ?? `#${targetId()}`,
-      section: 'instance',
-      remove: removeTarget,
-    });
   const version = gameVersion();
   if (version)
     chips.push({
@@ -121,6 +115,9 @@ function buildChips(): Chip[] {
   return chips;
 }
 
+const countFormat = new Intl.NumberFormat();
+const formatCount = (value: number) => countFormat.format(value);
+
 /** With more chips than this the strip shows the first `shownWhenCollapsed` and a "+N" chip. */
 const maxChips = 3;
 const shownWhenCollapsed = 2;
@@ -142,6 +139,8 @@ export function SearchField() {
   const [open, setOpen] = createSignal(false, { name: 'browseFiltersOpen' });
   const [section, setSection] = createSignal<Section | undefined>(undefined, { name: 'browseFiltersSection' });
   const chips = createMemo(buildChips, { name: 'browseChips' });
+  // The install target has its own segment, so the badge counts panel filters only.
+  const activeFilterCount = createMemo(() => filterCount(query(), false), { name: 'browseFilterCount' });
   const link = createMemo(() => parseProjectUrl(text()), {
     name: 'browseProjectLink',
     equals: (a, b) => a?.platform === b?.platform && a?.id === b?.id,
@@ -182,6 +181,9 @@ export function SearchField() {
       if (last) {
         event.preventDefault();
         last.remove();
+      } else if (targetId() && type() !== 'modpack') {
+        event.preventDefault();
+        chooseTarget(undefined);
       }
     } else if (event.key === 'Escape') {
       if (input.value) {
@@ -204,6 +206,11 @@ export function SearchField() {
           if (event.target === event.currentTarget) searchInput.element?.focus();
         }}
       >
+        <Show when={type() !== 'modpack'}>
+          <span data-vesta="browse-scope">
+            <TargetSelect class="browse-scope-select" aria-label={t('browse.install-to')} />
+          </span>
+        </Show>
         <span data-vesta="browse-search-icon" aria-hidden="true">
           <Icon name="icons/content/search" size={14} />
         </span>
@@ -246,13 +253,20 @@ export function SearchField() {
           data-vesta="browse-search-input"
           ref={(element: HTMLInputElement) => (searchInput.element = element)}
           value={text()}
-          placeholder={t('browse.search-placeholder')}
+          placeholder={t('browse.search-placeholder', { type: t(typeLabels[type()]).toLowerCase() })}
           aria-label={t('browse.search-label')}
           autocomplete="off"
           spellcheck="false"
           onInput={(event) => applyText(event.currentTarget.value, false)}
           onKeyDown={onKeyDown}
         />
+        <Show when={results()}>
+          {(current) => (
+            <span data-vesta="browse-search-count" role="status" title={t('browse.results-count', { count: current().total })}>
+              {formatCount(current().total)}
+            </span>
+          )}
+        </Show>
         <Show when={hasActiveFilters()}>
           <IconButton
             size="sm"
@@ -273,24 +287,29 @@ export function SearchField() {
             class="browse-filters-popover"
             anchorRef={() => box}
             trigger={(triggerProps) => (
-              <Button
+              <button
                 {...triggerProps}
+                type="button"
+                data-vesta="browse-filters-button"
                 data-active={activeFilterCount() ? '' : undefined}
-                size="sm"
-                variant="ghost"
-                icon={<Icon name="icons/content/filter" size={14} />}
+                aria-label={
+                  activeFilterCount()
+                    ? t('browse.filters-active', { count: activeFilterCount() })
+                    : t('browse.filters')
+                }
+                title={t('browse.filters')}
                 onClick={() => {
                   setSection(undefined);
                   setOpen(!open());
                 }}
               >
-                {t('browse.filters')}
+                <Icon name="icons/content/filter" size={15} />
                 <Show when={activeFilterCount()}>
-                  <Badge size="sm" tone="accent" variant="solid">
-                    {String(activeFilterCount())}
-                  </Badge>
+                  <span data-vesta="browse-filters-count" aria-hidden="true">
+                    {activeFilterCount()}
+                  </span>
                 </Show>
-              </Button>
+              </button>
             )}
           >
             <FilterPanel section={section} />

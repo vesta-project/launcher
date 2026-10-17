@@ -1,13 +1,7 @@
-import { IconButton, SegmentedControl, Select, Switch } from '@vesta/ui';
+import { IconButton, SegmentedControl, Select } from '@vesta/ui';
 import { createMemo, Show } from 'solid-js';
 import { Icon } from '../../components/icon';
-import {
-  resourceTypes,
-  sourceById,
-  sourcesForType,
-  type ResourceType,
-  type SourceId,
-} from '../../features/browse/browse-model';
+import { sourceById, sources, type ResourceType, type SourceId } from '../../features/browse/browse-model';
 import {
   banners,
   setBanners,
@@ -22,9 +16,8 @@ import {
 } from '../../features/browse/browse-store';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
-import { TargetSelect } from './target-select';
 
-const typeLabels: Record<ResourceType, MessageId> = {
+export const typeLabels: Record<ResourceType, MessageId> = {
   mod: 'browse.type-mod',
   modpack: 'browse.type-modpack',
   resourcepack: 'browse.type-resourcepack',
@@ -33,33 +26,49 @@ const typeLabels: Record<ResourceType, MessageId> = {
   world: 'browse.type-world',
 };
 
+const sourceOptions = sources.map((item) => ({
+  value: item.id,
+  label: item.label,
+  icon: <Icon name={item.icon} size={16} />,
+}));
+
 /**
- * Type, source, install target, sort and the banner toggle. The type control collapses to a
- * Select in narrow panes (CSS).
+ * One line, read left to right the way browsing works: where (source, icon only), what (the
+ * types that source offers, as tabs that become a Select in narrow panes), then how results are
+ * ordered and drawn. The install target and filters live in the search field below.
  */
 export function Toolbar() {
-  const typeOptions = createMemo(() => resourceTypes.map((value) => ({ value, label: t(typeLabels[value]) })), {
-    name: 'browseTypeOptions',
-  });
-  const sourceOptions = createMemo(
-    () =>
-      sourcesForType(type()).map((item) => ({
-        value: item.id,
-        label: item.label,
-        icon: <Icon name={item.icon} size={14} />,
-      })),
-    { name: 'browseSourceOptions' },
+  const typeOptions = createMemo(
+    () => sourceById(source()).types.map((value) => ({ value, label: t(typeLabels[value]) })),
+    { name: 'browseTypeOptions' },
   );
   const sortOptions = createMemo(
     () => sourceById(source()).sortOptions.map((option) => ({ value: option.value, label: t(option.label) })),
     { name: 'browseSortOptions' },
   );
+  const layoutOptions = createMemo(
+    () => [
+      { value: 'banner', label: t('browse.layout-banner'), icon: <Icon name="icons/content/card-banner" size={14} /> },
+      { value: 'compact', label: t('browse.layout-compact'), icon: <Icon name="icons/content/card-compact" size={14} /> },
+    ],
+    { name: 'browseLayoutOptions' },
+  );
 
   return (
     <div data-vesta="browse-toolbar">
-      <div data-vesta="browse-type">
+      <SegmentedControl
+        size="sm"
+        iconOnly
+        class="browse-sources"
+        aria-label={t('browse.source-label')}
+        options={sourceOptions}
+        value={source()}
+        onChange={(value) => setSource(value as SourceId)}
+      />
+      <div data-vesta="browse-types">
         <SegmentedControl
           size="sm"
+          class="browse-type-tabs"
           aria-label={t('browse.type-label')}
           options={typeOptions()}
           value={type()}
@@ -67,27 +76,18 @@ export function Toolbar() {
         />
         <Select
           size="sm"
+          class="browse-type-select"
           aria-label={t('browse.type-label')}
           options={typeOptions()}
           value={type()}
           onChange={(value) => setType(value as ResourceType)}
         />
       </div>
-      <div data-vesta="browse-controls">
-        <SegmentedControl
-          size="sm"
-          aria-label={t('browse.source-label')}
-          options={sourceOptions()}
-          value={source()}
-          onChange={(value) => setSource(value as SourceId)}
-        />
-        <label data-vesta="browse-target">
-          <span>{t('browse.install-to')}</span>
-          <TargetSelect />
-        </label>
+      <div data-vesta="browse-view">
         <div data-vesta="browse-sort">
           <Select
             size="sm"
+            class="browse-sort-select"
             aria-label={t('browse.sort-label')}
             options={sortOptions()}
             value={sort()}
@@ -96,7 +96,7 @@ export function Toolbar() {
           <Show when={sourceById(source()).sortOrder}>
             <IconButton
               size="sm"
-              variant="outline"
+              variant="ghost"
               label={sortOrder() === 'asc' ? t('browse.order-ascending') : t('browse.order-descending')}
               icon={
                 <Icon
@@ -108,7 +108,14 @@ export function Toolbar() {
             />
           </Show>
         </div>
-        <Switch size="sm" label={t('browse.banners')} checked={banners()} onChange={setBanners} />
+        <SegmentedControl
+          size="sm"
+          iconOnly
+          aria-label={t('browse.layout-label')}
+          options={layoutOptions()}
+          value={banners() ? 'banner' : 'compact'}
+          onChange={(value) => setBanners(value === 'banner')}
+        />
       </div>
     </div>
   );

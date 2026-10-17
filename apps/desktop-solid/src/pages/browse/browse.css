@@ -2,16 +2,17 @@
  * Browse page: toolbar, results, cards and the instance picker.
  * The search box and filter panel live in search-field.css.
  *
- * Hooks: [data-vesta=browse] -toolbar -type -controls -target -target-icon -sort
+ * Hooks: [data-vesta=browse] -toolbar -types -view -sort -target-icon
  *        -toggle -toggle-label -category-icon
- *        -results -results-head -count -page-size -pane -progress -notice -notice-close
- *        -warning -error -list -pages
- *        -card -card-banner -card-body -card-head -card-icon -card-initial -card-title
- *        -card-name -card-author -card-stats -card-stat -card-source -card-summary
- *        -card-foot -card-tags -tag -tags-more -card-action -card-action-wrap
+ *        -results -pane -progress -notice -notice-close -warning -error -list -pages -page-size
+ *        -card -card-banner -card-body -card-icon -card-initial -card-title -card-name
+ *        -card-meta -card-author -card-stat -card-action -card-action-wrap -card-summary
+ *        -card-tags -tag -tags-more
  *        -picker -picker-list -picker-row -picker-choice -picker-icon -picker-text
  *        -picker-status -picker-empty
+ *        classes: .browse-sources .browse-type-tabs .browse-type-select .browse-sort-select
  * States: list: data-pending; card: data-banner, data-enter, data-installed, data-skeleton;
+ *         banner img: data-backdrop, data-loaded; target icon: data-empty;
  *         tag: aria-pressed, data-kind=more; toggle: aria-pressed; notice: data-tone;
  *         picker row/status: data-status; category icon: data-kind (mask | image)
  * Knobs: --browse-card-min, --browse-icon-size, --browse-card-pad, --browse-hue
@@ -33,29 +34,58 @@
     container: browse / inline-size;
   }
 
-  /* ---- Toolbar ---- */
-  :where([data-vesta='browse-toolbar']),
-  :where([data-vesta='browse-controls']),
-  :where([data-vesta='browse-sort']) {
+  /* ---- Toolbar: sources | types ......... sort, layout ---- */
+  :where([data-vesta='browse-toolbar']) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--vesta-space-2);
+    gap: var(--vesta-space-2) var(--vesta-space-3);
     min-inline-size: 0;
   }
 
-  :where([data-vesta='browse-toolbar']) {
-    flex-wrap: wrap;
-    justify-content: space-between;
+  :where([data-vesta='browse-types']) {
+    display: flex;
+    flex: 1 1 auto;
+    min-inline-size: 0;
   }
 
-  :where([data-vesta='browse-controls']) {
-    flex-wrap: wrap;
+  /* Types read as tabs, not a second button group: no track, a sliding accent underline. */
+  :where(.browse-type-tabs) {
+    --segmented-track-bg: transparent;
+    --segmented-thumb-bg: transparent;
+    --segmented-thumb-shadow: inset 0 -2px 0 var(--vesta-color-accent);
+    --segmented-radius: 0;
+    --segmented-padding: 0;
+    --segmented-item-padding-x: var(--vesta-space-2);
+    --segmented-font-size: var(--vesta-text-md);
+
+    min-inline-size: 0;
+  }
+
+  :where(.browse-type-select) {
+    display: none;
+    min-inline-size: 9rem;
+  }
+
+  :where([data-vesta='browse-view']),
+  :where([data-vesta='browse-sort']) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-1);
+  }
+
+  :where([data-vesta='browse-view']) {
+    gap: var(--vesta-space-2);
     margin-inline-start: auto;
   }
 
-  :where([data-vesta='browse-type'] > [data-vesta='field']) {
-    display: none;
-    min-inline-size: 150px;
+  /* Sort is quiet until hovered: no box at rest. */
+  :where(.browse-sort-select) {
+    --field-bg: transparent;
+    --field-border-color: transparent;
+
+    min-inline-size: 8.5rem;
   }
 
   @container browse (max-width: 720px) {
@@ -63,44 +93,34 @@
       --browse-card-min: 240px;
     }
 
-    :where([data-vesta='browse-type']) {
-      flex: 1;
-    }
-
-    :where([data-vesta='browse-type'] > [data-vesta='segmented-field']) {
+    :where(.browse-type-tabs) {
       display: none;
     }
 
-    :where([data-vesta='browse-type'] > [data-vesta='field']) {
+    :where(.browse-type-select) {
       display: flex;
-      flex: 1;
     }
 
-    :where([data-vesta='browse-controls']) {
-      flex: 1 1 100%;
-      margin-inline-start: 0;
+    :where(.browse-sort-select) {
+      min-inline-size: 0;
     }
-  }
-
-  :where([data-vesta='browse-target']) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    min-inline-size: 0;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    white-space: nowrap;
-  }
-
-  :where([data-vesta='browse-target'] > [data-vesta='field']) {
-    inline-size: 12rem;
   }
 
   :where([data-vesta='browse-target-icon']) {
-    inline-size: 16px;
-    block-size: 16px;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    box-sizing: border-box;
+    inline-size: 18px;
+    block-size: 18px;
     border-radius: var(--vesta-radius-sm);
     object-fit: cover;
+  }
+
+  /* "Any instance": an empty slot waiting for one. */
+  :where([data-vesta='browse-target-icon'][data-empty]) {
+    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
+    color: var(--vesta-color-text-subtle);
   }
 
   /* ---- Toggles (filter panel) ---- */
@@ -174,24 +194,12 @@
     min-block-size: 0;
   }
 
-  :where([data-vesta='browse-results-head']) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--vesta-space-2);
-    min-block-size: var(--vesta-size-control-sm);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-  }
-
-  :where([data-vesta='browse-count']) {
-    font-variant-numeric: tabular-nums;
-  }
-
   :where([data-vesta='browse-page-size']) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
   }
 
   :where([data-vesta='browse-pane']) {
@@ -272,10 +280,34 @@
     overflow-wrap: anywhere;
   }
 
+  /* Pagination centred, page size at the end; the size steps under it when narrow. */
   :where([data-vesta='browse-pages']) {
-    display: flex;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: var(--vesta-space-2);
     padding-block: var(--vesta-space-4) var(--vesta-space-2);
+  }
+
+  :where([data-vesta='browse-pages'] > :not([data-vesta='browse-page-size'])) {
+    grid-column: 2;
+  }
+
+  :where([data-vesta='browse-pages'] > [data-vesta='browse-page-size']) {
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  @container browse (max-width: 560px) {
+    :where([data-vesta='browse-pages']) {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+
+    :where([data-vesta='browse-pages'] > *) {
+      grid-column: auto;
+      justify-self: center;
+    }
   }
 
   /* ---- List ---- */
@@ -309,17 +341,16 @@
     background: var(--vesta-color-surface-raised);
     container: browse-card / inline-size;
     content-visibility: auto;
-    contain-intrinsic-size: auto 8.5rem;
+    contain-intrinsic-size: auto 9.5rem;
     transition:
       border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
       background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
   :where([data-vesta='browse-card'][data-banner]) {
-    --browse-icon-size: 52px;
-    --browse-card-pad: var(--vesta-space-4);
+    --browse-icon-size: 48px;
 
-    contain-intrinsic-size: auto 17rem;
+    contain-intrinsic-size: auto 15rem;
   }
 
   /* Hover changes colour only; nothing reflows. */
@@ -361,40 +392,26 @@
     }
   }
 
-  /* ---- Banner: the gallery image over a hue-tinted dot grid that shows until it loads ---- */
+  /* ---- Banner: a short strip. Gallery image, else the blurred icon, over a per-project tint ---- */
   :where([data-vesta='browse-card-banner']) {
     position: relative;
     flex: none;
-    aspect-ratio: 16 / 7;
+    aspect-ratio: 3 / 1;
+    max-block-size: 132px;
     overflow: hidden;
-    background-color: color-mix(
-      in oklab,
-      oklch(0.62 0.11 var(--browse-hue, 250)) 22%,
-      var(--vesta-color-surface-raised)
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, oklch(0.6 0.1 var(--browse-hue, 250)) 40%, var(--vesta-color-surface-raised)),
+      color-mix(in oklab, oklch(0.45 0.08 calc(var(--browse-hue, 250) + 50)) 25%, var(--vesta-color-surface-raised))
     );
   }
 
-  :where([data-vesta='browse-card-banner'])::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image:
-      radial-gradient(circle, color-mix(in oklab, var(--vesta-color-text-muted) 28%, transparent) 1.5px, transparent 2px),
-      radial-gradient(circle, color-mix(in oklab, var(--vesta-color-text-subtle) 18%, transparent) 1px, transparent 1.5px);
-    background-position:
-      0 0,
-      6px 6px;
-    background-size:
-      24px 24px,
-      12px 12px;
-  }
-
-  /* A short fade into the card body. */
+  /* A fade into the body, so the overlapping icon sits on calm ground. */
   :where([data-vesta='browse-card-banner'])::after {
     content: '';
     position: absolute;
     inset: auto 0 0;
-    block-size: var(--vesta-space-5);
+    block-size: 45%;
     background: linear-gradient(to top, var(--vesta-color-surface-raised), transparent);
     pointer-events: none;
   }
@@ -415,50 +432,73 @@
     opacity: 1;
   }
 
-  :where([data-vesta='browse-card']:hover [data-vesta='browse-card-banner'] > img) {
-    transform: scale(1.02);
+  /* The icon as backdrop: enlarged and blurred into colour, never read as a picture. */
+  :where([data-vesta='browse-card-banner'] > img[data-backdrop]) {
+    filter: blur(20px) saturate(1.4);
+    transform: scale(1.6);
+  }
+
+  :where([data-vesta='browse-card-banner'] > img[data-backdrop][data-loaded]) {
+    opacity: 0.55;
+  }
+
+  :where([data-vesta='browse-card']:hover [data-vesta='browse-card-banner'] > img:not([data-backdrop])) {
+    transform: scale(1.03);
   }
 
   :where([data-vesta='browse-card'][data-skeleton] [data-vesta='browse-card-banner']) {
     background: var(--vesta-color-fill);
   }
 
-  :where([data-vesta='browse-card'][data-skeleton] [data-vesta='browse-card-banner'])::before {
-    content: none;
-  }
-
-  /* ---- Body ---- */
+  /* ---- Body: one grid, two arrangements ----
+   * Compact:  icon | title | action           Banner:  icon (overlapping) | … | action
+   *           summary                                  title
+   *           tags                                     summary
+   *                                                    tags
+   * The summary row takes spare height, so tags line up along the bottom of a grid row. */
   :where([data-vesta='browse-card-body']) {
-    display: flex;
+    display: grid;
     flex: 1;
-    flex-direction: column;
-    gap: var(--vesta-space-2);
+    grid-template-columns: var(--browse-icon-size) minmax(0, 1fr) auto;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      'icon title action'
+      'summary summary summary'
+      'tags tags tags';
+    gap: var(--vesta-space-2) var(--vesta-space-3);
     min-inline-size: 0;
     padding: var(--browse-card-pad);
   }
 
   :where([data-vesta='browse-card'][data-banner] [data-vesta='browse-card-body']) {
-    gap: var(--vesta-space-3);
+    grid-template-rows: auto auto 1fr auto;
+    grid-template-areas:
+      'icon . action'
+      'title title title'
+      'summary summary summary'
+      'tags tags tags';
     padding-block-start: var(--vesta-space-2);
-  }
-
-  :where([data-vesta='browse-card-head']) {
-    display: grid;
-    grid-template-columns: var(--browse-icon-size) minmax(0, 1fr) auto;
-    align-items: start;
-    gap: var(--vesta-space-3);
   }
 
   :where([data-vesta='browse-card-icon']) {
     position: relative;
     display: grid;
+    grid-area: icon;
     place-items: center;
+    box-sizing: border-box;
     inline-size: var(--browse-icon-size);
     block-size: var(--browse-icon-size);
     overflow: hidden;
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-lg);
     background: var(--vesta-color-fill);
+    box-shadow: inset 0 0 0 var(--vesta-border-width) var(--vesta-color-border);
+  }
+
+  /* Half over the banner, ringed in the card colour so it reads as lifted. */
+  :where([data-vesta='browse-card'][data-banner] [data-vesta='browse-card-icon']) {
+    align-self: end;
+    margin-block-start: calc(var(--browse-icon-size) / -2 - var(--vesta-space-2));
+    box-shadow: 0 0 0 3px var(--vesta-color-surface-raised);
   }
 
   :where([data-vesta='browse-card-initial']) {
@@ -484,8 +524,9 @@
   :where([data-vesta='browse-card-title']) {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: var(--vesta-space-0-5);
+    grid-area: title;
+    justify-content: center;
+    gap: 2px;
     min-inline-size: 0;
   }
 
@@ -493,7 +534,7 @@
     max-inline-size: 100%;
     overflow: hidden;
     color: var(--vesta-color-text);
-    font-size: var(--vesta-text-lg);
+    font-size: var(--vesta-text-md);
     font-weight: var(--vesta-weight-semibold);
     line-height: var(--vesta-leading-tight);
     text-decoration: none;
@@ -503,8 +544,8 @@
     outline: none;
   }
 
-  :where([data-vesta='browse-card']:not([data-banner]) [data-vesta='browse-card-name']) {
-    font-size: var(--vesta-text-md);
+  :where([data-vesta='browse-card'][data-banner] [data-vesta='browse-card-name']) {
+    font-size: var(--vesta-text-lg);
   }
 
   /* The title link covers the whole card, so the card is one click target. */
@@ -514,6 +555,22 @@
     inset: 0;
   }
 
+  /* One line. Items that do not fit wrap onto a second line that is clipped away, so stats
+   * drop out from the end instead of squeezing the author. */
+  :where([data-vesta='browse-card-meta']) {
+    --browse-meta-line: 18px;
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--vesta-space-2);
+    max-block-size: var(--browse-meta-line);
+    overflow: hidden;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    line-height: var(--browse-meta-line);
+  }
+
   :where([data-vesta='browse-card-author']) {
     position: relative;
     z-index: 1;
@@ -521,11 +578,11 @@
     overflow: hidden;
     padding: 0;
     border: 0;
-    border-radius: var(--vesta-radius-sm);
     background: transparent;
     color: var(--vesta-color-text-muted);
     font: inherit;
     font-size: var(--vesta-text-sm);
+    line-height: inherit;
     text-align: start;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -540,131 +597,27 @@
 
   :where(button[data-vesta='browse-card-author']):focus-visible {
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: var(--vesta-focus-offset);
-  }
-
-  :where([data-vesta='browse-card-stats']) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--vesta-space-0-5) var(--vesta-space-3);
-    margin-block-start: var(--vesta-space-0-5);
-    color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    outline-offset: 0;
   }
 
   :where([data-vesta='browse-card-stat']) {
     display: inline-flex;
     align-items: center;
-    gap: var(--vesta-space-1);
+    gap: 3px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-  }
-
-  :where([data-vesta='browse-card-source']) {
-    display: grid;
-    place-items: center;
-    inline-size: 24px;
-    block-size: 24px;
-    border-radius: var(--vesta-radius-md);
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-text-muted);
-  }
-
-  :where([data-vesta='browse-card-summary']) {
-    display: -webkit-box;
-    margin: 0;
-    overflow: hidden;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    line-height: var(--vesta-leading-normal);
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-  }
-
-  /* ---- Foot: filter pills, then the install action ---- */
-  :where([data-vesta='browse-card-foot']) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    margin-block-start: auto;
-  }
-
-  :where([data-vesta='browse-card-tags']) {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: var(--vesta-space-1);
-    min-inline-size: 0;
-    overflow: hidden;
-  }
-
-  :where([data-vesta='browse-tag']) {
-    position: relative;
-    z-index: 1;
-    flex: 0 1 auto;
-    box-sizing: border-box;
-    min-inline-size: 0;
-    max-inline-size: 9rem;
-    block-size: 22px;
-    overflow: hidden;
-    padding-inline: var(--vesta-space-2);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-full);
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-text-muted);
-    font: inherit;
-    font-size: var(--vesta-text-xs);
-    line-height: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: default;
-    transition:
-      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
-      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
-      color var(--vesta-duration-fast) var(--vesta-ease-standard);
-  }
-
-  :where([data-vesta='browse-tag']):hover {
-    border-color: var(--vesta-color-border-strong);
-    background: var(--vesta-color-fill-hover);
-    color: var(--vesta-color-text);
-  }
-
-  :where([data-vesta='browse-tag'])[aria-pressed='true'] {
-    border-color: var(--vesta-color-accent-border);
-    background: color-mix(in oklab, var(--vesta-color-accent) var(--vesta-state-soft), transparent);
-    color: var(--vesta-color-accent-text);
-  }
-
-  :where([data-vesta='browse-tag']):focus-visible {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: calc(var(--vesta-focus-width) * -1);
-  }
-
-  :where([data-vesta='browse-tag'][data-kind='more']) {
-    flex: none;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .browse-tags-popover {
-    --overlay-padding: var(--vesta-space-2);
-    --popover-width: max-content;
-  }
-
-  :where([data-vesta='browse-tags-more']) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--vesta-space-1);
-    max-inline-size: 18rem;
   }
 
   :where([data-vesta='browse-card-action']) {
     position: relative;
     z-index: 1;
-    flex: none;
-    margin-inline-start: auto;
+    display: flex;
+    grid-area: action;
+    align-self: center;
+  }
+
+  :where([data-vesta='browse-card'][data-banner] [data-vesta='browse-card-action']) {
+    align-self: end;
   }
 
   :where([data-vesta='browse-card-action-wrap']) {
@@ -693,21 +646,87 @@
     }
   }
 
-  /* Narrow cards drop the least useful stat, then give the pills their own line. */
-  @container browse-card (max-width: 320px) {
-    :where([data-vesta='browse-card-stat'][data-kind='updated']) {
-      display: none;
-    }
+  :where([data-vesta='browse-card-summary']) {
+    display: -webkit-box;
+    grid-area: summary;
+    align-self: start;
+    margin: 0;
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
-  @container browse-card (max-width: 260px) {
-    :where([data-vesta='browse-card-foot']) {
-      flex-wrap: wrap;
-    }
+  /* ---- Tags: square-cornered labels that filter; the rest fold into "+N" ---- */
+  :where([data-vesta='browse-card-tags']) {
+    display: flex;
+    grid-area: tags;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+    overflow: hidden;
+  }
 
-    :where([data-vesta='browse-card-tags']) {
-      flex-basis: 100%;
-    }
+  :where([data-vesta='browse-tag']) {
+    position: relative;
+    z-index: 1;
+    flex: 0 1 auto;
+    box-sizing: border-box;
+    min-inline-size: 3.5rem;
+    max-inline-size: 11rem;
+    block-size: 20px;
+    overflow: hidden;
+    padding-inline: var(--vesta-space-1-5);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-xs);
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='browse-tag']):hover {
+    background: var(--vesta-color-fill-hover);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='browse-tag'])[aria-pressed='true'] {
+    background: color-mix(in oklab, var(--vesta-color-accent) var(--vesta-state-soft), transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-tag']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='browse-tag'][data-kind='more']) {
+    flex: none;
+    min-inline-size: 0;
+    background: transparent;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .browse-tags-popover {
+    --overlay-padding: var(--vesta-space-2);
+    --popover-width: max-content;
+  }
+
+  :where([data-vesta='browse-tags-more']) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-1);
+    max-inline-size: 18rem;
   }
 
   /* ---- Instance picker ---- */
@@ -771,6 +790,12 @@
     border-radius: var(--vesta-radius-sm);
     object-fit: cover;
     background: var(--vesta-color-fill);
+  }
+
+  :where(span[data-vesta='browse-picker-icon'][data-empty]) {
+    display: grid;
+    place-items: center;
+    color: var(--vesta-color-text-subtle);
   }
 
   :where([data-vesta='browse-picker-text']) {

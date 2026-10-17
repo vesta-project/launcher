@@ -1,4 +1,5 @@
 import { createMemo, createRoot, createSignal, untrack } from 'solid-js';
+import { t } from '../../localization';
 import { navigate } from '../../app/router';
 import { RequestCache, CacheInvalidatedError } from '../../platform/cache/request-cache';
 import { findInstance } from '../instances/catalog';
@@ -572,7 +573,7 @@ function onInstallError(taskId: string) {
     taskOwners.delete(taskId);
     return next ?? current;
   });
-  if (matched) setNotice({ tone: 'danger', text: 'Resource installation failed. See notifications for details.' });
+  if (matched) setNotice({ tone: 'danger', text: t('browse.install-task-failed') });
 }
 
 const receiveRows = (instanceId: string) => void onRowsChanged(instanceId);
@@ -624,10 +625,7 @@ export type InstallState =
   | { kind: 'installed' }
   | { kind: 'update' }
   | { kind: 'installing' }
-  | { kind: 'unavailable'; reason: 'vanilla' | 'loader' | 'no-version' }
-  | { kind: 'pick' }
-  | { kind: 'create' }
-  | { kind: 'open' };
+  | { kind: 'unavailable'; reason: 'vanilla' | 'loader' | 'no-version' };
 
 export const sameState = (a: InstallState, b: InstallState) =>
   a.kind === b.kind && (a.kind !== 'unavailable' || (b.kind === 'unavailable' && a.reason === b.reason));
@@ -636,10 +634,9 @@ export const sameState = (a: InstallState, b: InstallState) =>
 export function installState(project: ResourceProject): InstallState {
   // Old hits remain visible while a different resource type is loading.
   const kind = project.resource_type;
-  if (kind === 'modpack') return { kind: 'create' };
-  if (kind === 'datapack') return { kind: 'open' };
+  if (kind === 'modpack') return { kind: 'install' };
   const info = target();
-  if (!info) return { kind: 'pick' };
+  if (!info) return { kind: 'install' };
   const key = projectKey(project.source, project.id);
   if (installing().has(installingKey(info.id, project.source, project.id))) return { kind: 'installing' };
   if (installed().has(key)) return updatable().has(key) ? { kind: 'update' } : { kind: 'installed' };
@@ -704,12 +701,12 @@ async function startInstallInto(
     }
     if (!hasDownloadableArtifact(choice.version)) return { kind: 'external' };
     if (requiresWorldTarget(choice.version, kind))
-      return { kind: 'failed', message: 'Datapack installation requires a World target.' };
+      return { kind: 'failed', message: t('browse.world-required') };
     setBlocked((current) => new Set([...current].filter((entry) => entry !== key)));
     setInstalling((current) => new Map(current).set(key, choice.version.id));
     try {
       const taskId = await installResource({ instanceId: instance.id, project, version: choice.version, type: kind });
-      if (failedStartingInstalls.has(key)) return { kind: 'failed', message: 'Resource installation failed. See notifications for details.' };
+      if (failedStartingInstalls.has(key)) return { kind: 'failed', message: t('browse.install-task-failed') };
       if (untrack(installing).has(key)) taskOwners.set(taskId, key);
       void onRowsChanged(instance.id);
       return { kind: 'started' };

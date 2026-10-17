@@ -36,6 +36,7 @@ const args = {
   source: "managed",
   time: "1 hour",
   title: "Test screenshot",
+  type: "mods",
   value: "16 GB",
   version: "1.2.3",
 };

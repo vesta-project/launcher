@@ -54,15 +54,15 @@ function Skeletons() {
               <div data-vesta="browse-card-banner" />
             </Show>
             <div data-vesta="browse-card-body">
-              <div data-vesta="browse-card-head">
-                <span data-vesta="browse-card-icon" />
-                <div data-vesta="browse-card-title">
-                  <Skeleton width={140} height={14} />
-                  <Skeleton width={90} height={11} />
-                </div>
+              <span data-vesta="browse-card-icon" />
+              <div data-vesta="browse-card-title">
+                <Skeleton width={140} height={14} />
+                <Skeleton width={110} height={11} />
               </div>
-              <Skeleton height={11} />
-              <Skeleton width={180} height={11} />
+              <div data-vesta="browse-card-summary">
+                <Skeleton height={11} />
+                <Skeleton width={180} height={11} />
+              </div>
             </div>
           </div>
         )}
@@ -71,7 +71,7 @@ function Skeletons() {
   );
 }
 
-/** Count and page size, then the scrolling pane with states, cards and pagination. */
+/** The scrolling pane: states, cards, then pagination and page size. The count lives in the search field. */
 export function Results() {
   let pane: HTMLDivElement | undefined;
   let top = 0;
@@ -140,21 +140,6 @@ export function Results() {
 
   return (
     <section data-vesta="browse-results" aria-label={t('browse.results-label')}>
-      <div data-vesta="browse-results-head">
-        <span data-vesta="browse-count" role="status">
-          <Show when={results()}>{t('browse.results-count', { count: total() })}</Show>
-        </span>
-        <label data-vesta="browse-page-size">
-          <span>{t('browse.per-page')}</span>
-          <Select
-            size="sm"
-            aria-label={t('browse.per-page')}
-            options={sizeOptions}
-            value={String(pageSize())}
-            onChange={(value) => setPageSize(Number(value))}
-          />
-        </label>
-      </div>
       <div
         data-vesta="browse-pane"
         ref={(element: HTMLDivElement) => (pane = element)}
@@ -227,8 +212,9 @@ export function Results() {
                 {(project, index) => <ResultCard project={project} index={index} enter={enter} />}
               </For>
             </div>
-            <Show when={pages() > 1}>
-              <nav data-vesta="browse-pages" aria-label={t('browse.pages-label')}>
+            {/* Pages and page size share the foot of the list; neither is worth a line at the top. */}
+            <footer data-vesta="browse-pages">
+              <Show when={pages() > 1}>
                 <Pagination
                   count={pages()}
                   page={page()}
@@ -237,8 +223,18 @@ export function Results() {
                   nextLabel={t('browse.next')}
                   aria-label={t('browse.pages-label')}
                 />
-              </nav>
-            </Show>
+              </Show>
+              <label data-vesta="browse-page-size">
+                <span>{t('browse.per-page')}</span>
+                <Select
+                  size="sm"
+                  aria-label={t('browse.per-page')}
+                  options={sizeOptions}
+                  value={String(pageSize())}
+                  onChange={(value) => setPageSize(Number(value))}
+                />
+              </label>
+            </footer>
           </Match>
         </Switch>
       </div>

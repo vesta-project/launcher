@@ -98,7 +98,8 @@ export const sources: SourceDescriptor[] = [
     id: 'modrinth',
     label: 'Modrinth',
     icon: 'branding/sources/modrinth',
-    types: everything,
+    // Modrinth has no world projects.
+    types: everything.filter((type) => type !== 'world'),
     defaultSort: 'relevance',
     sortOptions: [
       { value: 'relevance', label: 'browse.sort-relevance' },

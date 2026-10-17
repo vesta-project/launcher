@@ -42,7 +42,8 @@ import {
 import { route } from "../../app/router";
 import { findLauncher } from "../../features/installation/launchers";
 import { LauncherImportPage } from "./launcher-import-page";
-import { takeInstallSource } from "./install-navigation";
+import { startPendingResourceInstallation } from "../../features/browse/new-instance-install";
+import { takeResourceInstall, takeInstallSource } from "./install-navigation";
 import { InstallMemoryCard } from "./memory-card";
 import { InstallPackDetails } from "./pack-details";
 import { ImportDialog } from "./import-dialog";
@@ -67,6 +68,7 @@ export function CreatePage() {
 }
 
 function InstanceInstallForm() {
+  const [pendingResource, setPendingResource] = createSignal(takeResourceInstall(), { name: "installPendingResource" });
   const [name, setName] = createSignal("", { name: "installName" });
   const [icon, setIcon] = createSignal(defaultInstanceIcons[0].value, { name: "installIcon" });
   const [minecraft, setMinecraft] = createSignal("", { name: "installMinecraft" });
@@ -161,6 +163,16 @@ function InstanceInstallForm() {
     return options;
   });
   onSettled(() => {
+    const pending = untrack(pendingResource);
+    if (pending) {
+      setName(pending.project.name);
+      setIcon(pending.project.icon_url || defaultInstanceIcons[0].value);
+      setMinecraft(pending.minecraft);
+      setLoader(pending.loader);
+      setLoaderVersion(pending.loaderVersion);
+      nameEdited = iconEdited = true;
+      setExperimental(true);
+    }
     const handoff = takeInstallSource();
     if (handoff) void loadSource(handoff);
     void loadMetadata();
@@ -190,6 +202,7 @@ function InstanceInstallForm() {
     }
   };
   const loadSource = async (next: PackSource) => {
+    setPendingResource(undefined);
     const previous = untrack(source);
     // A newly chosen pack starts with its own artwork. Icon choices made after
     // choosing this source survive enrichment and retries.
@@ -279,18 +292,19 @@ function InstanceInstallForm() {
         packSource?.kind === "url" && selected
           ? { kind: "url" as const, value: selected.download_url }
           : packSource;
-      await startInstallation(
-        {
-          name: name(),
-          icon: icon(),
-          minecraft: selectedMinecraft(),
-          loader: loader(),
-          loaderVersion: selectedLoader() || pack()?.modloaderVersion || "",
-          memory: memory(),
-        },
-        resolved,
-        pack(),
-      );
+      const initialDraft = {
+        name: name(),
+        icon: icon(),
+        minecraft: selectedMinecraft(),
+        loader: loader(),
+        loaderVersion: selectedLoader() || pack()?.modloaderVersion || "",
+        memory: memory(),
+      };
+      const initialPack = pack();
+      const start = () => startInstallation(initialDraft, resolved, initialPack);
+      const pending = untrack(pendingResource);
+      if (pending) await startPendingResourceInstallation(pending, start);
+      else await start();
       if (!disposed) navigate("/library");
     } catch (reason) {
       if (!disposed) {
@@ -314,6 +328,9 @@ function InstanceInstallForm() {
         <header data-vesta="install-header">
           <div>
             <h1>{pack()?.name || t("management.create-title")}</h1>
+            <Show when={pendingResource()}>
+              {(pending) => <p role="status">{t(pending().kind === "datapack" ? "browse.pending-resource-world" : "browse.pending-resource", { name: pending().project.name })}</p>}
+            </Show>
             <Show when={source()}>
               <p>{source()?.kind === "file" ? t("install.local-file") : t("install.from-url")}</p>
             </Show>

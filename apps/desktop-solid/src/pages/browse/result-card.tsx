@@ -10,7 +10,6 @@ import {
   isLoaderCategory,
   ownerName,
   projectPath,
-  sourceById,
   typeUsesLoader,
   type ResourceProject,
 } from '../../features/browse/browse-model';
@@ -50,6 +49,9 @@ function hueOf(seed: string) {
   return Math.abs(hash) % 360;
 }
 
+const loaded = (event: Event & { currentTarget: HTMLImageElement }) => (event.currentTarget.dataset.loaded = '');
+const failed = (event: Event & { currentTarget: HTMLImageElement }) => (event.currentTarget.hidden = true);
+
 /** A tag on a card: a category (or, for loader-aware types, a loader) it filters by. */
 interface Tag {
   key: string;
@@ -58,7 +60,7 @@ interface Tag {
   apply: () => void;
 }
 
-function TagPill(props: { tag: Tag }) {
+function TagButton(props: { tag: Tag }) {
   return (
     <button
       type="button"
@@ -72,41 +74,30 @@ function TagPill(props: { tag: Tag }) {
   );
 }
 
-function InstallAction(props: { state: () => InstallState; onRun: () => void }) {
+function InstallAction(props: { state: () => InstallState; targetName: () => string | undefined; onRun: () => void }) {
   const kind = () => props.state().kind;
-  const label = () => {
-    switch (kind()) {
-      case 'installed':
-        return t('browse.action-installed');
-      case 'update':
-        return t('browse.action-update');
-      case 'installing':
-        return t('browse.action-installing');
-      case 'pick':
-        return t('browse.action-install-pick');
-      case 'create':
-        return t('browse.action-create');
-      case 'open':
-        return t('browse.action-open');
-      default:
-        return t('browse.action-install');
-    }
-  };
+  const label = () =>
+    kind() === 'installed'
+      ? t('browse.action-installed')
+      : kind() === 'update'
+        ? t('browse.action-update')
+        : kind() === 'installing'
+          ? t('browse.action-installing')
+          : t('browse.action-install');
   const icon = () =>
     kind() === 'installed'
       ? 'icons/controls/check'
       : kind() === 'update'
         ? 'icons/actions/refresh'
-        : kind() === 'create' || kind() === 'open'
-          ? 'icons/navigation/arrow-forward'
-          : 'icons/actions/download';
+        : 'icons/actions/download';
   const button = () => (
     <Button
       size="sm"
-      variant={kind() === 'installed' ? 'ghost' : kind() === 'install' || kind() === 'update' ? 'solid' : 'outline'}
-      tone={kind() === 'install' || kind() === 'update' ? 'accent' : kind() === 'installed' ? 'success' : 'neutral'}
+      variant={kind() === 'installed' ? 'ghost' : kind() === 'update' ? 'solid' : 'outline'}
+      tone={kind() === 'update' ? 'accent' : kind() === 'installed' ? 'success' : 'neutral'}
       disabled={kind() === 'installed' || kind() === 'installing' || kind() === 'unavailable'}
       data-busy={kind() === 'installing' ? '' : undefined}
+      title={kind() === 'install' && props.targetName() ? t('browse.install-into', { title: props.targetName() as string }) : undefined}
       icon={<Icon name={icon()} size={12} />}
       onClick={() => props.onRun()}
     >
@@ -137,10 +128,11 @@ function InstallAction(props: { state: () => InstallState; onRun: () => void }) 
 }
 
 /**
- * One result, in the spirit of the old launcher's card: banner (gallery image or a tinted
- * fallback), icon with name, author and stats, the summary, then filter pills and the install
- * action. With banners off the card is compact and has no banner. The title link is stretched
- * over the card, so the card is one click target; author, pills and install sit above it.
+ * One result, in the spirit of the old launcher's card. With banners on: a short banner (gallery
+ * image, else the blurred icon), the icon overlapping its lower edge with Install opposite, then
+ * the name and one meta line across the full width, the summary and filter tags. Compact puts
+ * the name beside the icon. The title link is stretched over the card, so the card is one
+ * click target; author, tags and Install sit above it.
  */
 export function ResultCard(props: { project: () => ResourceProject; index: () => number; enter: () => boolean }) {
   const project = () => props.project();
@@ -148,7 +140,6 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
   const path = () => projectPath(project().source, project().id);
   const author = () => ownerName(project());
   const canFilterCreator = () => !!creatorOf(project());
-  const descriptor = () => sourceById(project().source);
   const banner = () => project().gallery[0] || project().featured_gallery || undefined;
   const updated = () => formatRelative(project().updated_at, Date.now());
 
@@ -195,49 +186,41 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
     >
       <Show when={banners()}>
         <div data-vesta="browse-card-banner" aria-hidden="true">
-          <Show when={banner()}>
-            {(url) => (
-              <img
-                src={url()}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                onLoad={(event) => (event.currentTarget.dataset.loaded = '')}
-                onError={(event) => (event.currentTarget.hidden = true)}
-              />
-            )}
+          {/* No gallery image: the project's own icon, blurred, stands in so every card has colour. */}
+          <Show
+            when={banner()}
+            fallback={
+              <Show when={project().icon_url}>
+                {(url) => <img data-backdrop="" src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
+              </Show>
+            }
+          >
+            {(url) => <img src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
           </Show>
         </div>
       </Show>
       <div data-vesta="browse-card-body">
-        <div data-vesta="browse-card-head">
-          <span data-vesta="browse-card-icon" aria-hidden="true">
-            <span data-vesta="browse-card-initial">{initialOf(project().name)}</span>
-            <Show when={project().icon_url}>
-              {(url) => (
-                <img
-                  src={url()}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  onLoad={(event) => (event.currentTarget.dataset.loaded = '')}
-                  onError={(event) => (event.currentTarget.hidden = true)}
-                />
-              )}
-            </Show>
-          </span>
-          <div data-vesta="browse-card-title">
-            <a
-              href={`#${path()}`}
-              data-vesta="browse-card-name"
-              onClick={(event) => {
-                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-                event.preventDefault();
-                transitionTo(path());
-              }}
-            >
-              {project().name}
-            </a>
+        <span data-vesta="browse-card-icon" aria-hidden="true">
+          <span data-vesta="browse-card-initial">{initialOf(project().name)}</span>
+          <Show when={project().icon_url}>
+            {(url) => <img src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
+          </Show>
+        </span>
+        <div data-vesta="browse-card-title">
+          <a
+            href={`#${path()}`}
+            data-vesta="browse-card-name"
+            title={project().name}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+              event.preventDefault();
+              transitionTo(path());
+            }}
+          >
+            {project().name}
+          </a>
+          {/* One line: author first; stats that do not fit wrap out of sight rather than squeeze. */}
+          <div data-vesta="browse-card-meta">
             <Show when={author()}>
               <Show
                 when={canFilterCreator()}
@@ -253,41 +236,38 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
                 </button>
               </Show>
             </Show>
-            <div data-vesta="browse-card-stats">
-              <span
-                data-vesta="browse-card-stat"
-                title={t('browse.downloads-title', { count: project().download_count })}
-              >
-                <Icon name="icons/actions/download" size={12} />
-                {formatCompact(project().download_count)}
+            <span data-vesta="browse-card-stat" title={t('browse.downloads-title', { count: project().download_count })}>
+              <Icon name="icons/actions/download" size={11} />
+              {formatCompact(project().download_count)}
+            </span>
+            <Show when={project().follower_count > 0}>
+              <span data-vesta="browse-card-stat" title={t('browse.followers-title', { count: project().follower_count })}>
+                <Icon name="icons/content/heart" size={11} />
+                {formatCompact(project().follower_count)}
               </span>
-              <Show when={project().follower_count > 0}>
-                <span
-                  data-vesta="browse-card-stat"
-                  title={t('browse.followers-title', { count: project().follower_count })}
-                >
-                  <Icon name="icons/content/heart" size={12} />
-                  {formatCompact(project().follower_count)}
-                </span>
-              </Show>
-              <Show when={updated()}>
-                <span data-vesta="browse-card-stat" data-kind="updated">
-                  {t('browse.updated', { time: updated() })}
-                </span>
-              </Show>
-            </div>
+            </Show>
+            <Show when={updated()}>
+              <span data-vesta="browse-card-stat">
+                <Icon name="icons/content/history" size={11} />
+                {updated()}
+              </span>
+            </Show>
           </div>
-          <span data-vesta="browse-card-source" title={descriptor().label}>
-            <Icon name={descriptor().icon} size={14} label={descriptor().label} />
-          </span>
         </div>
+        <span data-vesta="browse-card-action">
+          <InstallAction
+            state={state}
+            targetName={() => target()?.name}
+            onRun={() => void runInstall(project(), project().resource_type, target())}
+          />
+        </span>
         <Show when={project().summary}>
           <p data-vesta="browse-card-summary">{project().summary}</p>
         </Show>
-        <div data-vesta="browse-card-foot">
+        <Show when={tags().length}>
           <div data-vesta="browse-card-tags">
             <For each={tags().slice(0, shownTags)} keyed={(tag) => tag.key}>
-              {(tag) => <TagPill tag={tag()} />}
+              {(tag) => <TagButton tag={tag()} />}
             </For>
             <Show when={tags().length > shownTags}>
               <Popover
@@ -307,16 +287,13 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
               >
                 <div data-vesta="browse-tags-more">
                   <For each={tags().slice(shownTags)} keyed={(tag) => tag.key}>
-                    {(tag) => <TagPill tag={tag()} />}
+                    {(tag) => <TagButton tag={tag()} />}
                   </For>
                 </div>
               </Popover>
             </Show>
           </div>
-          <span data-vesta="browse-card-action">
-            <InstallAction state={state} onRun={() => void runInstall(project(), project().resource_type, target())} />
-          </span>
-        </div>
+        </Show>
       </div>
     </article>
   );

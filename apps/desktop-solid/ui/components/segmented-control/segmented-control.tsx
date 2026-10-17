@@ -80,6 +80,8 @@ export function SegmentedControl(props: SegmentedControlProps) {
                 data-vesta="segmented-item"
                 value={option.value}
                 disabled={option.disabled}
+                // Icon-only items still name themselves on hover.
+                title={props.iconOnly ? option.label : undefined}
               >
                 <KobalteSegmentedControl.ItemInput />
                 <Show when={icon()}>

@@ -14,6 +14,7 @@ import {
 } from '../../features/browse/browse-store';
 import { findInstance } from '../../features/instances/catalog';
 import { InstancePickerDialog } from './instance-picker-dialog';
+import { WorldPickerDialog } from './world-picker-dialog';
 import { ProjectPlaceholder } from './project-placeholder';
 import { Results } from './results';
 import { SearchField, searchInput } from './search-field';
@@ -66,6 +67,7 @@ function Browser() {
         <Results />
       </div>
       <InstancePickerDialog />
+      <WorldPickerDialog />
     </Board>
   );
 }

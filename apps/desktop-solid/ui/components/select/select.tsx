@@ -16,7 +16,12 @@ export interface SelectOption {
   label: string;
   /** Secondary line under the label in the list. */
   description?: string;
-  icon?: JSX.Element;
+  /**
+   * Shown in the list and, for the selected option, in the trigger. Pass a function for
+   * markup such as an `<img>`: a single node can only sit in one place, so a plain element
+   * would vanish from the trigger once the list has rendered it.
+   */
+  icon?: JSX.Element | (() => JSX.Element);
   disabled?: boolean;
 }
 
@@ -41,6 +46,8 @@ export interface SelectProps {
   class?: string;
   style?: JSX.CSSProperties;
 }
+
+const renderIcon = (icon: SelectOption['icon']) => (typeof icon === 'function' ? icon() : icon);
 
 export function Select(props: SelectProps) {
   const mount = useOverlayMount();
@@ -97,7 +104,7 @@ export function Select(props: SelectProps) {
             <KobalteSelect.ItemLabel data-vesta="select-item-label">
               <Show when={itemProps.item.rawValue.icon}>
                 <span data-vesta="select-item-icon" aria-hidden="true">
-                  {itemProps.item.rawValue.icon}
+                  {renderIcon(itemProps.item.rawValue.icon)}
                 </span>
               </Show>
               {itemProps.item.rawValue.label}
@@ -126,7 +133,7 @@ export function Select(props: SelectProps) {
             <>
               <Show when={state.selectedOption()?.icon}>
                 <span data-vesta="field-icon" aria-hidden="true">
-                  {state.selectedOption()?.icon}
+                  {renderIcon(state.selectedOption()?.icon)}
                 </span>
               </Show>
               <span data-vesta="select-value-text">

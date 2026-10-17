@@ -100,6 +100,7 @@ export function onInstallEvents(rows: RowsListener, error: ErrorListener) {
 
 export interface InstallRequest {
   instanceId: string;
+  world?: { instanceId: number; directoryName: string };
   project: ResourceProject;
   version: ResourceVersion;
   type: ResourceType;
@@ -112,7 +113,7 @@ export async function installResource(request: InstallRequest): Promise<string> 
     // The host keeps project metadata (icon, name) for offline lists; the old launcher cached it first.
     await invoke('cache_resource_metadata', { platform: project.source, project }).catch(() => undefined);
     return invoke<string>('install_resource', {
-      target: { kind: 'instance', instanceId: Number(request.instanceId) },
+      target: request.world ? { kind: 'world', world: request.world } : { kind: 'instance', instanceId: Number(request.instanceId) },
       platform: project.source,
       projectId: project.id,
       projectName: project.name,
@@ -122,8 +123,9 @@ export async function installResource(request: InstallRequest): Promise<string> 
       replacementResourceId: null,
     });
   }
+  const scope = request.world ? `${request.instanceId}/world/${request.world.directoryName}` : request.instanceId;
   setTimeout(() => {
-    const rows = (fixtureInstalled.get(request.instanceId) ?? []).filter(
+    const rows = (fixtureInstalled.get(scope) ?? []).filter(
       (row) => !(row.platform === project.source && row.remote_id === project.id),
     );
     rows.push({
@@ -134,7 +136,7 @@ export async function installResource(request: InstallRequest): Promise<string> 
       resource_type: type,
       display_name: project.name,
     });
-    fixtureInstalled.set(request.instanceId, rows);
+    fixtureInstalled.set(scope, rows);
     for (const listener of rowsListeners) listener(request.instanceId);
   }, 1400);
   return `fixture-${project.id}`;
