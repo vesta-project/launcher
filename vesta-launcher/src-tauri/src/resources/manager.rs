@@ -3,7 +3,9 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
+
+use super::version_details_cache::VersionDetailsCache;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
@@ -90,6 +92,7 @@ pub struct ResourceManager {
     sources: Arc<RwLock<Vec<Arc<dyn ResourceSource>>>>,
     project_cache: Arc<RwLock<HashMap<PlatformIdKey, ResourceProject>>>,
     version_cache: Arc<RwLock<HashMap<PlatformIdKey, Vec<ResourceVersion>>>>,
+    version_details_cache: Arc<Mutex<VersionDetailsCache>>,
     hash_cache: Arc<RwLock<HashMap<PlatformIdKey, CachedHashLookup>>>,
     search_cache: Arc<RwLock<HashMap<String, CachedSearchResponse>>>,
     category_cache: Arc<RwLock<HashMap<SourcePlatform, CachedCategories>>>,
@@ -114,6 +117,7 @@ impl ResourceManager {
             sources: Arc::new(RwLock::new(sources)),
             project_cache: Arc::new(RwLock::new(HashMap::new())),
             version_cache: Arc::new(RwLock::new(HashMap::new())),
+            version_details_cache: Arc::new(Mutex::new(VersionDetailsCache::default())),
             hash_cache: Arc::new(RwLock::new(HashMap::new())),
             search_cache: Arc::new(RwLock::new(HashMap::new())),
             category_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -123,6 +127,11 @@ impl ResourceManager {
 
     pub async fn clear_cache(&self) -> Result<()> {
         log::info!("[ResourceManager] Clearing all caches (in-memory and database)");
+
+        // Serialize details publication with database deletion, so an older fetch
+        // cannot restore a row after this invalidation.
+        let mut details_cache = self.version_details_cache.lock().await;
+        details_cache.clear();
 
         // 1. Clear in-memory caches
         self.project_cache.write().await.clear();
@@ -870,9 +879,18 @@ impl ResourceManager {
         platform: SourcePlatform,
         project_id: &str,
         version_id: &str,
+        ignore_cache: bool,
     ) -> Result<ResourceVersionDetails> {
         let source = self.get_source(platform).await?;
-        source.get_version_details(project_id, version_id).await
+        let project_id = project_id.to_string();
+        let version_id = version_id.to_string();
+        VersionDetailsCache::get(
+            &self.version_details_cache,
+            (platform, project_id.clone(), version_id.clone()),
+            ignore_cache,
+            move || async move { source.get_version_details(&project_id, &version_id).await },
+        )
+        .await
     }
 
     pub async fn get_by_hash(

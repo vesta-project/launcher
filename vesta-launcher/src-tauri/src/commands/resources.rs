@@ -788,9 +788,15 @@ pub async fn get_resource_version_details(
     platform: SourcePlatform,
     project_id: String,
     version_id: String,
+    ignore_cache: Option<bool>,
 ) -> Result<ResourceVersionDetails> {
     Ok(resource_manager
-        .get_version_details(platform, &project_id, &version_id)
+        .get_version_details(
+            platform,
+            &project_id,
+            &version_id,
+            ignore_cache.unwrap_or(false),
+        )
         .await?)
 }
 

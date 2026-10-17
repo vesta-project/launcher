@@ -13,3 +13,5 @@ pub mod watcher;
 
 pub use manager::ResourceManager;
 pub use watcher::ResourceWatcher;
+
+mod version_details_cache;
