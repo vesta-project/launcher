@@ -3,6 +3,7 @@ import { BreadcrumbItem, Breadcrumbs, Button, IconButton, Menu, MenuItem, MenuSe
 import { For, Show } from 'solid-js';
 import { Icon } from '../components/icon';
 import { AccountMenu } from '../features/accounts/account-menu';
+import { peekProject } from '../features/browse/browse-projects';
 import { findLauncher } from '../features/installation/launchers';
 import { findInstance } from '../features/instances/catalog';
 import { detectPlatform } from './platform';
@@ -14,6 +15,14 @@ import type { MessageId } from '../localization/messages';
 import './titlebar.css';
 
 const platform = detectPlatform();
+
+const decodeSegment = (value: string | undefined) => {
+  try {
+    return value === undefined ? '' : decodeURIComponent(value);
+  } catch {
+    return value ?? '';
+  }
+};
 
 interface Crumb {
   label: string;
@@ -68,12 +77,30 @@ function location(): {
             trail: [{ label: t('nav.library') }],
           };
     }
-    case 'browse':
+    case 'browse': {
+      const root = { label: t('nav.browse'), href: '#/browse' };
+      if (current.section === 'project') {
+        const name = peekProject(decodeSegment(current.detail), decodeSegment(current.item))?.name ?? decodeSegment(current.item);
+        return {
+          label: name,
+          trail: [root, { label: name }],
+          back: { to: '/browse', label: t('common.back') },
+        };
+      }
+      const instance = current.section === 'for' ? findInstance(current.detail)?.instance : undefined;
+      if (instance)
+        return {
+          label: t('browse.trail-for', { name: instance.name }),
+          icon: 'icons/rail/browse',
+          trail: [root, { label: t('browse.trail-for', { name: instance.name }) }],
+          back: { to: '/browse', label: t('common.back') },
+        };
       return {
         label: t('nav.browse'),
         icon: 'icons/rail/browse',
         trail: [{ label: t('nav.browse') }],
       };
+    }
     case 'create': {
       const launcher = current.section === 'import' ? findLauncher(current.detail) : undefined;
       if (launcher)

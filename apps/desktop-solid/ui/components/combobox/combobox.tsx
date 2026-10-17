@@ -1,10 +1,11 @@
 import { Combobox as KobalteCombobox } from '@kobalte/core/combobox';
 import { createFilter } from '@kobalte/core/i18n';
 import type { JSX } from '@solidjs/web';
-import { children, Show, createSignal } from 'solid-js';
+import { children, Show, createSignal, useContext } from 'solid-js';
 import type { ControlSize } from '../../foundation/types';
 import { CheckGlyph, ChevronDownGlyph } from '../../internal/icons';
 import { useOverlayMount } from '../overlay/mount';
+import { PopoverScope } from '../overlay/popover-scope';
 import type { Placement } from '../overlay/types';
 import type { SelectOption } from '../select/select';
 import '../field/field.css';
@@ -44,6 +45,7 @@ export interface ComboboxProps {
 
 export function Combobox(props: ComboboxProps) {
   const mount = useOverlayMount();
+  const popoverOwners = useContext(PopoverScope);
   // A selected label is display text, not a search query. Only an actual input
   // event starts filtering; programmatic value/focus updates must not narrow it.
   const [query, setQuery] = createSignal<string | undefined>(undefined, { name: 'comboboxQuery' });
@@ -140,7 +142,7 @@ export function Combobox(props: ComboboxProps) {
         </Show>
       </Show>
       <KobalteCombobox.Portal mount={mount}>
-        <KobalteCombobox.Content data-vesta="select-content">
+        <KobalteCombobox.Content data-vesta="select-content" data-vesta-popover-owner={popoverOwners.join(' ') || undefined}>
           <KobalteCombobox.Listbox data-vesta="select-listbox" />
         </KobalteCombobox.Content>
       </KobalteCombobox.Portal>

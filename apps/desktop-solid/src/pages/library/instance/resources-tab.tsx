@@ -395,7 +395,7 @@ function ResourceList(props: {
                 size="sm"
                 tone="accent"
                 icon={<Icon name="icons/actions/add" />}
-                onClick={() => navigate(`/browse/${props.entry.instance.id}`)}
+                onClick={() => navigate(`/browse/for/${props.entry.instance.id}`)}
               >
                 {t("resources.add")}
               </Button>

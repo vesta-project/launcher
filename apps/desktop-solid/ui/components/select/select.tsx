@@ -1,9 +1,10 @@
 import { Select as KobalteSelect } from "@kobalte/core/select";
 import type { JSX } from "@solidjs/web";
-import { children, createMemo, Show, untrack } from "solid-js";
+import { children, createMemo, Show, untrack, useContext } from "solid-js";
 import type { ControlSize } from "../../foundation/types";
 import { CheckGlyph, ChevronDownGlyph } from "../../internal/icons";
 import { useOverlayMount } from "../overlay/mount";
+import { PopoverScope } from "../overlay/popover-scope";
 import type { Placement } from "../overlay/types";
 import "../field/field.css";
 import "../overlay/overlay.css";
@@ -43,6 +44,7 @@ export interface SelectProps {
 
 export function Select(props: SelectProps) {
   const mount = useOverlayMount();
+  const popoverOwners = useContext(PopoverScope);
   const label = children(() => props.label);
   const description = children(() => props.description);
   const error = children(() => props.error);
@@ -148,7 +150,7 @@ export function Select(props: SelectProps) {
         </KobalteSelect.ErrorMessage>
       </Show>
       <KobalteSelect.Portal mount={mount}>
-        <KobalteSelect.Content data-vesta="select-content">
+        <KobalteSelect.Content data-vesta="select-content" data-vesta-popover-owner={popoverOwners.join(' ') || undefined}>
           <KobalteSelect.Listbox data-vesta="select-listbox" />
         </KobalteSelect.Content>
       </KobalteSelect.Portal>

@@ -1,0 +1,831 @@
+/*
+ * Browse page: toolbar, results, cards and the instance picker.
+ * The search box and filter panel live in search-field.css.
+ *
+ * Hooks: [data-vesta=browse] -toolbar -type -controls -target -target-icon -sort
+ *        -toggle -toggle-label -category-icon
+ *        -results -results-head -count -page-size -pane -progress -notice -notice-close
+ *        -warning -error -list -pages
+ *        -card -card-banner -card-body -card-head -card-icon -card-initial -card-title
+ *        -card-name -card-author -card-stats -card-stat -card-source -card-summary
+ *        -card-foot -card-tags -tag -tags-more -card-action -card-action-wrap
+ *        -picker -picker-list -picker-row -picker-choice -picker-icon -picker-text
+ *        -picker-status -picker-empty
+ * States: list: data-pending; card: data-banner, data-enter, data-installed, data-skeleton;
+ *         tag: aria-pressed, data-kind=more; toggle: aria-pressed; notice: data-tone;
+ *         picker row/status: data-status; category icon: data-kind (mask | image)
+ * Knobs: --browse-card-min, --browse-icon-size, --browse-card-pad, --browse-hue
+ *
+ * The page is a size container (`browse`) and each card is one too (`browse-card`), so
+ * layout follows the pane and the card, not the window. Cards skip offscreen rendering
+ * (content-visibility) and images have fixed boxes, so nothing shifts while they load.
+ */
+@layer launcher {
+  :where([data-vesta='browse']) {
+    --browse-card-min: 300px;
+
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    min-block-size: 0;
+    padding: var(--vesta-space-3);
+    container: browse / inline-size;
+  }
+
+  /* ---- Toolbar ---- */
+  :where([data-vesta='browse-toolbar']),
+  :where([data-vesta='browse-controls']),
+  :where([data-vesta='browse-sort']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='browse-toolbar']) {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  :where([data-vesta='browse-controls']) {
+    flex-wrap: wrap;
+    margin-inline-start: auto;
+  }
+
+  :where([data-vesta='browse-type'] > [data-vesta='field']) {
+    display: none;
+    min-inline-size: 150px;
+  }
+
+  @container browse (max-width: 720px) {
+    :where([data-vesta='browse']) {
+      --browse-card-min: 240px;
+    }
+
+    :where([data-vesta='browse-type']) {
+      flex: 1;
+    }
+
+    :where([data-vesta='browse-type'] > [data-vesta='segmented-field']) {
+      display: none;
+    }
+
+    :where([data-vesta='browse-type'] > [data-vesta='field']) {
+      display: flex;
+      flex: 1;
+    }
+
+    :where([data-vesta='browse-controls']) {
+      flex: 1 1 100%;
+      margin-inline-start: 0;
+    }
+  }
+
+  :where([data-vesta='browse-target']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='browse-target'] > [data-vesta='field']) {
+    inline-size: 12rem;
+  }
+
+  :where([data-vesta='browse-target-icon']) {
+    inline-size: 16px;
+    block-size: 16px;
+    border-radius: var(--vesta-radius-sm);
+    object-fit: cover;
+  }
+
+  /* ---- Toggles (filter panel) ---- */
+  :where([data-vesta='browse-toggle']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    block-size: var(--vesta-size-control-sm);
+    padding-inline: var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: default;
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='browse-toggle']):hover {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='browse-toggle'])[aria-pressed='true'] {
+    border-color: var(--vesta-color-accent-border);
+    background: color-mix(in oklab, var(--vesta-color-accent) var(--vesta-state-soft), transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-toggle']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta='browse-toggle-label']) {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  :where([data-vesta='browse-category-icon']) {
+    flex: none;
+    inline-size: 12px;
+    block-size: 12px;
+  }
+
+  :where([data-vesta='browse-category-icon'][data-kind='mask']) {
+    background: currentcolor;
+    -webkit-mask: var(--browse-icon) center / contain no-repeat;
+    mask: var(--browse-icon) center / contain no-repeat;
+  }
+
+  :where([data-vesta='browse-category-icon'][data-kind='image']) {
+    object-fit: contain;
+  }
+
+  /* ---- Results ---- */
+  :where([data-vesta='browse-results']) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-1-5);
+    min-block-size: 0;
+  }
+
+  :where([data-vesta='browse-results-head']) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    min-block-size: var(--vesta-size-control-sm);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='browse-count']) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='browse-page-size']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='browse-pane']) {
+    position: relative;
+    flex: 1;
+    min-block-size: 0;
+    overflow: hidden auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+
+  /* Takes no space: a 3px line over the top edge of the pane while a query is in flight. */
+  :where([data-vesta='browse-progress']) {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    block-size: 3px;
+    margin-block-end: -3px;
+  }
+
+  :where([data-vesta='browse-notice']),
+  :where([data-vesta='browse-warning']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0 0 var(--vesta-space-2);
+    padding: var(--vesta-space-1-5) var(--vesta-space-2);
+    border-radius: var(--vesta-radius-md);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='browse-notice']) {
+    border: var(--vesta-border-width) solid var(--tone-border);
+    background: var(--tone-soft);
+    color: var(--tone-text);
+  }
+
+  :where([data-vesta='browse-notice'] > span) {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='browse-notice-close']) {
+    display: grid;
+    place-items: center;
+    inline-size: 18px;
+    block-size: 18px;
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: inherit;
+    cursor: default;
+  }
+
+  :where([data-vesta='browse-notice-close']):hover {
+    background: var(--tone-hover);
+  }
+
+  :where([data-vesta='browse-warning']) {
+    color: var(--vesta-color-warning-text);
+  }
+
+  :where([data-vesta='browse-error']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-8);
+    color: var(--vesta-color-danger-text);
+    text-align: center;
+  }
+
+  :where([data-vesta='browse-error'] > p) {
+    max-inline-size: 60ch;
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='browse-pages']) {
+    display: flex;
+    justify-content: center;
+    padding-block: var(--vesta-space-4) var(--vesta-space-2);
+  }
+
+  /* ---- List ---- */
+  :where([data-vesta='browse-list']) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--browse-card-min), 100%), 1fr));
+    gap: var(--vesta-space-3);
+    align-content: start;
+    padding-block-end: var(--vesta-space-1);
+  }
+
+  /* Stale results stay readable but recede; the dimming waits a beat so quick answers never flash. */
+  :where([data-vesta='browse-list'][data-pending]) {
+    opacity: 0.6;
+    transition: opacity var(--vesta-duration-normal) var(--vesta-ease-standard) 140ms;
+  }
+
+  /* ---- Card ---- */
+  :where([data-vesta='browse-card']) {
+    --browse-icon-size: 40px;
+    --browse-card-pad: var(--vesta-space-3);
+
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    container: browse-card / inline-size;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 8.5rem;
+    transition:
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='browse-card'][data-banner]) {
+    --browse-icon-size: 52px;
+    --browse-card-pad: var(--vesta-space-4);
+
+    contain-intrinsic-size: auto 17rem;
+  }
+
+  /* Hover changes colour only; nothing reflows. */
+  :where([data-vesta='browse-card']:not([data-skeleton])):hover {
+    border-color: var(--vesta-color-border-strong);
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-surface-raised),
+      var(--vesta-color-state-mix) var(--vesta-state-hover)
+    );
+  }
+
+  /* Paint containment clips an outside ring, so it is drawn inside the card. */
+  :where([data-vesta='browse-card']):has([data-vesta='browse-card-name']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='browse-card'][data-installed]) {
+    border-color: color-mix(in oklab, var(--vesta-color-success) 45%, var(--vesta-color-border));
+  }
+
+  /* New results fade in, staggered; reduced motion turns this off. */
+  :where([data-vesta='browse-card'][data-enter]) {
+    animation: browse-card-in var(--vesta-duration-normal) var(--vesta-ease-out) both;
+    animation-delay: calc(var(--i, 0) * 30ms);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='browse-card'][data-enter]) {
+      animation: none;
+    }
+  }
+
+  @keyframes browse-card-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  /* ---- Banner: the gallery image over a hue-tinted dot grid that shows until it loads ---- */
+  :where([data-vesta='browse-card-banner']) {
+    position: relative;
+    flex: none;
+    aspect-ratio: 16 / 7;
+    overflow: hidden;
+    background-color: color-mix(
+      in oklab,
+      oklch(0.62 0.11 var(--browse-hue, 250)) 22%,
+      var(--vesta-color-surface-raised)
+    );
+  }
+
+  :where([data-vesta='browse-card-banner'])::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle, color-mix(in oklab, var(--vesta-color-text-muted) 28%, transparent) 1.5px, transparent 2px),
+      radial-gradient(circle, color-mix(in oklab, var(--vesta-color-text-subtle) 18%, transparent) 1px, transparent 1.5px);
+    background-position:
+      0 0,
+      6px 6px;
+    background-size:
+      24px 24px,
+      12px 12px;
+  }
+
+  /* A short fade into the card body. */
+  :where([data-vesta='browse-card-banner'])::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    block-size: var(--vesta-space-5);
+    background: linear-gradient(to top, var(--vesta-color-surface-raised), transparent);
+    pointer-events: none;
+  }
+
+  :where([data-vesta='browse-card-banner'] > img) {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition:
+      opacity var(--vesta-duration-normal) var(--vesta-ease-standard),
+      transform var(--vesta-duration-slow) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='browse-card-banner'] > img[data-loaded]) {
+    opacity: 1;
+  }
+
+  :where([data-vesta='browse-card']:hover [data-vesta='browse-card-banner'] > img) {
+    transform: scale(1.02);
+  }
+
+  :where([data-vesta='browse-card'][data-skeleton] [data-vesta='browse-card-banner']) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='browse-card'][data-skeleton] [data-vesta='browse-card-banner'])::before {
+    content: none;
+  }
+
+  /* ---- Body ---- */
+  :where([data-vesta='browse-card-body']) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    padding: var(--browse-card-pad);
+  }
+
+  :where([data-vesta='browse-card'][data-banner] [data-vesta='browse-card-body']) {
+    gap: var(--vesta-space-3);
+    padding-block-start: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='browse-card-head']) {
+    display: grid;
+    grid-template-columns: var(--browse-icon-size) minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='browse-card-icon']) {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--browse-icon-size);
+    block-size: var(--browse-icon-size);
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='browse-card-initial']) {
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xl);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='browse-card-icon'] > img) {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='browse-card-icon'] > img[data-loaded]) {
+    opacity: 1;
+  }
+
+  :where([data-vesta='browse-card-title']) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--vesta-space-0-5);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='browse-card-name']) {
+    max-inline-size: 100%;
+    overflow: hidden;
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: var(--vesta-leading-tight);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+    outline: none;
+  }
+
+  :where([data-vesta='browse-card']:not([data-banner]) [data-vesta='browse-card-name']) {
+    font-size: var(--vesta-text-md);
+  }
+
+  /* The title link covers the whole card, so the card is one click target. */
+  :where([data-vesta='browse-card-name'])::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  :where([data-vesta='browse-card-author']) {
+    position: relative;
+    z-index: 1;
+    max-inline-size: 100%;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  :where(button[data-vesta='browse-card-author']):hover {
+    color: var(--vesta-color-accent-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  :where(button[data-vesta='browse-card-author']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta='browse-card-stats']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-0-5) var(--vesta-space-3);
+    margin-block-start: var(--vesta-space-0-5);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='browse-card-stat']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='browse-card-source']) {
+    display: grid;
+    place-items: center;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='browse-card-summary']) {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* ---- Foot: filter pills, then the install action ---- */
+  :where([data-vesta='browse-card-foot']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin-block-start: auto;
+  }
+
+  :where([data-vesta='browse-card-tags']) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  :where([data-vesta='browse-tag']) {
+    position: relative;
+    z-index: 1;
+    flex: 0 1 auto;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    max-inline-size: 9rem;
+    block-size: 22px;
+    overflow: hidden;
+    padding-inline: var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-xs);
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='browse-tag']):hover {
+    border-color: var(--vesta-color-border-strong);
+    background: var(--vesta-color-fill-hover);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='browse-tag'])[aria-pressed='true'] {
+    border-color: var(--vesta-color-accent-border);
+    background: color-mix(in oklab, var(--vesta-color-accent) var(--vesta-state-soft), transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-tag']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='browse-tag'][data-kind='more']) {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .browse-tags-popover {
+    --overlay-padding: var(--vesta-space-2);
+    --popover-width: max-content;
+  }
+
+  :where([data-vesta='browse-tags-more']) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-1);
+    max-inline-size: 18rem;
+  }
+
+  :where([data-vesta='browse-card-action']) {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    margin-inline-start: auto;
+  }
+
+  :where([data-vesta='browse-card-action-wrap']) {
+    display: inline-flex;
+  }
+
+  /* An install in progress: the disabled button carries a slow sweep. */
+  :where([data-vesta='browse-card-action'] [data-busy]) {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--vesta-color-accent) 30%, transparent),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: browse-busy 1.4s linear infinite;
+  }
+
+  @keyframes browse-busy {
+    from {
+      background-position: 100% 0;
+    }
+
+    to {
+      background-position: -100% 0;
+    }
+  }
+
+  /* Narrow cards drop the least useful stat, then give the pills their own line. */
+  @container browse-card (max-width: 320px) {
+    :where([data-vesta='browse-card-stat'][data-kind='updated']) {
+      display: none;
+    }
+  }
+
+  @container browse-card (max-width: 260px) {
+    :where([data-vesta='browse-card-foot']) {
+      flex-wrap: wrap;
+    }
+
+    :where([data-vesta='browse-card-tags']) {
+      flex-basis: 100%;
+    }
+  }
+
+  /* ---- Instance picker ---- */
+  :where([data-vesta='browse-picker']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='browse-picker-list']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-0-5);
+    max-block-size: min(50vh, 360px);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+
+  :where([data-vesta='browse-picker-row']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+  }
+
+  :where([data-vesta='browse-picker-choice']) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    padding: var(--vesta-space-1-5) var(--vesta-space-2);
+    border: 0;
+    border-radius: var(--vesta-radius-md);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='browse-picker-choice']):hover:not(:disabled) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='browse-picker-choice']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='browse-picker-choice']):disabled {
+    opacity: var(--vesta-opacity-disabled);
+  }
+
+  :where([data-vesta='browse-picker-icon']) {
+    flex: none;
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: var(--vesta-radius-sm);
+    object-fit: cover;
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='browse-picker-text']) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='browse-picker-text'] > strong) {
+    overflow: hidden;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='browse-picker-text'] > span) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='browse-picker-status']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    max-inline-size: 45%;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    text-align: end;
+  }
+
+  :where([data-vesta='browse-picker-status'][data-status='ready']),
+  :where([data-vesta='browse-picker-status'][data-status='installed']) {
+    color: var(--vesta-color-success-text);
+  }
+
+  :where([data-vesta='browse-picker-status'][data-status='update']) {
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-picker-status'][data-status='warning']) {
+    color: var(--vesta-color-warning-text);
+  }
+
+  :where([data-vesta='browse-picker-status'][data-status='incompatible']) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='browse-picker-empty']) {
+    margin: 0;
+    padding: var(--vesta-space-4);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-align: center;
+  }
+}

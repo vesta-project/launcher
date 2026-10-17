@@ -1,8 +1,7 @@
 diff --git a/dist/create-dom-collection/F5MPGch0.js b/dist/create-dom-collection/F5MPGch0.js
-index a915aa33b221ba033856b483e99fb1ad5a38e14f..afea14725afb8955e6c2802fede85f1ad57e3e8a 100644
 --- a/dist/create-dom-collection/F5MPGch0.js
 +++ b/dist/create-dom-collection/F5MPGch0.js
-@@ -91,7 +91,9 @@ function createSortBasedOnDOMPosition(items, setItems) {
+@@ -91,7 +91,9 @@
  //#endregion
  //#region src/primitives/create-dom-collection/create-dom-collection.ts
  function createDomCollection(props = {}) {
@@ -13,11 +12,19 @@ index a915aa33b221ba033856b483e99fb1ad5a38e14f..afea14725afb8955e6c2802fede85f1a
  	createSortBasedOnDOMPosition(items, setItems);
  	createEffect(() => items(), (currentItems) => {
  		props.onItemsChange?.(currentItems);
+@@ -107,7 +109,7 @@
+ 		});
+ 		return () => {
+ 			setItems((prevItems) => {
+-				const nextItems = prevItems.filter((prevItem) => untrack(() => prevItem.ref()) !== untrack(() => item.ref()));
++				const nextItems = prevItems.filter((prevItem) => prevItem !== item);
+ 				if (prevItems.length === nextItems.length) return prevItems;
+ 				return nextItems;
+ 			});
 diff --git a/dist/create-dom-collection/F5MPGch0.jsx b/dist/create-dom-collection/F5MPGch0.jsx
-index a915aa33b221ba033856b483e99fb1ad5a38e14f..afea14725afb8955e6c2802fede85f1ad57e3e8a 100644
 --- a/dist/create-dom-collection/F5MPGch0.jsx
 +++ b/dist/create-dom-collection/F5MPGch0.jsx
-@@ -91,7 +91,9 @@ function createSortBasedOnDOMPosition(items, setItems) {
+@@ -91,7 +91,9 @@
  //#endregion
  //#region src/primitives/create-dom-collection/create-dom-collection.ts
  function createDomCollection(props = {}) {
@@ -28,3 +35,132 @@ index a915aa33b221ba033856b483e99fb1ad5a38e14f..afea14725afb8955e6c2802fede85f1a
  	createSortBasedOnDOMPosition(items, setItems);
  	createEffect(() => items(), (currentItems) => {
  		props.onItemsChange?.(currentItems);
+@@ -107,7 +109,7 @@
+ 		});
+ 		return () => {
+ 			setItems((prevItems) => {
+-				const nextItems = prevItems.filter((prevItem) => untrack(() => prevItem.ref()) !== untrack(() => item.ref()));
++				const nextItems = prevItems.filter((prevItem) => prevItem !== item);
+ 				if (prevItems.length === nextItems.length) return prevItems;
+ 				return nextItems;
+ 			});
+diff --git a/dist/tabs/9RHDkQ_s.jsx b/dist/tabs/9RHDkQ_s.jsx
+--- a/dist/tabs/9RHDkQ_s.jsx
++++ b/dist/tabs/9RHDkQ_s.jsx
+@@ -174,12 +174,7 @@
+ 		shouldFocusWrap: false,
+ 		disallowEmptySelection: true
+ 	}, ref);
+-	createEffect(() => {
+-		if (ref() == null) return null;
+-		return ref().querySelector(`[data-key="${context.listState().selectedKey()}"]`);
+-	}, (selectedTab) => {
+-		if (selectedTab != null) context.setSelectedTab(selectedTab);
+-	});
++
+ 	return <Polymorphic as="div" ref={[setRef, props.ref]} role="tablist" aria-orientation={context.orientation()} data-orientation={context.orientation()} onKeyDown={composeEventHandlers([props.onKeyDown, selectableCollection.onKeyDown])} onMouseDown={composeEventHandlers([props.onMouseDown, selectableCollection.onMouseDown])} onFocusIn={composeEventHandlers([props.onFocusIn, selectableCollection.onFocusIn])} onFocusOut={composeEventHandlers([props.onFocusOut, selectableCollection.onFocusOut])} {...others} />;
+ }
+ //#endregion
+@@ -196,17 +191,18 @@
+ 		activationMode: "automatic"
+ 	}, props);
+ 	const others = omit(mergedProps, "value", "defaultValue", "onChange", "orientation", "activationMode", "disabled");
+-	const [items, setItems] = createSignal([]);
+-	const [selectedTab, setSelectedTab] = createSignal();
+-	const { DomCollectionProvider } = createDomCollection({
+-		items,
+-		onItemsChange: setItems
+-	});
++	const { items, DomCollectionProvider } = createDomCollection();
+ 	const listState = createSingleSelectListState({
+ 		selectedKey: () => mergedProps.value,
+ 		defaultSelectedKey: () => mergedProps.defaultValue,
+ 		onSelectionChange: (key) => mergedProps.onChange?.(String(key)),
+ 		dataSource: items
++	});
++	// Resolve the registered ref reactively, not a DOM query during compute (before
++	// the renderer has necessarily inserted children/applied their data-key).
++	const [selectedTab, setSelectedTab] = createSignal(() => {
++		const key = listState.selectedKey();
++		return key == null ? void 0 : listState.collection().getItem(key)?.rawValue.ref();
+ 	});
+ 	let lastSelectedKey = untrack(() => listState.selectedKey());
+ 	createEffect(() => ({
+@@ -215,7 +211,7 @@
+ 		currentSelectedKey: listState.selectedKey()
+ 	}), ({ selectionManager, collection, currentSelectedKey }) => {
+ 		let selectedKey = currentSelectedKey;
+-		if (untrack(() => selectionManager.isEmpty()) || selectedKey == null || !collection.getItem(selectedKey)) {
++		if (untrack(() => mergedProps.value) === void 0 && (untrack(() => selectionManager.isEmpty()) || selectedKey == null || !collection.getItem(selectedKey))) {
+ 			selectedKey = collection.getFirstKey();
+ 			let selectedItem = selectedKey != null ? collection.getItem(selectedKey) : void 0;
+ 			while (selectedItem?.disabled && selectedItem.key !== collection.getLastKey()) {
+@@ -223,7 +219,7 @@
+ 				selectedItem = selectedKey != null ? collection.getItem(selectedKey) : void 0;
+ 			}
+ 			if (selectedItem?.disabled && selectedKey === collection.getLastKey()) selectedKey = collection.getFirstKey();
+-			if (selectedKey != null) selectionManager.setSelectedKeys([selectedKey]);
++			if (selectedKey != null) untrack(() => selectionManager.setSelectedKeys([selectedKey]));
+ 		}
+ 		if (untrack(() => selectionManager.focusedKey()) == null || !untrack(() => selectionManager.isFocused()) && selectedKey !== lastSelectedKey) untrack(() => selectionManager.setFocusedKey(selectedKey));
+ 		lastSelectedKey = selectedKey;
+diff --git a/dist/tabs/LPQwybx8.js b/dist/tabs/LPQwybx8.js
+--- a/dist/tabs/LPQwybx8.js
++++ b/dist/tabs/LPQwybx8.js
+@@ -211,12 +211,7 @@
+ 		shouldFocusWrap: false,
+ 		disallowEmptySelection: true
+ 	}, ref);
+-	createEffect(() => {
+-		if (ref() == null) return null;
+-		return ref().querySelector(`[data-key="${context.listState().selectedKey()}"]`);
+-	}, (selectedTab) => {
+-		if (selectedTab != null) context.setSelectedTab(selectedTab);
+-	});
++
+ 	return createComponent(Polymorphic, mergeProps({
+ 		as: "div",
+ 		ref: [setRef, props.ref],
+@@ -255,17 +250,18 @@
+ 		activationMode: "automatic"
+ 	}, props);
+ 	const others = omit(mergedProps, "value", "defaultValue", "onChange", "orientation", "activationMode", "disabled");
+-	const [items, setItems] = createSignal([]);
+-	const [selectedTab, setSelectedTab] = createSignal();
+-	const { DomCollectionProvider } = createDomCollection({
+-		items,
+-		onItemsChange: setItems
+-	});
++	const { items, DomCollectionProvider } = createDomCollection();
+ 	const listState = createSingleSelectListState({
+ 		selectedKey: () => mergedProps.value,
+ 		defaultSelectedKey: () => mergedProps.defaultValue,
+ 		onSelectionChange: (key) => mergedProps.onChange?.(String(key)),
+ 		dataSource: items
++	});
++	// Resolve the registered ref reactively, not a DOM query during compute (before
++	// the renderer has necessarily inserted children/applied their data-key).
++	const [selectedTab, setSelectedTab] = createSignal(() => {
++		const key = listState.selectedKey();
++		return key == null ? void 0 : listState.collection().getItem(key)?.rawValue.ref();
+ 	});
+ 	let lastSelectedKey = untrack(() => listState.selectedKey());
+ 	createEffect(() => ({
+@@ -274,7 +270,7 @@
+ 		currentSelectedKey: listState.selectedKey()
+ 	}), ({ selectionManager, collection, currentSelectedKey }) => {
+ 		let selectedKey = currentSelectedKey;
+-		if (untrack(() => selectionManager.isEmpty()) || selectedKey == null || !collection.getItem(selectedKey)) {
++		if (untrack(() => mergedProps.value) === void 0 && (untrack(() => selectionManager.isEmpty()) || selectedKey == null || !collection.getItem(selectedKey))) {
+ 			selectedKey = collection.getFirstKey();
+ 			let selectedItem = selectedKey != null ? collection.getItem(selectedKey) : void 0;
+ 			while (selectedItem?.disabled && selectedItem.key !== collection.getLastKey()) {
+@@ -282,7 +278,7 @@
+ 				selectedItem = selectedKey != null ? collection.getItem(selectedKey) : void 0;
+ 			}
+ 			if (selectedItem?.disabled && selectedKey === collection.getLastKey()) selectedKey = collection.getFirstKey();
+-			if (selectedKey != null) selectionManager.setSelectedKeys([selectedKey]);
++			if (selectedKey != null) untrack(() => selectionManager.setSelectedKeys([selectedKey]));
+ 		}
+ 		if (untrack(() => selectionManager.focusedKey()) == null || !untrack(() => selectionManager.isFocused()) && selectedKey !== lastSelectedKey) untrack(() => selectionManager.setFocusedKey(selectedKey));
+ 		lastSelectedKey = selectedKey;

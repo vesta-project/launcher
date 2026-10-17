@@ -1,6 +1,6 @@
-import { Tabs as KobalteTabs, useTabsContext } from '@kobalte/core/tabs';
+import { Tabs as KobalteTabs } from '@kobalte/core/tabs';
 import type { JSX } from '@solidjs/web';
-import { children, createEffect, Show } from 'solid-js';
+import { children, Show } from 'solid-js';
 import './tabs.css';
 
 export interface TabsProps {
@@ -22,20 +22,9 @@ export interface TabsProps {
 /** Navigation between panels of content; the selected tab carries an underline. */
 export function Tabs(props: TabsProps) {
   const orientation = () => props.orientation ?? 'horizontal';
-  // Kobalte also "selects" on its own: re-picking the first tab while its collection
-  // re-registers, or the focused trigger after a controlled value moves. Callers that route
-  // on change would push a history entry for each, so a controlled Tabs only reports a
-  // change that follows the user's own pointer or key press.
-  let input = false;
-  let inputTimer: ReturnType<typeof setTimeout> | undefined;
-  const markInput = () => {
-    input = true;
-    clearTimeout(inputTimer);
-    inputTimer = setTimeout(() => (input = false), 0);
-  };
+  // Controlled callers (including routes) only need actual value changes.
   const change = (value: string) => {
-    if (props.value !== undefined && (!input || value === props.value)) return;
-    props.onChange?.(value);
+    if (value !== props.value) props.onChange?.(value);
   };
 
   return (
@@ -51,11 +40,6 @@ export function Tabs(props: TabsProps) {
       value={props.value}
       defaultValue={props.defaultValue}
       onChange={change}
-      ref={(element: HTMLElement) => {
-        // Capture phase: Kobalte selects inside the trigger's own handlers, before bubbling.
-        for (const type of ['pointerdown', 'pointerup', 'click', 'keydown'])
-          element.addEventListener(type, markInput, true);
-      }}
       orientation={orientation()}
     >
       {props.children}
@@ -77,7 +61,6 @@ export function TabList(props: TabListProps) {
     <KobalteTabs.List data-vesta="tab-list" aria-label={props['aria-label']} class={props.class} style={props.style}>
       {props.children}
       <KobalteTabs.Indicator data-vesta="tab-indicator" />
-      <IndicatorSync />
     </KobalteTabs.List>
   );
 }
@@ -129,25 +112,4 @@ export function TabPanel(props: TabPanelProps) {
       {props.children}
     </KobalteTabs.Content>
   );
-}
-
-/**
- * Kobalte points the indicator at the selected trigger only when the selection changes, and
- * on first render the triggers aren't in the DOM yet, so the initial tab went unmarked.
- * Re-point it once the triggers have mounted.
- */
-function IndicatorSync() {
-  const context = useTabsContext();
-  createEffect(
-    () => context.listState().selectedKey(),
-    (key) => {
-      if (key == null) return;
-      const frame = requestAnimationFrame(() => {
-        const trigger = document.getElementById(context.generateTriggerId(String(key)));
-        if (trigger) context.setSelectedTab(trigger);
-      });
-      return () => cancelAnimationFrame(frame);
-    },
-  );
-  return null;
 }
