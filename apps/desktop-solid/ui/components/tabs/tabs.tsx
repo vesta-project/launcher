@@ -1,6 +1,6 @@
-import { Tabs as KobalteTabs } from '@kobalte/core/tabs';
+import { Tabs as KobalteTabs, useTabsContext } from '@kobalte/core/tabs';
 import type { JSX } from '@solidjs/web';
-import { children, Show } from 'solid-js';
+import { children, createEffect, Show } from 'solid-js';
 import './tabs.css';
 
 export interface TabsProps {
@@ -77,6 +77,7 @@ export function TabList(props: TabListProps) {
     <KobalteTabs.List data-vesta="tab-list" aria-label={props['aria-label']} class={props.class} style={props.style}>
       {props.children}
       <KobalteTabs.Indicator data-vesta="tab-indicator" />
+      <IndicatorSync />
     </KobalteTabs.List>
   );
 }
@@ -128,4 +129,25 @@ export function TabPanel(props: TabPanelProps) {
       {props.children}
     </KobalteTabs.Content>
   );
+}
+
+/**
+ * Kobalte points the indicator at the selected trigger only when the selection changes, and
+ * on first render the triggers aren't in the DOM yet, so the initial tab went unmarked.
+ * Re-point it once the triggers have mounted.
+ */
+function IndicatorSync() {
+  const context = useTabsContext();
+  createEffect(
+    () => context.listState().selectedKey(),
+    (key) => {
+      if (key == null) return;
+      const frame = requestAnimationFrame(() => {
+        const trigger = document.getElementById(context.generateTriggerId(String(key)));
+        if (trigger) context.setSelectedTab(trigger);
+      });
+      return () => cancelAnimationFrame(frame);
+    },
+  );
+  return null;
 }
