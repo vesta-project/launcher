@@ -343,7 +343,6 @@ export const messageIds = [
   "account.empty-title",
   "account.empty-description",
   "account.manage",
-  "account.guest",
   "account.copy-failed",
   "account.action-failed",
   "account.log-out",
@@ -968,6 +967,11 @@ export const messageIds = [
   "prefs.sync.choice-semi-blocking",
   "prefs.sync.choice-fully-blocking",
   "prefs.sync.choice-none",
+  "account.copy-uuid",
+  "account.uuid-copied",
+  "account.active",
+  "account.close",
+  "account.manage-short",
 ] as const;
 
 export type MessageId = (typeof messageIds)[number];
