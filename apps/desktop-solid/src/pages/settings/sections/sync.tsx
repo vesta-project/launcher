@@ -308,12 +308,15 @@ function ValuePane(props: { id: SyncCategoryId; tabs: () => JSX.Element }) {
   );
   const shown = createMemo(() => visible().flatMap((entry) => entry.members));
   const shownAll = () => tally(shown()).all;
-  // Two keybinds on one key both fire in game; flag them the way the Controls screen does.
+  // Two vanilla keybinds on one key both fire in game; flag them the way the Controls screen does.
+  // Debug keys (only live while F3 is held) and mod keys land in 'other': mods scope their keys
+  // to screens or modifiers we can't see, so overlaps there are usually intended.
   const clashes = createMemo(() => {
     const counts = new Map<string, number>();
     if (id === 'keybinds')
       for (const item of items())
-        if (item.value !== UNBOUND_KEY) counts.set(item.value, (counts.get(item.value) ?? 0) + 1);
+        if (item.group !== 'other' && item.value !== UNBOUND_KEY)
+          counts.set(item.value, (counts.get(item.value) ?? 0) + 1);
     return counts;
   });
 
@@ -382,7 +385,7 @@ function ValuePane(props: { id: SyncCategoryId; tabs: () => JSX.Element }) {
               <SyncValueControl
                 item={item()}
                 disabled={!isOn(item())}
-                conflict={(clashes().get(item().value) ?? 0) > 1}
+                conflict={item().group !== 'other' && (clashes().get(item().value) ?? 0) > 1}
                 onSave={(value) => void saveSyncValue(id, item().key, value)}
               />
             </div>

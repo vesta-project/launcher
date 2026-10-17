@@ -112,6 +112,9 @@ const title = (text: string) =>
 /** A short label for a stored key, e.g. `key.keyboard.left.shift` → "Left Shift". Empty when unbound. */
 export function minecraftKeyLabel(value: string): string {
   if (!value || value === UNBOUND_KEY) return '';
+  // Forge stores a held modifier after the key, e.g. `key.mouse.left:SHIFT`.
+  const modified = /^(.+):(SHIFT|CONTROL|ALT)$/.exec(value);
+  if (modified) return `${title(modified[2].toLowerCase())} + ${minecraftKeyLabel(modified[1])}`;
   const mouse = /^key\.mouse\.(.+)$/.exec(value);
   if (mouse) {
     const button = mouse[1];
