@@ -1,4 +1,6 @@
 import { createSignal } from "solid-js";
+import { nativeInstances, nativeRecord } from "./native-service";
+import { preferencesFromNative } from "./native-model";
 export interface InstancePreferences {
   java: string;
   javaPath: string;
@@ -54,6 +56,10 @@ function createPreferences(id: string) {
   return { values, setValues };
 }
 export function instancePreferences(id: string) {
+  if (nativeInstances) return {
+    values: () => { const record = nativeRecord(id); return record ? preferencesFromNative(record) : { ...defaults }; },
+    setValues: (_values: InstancePreferences) => {},
+  };
   let store = stores.get(id);
   if (!store) {
     store = createPreferences(id);

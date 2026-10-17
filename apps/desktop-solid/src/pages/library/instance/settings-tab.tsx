@@ -1,3 +1,5 @@
+import { requestNativeExport } from "../../../features/instances/native-export-dialog";
+import { nativeInstances, saveNativeInstance, duplicateNativeInstance, repairNativeInstance, resetNativeInstance, deleteNativeInstance, instancePending, systemMemoryMb as nativeMemory, loadSystemMemory } from "../../../features/instances/native-service";
 import {
   Button,
   Dialog,
@@ -27,7 +29,7 @@ import {
   editInstance,
   removeInstance,
   type InstanceEntry,
-} from "../../../features/instances/fixtures";
+} from "../../../features/instances/catalog";
 import {
   instancePreferences,
   type InstancePreferences,
@@ -50,8 +52,12 @@ import {
 import "./settings-tab.css";
 
 /** Fixture host facts until the settings page reads them from the backend. */
-const systemMemoryMb = 16384;
-const javaOptions = () => [
+const previewSystemMemoryMb = 16384;
+const javaOptions = () => nativeInstances ? [
+  { value: "default", label: t("management.inherit-java") },
+  { value: "auto", label: t("management.java-auto") },
+  { value: "custom", label: t("instance-settings.java-custom") },
+] : [
   {
     value: "default",
     label: t("instance-settings.launcher-default"),
@@ -100,6 +106,7 @@ export function InstanceSettingsTab(props: {
   entry: InstanceEntry;
   onBack: () => void;
 }) {
+  const systemMemoryMb = () => nativeInstances ? nativeMemory() ?? Math.max(16384, draft().maxMemory) : previewSystemMemoryMb;
   const id = untrack(() => props.entry.instance.id);
   const store = instancePreferences(id);
   const initialName = untrack(() => props.entry.instance.name);
@@ -200,20 +207,36 @@ export function InstanceSettingsTab(props: {
   const invalid = () =>
     !name().trim() || (draft().java === "custom" && !draft().javaPath.trim());
   const busy = () =>
-    ["running", "warming", "installing"].includes(props.entry.state.kind);
-  const save = () => {
+    instancePending(id) || ["running", "warming", "installing"].includes(props.entry.state.kind);
+  const save = async () => {
+    if (nativeInstances) {
+      if (await saveNativeInstance(id, name(), icon(), draft())) {
+        setName(props.entry.instance.name); setIcon(props.entry.instance.image); setDraft({ ...store.values() });
+      }
+      return;
+    }
     store.setValues({ ...draft() });
     editInstance(id, { name: name().trim(), image: icon() });
+  };
+  const confirmManagement = async () => {
+    if (busy()) return;
+    const action = confirm();
+    setConfirm(undefined);
+    if (action === "delete") {
+      const removed = nativeInstances ? await deleteNativeInstance(id) : (removeInstance(id), true);
+      if (removed) navigate("/library");
+    } else if (nativeInstances && action === "reset") await resetNativeInstance(id);
   };
   const discard = () => {
     setDraft({ ...store.values() });
     setName(props.entry.instance.name);
     setIcon(props.entry.instance.image);
   };
-  const memoryHigh = () => draft().maxMemory >= systemMemoryMb * 0.9;
+  const memoryHigh = () => !!(nativeMemory() || !nativeInstances) && draft().maxMemory >= systemMemoryMb() * 0.9;
 
   // The section nearest the top of the scroller is the current one.
   onSettled(() => {
+    void loadSystemMemory();
     if (!scroller) return;
     const observer = new IntersectionObserver(
       (entries) => {
@@ -251,12 +274,12 @@ export function InstanceSettingsTab(props: {
     label: string,
     fallback: string,
     children: () => JSX.Element,
-  ) => (
+  ) => nativeInstances && key === "inheritMemory" ? children() : (
     <>
       <SettingRow
         label={label}
           description={
-          draft()[key] ? t("instance-settings.inherited", { fallback }) : undefined
+          draft()[key] ? nativeInstances ? t("management.inherit-java") : t("instance-settings.inherited", { fallback }) : undefined
         }
       >
         <Switch
@@ -437,7 +460,7 @@ export function InstanceSettingsTab(props: {
                 <Slider
                   label={t("instance-settings.allocation")}
                   min={512}
-                  max={systemMemoryMb}
+                  max={systemMemoryMb()}
                   step={512}
                   minStepsBetweenThumbs={1}
                   value={[draft().minMemory, draft().maxMemory]}
@@ -453,7 +476,7 @@ export function InstanceSettingsTab(props: {
                 />
                 <div data-vesta="settings-memory-scale">
                   <span>{t("instance-settings.megabytes", { amount: formatNumber(512) })}</span>
-                  <span>{t("instance-settings.gb-installed", { value: formatGb(systemMemoryMb) })}</span>
+                  <span>{nativeInstances && !nativeMemory() ? t("management.memory-unavailable") : t("instance-settings.gb-installed", { value: formatGb(systemMemoryMb()) })}</span>
                 </div>
                 <dl data-vesta="settings-memory-readout">
                   <div>
@@ -594,7 +617,11 @@ export function InstanceSettingsTab(props: {
                     aria-label={t("instance-settings.sandbox-preset")}
                     value={draft().sandboxPreset}
                     onChange={(sandboxPreset) => patch({ sandboxPreset })}
-                    options={[
+                    options={nativeInstances ? [
+                      { value: "trusted", label: t("management.sandbox-trusted") },
+                      { value: "modded", label: t("management.sandbox-modded") },
+                      { value: "paranoid", label: t("management.sandbox-paranoid") },
+                    ] : [
                       { value: "off", label: t("instance-settings.off") },
                       { value: "standard", label: t("instance-settings.standard") },
                       { value: "strict", label: t("instance-settings.strict") },
@@ -621,7 +648,7 @@ export function InstanceSettingsTab(props: {
               label={t("instance-settings.export")}
               description={t("instance-settings.export-description")}
             >
-              <Button size="sm" variant="outline" disabled={busy()}>
+              <Button size="sm" variant="outline" disabled={busy() || !nativeInstances} onClick={() => void requestNativeExport(id)}>
                 {t("instance-settings.export-action")}
               </Button>
             </SettingRow>
@@ -629,7 +656,7 @@ export function InstanceSettingsTab(props: {
               label={t("instance-settings.duplicate")}
               description={t("instance-settings.duplicate-description")}
             >
-              <Button size="sm" variant="outline" disabled={busy()}>
+              <Button size="sm" variant="outline" disabled={busy() || !nativeInstances} onClick={() => void duplicateNativeInstance(id)}>
                 {t("instance-settings.duplicate")}
               </Button>
             </SettingRow>
@@ -637,7 +664,7 @@ export function InstanceSettingsTab(props: {
               label={t("instance-settings.repair")}
               description={t("instance-settings.repair-description")}
             >
-              <Button size="sm" variant="outline" disabled={busy()}>
+              <Button size="sm" variant="outline" disabled={busy() || !nativeInstances} onClick={() => void repairNativeInstance(id)}>
                 {t("instance-settings.repair")}
               </Button>
             </SettingRow>
@@ -684,7 +711,7 @@ export function InstanceSettingsTab(props: {
             <Button size="sm" variant="ghost" onClick={discard}>
               {t("instance-settings.discard")}
             </Button>
-            <Button size="sm" tone="accent" disabled={invalid()} onClick={save}>
+            <Button size="sm" tone="accent" disabled={invalid() || busy()} onClick={() => void save()}>
               {t("instance-settings.save")}
             </Button>
           </div>
@@ -714,14 +741,8 @@ export function InstanceSettingsTab(props: {
             </Button>
             <Button
               tone="danger"
-              onClick={() => {
-                const action = confirm();
-                setConfirm(undefined);
-                if (action === "delete") {
-                  removeInstance(id);
-                  navigate("/library");
-                }
-              }}
+              disabled={busy()}
+              onClick={() => void confirmManagement()}
             >
               {confirm() === "delete" ? t("common.delete") : t("settings.reset")}
             </Button>

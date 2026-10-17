@@ -1,0 +1,21 @@
+@layer launcher {
+  :where([data-vesta="virtual-list"]) {
+    min-inline-size: 0;
+    overflow-anchor: none;
+  }
+
+  :where([data-virtual-header]) {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+  }
+
+  :where([data-virtual-body]) {
+    position: relative;
+  }
+
+  :where([data-vesta="virtual-row"]) {
+    position: absolute;
+    inset-inline: 0;
+  }
+}

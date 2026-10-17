@@ -1,0 +1,242 @@
+/*
+ * Storage page: a stacked usage bar over a legend.
+ * Hooks: [data-vesta=prefs-instances] -instance-icon -instance-name -instance-bar -instance-empty
+ * Hooks: [data-vesta=prefs-usage] -usage-head -bar -legend -actions -meter -block
+ * States: bar: data-empty, data-slim; bar part: data-rest
+ * Knobs: --part-hue
+ */
+@layer launcher {
+  :where([data-vesta='prefs-usage']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='prefs-usage-head']) {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  :where([data-vesta='prefs-usage-head'] > div) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :where([data-vesta='prefs-usage-head'] span) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-usage-head'] strong) {
+    font-size: 28px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
+  :where([data-vesta='prefs-bar']) {
+    display: flex;
+    gap: 2px;
+    block-size: 14px;
+    overflow: hidden;
+    border-radius: 7px;
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-bar'][data-slim]) {
+    block-size: 8px;
+    border-radius: 4px;
+  }
+
+  :where([data-vesta='prefs-bar'] > span) {
+    flex-basis: 0;
+    min-inline-size: 3px;
+    background: oklch(0.7 0.13 var(--part-hue, 200));
+    transition: opacity var(--vesta-duration-fast, 120ms) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='prefs-bar'][data-hovering] > span:not([data-active])) {
+    opacity: 0.35;
+  }
+
+  :where([data-vesta='prefs-bar'] > span[data-rest]) {
+    background: transparent;
+  }
+
+  :where([data-vesta='prefs-legend']) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-legend'] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 40px;
+    padding: var(--vesta-space-1) var(--vesta-space-4);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='prefs-legend'] li[data-active]) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-legend'] li:focus-visible) {
+    outline: 2px solid var(--vesta-color-accent);
+    outline-offset: -2px;
+  }
+
+  :where([data-vesta='prefs-legend-bar']) {
+    flex: none;
+    inline-size: 120px;
+    block-size: 6px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-legend-bar'] > div) {
+    block-size: 100%;
+    border-radius: 3px;
+    background: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='prefs-legend'] li + li) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-legend'] li > span) {
+    flex: 1;
+  }
+
+  :where([data-vesta='prefs-legend'] i) {
+    flex: none;
+    inline-size: 10px;
+    block-size: 10px;
+    border-radius: 3px;
+    background: oklch(0.7 0.13 var(--part-hue, 200));
+  }
+
+  :where([data-vesta='prefs-legend'] b) {
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='prefs-legend'] small) {
+    inline-size: 36px;
+    color: var(--vesta-color-text-subtle);
+    text-align: end;
+  }
+
+  :where([data-vesta='prefs-instances']) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: var(--vesta-space-1);
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-instances'] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 48px;
+    padding: var(--vesta-space-1-5, 6px) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-control, 8px);
+    font-size: var(--vesta-text-sm);
+    cursor: default;
+    transition: background-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='prefs-instances'] li:hover, [data-vesta='prefs-instances'] li:focus-visible) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-instances'] li:focus-visible) {
+    outline: 2px solid var(--vesta-color-accent);
+    outline-offset: -2px;
+  }
+
+  :where([data-vesta='prefs-instances'] li[data-empty]) {
+    opacity: 0.55;
+  }
+
+  :where([data-vesta='prefs-instance-icon']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: 7px;
+    background: var(--vesta-color-fill) center / cover no-repeat;
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='prefs-instance-name']) {
+    display: flex;
+    flex: 0 1 200px;
+    flex-direction: column;
+    min-inline-size: 0;
+    text-align: start;
+  }
+
+  :where([data-vesta='prefs-instance-name'] > span) {
+    overflow: hidden;
+    font-weight: var(--vesta-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='prefs-instance-name'] > small) {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='prefs-instance-bar']) {
+    flex: 1 1 0;
+    min-inline-size: 40px;
+    block-size: 6px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-instance-bar'] > div) {
+    block-size: 100%;
+    border-radius: 3px;
+    background: color-mix(in oklab, var(--vesta-color-accent) 85%, transparent);
+  }
+
+  :where([data-vesta='prefs-instances'] b) {
+    flex: none;
+    min-inline-size: 64px;
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--vesta-weight-medium);
+    text-align: end;
+  }
+
+  :where([data-vesta='prefs-instance-empty']) {
+    margin: 0;
+    padding: var(--vesta-space-6) var(--vesta-space-4);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-align: center;
+  }
+
+  :where([data-vesta='prefs-actions']) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-4);
+  }
+}

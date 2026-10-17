@@ -1,5 +1,5 @@
 import { Badge, Tab, TabList, TabPanel, Tabs } from "@vesta/ui";
-import { For, Show, createSignal, onCleanup, type Component } from "solid-js";
+import { For, Show, createSignal, onCleanup, untrack, type Component } from "solid-js";
 import { isServer } from "@solidjs/web";
 import { canGoBack, navigate, route } from "../../../app/router";
 import { Board } from "../../../components/board";
@@ -9,7 +9,10 @@ import { resourcesFor, worldsFor } from "../../../features/instances/details";
 import {
   findInstance,
   type InstanceEntry,
-} from "../../../features/instances/fixtures";
+} from "../../../features/instances/catalog";
+import { nativeInstances, instancesLoaded } from "../../../features/instances/native-service";
+import { useNativeDetails } from "../../../features/instances/native-details";
+import { NativeImportDialog } from "../../../features/instances/native-import-dialog";
 import { ConsoleTab } from "./console-tab";
 import { CrashTab } from "./crash-tab";
 import { InstanceHeader } from "./instance-header";
@@ -78,7 +81,7 @@ export function InstancePage(props: { id: string }) {
       keyed
       fallback={
         <Board>
-          <EmptyState icon="icons/rail/library" title={t("instance.not-found")} />
+          <Show when={!nativeInstances || instancesLoaded()} fallback={<p role="status">{t("management.loading")}</p>}><EmptyState icon="icons/rail/library" title={t("instance.not-found")} /></Show>
         </Board>
       }
     >
@@ -100,6 +103,7 @@ function useSideNav() {
 }
 
 function InstanceContent(props: { id: string }) {
+  useNativeDetails(untrack(() => props.id));
   const sideNav = useSideNav();
   const entry = () => findInstance(props.id)!;
   const [previousTab, setPreviousTab] = createSignal("overview");
@@ -126,8 +130,9 @@ function InstanceContent(props: { id: string }) {
   };
   const settings = () => route().detail === "settings";
   return (
-    <Board fixed still class="instance-board">
+    <Board fixed class="instance-board">
       <div data-vesta="instance-layout">
+        <NativeImportDialog instanceId={props.id} />
         <InstanceHeader
           entry={entry()}
           compact={settings()}

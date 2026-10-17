@@ -1,0 +1,94 @@
+/* Sign-in presentation belongs to the application; Dialog remains independent.
+ * Public hooks: account-login, account-device-code, account-login-status,
+ * account-login-spinner, account-login-feedback, account-login-error.
+ */
+@layer launcher {
+  .account-login-dialog {
+    --dialog-width: 400px;
+    --dialog-gap: var(--vesta-space-4);
+  }
+  .account-login-dialog :where([data-vesta="dialog-description"]) {
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
+  }
+  .account-login-dialog :where([data-vesta="dialog-footer"]) > :first-child {
+    margin-inline-end: auto;
+  }
+  :where([data-vesta="account-login"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="account-login"]) p { margin: 0; }
+  :where([data-vesta="account-device-code"]) {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    padding: var(--vesta-space-4) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text);
+    cursor: default;
+    transition: background var(--vesta-duration-fast), border-color var(--vesta-duration-fast);
+  }
+  :where([data-vesta="account-device-code"]) code {
+    grid-column: 2;
+    font-family: var(--vesta-font-mono);
+    font-size: clamp(var(--vesta-text-xl), 5vw, 28px);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 1.4;
+    letter-spacing: .12em;
+    user-select: text;
+  }
+  :where([data-vesta="account-device-code-icon"]) {
+    display: flex;
+    justify-self: end;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="account-device-code"]:hover) {
+    background: var(--vesta-color-fill);
+    border-color: var(--vesta-color-accent);
+  }
+  :where([data-vesta="account-device-code"]:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+  :where([data-vesta="account-login-status"]) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="account-login-spinner"]) {
+    flex: none;
+    inline-size: 12px;
+    block-size: 12px;
+    border: 2px solid var(--vesta-color-border-strong);
+    border-block-start-color: var(--vesta-color-accent-text);
+    border-radius: 50%;
+    animation: account-login-spin 1s linear infinite;
+  }
+  :where([data-vesta="account-login-feedback"]) {
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+    text-align: center;
+  }
+  :where([data-vesta="account-login-error"]) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+    padding-block: var(--vesta-space-2);
+    color: var(--vesta-color-text);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="account-login-error"]) > :where([data-vesta="icon"]) { color: var(--vesta-color-danger-text); }
+  @keyframes account-login-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="account-login-spinner"]) { animation: none; }
+    :where([data-vesta="account-device-code"]) { transition: none; }
+  }
+}

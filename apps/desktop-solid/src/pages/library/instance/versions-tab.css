@@ -1,13 +1,4 @@
 @layer launcher {
-  :where([data-vesta="version-controls"]) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--vesta-space-3);
-    align-items: center;
-  }
-  :where([data-vesta="version-controls"] > [data-vesta="field"]) {
-    min-inline-size: 160px;
-  }
   :where([data-vesta="version-actions"]) {
     display: flex;
     gap: var(--vesta-space-2);
@@ -84,13 +75,6 @@
   ) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
-  }
-  :where([data-vesta="version-release-detail"]) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    margin-block-end: var(--vesta-space-5);
   }
   :where([data-vesta="version-comparison"]) {
     display: grid;
@@ -274,5 +258,158 @@
   }
   :where([data-vesta="version-core"] [data-vesta="segmented-item"]) {
     flex-direction: column;
+  }
+}
+
+@layer launcher {
+  :where([data-vesta="pack-installed"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    margin-inline-start: auto;
+    text-align: end;
+  }
+  :where([data-vesta="pack-installed"] small:first-child) {
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-medium);
+  }
+  :where([data-vesta="version-release-heading"] > :last-child) {
+    flex: none;
+    inline-size: 180px;
+  }
+  :where([data-vesta="version-release"]) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where([data-vesta="version-release-row"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="version-release-row"] > span) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="version-release-row"] strong) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="version-release"][data-installed="true"]) {
+    box-shadow: inset 2px 0 var(--vesta-color-accent);
+  }
+  :where([data-vesta="version-muted"]) {
+    margin: var(--vesta-space-2) 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="version-empty"]) {
+    margin: 0;
+    padding: var(--vesta-space-4);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="changelog"]) {
+    max-block-size: 220px;
+    overflow: auto;
+    margin: var(--vesta-space-3) 0 0;
+    padding: var(--vesta-space-3);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="diff"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="diff-group"] h4) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0 0 var(--vesta-space-1);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="diff-group"] ul) {
+    margin: 0;
+    padding-inline-start: var(--vesta-space-5);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="keep-note"]) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-3);
+    margin-block-start: var(--vesta-space-4);
+    padding: var(--vesta-space-3);
+    border-radius: var(--vesta-radius-sm);
+    background: color-mix(in oklab, var(--vesta-color-success-text) 10%, transparent);
+  }
+  :where([data-vesta="keep-note"] > span) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+  }
+  :where([data-vesta="keep-note"] small) {
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="link-form"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+  }
+  :where([data-vesta="link-form"] > [data-vesta="version-muted"]) {
+    margin: 0;
+  }
+  :where([data-vesta="link-results"]) {
+    display: flex;
+    flex-direction: column;
+    max-block-size: 260px;
+    overflow: auto;
+  }
+  :where([data-vesta="link-result"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="link-result"]:hover) {
+    background: var(--vesta-color-fill);
+  }
+  :where([data-vesta="link-result"] > span) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="link-result"] small) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="link-result"] img, [data-vesta="link-result-art"]) {
+    flex: none;
+    inline-size: 40px;
+    block-size: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--vesta-color-fill);
+  }
+  :where([data-vesta="pack-summary"][data-compact="true"] > div) {
+    flex: 1;
+  }
+  :where([data-vesta="pack-summary"][data-compact="true"]) {
+    padding: 0;
   }
 }

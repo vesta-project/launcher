@@ -34,3 +34,8 @@
     block-size: 100%;
   }
 }
+
+@layer launcher {
+  :where([data-vesta='icon'][data-brand='modrinth']) { color:var(--vesta-brand-modrinth, #1bd96a); }
+  :where([data-vesta='icon'][data-brand='curseforge']) { color:var(--vesta-brand-curseforge, rgb(183, 91, 58)); }
+}

@@ -180,19 +180,6 @@
     flex: 1;
   }
 
-  :where([data-vesta="settings-subheading"]) {
-    margin: 0;
-    padding: var(--vesta-space-3) var(--vesta-space-4) 0;
-    border-block-start: var(--vesta-border-width) solid
-      var(--vesta-color-border);
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-semibold);
-  }
-
-  :where([data-vesta="settings-subheading"]:first-child) {
-    border-block-start: 0;
-  }
-
   /* Fields revealed by turning a default off: indented, on a faint inset, animated in. */
   :where([data-vesta="settings-reveal"]) {
     margin: 0 var(--vesta-space-2) var(--vesta-space-2);
@@ -231,15 +218,6 @@
   :where([data-vesta="settings-identity"] > div) {
     flex: 1;
     max-inline-size: 360px;
-  }
-
-  :where([data-vesta="settings-identity-icon"]) {
-    flex: none;
-    inline-size: 56px;
-    block-size: 56px;
-    border-radius: 10px;
-    background: center / cover no-repeat;
-    box-shadow: 0 0 0 1px var(--vesta-color-border-strong);
   }
 
   /* ---- Memory ---- */

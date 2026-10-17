@@ -1,0 +1,411 @@
+@layer launcher {
+  :where([data-vesta="instance-install"]) {
+    --install-content-width: 760px;
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    block-size: 100%;
+  }
+  :where([data-vesta="instance-install"][data-modpack]) {
+    --install-content-width: 1100px;
+  }
+  :where([data-vesta="install-header"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-4);
+    padding-block: var(--vesta-space-4);
+    padding-inline: max(var(--vesta-space-5), calc((100% - var(--install-content-width)) / 2));
+    border-block-end: 1px solid var(--vesta-color-border);
+  }
+  :where([data-vesta="install-header"]) h1 {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: 600;
+  }
+  :where([data-vesta="install-header"]) p {
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="install-header"]) > div:last-child {
+    display: flex;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="install-scroll"]) {
+    flex: 1;
+    min-block-size: 0;
+    overflow: auto;
+    padding: var(--vesta-space-5);
+    scrollbar-width: thin;
+  }
+  :where([data-vesta="install-columns"]) {
+    max-inline-size: 760px;
+    margin-inline: auto;
+  }
+  :where([data-vesta="install-columns"][data-modpack]) {
+    max-inline-size: 1100px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.65fr);
+    align-items: start;
+    gap: var(--vesta-space-5);
+  }
+  :where([data-vesta="install-main"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-5);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="install-section"]) {
+    padding: var(--vesta-space-4);
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface);
+  }
+  :where([data-vesta="install-section"]) h2 {
+    margin: 0 0 var(--vesta-space-4);
+    font-size: var(--vesta-text-sm);
+    font-weight: 600;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="install-section"]) p {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="install-identity"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-5);
+  }
+  :where([data-vesta="install-identity"]) [data-vesta="field"] {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  :where([data-vesta="install-identity"]) [data-vesta="icon-picker-trigger"] {
+    inline-size: calc(var(--vesta-size-control-md) * 2);
+    block-size: calc(var(--vesta-size-control-md) * 2);
+    flex: none;
+  }
+  :where([data-vesta="install-field"]) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    gap: var(--vesta-space-2);
+    margin-block-end: var(--vesta-space-4);
+  }
+  :where([data-vesta="install-field"]:last-child) {
+    margin-block-end: 0;
+  }
+  :where([data-vesta="install-field"]) > label {
+    font-size: var(--vesta-text-sm);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="install-field"]) [data-vesta="segmented-control"] {
+    flex-wrap: wrap;
+  }
+  :where([data-vesta="install-version-row"]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: end;
+    gap: var(--vesta-space-4);
+    margin-block-end: var(--vesta-space-4);
+  }
+  :where([data-vesta="install-version-row"]) > [data-vesta="install-field"] {
+    margin-block-end: 0;
+  }
+  :where([data-vesta="install-version-row"]) > [data-vesta="switch"] {
+    min-block-size: var(--vesta-size-control-md);
+    align-items: center;
+  }
+  :where([data-vesta="install-footer"]) {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--vesta-space-2);
+    padding-block: var(--vesta-space-3);
+    padding-inline: max(var(--vesta-space-5), calc((100% - var(--install-content-width)) / 2));
+    border-block-start: 1px solid var(--vesta-color-border);
+    background: var(--vesta-color-surface);
+  }
+  :where([data-vesta="install-error"]) {
+    max-inline-size: 760px;
+    margin: var(--vesta-space-4) auto 0;
+    color: var(--vesta-color-danger-text);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="install-pack-engine"]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--vesta-space-5);
+    margin: 0;
+  }
+  :where([data-vesta="install-pack-engine"]) dt {
+    font-size: var(--vesta-text-xs);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="install-pack-engine"]) dd {
+    margin: var(--vesta-space-1) 0 0;
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="install-import"]) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="install-import"]) small {
+    display: block;
+    font-size: var(--vesta-text-xs);
+    font-weight: 400;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="install-import"]) p {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="install-import"]) [role="alert"] {
+    color: var(--vesta-color-danger-text);
+    overflow-wrap: anywhere;
+  }
+  @container app (max-width: 800px) {
+    :where([data-vesta="install-columns"][data-modpack]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    :where([data-vesta="install-scroll"]) {
+      padding: var(--vesta-space-3);
+    }
+    :where([data-vesta="install-version-row"]) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--vesta-space-2);
+    }
+    :where([data-vesta="install-header"], [data-vesta="install-footer"]) {
+      padding-inline: var(--vesta-space-3);
+    }
+  }
+}
+
+@layer launcher {
+  :where([data-vesta="install-identity"]) .install-name-field {
+    --field-height: calc(var(--vesta-size-control-md) * 2);
+    --field-font-size: var(--vesta-text-xl);
+    --field-padding-x: var(--vesta-space-4);
+  }
+  :where(.install-import-dialog) {
+    --dialog-width: 520px;
+  }
+  :where(.install-import-heading) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  :where(.install-import-methods) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  :where(.install-import-launchers) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-block-start: 8px;
+  }
+  :where(.install-import-row) {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    inline-size: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--vesta-color-border);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text);
+    text-align: start;
+    cursor: default;
+    font: inherit;
+    transition:
+      background var(--vesta-duration-fast),
+      border-color var(--vesta-duration-fast);
+  }
+  :where(.install-import-row):hover:not(:disabled) {
+    background: var(--vesta-color-fill-hover);
+    border-color: var(--vesta-color-border-strong);
+  }
+  :where(.install-import-row):focus-visible {
+    outline: 2px solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+  :where(.install-import-row):disabled {
+    opacity: var(--vesta-opacity-disabled);
+  }
+  :where(.install-import-row-icon) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 36px;
+    block-size: 36px;
+    flex: none;
+    border-radius: 8px;
+    background: var(--vesta-color-surface-raised);
+    color: var(--vesta-color-text-muted);
+  }
+  :where(.install-import-row-copy) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+  :where(.install-import-row-title) {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vesta-color-text);
+  }
+  :where(.install-import-row-desc) {
+    font-size: 12px;
+    color: var(--vesta-color-text-muted);
+  }
+  :where(.install-import-launcher-stack) {
+    position: relative;
+  }
+  :where(.install-import-launcher-stack) > :first-child {
+    transform: translate(-4px, -4px);
+  }
+  :where(.install-import-launcher-stack) > :last-child {
+    position: absolute;
+    transform: translate(5px, 5px);
+  }
+  :where(.install-import-url-panel) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--vesta-color-border);
+    background: var(--vesta-color-surface-sunken);
+  }
+  :where(.install-import-url-row) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  :where(.install-import-url-row) > [data-vesta="field"] {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  :where(.install-import-row[data-brand="modrinthApp"]) .install-import-row-icon {
+    color: #1bd96a;
+  }
+  :where(.install-import-row[data-brand="curseforgeFlame"]) .install-import-row-icon {
+    color: rgb(183, 91, 58);
+  }
+}
+
+@layer launcher {
+  :where([data-vesta="install-memory-card"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface);
+  }
+  :where([data-vesta="install-memory-card"]) > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  :where([data-vesta="install-memory-card"]) h2 {
+    margin: 0;
+    font-size: var(--vesta-text-xs);
+    font-weight: 700;
+    color: var(--vesta-color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  :where([data-vesta="install-memory-card"]) header p {
+    margin: 3px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="memory-comparison"]) {
+    display: grid;
+    grid-template-columns: minmax(130px, 1.35fr) minmax(92px, 1fr);
+    gap: 8px;
+    padding-block-start: 8px;
+    border-block-start: 1px solid var(--vesta-color-border);
+  }
+  :where([data-vesta="memory-comparison"]) > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+    padding: 8px 10px;
+  }
+  :where([data-vesta="memory-comparison"]) > div[data-selected] {
+    border: 1px solid color-mix(in oklab, var(--vesta-color-accent) 28%, var(--vesta-color-border));
+    border-radius: 8px;
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-accent) 11%,
+      var(--vesta-color-surface-sunken)
+    );
+  }
+  :where([data-vesta="memory-comparison"]) span {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--vesta-color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  :where([data-vesta="memory-comparison"]) strong {
+    font-size: 12px;
+    font-weight: 700;
+  }
+  :where([data-vesta="memory-comparison"]) button {
+    inline-size: fit-content;
+    margin-block-start: 2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--vesta-color-text);
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.05;
+    cursor: default;
+  }
+  :where([data-vesta="memory-comparison"]) button:focus-visible {
+    outline: 2px solid var(--vesta-color-focus);
+    outline-offset: 3px;
+  }
+  :where([data-vesta="memory-controls"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-block-start: 8px;
+    border-block-start: 1px solid var(--vesta-color-border);
+  }
+  :where([data-vesta="memory-readout"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="memory-readout"]) strong {
+    color: var(--vesta-color-text);
+    font-size: 13px;
+  }
+  :where([data-vesta="memory-presets"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  :where([data-vesta="memory-warning"]) {
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+    color: var(--vesta-color-warning-text);
+  }
+}

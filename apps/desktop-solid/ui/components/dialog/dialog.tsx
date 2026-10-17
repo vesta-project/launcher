@@ -23,6 +23,7 @@ export interface DialogProps {
   onOpenChange?: (open: boolean) => void;
   /** Width step. Defaults to `md`. */
   size?: DialogSize;
+  class?: string;
   /** Show the header close button. Escape and the backdrop still close. Defaults to true. */
   closeButton?: boolean;
   /** Label for the close button. Defaults to "Close". */
@@ -42,7 +43,7 @@ export function Dialog(props: DialogProps) {
       <KobalteDialog.Portal mount={mount}>
         <KobalteDialog.Overlay data-vesta="dialog-backdrop" />
         <div data-vesta="dialog-positioner">
-          <KobalteDialog.Content onCloseAutoFocus={props.onCloseAutoFocus} data-vesta="dialog" data-size={props.size ?? 'md'}>
+          <KobalteDialog.Content onCloseAutoFocus={props.onCloseAutoFocus} class={props.class} data-vesta="dialog" data-size={props.size ?? 'md'}>
             <header data-vesta="dialog-header">
               <KobalteDialog.Title data-vesta="dialog-title">{props.title}</KobalteDialog.Title>
               <Show when={props.closeButton !== false}>

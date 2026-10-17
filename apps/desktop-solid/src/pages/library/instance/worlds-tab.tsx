@@ -11,6 +11,10 @@ import {
   TextField,
 } from "@vesta/ui";
 import { For, Show, createMemo, createSignal } from "solid-js";
+import { worldRouteId, worldTransferNeedsAcknowledgement } from "../../../features/instances/native-details-model";
+import { nativeInstances, nativeRecord, instancePending } from "../../../features/instances/native-service";
+import { importNativeWorld } from "../../../features/instances/native-import-dialog";
+import { openNativeWorld } from "../../../features/instances/native-details";
 import { navigate, route } from "../../../app/router";
 import { EmptyState } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
@@ -25,12 +29,13 @@ import {
   findInstance,
   instances,
   type InstanceEntry,
-} from "../../../features/instances/fixtures";
+} from "../../../features/instances/catalog";
 import { ResourcesTab } from "./resources-tab";
 import { t } from "../../../localization";
 import "./worlds-tab.css";
 
 export function WorldsTab(props: { entry: InstanceEntry }) {
+  const busy = () => nativeInstances && (instancePending(props.entry.instance.id) || ["running", "warming", "installing"].includes(props.entry.state.kind));
   const id = () => props.entry.instance.id;
   const [query, setQuery] = createSignal("");
   const [sort, setSort] = createSignal("recency");
@@ -38,6 +43,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
   const [transfer, setTransfer] = createSignal<{
     world: WorldInfo;
     move: boolean;
+    duplicate?: boolean;
   }>();
   const [destination, setDestination] = createSignal("");
   const [acknowledged, setAcknowledged] = createSignal(false);
@@ -53,29 +59,30 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         : list;
   });
   const chosen = () =>
-    worldsFor(id()).find((world) => world.id === route().item);
+    worldsFor(id()).find((world) => world.id === worldRouteId(route().item));
   const manage = (world?: WorldInfo) =>
-    navigate(`/library/${id()}/worlds${world ? `/${world.id}` : ""}`);
+    navigate(`/library/${id()}/worlds${world ? `/${encodeURIComponent(world.id)}` : ""}`);
   const target = () => findInstance(destination());
-  const mismatch = () =>
-    !!target() &&
-    target()!.instance.minecraftVersion !==
-      props.entry.instance.minecraftVersion;
-  const startTransfer = (world: WorldInfo, move: boolean) => {
+  const mismatch = () => {
+    const destinationRecord = nativeRecord(destination()), sourceRecord = nativeRecord(id());
+    if (nativeInstances && sourceRecord && destinationRecord) return worldTransferNeedsAcknowledgement(sourceRecord, destinationRecord, transfer()?.world.gameVersion);
+    return !!target() && target()!.instance.minecraftVersion !== props.entry.instance.minecraftVersion;
+  };
+  const startTransfer = (world: WorldInfo, move: boolean, duplicate = false) => {
     setAcknowledged(false);
-    setDestination("");
-    setTransfer({ world, move });
+    setDestination(duplicate ? id() : "");
+    setTransfer({ world, move, duplicate });
   };
   const actions = (world: WorldInfo, context = false) => {
     const Item = context ? ContextMenuItem : MenuItem;
     return (
       <>
         <Item onSelect={() => manage(world)}>{t("worlds.manage")}</Item>
-        <Item disabled>{t("worlds.open-folder")}</Item>
-        <Item onSelect={() => startTransfer(world, false)}>{t("worlds.copy-to-instance")}</Item>
-        <Item onSelect={() => startTransfer(world, true)}>{t("worlds.move-to-instance")}</Item>
-        <Item onSelect={() => copyWorldFixture(id(), id(), world.id)}>{t("worlds.duplicate")}</Item>
-        <Item tone="danger" onSelect={() => setDeleting(world)}>{t("worlds.delete")}</Item>
+        <Item disabled={!nativeInstances} onSelect={() => void openNativeWorld(id(), world.id)}>{t("worlds.open-folder")}</Item>
+        <Item disabled={busy() || world.running} onSelect={() => startTransfer(world, false)}>{t("worlds.copy-to-instance")}</Item>
+        <Item disabled={busy() || world.running} onSelect={() => startTransfer(world, true)}>{t("worlds.move-to-instance")}</Item>
+        <Item disabled={busy() || world.running} onSelect={() => nativeInstances ? startTransfer(world, false, true) : copyWorldFixture(id(), id(), world.id)}>{t("worlds.duplicate")}</Item>
+        <Item disabled={busy() || world.running} tone="danger" onSelect={() => setDeleting(world)}>{t("worlds.delete")}</Item>
       </>
     );
   };
@@ -108,7 +115,8 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => importer?.click()}
+                disabled={busy()}
+                onClick={() => nativeInstances ? void importNativeWorld(id()) : importer?.click()}
               >
                 {t("worlds.import")}
               </Button>
@@ -171,7 +179,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                                 >
                                   {world.mode}
                                 </span>
-                                {t("worlds.day-count", { count: world.days })}
+                                <Show when={world.days !== undefined}>{t("worlds.day-count", { count: world.days ?? 0 })}</Show>
                               </span>
                             </span>
                           </button>
@@ -226,7 +234,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                   >
                     {world().mode}
                   </span>
-                  {t("worlds.day-count", { count: world().days })} · {world().lastPlayed} · {t("worlds.megabytes", { size: world().sizeMb })}
+                  <Show when={world().days !== undefined}>{t("worlds.day-count", { count: world().days ?? 0 })} · </Show>{world().lastPlayed} · {t("worlds.megabytes", { size: world().sizeMb })}
                 </span>
               </div>
               <span data-vesta="world-detail-section">
@@ -257,7 +265,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 const world = deleting();
                 if (world) {
                   deleteWorldFixture(id(), world.id);
-                  if (route().item === world.id) manage();
+                  if (worldRouteId(route().item) === world.id) manage();
                 }
                 setDeleting(undefined);
               }}
@@ -268,7 +276,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         }
       />
       <Dialog
-        title={t(transfer()?.move ? "worlds.move-title" : "worlds.copy-title", { name: transfer()?.world.name ?? "" })}
+        title={t(transfer()?.duplicate ? "worlds.duplicate" : transfer()?.move ? "worlds.move-title" : "worlds.copy-title", { name: transfer()?.world.name ?? "" })}
         open={!!transfer()}
         onOpenChange={(open) => {
           if (!open) setTransfer(undefined);
@@ -281,7 +289,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
             </Button>
             <Button
               tone="accent"
-              disabled={!target() || (mismatch() && !acknowledged())}
+              disabled={busy() || !target() || (nativeInstances && !!target() && ["running", "warming", "installing"].includes(target()!.state.kind)) || (mismatch() && !acknowledged())}
               onClick={() => {
                 const pending = transfer();
                 if (pending && target())
@@ -290,16 +298,17 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                     destination(),
                     pending.world.id,
                     pending.move,
+                    acknowledged(),
                   );
                 setTransfer(undefined);
               }}
             >
-              {t(transfer()?.move ? "worlds.move-world" : "worlds.copy-world")}
+              {t(transfer()?.duplicate ? "worlds.duplicate" : transfer()?.move ? "worlds.move-world" : "worlds.copy-world")}
             </Button>
           </>
         }
       >
-        <Select
+        <Show when={!transfer()?.duplicate}><Select
           label={t("worlds.destination")}
           value={destination()}
           onChange={(value) => {
@@ -313,10 +322,10 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
               label: entry.instance.name,
               description: entry.instance.minecraftVersion,
             }))}
-        />
+        /></Show>
         <Show when={mismatch()}>
           <p data-vesta="world-transfer-warning">
-            {t("worlds.version-warning", { version: target()?.instance.minecraftVersion ?? "" })}
+            {t(nativeInstances ? "management.world-transfer-warning" : "worlds.version-warning", { version: target()?.instance.minecraftVersion ?? "" })}
           </p>
           <Checkbox
             label={t("worlds.backup-acknowledgement")}

@@ -1,0 +1,147 @@
+/*
+ * Java page: one card per game generation with its runtimes.
+ * Hooks: [data-vesta=prefs-java] -java-mark -java-radio -java-toolbar
+ * States: prefs-java: data-using; runtime row: data-active; test result: data-state
+ */
+@layer launcher {
+  :where([data-vesta='prefs-java-toolbar']) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='prefs-java-toolbar'] p) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='prefs-java']) {
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='prefs-java'][data-using]) {
+    border-color: color-mix(in oklab, var(--vesta-color-accent) 35%, var(--vesta-color-border));
+  }
+
+  :where([data-vesta='prefs-java'] > header) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-java'] > header > div) {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='prefs-java'] > header h3) {
+    margin: 0;
+    font-size: var(--vesta-text-md);
+  }
+
+  :where([data-vesta='prefs-java'] > header p) {
+    margin: 2px 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-java-mark']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: 10px;
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='prefs-java'][data-using] [data-vesta='prefs-java-mark']) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 20%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='prefs-java'] ul) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-java'] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 52px;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+  }
+
+  :where([data-vesta='prefs-java'] li + li) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-java'] li[data-active]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 7%, transparent);
+  }
+
+  :where([data-vesta='prefs-java-radio']) {
+    flex: none;
+    inline-size: 14px;
+    block-size: 14px;
+    border: 2px solid var(--vesta-color-border-strong);
+    border-radius: 50%;
+  }
+
+  :where([data-vesta='prefs-java'] li[data-active] [data-vesta='prefs-java-radio']) {
+    border-color: var(--vesta-color-accent);
+    background: radial-gradient(circle, var(--vesta-color-accent) 40%, transparent 45%);
+  }
+
+  :where([data-vesta='prefs-java'] li > div:not([data-vesta])) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='prefs-java'] li > div:not([data-vesta]) > span) {
+    display: flex;
+    gap: var(--vesta-space-1-5);
+  }
+
+  :where([data-vesta='prefs-java'] code) {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='prefs-java'] small) {
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-java'] small[data-state='ok']) {
+    color: var(--vesta-color-success-text, var(--vesta-color-accent-text));
+  }
+
+  :where([data-vesta='prefs-java'] small[data-state='failed']) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='prefs-java'] small[data-state='busy']) {
+    color: var(--vesta-color-text-subtle);
+  }
+}

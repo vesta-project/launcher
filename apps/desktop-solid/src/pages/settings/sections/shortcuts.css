@@ -1,0 +1,79 @@
+/*
+ * Shortcuts page: one row per command with a recordable chord.
+ * Hooks: [data-vesta=prefs-shortcuts] [data-vesta=prefs-chord] -chord-empty
+ * States: chord: data-recording
+ */
+@layer launcher {
+  :where([data-vesta='prefs-shortcuts']) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-shortcuts'] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-block-size: 48px;
+    padding: var(--vesta-space-1-5) var(--vesta-space-4);
+  }
+
+  :where([data-vesta='prefs-shortcuts'] li + li) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-shortcuts'] li > div:not([data-vesta])) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='prefs-shortcuts'] li > div:not([data-vesta]) > strong) {
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='prefs-shortcuts'] li > div:not([data-vesta]) > span) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-chord']) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 120px;
+    min-block-size: var(--vesta-size-control-sm);
+    padding-inline: var(--vesta-space-2);
+    border: var(--vesta-border-width) dashed transparent;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text-subtle);
+    font: inherit;
+    font-size: var(--vesta-text-xs);
+    cursor: default;
+  }
+
+  :where([data-vesta='prefs-chord']:hover) {
+    border-color: var(--vesta-color-border-strong);
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-chord'][data-recording]) {
+    border-color: var(--vesta-color-accent);
+    background: color-mix(in oklab, var(--vesta-color-accent) 12%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='prefs-chord-empty']) {
+    font-style: italic;
+  }
+
+  :where([data-vesta='prefs-note-line']) {
+    display: flex;
+    gap: var(--vesta-space-1-5);
+    align-items: center;
+  }
+}

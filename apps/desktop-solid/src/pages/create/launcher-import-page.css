@@ -1,0 +1,437 @@
+/* Application layout only. Fields, buttons and overlay behavior remain in /ui. */
+@layer launcher {
+  :where([data-vesta="launcher-import-page"]) {
+    --install-content-width: 1040px;
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    block-size: 100%;
+    container: import-page / inline-size;
+  }
+  :where(.launcher-import-title) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+  }
+  :where(.launcher-import-title) > div {
+    min-inline-size: 0;
+  }
+  :where(.launcher-import-title) h1 {
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="launcher-import-scroll"]) {
+    flex: 1;
+    min-block-size: 0;
+    overflow: auto;
+    padding: var(--vesta-space-5);
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+  :where([data-vesta="launcher-import-grid"]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+    align-items: start;
+    max-inline-size: var(--install-content-width);
+    margin-inline: auto;
+    gap: var(--vesta-space-6);
+  }
+  :where([data-vesta="launcher-import-controls"]) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    gap: var(--vesta-space-5);
+  }
+  :where([data-vesta="launcher-import-controls"]) [data-vesta="settings-section"] {
+    max-inline-size: none;
+    margin: 0;
+  }
+  :where([data-vesta="launcher-import-controls"]) [data-vesta="settings-section-header"] h2 {
+    margin: 0;
+  }
+  :where([data-vesta="import-field-group"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-4);
+  }
+  :where([data-vesta="launcher-import-path"]) {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="launcher-import-path"]) [data-vesta="field"] {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  :where([data-vesta="import-path-change"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="import-path-change"]) > span {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="import-inline-status"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="import-error"]) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-danger-border);
+    border-radius: var(--vesta-radius-container);
+    color: var(--vesta-color-danger-text);
+    background: color-mix(in oklab, var(--vesta-color-danger-text) 5%, transparent);
+  }
+  :where([data-vesta="import-error"]) p {
+    flex: 1;
+    margin: 0;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="import-error"]) > [data-vesta="icon"] {
+    margin-block-start: var(--vesta-space-1);
+  }
+  :where([data-vesta="launcher-import-preview"]) {
+    min-inline-size: 0;
+    margin-block-start: calc(
+      var(--vesta-text-md) *
+      var(--vesta-leading-normal) +
+      var(--vesta-space-2)
+    );
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-surface) 88%, transparent);
+    overflow: hidden;
+  }
+  :where([data-vesta="launcher-import-identity"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-4);
+  }
+  :where([data-vesta="import-instance-art"]) {
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 48px;
+    block-size: 48px;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-subtle);
+    overflow: hidden;
+  }
+  :where([data-vesta="import-instance-art"]) img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  :where([data-vesta="launcher-import-identity"]) > div:last-child {
+    min-inline-size: 0;
+  }
+  :where([data-vesta="launcher-import-identity"]) h2 {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="launcher-import-identity"]) p {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--vesta-space-3);
+    row-gap: var(--vesta-space-1);
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="launcher-import-stats"]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--vesta-space-3) var(--vesta-space-5);
+    margin: 0;
+    padding: var(--vesta-space-4);
+    border-block: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: color-mix(in oklab, var(--vesta-color-text) 2%, transparent);
+  }
+  :where([data-vesta="launcher-import-stats"]) > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="launcher-import-stats"]) dt {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    font-size: var(--vesta-text-sm);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="launcher-import-stats"]) dt span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  :where([data-vesta="launcher-import-stats"]) dd {
+    margin: 0;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+  :where([data-vesta="import-metadata"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    margin: 0;
+    padding: var(--vesta-space-4);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="import-metadata"]) > div {
+    display: grid;
+    grid-template-columns: minmax(90px, 0.7fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="import-metadata"]) dt {
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="import-metadata"]) dd {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-1-5);
+    margin: 0;
+    text-align: end;
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="import-directory"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="import-directory"]) > span {
+    font-size: var(--vesta-text-xs);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="import-directory"]) [data-vesta="button"] {
+    justify-content: flex-start;
+    max-inline-size: 100%;
+    margin-inline: calc(var(--vesta-space-2) * -1);
+  }
+  :where([data-vesta="import-directory"]) [data-vesta="button-label"] {
+    min-inline-size: 0;
+  }
+  :where(.launcher-import-game-path) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="import-preview-empty"]) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 240px;
+    padding: var(--vesta-space-5);
+    text-align: center;
+    color: var(--vesta-color-text-subtle);
+  }
+  :where([data-vesta="import-preview-empty"]) h2 {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-medium);
+  }
+  :where([data-vesta="import-preview-empty"]) p {
+    max-inline-size: 240px;
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="import-footer-selection"]) {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    align-self: center;
+    font-size: var(--vesta-text-sm);
+    color: var(--vesta-color-text-muted);
+  }
+  @container import-page (max-width: 800px) {
+    :where([data-vesta="launcher-import-grid"]) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--vesta-space-5);
+    }
+    :where([data-vesta="launcher-import-preview"]) {
+      margin-block-start: 0;
+    }
+    :where([data-vesta="launcher-import-scroll"]) {
+      padding: var(--vesta-space-3);
+    }
+  }
+  @container import-page (max-width: 520px) {
+    :where([data-vesta="launcher-import-page"] [data-vesta="install-header"]) {
+      flex-wrap: wrap;
+    }
+    :where([data-vesta="import-footer-selection"]) {
+      display: none;
+    }
+    :where([data-vesta="import-path-change"]) {
+      align-items: flex-start;
+    }
+  }
+}
+
+@layer launcher {
+  :where([data-vesta="import-path-field"]) {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  :where([data-vesta="import-path-field"]) [data-vesta="field-input"]:not(:focus) {
+    text-overflow: ellipsis;
+  }
+  :where([data-vesta="import-root-field"]) {
+    min-inline-size: 0;
+  }
+}
+@layer launcher {
+  :where([data-vesta="import-instance-list-meta"]) {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--vesta-space-3);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="import-instance-list"]) {
+    display: flex;
+    flex-direction: column;
+    max-block-size: var(--import-list-height, min(420px, 45vh));
+    overflow: auto;
+    margin-inline: calc(var(--vesta-space-4) * -1);
+    margin-block-end: calc(var(--vesta-space-4) * -1);
+    scrollbar-width: thin;
+    scroll-padding-block: var(--vesta-space-2);
+  }
+  :where([data-vesta="import-instance-row"]) {
+    position: relative;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) max-content 16px;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    cursor: default;
+  }
+  :where([data-vesta="import-instance-row"]):hover {
+    background: var(--vesta-color-fill-hover);
+  }
+  :where([data-vesta="import-instance-row"][data-selected]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 10%, transparent);
+    box-shadow: inset 2px 0 var(--vesta-color-accent);
+  }
+  :where([data-vesta="import-instance-row"]):has(:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+  :where([data-vesta="import-instance-row"]) input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  :where([data-vesta="import-instance-row"]):has(:disabled) {
+    opacity: var(--vesta-opacity-disabled);
+  }
+  :where([data-vesta="import-candidate-art"]) {
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 32px;
+    block-size: 32px;
+    overflow: hidden;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-subtle);
+  }
+  :where([data-vesta="import-candidate-art"]) img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  :where([data-vesta="import-instance-row-copy"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-0-5);
+    min-inline-size: 0;
+    flex: 1;
+  }
+  :where([data-vesta="import-instance-row-copy"]) strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-medium);
+  }
+  :where([data-vesta="import-instance-row-copy"]) > span {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-vesta="import-instance-row-date"]) {
+    inline-size: 88px;
+    text-align: end;
+    line-height: var(--vesta-leading-normal);
+  }
+  :where([data-vesta="import-instance-row"]) time {
+    flex: none;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="import-instance-row-check"]) {
+    flex: none;
+    display: grid;
+    place-items: center;
+    inline-size: 16px;
+    block-size: 16px;
+    line-height: 0;
+    color: var(--vesta-color-accent-text);
+  }
+  :where([data-vesta="import-header-actions"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+  @container import-page (max-width: 420px) {
+    :where([data-vesta="import-instance-row-date"]) {
+      inline-size: 64px;
+    }
+    :where([data-vesta="import-instance-row"]) time {
+      max-inline-size: 70px;
+      white-space: normal;
+      text-align: end;
+    }
+  }
+}

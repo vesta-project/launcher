@@ -222,7 +222,7 @@
   }
   :where([data-vesta="account-line"][data-current]) { background: var(--vesta-color-fill); }
   :where([data-vesta="account-line"][data-action="add-account"]) { color: var(--vesta-color-accent-text); }
-  :where([data-vesta="account-line"]:focus-visible, [data-vesta="account-device-code"]:focus-visible) {
+  :where([data-vesta="account-line"]:focus-visible) {
     outline: 2px solid var(--vesta-color-focus);
     outline-offset: -2px;
   }
@@ -231,21 +231,6 @@
     color: var(--vesta-color-danger-text);
     font-size: var(--vesta-text-sm);
     overflow-wrap: anywhere;
-  }
-  :where([data-vesta="account-login"]) { display: grid; gap: var(--vesta-space-3); }
-  :where([data-vesta="account-login"]) p { margin: 0; }
-  :where([data-vesta="account-device-code"]) {
-    padding: var(--vesta-space-3);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-sm);
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-text);
-    font-family: var(--vesta-font-mono);
-    font-size: var(--vesta-text-xl);
-    letter-spacing: .12em;
-    text-align: center;
-    cursor: default;
-    user-select: text;
   }
   @media (prefers-reduced-motion: reduce) {
     :where([data-vesta="profile-spinner"]) { animation: none; }

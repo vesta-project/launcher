@@ -3,11 +3,12 @@ import { BreadcrumbItem, Breadcrumbs, Button, IconButton, Menu, MenuItem, MenuSe
 import { For, Show } from 'solid-js';
 import { Icon } from '../components/icon';
 import { AccountMenu } from '../features/accounts/account-menu';
-import { findInstance } from '../features/instances/fixtures';
+import { findLauncher } from '../features/installation/launchers';
+import { findInstance } from '../features/instances/catalog';
 import { detectPlatform } from './platform';
 import { route } from './router';
 import { goBack, transitionTo } from './transition';
-import { sectionLabels } from '../pages/settings/sections';
+import { isSection, sectionLabels } from '../pages/settings/sections';
 import { t } from '../localization';
 import './titlebar.css';
 
@@ -51,14 +52,21 @@ function location(): {
         icon: 'icons/rail/browse',
         trail: [{ label: t('nav.browse') }],
       };
-    case 'create':
+    case 'create': {
+      const launcher = current.section === 'import' ? findLauncher(current.detail) : undefined;
+      if (launcher) return {
+        label: launcher.label,
+        trail: [{ label: t('nav.library'), href: '#/library' }, { label: t('settings.new-instance-title'), href: '#/create' }, { label: t('install.import-action'), href: `#/create/import/${launcher.value}` }, { label: launcher.label }],
+        back: { to: '/create', label: t('common.back') },
+      };
       return {
         label: t('settings.new-instance-title'),
         trail: [{ label: t('nav.library'), href: '#/library' }, { label: t('settings.new-instance-title') }],
         back: { to: '/library', label: t('nav.back-to-library') },
       };
+    }
     default: {
-      const sectionId = current.section ? sectionLabels[current.section] : undefined;
+      const sectionId = isSection(current.section) ? sectionLabels[current.section] : undefined;
       const section = sectionId ? t(sectionId) : undefined;
       return {
         label: t('nav.settings'),

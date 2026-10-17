@@ -14,12 +14,15 @@
 @layer launcher.tokens {
   :where(:root) {
     --vesta-accent-hue: 185;
-    --vesta-accent-chroma: 0.12;
     --vesta-neutral-hue: var(--vesta-accent-hue);
-    --vesta-neutral-chroma: 0.01;
   }
 
   :where(:root, [data-vesta-scheme='dark']) {
+    /* The theme resolves chroma per scheme; the theme's own hue wins over the user hue setting. */
+    --vesta-neutral-chroma: var(--vesta-theme-neutral-chroma-dark, 0.01);
+    --vesta-accent-chroma: var(--vesta-theme-accent-chroma-dark, 0.12);
+    --vesta-accent-h: var(--vesta-theme-accent-hue, var(--vesta-accent-hue));
+
     --vesta-neutral-1: oklch(0.16 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
     --vesta-neutral-2: oklch(0.19 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
     --vesta-neutral-3: oklch(0.225 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
@@ -33,21 +36,24 @@
     --vesta-neutral-11: oklch(0.76 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
     --vesta-neutral-12: oklch(0.95 calc(var(--vesta-neutral-chroma) * 0.4) var(--vesta-neutral-hue));
 
-    --vesta-accent-1: oklch(0.18 calc(var(--vesta-accent-chroma) * 0.15) var(--vesta-accent-hue));
-    --vesta-accent-2: oklch(0.21 calc(var(--vesta-accent-chroma) * 0.2) var(--vesta-accent-hue));
-    --vesta-accent-3: oklch(0.26 calc(var(--vesta-accent-chroma) * 0.35) var(--vesta-accent-hue));
-    --vesta-accent-4: oklch(0.3 calc(var(--vesta-accent-chroma) * 0.5) var(--vesta-accent-hue));
-    --vesta-accent-5: oklch(0.34 calc(var(--vesta-accent-chroma) * 0.6) var(--vesta-accent-hue));
-    --vesta-accent-6: oklch(0.39 calc(var(--vesta-accent-chroma) * 0.7) var(--vesta-accent-hue));
-    --vesta-accent-7: oklch(0.45 calc(var(--vesta-accent-chroma) * 0.8) var(--vesta-accent-hue));
-    --vesta-accent-8: oklch(0.52 calc(var(--vesta-accent-chroma) * 0.9) var(--vesta-accent-hue));
-    --vesta-accent-9: oklch(0.55 var(--vesta-accent-chroma) var(--vesta-accent-hue));
-    --vesta-accent-10: oklch(0.6 var(--vesta-accent-chroma) var(--vesta-accent-hue));
-    --vesta-accent-11: oklch(0.8 calc(var(--vesta-accent-chroma) * 0.85) var(--vesta-accent-hue));
-    --vesta-accent-12: oklch(0.93 calc(var(--vesta-accent-chroma) * 0.4) var(--vesta-accent-hue));
+    --vesta-accent-1: oklch(0.18 calc(var(--vesta-accent-chroma) * 0.15) var(--vesta-accent-h));
+    --vesta-accent-2: oklch(0.21 calc(var(--vesta-accent-chroma) * 0.2) var(--vesta-accent-h));
+    --vesta-accent-3: oklch(0.26 calc(var(--vesta-accent-chroma) * 0.35) var(--vesta-accent-h));
+    --vesta-accent-4: oklch(0.3 calc(var(--vesta-accent-chroma) * 0.5) var(--vesta-accent-h));
+    --vesta-accent-5: oklch(0.34 calc(var(--vesta-accent-chroma) * 0.6) var(--vesta-accent-h));
+    --vesta-accent-6: oklch(0.39 calc(var(--vesta-accent-chroma) * 0.7) var(--vesta-accent-h));
+    --vesta-accent-7: oklch(0.45 calc(var(--vesta-accent-chroma) * 0.8) var(--vesta-accent-h));
+    --vesta-accent-8: oklch(0.52 calc(var(--vesta-accent-chroma) * 0.9) var(--vesta-accent-h));
+    --vesta-accent-9: oklch(0.55 var(--vesta-accent-chroma) var(--vesta-accent-h));
+    --vesta-accent-10: oklch(0.6 var(--vesta-accent-chroma) var(--vesta-accent-h));
+    --vesta-accent-11: oklch(0.8 calc(var(--vesta-accent-chroma) * 0.85) var(--vesta-accent-h));
+    --vesta-accent-12: oklch(0.93 calc(var(--vesta-accent-chroma) * 0.4) var(--vesta-accent-h));
   }
 
   :where([data-vesta-scheme='light']) {
+    --vesta-neutral-chroma: var(--vesta-theme-neutral-chroma-light, 0.025);
+    --vesta-accent-chroma: var(--vesta-theme-accent-chroma-light, 0.16);
+
     --vesta-neutral-1: oklch(0.99 calc(var(--vesta-neutral-chroma) * 0.3) var(--vesta-neutral-hue));
     --vesta-neutral-2: oklch(0.975 calc(var(--vesta-neutral-chroma) * 0.4) var(--vesta-neutral-hue));
     --vesta-neutral-3: oklch(0.95 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
@@ -61,17 +67,41 @@
     --vesta-neutral-11: oklch(0.44 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
     --vesta-neutral-12: oklch(0.22 var(--vesta-neutral-chroma) var(--vesta-neutral-hue));
 
-    --vesta-accent-1: oklch(0.99 calc(var(--vesta-accent-chroma) * 0.1) var(--vesta-accent-hue));
-    --vesta-accent-2: oklch(0.975 calc(var(--vesta-accent-chroma) * 0.15) var(--vesta-accent-hue));
-    --vesta-accent-3: oklch(0.95 calc(var(--vesta-accent-chroma) * 0.3) var(--vesta-accent-hue));
-    --vesta-accent-4: oklch(0.92 calc(var(--vesta-accent-chroma) * 0.45) var(--vesta-accent-hue));
-    --vesta-accent-5: oklch(0.88 calc(var(--vesta-accent-chroma) * 0.55) var(--vesta-accent-hue));
-    --vesta-accent-6: oklch(0.84 calc(var(--vesta-accent-chroma) * 0.65) var(--vesta-accent-hue));
-    --vesta-accent-7: oklch(0.77 calc(var(--vesta-accent-chroma) * 0.75) var(--vesta-accent-hue));
-    --vesta-accent-8: oklch(0.68 calc(var(--vesta-accent-chroma) * 0.9) var(--vesta-accent-hue));
-    --vesta-accent-9: oklch(0.55 var(--vesta-accent-chroma) var(--vesta-accent-hue));
-    --vesta-accent-10: oklch(0.5 var(--vesta-accent-chroma) var(--vesta-accent-hue));
-    --vesta-accent-11: oklch(0.45 var(--vesta-accent-chroma) var(--vesta-accent-hue));
-    --vesta-accent-12: oklch(0.27 calc(var(--vesta-accent-chroma) * 0.6) var(--vesta-accent-hue));
+    --vesta-accent-1: oklch(0.99 calc(var(--vesta-accent-chroma) * 0.1) var(--vesta-accent-h));
+    --vesta-accent-2: oklch(0.975 calc(var(--vesta-accent-chroma) * 0.15) var(--vesta-accent-h));
+    --vesta-accent-3: oklch(0.95 calc(var(--vesta-accent-chroma) * 0.3) var(--vesta-accent-h));
+    --vesta-accent-4: oklch(0.92 calc(var(--vesta-accent-chroma) * 0.45) var(--vesta-accent-h));
+    --vesta-accent-5: oklch(0.88 calc(var(--vesta-accent-chroma) * 0.55) var(--vesta-accent-h));
+    --vesta-accent-6: oklch(0.84 calc(var(--vesta-accent-chroma) * 0.65) var(--vesta-accent-h));
+    --vesta-accent-7: oklch(0.77 calc(var(--vesta-accent-chroma) * 0.75) var(--vesta-accent-h));
+    --vesta-accent-8: oklch(0.68 calc(var(--vesta-accent-chroma) * 0.9) var(--vesta-accent-h));
+    --vesta-accent-9: oklch(0.55 var(--vesta-accent-chroma) var(--vesta-accent-h));
+    --vesta-accent-10: oklch(0.5 var(--vesta-accent-chroma) var(--vesta-accent-h));
+    --vesta-accent-11: oklch(0.45 var(--vesta-accent-chroma) var(--vesta-accent-h));
+    --vesta-accent-12: oklch(0.27 calc(var(--vesta-accent-chroma) * 0.6) var(--vesta-accent-h));
+  }
+
+  /*
+   * Achromatic accent (Mono): the accent is a high-contrast neutral so buttons stay legible.
+   * Dark mode: near-white fill; light mode: near-black fill.
+   */
+  :where([data-vesta-accent='neutral'][data-vesta-scheme='dark'], [data-vesta-accent='neutral']:not([data-vesta-scheme])) {
+    --vesta-accent-3: oklch(0.26 0 0);
+    --vesta-accent-4: oklch(0.3 0 0);
+    --vesta-accent-5: oklch(0.34 0 0);
+    --vesta-accent-9: oklch(0.93 0 0);
+    --vesta-accent-10: oklch(0.86 0 0);
+    --vesta-accent-11: oklch(0.88 0 0);
+    --vesta-accent-12: oklch(0.96 0 0);
+  }
+
+  :where([data-vesta-accent='neutral'][data-vesta-scheme='light']) {
+    --vesta-accent-3: oklch(0.95 0 0);
+    --vesta-accent-4: oklch(0.92 0 0);
+    --vesta-accent-5: oklch(0.88 0 0);
+    --vesta-accent-9: oklch(0.2 0 0);
+    --vesta-accent-10: oklch(0.3 0 0);
+    --vesta-accent-11: oklch(0.25 0 0);
+    --vesta-accent-12: oklch(0.15 0 0);
   }
 }

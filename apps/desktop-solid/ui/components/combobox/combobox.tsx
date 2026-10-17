@@ -1,6 +1,7 @@
 import { Combobox as KobalteCombobox } from '@kobalte/core/combobox';
+import { createFilter } from '@kobalte/core/i18n';
 import type { JSX } from '@solidjs/web';
-import { children, Show } from 'solid-js';
+import { children, Show, createSignal } from 'solid-js';
 import type { ControlSize } from '../../foundation/types';
 import { CheckGlyph, ChevronDownGlyph } from '../../internal/icons';
 import { useOverlayMount } from '../overlay/mount';
@@ -43,6 +44,18 @@ export interface ComboboxProps {
 
 export function Combobox(props: ComboboxProps) {
   const mount = useOverlayMount();
+  // A selected label is display text, not a search query. Only an actual input
+  // event starts filtering; programmatic value/focus updates must not narrow it.
+  const [query, setQuery] = createSignal<string | undefined>(undefined, { name: 'comboboxQuery' });
+  let isOpen = false;
+  const resetSearchForOpening = () => { if (!isOpen) setQuery(undefined); };
+  const textFilter = createFilter({ sensitivity: 'base' });
+  const matches = (option: ComboboxOption) => {
+    const text = query();
+    if (text === undefined) return true;
+    const filter = props.filter ?? 'contains';
+    return typeof filter === 'function' ? filter(option, text) : textFilter[filter](option.label, text);
+  };
   const label = children(() => props.label);
   const description = children(() => props.description);
   const error = children(() => props.error);
@@ -72,8 +85,9 @@ export function Combobox(props: ComboboxProps) {
       required={props.required}
       readOnly={props.readOnly}
       validationState={error() == null ? 'valid' : 'invalid'}
-      defaultFilter={props.filter ?? 'contains'}
-      triggerMode="input"
+      defaultFilter={matches}
+      onOpenChange={(open) => { isOpen = open; }}
+      triggerMode="focus"
       placement={props.placement ?? 'bottom-start'}
       gutter={4}
       itemComponent={(itemProps) => (
@@ -106,8 +120,12 @@ export function Combobox(props: ComboboxProps) {
       </Show>
       <KobalteCombobox.HiddenSelect />
       <KobalteCombobox.Control data-vesta="field-control">
-        <KobalteCombobox.Input data-vesta="field-input" aria-label={props['aria-label']} />
-        <KobalteCombobox.Trigger data-vesta="combobox-trigger" aria-label="Show options">
+        <KobalteCombobox.Input data-vesta="field-input" aria-label={props['aria-label']} onInput={(event) => setQuery(event.currentTarget.value)}
+          onFocus={resetSearchForOpening}
+          onClick={resetSearchForOpening}
+          onKeyDown={(event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') resetSearchForOpening(); }}
+        />
+        <KobalteCombobox.Trigger data-vesta="combobox-trigger" aria-label="Show options" onPointerDown={resetSearchForOpening}>
           <KobalteCombobox.Icon data-vesta="select-chevron">
             <ChevronDownGlyph />
           </KobalteCombobox.Icon>

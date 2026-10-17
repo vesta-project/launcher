@@ -8,17 +8,17 @@ import {
   MenuSeparator,
   Select,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   TextField,
 } from "@vesta/ui";
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { Show, createMemo, createSignal, untrack } from "solid-js";
+import { useNativeDetails } from "../../../features/instances/native-details";
+import {
+  nativeInstances,
+  instancePending,
+} from "../../../features/instances/native-service";
 import { navigate } from "../../../app/router";
 import { EmptyState } from "../../../components/empty-state";
+import { VirtualList } from "../../../components/virtual-list";
 import { Icon } from "../../../components/icon";
 import {
   applyUpdates,
@@ -30,7 +30,7 @@ import {
   type ResourceKind,
   type WorldInfo,
 } from "../../../features/instances/details";
-import type { InstanceEntry } from "../../../features/instances/fixtures";
+import type { InstanceEntry } from "../../../features/instances/catalog";
 import { selectVisible } from "../../../features/instances/interaction-utils";
 import { versionStore } from "../../../features/instances/versions";
 import { t } from "../../../localization";
@@ -43,7 +43,10 @@ const filters = () => [
   { value: "resourcepack", label: t("resources.resource-packs") },
   { value: "shader", label: t("resources.shaders") },
 ];
-const kindLabel: Record<string, "resources.mod" | "resources.pack" | "resources.shader" | "resources.datapack"> = {
+const kindLabel: Record<
+  string,
+  "resources.mod" | "resources.pack" | "resources.shader" | "resources.datapack"
+> = {
   mod: "resources.mod",
   resourcepack: "resources.pack",
   shader: "resources.shader",
@@ -72,40 +75,74 @@ function ResourceList(props: {
   scope: string;
   world: boolean;
 }) {
-  const [filter, setFilter] = createSignal<Filter>("all");
-  const [query, setQuery] = createSignal("");
-  const [selected, setSelected] = createSignal<string[]>([]);
-  const [expanded, setExpanded] = createSignal(true);
-  const [deleting, setDeleting] = createSignal<string[]>([]);
+  if (untrack(() => props.world))
+    useNativeDetails(
+      untrack(() => props.scope),
+      true,
+    );
+  const busy = () =>
+    nativeInstances &&
+    (instancePending(props.entry.instance.id) ||
+      ["running", "warming", "installing"].includes(props.entry.state.kind));
+  const [filter, setFilter] = createSignal<Filter>("all", {
+    name: "resources:filter",
+  });
+  const [query, setQuery] = createSignal("", { name: "resources:query" });
+  const [selected, setSelected] = createSignal<string[]>([], {
+    name: "resources:selection",
+  });
+  const [expanded, setExpanded] = createSignal(true, {
+    name: "resources:expanded",
+  });
+  const [deleting, setDeleting] = createSignal<string[]>([], {
+    name: "resources:deleting",
+  });
+
+  const [viewport, setViewport] = createSignal<HTMLDivElement | undefined>(
+    undefined,
+    { name: "resources:viewport" },
+  );
+  const [menuId, setMenuId] = createSignal<string | null>(null, {
+    name: "resources:menu",
+  });
 
   const all = () => resourcesFor(props.scope);
   const pack = () =>
     props.world
       ? undefined
       : versionStore(props.entry.instance.id).state().pack;
-  const visible = createMemo(() => {
-    const needle = query().trim().toLowerCase();
-    return all()
-      .filter(
-        (item) =>
-          (filter() === "all" || item.kind === filter()) &&
-          (!needle ||
-            `${item.name} ${item.author} ${item.filename}`
-              .toLowerCase()
-              .includes(needle)),
-      )
-      .toSorted((a, b) => a.name.localeCompare(b.name));
-  });
-  const bundled = () =>
-    pack() ? visible().filter((item) => item.bundled) : [];
-  const own = () =>
-    pack() ? visible().filter((item) => !item.bundled) : visible();
+  const visible = createMemo(
+    () => {
+      const needle = query().trim().toLowerCase();
+      return all()
+        .filter(
+          (item) =>
+            (filter() === "all" || item.kind === filter()) &&
+            (!needle ||
+              `${item.name} ${item.author || item.filename} ${item.filename}`
+                .toLowerCase()
+                .includes(needle)),
+        )
+        .toSorted((a, b) => a.name.localeCompare(b.name));
+    },
+    { name: "resources:visible" },
+  );
 
-  const ids = () => visible().map((item) => item.id);
-  const selectedSet = createMemo(() => {
-    const available = new Set(all().map((item) => item.id));
-    return new Set(selected().filter((id) => available.has(id)));
-  });
+  const ids = () =>
+    visible()
+      .filter((item) => !item.readOnly)
+      .map((item) => item.id);
+  const selectedSet = createMemo(
+    () => {
+      const available = new Set(
+        all()
+          .filter((item) => !item.readOnly)
+          .map((item) => item.id),
+      );
+      return new Set(selected().filter((id) => available.has(id)));
+    },
+    { name: "resources:selected" },
+  );
   const count = () => selectedSet().size;
   const allSelected = () =>
     ids().length > 0 && ids().every((id) => selectedSet().has(id));
@@ -128,103 +165,187 @@ function ResourceList(props: {
     setSelected((list) => selectVisible(list, [id], on));
   const showKind = () => !props.world && filter() === "all";
 
-  const row = (item: InstalledResource) => (
-    <TableRow
+  type ListRow =
+    | { id: string; kind: "resource"; item: InstalledResource }
+    | { id: string; kind: "pack" | "own" };
+  const groups = createMemo(
+    () => {
+      const items = visible();
+      return pack()
+        ? {
+            bundled: items.filter((item) => item.bundled),
+            own: items.filter((item) => !item.bundled),
+          }
+        : { bundled: [], own: items };
+    },
+    { name: "resources:groups" },
+  );
+  const rows = createMemo<ListRow[]>(
+    () => {
+      const { bundled, own } = groups();
+      const result: ListRow[] = [];
+      const add = (items: InstalledResource[]) =>
+        result.push(
+          ...items.map((item) => ({
+            id: `resource:${item.id}`,
+            kind: "resource" as const,
+            item,
+          })),
+        );
+      if (bundled.length) {
+        result.push({ id: "group:pack", kind: "pack" });
+        if (expanded() || query()) add(bundled);
+        if (own.length) result.push({ id: "group:own", kind: "own" });
+      }
+      add(own);
+      return result;
+    },
+    { name: "resources:rows" },
+  );
+  const row = (item: () => InstalledResource) => (
+    <div
+      data-vesta="table-row"
+      role="presentation"
       class={{
         "resource-row": true,
-        "row-selected": selectedSet().has(item.id),
-        "row-disabled": !item.enabled,
-        "row-bundled": !!item.bundled && !!pack(),
+        "row-selected": selectedSet().has(item().id),
+        "row-disabled": !item().enabled,
+        "row-bundled": !!item().bundled && !!pack(),
       }}
     >
-      <TableCell class="col-check">
+      <div data-vesta="table-cell" role="cell" class="col-check">
         <Checkbox
           size="sm"
-          aria-label={t("resources.select-resource", { name: item.name })}
-          checked={selectedSet().has(item.id)}
-          onChange={(on) => toggle(item.id, on)}
+          aria-label={t("resources.select-resource", { name: item().name })}
+          disabled={busy() || item().readOnly}
+          checked={selectedSet().has(item().id)}
+          onChange={(on) => toggle(item().id, on)}
         />
-      </TableCell>
-      <TableCell class="col-name">
+      </div>
+      <div data-vesta="table-cell" role="cell" class="col-name">
         <div data-vesta="resource-identity">
-          <img src={item.icon} alt="" loading="lazy" draggable="false" />
+          <img
+            src={item().icon}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            width={28}
+            height={28}
+            draggable="false"
+          />
           <span data-vesta="resource-copy">
-            <span data-vesta="resource-title">{item.name}</span>
+            <span data-vesta="resource-title">{item().name}</span>
             <span data-vesta="resource-sub">
               <Show when={showKind()}>
-                <span data-vesta="resource-kind" data-kind={item.kind}>
-                  {t(kindLabel[item.kind])}
+                <span data-vesta="resource-kind" data-kind={item().kind}>
+                  {t(kindLabel[item().kind])}
                 </span>
               </Show>
-              <span data-vesta="resource-file" title={item.filename}>
-                {item.author}
+              <span data-vesta="resource-file" title={item().filename}>
+                {item().author || item().filename}
               </span>
             </span>
           </span>
         </div>
-      </TableCell>
-      <TableCell class="col-version">
+      </div>
+      <div data-vesta="table-cell" role="cell" class="col-version">
         <span data-vesta="resource-version">
-          <span title={item.version}>{item.version}</span>
-          <Show when={item.update}>
+          <span title={item().version}>{item().version}</span>
+          <Show when={item().update}>
             <IconButton
               size="sm"
               variant="ghost"
               class="resource-update"
-              label={t("common.update-to", { version: item.update! })}
+              label={t("common.update-to", { version: item().update! })}
               icon={<Icon name="icons/actions/download" />}
-              onClick={() => applyUpdates(props.scope, [item.id])}
+              disabled={busy()}
+              onClick={() => applyUpdates(props.scope, [item().id])}
             />
           </Show>
         </span>
-      </TableCell>
-      <TableCell class="col-size" numeric>
-        {formatSize(item.sizeKb)}
-      </TableCell>
-      <TableCell class="col-enabled">
+      </div>
+      <div data-vesta="table-cell" role="cell" class="col-size" data-numeric="">
+        {formatSize(item().sizeKb)}
+      </div>
+      <div data-vesta="table-cell" role="cell" class="col-enabled">
         <Switch
           size="sm"
-          aria-label={t("resources.enable-resource", { name: item.name })}
-          checked={item.enabled}
-          onChange={(on) => setResourcesEnabled(props.scope, [item.id], on)}
+          aria-label={t("resources.enable-resource", { name: item().name })}
+          disabled={busy() || item().readOnly}
+          checked={item().enabled}
+          onChange={(on) => setResourcesEnabled(props.scope, [item().id], on)}
         />
-      </TableCell>
-      <TableCell class="col-menu">
-        <Menu
-          placement="bottom-end"
-          trigger={(menuProps) => (
+      </div>
+      <div data-vesta="table-cell" role="cell" class="col-menu">
+        <Show
+          when={menuId() === item().id}
+          fallback={
             <IconButton
-              {...menuProps}
               variant="ghost"
               size="sm"
               tooltip={false}
-              label={t("resources.actions", { name: item.name })}
+              label={t("resources.actions", { name: item().name })}
               icon={<Icon name="icons/content/ellipsis-v" />}
+              aria-haspopup="menu"
+              onClick={() => setMenuId(item().id)}
             />
-          )}
+          }
         >
-          <Show when={item.update}>
-            <MenuItem
-              icon={<Icon name="icons/actions/download" />}
-              onSelect={() => applyUpdates(props.scope, [item.id])}
-            >
-              {t("common.update-to", { version: item.update! })}
-            </MenuItem>
-          </Show>
-          <MenuItem icon={<Icon name="icons/content/folder" />} disabled>
-            {t("resources.show-in-folder")}
-          </MenuItem>
-          <MenuSeparator />
-          <MenuItem
-            tone="danger"
-            icon={<Icon name="icons/actions/delete" />}
-            onSelect={() => setDeleting([item.id])}
+          <Menu
+            defaultOpen
+            onOpenChange={(open) => {
+              if (!open) {
+                // Let Kobalte restore focus before replacing its trigger.
+                requestAnimationFrame(() => {
+                  const cell = document.activeElement?.closest(
+                    '[data-vesta="table-cell"]',
+                  );
+                  setMenuId(null);
+                  queueMicrotask(() =>
+                    cell
+                      ?.querySelector("button")
+                      ?.focus({ preventScroll: true }),
+                  );
+                });
+              }
+            }}
+            placement="bottom-end"
+            trigger={(menuProps) => (
+              <IconButton
+                {...menuProps}
+                variant="ghost"
+                size="sm"
+                tooltip={false}
+                label={t("resources.actions", { name: item().name })}
+                icon={<Icon name="icons/content/ellipsis-v" />}
+              />
+            )}
           >
-            {t("resources.remove")}
-          </MenuItem>
-        </Menu>
-      </TableCell>
-    </TableRow>
+            <Show when={item().update}>
+              <MenuItem
+                disabled={busy() || item().readOnly}
+                icon={<Icon name="icons/actions/download" />}
+                onSelect={() => applyUpdates(props.scope, [item().id])}
+              >
+                {t("common.update-to", { version: item().update! })}
+              </MenuItem>
+            </Show>
+            <MenuItem icon={<Icon name="icons/content/folder" />} disabled>
+              {t("resources.show-in-folder")}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              disabled={busy() || item().readOnly}
+              tone="danger"
+              icon={<Icon name="icons/actions/delete" />}
+              onSelect={() => setDeleting([item().id])}
+            >
+              {t("resources.remove")}
+            </MenuItem>
+          </Menu>
+        </Show>
+      </div>
+    </div>
   );
 
   return (
@@ -251,9 +372,11 @@ function ResourceList(props: {
                 size="sm"
                 class="resources-search"
                 aria-label={t("resources.search")}
-                placeholder={
-                  t(props.world ? "resources.search-datapacks" : "resources.search-resources")
-                }
+                placeholder={t(
+                  props.world
+                    ? "resources.search-datapacks"
+                    : "resources.search-resources",
+                )}
                 value={query()}
                 onChange={setQuery}
               />
@@ -262,6 +385,7 @@ function ResourceList(props: {
                   size="sm"
                   variant="outline"
                   icon={<Icon name="icons/actions/download" />}
+                  disabled={busy()}
                   onClick={() => applyUpdates(props.scope, updates())}
                 >
                   {t("resources.update-all-count", { count: updates().length })}
@@ -293,14 +417,18 @@ function ResourceList(props: {
                   size="sm"
                   variant="outline"
                   icon={<Icon name="icons/actions/download" />}
+                  disabled={busy()}
                   onClick={() => applyUpdates(props.scope, selectedUpdates())}
                 >
-                  {t("resources.update-count", { count: selectedUpdates().length })}
+                  {t("resources.update-count", {
+                    count: selectedUpdates().length,
+                  })}
                 </Button>
               </Show>
               <Button
                 size="sm"
                 variant="outline"
+                disabled={busy()}
                 onClick={() =>
                   setResourcesEnabled(
                     props.scope,
@@ -313,6 +441,7 @@ function ResourceList(props: {
               </Button>
               <Button
                 size="sm"
+                disabled={busy()}
                 tone="danger"
                 icon={<Icon name="icons/actions/delete" />}
                 onClick={() => setDeleting([...selectedSet()])}
@@ -324,15 +453,15 @@ function ResourceList(props: {
         </Show>
       </div>
 
-      <div data-vesta="resources-list">
+      <div data-vesta="resources-list" tabindex={0} ref={setViewport}>
         <Show
           when={visible().length}
           fallback={
             <EmptyState
               icon="icons/content/layers"
-              title={
-                t(query() ? "resources.no-matches" : "resources.none-installed")
-              }
+              title={t(
+                query() ? "resources.no-matches" : "resources.none-installed",
+              )}
               description={
                 query()
                   ? t("resources.try-another-search")
@@ -341,90 +470,175 @@ function ResourceList(props: {
             />
           }
         >
-          <Table class="resource-table">
-            <colgroup>
-              <col class="col-check" />
-              <col />
-              <col class="col-version" />
-              <col class="col-size" />
-              <col class="col-enabled" />
-              <col class="col-menu" />
-            </colgroup>
-            <TableHeader>
-              <TableRow>
-                <TableHead class="col-check">
-                  <Checkbox
-                    size="sm"
-                    aria-label={t("resources.select-all")}
-                    checked={allSelected()}
-                    indeterminate={someSelected()}
-                    onChange={(on) =>
-                      setSelected((list) => selectVisible(list, ids(), on))
-                    }
-                  />
-                </TableHead>
-                <TableHead class="col-name">{t("resources.name-column")}</TableHead>
-                <TableHead class="col-version">{t("resources.version-column")}</TableHead>
-                <TableHead class="col-size" numeric>
-                  {t("resources.size-column")}
-                </TableHead>
-                <TableHead class="col-enabled">{t("resources.enabled-column")}</TableHead>
-                <TableHead class="col-menu">
-                  <span data-vesta="sr-only">{t("resources.actions-column")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <Show when={pack() && bundled().length}>
-                <TableRow class="resource-group-row resource-pack-row">
-                  <TableCell colspan={6}>
-                    <button
-                      type="button"
-                      data-vesta="resource-group"
-                      aria-expanded={expanded() ? "true" : "false"}
-                      onClick={() => setExpanded(!expanded())}
+          <div data-vesta="table-scroll" class="resource-table">
+            <div
+              data-vesta="table"
+              role="table"
+              aria-label={t("resources.search-resources")}
+              aria-colcount={6}
+              aria-rowcount={rows().length + 1}
+            >
+              <VirtualList
+                items={rows()}
+                key={(row) => row.id}
+                rowHeight={44}
+                getHeight={(index) =>
+                  rows()[index].kind === "pack"
+                    ? 52
+                    : rows()[index].kind === "own"
+                      ? 36
+                      : 44
+                }
+                scrollElement={viewport()}
+                pinnedKey={menuId() ? `resource:${menuId()}` : null}
+                rowRole="row"
+                headerHeight={32}
+                headerHook="table-header"
+                bodyHook="table-body"
+                header={
+                  <div data-vesta="table-row" role="row" aria-rowindex={1}>
+                    <div
+                      data-vesta="table-head"
+                      role="columnheader"
+                      class="col-check"
                     >
-                      <Icon
-                        name="icons/controls/chevron-down"
-                        size={12}
-                        class="resource-group-chevron"
+                      <Checkbox
+                        size="sm"
+                        aria-label={t("resources.select-all")}
+                        checked={allSelected()}
+                        indeterminate={someSelected()}
+                        onChange={(on) =>
+                          setSelected((list) => selectVisible(list, ids(), on))
+                        }
                       />
-                      <img src={props.entry.instance.image} alt="" />
-                      <strong>{pack()?.name}</strong>
-                      <span data-vesta="resource-group-meta">
-                        {t("resources.modpack-group", { version: pack()?.installed ?? "" })}
+                    </div>
+                    <div
+                      data-vesta="table-head"
+                      role="columnheader"
+                      class="col-name"
+                    >
+                      {t("resources.name-column")}
+                    </div>
+                    <div
+                      data-vesta="table-head"
+                      role="columnheader"
+                      class="col-version"
+                    >
+                      {t("resources.version-column")}
+                    </div>
+                    <div
+                      data-vesta="table-head"
+                      role="columnheader"
+                      class="col-size"
+                      data-numeric=""
+                    >
+                      {t("resources.size-column")}
+                    </div>
+                    <div
+                      data-vesta="table-head"
+                      role="columnheader"
+                      class="col-enabled"
+                    >
+                      {t("resources.enabled-column")}
+                    </div>
+                    <div
+                      data-vesta="table-head"
+                      role="columnheader"
+                      class="col-menu"
+                    >
+                      <span data-vesta="sr-only">
+                        {t("resources.actions-column")}
                       </span>
-                      <span data-vesta="resource-group-count">
-                        {bundled().length}
-                      </span>
-                    </button>
-                  </TableCell>
-                </TableRow>
-                <Show when={expanded() || query()}>
-                  <For each={bundled()}>{row}</For>
-                </Show>
-                <Show when={own().length}>
-                  <TableRow class="resource-group-row">
-                    <TableCell colspan={6}>
-                      <div data-vesta="resource-group">
-                        <Icon name="icons/content/layers" size={14} />
-                        <strong>{t("resources.added-by-you")}</strong>
-                        <span data-vesta="resource-group-count">
-                          {own().length}
-                        </span>
+                    </div>
+                  </div>
+                }
+              >
+                {(entry) => (
+                  <Show
+                    when={entry().kind === "resource"}
+                    fallback={
+                      <div
+                        data-vesta="table-row"
+                        role="presentation"
+                        class={{
+                          "resource-group-row": true,
+                          "resource-pack-row": entry().kind === "pack",
+                        }}
+                      >
+                        <div
+                          data-vesta="table-cell"
+                          role="cell"
+                          aria-colspan={6}
+                        >
+                          <Show
+                            when={entry().kind === "pack"}
+                            fallback={
+                              <div data-vesta="resource-group">
+                                <Icon name="icons/content/layers" size={14} />
+                                <strong>{t("resources.added-by-you")}</strong>
+                                <span data-vesta="resource-group-count">
+                                  {groups().own.length}
+                                </span>
+                              </div>
+                            }
+                          >
+                            <button
+                              type="button"
+                              data-vesta="resource-group"
+                              aria-expanded={expanded() ? "true" : "false"}
+                              onClick={() => setExpanded(!expanded())}
+                            >
+                              <Icon
+                                name="icons/controls/chevron-down"
+                                size={12}
+                                class="resource-group-chevron"
+                              />
+                              <img
+                                src={props.entry.instance.image}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                width={32}
+                                height={32}
+                              />
+                              <strong>{pack()?.name}</strong>
+                              <span data-vesta="resource-group-meta">
+                                {t("resources.modpack-group", {
+                                  version:
+                                    pack()?.installedLabel ??
+                                    pack()?.installed ??
+                                    "",
+                                })}
+                              </span>
+                              <span data-vesta="resource-group-count">
+                                {groups().bundled.length}
+                              </span>
+                            </button>
+                          </Show>
+                        </div>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                </Show>
-              </Show>
-              <For each={own()}>{row}</For>
-            </TableBody>
-          </Table>
+                    }
+                  >
+                    {row(
+                      () =>
+                        (entry() as Extract<ListRow, { kind: "resource" }>)
+                          .item,
+                    )}
+                  </Show>
+                )}
+              </VirtualList>
+            </div>
+          </div>
         </Show>
       </div>
 
       <Dialog
-        title={t(deleting().length === 1 ? "resources.remove-title-one" : "resources.remove-title-other", { count: deleting().length })}
+        title={t(
+          deleting().length === 1
+            ? "resources.remove-title-one"
+            : "resources.remove-title-other",
+          { count: deleting().length },
+        )}
         size="sm"
         description={t("resources.remove-description")}
         open={deleting().length > 0}
@@ -438,6 +652,7 @@ function ResourceList(props: {
             </Button>
             <Button
               tone="danger"
+              disabled={busy()}
               onClick={() => {
                 removeResources(props.scope, deleting());
                 setSelected((list) =>

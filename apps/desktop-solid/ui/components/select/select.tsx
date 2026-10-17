@@ -1,6 +1,6 @@
 import { Select as KobalteSelect } from "@kobalte/core/select";
 import type { JSX } from "@solidjs/web";
-import { children, createMemo, Show } from "solid-js";
+import { children, createMemo, Show, untrack } from "solid-js";
 import type { ControlSize } from "../../foundation/types";
 import { CheckGlyph, ChevronDownGlyph } from "../../internal/icons";
 import { useOverlayMount } from "../overlay/mount";
@@ -48,6 +48,9 @@ export function Select(props: SelectProps) {
   const error = children(() => props.error);
   // Keep option identities stable across reads, including callers with mapped JSX props.
   const options = createMemo(() => props.options);
+  // JSX getters may create compiler-owned computations. Evaluate them in our
+  // owned memo, never for the first time inside Kobalte's effect callback.
+  const value = createMemo(() => props.value);
   const find = (value: string | undefined) =>
     options().find((option) => option.value === value);
 
@@ -64,15 +67,15 @@ export function Select(props: SelectProps) {
       optionValue="value"
       optionTextValue="label"
       optionDisabled="disabled"
-      {...(props.value !== undefined
-        ? { value: find(props.value) ?? null }
+      {...(value() !== undefined
+        ? { value: find(value()) ?? null }
         : {})}
-      {...(props.value === undefined && props.defaultValue !== undefined
+      {...(value() === undefined && props.defaultValue !== undefined
         ? { defaultValue: find(props.defaultValue) }
         : {})}
       onChange={(option) => {
         // Controlled selection synchronization must not echo an unchanged value.
-        if (option && option.value !== props.value)
+        if (option && option.value !== untrack(value))
           props.onChange?.(option.value);
       }}
       placeholder={props.placeholder ?? "Select…"}

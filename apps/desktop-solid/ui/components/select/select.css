@@ -71,7 +71,7 @@
   :where([data-vesta='select-content']) {
     --menu-min-width: var(--kb-popper-anchor-width, 180px);
 
-    z-index: var(--vesta-z-dropdown);
+    z-index: max(var(--vesta-z-dropdown), calc(var(--vesta-z-modal) + 1));
   }
 
   :where([data-vesta='select-listbox']) {

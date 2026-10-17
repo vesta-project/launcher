@@ -1,3 +1,5 @@
+import { nativeDetails, mutateNativeResources, deleteNativeWorld, transferNativeWorld } from './native-details';
+import { nativeInstances, nativeRecord } from "./native-service";
 import { createSignal } from "solid-js";
 import art1 from "../../assets/images/placeholders/placeholder-image1.jpg";
 import art2 from "../../assets/images/placeholders/placeholder-image2.png";
@@ -25,8 +27,9 @@ export interface InstalledResource {
   /** Newer version available, if any. */
   update?: string;
   sizeKb: number;
+  readOnly?: boolean;
   /** Where it was installed from. */
-  source: "Modrinth" | "CurseForge" | "Local";
+  source: "Modrinth" | "CurseForge" | "Smithed" | "Local";
   /** Square icon art. */
   icon: string;
 }
@@ -36,15 +39,18 @@ export interface WorldInfo {
   name: string;
   lastPlayed: string;
   sizeMb: number;
-  mode: "Survival" | "Creative" | "Hardcore";
+  mode: "Survival" | "Creative" | "Hardcore" | "Unknown";
   image: string;
   /** Days played in game. */
-  days: number;
+  days?: number;
+  running?: boolean;
+  gameVersion?: string;
 }
 
 export interface Screenshot {
   id: string;
   src: string;
+  path?: string;
   title: string;
   date: string;
 }
@@ -190,6 +196,7 @@ function makeWorlds(id: string): WorldInfo[] {
 }
 
 export function screenshotsFor(id: string): Screenshot[] {
+  if (nativeInstances) return nativeDetails(id).screenshots;
   if (id === "server") return [];
   const seed = hash(id);
   const dates = [
@@ -211,6 +218,10 @@ export function screenshotsFor(id: string): Screenshot[] {
 }
 
 export function statsFor(id: string): InstanceStats {
+  if (nativeInstances) { const record = nativeRecord(id); return {
+    playtimeMinutes: record?.totalPlaytimeMinutes ?? 0, lastPlayed: record?.lastPlayed ?? '',
+    sizeMb: 0, java: record?.javaPath ?? '', memoryMb: record?.maxMemory ?? 0, created: record?.createdAt ?? '',
+  }; }
   const seed = hash(id);
   return {
     playtimeMinutes: 90 + (seed % 5400),
@@ -291,6 +302,7 @@ function store(id: string) {
 }
 
 export const resourcesFor = (id: string) => {
+  if (nativeInstances) return nativeDetails(id).resources;
   const [list] = store(id);
   return list();
 };
@@ -309,8 +321,9 @@ function worldStore(id: string) {
   }
   return store;
 }
-export const worldsFor = (id: string) => worldStore(id).worlds();
+export const worldsFor = (id: string) => nativeInstances ? nativeDetails(id).worlds : worldStore(id).worlds();
 export function deleteWorldFixture(id: string, worldId: string) {
+  if (nativeInstances) return deleteNativeWorld(id, worldId);
   worldStore(id).setWorlds((list) =>
     list.filter((world) => world.id !== worldId),
   );
@@ -320,7 +333,9 @@ export function copyWorldFixture(
   to: string,
   worldId: string,
   move = false,
+  acknowledged = false,
 ) {
+  if (nativeInstances) return transferNativeWorld(from, to, worldId, move, acknowledged);
   const source = worldsFor(from).find((world) => world.id === worldId);
   if (!source) return;
   const copy = {
@@ -352,23 +367,6 @@ export function unlinkBundledResources(id: string, remove: boolean) {
       : list.map((item) => ({ ...item, bundled: false })),
   );
 }
-export function setResourceVersion(
-  id: string,
-  resourceId: string,
-  version: string,
-) {
-  update(id, (list) =>
-    list.map((item) =>
-      item.id === resourceId
-        ? {
-            ...item,
-            version,
-            update: item.update === version ? undefined : item.update,
-          }
-        : item,
-    ),
-  );
-}
 
 function update(
   instanceId: string,
@@ -383,16 +381,19 @@ export function setResourcesEnabled(
   ids: string[],
   enabled: boolean,
 ) {
+  if (nativeInstances) return mutateNativeResources(instanceId, ids, "toggle", enabled);
   update(instanceId, (list) =>
     list.map((item) => (ids.includes(item.id) ? { ...item, enabled } : item)),
   );
 }
 
 export function removeResources(instanceId: string, ids: string[]) {
+  if (nativeInstances) return mutateNativeResources(instanceId, ids, "delete");
   update(instanceId, (list) => list.filter((item) => !ids.includes(item.id)));
 }
 
 export function applyUpdates(instanceId: string, ids: string[]) {
+  if (nativeInstances) return mutateNativeResources(instanceId, ids, "update");
   update(instanceId, (list) =>
     list.map((item) =>
       ids.includes(item.id) && item.update

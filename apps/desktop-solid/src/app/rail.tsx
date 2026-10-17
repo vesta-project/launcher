@@ -2,7 +2,7 @@ import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, mergeEleme
 import { For, Show } from 'solid-js';
 import { Icon } from '../components/icon';
 import { AccountMenu } from '../features/accounts/account-menu';
-import { movePin, pinnedInstances, playInstance, retryInstance, togglePin } from '../features/instances/fixtures';
+import { movePin, pinnedInstances, playInstance, retryInstance, togglePin } from '../features/instances/catalog';
 import { route } from './router';
 import { transitionTo } from './transition';
 import { mainNav, settingsNav, type NavItem } from './routes';

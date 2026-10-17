@@ -1,0 +1,26 @@
+/*
+ * 3D skin viewer.
+ * Hooks: [data-vesta=skin-viewer] [data-vesta=skin-viewer-canvas]
+ */
+@layer launcher {
+  :where([data-vesta='skin-viewer']) {
+    position: relative;
+    inline-size: 100%;
+    min-block-size: 16rem;
+    overflow: hidden;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  :where([data-vesta='skin-viewer']:active) {
+    cursor: grabbing;
+  }
+
+  :where([data-vesta='skin-viewer-canvas']) {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    background: transparent;
+  }
+}

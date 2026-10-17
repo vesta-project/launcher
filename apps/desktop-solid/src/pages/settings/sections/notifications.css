@@ -1,0 +1,68 @@
+/*
+ * Notifications page: subscription rows.
+ * Hooks: [data-vesta=prefs-feeds] -feed-icon [data-vesta=prefs-add-feed] [data-vesta=prefs-note-line]
+ */
+@layer launcher {
+  :where([data-vesta='prefs-feeds']) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-feeds'] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 56px;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+  }
+
+  :where([data-vesta='prefs-feeds'] li + li) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-feeds'] li > div:not([data-vesta])) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='prefs-feeds'] li > div:not([data-vesta]) > span) {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='prefs-feed-icon']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='prefs-add-feed']) {
+    display: flex;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-4);
+  }
+
+  :where([data-vesta='prefs-add-feed'] > [data-vesta='field']) {
+    flex: 1;
+  }
+
+  :where([data-vesta='prefs-note-line']) {
+    margin: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-3);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+}

@@ -100,6 +100,8 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     padding-inline: var(--dialog-padding);
+    /* Content never touches the dividers or the dialog edge. */
+    padding-block: var(--dialog-padding);
     background:
       linear-gradient(var(--overlay-bg), var(--overlay-bg)) top / 100% 2px no-repeat local,
       linear-gradient(var(--overlay-bg), var(--overlay-bg)) bottom / 100% 2px no-repeat local,

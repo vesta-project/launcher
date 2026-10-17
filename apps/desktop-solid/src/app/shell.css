@@ -1,7 +1,7 @@
 /*
  * Shell frame.
  * Hooks: [data-vesta=shell] -body, [data-vesta=scene]
- * Knobs: --shell-spot-strength (0% for a flat solid canvas), --shell-narrow (hide the rail below this width)
+ * Theme background and static grain are resolved by the application theme engine.
  *
  * The background is the solid canvas with soft spots of the three brand colours;
  * a theme can retune the strength or the brand stops.
@@ -11,34 +11,56 @@
  */
 @layer launcher {
   :where([data-vesta='shell']) {
-    --shell-spot-strength: 13%;
-    --shell-bg: var(--vesta-color-canvas);
+    position: relative;
+    isolation: isolate;
 
     container: app / inline-size;
     display: flex;
     flex-direction: column;
     block-size: 100dvh;
-    background:
-      radial-gradient(
-        55% 50% at 0% 0%,
-        color-mix(in oklab, var(--vesta-brand-start) var(--shell-spot-strength), transparent),
-        transparent 72%
-      ),
-      radial-gradient(
-        50% 55% at 100% 100%,
-        color-mix(in oklab, var(--vesta-brand-mid) var(--shell-spot-strength), transparent),
-        transparent 72%
-      ),
-      radial-gradient(
-        30% 30% at 62% 108%,
-        color-mix(in oklab, var(--vesta-brand-end) calc(var(--shell-spot-strength) * 0.9), transparent),
-        transparent 75%
-      ),
-      var(--shell-bg);
+    background: var(--vesta-theme-background, none), var(--vesta-color-canvas-fill, var(--vesta-color-canvas));
   }
 
-  :where([data-vesta-scheme='light']) :where([data-vesta='shell']) {
-    --shell-spot-strength: 17%;
+  /*
+   * Grain is texture, not tint: one static noise layer blended over the canvas (the token is 0 for
+   * flat material). It sits behind content inside the shell's isolated group.
+   */
+  :where([data-vesta='shell'])::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: var(--vesta-theme-grain-opacity, 0);
+    background-image: var(--vesta-theme-grain-image, none);
+    background-size: 128px 128px;
+    mix-blend-mode: soft-light;
+  }
+
+  @supports (mix-blend-mode: overlay) {
+    :where([data-vesta='shell'])::after {
+      mix-blend-mode: overlay;
+    }
+  }
+
+  /*
+   * With a native window effect the page itself must not paint: the shell draws the one
+   * translucent canvas so the effect shows through. Effect 'none' (and flat material) stays opaque.
+   */
+  :where(
+    :root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']),
+    :root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']) body
+  ) {
+    background: transparent;
+  }
+
+  /* Chrome (titlebar, rail) is a slightly tinted layer above the canvas, below the board. */
+  [data-vesta='titlebar'] {
+    background: var(--vesta-color-chrome);
+  }
+
+  [data-vesta='rail'] {
+    --rail-bg: var(--vesta-color-chrome);
   }
 
   :where([data-vesta='shell-body']) {
@@ -70,14 +92,6 @@
    * own layers so they hold still; the page crossfades quickly, and the instance art
    * morphs between the card and the header instead of fading.
    */
-  :where([data-vesta='titlebar']) {
-    view-transition-name: titlebar;
-  }
-
-  :where([data-vesta='rail']) {
-    view-transition-name: rail;
-  }
-
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation-duration: 200ms;
@@ -105,5 +119,24 @@
     ::view-transition-new(*) {
       animation: none;
     }
+  }
+}
+
+@layer launcher {
+  :where([data-vesta='instance-service-error']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    color: var(--vesta-color-danger-text);
+    background: var(--vesta-color-surface-raised);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta='instance-service-error']) > span {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    max-block-size: 5lh;
+    overflow-y: auto;
   }
 }

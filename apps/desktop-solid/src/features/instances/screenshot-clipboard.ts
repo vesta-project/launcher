@@ -1,5 +1,9 @@
+import { invoke } from '@tauri-apps/api/core';
+import { nativeInstances } from './native-service';
+
 /** Browser preview equivalent of the native screenshot-copy action. */
-export async function copyScreenshot(src: string): Promise<void> {
+export async function copyScreenshot(src: string, path?: string): Promise<void> {
+  if (nativeInstances && path) { await invoke('copy_screenshot_to_clipboard', { path }); return; }
   const png = (async () => {
     const response = await fetch(src);
     if (!response.ok) throw new Error("Could not read screenshot");

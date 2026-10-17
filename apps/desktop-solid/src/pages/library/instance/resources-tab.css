@@ -1,5 +1,5 @@
 /*
- * Resources tab: toolbar over a fixed-layout table that always fits the pane.
+ * Resources tab: toolbar over windowed grid rows with table semantics.
  * Hooks: [data-vesta=resources] -toolbar -tools -selection -list
  *        [data-vesta=resource-identity] -copy -title -sub -kind -file -version
  *        [data-vesta=resource-group] -group-meta -group-count
@@ -99,30 +99,39 @@
     background: transparent;
   }
 
-  .resource-table [data-vesta="table"] {
-    inline-size: 100%;
-    table-layout: fixed;
+  .resource-table [data-vesta="table-row"] {
+    display: grid;
+    grid-template-columns: calc(var(--instance-gutter) + 24px) minmax(
+        0,
+        1fr
+      ) 128px 84px 56px calc(var(--instance-gutter) + 32px);
+    block-size: 100%;
   }
 
-  /* The outer columns carry the gutter, so the table lines up with the toolbar. */
-  .resource-table col.col-check {
-    inline-size: calc(var(--instance-gutter) + 24px);
+  .resource-table :where([data-vesta="table-cell"], [data-vesta="table-head"]) {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    box-sizing: border-box;
   }
 
-  .resource-table col.col-version {
-    inline-size: 128px;
+  .resource-table :where([data-numeric], .col-menu) {
+    justify-content: flex-end;
   }
 
-  .resource-table col.col-size {
-    inline-size: 84px;
+  .resource-table .resource-group-row {
+    display: block;
   }
 
-  .resource-table col.col-enabled {
-    inline-size: 56px;
+  .resource-table .resource-group-row [data-vesta="table-cell"] {
+    block-size: 100%;
   }
 
-  .resource-table col.col-menu {
-    inline-size: calc(var(--instance-gutter) + 32px);
+  .resource-table [data-vesta="resource-group"] {
+    box-sizing: border-box;
+    block-size: 100%;
+    white-space: nowrap;
+    overflow: hidden;
   }
 
   .resource-table .col-check {
@@ -155,6 +164,7 @@
   .resource-table .resource-row [data-vesta="table-cell"] {
     block-size: var(--resource-row-height);
     vertical-align: middle;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
   .resource-table .row-selected,
@@ -366,12 +376,26 @@
 
   /* ---- Narrower panes: drop size, then version ---- */
   @container pane (max-width: 640px) {
+    .resource-table [data-vesta="table-row"] {
+      grid-template-columns: calc(var(--instance-gutter) + 24px) minmax(
+          0,
+          1fr
+        ) 128px 56px calc(var(--instance-gutter) + 32px);
+    }
+
     .resource-table .col-size {
       display: none;
     }
   }
 
   @container pane (max-width: 480px) {
+    .resource-table [data-vesta="table-row"] {
+      grid-template-columns: calc(var(--instance-gutter) + 24px) minmax(
+          0,
+          1fr
+        ) 56px calc(var(--instance-gutter) + 32px);
+    }
+
     .resource-table .col-version {
       display: none;
     }

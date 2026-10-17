@@ -1,0 +1,89 @@
+/*
+ * Application integration of the UI token contract. Portals inherit from the document root.
+ * Materials are structural, not an opacity number:
+ *   glass   clear, light blur, translucent, bright top edge, stronger borders, grain texture
+ *   frosted heavy diffusion, milky tint, softer borders, grain texture
+ *   flat    opaque, crisp border, small shadow, no blur or grain, window effect ignored
+ */
+@layer launcher {
+  /* Background accents are a little stronger on light canvases. */
+  :where(:root) {
+    --vesta-bg-strength: 1;
+    --vesta-edge-highlight: inset 0 0 0 0 transparent;
+  }
+  :where(:root[data-vesta-scheme='light']) {
+    --vesta-bg-strength: 1.25;
+  }
+
+  /* Native window effect: the canvas lets it show through, unless the material is flat. */
+  :where(:root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat'])) {
+    --vesta-canvas-alpha: var(--vesta-theme-canvas-opacity, 100%);
+  }
+
+  /* Glass: a thin bright edge at the top of surfaces. */
+  :where(:root[data-vesta-material='glass']) {
+    --vesta-edge-highlight: inset 0 1px 0 oklch(1 0 0 / 0.08);
+  }
+  :where(:root[data-vesta-material='glass'][data-vesta-scheme='light']) {
+    --vesta-edge-highlight: inset 0 1px 0 oklch(1 0 0 / 0.6);
+  }
+
+  :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
+    --overlay-backdrop: var(--vesta-theme-overlay-blur, none);
+    --overlay-bg: color-mix(in oklab, var(--vesta-color-overlay) var(--vesta-theme-overlay-opacity, 100%), transparent);
+    -webkit-backdrop-filter: var(--overlay-backdrop);
+  }
+
+  /* Glass: clear and light, with a bright edge and a stronger border. */
+  :root[data-vesta-material='glass'] :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
+    --overlay-border-color: color-mix(in oklab, var(--vesta-color-border-strong) 70%, transparent);
+    --overlay-shadow: var(--vesta-edge-highlight), var(--vesta-shadow-lg);
+  }
+
+  /* Frosted: milky diffusion, soft border. Grain (all but flat) is the ::after overlay below. */
+  :root[data-vesta-material='frosted'] :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
+    --overlay-bg: color-mix(
+      in oklab,
+      color-mix(in oklab, var(--vesta-color-overlay), var(--vesta-neutral-12) 4%) var(--vesta-theme-overlay-opacity, 100%),
+      transparent
+    );
+    --overlay-border-color: color-mix(in oklab, var(--vesta-color-border) 55%, transparent);
+    --overlay-shadow: var(--vesta-shadow-lg);
+  }
+  :root[data-vesta-material='frosted'][data-vesta-scheme='light'] :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
+    --overlay-bg: color-mix(
+      in oklab,
+      color-mix(in oklab, var(--vesta-color-overlay), white 30%) var(--vesta-theme-overlay-opacity, 100%),
+      transparent
+    );
+  }
+  :root:not([data-vesta-material='flat']) :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
+    position: relative;
+    isolation: isolate;
+  }
+  :root:not([data-vesta-material='flat']) :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog'])::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: var(--vesta-theme-grain-opacity, 0);
+    background-image: var(--vesta-theme-grain-image, none);
+    background-size: 128px 128px;
+    mix-blend-mode: soft-light;
+  }
+  @supports (mix-blend-mode: overlay) {
+    :root:not([data-vesta-material='flat']) :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog'])::after {
+      mix-blend-mode: overlay;
+    }
+  }
+
+  /* Flat: opaque, crisp 1px border, small shadow. */
+  :root[data-vesta-material='flat'] :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
+    --overlay-bg: var(--vesta-color-overlay);
+    --overlay-border-color: var(--vesta-color-border-strong);
+    --overlay-shadow: var(--vesta-shadow-md);
+    border-width: 1px;
+  }
+}

@@ -6,8 +6,20 @@
  * so they stay readable.
  */
 @layer launcher.tokens {
+  :where(:root) {
+    --vesta-shadow-sm: var(--vesta-theme-shadow-sm, 0 1px 2px oklch(0 0 0 / 0.12));
+    --vesta-shadow-md: var(--vesta-theme-shadow-md, 0 4px 12px oklch(0 0 0 / 0.16));
+    --vesta-shadow-lg: var(--vesta-theme-shadow-lg, 0 12px 32px oklch(0 0 0 / 0.24));
+  }
   :where(:root, [data-vesta-scheme='dark']) {
+    /*
+     * Layers, back to front: canvas (most transparent) < chrome (titlebar, rail) < panel (board)
+     * < dense surfaces. Surfaces hold text, inputs, tables and consoles, so they are always opaque.
+     */
     --vesta-color-canvas: var(--vesta-neutral-1);
+    --vesta-color-canvas-fill: color-mix(in oklab, var(--vesta-neutral-1) var(--vesta-canvas-alpha, 100%), transparent);
+    --vesta-color-chrome: color-mix(in oklab, color-mix(in oklab, var(--vesta-neutral-2), var(--vesta-accent-9) 5%) var(--vesta-theme-chrome-opacity, 100%), transparent);
+    --vesta-color-panel: color-mix(in oklab, color-mix(in oklab, var(--vesta-neutral-1) 40%, var(--vesta-neutral-2)) var(--vesta-theme-panel-opacity, 100%), transparent);
     --vesta-color-surface: var(--vesta-neutral-2);
     --vesta-color-surface-raised: var(--vesta-neutral-3);
     --vesta-color-surface-sunken: var(--vesta-neutral-1);
@@ -29,10 +41,14 @@
   }
 
   :where([data-vesta-scheme='light']) {
-    --vesta-color-canvas: var(--vesta-neutral-2);
+    /* Vibrant light: canvas and chrome carry the theme hue; surfaces stay near-white. */
+    --vesta-color-canvas: var(--vesta-neutral-3);
+    --vesta-color-canvas-fill: color-mix(in oklab, var(--vesta-neutral-3) var(--vesta-canvas-alpha, 100%), transparent);
+    --vesta-color-chrome: color-mix(in oklab, color-mix(in oklab, var(--vesta-neutral-4), var(--vesta-accent-9) 5%) var(--vesta-theme-chrome-opacity, 100%), transparent);
+    --vesta-color-panel: color-mix(in oklab, var(--vesta-neutral-2) var(--vesta-theme-panel-opacity, 100%), transparent);
     --vesta-color-surface: var(--vesta-neutral-1);
     --vesta-color-surface-raised: var(--vesta-neutral-1);
-    --vesta-color-surface-sunken: var(--vesta-neutral-3);
+    --vesta-color-surface-sunken: var(--vesta-neutral-4);
     --vesta-color-text: var(--vesta-neutral-12);
     --vesta-color-text-muted: var(--vesta-neutral-11);
     --vesta-color-text-subtle: var(--vesta-neutral-9);
@@ -48,5 +64,13 @@
     /* Near-white surface + light accent tint. */
     --vesta-color-overlay: color-mix(in oklab, var(--vesta-neutral-1), var(--vesta-accent-9) 8%);
     --vesta-color-tooltip: color-mix(in oklab, var(--vesta-neutral-1), var(--vesta-accent-9) 12%);
+  }
+
+  /* Achromatic accent (Mono): dark text on the near-white dark-mode accent, white on near-black. */
+  :where([data-vesta-accent='neutral'][data-vesta-scheme='dark'], [data-vesta-accent='neutral']:not([data-vesta-scheme])) {
+    --vesta-color-on-accent: oklch(0.18 0 0);
+  }
+  :where([data-vesta-accent='neutral'][data-vesta-scheme='light']) {
+    --vesta-color-on-accent: oklch(0.99 0 0);
   }
 }

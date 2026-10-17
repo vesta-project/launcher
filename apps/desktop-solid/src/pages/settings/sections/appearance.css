@@ -1,0 +1,125 @@
+/* Theme choices and hue control. Hooks: prefs-themes, prefs-theme, prefs-theme-swatch, prefs-theme-check, prefs-material-note.
+ * Selection: aria-pressed. Swatch treatment: data-theme. No library tools until custom themes exist. */
+@layer launcher {
+  /* Square tiles: a live sample of each theme, its name below. */
+  :where([data-vesta='prefs-themes']) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 96px);
+    gap: var(--vesta-space-4) var(--vesta-space-3);
+    margin: 0;
+    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-theme']) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--vesta-space-2);
+    inline-size: 96px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-align: center;
+    cursor: default;
+  }
+
+  /* The sample resolves its colours from the theme's own inputs, for the current colour mode. */
+  :where([data-vesta='prefs-theme-swatch']) {
+    --tile-nc: var(--tile-nc-dark);
+    --tile-ac: var(--tile-ac-dark);
+    --tile-al: var(--tile-al-dark);
+    --tile-canvas: oklch(0.17 var(--tile-nc) var(--tile-nh));
+    --tile-raised: oklch(0.28 var(--tile-nc) var(--tile-nh));
+    --tile-edge: oklch(0.38 var(--tile-nc) var(--tile-nh));
+
+    position: relative;
+    display: block;
+    inline-size: 96px;
+    block-size: 96px;
+    overflow: hidden;
+    border: 1px solid var(--tile-edge);
+    border-radius: calc(var(--tile-radius) + 4px);
+    background:
+      radial-gradient(60% 55% at 0% 0%, var(--tile-bg-a), transparent 75%),
+      radial-gradient(55% 60% at 100% 100%, var(--tile-bg-b), transparent 75%),
+      radial-gradient(35% 35% at 62% 105%, var(--tile-bg-c), transparent 75%), var(--tile-canvas);
+    transition: box-shadow var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where(:root[data-vesta-scheme='light'] [data-vesta='prefs-theme-swatch']) {
+    --tile-nc: var(--tile-nc-light);
+    --tile-ac: var(--tile-ac-light);
+    --tile-al: var(--tile-al-light);
+    --tile-canvas: oklch(0.95 var(--tile-nc) var(--tile-nh));
+    --tile-raised: oklch(0.995 calc(var(--tile-nc) * 0.3) var(--tile-nh));
+    --tile-edge: oklch(0.85 var(--tile-nc) var(--tile-nh));
+  }
+
+  /* A raised surface block. */
+  :where([data-vesta='prefs-theme-sample-surface']) {
+    position: absolute;
+    inset-inline: 14px;
+    inset-block: 34px 14px;
+    border: 1px solid var(--tile-edge);
+    border-radius: var(--tile-radius);
+    background: var(--tile-raised);
+  }
+
+  /* The accent dot. */
+  :where([data-vesta='prefs-theme-sample-accent']) {
+    position: absolute;
+    inset-inline-start: 14px;
+    inset-block-start: 12px;
+    inline-size: 14px;
+    block-size: 14px;
+    border-radius: 50%;
+    background: oklch(var(--tile-al) var(--tile-ac) var(--tile-h));
+  }
+
+  :where([data-vesta='prefs-theme']:hover [data-vesta='prefs-theme-swatch']) {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
+  }
+
+  :where([data-vesta='prefs-theme'][aria-pressed='true'] [data-vesta='prefs-theme-swatch']) {
+    border-color: var(--vesta-color-accent);
+    box-shadow: 0 0 0 2px var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='prefs-theme-check']) {
+    position: absolute;
+    inset-block-start: 6px;
+    inset-inline-end: 6px;
+    display: grid;
+    place-items: center;
+    inline-size: 20px;
+    block-size: 20px;
+    border-radius: 50%;
+    background: var(--vesta-color-accent);
+    color: var(--vesta-color-on-accent);
+  }
+
+  :where([data-vesta='prefs-theme-name']) {
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='prefs-material-note']) {
+    margin: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-3);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    line-height: var(--vesta-leading-normal);
+  }
+
+  /* The hue slider's track shows the hue it picks. */
+  .prefs-hue [data-vesta='slider-fill'] {
+    display: none;
+  }
+
+  .prefs-hue [data-vesta='slider-track'] {
+    background: linear-gradient(to right in oklch longer hue, oklch(0.7 0.14 0), oklch(0.7 0.14 360));
+  }
+}

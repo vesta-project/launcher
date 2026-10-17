@@ -1,14 +1,18 @@
 import { Button, IconButton, Menu, MenuItem } from "@vesta/ui";
 import { Show } from "solid-js";
-import { instanceArtTransitionName } from "../../../app/transition";
 import { Icon } from "../../../components/icon";
 import { formatPlaytime, statsFor } from "../../../features/instances/details";
 import {
   playInstance,
   retryInstance,
   type InstanceEntry,
-} from "../../../features/instances/fixtures";
+} from "../../../features/instances/catalog";
 import { route } from "../../../app/router";
+import {
+  nativeInstances,
+  instancePending,
+  openNativeInstanceFolder,
+} from "../../../features/instances/native-service";
 import { t } from "../../../localization";
 import "./instance-header.css";
 
@@ -57,7 +61,11 @@ function primaryAction(entry: InstanceEntry) {
       };
     case "interrupted":
       return {
-        label: state.recovery ? t("instance.resume-recovery") : t("instance.resume"),
+        label: state.initial
+          ? t("management.install")
+          : state.recovery
+            ? t("instance.resume-recovery")
+            : t("instance.resume"),
         icon: "icons/actions/play",
         tone: "accent" as const,
         disabled: !!state.resuming,
@@ -93,6 +101,7 @@ function notice(entry: InstanceEntry) {
         action: undefined,
       };
     case "interrupted":
+      if (state.initial) return undefined;
       return {
         tone: "warning",
         title: state.recovery
@@ -108,8 +117,7 @@ function notice(entry: InstanceEntry) {
 
 /**
  * Compact instance header: art band, identity, facts and actions in one row.
- * The art layer carries the shared view-transition name, so opening the page from a
- * card morphs the card's art into this band.
+ * Navigation captures the whole header so its identity stays with the art.
  */
 export function InstanceHeader(props: {
   entry: InstanceEntry;
@@ -128,14 +136,11 @@ export function InstanceHeader(props: {
   return (
     <header
       data-vesta="instance-header"
+      data-instance-id={instance().id}
       data-compact={props.compact ? "" : undefined}
       style={{ "--header-image": `url('${instance().image}')` } as never}
     >
-      <div
-        data-vesta="instance-header-art"
-        style={{ "view-transition-name": instanceArtTransitionName }}
-        aria-hidden="true"
-      />
+      <div data-vesta="instance-header-art" aria-hidden="true" />
 
       <div data-vesta="instance-header-main">
         <img
@@ -155,7 +160,9 @@ export function InstanceHeader(props: {
               {instance().modloader}
             </span>
             <span data-vesta="instance-header-playtime">
-              {t("instance.played-time", { time: formatPlaytime(statsFor(instance().id).playtimeMinutes) })}
+              {t("instance.played-time", {
+                time: formatPlaytime(statsFor(instance().id).playtimeMinutes),
+              })}
             </span>
           </p>
         </div>
@@ -179,13 +186,19 @@ export function InstanceHeader(props: {
               />
             )}
           >
-            <MenuItem icon={<Icon name="icons/content/folder" />} disabled>
+            <MenuItem
+              icon={<Icon name="icons/content/folder" />}
+              disabled={!nativeInstances}
+              onSelect={() =>
+                void openNativeInstanceFolder(props.entry.instance.id)
+              }
+            >
               {t("instance.open-folder")}
             </MenuItem>
           </Menu>
           <Button
             tone={action().tone}
-            disabled={action().disabled}
+            disabled={action().disabled || instancePending(instance().id)}
             icon={<Icon name={action().icon} />}
             onClick={action().run}
           >

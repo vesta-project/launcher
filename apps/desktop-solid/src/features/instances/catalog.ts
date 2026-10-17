@@ -7,9 +7,11 @@ import art5 from "../../assets/images/placeholders/placeholder-image5.png";
 import art6 from "../../assets/images/placeholders/placeholder-image6.png";
 import type { InstanceCardData, InstanceCardState } from "./instance-card";
 
+import { nativeInstances, nativeEntries, runInstance, resumeNativeInstance, clearNativeCrash, deleteNativeInstance } from './native-service';
+
 /**
- * Fixture instances for building the UI before the backend is wired.
- * Replace with the real instance store; the card only needs data plus a state.
+ * Application catalog: native records in Tauri, isolated preview data in browsers.
+ * Components consume the same small identity/state Interface in either environment.
  */
 const seed: { instance: InstanceCardData; state: InstanceCardState }[] = [
   {
@@ -113,7 +115,7 @@ const seed: { instance: InstanceCardData; state: InstanceCardState }[] = [
   },
 ];
 
-const PIN_KEY = "vesta:fixture:pins";
+const PIN_KEY = nativeInstances ? "vesta:instance:pins" : "vesta:fixture:pins";
 function loadPins(): string[] {
   try {
     const saved: unknown =
@@ -126,13 +128,14 @@ function loadPins(): string[] {
           saved.filter(
             (id): id is string =>
               typeof id === "string" &&
-              seed.some((entry) => entry.instance.id === id),
+              (nativeInstances ? /^\d+$/.test(id) : seed.some((entry) => entry.instance.id === id)),
           ),
         ),
       ];
   } catch {
     /* A damaged preview preference should not prevent startup. */
   }
+  if (nativeInstances) return [];
   return seed
     .filter((entry) => entry.instance.pinned)
     .map((entry) => entry.instance.id);
@@ -152,10 +155,11 @@ const [items, setItems] = createSignal(
   { name: "fixtureInstances" },
 );
 
-export const instances = items;
+export const instances = () => nativeInstances ? nativeEntries().map((entry) => ({ ...entry,
+  instance: { ...entry.instance, pinned: pinIds().includes(entry.instance.id) } })) : items();
 export type InstanceEntry = (typeof seed)[number];
 export const findInstance = (id: string | undefined) =>
-  items().find((entry) => entry.instance.id === id);
+  instances().find((entry) => entry.instance.id === id);
 export const pinnedInstances = () =>
   pinIds().flatMap((id) => {
     const entry = findInstance(id);
@@ -180,6 +184,7 @@ const update = (id: string, state: InstanceCardState) =>
 
 /** Stand-in for the real launch/stop flows: each click advances the state. */
 export function playInstance(id: string) {
+  if (nativeInstances) { void runInstance(id); return; }
   const current = findInstance(id)?.state;
   if (!current) return;
   switch (current.kind) {
@@ -198,6 +203,7 @@ export function playInstance(id: string) {
 
 /** Stand-in for retry/resume: shows the busy overlay, then settles. */
 export function retryInstance(id: string, label: string) {
+  if (nativeInstances) { void resumeNativeInstance(id); return; }
   update(id, { kind: "installing", label });
   window.setTimeout(() => update(id, { kind: "idle" }), 2200);
 }
@@ -236,6 +242,7 @@ export function editInstance(
     Pick<InstanceCardData, "name" | "minecraftVersion" | "modloader" | "image">
   >,
 ) {
+  if (nativeInstances) throw new Error('Native edits must use the instance service');
   setItems((list) =>
     list.map((entry) =>
       entry.instance.id === id
@@ -246,10 +253,12 @@ export function editInstance(
 }
 
 export function removeInstance(id: string) {
+  if (nativeInstances) return deleteNativeInstance(id);
   savePins(pinIds().filter((pin) => pin !== id));
   setItems((list) => list.filter((entry) => entry.instance.id !== id));
 }
 
 export function clearInstanceCrash(id: string) {
+  if (nativeInstances) return clearNativeCrash(id);
   if (findInstance(id)?.state.kind === "crashed") update(id, { kind: "idle" });
 }

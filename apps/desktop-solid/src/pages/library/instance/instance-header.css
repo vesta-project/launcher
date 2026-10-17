@@ -21,12 +21,13 @@
     text-shadow: 0 1px 6px oklch(0 0 0 / 0.6);
   }
 
-  /* The blurred art is a separate layer so it alone morphs during the page transition. */
+  /* Keep art behind the header identity and controls. */
   :where([data-vesta="instance-header-art"]) {
     position: absolute;
     inset: 0;
     z-index: 0;
     background:
+      linear-gradient(to left, oklch(0 0 0 / 0.45), transparent 45%),
       linear-gradient(to top, oklch(0 0 0 / 0.78), oklch(0 0 0 / 0.28) 80%),
       var(--header-image, none) center 35% / cover no-repeat;
   }
@@ -203,18 +204,7 @@
     }
   }
 
-  @keyframes vesta-rise {
-    from {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    :where([data-vesta="instance-header-copy"]),
-    :where([data-vesta="instance-header-actions"]) {
-      animation: none;
-    }
     :where(
       [data-vesta="instance-header-main"],
       [data-vesta="instance-header-icon"]

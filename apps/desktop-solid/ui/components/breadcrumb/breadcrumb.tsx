@@ -1,6 +1,6 @@
 import { Breadcrumbs as KobalteBreadcrumbs } from '@kobalte/core/breadcrumbs';
 import type { JSX } from '@solidjs/web';
-import { children, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { ChevronRightGlyph } from '../../internal/icons';
 import './breadcrumb.css';
 
@@ -16,19 +16,20 @@ export interface BreadcrumbsProps {
 
 /** Hierarchy trail for the current location. */
 export function Breadcrumbs(props: BreadcrumbsProps) {
+  // The separator getter creates a fresh glyph for each separator slot. A cached
+  // DOM node would be moved between slots, leaving only the last arrow visible.
   // Always pass translations — Solid 2 merge() treats explicit `undefined` as set
   // and would wipe Kobalte’s default, crashing on `translations.breadcrumbs`.
   const translations = () => ({
     breadcrumbs: props['aria-label'] ?? 'Breadcrumbs',
   });
-  const separator = children(() => props.separator ?? <ChevronRightGlyph />);
 
   return (
     <KobalteBreadcrumbs
       data-vesta="breadcrumbs"
       class={props.class}
       style={props.style}
-      separator={separator()}
+      separator={props.separator ?? <ChevronRightGlyph />}
       translations={translations()}
     >
       <ol data-vesta="breadcrumb-list">{props.children}</ol>

@@ -1,0 +1,102 @@
+/*
+ * Sandbox page: preset cards, extra folders.
+ * Hooks: [data-vesta=prefs-presets] [data-vesta=prefs-folders] [data-vesta=prefs-add-folder]
+ * States: preset button: aria-checked, data-preset
+ */
+@layer launcher {
+  :where([data-vesta='prefs-presets']) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0 var(--vesta-space-3) var(--vesta-space-3);
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-presets'] button) {
+    --preset-hue: 150;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    align-items: flex-start;
+    inline-size: 100%;
+    block-size: 100%;
+    padding: var(--vesta-space-3);
+    border: 2px solid transparent;
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='prefs-presets'] button[data-preset='modded']) {
+    --preset-hue: 80;
+  }
+
+  :where([data-vesta='prefs-presets'] button[data-preset='paranoid']) {
+    --preset-hue: 25;
+  }
+
+  :where([data-vesta='prefs-presets'] button > [data-vesta='icon']) {
+    color: oklch(0.75 0.14 var(--preset-hue));
+  }
+
+  :where([data-vesta='prefs-presets'] button > span) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-presets'] button:hover) {
+    background: var(--vesta-color-fill-hover);
+  }
+
+  :where([data-vesta='prefs-presets'] button[aria-checked='true']) {
+    border-color: oklch(0.7 0.14 var(--preset-hue));
+    background: oklch(0.7 0.14 var(--preset-hue) / 0.12);
+  }
+
+  :where([data-vesta='prefs-folders']) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='prefs-folders'] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-block-size: 40px;
+    padding: var(--vesta-space-1) var(--vesta-space-4);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='prefs-folders'] code) {
+    flex: 1;
+    overflow: hidden;
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='prefs-add-folder']) {
+    display: flex;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+  }
+
+  :where([data-vesta='prefs-add-folder'] > [data-vesta='field']) {
+    flex: 1;
+  }
+
+  @container pane (max-width: 640px) {
+    :where([data-vesta='prefs-presets']) {
+      grid-template-columns: 1fr;
+    }
+  }
+}

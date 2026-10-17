@@ -1,0 +1,29 @@
+@layer launcher {
+  html[data-vesta-reduced-motion] {
+    --vesta-duration-fast: 0ms;
+    --vesta-duration-normal: 0ms;
+    --vesta-duration-slow: 0ms;
+  }
+  html[data-vesta-reduced-motion]::view-transition-group(*),
+  html[data-vesta-reduced-motion]::view-transition-old(*),
+  html[data-vesta-reduced-motion]::view-transition-new(*) {
+    animation-duration: 0.01ms;
+    animation-delay: 0ms;
+  }
+  /* Specificity wins over component motion rules in the same layer. Keep animation
+     completion events firing, since presence primitives use them to release content. */
+  html[data-vesta-reduced-motion] *,
+  html[data-vesta-reduced-motion] *::before,
+  html[data-vesta-reduced-motion] *::after {
+    animation-duration: 0.01ms;
+    animation-delay: 0ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    transition-delay: 0ms;
+    scroll-behavior: auto;
+  }
+  html[data-vesta-reduced-motion]
+    :where([data-vesta="instance-header-main"], [data-vesta="instance-header-icon"]) {
+    transition: none;
+  }
+}

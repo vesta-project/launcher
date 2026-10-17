@@ -16,7 +16,7 @@ const defaults: Stored = { scheme: 'system', hue: 185, railCollapsed: false };
 function load(): Stored {
   if (!hasWindow) return defaults;
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+    return { ...defaults, railCollapsed: JSON.parse(localStorage.getItem(KEY) ?? '{}').railCollapsed === true };
   } catch {
     return defaults;
   }
@@ -51,8 +51,9 @@ export function usePreferences() {
     document.documentElement.style.setProperty('--vesta-accent-hue', String(value));
   });
 
-  createEffect(
-    () => JSON.stringify({ scheme: scheme(), hue: hue(), railCollapsed: railCollapsed() } satisfies Stored),
-    (json) => localStorage.setItem(KEY, json),
-  );
+  // Appearance is persisted by the coalesced theme store, never once per drag frame.
+  createEffect(railCollapsed, (collapsed) => {
+    try { localStorage.setItem(KEY, JSON.stringify({ railCollapsed: collapsed })); }
+    catch { /* Navigation still works when browser storage is unavailable. */ }
+  });
 }

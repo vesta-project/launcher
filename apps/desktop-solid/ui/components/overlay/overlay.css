@@ -48,6 +48,12 @@
     animation: var(--overlay-exit) var(--vesta-duration-fast) var(--vesta-ease-standard) forwards;
   }
 
+  /* Portals attach beside dialogs, so interactive floating content must clear
+     the modal positioner/scrim as well as ordinary page overlays. */
+  :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content']) {
+    z-index: max(var(--vesta-z-dropdown), calc(var(--vesta-z-modal) + 1));
+  }
+
   @keyframes vesta-overlay-enter {
     from {
       opacity: 0;

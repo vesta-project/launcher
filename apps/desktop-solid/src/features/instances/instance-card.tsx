@@ -2,6 +2,7 @@ import type { JSX } from '@solidjs/web';
 import { Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, Tooltip } from '@vesta/ui';
 import { Icon } from '../../components/icon';
+import { t } from '../../localization';
 import './instance-card.css';
 
 /**
@@ -17,6 +18,7 @@ export type InstanceCardState =
       kind: 'interrupted';
       label: string;
       recovery?: boolean;
+      initial?: boolean;
       resuming?: boolean;
     }
   | { kind: 'warming' }
@@ -52,10 +54,9 @@ export interface InstanceCardActions {
 }
 
 export interface InstanceCardProps extends InstanceCardActions {
+  pending?: boolean;
   instance: InstanceCardData;
   state?: InstanceCardState;
-  /** Set while the card takes part in a view transition. */
-  transitionName?: string;
 }
 
 const modloaderLogos: Record<string, string> = {
@@ -121,7 +122,7 @@ export function InstanceCard(props: InstanceCardProps) {
   };
   const variant = () => playVariant(kind());
   const logo = createMemo(() => modloaderLogos[props.instance.modloader]);
-  const busy = () => kind() === 'installing' || kind() === 'warming';
+  const busy = () => props.pending || kind() === 'installing' || kind() === 'warming';
   const overlay = () => kind() === 'installing' || kind() === 'failed' || kind() === 'interrupted';
   const overlayTone = () => (kind() === 'failed' ? 'danger' : kind() === 'interrupted' ? 'warning' : 'neutral');
 
@@ -135,6 +136,7 @@ export function InstanceCard(props: InstanceCardProps) {
       case 'installing':
         return `${installing()?.label}...`;
       case 'interrupted':
+        if (interrupted()?.initial) return t('management.install');
         return interrupted()?.recovery
           ? 'Update recovery is incomplete. Click to resume recovery.'
           : `${interrupted()?.label} interrupted. Click to resume.`;
@@ -154,6 +156,7 @@ export function InstanceCard(props: InstanceCardProps) {
       case 'failed':
         return failed()?.retrying ? 'Retrying…' : 'Retry installation';
       case 'interrupted':
+        if (interrupted()?.initial) return t('management.install');
         if (interrupted()?.resuming) return 'Resuming…';
         return interrupted()?.recovery ? 'Resume recovery' : 'Resume operation';
       default:
@@ -167,7 +170,7 @@ export function InstanceCard(props: InstanceCardProps) {
       case 'running':
         return 'Stop';
       case 'interrupted':
-        return 'Resume operation';
+        return interrupted()?.initial ? t('management.install') : 'Resume operation';
       case 'crashed':
         return 'Crash details';
       case 'failed':
@@ -222,6 +225,7 @@ export function InstanceCard(props: InstanceCardProps) {
     <div
       {...triggerProps}
       data-vesta="instance-card"
+      data-instance-id={props.instance.id}
       data-status={kind()}
       data-tone={cardTone[kind()] ?? 'neutral'}
       data-modloader={props.instance.modloader}
@@ -232,7 +236,6 @@ export function InstanceCard(props: InstanceCardProps) {
       style={
         {
           '--instance-card-image': `url('${props.instance.image}')`,
-          'view-transition-name': props.transitionName,
         } as JSX.CSSProperties
       }
       onClick={handleCardClick}
@@ -260,7 +263,7 @@ export function InstanceCard(props: InstanceCardProps) {
             </Show>
             <Show when={kind() === 'interrupted'}>
               <p data-vesta="instance-card-overlay-text" data-clamp="3">
-                {interrupted()?.recovery
+                {interrupted()?.initial ? t('management.ready-install') : interrupted()?.recovery
                   ? 'Recovery is incomplete. Resume to finish.'
                   : `${interrupted()?.label} was interrupted. Resume to finish.`}
               </p>
@@ -361,22 +364,22 @@ export function InstanceCard(props: InstanceCardProps) {
       <ContextMenuItem onSelect={() => props.onPlay?.()} disabled={busy()}>
         {menuPrimaryLabel()}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => props.onOpen?.()}>Open Details</ContextMenuItem>
-      <ContextMenuItem onSelect={() => props.onOpenStandalone?.()}>Open in New Window</ContextMenuItem>
+      <ContextMenuItem disabled={!props.onOpen} onSelect={() => props.onOpen?.()}>Open Details</ContextMenuItem>
+      <ContextMenuItem disabled={!props.onOpenStandalone} onSelect={() => props.onOpenStandalone?.()}>Open in New Window</ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => props.onAddContent?.()}>Add Content</ContextMenuItem>
-      <ContextMenuItem onSelect={() => props.onOpenFolder?.()}>Open Folder</ContextMenuItem>
+      <ContextMenuItem disabled={!props.onAddContent} onSelect={() => props.onAddContent?.()}>Add Content</ContextMenuItem>
+      <ContextMenuItem disabled={!props.onOpenFolder} onSelect={() => props.onOpenFolder?.()}>Open Folder</ContextMenuItem>
       <ContextMenuItem onSelect={() => props.onTogglePin?.()}>
         {props.instance.pinned ? 'Unpin from Sidebar' : 'Pin to Sidebar'}
       </ContextMenuItem>
       <ContextMenuSub label="Manage">
-        <ContextMenuItem onSelect={() => props.onRepair?.()}>Repair</ContextMenuItem>
-        <ContextMenuItem onSelect={() => props.onDuplicate?.()}>Duplicate</ContextMenuItem>
-        <ContextMenuItem onSelect={() => props.onExport?.()}>Export Instance</ContextMenuItem>
-        <ContextMenuItem onSelect={() => props.onHardReset?.()}>Hard Reset</ContextMenuItem>
+        <ContextMenuItem disabled={!props.onRepair || busy() || kind() === 'running'} onSelect={() => props.onRepair?.()}>Repair</ContextMenuItem>
+        <ContextMenuItem disabled={!props.onDuplicate || busy() || kind() === 'running'} onSelect={() => props.onDuplicate?.()}>Duplicate</ContextMenuItem>
+        <ContextMenuItem disabled={!props.onExport || busy() || kind() === 'running'} onSelect={() => props.onExport?.()}>Export Instance</ContextMenuItem>
+        <ContextMenuItem disabled={!props.onHardReset || busy() || kind() === 'running'} onSelect={() => props.onHardReset?.()}>Hard Reset</ContextMenuItem>
       </ContextMenuSub>
       <ContextMenuSeparator />
-      <ContextMenuItem tone="danger" onSelect={() => props.onUninstall?.()}>
+      <ContextMenuItem tone="danger" disabled={!props.onUninstall || busy() || kind() === 'running'} onSelect={() => props.onUninstall?.()}>
         Uninstall
       </ContextMenuItem>
     </ContextMenu>

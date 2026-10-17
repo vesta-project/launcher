@@ -1,4 +1,4 @@
-import { Button, IconButton, ImageViewer } from "@vesta/ui";
+import { Button, Dialog, IconButton, ImageViewer } from "@vesta/ui";
 import { For, Show, createSignal } from "solid-js";
 import { navigate } from "../../../app/router";
 import { Icon } from "../../../components/icon";
@@ -12,7 +12,9 @@ import {
 import {
   playInstance,
   type InstanceEntry,
-} from "../../../features/instances/fixtures";
+} from "../../../features/instances/catalog";
+import { nativeInstances } from "../../../features/instances/native-service";
+import { mutateNativeScreenshot } from "../../../features/instances/native-details";
 import { copyScreenshot } from "../../../features/instances/screenshot-clipboard";
 import { t } from "../../../localization";
 import "./overview-tab.css";
@@ -35,11 +37,19 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
   const goto = (section: string) => navigate(`/library/${id()}/${section}`);
 
   const [viewer, setViewer] = createSignal<number | undefined>(undefined);
+  const [deleteShot, setDeleteShot] = createSignal<string>();
+  const [deletingShot, setDeletingShot] = createSignal(false);
+  const deleteScreenshot = async () => {
+    const path = deleteShot(); if (!path || deletingShot()) return;
+    setDeletingShot(true);
+    try { if (await mutateNativeScreenshot(id(), path, true)) { setDeleteShot(undefined); setViewer(undefined); } }
+    finally { setDeletingShot(false); }
+  };
   const [copyStatus, setCopyStatus] = createSignal("");
   const copy = async (src: string) => {
     setCopyStatus("");
     try {
-      await copyScreenshot(src);
+      await copyScreenshot(src, shots().find((shot) => shot.src === src)?.path);
       setCopyStatus(t("overview.screenshot-copied"));
     } catch {
       setCopyStatus(t("overview.screenshot-copy-failed"));
@@ -76,13 +86,13 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                 >
                   {world().mode}
                 </span>
-                {t("worlds.day-count", { count: world().days })} · {world().lastPlayed}
+                <Show when={world().days !== undefined}>{t("worlds.day-count", { count: world().days ?? 0 })} · </Show>{world().lastPlayed}
               </span>
             </div>
             <div data-vesta="overview-continue-actions">
               <Button
                 variant="ghost"
-                onClick={() => goto(`worlds/${world().id}`)}
+                onClick={() => goto(`worlds/${encodeURIComponent(world().id)}`)}
               >
                 {t("overview.manage")}
               </Button>
@@ -118,7 +128,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                     <button
                       type="button"
                       data-vesta="overview-world"
-                      onClick={() => goto(`worlds/${world.id}`)}
+                      onClick={() => goto(`worlds/${encodeURIComponent(world.id)}`)}
                     >
                       <img src={world.image} alt="" draggable="false" />
                       <span data-vesta="overview-world-name">{world.name}</span>
@@ -238,8 +248,12 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
         index={viewer() ?? 0}
         onIndexChange={setViewer}
         onCopy={(src) => void copy(src)}
-        showDelete={false}
+        onOpenFolder={nativeInstances ? (src) => { const path = shots().find((shot) => shot.src === src)?.path; if (path) void mutateNativeScreenshot(id(), path); } : undefined}
+        onDelete={nativeInstances ? (src) => setDeleteShot(shots().find((shot) => shot.src === src)?.path) : undefined}
+        showDelete={nativeInstances}
       />
+      <Dialog title={t('common.delete')} description={t('management.delete-screenshot')} open={!!deleteShot()} onOpenChange={(open) => { if (!open && !deletingShot()) setDeleteShot(undefined); }} size="sm"
+        footer={<><Button variant="ghost" disabled={deletingShot()} onClick={() => setDeleteShot(undefined)}>{t('common.cancel')}</Button><Button tone="danger" disabled={deletingShot()} onClick={() => void deleteScreenshot()}>{t('common.delete')}</Button></>} />
     </div>
   );
 }

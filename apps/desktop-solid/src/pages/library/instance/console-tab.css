@@ -20,17 +20,27 @@
   }
 
   :where([data-vesta="console-toolbar"]) {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    min-inline-size: 0;
   }
 
   .console-source {
     flex: 0 1 200px;
-    min-inline-size: 150px;
+    min-inline-size: 140px;
   }
 
   .console-search {
-    flex: 1;
-    min-inline-size: 140px;
+    flex: 1 1 auto;
+    min-inline-size: 120px;
+  }
+
+  .console-follow,
+  .console-actions {
+    flex: none;
+  }
+
+  .console-actions {
+    margin-inline-start: auto;
   }
 
   /* Level filters: one joined control, each level in its own colour with its count. */
@@ -131,6 +141,11 @@
     white-space: pre;
   }
 
+  :where([data-vesta="console-log"]:not([data-wrap]) [data-vesta="log-line"]) {
+    block-size: 20px;
+    overflow-y: clip;
+  }
+
   :where([data-vesta="log-line"]:hover) {
     background: color-mix(in oklab, var(--vesta-color-text) 4%, transparent);
   }
@@ -221,7 +236,7 @@
     font-size: var(--vesta-text-xs);
   }
 
-  @container pane (max-width: 700px) {
+  @container pane (max-width: 720px) {
     :where([data-vesta="console"][data-metadata] [data-vesta="log-line"]) {
       grid-template-columns: 8ch 5ch minmax(0, 1fr);
     }
@@ -235,9 +250,10 @@
     }
   }
 
-  @container pane (max-width: 520px) {
-    .console-source {
-      flex-basis: 100%;
+  @container pane (max-width: 560px) {
+    :where([data-vesta="console-levels"]),
+    .console-follow [data-vesta="switch-label"] {
+      display: none;
     }
   }
 }

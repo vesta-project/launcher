@@ -1,0 +1,122 @@
+@layer launcher {
+  :where([data-vesta="install-pack-details"]) {
+    align-self: start;
+    min-inline-size: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-surface) 88%, transparent);
+    overflow: hidden;
+  }
+  :where([data-vesta="install-pack-identity"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-4);
+  }
+  :where([data-vesta="install-pack-identity"]) > div:last-child {
+    min-inline-size: 0;
+  }
+  :where([data-vesta="install-pack-identity"]) h2 {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: var(--vesta-leading-tight);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="install-pack-identity"]) p {
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="install-pack-art"]) {
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 56px;
+    block-size: 56px;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-subtle);
+    overflow: hidden;
+  }
+  :where([data-vesta="install-pack-art"]) img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  :where([data-vesta="install-pack-platform"]) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="install-pack-origin"]) {
+    margin-inline-start: auto;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="install-pack-facts"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    margin: 0;
+    padding: var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="install-pack-facts"]) > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--vesta-space-3);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="install-pack-facts"]) dt {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="install-pack-facts"]) dd {
+    margin: 0;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="install-pack-description"]) {
+    margin: 0;
+    padding: var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="install-pack-matching"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0 var(--vesta-space-4) var(--vesta-space-3);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="install-pack-file"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="install-pack-file"]) span {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
