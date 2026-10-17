@@ -237,7 +237,7 @@ export function SearchField() {
               type="button"
               data-vesta="browse-chip"
               data-kind="more"
-              title={chips()
+              data-tip={chips()
                 .slice(shown().length)
                 .map((chip) => chip.label)
                 .join(', ')}
@@ -262,7 +262,7 @@ export function SearchField() {
         />
         <Show when={results()}>
           {(current) => (
-            <span data-vesta="browse-search-count" role="status" title={t('browse.results-count', { count: current().total })}>
+            <span data-vesta="browse-search-count" role="status" data-tip={t('browse.results-count', { count: current().total })}>
               {formatCount(current().total)}
             </span>
           )}
@@ -297,7 +297,7 @@ export function SearchField() {
                     ? t('browse.filters-active', { count: activeFilterCount() })
                     : t('browse.filters')
                 }
-                title={t('browse.filters')}
+                data-tip={t('browse.filters')}
                 onClick={() => {
                   setSection(undefined);
                   setOpen(!open());

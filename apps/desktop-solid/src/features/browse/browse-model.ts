@@ -389,10 +389,19 @@ export interface CategoryGroup {
   items: CategoryItem[];
 }
 
+/**
+ * Modrinth names categories by their slug ("kitchen-sink"); CurseForge already sends titles.
+ * Slug-like names are shown as titles ("Kitchen Sink"); anything with capitals is left alone.
+ */
+export function categoryDisplayName(name: string): string {
+  if (/[A-Z]/.test(name)) return name;
+  return name.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+}
+
 const byIndex = (a: CategoryItem, b: CategoryItem) => a.index - b.index || a.name.localeCompare(b.name);
 const asItem = (category: ResourceCategory): CategoryItem => ({
   id: category.id,
-  name: category.name,
+  name: categoryDisplayName(category.name),
   icon: category.icon_url,
   index: category.display_index ?? 0,
 });
@@ -457,7 +466,7 @@ export function quickCategories(all: ResourceCategory[], selected: string[], lim
 export function categoryLabel(id: string, names: ReadonlyMap<string, string>): string {
   const known = names.get(id) ?? names.get(id.toLowerCase());
   if (known) return known;
-  return id.charAt(0).toUpperCase() + id.slice(1).replace(/[-_]+/g, ' ');
+  return categoryDisplayName(id);
 }
 
 /* ---- Compatibility and version selection ---- */

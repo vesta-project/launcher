@@ -7,7 +7,9 @@ const masks = new Map<string, string>();
 function maskUrl(svg: string): string {
   let url = masks.get(svg);
   if (!url) {
-    url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    // Modrinth's markup omits the namespace, without which an SVG image renders nothing.
+    const markup = /<svg[^>]*\sxmlns=/.test(svg) ? svg : svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    url = `url("data:image/svg+xml,${encodeURIComponent(markup)}")`;
     masks.set(svg, url);
     if (masks.size > 400) masks.delete(masks.keys().next().value as string);
   }

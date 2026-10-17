@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { createSignal, onSettled } from "solid-js";
 import { nativeInstances, nativeRecord, displayImage, performNative, reportInstanceError, changeNativeEngine } from "./native-service";
 import type { NativeVersion, NativeResource } from './native-details-model';
-import { metadata, loaderVersions } from "./metadata";
+import { minecraftVersionIds, loaderVersions } from "./metadata";
 import { unlinkBundledResources } from "./details";
 import { editInstance, findInstance, retryInstance } from "./catalog";
 
@@ -42,7 +42,7 @@ const previewMinecraftVersions = [
   "24w44a",
   "1.21.4-rc1",
 ];
-export const minecraftVersions = () => nativeInstances ? metadata()?.game_versions.map((version)=>version.id) ?? [] : previewMinecraftVersions;
+export const minecraftVersions = () => nativeInstances ? minecraftVersionIds() : previewMinecraftVersions;
 export const experimentalVersion = (version: string) =>
   /\d+w\d+|-(pre|rc)/i.test(version);
 export function compatibleLoaderVersions(
@@ -192,7 +192,7 @@ export function unlinkPack(id: string, removeBundled: boolean) {
 
 function nativePack(id: string, versions: NativeVersion[] = [], name?: string): LinkedPack | undefined {
   const record = nativeRecord(id);
-  if (!record?.modpackId) return undefined;
+  if (!record?.modpackId?.trim()) return undefined;
   const engine = { minecraft: record.minecraftVersion, loader: record.modloader || 'vanilla', loaderVersion: record.modloaderVersion || '' };
   const releases: PackRelease[] = releaseOrder(versions).map((version) => ({ ...engine, minecraft: version.game_versions[0] ?? engine.minecraft,
     loader: version.loaders.find((loader) => ['fabric', 'forge', 'neoforge', 'quilt'].includes(loader)) ?? engine.loader,
@@ -208,14 +208,25 @@ export function useNativePack(id: string) {
   onSettled(() => {
     let disposed = false, revision = 0;
     const refresh = async () => {
-      const record = nativeRecord(id); if (!record?.modpackId || !record.modpackPlatform) return;
+      const record = nativeRecord(id);
+      const projectId = record?.modpackId?.trim();
+      const platform = record?.modpackPlatform;
+      if (!projectId || !platform || !['modrinth', 'curseforge'].includes(platform)) return;
       const current = ++revision;
       try {
-        const [versions, project] = await Promise.all([
-          invoke<NativeVersion[]>('get_resource_versions', { platform: record.modpackPlatform, projectId: record.modpackId, ignoreCache: false }),
-          invoke<{name:string}>('get_resource_project', { platform: record.modpackPlatform, projectId: record.modpackId }),
+        const [versions, project] = await Promise.allSettled([
+          invoke<NativeVersion[]>('get_resource_versions', { platform, projectId, ignoreCache: false }),
+          invoke<{name:string}>('get_resource_project', { platform, id: projectId }),
         ]);
-        if (!disposed && current === revision && nativeRecord(id)?.modpackId === record.modpackId) versionStore(id).setState((state) => ({ ...state, pack: nativePack(id, versions, project.name) }));
+        if (disposed || current !== revision || nativeRecord(id)?.modpackId !== record.modpackId
+          || nativeRecord(id)?.modpackPlatform !== platform || nativeRecord(id)?.modpackVersionId !== record.modpackVersionId) return;
+        // Project enrichment is optional: a failed name lookup must not discard releases.
+        versionStore(id).setState((state) => ({ ...state, pack: versions.status === 'rejected' && state.pack
+          ? { ...state.pack, name: project.status === 'fulfilled' ? project.value.name : state.pack.name }
+          : nativePack(id,
+          versions.status === 'fulfilled' ? versions.value : [],
+          project.status === 'fulfilled' ? project.value.name : undefined) }));
+        if (versions.status === 'rejected') reportInstanceError(versions.reason);
       } catch (reason) { if (!disposed) reportInstanceError(reason); }
     };
     let stop: (() => void) | undefined;
@@ -252,6 +263,7 @@ function plainText(raw: string, format: string): string {
   return raw.replace(/<br\s*\/?>|<\/(p|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 }
 export function releaseChangelog(source: PackSource, projectId: string | undefined, releaseId: string): Promise<string | undefined> {
+  if (nativeInstances && !projectId?.trim()) return Promise.resolve(undefined);
   const key = `${source}:${projectId}:${releaseId}`;
   let cached = changelogCache.get(key);
   if (!cached) {
@@ -303,7 +315,7 @@ export async function searchPacks(source: PackSource, query: string): Promise<Pa
       const response = await invoke<{ hits: NativeProject[] }>('search_resources', { platform: 'curseforge', query: searchQuery(parsed.id.replace(/-/g, ' ')) });
       return response.hits.map((project) => candidate("CurseForge", project));
     }
-    const project = await invoke<NativeProject>('get_resource_project', { platform: 'modrinth', projectId: parsed.id });
+    const project = await invoke<NativeProject>('get_resource_project', { platform: 'modrinth', id: parsed.id });
     return [candidate("Modrinth", project)];
   }
   const response = await invoke<{ hits: NativeProject[] }>('search_resources', { platform: source.toLowerCase(), query: searchQuery(query.trim()) });

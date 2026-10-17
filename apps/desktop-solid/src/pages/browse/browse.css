@@ -673,26 +673,33 @@
   :where([data-vesta='browse-tag']) {
     position: relative;
     z-index: 1;
-    flex: 0 1 auto;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
     box-sizing: border-box;
-    min-inline-size: 3.5rem;
     max-inline-size: 11rem;
     block-size: 20px;
-    overflow: hidden;
-    padding-inline: var(--vesta-space-1-5);
+    margin: 0;
+    padding: 0 var(--vesta-space-1-5);
     border: 0;
     border-radius: var(--vesta-radius-sm);
     background: var(--vesta-color-fill);
     color: var(--vesta-color-text-muted);
     font: inherit;
     font-size: var(--vesta-text-xs);
-    line-height: 20px;
-    text-overflow: ellipsis;
+    line-height: 1;
     white-space: nowrap;
     cursor: default;
     transition:
       background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
       color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='browse-tag'] > span) {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   :where([data-vesta='browse-tag']):hover {
@@ -711,8 +718,6 @@
   }
 
   :where([data-vesta='browse-tag'][data-kind='more']) {
-    flex: none;
-    min-inline-size: 0;
     background: transparent;
     font-variant-numeric: tabular-nums;
   }

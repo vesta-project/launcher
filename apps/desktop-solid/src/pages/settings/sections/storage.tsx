@@ -93,7 +93,7 @@ export function StorageSettings() {
                       'flex-grow': category.bytes,
                     } as never
                   }
-                  title={`${category.label} · ${formatBytes(category.bytes)}`}
+                  data-tip={`${category.label} · ${formatBytes(category.bytes)}`}
                 />
               )}
             </For>
@@ -119,7 +119,7 @@ export function StorageSettings() {
                 <li
                   tabindex={0}
                   data-active={hovered() === category.label ? '' : undefined}
-                  title={`${category.label} · ${formatBytes(category.bytes)} · ${Math.round((category.bytes / total()) * 100)}%`}
+                  data-tip={`${category.label} · ${formatBytes(category.bytes)} · ${Math.round((category.bytes / total()) * 100)}%`}
                   {...hover(category.label)}
                 >
                   <i style={{ '--part-hue': hues[index() % hues.length] } as never} />

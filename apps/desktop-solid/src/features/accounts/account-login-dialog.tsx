@@ -62,7 +62,7 @@ export function AccountLoginDialog() {
               <span>{t('account.connecting')}</span>
             </div>
           }>
-            <button type="button" data-vesta="account-device-code" onClick={() => void copy()} aria-label={t('account.copy-code')} title={t('account.copy-code')}>
+            <button type="button" data-vesta="account-device-code" onClick={() => void copy()} aria-label={t('account.copy-code')} data-tip={t('account.copy-code')}>
               <code>{loginState().code}</code>
               <span data-vesta="account-device-code-icon"><Icon name={feedback() === 'copied' ? 'icons/controls/check' : 'icons/actions/copy'} size={16} /></span>
             </button>

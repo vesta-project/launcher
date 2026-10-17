@@ -77,7 +77,7 @@ export function AppearanceSettings() {
                     <span data-vesta="prefs-theme-sample-surface" />
                     <span data-vesta="prefs-theme-sample-accent" />
                     <Show when={definition().id === preset.id}>
-                      <span data-vesta="prefs-theme-check" title={t('prefs.appearance.theme-selected')}>
+                      <span data-vesta="prefs-theme-check" data-tip={t('prefs.appearance.theme-selected')}>
                         <Icon name="icons/controls/check" size={12} />
                       </span>
                     </Show>

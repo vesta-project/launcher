@@ -1,7 +1,8 @@
 import { Combobox as KobalteCombobox } from '@kobalte/core/combobox';
 import { createFilter } from '@kobalte/core/i18n';
 import type { JSX } from '@solidjs/web';
-import { children, Show, createSignal, useContext } from 'solid-js';
+import { children, Show, createMemo, createSignal, untrack, useContext } from 'solid-js';
+import { boundOptions } from './options';
 import type { ControlSize } from '../../foundation/types';
 import { CheckGlyph, ChevronDownGlyph } from '../../internal/icons';
 import { useOverlayMount } from '../overlay/mount';
@@ -18,6 +19,8 @@ export type ComboboxOption = SelectOption;
 
 export interface ComboboxProps {
   options: ComboboxOption[];
+  /** Bound large catalogues; searching still considers every option. */
+  maxOptions?: number;
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
@@ -61,7 +64,14 @@ export function Combobox(props: ComboboxProps) {
   const label = children(() => props.label);
   const description = children(() => props.description);
   const error = children(() => props.error);
-  const find = (value: string | undefined) => props.options.find((option) => option.value === value);
+  // Mapped JSX getters allocate new option objects on every read. Resolve them
+  // once per dependency change so Kobalte can synchronize selection by identity.
+  const options = createMemo(() => props.options, { name: 'comboboxOptions' });
+  const value = createMemo(() => props.value, { name: 'comboboxValue' });
+  const find = (key: string | undefined) => options().find((option) => option.value === key);
+  const selected = createMemo(() => find(value()), { name: 'comboboxSelected' });
+  const displayed = createMemo(() => boundOptions(options(), matches, selected(), props.maxOptions),
+    { name: 'comboboxCollection' });
 
   return (
     <KobalteCombobox<ComboboxOption>
@@ -71,16 +81,18 @@ export function Combobox(props: ComboboxProps) {
       style={props.style}
       {...(props.id != null ? { id: props.id } : {})}
       name={props.name}
-      options={props.options}
+      options={displayed()}
       optionValue="value"
       optionTextValue="label"
       optionLabel="label"
       optionDisabled="disabled"
-      {...(props.value !== undefined ? { value: find(props.value) ?? null } : {})}
-      {...(props.value === undefined && props.defaultValue !== undefined
+      {...(value() !== undefined ? { value: selected() ?? null } : {})}
+      {...(value() === undefined && props.defaultValue !== undefined
         ? { defaultValue: find(props.defaultValue) }
         : {})}
-      onChange={(option) => option && props.onChange?.(option.value)}
+      onChange={(option) => {
+        if (option && option.value !== untrack(value)) props.onChange?.(option.value);
+      }}
       onInputChange={props.onInputChange}
       placeholder={props.placeholder ?? 'Search…'}
       disabled={props.disabled}

@@ -132,3 +132,12 @@ test('deletion queued before the create command returns cancels the resource con
     expect(c.notices).toHaveLength(1);
     expect(c.notices[0].text).toContain('browse.new-instance-removed');
   }));
+
+test('Browse carries the provider project and selected pack release through the archive handoff', () =>
+  harness('pages/browse/install-actions.ts', async (api, c) => {
+    const pack = { ...project, resource_type: 'modpack', summary: 'Short summary', description: 'Long body' };
+    c.versions = [{ ...release, project_id: project.id, version_number: 'Pack 2.0', loaders: ['mrpack', 'fabric'] }];
+    await api.runInstall(pack, 'modpack', undefined);
+    expect(c.handoffs).toEqual([{ kind: 'url', value: release.download_url,
+      online: { project: pack, release: c.versions[0] } }]);
+  }));

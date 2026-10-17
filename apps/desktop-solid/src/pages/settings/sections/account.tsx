@@ -108,7 +108,7 @@ function SaveIndicator(props: { status: SaveState }) {
     }
   };
   return (
-    <span data-vesta="skin-status" data-state={props.status} role="status" aria-live="polite" title={label()}>
+    <span data-vesta="skin-status" data-state={props.status} role="status" aria-live="polite" data-tip={label()}>
       <span data-vesta="skin-status-dot" aria-hidden="true" />
       <Show when={props.status === 'saved'}>
         <span data-vesta="skin-status-text">{label()}</span>
@@ -224,7 +224,7 @@ function SkinPanel(props: { account: Account }) {
                             type="button"
                             data-vesta="skin-tile-apply"
                             aria-label={t('skins.apply', { name: skin.name })}
-                            title={skin.name}
+                            data-tip={skin.name}
                             aria-pressed={skin.image === currentSkin() ? 'true' : 'false'}
                             disabled={locked()}
                             onClick={() => skins.selectLibrary(skin)}
@@ -268,7 +268,7 @@ function SkinPanel(props: { account: Account }) {
                                       type="button"
                                       data-vesta="skin-tile-apply"
                                       aria-label={t('skins.apply', { name: preset.name })}
-                                      title={preset.name}
+                                      data-tip={preset.name}
                                       aria-pressed={presetImage(preset) === currentSkin() ? 'true' : 'false'}
                                       disabled={locked()}
                                       onClick={() => skins.selectPreset(preset)}
@@ -297,7 +297,7 @@ function SkinPanel(props: { account: Account }) {
                   data-vesta="cape-option"
                   aria-checked={view()?.capeId ? 'false' : 'true'}
                   aria-label={t('skins.cape-none')}
-                  title={t('skins.cape-none')}
+                  data-tip={t('skins.cape-none')}
                   disabled={locked()}
                   onClick={() => skins.setCape(undefined)}
                 >
@@ -313,7 +313,7 @@ function SkinPanel(props: { account: Account }) {
                       data-vesta="cape-option"
                       aria-checked={view()?.capeId === cape.id ? 'true' : 'false'}
                       aria-label={cape.name}
-                      title={cape.name}
+                      data-tip={cape.name}
                       disabled={locked()}
                       onClick={() => skins.setCape(cape.id)}
                     >

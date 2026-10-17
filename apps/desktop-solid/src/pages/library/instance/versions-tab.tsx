@@ -7,7 +7,7 @@ import {
   SegmentedControl,
   TextField,
 } from "@vesta/ui";
-import { For, Show, createEffect, createSignal, untrack, onSettled } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, untrack, onSettled } from "solid-js";
 import { SettingRow, SettingsSection } from "../../../components/setting-row";
 import {
   compatibleLoaderVersions,
@@ -86,12 +86,16 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
     loader: loader(),
     loaderVersion: loader() === "vanilla" ? "" : loaderVersion(),
   });
+  const loaders = createMemo(() => compatibleLoaderVersions(minecraft(), loader()),
+    { name: "versionsCompatibleLoaders" });
+  const loaderOptions = createMemo(() => loaders().map(value => ({ value, label: value })),
+    { name: "versionsLoaderOptions" });
   const valid = () =>
     loader() === "vanilla" ||
-    compatibleLoaderVersions(minecraft(), loader()).includes(loaderVersion());
+    loaders().includes(loaderVersion());
   const dirty = () =>
     JSON.stringify(engine()) !== JSON.stringify(store.state().engine);
-  const mcOptions = () =>
+  const mcOptions = createMemo(() =>
     [...new Set([store.state().engine.minecraft, ...minecraftVersions()])]
       .filter(
         (value) =>
@@ -105,7 +109,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         description: experimentalVersion(value)
           ? t("versions.experimental")
           : t("versions.release"),
-      }));
+      })), { name: "versionsMinecraftOptions" });
 
   const chooseMinecraft = (value: string) => {
     setMinecraft(value);
@@ -184,6 +188,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 <Combobox
                   aria-label={t("versions.minecraft-version")}
                   options={mcOptions()}
+                  maxOptions={80}
                   value={minecraft()}
                   onChange={chooseMinecraft}
                 />
@@ -195,17 +200,15 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                     aria-label={t("versions.loader-version")}
                     value={loaderVersion()}
                     onChange={setLoaderVersion}
-                    options={compatibleLoaderVersions(
-                      minecraft(),
-                      loader(),
-                    ).map((value) => ({ value, label: value }))}
+                    options={loaderOptions()}
+                    maxOptions={80}
                   />
                 </div>
               </Show>
             </div>
             <Show when={!valid()}>
               <p data-vesta="version-warning">
-                {compatibleLoaderVersions(minecraft(), loader()).length
+                {loaders().length
                   ? t("versions.choose-loader-version")
                   : t("versions.none-found", { loader: loader().charAt(0).toUpperCase() + loader().slice(1), minecraft: minecraft() })}
               </p>

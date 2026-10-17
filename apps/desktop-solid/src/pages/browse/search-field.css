@@ -276,14 +276,15 @@
     align-self: stretch;
   }
 
-  /* A square segment: the funnel, and a small count on its corner while filters apply. */
+  /* The funnel segment; while filters apply their count sits beside it, not on top of it. */
   :where([data-vesta='browse-filters-button']) {
-    position: relative;
-    display: grid;
-    place-items: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-1);
     box-sizing: border-box;
-    inline-size: calc(var(--browse-search-height) + 2px);
-    padding: 0;
+    min-inline-size: calc(var(--browse-search-height) + 2px);
+    padding: 0 var(--vesta-space-2);
     border: 0;
     border-inline-start: var(--vesta-border-width) solid var(--vesta-color-border);
     background: transparent;
@@ -310,21 +311,17 @@
   }
 
   :where([data-vesta='browse-filters-count']) {
-    position: absolute;
-    inset-block-start: 4px;
-    inset-inline-end: 4px;
     box-sizing: border-box;
-    min-inline-size: 14px;
-    block-size: 14px;
-    padding-inline: 3px;
-    border-radius: 7px;
+    min-inline-size: 16px;
+    block-size: 16px;
+    padding-inline: 4px;
+    border-radius: var(--vesta-radius-sm);
     background: var(--vesta-color-accent);
-    box-shadow: 0 0 0 2px var(--vesta-color-surface-sunken);
     color: var(--vesta-color-on-accent);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: var(--vesta-weight-semibold);
     font-variant-numeric: tabular-nums;
-    line-height: 14px;
+    line-height: 16px;
     text-align: center;
     animation: browse-chip-in var(--vesta-duration-normal) var(--vesta-ease-out) both;
   }

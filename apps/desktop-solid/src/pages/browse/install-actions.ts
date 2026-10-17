@@ -52,15 +52,16 @@ function packRelease(versions: readonly ResourceVersion[], minecraft: string | n
 
 async function startPack(project: ResourceProject) {
   try {
-    const versions = await loadVersions(project.source, project.id).catch(() => []);
+    const versions = await loadVersions(project.source, project.id);
     const release = packRelease(versions, gameVersion(), loader());
     const url = release
       ? hasDownloadableArtifact(release)
         ? release.download_url || release.files?.[0]?.url
         : undefined
       : undefined;
-    // The create flow reads packs from a URL; without a downloadable archive hand it the project page.
-    openInstallSource({ kind: 'url', value: url || project.web_url });
+    if (!release || !url) throw new Error(t('install.release-unavailable'));
+    // Preserve provider identity and the exact release instead of re-inferring them from a CDN URL.
+    openInstallSource({ kind: 'url', value: url, online: { project, release } });
   } catch (reason) {
     setNotice({ tone: 'danger', text: t('browse.install-failed', { message: String(reason) }) });
   }

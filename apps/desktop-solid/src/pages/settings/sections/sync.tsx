@@ -379,7 +379,7 @@ function ValuePane(props: { id: SyncCategoryId; tabs: () => JSX.Element }) {
                 disabled={item().fixed}
                 onChange={(on) => setSyncSelection(id, [item().key], on)}
               />
-              <span data-vesta="prefs-sync-label" title={item().fixed ? t('prefs.sync.fixed') : item().key}>
+              <span data-vesta="prefs-sync-label" data-tip={item().fixed ? t('prefs.sync.fixed') : item().key}>
                 {item().label}
               </span>
               <SyncValueControl

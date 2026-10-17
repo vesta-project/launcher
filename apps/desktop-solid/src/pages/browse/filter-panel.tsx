@@ -52,7 +52,7 @@ function Toggle(props: { pressed: boolean; onClick: () => void; children: JSX.El
       type="button"
       data-vesta="browse-toggle"
       aria-pressed={props.pressed ? 'true' : 'false'}
-      title={props.title}
+      data-tip={props.title}
       onClick={() => props.onClick()}
     >
       {props.children}

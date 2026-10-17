@@ -3,6 +3,7 @@ import { createMemo, For, Show, untrack } from 'solid-js';
 import { transitionTo } from '../../app/transition';
 import { Icon } from '../../components/icon';
 import {
+  categoryDisplayName,
   creatorOf,
   formatCompact,
   formatRelative,
@@ -66,10 +67,10 @@ function TagButton(props: { tag: Tag }) {
       type="button"
       data-vesta="browse-tag"
       aria-pressed={props.tag.active ? 'true' : 'false'}
-      title={t('browse.filter-by-tag', { name: props.tag.label })}
+      data-tip={t('browse.filter-by-tag', { name: props.tag.label })}
       onClick={() => props.tag.apply()}
     >
-      {props.tag.label}
+      <span>{props.tag.label}</span>
     </button>
   );
 }
@@ -97,7 +98,7 @@ function InstallAction(props: { state: () => InstallState; targetName: () => str
       tone={kind() === 'update' ? 'accent' : kind() === 'installed' ? 'success' : 'neutral'}
       disabled={kind() === 'installed' || kind() === 'installing' || kind() === 'unavailable'}
       data-busy={kind() === 'installing' ? '' : undefined}
-      title={kind() === 'install' && props.targetName() ? t('browse.install-into', { title: props.targetName() as string }) : undefined}
+      data-tip={kind() === 'install' && props.targetName() ? t('browse.install-into', { title: props.targetName() as string }) : undefined}
       icon={<Icon name={icon()} size={12} />}
       onClick={() => props.onRun()}
     >
@@ -166,7 +167,7 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
         const id = names.has(raw) ? raw : (byName.get(raw.toLowerCase()) ?? raw);
         if (seen.has(id)) continue;
         seen.add(id);
-        const label = names.get(id) ?? raw.charAt(0).toUpperCase() + raw.slice(1).replace(/[-_]+/g, ' ');
+        const label = names.get(id) ?? categoryDisplayName(raw);
         list.push({ key: id, label, active: selected.has(id), apply: () => toggleCategory(id) });
       }
       return list;
@@ -210,7 +211,6 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
           <a
             href={`#${path()}`}
             data-vesta="browse-card-name"
-            title={project().name}
             onClick={(event) => {
               if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
               event.preventDefault();
@@ -229,19 +229,19 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
                 <button
                   type="button"
                   data-vesta="browse-card-author"
-                  title={t('browse.filter-by-author', { author: author() })}
+                  data-tip={t('browse.filter-by-author', { author: author() })}
                   onClick={() => filterByCreator(project())}
                 >
                   {t('browse.by-author', { author: author() })}
                 </button>
               </Show>
             </Show>
-            <span data-vesta="browse-card-stat" title={t('browse.downloads-title', { count: project().download_count })}>
+            <span data-vesta="browse-card-stat" data-tip={t('browse.downloads-title', { count: project().download_count })}>
               <Icon name="icons/actions/download" size={11} />
               {formatCompact(project().download_count)}
             </span>
             <Show when={project().follower_count > 0}>
-              <span data-vesta="browse-card-stat" title={t('browse.followers-title', { count: project().follower_count })}>
+              <span data-vesta="browse-card-stat" data-tip={t('browse.followers-title', { count: project().follower_count })}>
                 <Icon name="icons/content/heart" size={11} />
                 {formatCompact(project().follower_count)}
               </span>

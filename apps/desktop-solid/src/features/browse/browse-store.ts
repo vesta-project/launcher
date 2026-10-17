@@ -15,6 +15,7 @@ import {
   buildCategoryGroups,
   categoriesForType,
   creatorOf,
+  categoryDisplayName,
   filterCount as countFilters,
   firstSourceForType,
   hostQuery,
@@ -474,7 +475,7 @@ export const derived = createRoot(() => {
   });
   const groups = createMemo(() => buildCategoryGroups(typeCategories(), source()), { name: 'browseCategoryGroups' });
   const quick = createMemo(() => quickCategories(typeCategories(), categories()), { name: 'browseQuickCategories' });
-  const names = createMemo(() => new Map(typeCategories().map((category) => [category.id, category.name])), {
+  const names = createMemo(() => new Map(typeCategories().map((category) => [category.id, categoryDisplayName(category.name)])), {
     name: 'browseCategoryNames',
   });
   return { typeCategories, groups, quick, names };

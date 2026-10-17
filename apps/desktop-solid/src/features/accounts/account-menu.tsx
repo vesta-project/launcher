@@ -101,7 +101,7 @@ export function AccountMenu(props: AccountMenuProps) {
           type="button"
           data-vesta="profile-button"
           data-open={open() ? '' : undefined}
-          title={t('account.profile')}
+          data-tip={t('account.profile')}
           aria-label={t('account.trigger', { name: activeAccount()?.username ?? t('account.profile') })}
         >
           <Head uuid={() => activeAccount()?.uuid} size={40} />
@@ -127,7 +127,7 @@ export function AccountMenu(props: AccountMenuProps) {
         <p data-vesta="account-empty" role="status">{t(accountsLoaded() ? 'account.empty-description' : 'account.loading')}</p>
       }>
         {(account) => <>
-          <button type="button" data-vesta="account-uuid" title={t(copied() ? 'account.uuid-copied' : 'account.copy-uuid')} aria-label={t('account.copy-uuid')} disabled={busy()} onClick={() => void copyUuid()}>
+          <button type="button" data-vesta="account-uuid" data-tip={t(copied() ? 'account.uuid-copied' : 'account.copy-uuid')} aria-label={t('account.copy-uuid')} disabled={busy()} onClick={() => void copyUuid()}>
             <code>{account().uuid}</code>
             <Icon name={copied() ? 'icons/controls/check' : 'icons/actions/copy'} size={14} />
           </button>

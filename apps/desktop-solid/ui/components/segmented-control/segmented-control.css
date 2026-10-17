@@ -166,16 +166,21 @@
     cursor: inherit;
   }
 
-  /* Icon-only: the label stays in the DOM as the accessible name. */
+  /* The label is what Kobalte selects on click, so it reaches over the whole item:
+   * icon and padding included. */
+  :where([data-vesta='segmented-label'])::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Icon-only: the label stays as the accessible name and the click target, text unseen. */
   :where([data-vesta='segmented-control'][data-icon-only] [data-vesta='segmented-label']) {
     position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    margin: -1px;
-    padding: 0;
+    inset: 0;
     overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+    color: transparent;
+    font-size: 0;
   }
 
   :where([data-vesta='segmented-control'][data-icon-only] [data-vesta='segmented-item']) {

@@ -1,3 +1,4 @@
+import { onlinePackInfo, type OnlinePackSelection } from "./online-pack";
 import type { PackSourceMatch } from "./pack-metadata";
 import { invoke } from "@tauri-apps/api/core";
 import { newNativeInstance, type NativeInstance } from "../instances/native-model";
@@ -30,7 +31,7 @@ export interface PackRelease {
   loaders: string[];
   download_url: string;
 }
-export type PackSource = { kind: "file" | "url"; value: string };
+export type PackSource = { kind: "file" | "url"; value: string; online?: OnlinePackSelection };
 export interface InstallDraft {
   name: string;
   icon: string;
@@ -39,8 +40,8 @@ export interface InstallDraft {
   loaderVersion: string;
   memory: number[];
 }
-export const readPack = (source: PackSource) =>
-  invoke<PackInfo>(
+export const readPack = (source: PackSource): Promise<PackInfo> =>
+  source.online ? Promise.resolve(onlinePackInfo(source.online)) : invoke<PackInfo>(
     source.kind === "file" ? "get_modpack_info" : "get_modpack_info_from_url",
     source.kind === "file" ? { path: source.value } : { url: source.value },
   );

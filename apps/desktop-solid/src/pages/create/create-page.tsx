@@ -17,7 +17,7 @@ import {
   metadata,
   metadataError,
   loadMetadata,
-  loaderVersions,
+  gameVersionsForLoader,
 } from "../../features/instances/metadata";
 import { minecraftVersions, compatibleLoaderVersions } from "../../features/instances/versions";
 import {
@@ -101,23 +101,18 @@ function InstanceInstallForm() {
   });
   const selectedMinecraft = () =>
     minecraft() || (nativeInstances ? metadata()?.latest.release : "1.21.4") || "";
-  const availableVersions = () =>
-    nativeInstances
-      ? (metadata()?.game_versions ?? [])
-      : minecraftVersions().map((id) => ({ id, stable: !/\d+w|-(pre|rc)/.test(id), loaders: {} }));
-  const versions = createMemo(() =>
-    availableVersions()
-      .filter(
-        (version) =>
-          (experimental() || version.stable) &&
-          (loader() === "vanilla" || compatibleLoaderVersions(version.id, loader()).length > 0),
-      )
-      .map((version) => ({ value: version.id, label: version.id })),
-  );
-  const loaderOptions = () =>
-    nativeInstances
-      ? loaderVersions(selectedMinecraft(), loader())
-      : compatibleLoaderVersions(selectedMinecraft(), loader());
+  const availableVersions = createMemo(() => nativeInstances
+    ? gameVersionsForLoader(loader(), experimental())
+    : minecraftVersions()
+      .filter(id => (experimental() || !/\d+w|-(pre|rc)/.test(id)) &&
+        (loader() === "vanilla" || compatibleLoaderVersions(id, loader()).length > 0))
+      .map(id => ({ id })), { name: "installCompatibleMinecraft" });
+  const versions = createMemo(() => availableVersions().map(version => ({ value: version.id, label: version.id })),
+    { name: "installMinecraftOptions" });
+  const loaderOptions = createMemo(() => compatibleLoaderVersions(selectedMinecraft(), loader()),
+    { name: "installLoaderVersions" });
+  const loaderComboboxOptions = createMemo(() => loaderOptions().map(value => ({ value, label: value })),
+    { name: "installLoaderOptions" });
   const selectedLoader = () =>
     loader() === "vanilla" ? "" : loaderVersion() || loaderOptions()[0] || "";
   const locked = () => busy() || reading();
@@ -266,17 +261,20 @@ function InstanceInstallForm() {
   };
   const chooseRelease = (id: string) => {
     const release = releases().find((item) => item.id === id);
-    if (!release) return;
-    void loadSource({ kind: "url", value: release.download_url });
+    if (!release || id === pack()?.modpackVersionId) return;
+    const online = source()?.online;
+    void loadSource({ kind: "url", value: release.download_url,
+      ...(online ? { online: { project: online.project, release } } : {}),
+    });
   };
   const chooseLoader = (value: string) => {
     setLoader(value);
     setLoaderVersion("");
     if (value !== "vanilla" && !compatibleLoaderVersions(selectedMinecraft(), value).length) {
-      const version = availableVersions().find(
-        (item) =>
-          (experimental() || item.stable) && compatibleLoaderVersions(item.id, value).length,
-      );
+      const version = nativeInstances
+        ? gameVersionsForLoader(value, experimental())[0]
+        : minecraftVersions().map(id => ({ id })).find(item =>
+          (experimental() || !/\d+w|-(pre|rc)/.test(item.id)) && compatibleLoaderVersions(item.id, value).length);
       setMinecraft(version?.id || "");
     }
   };
@@ -400,6 +398,7 @@ function InstanceInstallForm() {
                             <Combobox
                               value={selectedMinecraft()}
                               options={versions()}
+                              maxOptions={80}
                               onChange={(value) => {
                                 setMinecraft(value);
                                 setLoaderVersion("");
@@ -420,7 +419,8 @@ function InstanceInstallForm() {
                             <label>{t("management.loader-version")}</label>
                             <Combobox
                               value={selectedLoader()}
-                              options={loaderOptions().map((value) => ({ value, label: value }))}
+                              options={loaderComboboxOptions()}
+                              maxOptions={80}
                               onChange={setLoaderVersion}
                               disabled={locked() || !loaderOptions().length}
                               aria-label={t("management.loader-version")}

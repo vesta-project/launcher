@@ -2,18 +2,25 @@ import { invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { RequestCache } from '../../platform/cache/request-cache';
 import { nativeInstances } from './native-service';
-export interface GameVersion {
-  id: string; stable: boolean; version_type: string;
-  loaders: Record<string, {version:string;stable:boolean}[]>;
-}
-interface Metadata { game_versions: GameVersion[]; latest:{release:string;snapshot:string} }
-const cache = new RequestCache<Metadata>({ maxEntries:1, staleTimeMs:300_000, retentionMs:1_800_000 });
-const [metadata, setMetadata] = createSignal<Metadata | undefined>(undefined, { name:'minecraftMetadata' });
-const [metadataError, setMetadataError] = createSignal<string | undefined>(undefined, { name:'minecraftMetadataError' });
-export { metadata, metadataError };
+import { indexMetadata, type Metadata } from './metadata-index';
+export type { GameVersion } from './metadata-index';
+
+// Cache the indexed response too: joins and cache hits never rebuild the index.
+const cache = new RequestCache<ReturnType<typeof indexMetadata>>({ maxEntries: 1, staleTimeMs: 300_000, retentionMs: 1_800_000 });
+const [snapshot, setSnapshot] = createSignal<ReturnType<typeof indexMetadata> | undefined>(undefined, { name: 'minecraftMetadataSnapshot' });
+const [metadataError, setMetadataError] = createSignal<string | undefined>(undefined, { name: 'minecraftMetadataError' });
+export const metadata = () => snapshot()?.metadata;
+export { metadataError };
 export async function loadMetadata() {
   if (!nativeInstances) return;
-  try { setMetadata(await cache.read('minecraft', () => invoke<Metadata>('get_minecraft_versions'))); setMetadataError(undefined); }
-  catch (reason) { setMetadataError(String(reason)); }
+  try {
+    // Never clear the published snapshot while a stale response is refreshed.
+    setSnapshot(await cache.read('minecraft', async () => indexMetadata(await invoke<Metadata>('get_minecraft_versions'))));
+    setMetadataError(undefined);
+  } catch (reason) { setMetadataError(String(reason)); }
 }
-export const loaderVersions = (minecraft:string,loader:string) => metadata()?.game_versions.find((version)=>version.id===minecraft)?.loaders[loader]?.map((version)=>version.version) ?? [];
+const emptyVersions: string[] = [];
+const emptyGames: import('./metadata-index').GameVersion[] = [];
+export const minecraftVersionIds = () => snapshot()?.ids ?? emptyVersions;
+export const loaderVersions = (minecraft: string, loader: string) => snapshot()?.loaderVersions(minecraft, loader) ?? emptyVersions;
+export const gameVersionsForLoader = (loader: string, experimental: boolean) => snapshot()?.gameVersions(loader, experimental) ?? emptyGames;

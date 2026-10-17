@@ -260,7 +260,7 @@ function KeyCapture(props: {
       data-conflict={props.conflict && !listening() ? '' : undefined}
       data-unbound={minecraftKeyLabel(props.item.value) ? undefined : ''}
       aria-label={props.label}
-      title={listening() ? t('prefs.sync.key-hint') : props.conflict ? t('prefs.sync.key-conflict') : undefined}
+      data-tip={listening() ? t('prefs.sync.key-hint') : props.conflict ? t('prefs.sync.key-conflict') : undefined}
       disabled={props.disabled}
       onContextMenu={(event) => listening() && event.preventDefault()}
       onClick={() => {
