@@ -39,9 +39,10 @@ async function metadataHarness() {
   const file = new URL('../src/features/instances/metadata.ts', import.meta.url).pathname;
   const built = await Bun.build({entrypoints: [file], target: 'bun', conditions: ['browser', 'development'], plugins: [{
     name: 'metadata-host', setup(build) {
+      build.onResolve({filter: /^\.\.\/\.\.\/localization$/}, () => ({path: 'localization', namespace: 'fixture'}));
       build.onResolve({filter: /^\.\/native-service$/}, () => ({path: 'native', namespace: 'fixture'}));
       build.onResolve({filter: /^@tauri-apps\/api\/core$/}, () => ({path: 'core', namespace: 'fixture'}));
-      build.onLoad({filter: /.*/, namespace: 'fixture'}, ({path}) => ({loader: 'js', contents: path === 'native'
+      build.onLoad({filter: /.*/, namespace: 'fixture'}, ({path}) => ({loader: 'js', contents: path === 'localization' ? 'export const t = id => id;' : path === 'native'
         ? 'export const nativeInstances = true;'
         : 'let handler; export const setInvoke = next => handler = next; export const invoke = (...args) => handler(...args);'}));
       build.onLoad({filter: /instances\/metadata\.ts$/}, async ({path}) => ({loader: 'ts', contents: await Bun.file(path).text() +

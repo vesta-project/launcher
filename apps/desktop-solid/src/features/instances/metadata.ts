@@ -1,3 +1,5 @@
+import { runBackgroundActivity } from '../activity/activity-store';
+import { t } from '../../localization';
 import { invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { RequestCache } from '../../platform/cache/request-cache';
@@ -15,7 +17,7 @@ export async function loadMetadata() {
   if (!nativeInstances) return;
   try {
     // Never clear the published snapshot while a stale response is refreshed.
-    setSnapshot(await cache.read('minecraft', async () => indexMetadata(await invoke<Metadata>('get_minecraft_versions'))));
+    setSnapshot(await cache.read('minecraft', () => runBackgroundActivity(t('activity.metadata-refresh'), async () => indexMetadata(await invoke<Metadata>('get_minecraft_versions')))));
     setMetadataError(undefined);
   } catch (reason) { setMetadataError(String(reason)); }
 }

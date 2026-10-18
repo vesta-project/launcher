@@ -1,0 +1,37 @@
+import { untrack } from 'solid-js';
+import { isTauri } from '@tauri-apps/api/core';
+import { t } from '../../localization';
+import { clearFinished, receiveActivity, activities, configureActivityCancellation } from './activity-store';
+import { setUpdaterFixture } from '../settings/updates';
+export type ActivityFixture = 'single' | 'multiple' | 'background' | 'success' | 'failure' | 'update-ready';
+/** Explicit opt-in: import and call from browser devtools/workbench. Returns timer cleanup. */
+export function simulateActivity(scenario: ActivityFixture): () => void {
+  if (!import.meta.env.DEV || isTauri()) return () => {};
+  for (const row of untrack(activities)) receiveActivity({ id: row.id, state: 'cancelled' });
+  clearFinished();
+  setUpdaterFixture({ state: 'idle' });
+  if (scenario === 'update-ready') { setUpdaterFixture({ state: 'ready', version: '0.3.0' }); return () => {}; }
+  configureActivityCancellation(async (id) => { receiveActivity({ id, state: 'cancelled' }); });
+  const now = Date.now();
+  const title = t('activity.fixture-install');
+  if (scenario === 'background') {
+    receiveActivity({ id: 'fixture-background', title: t('activity.fixture-background'), kind: 'background', state: 'running' });
+    const timer = setTimeout(() => receiveActivity({ id: 'fixture-background', state: 'done' }), 5000);
+    return () => clearTimeout(timer);
+  }
+  const count = scenario === 'multiple' ? 5 : 1;
+  for (let i = 0; i < count; i++) receiveActivity({ id: `fixture-install-${i}`, kind: 'task', title: `${title} ${i + 1}`, subtitle: 'Minecraft 1.21.1 · Fabric',
+    iconFallback: 'minecraft', state: scenario === 'success' ? 'done' : scenario === 'failure' ? 'failed' : 'running',
+    progress: scenario === 'multiple' ? i / 6 : 0.42, weight: (i + 1) * 100, step: t('activity.fixture-step', { count: 47, max: 112 }),
+    cancellable: true, startedAt: now, target: { instanceId: `fixture-${i}` }, action: 'play',
+    error: scenario === 'failure' ? t('activity.fixture-error') : undefined });
+  if (scenario === 'success' || scenario === 'failure') return () => {};
+  const timer = setInterval(() => {
+    for (const row of untrack(activities)) {
+      if (row.state !== 'running' || !row.id.startsWith('fixture-install-')) continue;
+      const progress = Math.min(1, (row.progress ?? 0) + 0.025);
+      receiveActivity({ id: row.id, progress, weight: Math.max(1, 1000 * (1 - progress)), state: progress === 1 ? 'done' : 'running' });
+    }
+  }, 300);
+  return () => clearInterval(timer);
+}

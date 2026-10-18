@@ -1,3 +1,5 @@
+import { runBackgroundActivity } from '../activity/activity-store';
+import { t } from '../../localization';
 import { listen } from "@tauri-apps/api/event";
 import { route } from "../../app/router";
 import { createEffect, onSettled } from "solid-js";
@@ -23,13 +25,15 @@ export const javaInventory = cachedResource<JavaInventory>({
   fallback: { requirements: [], detected: [], managed: [], global: [] },
   load: async () => {
     if (!native) return javaFixture;
-    const [requirements, detected, managed, global] = await Promise.all([
-      invoke<JavaInventory["requirements"]>("get_required_java_versions"),
-      invoke<JavaInventory["detected"]>("detect_java"),
-      invoke<JavaInventory["managed"]>("get_managed_javas"),
-      invoke<JavaInventory["global"]>("get_global_java_paths"),
-    ]);
-    return { requirements, detected, managed, global };
+    return runBackgroundActivity(t('activity.java-check'), async () => {
+      const [requirements, detected, managed, global] = await Promise.all([
+        invoke<JavaInventory["requirements"]>("get_required_java_versions"),
+        invoke<JavaInventory["detected"]>("detect_java"),
+        invoke<JavaInventory["managed"]>("get_managed_javas"),
+        invoke<JavaInventory["global"]>("get_global_java_paths"),
+      ]);
+      return { requirements, detected, managed, global };
+    });
   },
 });
 

@@ -1,5 +1,11 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "activity.java-check",
+  "activity.metadata-refresh",
+  "activity.fixture-install",
+  "activity.fixture-background",
+  "activity.fixture-step",
+  "activity.fixture-error",
   "browse.pending-resource",
   "browse.pending-resource-world",
   "browse.new-instance-desktop",

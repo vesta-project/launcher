@@ -1,6 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { startActivitySync } from '../features/activity/activity-sync';
 
 interface ExitCheck {
   can_exit: boolean;
@@ -34,6 +35,7 @@ function afterNextPaint(): Promise<void> {
 export function startDesktop(): () => void {
   if (!isTauri()) return () => {};
 
+  const stopActivity = startActivitySync();
   let disposed = false;
   let unlistenExit: UnlistenFn | undefined;
   let checkingExit = false;
@@ -79,5 +81,6 @@ export function startDesktop(): () => void {
   return () => {
     disposed = true;
     unlistenExit?.();
+    stopActivity();
   };
 }
