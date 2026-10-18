@@ -6,6 +6,9 @@
  *
  * Every page is a stack of cards on the pane surface. Cards are raised one step so
  * sections read as separate blocks; a danger card carries a red edge.
+ *
+ * Narrow panes (the settings scroll area is the `pane` container): rows stack their control
+ * under the label (see setting-row.css), header actions wrap under the title, sliders fill.
  */
 @layer launcher {
   :where([data-vesta='prefs-card']) {
@@ -24,10 +27,16 @@
 
   :where([data-vesta='prefs-card-header']) {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--vesta-space-3);
     padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-2);
+  }
+
+  :where([data-vesta='prefs-card-header'] > div:first-child) {
+    flex: 1 1 200px;
+    min-inline-size: 0;
   }
 
   :where([data-vesta='prefs-card-header'] h3) {
@@ -149,6 +158,23 @@
     font-size: var(--vesta-text-xs);
     line-height: 18px;
     text-align: center;
+  }
+
+  /* The wide layout's control column must not become a tall column once rows stack. */
+  @container pane (max-width: 520px) {
+    :where([data-vesta='prefs-card-body'] [data-vesta='setting-row-control']) {
+      flex: none;
+      justify-content: flex-start;
+    }
+
+    :where([data-vesta='prefs-card-body'] [data-vesta='setting-row-control'] > [data-vesta='prefs-slider']) {
+      flex: 1;
+      inline-size: auto;
+    }
+
+    :where([data-vesta='prefs-callout']) {
+      margin-inline: var(--vesta-space-3);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

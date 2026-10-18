@@ -364,5 +364,13 @@
     :where([data-vesta='prefs-sync-toolbar']) {
       flex-wrap: wrap;
     }
+
+    :where([data-vesta='prefs-sync-add']) {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    :where([data-vesta='prefs-sync-add'] > :first-child) {
+      grid-column: 1 / -1;
+    }
   }
 }

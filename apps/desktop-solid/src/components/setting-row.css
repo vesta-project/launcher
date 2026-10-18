@@ -73,11 +73,34 @@
     gap: var(--vesta-space-2);
   }
 
-  /* Narrow windows: stack the control under its label. */
+  /*
+   * Narrow containers: the control drops under its label, left-aligned at its own width
+   * (fields fill the line). The control's flex basis is reset so it never turns into a
+   * tall empty column. A lone switch or checkbox stays beside its label.
+   */
   @container (max-width: 520px) {
     :where([data-vesta='setting-row']) {
       flex-direction: column;
       align-items: stretch;
+      gap: var(--vesta-space-2);
+      padding-block: var(--vesta-space-3);
+    }
+
+    :where([data-vesta='setting-row'] > [data-vesta='setting-row-control']) {
+      flex: none;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      min-inline-size: 0;
+    }
+
+    :where(
+      [data-vesta='setting-row']:has(
+          > [data-vesta='setting-row-control'] > :is([data-vesta='switch'], [data-vesta='checkbox']):only-child
+        )
+    ) {
+      flex-direction: row;
+      align-items: center;
+      padding-block: var(--vesta-space-2);
     }
   }
 }

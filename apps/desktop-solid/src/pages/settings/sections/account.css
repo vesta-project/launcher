@@ -28,6 +28,7 @@
 
   :where([data-vesta='prefs-accounts'] li) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--vesta-space-3);
     padding: var(--vesta-space-2) var(--vesta-space-4);
@@ -37,9 +38,10 @@
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
+  /* Narrow rows wrap the account buttons under the name. */
   :where([data-vesta='prefs-accounts'] li > div:not([data-vesta])) {
     display: flex;
-    flex: 1;
+    flex: 1 1 160px;
     flex-direction: column;
     min-inline-size: 0;
   }

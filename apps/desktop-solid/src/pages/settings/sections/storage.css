@@ -18,6 +18,8 @@
 
   :where([data-vesta='prefs-usage-head']) {
     display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
     align-items: flex-end;
     justify-content: space-between;
   }
@@ -95,7 +97,7 @@
 
   :where([data-vesta='prefs-legend-bar']) {
     flex: none;
-    inline-size: 120px;
+    inline-size: clamp(40px, 20cqi, 120px);
     block-size: 6px;
     overflow: hidden;
     border-radius: 3px;
@@ -114,6 +116,7 @@
 
   :where([data-vesta='prefs-legend'] li > span:not([data-vesta])) {
     flex: 1;
+    min-inline-size: 0;
   }
 
   :where([data-vesta='prefs-legend'] i) {

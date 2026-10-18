@@ -1,14 +1,47 @@
-/* Theme choices and hue control. Hooks: prefs-themes, prefs-theme, prefs-theme-swatch, prefs-theme-check, prefs-material-note.
- * Selection: aria-pressed. Swatch treatment: data-theme. No library tools until custom themes exist. */
+/*
+ * Appearance page: theme picker, colour, material and surface controls.
+ * Hooks: [data-vesta=prefs-themes] -theme -theme-frame -theme-check -theme-caption -theme-name
+ *        -theme-material -material-note
+ *        Preview: [data-vesta=prefs-theme-preview] -preview-titlebar -preview-rail -preview-dot
+ *        -preview-board -preview-head -preview-line -preview-button -preview-pill -preview-cards
+ *        -preview-card -preview-art
+ * States: theme: aria-pressed; preview: data-material (glass | frosted | flat), data-vesta-scheme,
+ *         data-vesta-accent; line: data-size (xs | sm | lg), data-tone (muted); dot: data-active;
+ *         art: data-tone (accent)
+ * Knobs: --prefs-theme-columns
+ *
+ * Each preview is a miniature launcher window (titlebar, rail, board with a header, a button and
+ * two cards) painted with that theme's own resolved tokens, scoped onto the preview element. Sizes
+ * are in cqi of the preview so it scales with its column. The picker's chrome (ring, check,
+ * caption) sits outside the scoped element and uses the page's tokens.
+ */
 @layer launcher {
-  /* Square tiles: a live sample of each theme, its name below. */
   :where([data-vesta='prefs-themes']) {
+    --prefs-theme-columns: 3;
+
     display: grid;
-    grid-template-columns: repeat(auto-fill, 96px);
+    grid-template-columns: repeat(var(--prefs-theme-columns), minmax(0, 1fr));
     gap: var(--vesta-space-4) var(--vesta-space-3);
     margin: 0;
-    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
+    padding: var(--vesta-space-1) var(--vesta-space-4) var(--vesta-space-4);
     list-style: none;
+  }
+
+  /* Columns follow the settings pane's width, not the window's: 3, then 2, then 1. */
+  @container pane (max-width: 540px) {
+    :where([data-vesta='prefs-themes']) {
+      --prefs-theme-columns: 2;
+    }
+  }
+
+  @container pane (max-width: 340px) {
+    :where([data-vesta='prefs-themes']) {
+      --prefs-theme-columns: 1;
+    }
+  }
+
+  :where([data-vesta='prefs-themes'] > li) {
+    min-inline-size: 0;
   }
 
   :where([data-vesta='prefs-theme']) {
@@ -16,96 +49,278 @@
     flex-direction: column;
     align-items: stretch;
     gap: var(--vesta-space-2);
-    inline-size: 96px;
+    inline-size: 100%;
     padding: 0;
     border: 0;
+    border-radius: var(--vesta-radius-container);
     background: none;
     color: var(--vesta-color-text);
     font: inherit;
     font-size: var(--vesta-text-sm);
-    text-align: center;
+    text-align: start;
     cursor: default;
   }
 
-  /* The sample resolves its colours from the theme's own inputs, for the current colour mode. */
-  :where([data-vesta='prefs-theme-swatch']) {
-    --tile-nc: var(--tile-nc-dark);
-    --tile-lift: var(--tile-lift-dark, 0);
-    --tile-ac: var(--tile-ac-dark);
-    --tile-al: var(--tile-al-dark);
-    --tile-canvas: oklch(calc(0.17 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
-    --tile-raised: oklch(calc(0.28 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
-    --tile-edge: oklch(calc(0.38 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
+  :where([data-vesta='prefs-theme']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 4px;
+  }
 
+  /* The frame holds the ring and the check; the preview inside is clipped to it. */
+  :where([data-vesta='prefs-theme-frame']) {
     position: relative;
     display: block;
-    inline-size: 96px;
-    block-size: 96px;
-    overflow: hidden;
-    border: 1px solid var(--tile-edge);
-    border-radius: calc(var(--tile-radius) + 4px);
-    background:
-      radial-gradient(60% 55% at 0% 0%, var(--tile-bg-a), transparent 75%),
-      radial-gradient(55% 60% at 100% 100%, var(--tile-bg-b), transparent 75%),
-      radial-gradient(35% 35% at 62% 105%, var(--tile-bg-c), transparent 75%), var(--tile-canvas);
+    border-radius: var(--vesta-radius-container);
+    box-shadow: 0 0 0 1px var(--vesta-color-border);
     transition: box-shadow var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
-  :where(:root[data-vesta-scheme='light'] [data-vesta='prefs-theme-swatch']) {
-    --tile-nc: var(--tile-nc-light);
-    --tile-lift: var(--tile-lift-light, 0);
-    --tile-ac: var(--tile-ac-light);
-    --tile-al: var(--tile-al-light);
-    --tile-canvas: oklch(calc(0.95 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
-    --tile-raised: oklch(calc(0.995 + var(--tile-lift)) calc(var(--tile-nc) * var(--tile-tint, 0.3)) var(--tile-nh));
-    --tile-edge: oklch(calc(0.85 + var(--tile-lift)) var(--tile-nc) var(--tile-nh));
+  :where([data-vesta='prefs-theme']:hover [data-vesta='prefs-theme-frame']) {
+    box-shadow: 0 0 0 1px var(--vesta-color-border-strong);
   }
 
-  /* A raised surface block. */
-  :where([data-vesta='prefs-theme-sample-surface']) {
-    position: absolute;
-    inset-inline: 14px;
-    inset-block: 34px 14px;
-    border: 1px solid var(--tile-edge);
-    border-radius: var(--tile-radius);
-    background: var(--tile-raised);
-  }
-
-  /* The accent dot. */
-  :where([data-vesta='prefs-theme-sample-accent']) {
-    position: absolute;
-    inset-inline-start: 14px;
-    inset-block-start: 12px;
-    inline-size: 14px;
-    block-size: 14px;
-    border-radius: 50%;
-    background: oklch(var(--tile-al) var(--tile-ac) var(--tile-h));
-  }
-
-  :where([data-vesta='prefs-theme']:hover [data-vesta='prefs-theme-swatch']) {
-    box-shadow: 0 0 0 2px color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
-  }
-
-  :where([data-vesta='prefs-theme'][aria-pressed='true'] [data-vesta='prefs-theme-swatch']) {
-    border-color: var(--vesta-color-accent);
-    box-shadow: 0 0 0 2px var(--vesta-color-accent);
+  /* Selected: an accent ring with a hairline gap, plus a check. */
+  :where([data-vesta='prefs-theme'][aria-pressed='true'] [data-vesta='prefs-theme-frame']) {
+    box-shadow:
+      0 0 0 2px var(--prefs-card-bg, var(--vesta-color-surface-raised)),
+      0 0 0 4px var(--vesta-color-accent);
   }
 
   :where([data-vesta='prefs-theme-check']) {
     position: absolute;
-    inset-block-start: 6px;
-    inset-inline-end: 6px;
+    inset-block-start: -6px;
+    inset-inline-end: -6px;
     display: grid;
     place-items: center;
-    inline-size: 20px;
-    block-size: 20px;
+    inline-size: 18px;
+    block-size: 18px;
     border-radius: 50%;
     background: var(--vesta-color-accent);
+    box-shadow: 0 0 0 2px var(--prefs-card-bg, var(--vesta-color-surface-raised));
     color: var(--vesta-color-on-accent);
   }
 
+  :where([data-vesta='prefs-theme-caption']) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    padding-inline: 2px;
+  }
+
   :where([data-vesta='prefs-theme-name']) {
+    overflow: hidden;
     font-weight: var(--vesta-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='prefs-theme-material']) {
+    flex: none;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='prefs-theme'][aria-pressed='true'] [data-vesta='prefs-theme-name']) {
+    color: var(--vesta-color-accent-text);
+  }
+
+  /* ---- Preview: a launcher window in miniature ---- */
+  :where([data-vesta='prefs-theme-preview']) {
+    /* Background spots read at thumbnail size only when a little stronger than full size. */
+    --vesta-bg-strength: 1.6;
+    --preview-hairline: min(var(--vesta-border-width), 1px);
+    --preview-highlight: inset 0 0 0 0 transparent;
+    --preview-board: var(--vesta-color-panel);
+
+    container-type: inline-size;
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: 13% minmax(0, 1fr);
+    grid-template-rows: 11% minmax(0, 1fr);
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-theme-background, none), var(--vesta-color-canvas);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='prefs-theme-preview'][data-vesta-scheme='light']) {
+    --vesta-bg-strength: 2;
+  }
+
+  /* Glass: a bright top edge on surfaces. Frosted: a milky board. Grain on both. */
+  :where([data-vesta='prefs-theme-preview'][data-material='glass']) {
+    --preview-highlight: inset 0 1px 0 oklch(1 0 0 / 0.08);
+  }
+
+  :where([data-vesta='prefs-theme-preview'][data-material='glass'][data-vesta-scheme='light']) {
+    --preview-highlight: inset 0 1px 0 oklch(1 0 0 / 0.6);
+  }
+
+  :where([data-vesta='prefs-theme-preview'][data-material='frosted']) {
+    --preview-board: color-mix(in oklab, var(--vesta-color-panel), var(--vesta-neutral-12) 4%);
+  }
+
+  :where([data-vesta='prefs-theme-preview'][data-material='frosted'][data-vesta-scheme='light']) {
+    --preview-board: color-mix(in oklab, var(--vesta-color-panel), white 30%);
+  }
+
+  :where([data-vesta='prefs-theme-preview'])::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: var(--vesta-theme-grain-opacity, 0);
+    background-image: var(--vesta-theme-grain-image, none);
+    background-size: 128px 128px;
+    mix-blend-mode: overlay;
+  }
+
+  :where([data-vesta='prefs-theme-preview-titlebar']) {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: center;
+    gap: 3cqi;
+    padding-inline: 4cqi;
+    border-block-end: var(--preview-hairline) solid color-mix(in oklab, var(--vesta-color-border) 60%, transparent);
+    background: var(--vesta-color-chrome);
+  }
+
+  :where([data-vesta='prefs-theme-preview-rail']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.5cqi;
+    padding-block: 3cqi;
+    background: var(--vesta-color-chrome);
+  }
+
+  :where([data-vesta='prefs-theme-preview-dot']) {
+    inline-size: 5.5cqi;
+    aspect-ratio: 1;
+    border-radius: calc(1.4cqi * var(--vesta-radius-factor, 1));
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='prefs-theme-preview-dot'][data-active]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 85%, transparent);
+  }
+
+  :where([data-vesta='prefs-theme-preview-board']) {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5cqi;
+    min-inline-size: 0;
+    margin: 2.5cqi;
+    padding: 4cqi;
+    border-radius: calc(2.2cqi * var(--vesta-radius-factor, 1));
+    background: var(--preview-board);
+    box-shadow: var(--preview-highlight);
+  }
+
+  :where([data-vesta='prefs-theme-preview-head']) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3cqi;
+  }
+
+  /* Text, drawn as rounded bars in the theme's text colours. */
+  :where([data-vesta='prefs-theme-preview-line']) {
+    display: block;
+    flex: none;
+    inline-size: 52%;
+    block-size: 2cqi;
+    border-radius: 1cqi;
+    background: color-mix(in oklab, var(--vesta-color-text-muted) 55%, transparent);
+  }
+
+  :where([data-vesta='prefs-theme-preview-line'][data-size='lg']) {
+    inline-size: 34%;
+    block-size: 3.2cqi;
+    border-radius: 1.6cqi;
+    background: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='prefs-theme-preview-line'][data-size='sm']) {
+    inline-size: 70%;
+    block-size: 1.8cqi;
+    background: color-mix(in oklab, var(--vesta-color-text) 70%, transparent);
+  }
+
+  :where([data-vesta='prefs-theme-preview-line'][data-size='xs']) {
+    inline-size: 22%;
+    block-size: 1.6cqi;
+    background: color-mix(in oklab, var(--vesta-color-text-muted) 45%, transparent);
+  }
+
+  /* The status pill in the titlebar, and the primary button on the board. */
+  :where([data-vesta='prefs-theme-preview-pill']) {
+    inline-size: 9cqi;
+    block-size: 3.2cqi;
+    border-radius: 1.6cqi;
+    background: color-mix(in oklab, var(--vesta-color-accent) 30%, transparent);
+  }
+
+  :where([data-vesta='prefs-theme-preview-button']) {
+    flex: none;
+    inline-size: 15cqi;
+    block-size: 5.5cqi;
+    border-radius: calc(1.4cqi * var(--vesta-radius-factor, 1));
+    background: var(--vesta-color-accent);
+    box-shadow: var(--vesta-theme-shadow-sm, none);
+  }
+
+  :where([data-vesta='prefs-theme-preview-cards']) {
+    display: grid;
+    flex: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3cqi;
+    min-block-size: 0;
+    margin-block-start: 1cqi;
+  }
+
+  :where([data-vesta='prefs-theme-preview-card']) {
+    display: flex;
+    flex-direction: column;
+    gap: 2cqi;
+    min-block-size: 0;
+    padding: 2cqi;
+    border: var(--preview-hairline) solid var(--vesta-color-border);
+    border-radius: calc(1.8cqi * var(--vesta-radius-factor, 1));
+    background: var(--vesta-color-surface-raised);
+    box-shadow: var(--preview-highlight), var(--vesta-theme-shadow-sm, none);
+  }
+
+  /* Instance art: one card in the theme's accent, one neutral. */
+  :where([data-vesta='prefs-theme-preview-art']) {
+    flex: 1;
+    min-block-size: 0;
+    border-radius: calc(1.2cqi * var(--vesta-radius-factor, 1));
+    background: linear-gradient(
+      150deg,
+      var(--vesta-color-fill-active),
+      var(--vesta-color-fill)
+    );
+  }
+
+  :where([data-vesta='prefs-theme-preview-art'][data-tone='accent']) {
+    background: linear-gradient(
+      150deg,
+      color-mix(in oklab, var(--vesta-color-accent) 70%, var(--vesta-color-surface-raised)),
+      color-mix(in oklab, var(--vesta-color-accent) 25%, var(--vesta-color-surface-raised))
+    );
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='prefs-theme-frame']) {
+      transition: none;
+    }
   }
 
   :where([data-vesta='prefs-material-note']) {

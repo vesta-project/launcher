@@ -27,21 +27,26 @@ export const [scheme, setScheme] = createSignal<SchemePreference>(initial.scheme
 export const [hue, setHue] = createSignal(initial.hue, { name: 'hue' });
 export const [railCollapsed, setRailCollapsed] = createSignal(initial.railCollapsed, { name: 'railCollapsed' });
 
+const media = hasWindow ? window.matchMedia('(prefers-color-scheme: light)') : undefined;
+const [systemLight, setSystemLight] = createSignal(media?.matches ?? false, { name: 'systemLight' });
+
+/** The colour scheme in effect: the preference, with 'system' resolved against the OS. */
+export const resolvedScheme = (): 'light' | 'dark' =>
+  scheme() === 'system' ? (systemLight() ? 'light' : 'dark') : scheme() === 'light' ? 'light' : 'dark';
+
 /**
  * Applies preferences to the document root. The scheme and accent live on <html>,
  * not the shell, so portalled overlays (menus, dialogs, tooltips) inherit them too.
  * Call once from the shell.
  */
 export function usePreferences() {
-  if (!hasWindow) return; // static prerender: nothing to apply yet
-  const media = window.matchMedia('(prefers-color-scheme: light)');
-  const [systemLight, setSystemLight] = createSignal(media.matches, { name: 'systemLight' });
+  if (!hasWindow || !media) return; // static prerender: nothing to apply yet
   const onChange = (event: MediaQueryListEvent) => setSystemLight(event.matches);
   media.addEventListener('change', onChange);
   onCleanup(() => media.removeEventListener('change', onChange));
 
   createEffect(
-    () => (scheme() === 'system' ? (systemLight() ? 'light' : 'dark') : scheme()),
+    resolvedScheme,
     (resolved) => {
       document.documentElement.dataset.vestaScheme = resolved;
     },

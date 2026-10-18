@@ -6,12 +6,14 @@
 @layer launcher {
   :where([data-vesta='prefs-java-toolbar']) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--vesta-space-3);
   }
 
   :where([data-vesta='prefs-java-toolbar'] p) {
+    flex: 1 1 240px;
     margin: 0;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
@@ -80,6 +82,7 @@
 
   :where([data-vesta='prefs-java'] li) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--vesta-space-3);
     min-block-size: 52px;
@@ -107,9 +110,10 @@
     background: radial-gradient(circle, var(--vesta-color-accent) 40%, transparent 45%);
   }
 
+  /* The runtime keeps ~200px; narrower rows wrap their buttons onto a second line. */
   :where([data-vesta='prefs-java'] li > div:not([data-vesta])) {
     display: flex;
-    flex: 1;
+    flex: 1 1 200px;
     flex-direction: column;
     gap: 2px;
     min-inline-size: 0;

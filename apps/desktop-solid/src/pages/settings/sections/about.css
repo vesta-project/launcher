@@ -5,6 +5,7 @@
 @layer launcher {
   :where([data-vesta='prefs-about']) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--vesta-space-4);
     padding: var(--vesta-space-4);
@@ -28,7 +29,8 @@
   }
 
   :where([data-vesta='prefs-about'] > div:first-of-type) {
-    flex: 1;
+    flex: 1 1 160px;
+    min-inline-size: 0;
   }
 
   :where([data-vesta='prefs-about'] h3) {
@@ -54,6 +56,8 @@
   :where([data-vesta='prefs-about-update']) {
     display: flex;
     flex: none;
+    flex-wrap: wrap;
+    max-inline-size: 100%;
     align-items: center;
     gap: var(--vesta-space-3);
   }

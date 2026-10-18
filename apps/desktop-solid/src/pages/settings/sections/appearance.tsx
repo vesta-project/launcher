@@ -1,14 +1,16 @@
 import { supportedWindowEffects } from '../../../features/settings/window-effects';
 import {
-  effectiveHue,
   presetUpdates,
+  resolveThemeTokens,
+  splitThemeUpdates,
   themeDefinition,
   themePresets,
-  type ThemeDefinition,
+  type ThemeValues,
 } from '../../../features/settings/theme-model';
 import { Button, SegmentedControl, Select, Slider } from '@vesta/ui';
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show, createMemo, createSignal } from 'solid-js';
 
+import { resolvedScheme } from '../../../app/preferences';
 import { Icon } from '../../../components/icon';
 import { SettingRow } from '../../../components/setting-row';
 import { setting, updateSetting, flushSettings } from '../../../features/settings/config';
@@ -16,33 +18,75 @@ import { t } from '../../../localization';
 import { Card, Reveal, ToggleRow } from '../parts';
 import './appearance.css';
 
-/** Inline custom properties for a tile's live sample, from the theme's own definition. */
-function sampleStyle(definition: ThemeDefinition) {
-  const hue = effectiveHue(definition, definition.hue ?? 0);
-  const neutralHue = definition.neutral.hue === 'accent' ? hue : definition.neutral.hue;
-  const palette = definition.fixedHues ?? [hue, hue + 120, hue + 240];
-  const glow = (h: number, l: number) => `oklch(${l} 0.14 ${h})`;
-  const glowStrength = definition.background === 'none' ? 0 : 30;
-  const mix = (color: string) => `color-mix(in oklab, ${color} ${glowStrength}%, transparent)`;
-  const neutral = definition.accentChroma.dark === 0;
+type Preset = (typeof themePresets)[number];
+
+/** The live theme settings, in the shape the token resolver takes. */
+function currentTheme(): ThemeValues {
   return {
-    '--tile-nh': String(neutralHue),
-    '--tile-h': String(hue),
-    '--tile-nc-dark': String(definition.neutral.chroma.dark),
-    '--tile-nc-light': String(definition.neutral.chroma.light),
-    '--tile-lift-dark': String(definition.neutral.lift?.dark ?? 0),
-    '--tile-lift-light': String(definition.neutral.lift?.light ?? 0),
-    '--tile-tint': String(definition.neutral.tint ?? 0.3),
-    '--tile-ac-dark': String(definition.accentChroma.dark),
-    '--tile-ac-light': String(definition.accentChroma.light),
-    '--tile-al-dark': neutral ? '0.93' : '0.68',
-    '--tile-al-light': neutral ? '0.2' : '0.55',
-    '--tile-radius': `${Math.round(definition.radius * 8)}px`,
-    '--tile-bg-a': mix(glow(palette[0]!, 0.74)),
-    '--tile-bg-b': mix(glow(palette[1]!, 0.62)),
-    '--tile-bg-c': mix(glow(palette[2]!, 0.76)),
+    id: setting('theme_id'),
+    mode: setting('theme'),
+    hue: setting('theme_primary_hue'),
+    material: setting('theme_style'),
+    translucency: setting('theme_translucency'),
+    grain: setting('theme_grain'),
+    gradient: setting('theme_gradient_enabled'),
+    gradientType: setting('theme_gradient_type'),
+    gradientAngle: setting('theme_gradient_angle'),
+    gradientHarmony: setting('theme_gradient_harmony'),
+    borderWidth: setting('theme_border_width'),
   };
 }
+
+/**
+ * A miniature launcher window drawn with one theme's real tokens. The theme's resolved inputs
+ * are set inline and the element carries data-vesta-scheme, so the launcher palette re-derives
+ * inside it exactly as it does on :root, in the current colour mode.
+ */
+function ThemePreview(props: { tokens: Record<string, string>; neutral: boolean; material: string }) {
+  return (
+    <span
+      data-vesta="prefs-theme-preview"
+      data-vesta-scheme={resolvedScheme()}
+      data-vesta-accent={props.neutral ? 'neutral' : 'hue'}
+      data-material={props.material}
+      style={props.tokens}
+      aria-hidden="true"
+    >
+      <span data-vesta="prefs-theme-preview-titlebar">
+        <span data-vesta="prefs-theme-preview-line" data-size="xs" />
+        <span data-vesta="prefs-theme-preview-pill" />
+      </span>
+      <span data-vesta="prefs-theme-preview-rail">
+        <span data-vesta="prefs-theme-preview-dot" data-active="" />
+        <span data-vesta="prefs-theme-preview-dot" />
+        <span data-vesta="prefs-theme-preview-dot" />
+      </span>
+      <span data-vesta="prefs-theme-preview-board">
+        <span data-vesta="prefs-theme-preview-head">
+          <span data-vesta="prefs-theme-preview-line" data-size="lg" />
+          <span data-vesta="prefs-theme-preview-button" />
+        </span>
+        <span data-vesta="prefs-theme-preview-line" data-tone="muted" />
+        <span data-vesta="prefs-theme-preview-cards">
+          <span data-vesta="prefs-theme-preview-card">
+            <span data-vesta="prefs-theme-preview-art" data-tone="accent" />
+            <span data-vesta="prefs-theme-preview-line" data-size="sm" />
+          </span>
+          <span data-vesta="prefs-theme-preview-card">
+            <span data-vesta="prefs-theme-preview-art" />
+            <span data-vesta="prefs-theme-preview-line" data-size="sm" />
+          </span>
+        </span>
+      </span>
+    </span>
+  );
+}
+
+const materialLabels = {
+  glass: 'prefs.appearance.style-glass',
+  frosted: 'prefs.appearance.style-frosted',
+  flat: 'prefs.appearance.style-flat',
+} as const;
 
 export function AppearanceSettings() {
   const [advanced, setAdvanced] = createSignal(false);
@@ -50,12 +94,31 @@ export function AppearanceSettings() {
   const frosted = () => setting('theme_style') === 'frosted';
   const effects = supportedWindowEffects;
   const definition = () => themeDefinition(setting('theme_id'));
-  const choose = (preset: (typeof themePresets)[number]) => {
+  const choose = (preset: Preset) => {
     // Colour mode and window effect are launcher-wide: a preset never changes them.
     for (const [key, value] of Object.entries(presetUpdates(preset.definition)))
       updateSetting(key as Parameters<typeof updateSetting>[0], value as never);
     flushSettings();
   };
+  /*
+   * Each preview shows what choosing it gives: the live settings for the current theme, and for
+   * the others the live settings with that preset's overrides (exactly what choose() writes).
+   */
+  const previews = createMemo(
+    () => {
+      const current = currentTheme();
+      return Object.fromEntries(
+        themePresets.map((preset) => {
+          const values =
+            preset.id === current.id
+              ? current
+              : ({ ...current, ...splitThemeUpdates(presetUpdates(preset.definition)).theme } as ThemeValues);
+          return [preset.id, { tokens: resolveThemeTokens(values), material: values.material }];
+        }),
+      );
+    },
+    { name: 'themePreviews' },
+  );
   const hue = () => setting('theme_primary_hue');
 
   return (
@@ -63,29 +126,40 @@ export function AppearanceSettings() {
       <Card title={t('prefs.appearance.theme')}>
         <ul data-vesta="prefs-themes">
           <For each={themePresets}>
-            {(preset) => (
-              <li>
-                <button
-                  type="button"
-                  data-vesta="prefs-theme"
-                  data-theme={preset.id}
-                  aria-pressed={definition().id === preset.id ? 'true' : 'false'}
-                  style={sampleStyle(preset.definition)}
-                  onClick={() => choose(preset)}
-                >
-                  <span data-vesta="prefs-theme-swatch" aria-hidden="true">
-                    <span data-vesta="prefs-theme-sample-surface" />
-                    <span data-vesta="prefs-theme-sample-accent" />
-                    <Show when={definition().id === preset.id}>
-                      <span data-vesta="prefs-theme-check" data-tip={t('prefs.appearance.theme-selected')}>
-                        <Icon name="icons/controls/check" size={12} />
+            {(preset) => {
+              const selected = () => definition().id === preset.id;
+              const preview = () => previews()[preset.id]!;
+              return (
+                <li>
+                  <button
+                    type="button"
+                    data-vesta="prefs-theme"
+                    data-theme={preset.id}
+                    aria-pressed={selected() ? 'true' : 'false'}
+                    onClick={() => choose(preset)}
+                  >
+                    <span data-vesta="prefs-theme-frame">
+                      <ThemePreview
+                        tokens={preview().tokens}
+                        material={preview().material}
+                        neutral={preset.definition.accentChroma.dark === 0}
+                      />
+                      <Show when={selected()}>
+                        <span data-vesta="prefs-theme-check" aria-hidden="true">
+                          <Icon name="icons/controls/check" size={11} />
+                        </span>
+                      </Show>
+                    </span>
+                    <span data-vesta="prefs-theme-caption">
+                      <span data-vesta="prefs-theme-name">{preset.name}</span>
+                      <span data-vesta="prefs-theme-material">
+                        {t(materialLabels[preview().material as keyof typeof materialLabels] ?? materialLabels.glass)}
                       </span>
-                    </Show>
-                  </span>
-                  <span data-vesta="prefs-theme-name">{preset.name}</span>
-                </button>
-              </li>
-            )}
+                    </span>
+                  </button>
+                </li>
+              );
+            }}
           </For>
         </ul>
       </Card>

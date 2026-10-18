@@ -14,6 +14,7 @@
 
   :where([data-vesta='prefs-shortcuts'] li) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--vesta-space-2);
     min-block-size: 48px;
@@ -24,9 +25,10 @@
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
+  /* The name keeps at least ~180px; below that the chord and buttons wrap under it. */
   :where([data-vesta='prefs-shortcuts'] li > div:not([data-vesta])) {
     display: flex;
-    flex: 1;
+    flex: 1 1 180px;
     flex-direction: column;
     min-inline-size: 0;
   }
