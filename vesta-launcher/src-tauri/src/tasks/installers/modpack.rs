@@ -223,6 +223,10 @@ impl InstallModpackTask {
 }
 
 impl Task for InstallModpackTask {
+    fn completion_action(&self) -> Option<&'static str> {
+        Some("play")
+    }
+
     fn name(&self) -> String {
         format!("Install Modpack {}", self.instance.name)
     }

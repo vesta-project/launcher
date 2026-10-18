@@ -55,6 +55,10 @@ impl Task for InstallInstanceTask {
             self.instance.id,
         )]
     }
+    fn completion_action(&self) -> Option<&'static str> {
+        Some("play")
+    }
+
     fn name(&self) -> String {
         format!("Install {}", self.instance.name)
     }

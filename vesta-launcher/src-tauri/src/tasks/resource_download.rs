@@ -407,6 +407,16 @@ async fn rollback_publication(published: &[PublishedArtifact]) {
 }
 
 impl Task for ResourceDownloadTask {
+    fn activity_instance_id(&self) -> Option<String> {
+        Some(match &self.target {
+            ResourceInstallTarget::Instance { instance_id } => instance_id.to_string(),
+            ResourceInstallTarget::World { world } => world.instance_id.to_string(),
+        })
+    }
+    fn completion_action(&self) -> Option<&'static str> {
+        Some("open")
+    }
+
     fn name(&self) -> String {
         format!("Installing {}", self.project_name)
     }

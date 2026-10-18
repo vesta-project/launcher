@@ -26,7 +26,26 @@ pub struct TaskContext {
 }
 
 impl TaskContext {
+    /// Independent of notifications: silent tasks and deleted completions still
+    /// reach the rewrite activity store. Missing fields are partial updates.
+    fn activity_progress(
+        &self,
+        progress: Option<i32>,
+        description: Option<&str>,
+        current: Option<i32>,
+        total: Option<i32>,
+    ) {
+        let _ = self.app_handle.emit(
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "progress": progress,
+                "step": description, "currentStep": current, "totalSteps": total,
+            }),
+        );
+    }
+
     pub fn update_description(&self, description: String) {
+        self.activity_progress(None, Some(&description), None, None);
         // 1. Update the channel if available
         if let Some(ref channel) = self.progress_channel {
             let _ = channel.send(ProgressUpdate::Progress {
@@ -52,6 +71,7 @@ impl TaskContext {
         current_step: Option<i32>,
         total_steps: Option<i32>,
     ) {
+        self.activity_progress(Some(progress), None, current_step, total_steps);
         // 1. Update the channel if available
         if let Some(ref channel) = self.progress_channel {
             let _ = channel.send(ProgressUpdate::Progress {
@@ -85,6 +105,12 @@ impl TaskContext {
     }
 
     pub fn set_title(&self, title: String) {
+        let _ = self.app_handle.emit(
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "title": title,
+            }),
+        );
         if !self.notifications_enabled {
             return;
         }
@@ -107,6 +133,12 @@ impl TaskContext {
         current_step: Option<i32>,
         total_steps: Option<i32>,
     ) {
+        self.activity_progress(
+            Some(progress),
+            Some(&description),
+            current_step,
+            total_steps,
+        );
         // 1. Update the channel if available
         if let Some(ref channel) = self.progress_channel {
             let _ = channel.send(ProgressUpdate::Progress {
@@ -151,6 +183,24 @@ pub trait Task: Send + Sync {
     /// participate in task identity, locking, or persistence policy.
     fn notification_context(&self) -> Option<NotificationContext> {
         None
+    }
+    /// Presentation policy for the titlebar activity consumer.
+    fn activity_kind(&self) -> &'static str {
+        if self.show_notification() {
+            "task"
+        } else {
+            "background"
+        }
+    }
+    fn completion_action(&self) -> Option<&'static str> {
+        self.notification_context()
+            .filter(|context| context.kind == "instance")
+            .map(|_| "open")
+    }
+    fn activity_instance_id(&self) -> Option<String> {
+        self.notification_context()
+            .filter(|context| context.kind == "instance")
+            .and_then(|context| context.id)
     }
     fn cancellable(&self) -> bool {
         false
@@ -468,6 +518,14 @@ impl TaskManager {
                         .insert(client_key.clone(), pause_tx);
                 }
 
+                let _ = manager_app.emit("core://activity", serde_json::json!({
+                    "id": client_key, "kind": task.activity_kind(),
+                    "state": "queued", "title": task_name, "context": notification_context,
+                    "cancellable": is_cancellable, "step": task.starting_description(),
+                    "totalSteps": initial_total_steps,
+                    "action": task.completion_action(),
+                    "target": task.activity_instance_id().map(|instance_id| serde_json::json!({ "instanceId": instance_id })),
+                }));
                 let app = manager_app.clone();
                 let tokens = manager_tokens.clone();
                 let p_tokens = manager_pause_tokens.clone();
@@ -495,6 +553,10 @@ impl TaskManager {
 
                     // Check if cancelled while waiting for conflict locks.
                     if *ctx.cancel_rx.borrow() {
+                        let _ = app.emit(
+                            "core://activity",
+                            serde_json::json!({ "id": key_clone, "state": "cancelled" }),
+                        );
                         if notifications_enabled {
                             let manager = app.state::<NotificationManager>();
                             if let Err(e) = manager.create(CreateNotificationInput {
@@ -544,6 +606,9 @@ impl TaskManager {
                     log::info!("TaskManager: Running readiness for task: {}", task_name);
                     if let Err(ready_error) = task.ready(ctx.clone()).await {
                         log::error!("Task readiness failed: {}", ready_error);
+                        let _ = app.emit("core://activity", serde_json::json!({
+                            "id": key_clone, "state": if *ctx.cancel_rx.borrow() { "cancelled" } else { "failed" }, "error": ready_error,
+                        }));
                         if let Some(ref channel) = ctx.progress_channel {
                             let _ = channel.send(ProgressUpdate::Finished {
                                 success: false,
@@ -612,6 +677,10 @@ impl TaskManager {
                     let permit = match worker_semaphore.acquire_owned().await {
                         Ok(permit) => permit,
                         Err(_) => {
+                            let _ = app.emit(
+                                "core://activity",
+                                serde_json::json!({ "id": key_clone, "state": "cancelled" }),
+                            );
                             if is_cancellable {
                                 tokens.lock().unwrap().remove(&key_clone);
                             }
@@ -630,6 +699,10 @@ impl TaskManager {
 
                     // Check if cancelled while waiting
                     if *ctx.cancel_rx.borrow() {
+                        let _ = app.emit(
+                            "core://activity",
+                            serde_json::json!({ "id": key_clone, "state": "cancelled" }),
+                        );
                         if notifications_enabled {
                             let manager = app.state::<NotificationManager>();
                             if let Err(e) = manager.create(CreateNotificationInput {
@@ -694,7 +767,17 @@ impl TaskManager {
                         );
                     }
 
+                    let _ = app.emit(
+                        "core://activity",
+                        serde_json::json!({ "id": key_clone, "state": "running" }),
+                    );
                     let run_result = task.run(ctx.clone()).await;
+                    let _ = app.emit("core://activity", serde_json::json!({
+                        "id": key_clone,
+                        "state": match &run_result { _ if *ctx.cancel_rx.borrow() => "cancelled", Ok(_) => "done", Err(_) => "failed" },
+                        "error": run_result.as_ref().err(),
+                        "step": if run_result.is_ok() { Some(task.completion_description()) } else { None },
+                    }));
 
                     // Cleanup tokens after run
                     if is_cancellable {

@@ -278,6 +278,10 @@ pub async fn sync_account_profile_data(
 }
 
 impl Task for SyncAccountProfilesTask {
+    fn activity_kind(&self) -> &'static str {
+        "background"
+    }
+
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         Box::pin(async move {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;

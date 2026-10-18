@@ -29,6 +29,10 @@ impl ImportExternalInstanceTask {
 }
 
 impl Task for ImportExternalInstanceTask {
+    fn completion_action(&self) -> Option<&'static str> {
+        Some("play")
+    }
+
     fn name(&self) -> String {
         format!("Import external instance {}", self.instance_name)
     }

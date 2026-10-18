@@ -24,6 +24,10 @@ impl GenerateManifestTask {
 }
 
 impl Task for GenerateManifestTask {
+    fn activity_kind(&self) -> &'static str {
+        "background"
+    }
+
     fn name(&self) -> String {
         if self.force_refresh {
             "Refresh Piston Manifest".to_string()
