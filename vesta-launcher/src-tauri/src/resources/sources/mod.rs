@@ -27,6 +27,12 @@ pub trait ResourceSource: Send + Sync {
         game_version: Option<&str>,
         loader: Option<&str>,
     ) -> Result<Vec<ResourceVersion>>;
+    /// Small metadata sample for lazy peer identification; never download artifacts.
+    async fn get_peer_versions(&self, project_id: &str) -> Result<Vec<ResourceVersion>> {
+        let mut versions = self.get_versions(project_id, None, None).await?;
+        versions.truncate(3);
+        Ok(versions)
+    }
     async fn get_version(&self, project_id: &str, version_id: &str) -> Result<ResourceVersion>;
     async fn get_version_details(
         &self,

@@ -24,6 +24,12 @@ use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
 use crate::schema::vesta::resource_project::dsl as rp_dsl;
 use crate::utils::db::get_vesta_conn;
 
+/// Empty/invalid hashes must never establish cross-provider identity.
+fn peer_sha1(hash: &str) -> Option<String> {
+    (hash.len() == 40 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .then(|| hash.to_ascii_lowercase())
+}
+
 fn is_record_incomplete(record: &ResourceProjectRecord) -> bool {
     record.metadata_synced_at.is_none() || record.summary.trim().is_empty()
 }
@@ -815,46 +821,45 @@ impl ResourceManager {
                 }
             }
 
-            let query = SearchQuery {
-                text: Some(current.name.clone()),
-                resource_type: current.resource_type,
-                limit: 10,
-                ..Default::default()
-            };
-
-            if let Ok(results) = self.search(other_platform, query).await {
-                let c_name = current.name.to_lowercase();
-                let c_author = current.author.to_lowercase();
-
-                for hit in results.hits {
-                    let h_name = hit.name.to_lowercase();
-                    let h_author = hit.author.to_lowercase();
-
-                    let name_match =
-                        h_name == c_name || h_name.contains(&c_name) || c_name.contains(&h_name);
-                    let exact_name = h_name == c_name;
-                    let author_match = h_author.contains(&c_author)
-                        || c_author.contains(&h_author)
-                        || (c_author.starts_with("yung") && h_author.starts_with("yung"));
-
-                    if exact_name || (name_match && author_match) {
-                        return Ok(Some(hit));
-                    }
-                }
+            // Both providers expose file SHA-1 metadata. A title/author match is only
+            // a search hint: forks, ports and unrelated projects can share those names.
+            let versions = self
+                .get_source(current.source)
+                .await?
+                .get_peer_versions(&current.id)
+                .await?;
+            let hashes: HashSet<String> = versions
+                .iter()
+                .filter_map(|version| peer_sha1(&version.hash))
+                .collect();
+            if hashes.is_empty() {
+                continue;
             }
 
             if other_platform == SourcePlatform::Modrinth {
-                if let Ok(versions) = self
-                    .get_versions(current.source, &current.id, false, None, None)
-                    .await
-                {
-                    for v in versions.iter().take(3) {
-                        if v.hash.len() == 40 {
-                            if let Ok((project, _)) =
-                                self.get_by_hash(SourcePlatform::Modrinth, &v.hash).await
-                            {
-                                return Ok(Some(project));
-                            }
+                for hash in &hashes {
+                    if let Ok((project, _)) = self.get_by_hash(other_platform, hash).await {
+                        return Ok(Some(project));
+                    }
+                }
+            } else {
+                // CurseForge cannot look up SHA-1 directly. Computing its murmur2
+                // fingerprint would require downloading the artifact. Instead inspect
+                // only three search candidates and one page of three files each.
+                let query = SearchQuery {
+                    text: Some(current.name.clone()),
+                    resource_type: current.resource_type,
+                    limit: 3,
+                    ..Default::default()
+                };
+                let results = self.search(other_platform, query).await?;
+                let source = self.get_source(other_platform).await?;
+                for hit in results.hits.into_iter().take(3) {
+                    if let Ok(versions) = source.get_peer_versions(&hit.id).await {
+                        if versions.iter().any(|version| {
+                            peer_sha1(&version.hash).is_some_and(|hash| hashes.contains(&hash))
+                        }) {
+                            return Ok(Some(hit));
                         }
                     }
                 }
@@ -1400,7 +1405,15 @@ pub fn is_loader_compatible(supported: &[String], target: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{dependency_type_for_pinned_loaders, dependency_version_filters};
+    use super::{dependency_type_for_pinned_loaders, dependency_version_filters, peer_sha1};
+
+    #[test]
+    fn peer_identity_requires_a_real_sha1() {
+        assert_eq!(peer_sha1(""), None);
+        assert_eq!(peer_sha1("123456"), None);
+        assert_eq!(peer_sha1(&"z".repeat(40)), None);
+        assert_eq!(peer_sha1(&"A".repeat(40)), Some("a".repeat(40)));
+    }
     use crate::models::resource::{ResourceType, SourcePlatform};
 
     #[test]

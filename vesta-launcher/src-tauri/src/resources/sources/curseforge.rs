@@ -1010,6 +1010,25 @@ impl ResourceSource for CurseForgeSource {
             .collect())
     }
 
+    async fn get_peer_versions(&self, project_id: &str) -> Result<Vec<ResourceVersion>> {
+        // Peer discovery must not paginate up to 1000 files like the versions page.
+        let numeric_id = project_id.parse::<u64>()?;
+        let response = self
+            .http_get(&format!(
+                "https://api.curseforge.com/v1/mods/{numeric_id}/files?index=0&pageSize=3"
+            ))
+            .send()
+            .await?
+            .error_for_status()?;
+        let files: CFFilesResponse = response.json().await?;
+        Ok(files
+            .data
+            .into_iter()
+            .take(3)
+            .map(|file| Self::map_file(file, project_id.to_string()))
+            .collect())
+    }
+
     async fn get_version(&self, project_id: &str, version_id: &str) -> Result<ResourceVersion> {
         // For CurseForge, `version_id` is the mod/file ID (CF API: /mods/{project}/files/{file_id}).
         let numeric_id = if project_id.is_empty() {
