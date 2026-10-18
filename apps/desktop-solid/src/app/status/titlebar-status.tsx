@@ -123,15 +123,6 @@ function InboxRow(props: { row: HostNotification }) {
         </Show>
       </div>
       <div data-vesta="inbox-row-actions">
-        <Show when={!props.row.read}>
-          <IconButton
-            variant="ghost"
-            size="sm"
-            label={t('activity.inbox-mark-read', { title: props.row.title })}
-            icon={<Icon name="icons/controls/check" size={12} />}
-            onClick={() => void notifications.markRead(key()).catch(() => undefined)}
-          />
-        </Show>
         <IconButton
           variant="ghost"
           size="sm"
@@ -145,22 +136,30 @@ function InboxRow(props: { row: HostNotification }) {
 }
 
 /**
- * The notification inbox: a bell that appears only while something is unread (it stays
- * while its popover is open, so reading the last item does not pull the panel away).
+ * The notification inbox: a bell that appears while anything is kept, with a dot while
+ * something is unread. Opening it reads everything; × removes one row, Clear all the rest.
  */
 export function InboxControl() {
   const [open, setOpen] = createSignal(false, { name: 'inboxOpen' });
   const unread = () => notifications.unreadCount();
-  const markAll = () => {
+  const readAll = () => {
     for (const row of notifications.list()) if (!row.read) void notifications.markRead(notificationKey(row)).catch(() => undefined);
+  };
+  const clearAll = () => {
+    for (const row of notifications.list()) void notifications.dismiss(notificationKey(row)).catch(() => undefined);
+    setOpen(false);
+  };
+  const toggle = (next: boolean) => {
+    setOpen(next);
+    if (next) readAll();
   };
 
   return (
-    <Show when={unread() > 0 || open()}>
+    <Show when={notifications.list().length > 0 || open()}>
       <span data-vesta="titlebar-status-item">
         <Popover
           open={open()}
-          onOpenChange={setOpen}
+          onOpenChange={toggle}
           placement="bottom-end"
           title={t('activity.inbox-title')}
           class="inbox-panel"
@@ -175,9 +174,9 @@ export function InboxControl() {
           )}
         >
           <div data-vesta="inbox-panel">
-            <Show when={unread() > 0}>
-              <Button class="inbox-mark-all" size="sm" variant="ghost" onClick={markAll}>
-                {t('activity.inbox-mark-all')}
+            <Show when={notifications.list().length > 0}>
+              <Button class="inbox-clear-all" size="sm" variant="ghost" onClick={clearAll}>
+                {t('activity.inbox-clear-all')}
               </Button>
             </Show>
             <Show when={notifications.list().length} fallback={<p data-vesta="inbox-empty">{t('activity.inbox-empty')}</p>}>

@@ -28,7 +28,7 @@
   }
 
   .activity-panel-clear,
-  .inbox-mark-all {
+  .inbox-clear-all {
     position: absolute;
     inset-block-start: 4px;
     inset-inline-end: 6px;

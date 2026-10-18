@@ -3,7 +3,7 @@
  * Hooks:  [data-vesta=titlebar-status-item] (data-kind=update-progress), [data-vesta=titlebar-badge]
  *         [data-vesta=titlebar-dot] (data-tone=danger), [data-vesta=titlebar-update-ring] -track -value
  *         [data-vesta=titlebar-restart] -label (data-error)
- *         .inbox-panel, .inbox-mark-all, [data-vesta=inbox-panel] -empty, [data-vesta=inbox-rows]
+ *         .inbox-panel, .inbox-clear-all, [data-vesta=inbox-panel] -empty, [data-vesta=inbox-rows]
  *         [data-vesta=inbox-row] -icon -copy -title -description -time -actions
  * States: inbox-row: data-unread, data-severity (info | success | warning | error);
  *         titlebar-status-item[data-kind=update-progress]: data-indeterminate

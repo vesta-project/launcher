@@ -54,6 +54,5 @@ activity-inbox-label = { $count ->
    *[other] { $count } unread notifications
   }
 activity-inbox-empty = You're all caught up.
-activity-inbox-mark-all = Mark all read
-activity-inbox-mark-read = Mark { $title } as read
+activity-inbox-clear-all = Clear all
 activity-inbox-dismiss = Dismiss { $title }
