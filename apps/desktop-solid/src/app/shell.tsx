@@ -6,7 +6,7 @@ import { findInstance } from '../features/instances/catalog';
 import { AccountLoginDialog } from '../features/accounts/account-login-dialog';
 import { ExternalLinkDialog } from '../features/links/external-link-dialog';
 import { LinkPreview } from '../features/links/link-preview';
-import { Button, TooltipHints } from '@vesta/ui';
+import { Button, TooltipHints, ToastRegion } from '@vesta/ui';
 import { t } from '../localization';
 import { instanceError, clearInstanceError, refreshNativeInstances, useInstanceSync } from '../features/instances/native-service';
 import { useAccountSync } from '../features/accounts/accounts';
@@ -24,6 +24,7 @@ import { goBack } from './transition';
 import './shell.css';
 import '../styles/reduced-motion.css';
 import { useReducedMotion } from '../features/settings/reduced-motion';
+import { useInstanceShortcutRuntime } from '../features/instances/shortcut-runtime';
 import { useShortcutRuntime } from '../features/settings/shortcut-runtime';
 
 /** Window frame: titlebar across the top, then the rail beside the scene. */
@@ -38,6 +39,7 @@ export function Shell() {
   useSettingsResourceSync();
   prefetchSettingsWhenIdle();
   useInstanceSync();
+  useInstanceShortcutRuntime();
   useMouseBack();
 
   return (
@@ -45,6 +47,7 @@ export function Shell() {
       <Titlebar />
       <AccountLoginDialog />
       <TooltipHints />
+      <ToastRegion />
       <LinkPreview />
       <ExternalLinkDialog />
       <Show when={instanceError()}><div data-vesta="instance-service-error" role="alert">

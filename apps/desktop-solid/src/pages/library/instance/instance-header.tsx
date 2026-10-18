@@ -1,4 +1,4 @@
-import { Button, IconButton, Menu, MenuItem } from "@vesta/ui";
+import { Button, IconButton, Menu } from "@vesta/ui";
 import { Show } from "solid-js";
 import { Icon } from "../../../components/icon";
 import { formatPlaytime, statsFor } from "../../../features/instances/details";
@@ -9,12 +9,11 @@ import {
 } from "../../../features/instances/catalog";
 import { route } from "../../../app/router";
 import {
-  nativeInstances,
   instancePending,
-  openNativeInstanceFolder,
 } from "../../../features/instances/native-service";
 import { t } from "../../../localization";
 import "./instance-header.css";
+import { InstanceActionItems } from "../../../features/instances/action-menu";
 
 const loaderLogos: Record<string, string> = {
   fabric: "branding/modloaders/fabric-logo",
@@ -186,15 +185,7 @@ export function InstanceHeader(props: {
               />
             )}
           >
-            <MenuItem
-              icon={<Icon name="icons/content/folder" />}
-              disabled={!nativeInstances}
-              onSelect={() =>
-                void openNativeInstanceFolder(props.entry.instance.id)
-              }
-            >
-              {t("instance.open-folder")}
-            </MenuItem>
+            <InstanceActionItems instance={instance()} state={props.entry.state} pending={instancePending(instance().id)} />
           </Menu>
           <Button
             tone={action().tone}

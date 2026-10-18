@@ -137,7 +137,7 @@ export function useInstanceSync() {
 }
 
 /** Resolve identity by numeric ID and fetch fresh settings before every mutation. */
-export async function performNative(id: string, action: (record: NativeInstance) => Promise<unknown>): Promise<boolean> {
+export async function performNative(id: string, action: (record: NativeInstance) => Promise<unknown>, refreshCatalog = true): Promise<boolean> {
   const numeric = Number(id);
   if (!nativeInstances || !Number.isInteger(numeric) || numeric < 1) return false;
   if (instancePending(id)) return false;
@@ -146,7 +146,7 @@ export async function performNative(id: string, action: (record: NativeInstance)
   try {
     const record = await invoke<NativeInstance>('get_instance', { instanceId: numeric });
     await action(record);
-    await refreshNativeInstances(true);
+    if (refreshCatalog) await refreshNativeInstances(true);
     return true;
   } catch (reason) { setError(String(reason)); return false; }
   finally { setPending((current) => { const next = new Set(current); next.delete(numeric); return next; }); }
@@ -157,24 +157,32 @@ export const runInstance = (id: string) => performNative(id, async (record) => {
     await invoke('kill_instance', { inst: record });
     await refreshRuntime();
   } else {
-    const account = untrack(activeAccount);
-    if (!account || ['guest', 'demo'].includes(account.account_type.toLowerCase())) throw new Error('Sign in with Microsoft to launch an instance.');
-    const status = record.installationStatus;
-    if (!status || status === 'pending' || status.startsWith('failed') || status === 'interrupted') {
-      await invoke('resume_instance_operation', { instanceId: record.id });
-    } else {
-      const slug = instanceSlug(record.name);
-      runtimeRevision++;
-      setRuntime((current) => ({ ...current, [slug]: 'warming' }));
-      try { await invoke('launch_instance', { instanceData: record }); }
-      finally {
-        runtimeRevision++;
-        setRuntime((current) => { const next = { ...current }; delete next[slug]; return next; });
-        await refreshRuntime();
-      }
-    }
+    await launchRecord(record);
   }
 });
+/** Direct-launch shortcuts must never stop a running game. */
+export const launchNativeInstance = (id: string) => performNative(id, async (record) => {
+  if (await invoke<boolean>('is_instance_running', { instanceData: record })) return;
+  await launchRecord(record);
+});
+async function launchRecord(record: NativeInstance) {
+  const account = untrack(activeAccount);
+  if (!account || ['guest', 'demo'].includes(account.account_type.toLowerCase())) throw new Error('Sign in with Microsoft to launch an instance.');
+  const status = record.installationStatus;
+  if (!status || status === 'pending' || status.startsWith('failed') || status === 'interrupted') {
+    await invoke('resume_instance_operation', { instanceId: record.id });
+  } else {
+    const slug = instanceSlug(record.name);
+    runtimeRevision++;
+    setRuntime((current) => ({ ...current, [slug]: 'warming' }));
+    try { await invoke('launch_instance', { instanceData: record }); }
+    finally {
+      runtimeRevision++;
+      setRuntime((current) => { const next = { ...current }; delete next[slug]; return next; });
+      await refreshRuntime();
+    }
+  }
+}
 export const deleteNativeInstance = (id: string) => performNative(id, (record) => invoke('delete_instance', { instanceId: record.id }));
 export const resetNativeInstance = (id: string) => performNative(id, (record) => invoke('reset_instance', { instanceId: record.id }));
 export const repairNativeInstance = (id: string) => performNative(id, (record) => invoke('repair_instance', { instanceId: record.id }));

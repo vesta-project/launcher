@@ -1,5 +1,22 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "instance-actions.details",
+  "instance-actions.new-window",
+  "instance-actions.content",
+  "instance-actions.pin",
+  "instance-actions.unpin",
+  "instance-actions.desktop-launch",
+  "instance-actions.desktop-page",
+  "instance-actions.copy-link",
+  "instance-actions.logs",
+  "instance-actions.crash",
+  "instance-actions.shortcut-launch",
+  "instance-actions.shortcut-page",
+  "instance-actions.shortcut-created",
+  "instance-actions.shortcut-failed",
+  "instance-actions.link-copied",
+  "instance-actions.intent-failed",
+
   "activity.java-check",
   "activity.metadata-refresh",
   "activity.fixture-install",

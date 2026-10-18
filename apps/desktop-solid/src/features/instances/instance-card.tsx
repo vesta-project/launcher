@@ -1,9 +1,10 @@
 import type { JSX } from '@solidjs/web';
 import { Show, createMemo, createSignal, onCleanup } from 'solid-js';
-import { ContextMenu, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, Tooltip } from '@vesta/ui';
+import { ContextMenu, ContextMenuItem, Tooltip } from '@vesta/ui';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import './instance-card.css';
+import { InstanceActionItems } from './action-menu';
 
 /**
  * What the card shows. Each value mirrors a state the old launcher card had.
@@ -168,15 +169,15 @@ export function InstanceCard(props: InstanceCardProps) {
   const menuPrimaryLabel = () => {
     switch (kind()) {
       case 'running':
-        return 'Stop';
+        return t('instance.stop');
       case 'interrupted':
-        return interrupted()?.initial ? t('management.install') : 'Resume operation';
+        return interrupted()?.initial ? t('management.install') : t('instance.resume');
       case 'crashed':
-        return 'Crash details';
+        return t('instance-actions.crash');
       case 'failed':
-        return 'Retry installation';
+        return t('instance.retry-installation');
       default:
-        return 'Play';
+        return t('instance.play');
     }
   };
 
@@ -361,27 +362,15 @@ export function InstanceCard(props: InstanceCardProps) {
 
   return (
     <ContextMenu trigger={renderCard}>
-      <ContextMenuItem onSelect={() => props.onPlay?.()} disabled={busy()}>
+      <ContextMenuItem onSelect={() => {
+        if (kind() === 'crashed') props.onOpenCrash?.();
+        else if (kind() === 'failed') props.onRetry?.();
+        else if (kind() === 'interrupted') props.onResume?.();
+        else props.onPlay?.();
+      }} disabled={busy()}>
         {menuPrimaryLabel()}
       </ContextMenuItem>
-      <ContextMenuItem disabled={!props.onOpen} onSelect={() => props.onOpen?.()}>Open Details</ContextMenuItem>
-      <ContextMenuItem disabled={!props.onOpenStandalone} onSelect={() => props.onOpenStandalone?.()}>Open in New Window</ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem disabled={!props.onAddContent} onSelect={() => props.onAddContent?.()}>Add Content</ContextMenuItem>
-      <ContextMenuItem disabled={!props.onOpenFolder} onSelect={() => props.onOpenFolder?.()}>Open Folder</ContextMenuItem>
-      <ContextMenuItem onSelect={() => props.onTogglePin?.()}>
-        {props.instance.pinned ? 'Unpin from Sidebar' : 'Pin to Sidebar'}
-      </ContextMenuItem>
-      <ContextMenuSub label="Manage">
-        <ContextMenuItem disabled={!props.onRepair || busy() || kind() === 'running'} onSelect={() => props.onRepair?.()}>Repair</ContextMenuItem>
-        <ContextMenuItem disabled={!props.onDuplicate || busy() || kind() === 'running'} onSelect={() => props.onDuplicate?.()}>Duplicate</ContextMenuItem>
-        <ContextMenuItem disabled={!props.onExport || busy() || kind() === 'running'} onSelect={() => props.onExport?.()}>Export Instance</ContextMenuItem>
-        <ContextMenuItem disabled={!props.onHardReset || busy() || kind() === 'running'} onSelect={() => props.onHardReset?.()}>Hard Reset</ContextMenuItem>
-      </ContextMenuSub>
-      <ContextMenuSeparator />
-      <ContextMenuItem tone="danger" disabled={!props.onUninstall || busy() || kind() === 'running'} onSelect={() => props.onUninstall?.()}>
-        Uninstall
-      </ContextMenuItem>
+      <InstanceActionItems {...props} context />
     </ContextMenu>
   );
 }
