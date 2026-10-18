@@ -17,7 +17,7 @@
       var(--vesta-color-surface-sunken) 70%,
       var(--vesta-color-surface)
     );
-    --board-bg: var(--vesta-color-surface);
+    --board-bg: var(--vesta-color-chrome);
 
     border: var(--vesta-border-width) solid var(--vesta-color-border);
   }

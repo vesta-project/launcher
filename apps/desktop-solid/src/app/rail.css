@@ -10,7 +10,7 @@
   :where([data-vesta="rail"]) {
     --rail-width: 64px;
     --rail-button-size: 40px;
-    --rail-button-radius: 8px;
+    --rail-button-radius: var(--vesta-radius-container);
     --rail-tile-border: 2px;
     --rail-gap: 4px;
     --rail-account-gap: var(--vesta-space-4);

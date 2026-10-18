@@ -2,7 +2,7 @@ import { untrack } from 'solid-js';
 import { t } from '../../localization';
 import { clearFinishedActivities, receiveActivity, activities } from './activity-store';
 import { setUpdaterFixture } from '../settings/updates';
-export type ActivityFixture = 'single' | 'multiple' | 'background' | 'success' | 'failure' | 'update-ready';
+export type ActivityFixture = 'single' | 'multiple' | 'background' | 'success' | 'failure' | 'update-ready' | 'indeterminate' | 'long-title';
 /**
  * Dev-only simulator, on `window.vestaDev.simulateActivity('multiple')` in dev builds (the
  * WebKit console cannot run top-level `import`). Only fixture rows are touched, so real
@@ -22,12 +22,12 @@ function startSimulation(scenario: ActivityFixture): () => void {
     return () => clearTimeout(timer);
   }
   const count = scenario === 'multiple' ? 5 : 1;
-  for (let i = 0; i < count; i++) receiveActivity({ id: `fixture-install-${i}`, kind: 'task', title: `${title} ${i + 1}`, subtitle: 'Minecraft 1.21.1 · Fabric',
+  for (let i = 0; i < count; i++) receiveActivity({ id: `fixture-install-${i}`, kind: 'task', title: scenario === 'long-title' ? `${title} — ${'Minecraft modpack '.repeat(8)}` : `${title} ${i + 1}`, subtitle: 'Minecraft 1.21.1 · Fabric',
     iconFallback: 'minecraft', state: scenario === 'success' ? 'done' : scenario === 'failure' ? 'failed' : 'running',
-    progress: scenario === 'multiple' ? i / 6 : 0.42, weight: (i + 1) * 100, step: t('activity.fixture-step', { count: 47, max: 112 }),
+    progress: scenario === 'indeterminate' ? undefined : scenario === 'multiple' ? i / 6 : 0.42, weight: (i + 1) * 100, step: t('activity.fixture-step', { count: 47, max: 112 }),
     cancellable: true, startedAt: now, target: { instanceId: `fixture-${i}` }, action: 'play',
     error: scenario === 'failure' ? t('activity.fixture-error') : undefined });
-  if (scenario === 'success' || scenario === 'failure') return () => {};
+  if (scenario === 'success' || scenario === 'failure' || scenario === 'indeterminate') return () => {};
   const timer = setInterval(() => {
     for (const row of untrack(activities)) {
       if (row.state !== 'running' || !row.id.startsWith('fixture-install-')) continue;

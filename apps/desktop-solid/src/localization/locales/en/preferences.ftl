@@ -67,7 +67,7 @@ prefs-appearance-style = Material style
 prefs-appearance-style-glass = Glass
 prefs-appearance-style-frosted = Frosted
 prefs-appearance-style-flat = Flat
-prefs-appearance-advanced = Advanced style
+prefs-appearance-advanced = Theme details
 prefs-appearance-translucency = Layout translucency
 prefs-appearance-grain = Material grain
 prefs-appearance-gradient = Background gradient
@@ -442,3 +442,5 @@ prefs-general-trusted-sites-none = Links that leave the launcher ask before open
 prefs-general-trusted-sites-forget = Forget all
 prefs-about-checking = Checking for updates…
 prefs-about-update-available = An update is available.
+
+prefs-appearance-restore = Restore theme defaults

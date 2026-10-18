@@ -26,14 +26,9 @@ export const defaultTheme = {
   borderWidth: 1,
 } as const;
 
-export function themeSettings(
-  theme: Record<string, unknown>,
-): Record<string, unknown> {
+export function themeSettings(theme: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(themeFields).map(([key, field]) => [
-      key,
-      theme[field] ?? defaultTheme[field],
-    ]),
+    Object.entries(themeFields).map(([key, field]) => [key, theme[field] ?? defaultTheme[field]]),
   );
 }
 
@@ -183,25 +178,27 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
 
 /** Unknown stored ids fall back to Vesta. */
 export function themeDefinition(id: string): ThemeDefinition {
-  return (
-    themeDefinitions.find((definition) => definition.id === id) ??
-    themeDefinitions[0]!
-  );
+  return themeDefinitions.find((definition) => definition.id === id) ?? themeDefinitions[0]!;
 }
 
 /** Settings written when a preset is chosen. Colour mode and window effect are never touched. */
-export function presetUpdates(
-  definition: ThemeDefinition,
-): Record<string, unknown> {
-  const updates: Record<string, unknown> = {
-    theme_id: definition.id,
-    theme_style: definition.material,
-    theme_gradient_enabled: definition.background !== "none",
-    theme_gradient_type:
-      definition.background === "gradient" ? "linear" : "radial",
-  };
-  if (definition.hue !== null) updates.theme_primary_hue = definition.hue;
+export function presetUpdates(definition: ThemeDefinition): Record<string, unknown> {
+  const values = presetValues(definition);
+  const updates = themeSettings(values);
+  delete updates.theme; // Colour mode belongs to the launcher, not the preset.
   return updates;
+}
+
+/** Complete defaults, including every advanced setting; never inherit another theme's edits. */
+function presetValues(definition: ThemeDefinition): ThemeValues {
+  return {
+    ...defaultTheme,
+    id: definition.id,
+    hue: definition.hue ?? defaultTheme.hue,
+    material: definition.material,
+    gradient: definition.background !== "none",
+    gradientType: definition.background === "gradient" ? "linear" : "radial",
+  };
 }
 
 export const themePresets: {
@@ -213,19 +210,11 @@ export const themePresets: {
   id: definition.id,
   name: definition.name,
   definition,
-  values: {
-    ...defaultTheme,
-    id: definition.id,
-    hue: definition.hue ?? defaultTheme.hue,
-    material: definition.material,
-    gradient: definition.background !== "none",
-    gradientType: definition.background === "gradient" ? "linear" : "radial",
-  },
+  values: presetValues(definition),
 }));
 
 const wrap = (hue: number) => ((hue % 360) + 360) % 360;
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const pct = (value: number) => `${Math.round(value * 10) / 10}%`;
 
 /** Hue the accent palette really uses: adjustable themes follow the setting, others are fixed. */
@@ -241,11 +230,7 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
   const material = theme.material;
   const flat = material === "flat";
   const frosted = material === "frosted";
-  const t = clamp(
-    Number.isFinite(theme.translucency) ? theme.translucency : 0,
-    0,
-    100,
-  );
+  const t = clamp(Number.isFinite(theme.translucency) ? theme.translucency : 0, 0, 100);
 
   // Structure: canvas (most transparent) < chrome < panels < overlays; dense surfaces are opaque in CSS.
   const canvas = flat ? 100 : frosted ? 80 - 0.2 * t : 70 - 0.3 * t;
@@ -263,12 +248,7 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
         : harmony === "analogous"
           ? hue + 30
           : hue;
-  const end =
-    harmony === "triadic"
-      ? hue + 240
-      : harmony === "analogous"
-        ? hue - 30
-        : hue;
+  const end = harmony === "triadic" ? hue + 240 : harmony === "analogous" ? hue - 30 : hue;
   const vestaSignature = def.id === "vesta" && harmony === "analogous";
   const colors: [string, string, string] = def.fixedHues
     ? [
@@ -278,12 +258,8 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
       ]
     : [
         `oklch(0.74 0.13 ${hue})`,
-        vestaSignature
-          ? "oklch(0.6 0.2 285)"
-          : `oklch(0.6 0.12 ${wrap(secondary)})`,
-        vestaSignature
-          ? "oklch(0.76 0.15 60)"
-          : `oklch(0.76 0.12 ${wrap(end)})`,
+        vestaSignature ? "oklch(0.6 0.2 285)" : `oklch(0.6 0.12 ${wrap(secondary)})`,
+        vestaSignature ? "oklch(0.76 0.15 60)" : `oklch(0.76 0.12 ${wrap(end)})`,
       ];
   // Strength scales with --vesta-bg-strength (stronger in light mode); see theme-runtime.css.
   const mix = (color: string, strength: number) =>

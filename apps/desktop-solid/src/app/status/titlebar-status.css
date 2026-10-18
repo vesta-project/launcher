@@ -10,20 +10,20 @@
  * Knobs:  --update-progress (0–1, set inline)
  */
 @layer launcher {
-  :where([data-vesta='titlebar-status-item']) {
+  :where([data-vesta="titlebar-status-item"]) {
     display: inline-flex;
     flex: none;
     align-items: center;
     animation: titlebar-status-in 320ms cubic-bezier(0.32, 0.72, 0, 1);
   }
 
-  :where([data-vesta='titlebar-badge']) {
+  :where([data-vesta="titlebar-badge"]) {
     position: relative;
     display: grid;
     place-items: center;
   }
 
-  :where([data-vesta='titlebar-dot']) {
+  :where([data-vesta="titlebar-dot"]) {
     position: absolute;
     inset-block-start: -2px;
     inset-inline-end: -3px;
@@ -35,11 +35,11 @@
     animation: titlebar-dot-in 360ms cubic-bezier(0.32, 0.72, 0, 1);
   }
 
-  :where([data-vesta='titlebar-dot'][data-tone='danger']) {
+  :where([data-vesta="titlebar-dot"][data-tone="danger"]) {
     background: var(--vesta-color-danger);
   }
 
-  :where([data-vesta='titlebar-status-item'][data-kind='update-progress']) {
+  :where([data-vesta="titlebar-status-item"][data-kind="update-progress"]) {
     --update-progress: 0;
 
     display: grid;
@@ -49,11 +49,11 @@
     color: var(--vesta-color-accent-text);
   }
 
-  :where([data-vesta='titlebar-status-item'][data-kind='update-progress']) > :where(*) {
+  :where([data-vesta="titlebar-status-item"][data-kind="update-progress"]) > :where(*) {
     grid-area: 1 / 1;
   }
 
-  :where([data-vesta='titlebar-update-ring']) {
+  :where([data-vesta="titlebar-update-ring"]) {
     inline-size: 20px;
     block-size: 20px;
     fill: none;
@@ -61,11 +61,11 @@
     transform: rotate(-90deg);
   }
 
-  :where([data-vesta='titlebar-update-ring-track']) {
+  :where([data-vesta="titlebar-update-ring-track"]) {
     stroke: var(--vesta-color-fill-active);
   }
 
-  :where([data-vesta='titlebar-update-ring-value']) {
+  :where([data-vesta="titlebar-update-ring-value"]) {
     stroke: var(--vesta-color-accent-text);
     stroke-dasharray: 100;
     stroke-dashoffset: calc(100 - var(--update-progress) * 100);
@@ -73,13 +73,14 @@
     transition: stroke-dashoffset 360ms var(--vesta-ease-out);
   }
 
-  :where([data-vesta='titlebar-status-item'][data-indeterminate]) :where([data-vesta='titlebar-update-ring-value']) {
+  :where([data-vesta="titlebar-status-item"][data-indeterminate])
+    :where([data-vesta="titlebar-update-ring-value"]) {
     stroke-dasharray: 28 72;
     transform-origin: center;
     animation: status-spin 0.9s linear infinite;
   }
 
-  :where([data-vesta='titlebar-restart']) {
+  :where([data-vesta="titlebar-restart"]) {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -99,20 +100,20 @@
       transform var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
-  :where([data-vesta='titlebar-restart']:hover) {
+  :where([data-vesta="titlebar-restart"]:hover) {
     background: color-mix(in oklab, var(--vesta-color-accent) 28%, transparent);
   }
 
-  :where([data-vesta='titlebar-restart']:active) {
+  :where([data-vesta="titlebar-restart"]:active) {
     transform: scale(0.96);
   }
 
-  :where([data-vesta='titlebar-restart']:focus-visible) {
+  :where([data-vesta="titlebar-restart"]:focus-visible) {
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
     outline-offset: var(--vesta-focus-offset);
   }
 
-  :where([data-vesta='titlebar-restart'][data-error]) {
+  :where([data-vesta="titlebar-restart"][data-error]) {
     border-color: var(--vesta-color-danger-border);
     color: var(--vesta-color-danger-text);
   }
@@ -127,26 +128,26 @@
     overflow: hidden;
   }
 
-  :where([data-vesta='inbox-panel']) {
+  :where([data-vesta="inbox-panel"]) {
     max-block-size: min(420px, 70vh);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
 
-  :where([data-vesta='inbox-empty']) {
+  :where([data-vesta="inbox-empty"]) {
     margin: 0;
     padding: 8px 12px 14px;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
   }
 
-  :where([data-vesta='inbox-rows']) {
+  :where([data-vesta="inbox-rows"]) {
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  :where([data-vesta='inbox-row']) {
+  :where([data-vesta="inbox-row"]) {
     display: grid;
     grid-template-columns: 16px minmax(0, 1fr) auto;
     align-items: start;
@@ -155,30 +156,30 @@
     animation: activity-row-in var(--vesta-duration-slow) var(--vesta-ease-out);
   }
 
-  :where([data-vesta='inbox-row'] + [data-vesta='inbox-row']) {
+  :where([data-vesta="inbox-row"] + [data-vesta="inbox-row"]) {
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
-  :where([data-vesta='inbox-row-icon']) {
+  :where([data-vesta="inbox-row-icon"]) {
     display: grid;
     place-items: center;
     block-size: 18px;
     color: var(--vesta-color-text-muted);
   }
 
-  :where([data-vesta='inbox-row'][data-severity='success']) :where([data-vesta='inbox-row-icon']) {
+  :where([data-vesta="inbox-row"][data-severity="success"]) :where([data-vesta="inbox-row-icon"]) {
     color: var(--vesta-color-success-text);
   }
 
-  :where([data-vesta='inbox-row'][data-severity='warning']) :where([data-vesta='inbox-row-icon']) {
+  :where([data-vesta="inbox-row"][data-severity="warning"]) :where([data-vesta="inbox-row-icon"]) {
     color: var(--vesta-color-warning-text);
   }
 
-  :where([data-vesta='inbox-row'][data-severity='error']) :where([data-vesta='inbox-row-icon']) {
+  :where([data-vesta="inbox-row"][data-severity="error"]) :where([data-vesta="inbox-row-icon"]) {
     color: var(--vesta-color-danger-text);
   }
 
-  :where([data-vesta='inbox-row-copy']) {
+  :where([data-vesta="inbox-row-copy"]) {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -186,19 +187,19 @@
     padding-block-start: 1px;
   }
 
-  :where([data-vesta='inbox-row-title']) {
+  :where([data-vesta="inbox-row-title"]) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-md);
     font-weight: var(--vesta-weight-medium);
     overflow-wrap: anywhere;
   }
 
-  :where([data-vesta='inbox-row'][data-unread]) :where([data-vesta='inbox-row-title']) {
+  :where([data-vesta="inbox-row"][data-unread]) :where([data-vesta="inbox-row-title"]) {
     color: var(--vesta-color-text);
     font-weight: var(--vesta-weight-semibold);
   }
 
-  :where([data-vesta='inbox-row-description']) {
+  :where([data-vesta="inbox-row-description"]) {
     display: -webkit-box;
     margin: 0;
     overflow: hidden;
@@ -210,14 +211,27 @@
     line-clamp: 3;
   }
 
-  :where([data-vesta='inbox-row-time']) {
+  :where([data-vesta="inbox-row-time"]) {
     color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta='inbox-row-actions']) {
+  :where([data-vesta="inbox-row-actions"]) {
     display: flex;
     gap: 2px;
+  }
+
+  :where([data-vesta="inbox-notification-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+    padding-block: var(--vesta-space-2);
+  }
+  :where([data-vesta="inbox-action-error"]) {
+    margin: 0;
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
   }
 
   @keyframes titlebar-status-in {

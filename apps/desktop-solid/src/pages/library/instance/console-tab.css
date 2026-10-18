@@ -34,12 +34,8 @@
     min-inline-size: 120px;
   }
 
-  .console-follow,
   .console-actions {
     flex: none;
-  }
-
-  .console-actions {
     margin-inline-start: auto;
   }
 
@@ -103,10 +99,7 @@
     opacity: 0.35;
   }
 
-  :where(
-    [data-vesta="console-level"][aria-pressed="true"]
-      [data-vesta="console-level-dot"]
-  ) {
+  :where([data-vesta="console-level"][aria-pressed="true"] [data-vesta="console-level-dot"]) {
     opacity: 1;
   }
 
@@ -179,9 +172,9 @@
   }
 
   :where(
-    [data-vesta="console"][data-metadata] [data-vesta="log-level"],
-    [data-vesta="console"][data-metadata] [data-vesta="log-thread"]
-  ) {
+      [data-vesta="console"][data-metadata] [data-vesta="log-level"],
+      [data-vesta="console"][data-metadata] [data-vesta="log-thread"]
+    ) {
     display: block;
   }
 
@@ -194,18 +187,15 @@
     color: var(--vesta-color-warning-text);
   }
 
-  :where(
-    [data-vesta="log-line"][data-level="ERROR"],
-    [data-vesta="log-line"][data-level="FATAL"]
-  ) {
+  :where([data-vesta="log-line"][data-level="ERROR"], [data-vesta="log-line"][data-level="FATAL"]) {
     border-inline-start-color: var(--vesta-color-danger);
     background: color-mix(in oklab, var(--vesta-color-danger) 8%, transparent);
   }
 
   :where(
-    [data-vesta="log-line"][data-level="ERROR"] [data-vesta="log-text"],
-    [data-vesta="log-line"][data-level="FATAL"] [data-vesta="log-text"]
-  ) {
+      [data-vesta="log-line"][data-level="ERROR"] [data-vesta="log-text"],
+      [data-vesta="log-line"][data-level="FATAL"] [data-vesta="log-text"]
+    ) {
     color: var(--vesta-color-danger-text);
   }
 
@@ -229,8 +219,7 @@
     gap: var(--vesta-space-2);
     min-block-size: 30px;
     padding: 2px var(--instance-gutter);
-    border-block-start: var(--vesta-border-width) solid
-      var(--vesta-color-border);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
     background: var(--instance-bar-bg);
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
@@ -251,8 +240,7 @@
   }
 
   @container pane (max-width: 560px) {
-    :where([data-vesta="console-levels"]),
-    .console-follow [data-vesta="switch-label"] {
+    :where([data-vesta="console-levels"]) {
       display: none;
     }
   }

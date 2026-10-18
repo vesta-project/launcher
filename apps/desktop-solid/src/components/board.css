@@ -14,7 +14,7 @@
 
   :where([data-vesta='board']) {
     --board-bg: var(--vesta-color-panel);
-    --board-radius: 7px;
+    --board-radius: var(--vesta-radius-container);
 
     block-size: 100%;
     overflow-y: auto;
@@ -30,7 +30,7 @@
     content: '';
     position: absolute;
     inset: var(--board-inset);
-    border-radius: 7px;
+    border-radius: var(--vesta-radius-container);
     pointer-events: none;
     opacity: var(--vesta-theme-grain-opacity, 0);
     background-image: var(--vesta-theme-grain-image, none);

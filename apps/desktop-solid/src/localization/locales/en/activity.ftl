@@ -55,4 +55,6 @@ activity-inbox-label = { $count ->
   }
 activity-inbox-empty = You're all caught up.
 activity-inbox-clear-all = Clear all
-activity-inbox-dismiss = Dismiss { $title }
+activity-inbox-dismiss = Dismiss
+
+activity-action-unavailable = This action is not available in this version of the launcher.

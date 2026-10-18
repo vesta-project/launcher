@@ -7,7 +7,6 @@ import {
   MenuSeparator,
   MenuSub,
   Select,
-  Switch,
   TextField,
 } from "@vesta/ui";
 
@@ -250,18 +249,6 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
             )}
           </For>
         </div>
-        <Switch
-          size="sm"
-          class="console-follow"
-          label="Follow"
-          aria-label="Follow"
-          disabled={source().kind !== "live"}
-          checked={source().kind === "live" && state().follow}
-          onChange={(follow) => {
-            if (follow) setEarlierEnd(null);
-            patch({ follow });
-          }}
-        />
         <Menu
           placement="bottom-end"
           trigger={(menuProps) => (

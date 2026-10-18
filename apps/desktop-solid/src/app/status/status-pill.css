@@ -18,7 +18,7 @@
  * Narrow windows: the slot is a container; the label drops first, then a ring replaces the icon.
  */
 @layer launcher {
-  :where([data-vesta='status-pill-slot']) {
+  :where([data-vesta="status-pill-slot"]) {
     /* Takes whatever titlebar-end has left; the pill sits at its end and never pushes the
        breadcrumb (the centre column wins, this column shrinks). */
     container: status-pill / inline-size;
@@ -30,13 +30,13 @@
     block-size: 100%;
   }
 
-  :where([data-vesta='status-pill']) {
+  :where([data-vesta="status-pill"]) {
     --status-pill-height: 22px;
     --status-pill-progress: 0;
     --status-pill-tint: color-mix(in oklab, var(--vesta-color-accent) 30%, transparent);
     --status-pill-edge: color-mix(in oklab, var(--vesta-color-accent-text) 60%, transparent);
     --status-pill-border: var(--vesta-color-border);
-    --status-pill-morph: 420ms;
+    --status-pill-morph: var(--vesta-duration-normal);
     --status-pill-ease: cubic-bezier(0.32, 0.72, 0, 1);
 
     position: relative;
@@ -48,7 +48,7 @@
     max-inline-size: 100cqi;
     block-size: var(--status-pill-height);
     overflow: hidden;
-    border-radius: var(--vesta-radius-full);
+    border-radius: var(--vesta-radius-control);
     background: var(--vesta-color-fill);
     color: var(--vesta-color-text);
     font-size: var(--vesta-text-sm);
@@ -65,19 +65,19 @@
   }
 
   /* The hairline sits above the fill, so it reads as one shape at any progress. */
-  :where([data-vesta='status-pill'])::after {
+  :where([data-vesta="status-pill"])::after {
     position: absolute;
     z-index: 2;
     inset: 0;
     border-radius: inherit;
     box-shadow: inset 0 0 0 var(--vesta-border-width) var(--status-pill-border);
     pointer-events: none;
-    content: '';
+    content: "";
     transition: box-shadow var(--vesta-duration-normal) var(--vesta-ease-standard);
   }
 
   /* Idle: shrink to a dot and fade, then leave the accessibility tree once it is gone. */
-  :where([data-vesta='status-pill'][data-collapsed]) {
+  :where([data-vesta="status-pill"][data-collapsed]) {
     visibility: hidden;
     opacity: 0;
     transform: scale(0.5);
@@ -88,45 +88,43 @@
       visibility 0s linear var(--status-pill-morph);
   }
 
-  :where([data-vesta='status-pill']:hover) {
+  :where([data-vesta="status-pill"]:hover) {
     --status-pill-border: var(--vesta-color-border-strong);
   }
 
-  :where([data-vesta='status-pill'][data-open]) {
+  :where([data-vesta="status-pill"][data-open]) {
     --status-pill-border: var(--vesta-color-accent-border);
     --status-pill-tint: color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
   }
 
-  :where([data-vesta='status-pill']:has([data-vesta='status-pill-button']:focus-visible)) {
+  :where([data-vesta="status-pill"]:has([data-vesta="status-pill-button"]:focus-visible)) {
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
     outline-offset: var(--vesta-focus-offset);
   }
 
-  :where([data-vesta='status-pill'][data-face='quiet']) {
+  :where([data-vesta="status-pill"][data-face="quiet"]) {
     --status-pill-border: transparent;
     background: transparent;
   }
 
-  :where([data-vesta='status-pill'][data-face='quiet']:hover) {
+  :where([data-vesta="status-pill"][data-face="quiet"]:hover) {
     background: var(--vesta-color-fill);
   }
 
-  :where([data-vesta='status-pill'][data-face='success']) {
+  :where([data-vesta="status-pill"][data-face="success"]) {
     --status-pill-tint: color-mix(in oklab, var(--vesta-color-success) 24%, transparent);
     --status-pill-edge: transparent;
     --status-pill-border: var(--vesta-color-success-border);
-    animation: status-pill-pop 520ms var(--status-pill-ease);
   }
 
-  :where([data-vesta='status-pill'][data-face='failed']) {
+  :where([data-vesta="status-pill"][data-face="failed"]) {
     --status-pill-tint: color-mix(in oklab, var(--vesta-color-danger) 24%, transparent);
     --status-pill-edge: transparent;
     --status-pill-border: var(--vesta-color-danger-border);
-    animation: status-pill-nudge 420ms var(--vesta-ease-standard);
   }
 
   /* The pill is the progress bar: a full-width tint slid in from the start edge. */
-  :where([data-vesta='status-pill-fill']) {
+  :where([data-vesta="status-pill-fill"]) {
     position: absolute;
     z-index: 0;
     inset: 0;
@@ -141,27 +139,12 @@
     pointer-events: none;
   }
 
-  :where([dir='rtl']) :where([data-vesta='status-pill-fill']) {
+  :where([dir="rtl"]) :where([data-vesta="status-pill-fill"]) {
     transform: translateX(calc((1 - var(--status-pill-progress)) * 100%));
   }
 
-  /* A soft sheen travels across the filled part, so long installs never look frozen. */
-  :where([data-vesta='status-pill'][data-face='single'], [data-vesta='status-pill'][data-face='multi']) :where([data-vesta='status-pill-fill'])::after {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in oklab, var(--vesta-color-accent-text) 22%, transparent),
-      transparent
-    );
-    transform: translateX(-100%);
-    animation: status-pill-sheen 2.8s var(--vesta-ease-standard) 0.6s infinite;
-    content: '';
-  }
-
   /* Unknown progress: a band sweeps the pill instead of a fill. */
-  :where([data-vesta='status-pill'][data-indeterminate]) :where([data-vesta='status-pill-fill']) {
+  :where([data-vesta="status-pill"][data-indeterminate]) :where([data-vesta="status-pill-fill"]) {
     inset-inline: -40%;
     border-inline-end: 0;
     background: linear-gradient(90deg, transparent, var(--status-pill-tint), transparent);
@@ -169,11 +152,12 @@
     animation: status-pill-sweep 1.6s var(--vesta-ease-standard) infinite;
   }
 
-  :where([data-vesta='status-pill'][data-indeterminate]) :where([data-vesta='status-pill-fill'])::after {
+  :where([data-vesta="status-pill"][data-indeterminate])
+    :where([data-vesta="status-pill-fill"])::after {
     content: none;
   }
 
-  :where([data-vesta='status-pill-content']) {
+  :where([data-vesta="status-pill-content"]) {
     position: relative;
     z-index: 1;
     display: flex;
@@ -183,7 +167,7 @@
     block-size: 100%;
   }
 
-  :where([data-vesta='status-pill-button']) {
+  :where([data-vesta="status-pill-button"]) {
     display: flex;
     align-items: center;
     block-size: 100%;
@@ -198,7 +182,7 @@
     outline: none;
   }
 
-  :where([data-vesta='status-pill-face']) {
+  :where([data-vesta="status-pill-face"]) {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -206,46 +190,47 @@
     animation: status-pill-face-in var(--status-pill-morph) var(--status-pill-ease) both;
   }
 
-  :where([data-vesta='status-pill-face'][data-face='quiet']) {
+  :where([data-vesta="status-pill-face"][data-face="quiet"]) {
     justify-content: center;
     inline-size: var(--status-pill-height);
     padding: 0;
   }
 
-  :where([data-vesta='status-pill-face'][data-face='failed']) {
+  :where([data-vesta="status-pill-face"][data-face="failed"]) {
     padding-inline-start: 8px;
   }
 
-  :where([data-vesta='status-pill-face'][data-face='success']) {
+  :where([data-vesta="status-pill-face"][data-face="success"]) {
     padding-inline-end: 4px;
   }
 
-  :where([data-vesta='status-pill-lead']) {
+  :where([data-vesta="status-pill-lead"]) {
     position: relative;
     display: grid;
     flex: none;
     place-items: center;
   }
 
-  :where([data-vesta='status-pill-lead']) > :where(*) {
+  :where([data-vesta="status-pill-lead"]) > :where(*) {
     grid-area: 1 / 1;
   }
 
-  :where([data-vesta='status-pill-stack']) {
+  :where([data-vesta="status-pill-stack"]) {
     display: flex;
     align-items: center;
     margin-inline-start: 1px;
   }
 
-  :where([data-vesta='status-pill-stack']) :where([data-vesta='activity-icon']) {
+  :where([data-vesta="status-pill-stack"]) :where([data-vesta="activity-icon"]) {
     box-shadow: 0 0 0 1.5px var(--vesta-color-surface);
   }
 
-  :where([data-vesta='status-pill-stack']) :where([data-vesta='activity-icon'] + [data-vesta='activity-icon']) {
+  :where([data-vesta="status-pill-stack"])
+    :where([data-vesta="activity-icon"] + [data-vesta="activity-icon"]) {
     margin-inline-start: -6px;
   }
 
-  :where([data-vesta='status-pill-more']) {
+  :where([data-vesta="status-pill-more"]) {
     margin-inline-start: 4px;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
@@ -253,25 +238,25 @@
     font-variant-numeric: tabular-nums;
   }
 
-  :where([data-vesta='status-pill-label']) {
+  :where([data-vesta="status-pill-label"]) {
     /* Never wider than 150px, and narrower when the slot is short (the rest needs ~84px). */
     max-inline-size: clamp(48px, 100cqi - 84px, 150px);
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  :where([data-vesta='status-pill-percent']) {
+  :where([data-vesta="status-pill-percent"]) {
     color: var(--vesta-color-accent-text);
     font-weight: var(--vesta-weight-semibold);
     font-variant-numeric: tabular-nums;
   }
 
-  :where([data-vesta='status-pill-alert']) {
+  :where([data-vesta="status-pill-alert"]) {
     color: var(--vesta-color-danger-text);
     font-weight: var(--vesta-weight-bold);
   }
 
-  :where([data-vesta='status-pill-ring']) {
+  :where([data-vesta="status-pill-ring"]) {
     display: none;
     inline-size: 18px;
     block-size: 18px;
@@ -280,11 +265,11 @@
     transform: rotate(-90deg);
   }
 
-  :where([data-vesta='status-pill-ring-track']) {
+  :where([data-vesta="status-pill-ring-track"]) {
     stroke: var(--vesta-color-fill-active);
   }
 
-  :where([data-vesta='status-pill-ring-value']) {
+  :where([data-vesta="status-pill-ring-value"]) {
     stroke: var(--vesta-color-accent-text);
     stroke-dasharray: 100;
     stroke-dashoffset: calc(100 - var(--status-pill-progress) * 100);
@@ -292,14 +277,15 @@
     transition: stroke-dashoffset 360ms var(--vesta-ease-out);
   }
 
-  :where([data-vesta='status-pill'][data-indeterminate]) :where([data-vesta='status-pill-ring-value']) {
+  :where([data-vesta="status-pill"][data-indeterminate])
+    :where([data-vesta="status-pill-ring-value"]) {
     stroke-dasharray: 28 72;
     transform-origin: center;
     animation: status-spin 0.9s linear infinite;
   }
 
   /* Success: the next step, inline. A real sibling button, never nested in the pill button. */
-  :where([data-vesta='status-pill-play']) {
+  :where([data-vesta="status-pill-play"]) {
     display: inline-flex;
     align-items: center;
     gap: 3px;
@@ -307,7 +293,7 @@
     margin: 0 2px 0 0;
     padding-inline: 6px 8px;
     border: 0;
-    border-radius: var(--vesta-radius-full);
+    border-radius: var(--vesta-radius-control);
     background: var(--vesta-color-accent);
     color: var(--vesta-color-on-accent);
     font: inherit;
@@ -320,73 +306,88 @@
       transform var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
-  :where([data-vesta='status-pill-play']:hover) {
+  :where([data-vesta="status-pill-play"]:hover) {
     background: var(--vesta-color-accent-hover);
   }
 
-  :where([data-vesta='status-pill-play']:active) {
+  :where([data-vesta="status-pill-play"]:active) {
     transform: scale(0.94);
   }
 
-  :where([data-vesta='status-pill-play']:focus-visible) {
+  :where([data-vesta="status-pill-play"]:focus-visible) {
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
     outline-offset: 1px;
   }
 
   /* Narrow: the label goes first … */
   @container status-pill (max-width: 200px) {
-    :where([data-vesta='status-pill-label']) {
+    :where([data-vesta="status-pill-label"]) {
       display: none;
     }
 
-    :where([data-vesta='status-pill-face'][data-face='failed']) {
+    :where([data-vesta="status-pill-face"][data-face="failed"]) {
       padding-inline-end: 8px;
     }
   }
 
   /* … then a ring around the percentage stands in for the icons. */
   @container status-pill (max-width: 104px) {
-    :where([data-vesta='status-pill-face'][data-face='single'], [data-vesta='status-pill-face'][data-face='multi']) {
+    :where(
+        [data-vesta="status-pill-face"][data-face="single"],
+        [data-vesta="status-pill-face"][data-face="multi"]
+      ) {
       gap: 4px;
       padding-inline: 2px 7px;
     }
 
-    :where([data-vesta='status-pill-face'][data-face='single'], [data-vesta='status-pill-face'][data-face='multi'])
-      :where([data-vesta='activity-icon'], [data-vesta='status-pill-stack']) {
+    :where(
+        [data-vesta="status-pill-face"][data-face="single"],
+        [data-vesta="status-pill-face"][data-face="multi"]
+      )
+      :where([data-vesta="activity-icon"], [data-vesta="status-pill-stack"]) {
       display: none;
     }
 
-    :where([data-vesta='status-pill-face'][data-face='single'], [data-vesta='status-pill-face'][data-face='multi'])
-      :where([data-vesta='status-pill-ring']) {
+    :where(
+        [data-vesta="status-pill-face"][data-face="single"],
+        [data-vesta="status-pill-face"][data-face="multi"]
+      )
+      :where([data-vesta="status-pill-ring"]) {
       display: block;
     }
 
-    :where([data-vesta='status-pill'][data-face='single'], [data-vesta='status-pill'][data-face='multi']) {
+    :where(
+        [data-vesta="status-pill"][data-face="single"],
+        [data-vesta="status-pill"][data-face="multi"]
+      ) {
       --status-pill-tint: transparent;
       --status-pill-edge: transparent;
     }
 
-    :where([data-vesta='status-pill-play-label']) {
+    :where([data-vesta="status-pill-play-label"]) {
       display: none;
     }
 
-    :where([data-vesta='status-pill-play']) {
+    :where([data-vesta="status-pill-play"]) {
       padding-inline: 4px;
     }
   }
 
   /* Hardly any room: just the ring. */
   @container status-pill (max-width: 56px) {
-    :where([data-vesta='status-pill-percent']) {
+    :where([data-vesta="status-pill-percent"]) {
       display: none;
     }
 
-    :where([data-vesta='status-pill-face'][data-face='single'], [data-vesta='status-pill-face'][data-face='multi']) {
+    :where(
+        [data-vesta="status-pill-face"][data-face="single"],
+        [data-vesta="status-pill-face"][data-face="multi"]
+      ) {
       padding-inline: 2px;
     }
   }
 
-  :where([data-vesta='status-spinner']) {
+  :where([data-vesta="status-spinner"]) {
     display: block;
     flex: none;
     inline-size: 12px;
@@ -397,7 +398,7 @@
     animation: status-spin 0.9s linear infinite;
   }
 
-  :where([data-vesta='status-live']) {
+  :where([data-vesta="status-live"]) {
     position: absolute;
     inline-size: 1px;
     block-size: 1px;
@@ -407,9 +408,9 @@
   }
 
   /* Activity icon (pill: 16px; panel rows: 28px). */
-  :where([data-vesta='activity-icon']) {
+  :where([data-vesta="activity-icon"]) {
     --activity-icon-size: 16px;
-    --activity-icon-radius: 5px;
+    --activity-icon-radius: var(--vesta-radius-sm);
 
     display: grid;
     flex: none;
@@ -421,24 +422,28 @@
     background: var(--vesta-color-fill-active);
   }
 
-  :where([data-vesta='activity-icon'][data-size='row']) {
+  :where([data-vesta="activity-icon"][data-size="row"]) {
     --activity-icon-size: 28px;
-    --activity-icon-radius: 7px;
+    --activity-icon-radius: var(--vesta-radius-control);
   }
 
-  :where([data-vesta='activity-icon'][data-fallback]) {
-    background: color-mix(in oklab, var(--vesta-color-accent) 45%, var(--vesta-color-surface-raised));
+  :where([data-vesta="activity-icon"][data-fallback]) {
+    background: color-mix(
+      in oklab,
+      var(--vesta-color-accent) 45%,
+      var(--vesta-color-surface-raised)
+    );
     background: oklch(from var(--vesta-color-accent) max(l, 0.72) 0.09 var(--activity-icon-hue));
     color: oklch(0.25 0.03 var(--activity-icon-hue, 300));
   }
 
-  :where([data-vesta='activity-icon']) :where(img) {
+  :where([data-vesta="activity-icon"]) :where(img) {
     inline-size: 100%;
     block-size: 100%;
     object-fit: cover;
   }
 
-  :where([data-vesta='activity-icon-initials']) {
+  :where([data-vesta="activity-icon-initials"]) {
     font-size: calc(var(--activity-icon-size) * 0.45);
     font-weight: var(--vesta-weight-bold);
     letter-spacing: -0.02em;
@@ -454,33 +459,6 @@
   @keyframes status-pill-face-in {
     from {
       opacity: 0;
-      filter: blur(2px);
-      transform: scale(0.94);
-    }
-  }
-
-  @keyframes status-pill-pop {
-    40% {
-      transform: scale(1.06);
-    }
-  }
-
-  @keyframes status-pill-nudge {
-    25% {
-      transform: translateX(-2px);
-    }
-    60% {
-      transform: translateX(2px);
-    }
-  }
-
-  @keyframes status-pill-sheen {
-    from {
-      transform: translateX(-100%);
-    }
-    60%,
-    to {
-      transform: translateX(100%);
     }
   }
 
@@ -494,16 +472,16 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    :where([data-vesta='status-pill']) {
+    :where([data-vesta="status-pill"]) {
       --status-pill-morph: 0ms;
     }
 
-    :where([data-vesta='status-pill-fill'])::after {
+    :where([data-vesta="status-pill-fill"])::after {
       animation: none;
     }
   }
 
-  html[data-vesta-reduced-motion] :where([data-vesta='status-pill']) {
+  html[data-vesta-reduced-motion] :where([data-vesta="status-pill"]) {
     --status-pill-morph: 0ms;
   }
 }
