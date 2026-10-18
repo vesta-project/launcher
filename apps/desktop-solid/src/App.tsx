@@ -8,6 +8,8 @@ import { startDesktop } from './platform/desktop';
 import { Shell } from './app/shell';
 import { initializeLocalization } from './localization';
 
+if (import.meta.env.DEV) void import('./features/activity/activity-fixtures');
+
 export default function App() {
   // One-time start-up: its reads are snapshots, never dependencies.
   createEffect(

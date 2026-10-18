@@ -138,7 +138,7 @@ export function SettingsPage() {
             aria-label={t('prefs.nav-aria')}
             value={active()}
             onChange={(value) => open(value as SectionId)}
-            options={sections.filter(visible).map((section) => ({
+            options={sectionGroups.flatMap((group) => group.items).filter(visible).map((section) => ({
               value: section,
               label: t(sectionLabels[section]),
             }))}

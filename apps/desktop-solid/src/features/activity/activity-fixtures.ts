@@ -1,13 +1,16 @@
 import { untrack } from 'solid-js';
-import { isTauri } from '@tauri-apps/api/core';
 import { t } from '../../localization';
 import { clearFinished, receiveActivity, activities, configureActivityCancellation } from './activity-store';
 import { setUpdaterFixture } from '../settings/updates';
 export type ActivityFixture = 'single' | 'multiple' | 'background' | 'success' | 'failure' | 'update-ready';
-/** Explicit opt-in: import and call from browser devtools/workbench. Returns timer cleanup. */
+/**
+ * Dev-only simulator, on `window.vestaDev.simulateActivity('multiple')` in dev builds (the
+ * WebKit console cannot run top-level `import`). Only fixture rows are touched, so real
+ * tasks keep running. Returns timer cleanup.
+ */
 export function simulateActivity(scenario: ActivityFixture): () => void {
-  if (!import.meta.env.DEV || isTauri()) return () => {};
-  for (const row of untrack(activities)) receiveActivity({ id: row.id, state: 'cancelled' });
+  if (!import.meta.env.DEV) return () => {};
+  for (const row of untrack(activities)) if (row.id.startsWith('fixture-')) receiveActivity({ id: row.id, state: 'cancelled' });
   clearFinished();
   setUpdaterFixture({ state: 'idle' });
   if (scenario === 'update-ready') { setUpdaterFixture({ state: 'ready', version: '0.3.0' }); return () => {}; }
@@ -34,4 +37,11 @@ export function simulateActivity(scenario: ActivityFixture): () => void {
     }
   }, 300);
   return () => clearInterval(timer);
+}
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as unknown as { vestaDev?: Record<string, unknown> }).vestaDev = {
+    ...(window as unknown as { vestaDev?: Record<string, unknown> }).vestaDev,
+    simulateActivity,
+  };
 }
