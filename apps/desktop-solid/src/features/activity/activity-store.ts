@@ -60,6 +60,10 @@ export function configureActivityCancellation(handler: typeof cancel) { cancel =
 export async function cancelActivity(id: string) {
   const activity = ledger.rows.find((a) => a.id === id);
   if (!activity?.cancellable || !active(activity)) return;
+  if (import.meta.env?.DEV && id.startsWith('fixture-')) {
+    receiveActivity({ id, state: 'cancelled' });
+    return;
+  }
   try { await cancel(id); }
   catch (error) { setActivityError(String(error)); throw error; }
   // Host acknowledges cancellation through lifecycle events, not the command return.
@@ -67,6 +71,8 @@ export async function cancelActivity(id: string) {
 /** Hides pill presence, retaining the panel row. */
 export function dismissActivity(id: string) { flushActivityProgress(); ledger.dismiss(id); publish(); }
 export function clearFinished() { flushActivityProgress(); ledger.clearFinished(); publish(); }
+/** Used by the simulator to remove only its own terminal history. */
+export function clearFinishedActivities(ids: readonly string[]) { flushActivityProgress(); ledger.clearFinished(ids); publish(); }
 export function markSeen(ids?: readonly string[]) { flushActivityProgress(); ledger.markSeen(ids); publish(); }
 /** Called only by the owning desktop connection on teardown. */
 export function stopActivityTimers() { flushActivityProgress(); clearTimeout(wake); clearTimeout(flushTimer); }

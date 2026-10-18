@@ -1,6 +1,6 @@
 import { untrack } from 'solid-js';
 import { t } from '../../localization';
-import { clearFinished, receiveActivity, activities, configureActivityCancellation } from './activity-store';
+import { clearFinishedActivities, receiveActivity, activities } from './activity-store';
 import { setUpdaterFixture } from '../settings/updates';
 export type ActivityFixture = 'single' | 'multiple' | 'background' | 'success' | 'failure' | 'update-ready';
 /**
@@ -8,13 +8,12 @@ export type ActivityFixture = 'single' | 'multiple' | 'background' | 'success' |
  * WebKit console cannot run top-level `import`). Only fixture rows are touched, so real
  * tasks keep running. Returns timer cleanup.
  */
-export function simulateActivity(scenario: ActivityFixture): () => void {
+function startSimulation(scenario: ActivityFixture): () => void {
   if (!import.meta.env.DEV) return () => {};
   for (const row of untrack(activities)) if (row.id.startsWith('fixture-')) receiveActivity({ id: row.id, state: 'cancelled' });
-  clearFinished();
+  clearFinishedActivities(untrack(activities).filter((row) => row.id.startsWith('fixture-')).map((row) => row.id));
   setUpdaterFixture({ state: 'idle' });
   if (scenario === 'update-ready') { setUpdaterFixture({ state: 'ready', version: '0.3.0' }); return () => {}; }
-  configureActivityCancellation(async (id) => { receiveActivity({ id, state: 'cancelled' }); });
   const now = Date.now();
   const title = t('activity.fixture-install');
   if (scenario === 'background') {
@@ -37,6 +36,13 @@ export function simulateActivity(scenario: ActivityFixture): () => void {
     }
   }, 300);
   return () => clearInterval(timer);
+}
+
+let stopPrevious: () => void = () => {};
+export function simulateActivity(scenario: ActivityFixture): () => void {
+  stopPrevious();
+  stopPrevious = startSimulation(scenario);
+  return stopPrevious;
 }
 
 if (import.meta.env.DEV && typeof window !== 'undefined') {

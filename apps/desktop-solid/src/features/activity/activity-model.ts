@@ -89,5 +89,5 @@ export class ActivityLedger {
   }
   dismiss(id: string) { this.rows = this.rows.map((a) => a.id === id ? { ...a, pillDismissed: true, seen: true } : a); }
   markSeen(ids?: readonly string[]) { this.rows = this.rows.map((a) => a.state === 'failed' && (!ids || ids.includes(a.id)) ? { ...a, seen: true } : a); }
-  clearFinished() { this.rows = this.rows.filter(active); }
+  clearFinished(ids?: readonly string[]) { this.rows = this.rows.filter((row) => active(row) || (!!ids && !ids.includes(row.id))); }
 }
