@@ -72,30 +72,50 @@ export function ChannelBadge(props: { channel: ReleaseType }) {
   );
 }
 
-/** Loader marks in a row (names on hover); unknown loaders as short text. */
-export function LoaderMarks(props: { loaders: readonly string[]; limit?: number }) {
+/**
+ * A version's loaders in a fixed-width cell: the first by mark and name, the rest folded into
+ * "+N" whose tooltip names them, so the column reads at a glance and never grows.
+ */
+export function LoaderMarks(props: { loaders: readonly string[] }) {
   const list = () => displayLoaders(props.loaders);
-  const shown = () => list().slice(0, props.limit ?? list().length);
   return (
-    <span data-vesta="project-loaders">
-      <For each={shown()}>
-        {(loader) => (
-          <Show
-            when={loaderMarks.has(loader)}
-            fallback={<span data-vesta="project-loader-name">{loaderLabel(loader)}</span>}
-          >
-            <span data-vesta="project-loader-mark" data-tip={loaderLabel(loader)}>
-              <Icon name={`branding/modloaders/${loader}-logo`} size={14} label={loaderLabel(loader)} />
+    <Show when={list()[0]}>
+      {(first) => (
+        <span data-vesta="project-loaders">
+          <Show when={loaderMarks.has(first())}>
+            <span data-vesta="project-loader-mark">
+              <Icon name={`branding/modloaders/${first()}-logo`} size={14} />
             </span>
           </Show>
+          <span data-vesta="project-loader-name" data-tip-overflow="">
+            {loaderLabel(first())}
+          </span>
+          <Show when={list().length > 1}>
+            <span data-vesta="project-loader-more" data-tip={list().slice(1).map(loaderLabel).join(', ')}>
+              {t('browse.more-tags', { count: list().length - 1 })}
+            </span>
+          </Show>
+        </span>
+      )}
+    </Show>
+  );
+}
+
+/** Every loader as a small wrapping chip (mark and name), for panels with room to wrap. */
+export function LoaderChips(props: { loaders: readonly string[]; 'aria-label'?: string }) {
+  return (
+    <ul data-vesta="project-loader-chips" aria-label={props['aria-label']}>
+      <For each={displayLoaders(props.loaders)}>
+        {(loader) => (
+          <li data-vesta="project-loader-chip">
+            <Show when={loaderMarks.has(loader)}>
+              <Icon name={`branding/modloaders/${loader}-logo`} size={12} />
+            </Show>
+            <span data-vesta="project-loader-chip-label">{loaderLabel(loader)}</span>
+          </li>
         )}
       </For>
-      <Show when={list().length > shown().length}>
-        <span data-vesta="project-loader-more" data-tip={list().slice(shown().length).map(loaderLabel).join(', ')}>
-          {t('browse.more-tags', { count: list().length - shown().length })}
-        </span>
-      </Show>
-    </span>
+    </ul>
   );
 }
 

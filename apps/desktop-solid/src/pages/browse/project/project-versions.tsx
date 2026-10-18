@@ -1,14 +1,14 @@
-import { Badge, Button, Combobox, SegmentedControl, Select, Skeleton, TextField } from '@vesta/ui';
-import { createMemo, createSignal, For, Match, onSettled, Show, Switch, untrack } from 'solid-js';
+import { Badge, Button, Combobox, Pagination, SegmentedControl, Select, Skeleton, TextField } from '@vesta/ui';
+import { createEffect, createMemo, For, Match, onSettled, Show, Switch, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
-import { VirtualList } from '../../../components/virtual-list';
 import {
   filterVersions,
   formatCompact,
   loaderLabel,
   minecraftVersionsOf,
+  pageSizes,
   projectKey,
   summarizeGameVersions,
   versionFacets,
@@ -20,14 +20,22 @@ import {
 } from '../../../features/browse/browse-model';
 import { prefetchVersionDetails } from '../../../features/browse/browse-projects';
 import { installed, target } from '../../../features/browse/browse-store';
-import { resetVersionFilter, updateVersionFilter, versionFilterFor } from '../../../features/browse/version-filter';
+import {
+  resetVersionFilter,
+  setVersionPage,
+  setVersionPageSize,
+  updateVersionFilter,
+  versionFilterFor,
+  versionPageFor,
+  versionPageSize,
+} from '../../../features/browse/version-filter';
 import { formatNumber, t } from '../../../localization';
 import { InstallButton } from '../install-button';
 import { runInstall } from '../install-actions';
 import type { ProjectData } from './project-data';
 import { ChannelBadge, formatDay, LoaderMarks, sameAction, versionAction } from './project-shared';
 
-const rowHeight = 44;
+const sizeOptions = pageSizes.map((size) => ({ value: String(size), label: String(size) }));
 const skeletonRows = Array.from({ length: 8 }, (_, index) => index);
 
 /** Opens a version page; modified clicks are left alone like any link. */
@@ -90,7 +98,7 @@ function VersionRow(props: { project: ResourceProject; version: ResourceVersion 
         {summarizeGameVersions(games())}
       </span>
       <span data-vesta="project-version-loaders">
-        <LoaderMarks loaders={props.version.loaders} limit={3} />
+        <LoaderMarks loaders={props.version.loaders} />
       </span>
       <time data-vesta="project-version-date" datetime={props.version.published_at ?? undefined}>
         {formatDay(props.version.published_at)}
@@ -116,13 +124,14 @@ function VersionRow(props: { project: ResourceProject; version: ResourceVersion 
 
 /**
  * The Versions tab: a filter bar in the chrome (search, Minecraft version, loader, channel and
- * "fits the target"), then a virtualised list. Filters are kept for the project, so a version
- * page can step through the same list and coming back finds it unchanged.
+ * "fits the target"), then one page of the list with pages and page size at its foot. Filters
+ * and the page are kept for the project, so a version page can step through the same list and
+ * coming back finds it unchanged; changing a filter returns to page 1.
  */
 export function ProjectVersions(props: { data: ProjectData; project: ResourceProject }) {
   const key = untrack(() => props.data.key);
   const filter = () => versionFilterFor(key);
-  const [scroller, setScroller] = createSignal<HTMLDivElement | undefined>(undefined, { name: 'projectVersionsPane' });
+  let scroller: HTMLDivElement | undefined;
   const all = () => props.data.versions() ?? [];
   const facets = createMemo(() => versionFacets(all()), { name: 'projectVersionFacets' });
   const canFit = () => !!target() && props.project.resource_type !== 'modpack';
@@ -134,6 +143,26 @@ export function ProjectVersions(props: { data: ProjectData; project: ResourcePro
         { target: target(), type: props.project.resource_type, source: props.project.source },
       ),
     { name: 'projectVersionsShown' },
+  );
+  const pages = createMemo(() => Math.max(1, Math.ceil(shown().length / versionPageSize())), {
+    name: 'projectVersionPages',
+  });
+  // A stored page past the end (the list shrank) shows the last page instead of nothing.
+  const page = () => Math.min(versionPageFor(key), pages());
+  const pageRows = createMemo(
+    () => {
+      const size = versionPageSize();
+      const start = (page() - 1) * size;
+      return shown().slice(start, start + size);
+    },
+    { name: 'projectVersionPageRows' },
+  );
+  // A new page starts at its top.
+  createEffect(
+    () => page(),
+    (_, previous) => {
+      if (previous !== undefined) scroller?.scrollTo({ top: 0 });
+    },
   );
   const filtered = () => {
     const current = filter();
@@ -243,7 +272,7 @@ export function ProjectVersions(props: { data: ProjectData; project: ResourcePro
       <div
         data-vesta="project-versions-pane"
         tabindex={-1}
-        ref={setScroller}
+        ref={(element) => (scroller = element)}
         onPointerOver={hover}
         onFocusIn={(event) => prefetch(rowOf(event.target)?.dataset.versionId)}
       >
@@ -290,16 +319,32 @@ export function ProjectVersions(props: { data: ProjectData; project: ResourcePro
                 <span>{t('browse.column-downloads')}</span>
                 <span />
               </div>
-              <VirtualList
-                items={shown()}
-                key={(version) => version.id}
-                rowHeight={rowHeight}
-                overscan={6}
-                scrollElement={scroller()}
-              >
+              <For each={pageRows()} keyed={(version) => version.id}>
                 {(version) => <VersionRow project={props.project} version={version()} />}
-              </VirtualList>
+              </For>
             </div>
+            <footer data-vesta="project-versions-pages">
+              <Show when={pages() > 1}>
+                <Pagination
+                  count={pages()}
+                  page={page()}
+                  onPageChange={(next) => setVersionPage(key, next)}
+                  previousLabel={t('browse.previous')}
+                  nextLabel={t('browse.next')}
+                  aria-label={t('browse.pages-label')}
+                />
+              </Show>
+              <label data-vesta="project-versions-page-size">
+                <span data-vesta="project-versions-page-size-label">{t('browse.per-page')}</span>
+                <Select
+                  size="sm"
+                  aria-label={t('browse.per-page')}
+                  options={sizeOptions}
+                  value={String(versionPageSize())}
+                  onChange={(value) => setVersionPageSize(key, Number(value))}
+                />
+              </label>
+            </footer>
           </Match>
         </Switch>
       </div>

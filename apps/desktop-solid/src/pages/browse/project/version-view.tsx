@@ -10,7 +10,6 @@ import {
   filterVersions,
   formatBytes,
   formatCompact,
-  loaderLabel,
   minecraftVersionsOf,
   projectPath,
   versionFiles,
@@ -35,6 +34,7 @@ import { ProjectHeader, versionWebUrl, WebMenu } from './project-header';
 import {
   ChannelBadge,
   formatDay,
+  LoaderChips,
   ProjectIcon,
   sameAction,
   versionAction,
@@ -134,18 +134,7 @@ function Compatibility(props: { project: ResourceProject; version: ResourceVersi
         </div>
       </Show>
       <Show when={loaders().length}>
-        <div data-vesta="project-loader-chips" aria-label={t('browse.section-loader')}>
-          <For each={loaders()}>
-            {(loader) => (
-              <span data-vesta="project-loader-chip">
-                <Show when={['fabric', 'forge', 'neoforge', 'quilt'].includes(loader)}>
-                  <Icon name={`branding/modloaders/${loader}-logo`} size={14} />
-                </Show>
-                {loaderLabel(loader)}
-              </span>
-            )}
-          </For>
-        </div>
+        <LoaderChips loaders={props.version.loaders} aria-label={t('browse.section-loader')} />
       </Show>
     </Section>
   );

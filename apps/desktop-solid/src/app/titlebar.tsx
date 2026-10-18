@@ -195,10 +195,15 @@ function WindowControls() {
  * Compact titlebar: back (on sub-pages) and a breadcrumb of where you are. In narrow
  * windows, where the rail is hidden, the breadcrumb becomes a destination menu and the
  * add and account buttons appear.
+ *
+ * The whole bar drags the window: `deep` makes every descendant a drag region, and Tauri
+ * itself exempts interactive elements (buttons, links, menu triggers). Children must not
+ * carry a bare `data-tauri-drag-region`: that limits dragging to the element itself and
+ * blocks it for everything inside.
  */
 export function Titlebar() {
   return (
-    <header data-vesta="titlebar" data-platform={platform} data-tauri-drag-region>
+    <header data-vesta="titlebar" data-platform={platform} data-tauri-drag-region="deep">
       <div data-vesta="titlebar-start">
         <Show when={location().back}>
           {(back) => (
@@ -241,7 +246,6 @@ export function Titlebar() {
 
       <div
         data-vesta="titlebar-center"
-        data-tauri-drag-region
         onClick={(event) => {
           // Breadcrumb links are plain hash links; route them through the same transition as the rail.
           const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#/"]');
@@ -257,7 +261,7 @@ export function Titlebar() {
         </Breadcrumbs>
       </div>
 
-      <div data-vesta="titlebar-end" data-tauri-drag-region>
+      <div data-vesta="titlebar-end">
         <div data-vesta="titlebar-compact">
           <IconButton
             variant="ghost"

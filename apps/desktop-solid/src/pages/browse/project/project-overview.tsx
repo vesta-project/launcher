@@ -7,7 +7,6 @@ import {
   descriptionFormat,
   isLoaderCategory,
   projectKey,
-  projectPath,
   selectInstallVersion,
   sourceById,
   summarizeGameVersions,
@@ -17,13 +16,12 @@ import {
   type ProjectLink,
   type ResourceProject,
 } from '../../../features/browse/browse-model';
-import { loadPeerProject } from '../../../features/browse/browse-projects';
 import { categoryName, ensureCategories, installed, target } from '../../../features/browse/browse-store';
 import { t } from '../../../localization';
 import { openExternal } from '../install-actions';
 import type { ProjectData } from './project-data';
 import { leaveForBrowse } from './project-strip';
-import { ChannelBadge, failed, formatDay, LoaderMarks, loaded } from './project-shared';
+import { ChannelBadge, failed, formatDay, LoaderChips, loaded } from './project-shared';
 import { RichTextView } from './rich-text-view';
 
 const linkIcon = (link: ProjectLink) => {
@@ -153,26 +151,10 @@ function TargetFit(props: { data: ProjectData; project: ResourceProject }) {
 export function ProjectOverview(props: { data: ProjectData; project: ResourceProject }) {
   const [viewing, setViewing] = createSignal<number | undefined>(undefined, { name: 'projectDescriptionImage' });
   const [inline, setInline] = createSignal<string | undefined>(undefined, { name: 'projectDescriptionInline' });
-  const [peer, setPeer] = createSignal<ResourceProject | null>(null, { name: 'projectPeer' });
 
   createEffect(
     () => props.project.source,
     (source) => ensureCategories(source),
-  );
-  // The same project on the other big source, once the full project is known.
-  createEffect(
-    () => (props.data.complete() && props.project.source !== 'smithed' ? props.project : undefined),
-    (project) => {
-      if (!project) return;
-      let live = true;
-      loadPeerProject(project).then(
-        (found) => live && setPeer(found),
-        () => undefined,
-      );
-      return () => {
-        live = false;
-      };
-    },
   );
 
   const facets = createMemo(() => versionFacets(props.data.versions() ?? []), { name: 'projectFacets' });
@@ -250,15 +232,15 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
         <FactGroup title={t('browse.facts-details')}>
           <dl data-vesta="project-details">
             <Show when={facets().gameVersions.length}>
-              <dt>{t('browse.section-version')}</dt>
+              <dt>{t('browse.facts-minecraft')}</dt>
               <dd data-tip={facets().gameVersions.length > 2 ? facets().gameVersions.join(', ') : undefined}>
                 {summarizeGameVersions(facets().gameVersions)}
               </dd>
             </Show>
             <Show when={facets().loaders.length}>
-              <dt>{t('browse.section-loader')}</dt>
+              <dt>{t('browse.facts-loaders')}</dt>
               <dd>
-                <LoaderMarks loaders={facets().loaders} />
+                <LoaderChips loaders={facets().loaders} />
               </dd>
             </Show>
             <Show when={environment()}>
@@ -344,24 +326,6 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
                   <Icon name="icons/actions/external-link" size={12} />
                 </button>
               </li>
-            </Show>
-            <Show when={peer()}>
-              {(other) => (
-                <li>
-                  <button
-                    type="button"
-                    data-vesta="project-link"
-                    data-internal=""
-                    onClick={() => transitionTo(projectPath(other().source, other().id))}
-                  >
-                    <Icon name={sourceById(other().source).icon} size={14} />
-                    <span data-vesta="project-link-label" data-tip-overflow="">
-                      {t('browse.also-on', { source: sourceById(other().source).label })}
-                    </span>
-                    <Icon name="icons/controls/chevron-right" size={12} />
-                  </button>
-                </li>
-              )}
             </Show>
             <For each={links()} keyed={(link) => link.url}>
               {(link) => (

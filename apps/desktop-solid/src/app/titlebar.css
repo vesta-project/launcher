@@ -2,6 +2,7 @@
  * Titlebar.
  * Hooks: [data-vesta=titlebar] -start -end -compact, the .titlebar-destination button and .titlebar-breadcrumb, [data-vesta=window-controls]
  * States: data-platform (macos | windows | linux | web)
+ * Drag: the header is the drag region (deep); only interactive elements opt out.
  * Knobs: --titlebar-height, --titlebar-inset-start (room for macOS traffic lights)
  */
 @layer launcher {
@@ -62,6 +63,12 @@
   .titlebar-breadcrumb {
     min-inline-size: 0;
     font-size: var(--vesta-text-sm);
+  }
+
+  /* The current crumb is a role=link span, which Tauri treats as interactive; it only names
+     the page, so let presses fall through to the drag region. */
+  .titlebar-breadcrumb :where([data-vesta='breadcrumb-link'][aria-current='page']) {
+    pointer-events: none;
   }
 
   /* Add and account only appear when the rail is hidden. */

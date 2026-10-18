@@ -570,6 +570,13 @@ function changeKind(pack: LinkedPack | undefined, release: PackRelease): "update
   return target < installed ? "update" : "downgrade";
 }
 const channelTone = { release: "success", beta: "warning", alpha: "danger" } as const;
+
+/** Direction of a change relative to the installed release. */
+const changeIcon = {
+  update: "icons/navigation/arrow-up",
+  downgrade: "icons/navigation/arrow-down",
+  switch: "icons/actions/swap",
+} as const;
 function ChannelBadge(props: { channel: PackRelease["channel"] }) {
   return (
     <Badge size="sm" tone={channelTone[props.channel]} variant="soft">
@@ -673,8 +680,9 @@ function ReleaseRow(props: {
           <Show when={!installed()}>
             <Button
               size="sm"
-              variant={kind() === "update" ? "outline" : "ghost"}
+              variant="outline"
               tone={kind() === "update" ? "accent" : "neutral"}
+              icon={<Icon name={changeIcon[kind()]} size={14} />}
               disabled={props.busy}
               onClick={() => props.onPreview(props.release)}
             >

@@ -1,6 +1,7 @@
 import { Tab, TabList, TabPanel, Tabs } from '@vesta/ui';
-import { createMemo, Show } from 'solid-js';
-import { navigate } from '../../../app/router';
+import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js';
+import { navigate, route } from '../../../app/router';
+import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import {
   creatorOf,
@@ -8,11 +9,14 @@ import {
   formatRelative,
   isProjectTab,
   ownerName,
+  projectKey,
   projectPath,
   sourceById,
   type ProjectTab,
   type ResourceProject,
+  type SourceId,
 } from '../../../features/browse/browse-model';
+import { loadPeerProjectId } from '../../../features/browse/browse-projects';
 import { sameState, target } from '../../../features/browse/browse-store';
 import { formatNumber, t } from '../../../localization';
 import { InstallButton } from '../install-button';
@@ -66,6 +70,87 @@ function ProjectMeta(props: { project: ResourceProject }) {
   );
 }
 
+const decode = (value: string | undefined) => {
+  try {
+    return value === undefined ? '' : decodeURIComponent(value);
+  } catch {
+    return value ?? '';
+  }
+};
+
+/** Sources that can list the same project; always shown in this order. */
+const switchSources = ['modrinth', 'curseforge'] as const satisfies readonly SourceId[];
+
+/**
+ * The source tag, which becomes a two-way switch once the same project is proven to exist on
+ * the other big source. The lookup runs only here (never for search results), after the full
+ * project has loaded; a late answer for a project the route has since left is dropped.
+ * Switching replaces the history entry and keeps the open tab.
+ */
+function SourceSwitch(props: { data: ProjectData; project: ResourceProject; tab: ProjectTab }) {
+  const [peer, setPeer] = createSignal<{ source: SourceId; id: string } | null>(null, { name: 'projectPeer' });
+  createEffect(
+    () =>
+      props.data.complete() && switchSources.some((source) => source === props.project.source)
+        ? { project: props.project, asked: projectKey(props.data.source, props.data.id) }
+        : undefined,
+    (request) => {
+      if (!request) return;
+      const { project, asked } = request;
+      let live = true;
+      loadPeerProjectId(project).then(
+        (found) => {
+          const current = untrack(route);
+          if (live && projectKey(decode(current.detail), decode(current.item)) === asked) setPeer(found);
+        },
+        () => undefined,
+      );
+      return () => {
+        live = false;
+      };
+    },
+  );
+  const option = (source: SourceId, other: { source: SourceId; id: string }) => {
+    const content = (
+      <>
+        <Icon name={sourceById(source).icon} size={12} />
+        <span data-vesta="project-source-label">{sourceById(source).label}</span>
+      </>
+    );
+    return source === props.project.source ? (
+      <span data-vesta="project-source-option" data-source={source} aria-current="true">
+        {content}
+      </span>
+    ) : (
+      <button
+        type="button"
+        data-vesta="project-source-option"
+        data-source={source}
+        onClick={() => transitionTo(projectPath(other.source, other.id, props.tab), undefined, { replace: true })}
+      >
+        {content}
+      </button>
+    );
+  };
+  return (
+    <Show
+      when={peer()}
+      fallback={
+        <span data-vesta="project-tag" data-source={props.project.source}>
+          {sourceById(props.project.source).label}
+        </span>
+      }
+    >
+      {(other) => (
+        <span data-vesta="project-source-switch" role="group" aria-label={t('browse.source-switch')}>
+          {option('modrinth', other())}
+          {option('curseforge', other())}
+        </span>
+      )}
+    </Show>
+  );
+}
+
 /**
  * A project: the art header with Install, a chrome strip of tabs (with the install target at its
  * end, under the Install button), then one scrolling pane per tab. Tabs are routes that replace
@@ -93,9 +178,7 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
         title={
           <>
             <span data-vesta="project-header-name">{props.project.name}</span>
-            <span data-vesta="project-tag" data-source={props.project.source}>
-              {sourceById(props.project.source).label}
-            </span>
+            <SourceSwitch data={props.data} project={props.project} tab={active()} />
             <span data-vesta="project-tag">{t(kindLabels[props.project.resource_type])}</span>
           </>
         }
