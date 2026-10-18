@@ -1,6 +1,8 @@
 /*
  * Titlebar.
  * Hooks: [data-vesta=titlebar] -start -end -compact, the .titlebar-destination button and .titlebar-breadcrumb, [data-vesta=window-controls]
+ * The end cell holds, in order: status pill slot, update control, inbox bell, compact items,
+ * window controls (see status/status-pill.css and status/titlebar-status.css).
  * States: data-platform (macos | windows | linux | web)
  * Drag: the header is the drag region (deep); only interactive elements opt out.
  * Knobs: --titlebar-height, --titlebar-inset-start (room for macOS traffic lights)

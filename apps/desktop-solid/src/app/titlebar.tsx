@@ -8,6 +8,8 @@ import { peekProject, peekVersions } from '../features/browse/browse-projects';
 import { findLauncher } from '../features/installation/launchers';
 import { findInstance } from '../features/instances/catalog';
 import { detectPlatform } from './platform';
+import { StatusPill } from './status/status-pill';
+import { InboxControl, UpdateControl } from './status/titlebar-status';
 import { route } from './router';
 import { goBack, transitionTo } from './transition';
 import { isSection, sectionLabels } from '../pages/settings/sections';
@@ -194,7 +196,8 @@ function WindowControls() {
 /**
  * Compact titlebar: back (on sub-pages) and a breadcrumb of where you are. In narrow
  * windows, where the rail is hidden, the breadcrumb becomes a destination menu and the
- * add and account buttons appear.
+ * add and account buttons appear. The end holds the activity status pill (growing leftward
+ * into the free space), the launcher-update control and the notification bell.
  *
  * The whole bar drags the window: `deep` makes every descendant a drag region, and Tauri
  * itself exempts interactive elements (buttons, links, menu triggers). Children must not
@@ -262,6 +265,9 @@ export function Titlebar() {
       </div>
 
       <div data-vesta="titlebar-end">
+        <StatusPill />
+        <UpdateControl />
+        <InboxControl />
         <div data-vesta="titlebar-compact">
           <IconButton
             variant="ghost"

@@ -1,0 +1,259 @@
+/*
+ * Activity panel (the popover under the status pill).
+ * Hooks:  .activity-panel (popover), .activity-panel-clear, .activity-row-progress
+ *         [data-vesta=activity-panel] -error -empty, [data-vesta=activity-rows]
+ *         [data-vesta=activity-row] -head -title -subtitle -actions -detail -step -error
+ *         [data-vesta=activity-background] -title -rows -row -name
+ * States: activity-row / activity-background-row: data-state (queued | running | done | failed | cancelled)
+ * The row title is the row's link: its ::after covers the row; the actions sit above it.
+ */
+@layer launcher {
+  .activity-panel {
+    --overlay-padding: 0;
+    --popover-width: 320px;
+    --popover-gap: 0;
+
+    position: relative;
+    overflow: hidden;
+  }
+
+  .activity-panel :where([data-vesta='popover-title']),
+  .inbox-panel :where([data-vesta='popover-title']) {
+    padding: 10px 12px 6px;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .activity-panel-clear,
+  .inbox-mark-all {
+    position: absolute;
+    inset-block-start: 4px;
+    inset-inline-end: 6px;
+  }
+
+  :where([data-vesta='activity-panel']) {
+    display: flex;
+    flex-direction: column;
+    max-block-size: min(440px, 70vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  :where([data-vesta='activity-panel-error']) {
+    margin: 0 12px 6px;
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='activity-panel-empty']) {
+    margin: 0;
+    padding: 8px 12px 14px;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='activity-rows'], [data-vesta='activity-background-rows']) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='activity-row']) {
+    position: relative;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 3px 10px;
+    padding: 8px 12px;
+    animation: activity-row-in var(--vesta-duration-slow) var(--vesta-ease-out);
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='activity-row'] + [data-vesta='activity-row']) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='activity-row']:has(button[data-vesta='activity-row-title']:hover)) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='activity-row']) > :where([data-vesta='activity-icon']) {
+    grid-row: span 2;
+  }
+
+  :where([data-vesta='activity-row'][data-state='done'], [data-vesta='activity-row'][data-state='cancelled']) > :where([data-vesta='activity-icon']) {
+    opacity: 0.8;
+  }
+
+  :where([data-vesta='activity-row-head']) {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='activity-row-title']) {
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: none;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+    outline: none;
+  }
+
+  /* The whole row opens the task's target. */
+  :where(button[data-vesta='activity-row-title'])::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+  }
+
+  :where(button[data-vesta='activity-row-title']:focus-visible)::after {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: -2px;
+  }
+
+  :where([data-vesta='activity-row-subtitle']) {
+    flex: none;
+    max-inline-size: 45%;
+    overflow: hidden;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='activity-row-actions']) {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  :where([data-vesta='activity-row-detail']) {
+    display: flex;
+    grid-column: 2 / 4;
+    align-items: center;
+    gap: 8px;
+    min-inline-size: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  .activity-row-progress {
+    flex: 1;
+  }
+
+  /* Keep the fill moving smoothly between the 100ms batched updates. */
+  .activity-row-progress :where([data-vesta='progress-fill']) {
+    transition-duration: 360ms;
+  }
+
+  :where([data-vesta='activity-row-step']) {
+    flex: none;
+    max-inline-size: 55%;
+    overflow: hidden;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='activity-row'][data-state='queued']) :where([data-vesta='activity-row-step']) {
+    max-inline-size: none;
+    color: var(--vesta-color-warning-text);
+  }
+
+  :where([data-vesta='activity-row'][data-state='done']) :where([data-vesta='activity-row-detail']) {
+    gap: 4px;
+    color: var(--vesta-color-success-text);
+  }
+
+  :where([data-vesta='activity-row'][data-state='done']) :where([data-vesta='activity-row-step']) {
+    max-inline-size: none;
+  }
+
+  :where([data-vesta='activity-row'][data-state='failed']) :where([data-vesta='activity-row-detail']) {
+    align-items: flex-start;
+    gap: 4px;
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='activity-row-error']) {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='activity-row-detail']) > :where([data-vesta='icon']) {
+    flex: none;
+  }
+
+  :where([data-vesta='activity-background']) {
+    padding: 6px 12px 10px;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='activity-background-title']) {
+    margin: 2px 0 4px;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta='activity-background-row']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    padding-block: 3px;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    animation: activity-row-in var(--vesta-duration-slow) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='activity-background-row']) :where([data-vesta='status-spinner']) {
+    inline-size: 10px;
+    block-size: 10px;
+  }
+
+  :where([data-vesta='activity-background-row'][data-state='failed']) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='activity-background-row']) :where([data-vesta='activity-row-error']) {
+    flex-basis: 100%;
+    padding-inline-start: 18px;
+  }
+
+  :where([data-vesta='activity-background-name']) {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @keyframes activity-row-in {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+  }
+}
