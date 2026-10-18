@@ -107,21 +107,41 @@
     }
   }
 
+  /*
+   * Instance thumbnails in the target Select. The Select's icon slots (trigger and list) are
+   * sized for glyphs, so they grow to the thumbnail size here and the thumbnail fills them:
+   * nothing overflows the slot, so nothing is clipped.
+   */
+  :where(
+    [data-vesta='field-icon']:has(> [data-vesta='browse-target-icon']),
+    [data-vesta='select-item-icon']:has(> [data-vesta='browse-target-icon'])
+  ) {
+    inline-size: 18px;
+    block-size: 18px;
+  }
+
   :where([data-vesta='browse-target-icon']) {
     display: inline-grid;
     flex: none;
     place-items: center;
     box-sizing: border-box;
-    inline-size: 18px;
-    block-size: 18px;
+    inline-size: 100%;
+    block-size: 100%;
     border-radius: var(--vesta-radius-sm);
     object-fit: cover;
   }
 
-  /* "Any instance": an empty slot waiting for one. */
+  /* "Any instance": an empty slot waiting for one, as legible as a thumbnail beside it. */
   :where([data-vesta='browse-target-icon'][data-empty]) {
-    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
-    color: var(--vesta-color-text-subtle);
+    border: var(--vesta-border-width) dashed color-mix(in oklab, var(--vesta-color-text-muted) 70%, transparent);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='select-item'][data-highlighted] [data-vesta='browse-target-icon'][data-empty]) {
+    border-color: currentColor;
+    background: transparent;
+    color: inherit;
   }
 
   /* ---- Toggles (filter panel) ---- */
@@ -238,7 +258,7 @@
     color: var(--tone-text);
   }
 
-  :where([data-vesta='browse-notice'] > span) {
+  :where([data-vesta='browse-notice'] > span:not([data-vesta])) {
     flex: 1;
     min-inline-size: 0;
   }
@@ -697,7 +717,7 @@
       color var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
-  :where([data-vesta='browse-tag'] > span) {
+  :where([data-vesta='browse-tag'] > span:not([data-vesta])) {
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -820,7 +840,7 @@
     white-space: nowrap;
   }
 
-  :where([data-vesta='browse-picker-text'] > span) {
+  :where([data-vesta='browse-picker-text'] > span:not([data-vesta])) {
     color: var(--vesta-color-text-muted);
   }
 

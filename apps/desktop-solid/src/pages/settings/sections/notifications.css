@@ -30,7 +30,7 @@
     min-inline-size: 0;
   }
 
-  :where([data-vesta='prefs-feeds'] li > div:not([data-vesta]) > span) {
+  :where([data-vesta='prefs-feeds'] li > div:not([data-vesta]) > span:not([data-vesta])) {
     overflow: hidden;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);

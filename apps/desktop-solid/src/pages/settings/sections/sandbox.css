@@ -44,7 +44,7 @@
     color: oklch(0.75 0.14 var(--preset-hue));
   }
 
-  :where([data-vesta='prefs-presets'] button > span) {
+  :where([data-vesta='prefs-presets'] button > span:not([data-vesta])) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }

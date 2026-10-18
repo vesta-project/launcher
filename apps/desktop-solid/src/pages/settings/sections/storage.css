@@ -27,7 +27,7 @@
     flex-direction: column;
   }
 
-  :where([data-vesta='prefs-usage-head'] span) {
+  :where([data-vesta='prefs-usage-head'] span:not([data-vesta])) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }
@@ -52,14 +52,14 @@
     border-radius: 4px;
   }
 
-  :where([data-vesta='prefs-bar'] > span) {
+  :where([data-vesta='prefs-bar'] > span:not([data-vesta])) {
     flex-basis: 0;
     min-inline-size: 3px;
     background: oklch(0.7 0.13 var(--part-hue, 200));
     transition: opacity var(--vesta-duration-fast, 120ms) var(--vesta-ease-out);
   }
 
-  :where([data-vesta='prefs-bar'][data-hovering] > span:not([data-active])) {
+  :where([data-vesta='prefs-bar'][data-hovering] > span:not([data-active], [data-vesta])) {
     opacity: 0.35;
   }
 
@@ -112,7 +112,7 @@
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
-  :where([data-vesta='prefs-legend'] li > span) {
+  :where([data-vesta='prefs-legend'] li > span:not([data-vesta])) {
     flex: 1;
   }
 
@@ -187,7 +187,7 @@
     text-align: start;
   }
 
-  :where([data-vesta='prefs-instance-name'] > span) {
+  :where([data-vesta='prefs-instance-name'] > span:not([data-vesta])) {
     overflow: hidden;
     font-weight: var(--vesta-weight-medium);
     text-overflow: ellipsis;

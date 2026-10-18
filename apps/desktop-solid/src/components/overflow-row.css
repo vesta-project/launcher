@@ -1,0 +1,45 @@
+/*
+ * Overflow row: one line of pills that folds what does not fit into "+N" (overflow-row.tsx).
+ * The row keeps its own hook for gap and placement; these rules only do the folding.
+ *
+ * Hooks: [data-overflow-row] (beside the row's own data-vesta), [data-vesta=overflow-more]
+ *        (default "+N" hook; callers usually pass their own pill hook)
+ * States: row: data-overflow-squeeze (only the first pill fits, so it shrinks);
+ *         pill: data-overflow-hidden; "+N" button and probe: data-overflow-control,
+ *         probe: data-overflow-probe
+ *
+ * The folding rules are attribute selectors outside :where() on purpose: they must win over
+ * any pill's own `display` and `flex` (pills are styled with zero-specificity hooks).
+ */
+@layer launcher {
+  :where([data-overflow-row]) {
+    position: relative;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  [data-overflow-row] > [data-overflow-hidden] {
+    display: none;
+  }
+
+  /* Measures the widest "+N" this row can show without taking part in the layout. */
+  [data-overflow-row] > [data-overflow-probe] {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  [data-overflow-row][data-overflow-squeeze] > :first-child {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+  }
+
+  [data-overflow-row] > [data-overflow-control] {
+    flex: none;
+  }
+}

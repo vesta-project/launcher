@@ -284,7 +284,6 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
                   <button
                     type="button"
                     data-vesta="browse-tag"
-                    data-tip={t('browse.browse-category', { name: item().label })}
                     onClick={() => leaveForBrowse(props.project, { category: item().raw })}
                   >
                     <span>{item().label}</span>
@@ -305,7 +304,6 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
                       type="button"
                       data-vesta="project-creator"
                       disabled={!row().filter}
-                      data-tip={row().filter ? t('browse.filter-by-author', { author: row().name }) : undefined}
                       onClick={() => {
                         const filter = row().filter;
                         if (filter) leaveForBrowse(props.project, { creator: filter });
@@ -318,7 +316,7 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
                         </Show>
                       </span>
                       <span data-vesta="project-creator-text">
-                        <strong>{row().name}</strong>
+                        <strong data-tip-overflow="">{row().name}</strong>
                         <small>{row().role}</small>
                       </span>
                     </button>
@@ -333,9 +331,16 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
           <ul data-vesta="project-links">
             <Show when={props.project.web_url}>
               <li>
-                <button type="button" data-vesta="project-link" onClick={() => void openExternal(props.project.web_url)}>
+                <button
+                  type="button"
+                  data-vesta="project-link"
+                  data-href={props.project.web_url}
+                  onClick={() => void openExternal(props.project.web_url)}
+                >
                   <Icon name={sourceById(props.project.source).icon} size={14} />
-                  <span>{t('browse.open-on', { source: sourceById(props.project.source).label })}</span>
+                  <span data-vesta="project-link-label" data-tip-overflow="">
+                    {t('browse.open-on', { source: sourceById(props.project.source).label })}
+                  </span>
                   <Icon name="icons/actions/external-link" size={12} />
                 </button>
               </li>
@@ -350,7 +355,9 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
                     onClick={() => transitionTo(projectPath(other().source, other().id))}
                   >
                     <Icon name={sourceById(other().source).icon} size={14} />
-                    <span>{t('browse.also-on', { source: sourceById(other().source).label })}</span>
+                    <span data-vesta="project-link-label" data-tip-overflow="">
+                      {t('browse.also-on', { source: sourceById(other().source).label })}
+                    </span>
                     <Icon name="icons/controls/chevron-right" size={12} />
                   </button>
                 </li>
@@ -363,10 +370,13 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
                     type="button"
                     data-vesta="project-link"
                     data-donation={link().donation ? '' : undefined}
+                    data-href={link().url}
                     onClick={() => void openExternal(link().url)}
                   >
                     <Icon name={linkIcon(link())} size={14} />
-                    <span>{link().label}</span>
+                    <span data-vesta="project-link-label" data-tip-overflow="">
+                      {link().label}
+                    </span>
                     <Icon name="icons/actions/external-link" size={12} />
                   </button>
                 </li>

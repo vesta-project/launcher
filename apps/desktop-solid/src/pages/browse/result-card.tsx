@@ -1,7 +1,7 @@
-import { Popover } from '@vesta/ui';
-import { createMemo, For, Show, untrack } from 'solid-js';
+import { createMemo, Show, untrack } from 'solid-js';
 import { transitionTo } from '../../app/transition';
 import { Icon } from '../../components/icon';
+import { OverflowRow } from '../../components/overflow-row';
 import {
   categoryDisplayName,
   creatorOf,
@@ -33,9 +33,6 @@ import { loaderLabels } from './filter-panel';
 import { InstallButton } from './install-button';
 import { runInstall } from './install-actions';
 
-/** Tags shown before the rest fold into a "+N" pill. */
-const shownTags = 3;
-
 /** A stable hue per project, so the fallback banner differs between cards but never flickers. */
 function hueOf(seed: string) {
   let hash = 0;
@@ -60,7 +57,6 @@ function TagButton(props: { tag: Tag }) {
       type="button"
       data-vesta="browse-tag"
       aria-pressed={props.tag.active ? 'true' : 'false'}
-      data-tip={t('browse.filter-by-tag', { name: props.tag.label })}
       onClick={() => props.tag.apply()}
     >
       <span>{props.tag.label}</span>
@@ -205,34 +201,19 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
           <p data-vesta="browse-card-summary">{project().summary}</p>
         </Show>
         <Show when={tags().length}>
-          <div data-vesta="browse-card-tags">
-            <For each={tags().slice(0, shownTags)} keyed={(tag) => tag.key}>
-              {(tag) => <TagButton tag={tag()} />}
-            </For>
-            <Show when={tags().length > shownTags}>
-              <Popover
-                placement="bottom-start"
-                class="browse-tags-popover"
-                trigger={(triggerProps) => (
-                  <button
-                    {...triggerProps}
-                    type="button"
-                    data-vesta="browse-tag"
-                    data-kind="more"
-                    aria-label={t('browse.more-categories', { count: tags().length - shownTags })}
-                  >
-                    {t('browse.more-tags', { count: tags().length - shownTags })}
-                  </button>
-                )}
-              >
-                <div data-vesta="browse-tags-more">
-                  <For each={tags().slice(shownTags)} keyed={(tag) => tag.key}>
-                    {(tag) => <TagButton tag={tag()} />}
-                  </For>
-                </div>
-              </Popover>
-            </Show>
-          </div>
+          {/* As many tags as fit on one line; the rest fold into "+N" (measured, not counted). */}
+          <OverflowRow
+            hook="browse-card-tags"
+            moreHook="browse-tag"
+            popoverClass="browse-tags-popover"
+            popoverHook="browse-tags-more"
+            items={tags()}
+            key={(tag) => tag.key}
+            moreLabel={(count) => t('browse.more-tags', { count })}
+            moreAriaLabel={(count) => t('browse.more-categories', { count })}
+          >
+            {(tag) => <TagButton tag={tag()} />}
+          </OverflowRow>
         </Show>
       </div>
     </article>

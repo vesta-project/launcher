@@ -10,7 +10,7 @@
  *        -stepper-position -notice -state -state-actions -inline-state -muted
  *        overview: -overview -article -article-loading -article-summary -facts
  *        -facts-group -details -tags -creators -creator -creator-avatar -creator-text
- *        -links -link -fit -fit-version -fit-label -loaders -loader-mark -loader-name
+ *        -links -link -link-label -fit -fit-version -fit-label -loaders -loader-mark -loader-name
  *        -loader-more
  *        gallery: -gallery -gallery-item
  *        versions: -versions -toolbar -toolbar-count -versions-pane -version-list
@@ -26,7 +26,7 @@
  *         version: data-installed, data-skeleton; version-game: data-differs;
  *         fit: data-tone; link: data-internal, data-donation; dependency: data-unresolved;
  *         dependency-group: data-kind; dependency-icon: data-empty
- * Knobs (on the board): --project-gutter, --project-bar-bg; header: --project-header-height,
+ * Knobs (on the board): --project-gutter, --project-bar-bg, --project-facts-bg; header: --project-header-height,
  *        --project-icon-size, --project-hue; versions: --project-version-columns
  *
  * The panes are size containers (`project-pane`, `project-versions`), so the facts column,
@@ -36,6 +36,8 @@
   .project-board {
     --project-gutter: 24px;
     --project-bar-bg: color-mix(in oklab, var(--vesta-color-surface-sunken) 70%, var(--vesta-color-surface));
+    /* The facts column is raised off the pane, like the instance Overview's panels. */
+    --project-facts-bg: var(--vesta-color-surface-raised);
     --board-bg: var(--vesta-color-surface);
 
     position: relative;
@@ -487,7 +489,8 @@
     flex: 1;
     min-block-size: 0;
     overflow-y: auto;
-    padding: 20px var(--project-gutter) 28px;
+    /* The same space on every side, so content never sits closer to one edge. */
+    padding: var(--project-gutter);
     container: project-pane / inline-size;
     scrollbar-width: thin;
     scrollbar-color: var(--vesta-color-border-strong) transparent;
@@ -567,7 +570,7 @@
   /* ---- Description and version page: text beside a column of facts ---- */
   :where([data-vesta='project-overview']) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 17rem;
+    grid-template-columns: minmax(0, 1fr) 18.5rem;
     gap: var(--vesta-space-8);
     align-items: start;
     max-inline-size: 76rem;
@@ -590,6 +593,24 @@
     line-height: var(--vesta-leading-normal);
   }
 
+  /* A raised panel beside the text: its own surface, so facts never blend into the prose. */
+  :where([data-vesta='project-facts']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--project-facts-bg);
+  }
+
+  :where([data-vesta='project-facts-group'] + [data-vesta='project-facts-group']) {
+    padding-block-start: var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
   /* Narrow: one column. Project facts follow the text; version facts lead (they are short). */
   @container project-pane (max-width: 760px) {
     :where([data-vesta='project-overview']) {
@@ -601,25 +622,17 @@
       order: -1;
     }
 
+    /* Groups flow into columns inside the panel; the panel itself is the separation. */
     :where([data-vesta='project-facts']) {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
-      gap: var(--vesta-space-5);
-      padding-block-start: var(--vesta-space-5);
-      border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+      gap: var(--vesta-space-5) var(--vesta-space-6);
     }
 
-    :where([data-vesta='project-overview'][data-kind='version'] > [data-vesta='project-facts']) {
-      padding-block: 0 var(--vesta-space-5);
-      border-block: 0 var(--vesta-border-width) solid var(--vesta-color-border);
+    :where([data-vesta='project-facts-group'] + [data-vesta='project-facts-group']) {
+      padding-block-start: 0;
+      border-block-start: 0;
     }
-  }
-
-  :where([data-vesta='project-facts']) {
-    display: flex;
-    flex-direction: column;
-    gap: var(--vesta-space-5);
-    min-inline-size: 0;
   }
 
   :where([data-vesta='project-facts-group']) {
@@ -726,10 +739,12 @@
     outline-offset: calc(var(--vesta-focus-width) * -1);
   }
 
-  :where([data-vesta='project-link'] > span) {
+  /* The label takes the row; the icons keep their size (icons are spans too, so never `> span`). */
+  :where([data-vesta='project-link-label']) {
     flex: 1;
     min-inline-size: 0;
     overflow: hidden;
+    text-align: start;
     text-overflow: ellipsis;
     white-space: nowrap;
   }

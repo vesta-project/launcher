@@ -189,7 +189,7 @@
     cursor: default;
   }
 
-  :where([data-vesta='browse-url-hint'] > span) {
+  :where([data-vesta='browse-url-hint'] > span:not([data-vesta])) {
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;

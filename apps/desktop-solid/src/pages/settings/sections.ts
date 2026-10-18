@@ -92,6 +92,7 @@ export const settingIndex: { section: SectionId; label: MessageId }[] = [
   { section: 'general', label: 'prefs.general.gpu' },
   { section: 'general', label: 'prefs.general.telemetry' },
   { section: 'general', label: 'prefs.general.discord' },
+  { section: 'general', label: 'prefs.general.trusted-sites' },
   { section: 'appearance', label: 'prefs.appearance.theme' },
   { section: 'appearance', label: 'prefs.appearance.color-mode' },
   { section: 'appearance', label: 'prefs.appearance.hue' },

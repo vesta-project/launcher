@@ -70,7 +70,7 @@
     justify-content: space-between;
     gap: var(--vesta-space-3);
   }
-  :where([data-vesta="import-path-change"]) > span {
+  :where([data-vesta="import-path-change"]) > span:not([data-vesta]) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);
@@ -180,7 +180,7 @@
     font-size: var(--vesta-text-sm);
     color: var(--vesta-color-text-muted);
   }
-  :where([data-vesta="launcher-import-stats"]) dt span {
+  :where([data-vesta="launcher-import-stats"]) dt span:not([data-vesta]) {
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -224,7 +224,7 @@
     padding: var(--vesta-space-3) var(--vesta-space-4);
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
-  :where([data-vesta="import-directory"]) > span {
+  :where([data-vesta="import-directory"]) > span:not([data-vesta]) {
     font-size: var(--vesta-text-xs);
     color: var(--vesta-color-text-muted);
   }
@@ -393,7 +393,7 @@
     font-size: var(--vesta-text-md);
     font-weight: var(--vesta-weight-medium);
   }
-  :where([data-vesta="import-instance-row-copy"]) > span {
+  :where([data-vesta="import-instance-row-copy"]) > span:not([data-vesta]) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
     overflow: hidden;

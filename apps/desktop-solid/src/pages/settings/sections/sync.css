@@ -59,7 +59,7 @@
     font-weight: var(--vesta-weight-medium);
   }
 
-  :where([data-vesta='prefs-sync-summary'] > span) {
+  :where([data-vesta='prefs-sync-summary'] > span:not([data-vesta])) {
     overflow: hidden;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);

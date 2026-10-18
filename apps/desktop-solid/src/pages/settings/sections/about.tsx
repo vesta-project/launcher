@@ -1,12 +1,12 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { open as openExternal } from '@tauri-apps/plugin-shell';
 import { Button, Dialog } from '@vesta/ui';
 import { For, Show, createSignal, onSettled } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { ImportDialog } from '../../create/import-dialog';
 import { openInstallSource } from '../../create/install-navigation';
 import { Icon } from '../../../components/icon';
+import { openExternal } from '../../../features/links/external-links';
 import { SettingRow } from '../../../components/setting-row';
 import { resetConfig, setting, updateSetting } from '../../../features/settings/config';
 import { updateStatus, checkForUpdates } from '../../../features/settings/updates';
@@ -35,7 +35,7 @@ const links = [
   },
 ];
 
-const openLink = (url: string) => (isTauri() ? void openExternal(url) : void window.open(url, '_blank', 'noopener'));
+const openLink = (url: string) => void openExternal(url);
 
 export function AboutSettings() {
   const [version, setVersion] = createSignal('0.2.0-dev');
@@ -142,7 +142,7 @@ export function AboutSettings() {
           <For each={links}>
             {(link) => (
               <li>
-                <button type="button" onClick={() => openLink(link.url)}>
+                <button type="button" data-href={link.url} onClick={() => openLink(link.url)}>
                   <span data-vesta="prefs-link-tile">
                     <Icon name={link.icon} size={16} />
                   </span>

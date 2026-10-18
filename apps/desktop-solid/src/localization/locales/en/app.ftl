@@ -198,3 +198,11 @@ crash-report-copied = Report copied
 crash-report-copy-failed = Could not copy report
 crash-open-file = Open file
 crash-view-full-log = View full log
+
+# Links that leave the launcher.
+links-open-title = Open this link in your browser?
+links-open-description = It leaves Vesta Launcher and opens in your default web browser.
+links-trust-site = Always open links to { $value }
+links-open = Open link
+links-stay = Stay in app
+links-preview-project = { $name } on { $source }

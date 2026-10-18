@@ -90,7 +90,6 @@ browse-more-categories =
         [one] { $count } more category
        *[other] { $count } more categories
     }
-browse-filter-by-tag = Filter by { $name }
 browse-followers-title = { $count } followers
 browse-downloads-title = { $count } downloads
 
@@ -173,7 +172,6 @@ browse-facts-updated = Updated
 browse-facts-creators = Creators
 browse-facts-links = Links
 browse-environment-both = Client and server
-browse-browse-category = Browse { $name }
 browse-creator-organization = Organization
 browse-creator-owner = Owner
 browse-creator-member = Member

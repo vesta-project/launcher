@@ -29,11 +29,9 @@ import {
   setGameVersion,
   setLoader,
   setServer,
-  chooseTarget,
   clearFilters,
   setText,
   results,
-  targetId,
   text,
   toggleCategory,
   type,
@@ -130,7 +128,7 @@ function openProject(url: ProjectUrl) {
 /**
  * The signature search box: filter chips, the text input and the Filters button live in one
  * field-looking container. Keys in the input: Enter commits (or opens a pasted project URL),
- * Backspace on empty text removes the last chip (hidden ones included), Escape clears the text
+ * Deletion keys edit text only; chips and the target have explicit removal controls. Escape clears the text
  * and then blurs, ArrowDown opens the filter panel (Escape closes it again). Many filters
  * collapse to the first few chips and a "+N" chip that opens the panel.
  */
@@ -176,15 +174,6 @@ export function SearchField() {
       const url = link();
       if (url) openProject(url);
       else applyText(input.value, true);
-    } else if (event.key === 'Backspace' && !input.value) {
-      const last = chips().at(-1);
-      if (last) {
-        event.preventDefault();
-        last.remove();
-      } else if (targetId() && type() !== 'modpack') {
-        event.preventDefault();
-        chooseTarget(undefined);
-      }
     } else if (event.key === 'Escape') {
       if (input.value) {
         event.preventDefault();

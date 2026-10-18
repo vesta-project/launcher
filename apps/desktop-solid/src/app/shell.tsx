@@ -4,6 +4,8 @@ import { Match, Switch, Show, onCleanup } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { findInstance } from '../features/instances/catalog';
 import { AccountLoginDialog } from '../features/accounts/account-login-dialog';
+import { ExternalLinkDialog } from '../features/links/external-link-dialog';
+import { LinkPreview } from '../features/links/link-preview';
 import { Button, TooltipHints } from '@vesta/ui';
 import { t } from '../localization';
 import { instanceError, clearInstanceError, refreshNativeInstances, useInstanceSync } from '../features/instances/native-service';
@@ -43,6 +45,8 @@ export function Shell() {
       <Titlebar />
       <AccountLoginDialog />
       <TooltipHints />
+      <LinkPreview />
+      <ExternalLinkDialog />
       <Show when={instanceError()}><div data-vesta="instance-service-error" role="alert">
         <span>{instanceError()}</span>
         <Button size="sm" variant="ghost" onClick={()=>{clearInstanceError();void refreshNativeInstances(true);}}>{t('common.retry')}</Button>

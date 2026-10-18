@@ -26,6 +26,8 @@ export interface LauncherConfig {
   debug_logging: boolean;
   /** Local-only: shows the Developer page. Never sent to the host. */
   developer_mode: boolean;
+  /** Local-only: sites whose links open without asking first (see features/links). */
+  trusted_link_domains: string[];
 
   max_download_threads: number;
   artifact_cache_max_bytes: number;
@@ -80,6 +82,7 @@ export const configDefaults: LauncherConfig = {
   minimize_to_tray: false,
   debug_logging: false,
   developer_mode: false,
+  trusted_link_domains: [],
 
   max_download_threads: 4,
   artifact_cache_max_bytes: 1024 * 1024 * 1024,
@@ -138,7 +141,7 @@ const secret = new Set<keyof LauncherConfig>([
 ]);
 
 /** Kept in the local mirror only; the host has no such field. */
-const localOnly = new Set<keyof LauncherConfig>(["developer_mode"]);
+const localOnly = new Set<keyof LauncherConfig>(["developer_mode", "trusted_link_domains"]);
 
 /**
  * The last known configuration, read synchronously at startup so the Settings pages

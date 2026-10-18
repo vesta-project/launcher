@@ -1,4 +1,3 @@
-import { open as openInShell } from '@tauri-apps/plugin-shell';
 import { createSignal, untrack } from 'solid-js';
 import { invoke } from '@tauri-apps/api/core';
 import { worldsFor } from '../../features/instances/details';
@@ -18,6 +17,7 @@ import { installIntoNewInstance } from '../../features/browse/new-instance-insta
 import { nativeInstances } from '../../features/instances/native-service';
 import { t } from '../../localization';
 import { openInstallSource } from '../create/install-navigation';
+import { openExternal } from '../../features/links/external-links';
 
 /** The project waiting for an instance choice; the picker dialog is open while this is set. */
 const [pickerProject, setPickerProject] = createSignal<ResourceProject | undefined>(undefined, {
@@ -33,12 +33,8 @@ export function closePicker(): void {
   setPickerVersion(undefined);
 }
 
-/** Opens a provider page in the system browser (or a new tab in the preview). */
-export async function openExternal(url: string) {
-  if (!/^(https?:\/\/|mailto:)/i.test(url)) return;
-  if (nativeInstances) await openInShell(url);
-  else window.open(url, '_blank', 'noopener');
-}
+/** Opens a provider page in the system browser, after the shared "leaving the launcher" check. */
+export { openExternal };
 
 const rank = { release: 0, beta: 1, alpha: 2 } as const;
 

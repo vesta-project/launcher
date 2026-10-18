@@ -8,11 +8,15 @@ export interface TooltipHintsProps {
 }
 
 /**
- * One shared tooltip for every element carrying `data-tip="…"` — the light alternative to
+ * One shared tooltip for every element carrying `data-tip="…"` (or `data-tip-overflow`) — the light alternative to
  * wrapping each tag and stat in a Tooltip. Mount it once near the root. It follows pointer
  * hover and keyboard focus, sits above the element (below when there is no room), and once
  * one hint has shown, moving to the next shows it straight away. Like Tooltip, the text is
  * supplementary: the element still needs its own accessible name.
+ *
+ * `data-tip-overflow` is for text that may be cut off with an ellipsis: the hint (its
+ * `data-tip`, else the element's own text) shows only while the text is actually truncated,
+ * so a label that fits never repeats itself in a tooltip.
  */
 export function TooltipHints(props: TooltipHintsProps) {
   const mount = useOverlayMount();
@@ -43,9 +47,14 @@ export function TooltipHints(props: TooltipHintsProps) {
       tip.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
     };
 
+    const truncated = (element: HTMLElement) =>
+      element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1;
+
     const show = (element: HTMLElement) => {
-      const text = element.dataset.tip;
+      const overflow = element.hasAttribute('data-tip-overflow');
+      const text = element.dataset.tip || (overflow ? element.textContent?.trim() : undefined);
       if (!text || !element.isConnected) return;
+      if (overflow && !truncated(element)) return;
       tip.textContent = text;
       tip.style.display = 'block';
       tip.toggleAttribute('data-expanded', !warm);
@@ -65,7 +74,7 @@ export function TooltipHints(props: TooltipHintsProps) {
     };
 
     const target = (node: EventTarget | null) =>
-      node instanceof Element ? node.closest<HTMLElement>('[data-tip]') : null;
+      node instanceof Element ? node.closest<HTMLElement>('[data-tip], [data-tip-overflow]') : null;
 
     const arm = (element: HTMLElement | null) => {
       if (element === current) return;

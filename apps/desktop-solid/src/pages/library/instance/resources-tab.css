@@ -267,7 +267,7 @@
     min-inline-size: 0;
   }
 
-  :where([data-vesta="resource-version"] > span) {
+  :where([data-vesta="resource-version"] > span:not([data-vesta])) {
     overflow: hidden;
     text-overflow: ellipsis;
   }

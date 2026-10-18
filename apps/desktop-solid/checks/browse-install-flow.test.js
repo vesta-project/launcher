@@ -20,6 +20,7 @@ async function harness(entry, run) {
     '@tauri-apps/api/core': `export const invoke = (...args) => c.invoke(...args);`,
     '@tauri-apps/api/event': `export const listen = async (name, handler) => { c.events.set(name, handler); return () => c.events.delete(name); };`,
     '@tauri-apps/plugin-shell': 'export const open = async () => {};',
+    '../../features/links/external-links': 'export const openExternal = async () => true;',
     '../../localization': 'export const t = (id, args) => id + JSON.stringify(args || {});',
     '../instances/metadata': `export const loadMetadata = async () => {}, metadataError = () => '', metadata = () => ({ game_versions: [
       { id: '1.21.4', stable: true, loaders: {fabric: [{version: 'new', stable: true}]} },

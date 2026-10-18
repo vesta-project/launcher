@@ -132,7 +132,7 @@
     background: var(--vesta-color-surface-raised);
     font-size: var(--vesta-text-sm);
   }
-  :where([data-vesta='instance-service-error']) > span {
+  :where([data-vesta='instance-service-error']) > span:not([data-vesta]) {
     flex: 1;
     min-inline-size: 0;
     overflow-wrap: anywhere;

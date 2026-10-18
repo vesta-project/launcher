@@ -27,7 +27,7 @@ export function TargetSelect(props: {
         label: t('browse.no-instance'),
         icon: () => (
           <span data-vesta="browse-target-icon" data-empty="">
-            <Icon name="icons/content/cube" size={10} />
+            <Icon name="icons/content/cube" size={12} />
           </span>
         ),
       },

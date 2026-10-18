@@ -1,4 +1,5 @@
-import { Select } from '@vesta/ui';
+import { Button, Select } from '@vesta/ui';
+import { forgetTrustedSites, trustedSites } from '../../../features/links/external-links';
 import { setting, updateSetting } from '../../../features/settings/config';
 import { SettingRow } from '../../../components/setting-row';
 import {
@@ -84,6 +85,18 @@ export function GeneralSettings() {
           checked={setting('discord_presence_enabled')}
           onChange={(value) => updateSetting('discord_presence_enabled', value)}
         />
+        <SettingRow
+          label={t('prefs.general.trusted-sites')}
+          description={
+            trustedSites().length
+              ? t('prefs.general.trusted-sites-description', { value: trustedSites().join(', ') })
+              : t('prefs.general.trusted-sites-none')
+          }
+        >
+          <Button size="sm" variant="outline" disabled={!trustedSites().length} onClick={forgetTrustedSites}>
+            {t('prefs.general.trusted-sites-forget')}
+          </Button>
+        </SettingRow>
       </Card>
 
       <Card title={t('prefs.general.advanced')}>

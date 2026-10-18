@@ -63,12 +63,12 @@
     white-space: nowrap;
     font-weight: var(--vesta-weight-semibold);
   }
-  :where([data-vesta="world-copy"] > span) {
+  :where([data-vesta="world-copy"] > span:not([data-vesta])) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);
   }
-  :where([data-vesta="world-copy"] > span, [data-vesta="world-meta"]) {
+  :where([data-vesta="world-copy"] > span:not([data-vesta]), [data-vesta="world-meta"]) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }
@@ -118,7 +118,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  :where([data-vesta="world-detail-copy"] > span) {
+  :where([data-vesta="world-detail-copy"] > span:not([data-vesta])) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);

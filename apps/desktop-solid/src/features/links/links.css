@@ -1,0 +1,69 @@
+/*
+ * Links that leave the launcher: the confirmation dialog's address block and the
+ * browser-style status pill (link preview).
+ *
+ * Hooks: [data-vesta=external-link] -url; [data-vesta=link-preview]
+ * States: link-preview: data-side (start | end)
+ */
+@layer launcher {
+  :where([data-vesta='external-link']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+  }
+
+  /* The full address, host emphasised: where the link really goes, whatever its text said. */
+  :where([data-vesta='external-link-url']) {
+    max-block-size: 6lh;
+    margin: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    overflow-y: auto;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text-muted);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    line-height: var(--vesta-leading-normal);
+    overflow-wrap: anywhere;
+    user-select: text;
+  }
+
+  :where([data-vesta='external-link-url'] > strong) {
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  /* Status pill: a quiet, non-interactive address in the window's corner. */
+  :where([data-vesta='link-preview']) {
+    position: fixed;
+    inset-block-end: var(--vesta-space-2);
+    inset-inline-start: var(--vesta-space-2);
+    z-index: var(--vesta-z-tooltip);
+    box-sizing: border-box;
+    max-inline-size: min(40rem, calc(100vw - var(--vesta-space-4)));
+    padding: var(--vesta-space-0-5) var(--vesta-space-2);
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-surface-raised);
+    box-shadow: var(--vesta-shadow-sm);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: vesta-link-preview-in var(--vesta-duration-fast) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='link-preview'][data-side='end']) {
+    inset-inline: auto var(--vesta-space-2);
+  }
+
+  @keyframes vesta-link-preview-in {
+    from {
+      opacity: 0;
+    }
+  }
+}

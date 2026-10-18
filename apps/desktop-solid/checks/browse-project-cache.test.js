@@ -13,6 +13,8 @@ async function harness(run) {
     versions: [{ id: 'v', version_number: '1.0' }],
     projectReads: 0,
     detailReads: [],
+    peerReads: 0,
+    peer: null,
   };
   globalThis[key] = control;
   try {
@@ -31,7 +33,7 @@ async function harness(run) {
           export const fetchProject = async () => { c.projectReads++; return c.project; };
           export const fetchProjects = async () => c.batch;
           export const fetchVersions = async () => c.versions;
-          export const fetchPeerProject = async () => null;
+          export const fetchPeerProject = async (project) => { c.peerReads++; return typeof c.peer === 'function' ? c.peer(project) : c.peer; };
           export const fetchVersionDetails = async (...args) => { c.detailReads.push(args); return {version: c.versions[0], changelog_status: args[3] ? 'available' : 'unavailable'}; };
         ` }));
       } }] });
@@ -84,4 +86,35 @@ test('changelog retry bypasses frontend freshness and the host cache', () => har
   expect((await api.loadVersionDetails('modrinth', 'p', 'v')).changelog_status).toBe('unavailable');
   expect((await api.loadVersionDetails('modrinth', 'p', 'v', true)).changelog_status).toBe('available');
   expect(c.detailReads.map((args) => args[3])).toEqual([false, true]);
+}));
+
+
+test('peer lookup is lazy, joins concurrent calls, caches misses and reuses reverse identity', () => harness(async (api, c) => {
+  api.seedProjects([c.project]);
+  await api.loadProject('modrinth', 'p');
+  expect(c.peerReads).toBe(0);
+  const peer = { source: 'curseforge', id: '42' };
+  c.peer = peer;
+  const [full, identity] = await Promise.all([api.loadPeerProject(c.project), api.loadPeerProjectId(c.project)]);
+  expect(full).toEqual(peer);
+  expect(identity).toEqual(peer);
+  expect(c.peerReads).toBe(1);
+  expect(await api.loadPeerProjectId(peer)).toEqual({ source: 'modrinth', id: 'p' });
+  expect(c.peerReads).toBe(1);
+  c.peer = null;
+  const missing = { source: 'modrinth', id: 'absent' };
+  expect(await api.loadPeerProjectId(missing)).toBeNull();
+  expect(await api.loadPeerProjectId(missing)).toBeNull();
+  expect(c.peerReads).toBe(2);
+  expect(await api.loadPeerProjectId({ source: 'smithed', id: 'pack' })).toBeNull();
+  expect(c.peerReads).toBe(2);
+}));
+
+
+test('opposite-direction peer lookups do not invalidate each other in flight', () => harness(async (api, c) => {
+  const first = { source: 'modrinth', id: 'p' };
+  const second = { source: 'curseforge', id: '42' };
+  c.peer = (project) => project.source === 'modrinth' ? second : first;
+  expect(await Promise.all([api.loadPeerProjectId(first), api.loadPeerProjectId(second)])).toEqual([second, first]);
+  expect(c.peerReads).toBe(2);
 }));

@@ -76,8 +76,32 @@ export const loadVersionDetails = (platform: SourceId, projectId: string, versio
 export const peekVersionDetails = (platform: string, projectId: string, versionId: string) =>
   detailsCache.peek(versionKey(platform, projectId, versionId))?.data;
 
-export const loadPeerProject = (project: ResourceProject) =>
-  peerCache.read(projectKey(project.source, project.id), () => fetchPeerProject(project));
+/** Details-page only: never call from results, seeding or hover prefetch.
+ * Joins concurrent requests and caches both matches and misses in memory for one hour.
+ * Host accepts persisted identity, explicit IDs or shared file SHA-1, never a name alone.
+ * Errors reject (and can be retried); null means no peer was proven within the lookup budget.
+ */
+export const loadPeerProject = (project: ResourceProject): Promise<ResourceProject | null> => {
+  if (project.source !== 'modrinth' && project.source !== 'curseforge') return Promise.resolve(null);
+  return peerCache.read(projectKey(project.source, project.id), async () => {
+    const peer = await fetchPeerProject(project);
+    if (!peer || peer.source === project.source || !['modrinth', 'curseforge'].includes(peer.source)) return null;
+    // Returning from the other listing should reuse this identity without another lookup.
+    const reverseKey = projectKey(peer.source, peer.id);
+    const reverse = peerCache.peek(reverseKey);
+    // Do not retire an opposite-direction lookup that another details view already owns.
+    if (!reverse?.hasData && !reverse?.refreshing) peerCache.seed(reverseKey, project);
+    return peer;
+  });
+};
+
+/** Minimal navigation identity, sharing exactly the same cache as loadPeerProject.
+ * The caller must discard a late answer if the active source/id changed while awaiting it.
+ */
+export async function loadPeerProjectId(project: ResourceProject): Promise<Pick<ResourceProject, 'source' | 'id'> | null> {
+  const peer = await loadPeerProject(project);
+  return peer ? { source: peer.source, id: peer.id } : null;
+}
 
 /**
  * Projects for a dependency list: cached ones are used as they are, the rest arrive in one

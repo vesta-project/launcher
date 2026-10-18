@@ -451,7 +451,7 @@
     background: color-mix(in oklab, var(--vesta-color-success-text) 10%, transparent);
   }
 
-  :where([data-vesta='keep-note'] > span) {
+  :where([data-vesta='keep-note'] > span:not([data-vesta])) {
     display: flex;
     flex-direction: column;
     gap: var(--vesta-space-1);
@@ -492,7 +492,7 @@
     background: var(--vesta-color-fill);
   }
 
-  :where([data-vesta='link-result'] > span) {
+  :where([data-vesta='link-result'] > span:not([data-vesta])) {
     display: flex;
     flex-direction: column;
     gap: var(--vesta-space-1);

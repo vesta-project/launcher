@@ -177,7 +177,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  :where([data-vesta="overview-facts"] dd > span) {
+  :where([data-vesta="overview-facts"] dd > span:not([data-vesta])) {
     color: var(--vesta-color-text-muted);
   }
 
@@ -248,7 +248,7 @@
     object-fit: cover;
   }
 
-  :where([data-vesta="shot"] span) {
+  :where([data-vesta="shot"] span:not([data-vesta])) {
     position: absolute;
     inset: auto 0 0;
     padding: var(--vesta-space-1-5) var(--vesta-space-2);

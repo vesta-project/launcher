@@ -35,7 +35,7 @@
     font-weight: var(--vesta-weight-medium);
   }
 
-  :where([data-vesta='prefs-shortcuts'] li > div:not([data-vesta]) > span) {
+  :where([data-vesta='prefs-shortcuts'] li > div:not([data-vesta]) > span:not([data-vesta])) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }

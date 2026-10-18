@@ -1,7 +1,7 @@
 /*
  * Instance page frame: header, tab strip, one scrolling pane.
- * Knobs (on the board): --instance-gutter (inline space shared by header, tabs and
- * panes), --instance-pane-padding-block, --instance-bar-bg (tab strip and pane toolbars).
+ * Knobs (on the board): --instance-gutter (space shared by header, tabs and panes; panes
+ * use it on every side; --instance-pane-padding-block follows it), --instance-bar-bg (tab strip and pane toolbars).
  *
  * Three layers read as separate surfaces: the art header, a darker chrome strip
  * (tabs, then any pane toolbar), and the content surface. Panes are the only scroll
@@ -10,7 +10,8 @@
 @layer launcher {
   .instance-board {
     --instance-gutter: 24px;
-    --instance-pane-padding-block: 20px;
+    /* Kept for tabs that pad their own scrollers; it now equals the gutter. */
+    --instance-pane-padding-block: var(--instance-gutter);
     --instance-bar-bg: color-mix(
       in oklab,
       var(--vesta-color-surface-sunken) 70%,
@@ -19,12 +20,6 @@
     --board-bg: var(--vesta-color-surface);
 
     border: var(--vesta-border-width) solid var(--vesta-color-border);
-  }
-
-  @media (max-height: 700px) {
-    .instance-board {
-      --instance-pane-padding-block: 12px;
-    }
   }
 
   @container app (max-width: 720px) {
@@ -156,6 +151,7 @@
     flex: 1;
     min-block-size: 0;
     overflow-y: auto;
+    /* One space on every side: the top matches the sides, and the end clears the last row. */
     padding: var(--instance-pane-padding-block) var(--instance-gutter);
     container: pane / inline-size;
     scrollbar-width: thin;

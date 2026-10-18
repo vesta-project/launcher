@@ -1,6 +1,8 @@
 import { Button, Dialog, IconButton, TextField } from "@vesta/ui";
 import { For, Show, createSignal, onCleanup, untrack } from "solid-js";
 import { Icon } from "../../components/icon";
+import { transitionTo } from "../../app/transition";
+import { setType } from "../../features/browse/browse-store";
 import { t } from "../../localization";
 import { nativeInstances } from "../../features/instances/native-service";
 import type { PackSource } from "../../features/installation/install-service";
@@ -143,8 +145,11 @@ export function ImportDialog(props: {
               "icons/content/search",
               t("install.browse-modpacks"),
               t("install.browse-description"),
-              () => {},
-              true,
+              () => {
+                setType("modpack");
+                close();
+                transitionTo("/browse");
+              },
             )}
             <button
               type="button"

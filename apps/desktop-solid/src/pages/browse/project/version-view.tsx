@@ -165,7 +165,7 @@ function Files(props: { version: ResourceVersion }) {
                 <li data-vesta="project-file">
                   <Icon name="icons/content/file" size={16} />
                   <span data-vesta="project-file-text">
-                    <strong data-tip={name()}>{name()}</strong>
+                    <strong data-tip-overflow="">{name()}</strong>
                     <small>
                       <Show when={role() && (files().length > 1 || file().role.toLowerCase() !== 'primary')}>
                         <Badge size="sm" tone={file().role.toLowerCase() === 'primary' ? 'accent' : 'neutral'} variant="soft">
@@ -196,6 +196,7 @@ function Files(props: { version: ResourceVersion }) {
                     variant="ghost"
                     label={t('browse.file-download')}
                     disabled={!file().url}
+                    data-href={file().url || undefined}
                     icon={<Icon name="icons/actions/download" size={14} />}
                     onClick={() => void openExternal(file().url)}
                   />

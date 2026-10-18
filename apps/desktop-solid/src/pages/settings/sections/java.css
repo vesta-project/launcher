@@ -115,7 +115,7 @@
     min-inline-size: 0;
   }
 
-  :where([data-vesta='prefs-java'] li > div:not([data-vesta]) > span) {
+  :where([data-vesta='prefs-java'] li > div:not([data-vesta]) > span:not([data-vesta])) {
     display: flex;
     gap: var(--vesta-space-1-5);
   }
