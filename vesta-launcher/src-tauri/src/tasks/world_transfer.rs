@@ -37,6 +37,39 @@ impl WorldTransferTask {
 }
 
 impl Task for WorldTransferTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::WorldTransfer
+    }
+    fn activity_subject(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::Subject {
+            id: Some(self.world_ref.directory_name.clone()),
+            name: self.world_ref.directory_name.clone(),
+            icon_url: None,
+            instance_id: Some(self.destination_instance.id.to_string()),
+        })
+    }
+    fn activity_source(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::instance_subject(
+            self.source_instance.id,
+            Some(self.source_instance.name.clone()),
+        ))
+    }
+    fn activity_destination(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::instance_subject(
+            self.destination_instance.id,
+            Some(self.destination_instance.name.clone()),
+        ))
+    }
+    fn activity_mode(&self) -> Option<&'static str> {
+        Some(match self.mode {
+            TransferMode::Copy | TransferMode::Duplicate => "copy",
+            TransferMode::Move => "move",
+        })
+    }
+    fn activity_instance_id(&self) -> Option<String> {
+        Some(self.destination_instance.id.to_string())
+    }
+
     fn name(&self) -> String {
         format!("{:?} world {}", self.mode, self.world_ref.directory_name)
     }
@@ -89,6 +122,8 @@ impl Task for WorldTransferTask {
         let acknowledged = self.risk_acknowledged;
         let cleanup_warning = self.cleanup_warning.clone();
         Box::pin(async move {
+            ctx.set_stage("copying_files");
+            ctx.update_overall_progress(20);
             ctx.update_full(
                 20,
                 "Copying and verifying world…".to_string(),
@@ -109,6 +144,8 @@ impl Task for WorldTransferTask {
             .await
             .map_err(|error| format!("World transfer task failed: {error}"))??;
 
+            ctx.set_stage("saving_records");
+            ctx.update_overall_progress(85);
             ctx.update_full(
                 85,
                 "Updating installed resource records…".to_string(),
@@ -146,6 +183,8 @@ impl Task for WorldTransferTask {
                 transfer::finalize_prepared_move(&mut result);
             }
 
+            ctx.set_stage("finalizing");
+            ctx.update_overall_progress(100);
             ctx.update_full(
                 100,
                 "World transfer completed".to_string(),

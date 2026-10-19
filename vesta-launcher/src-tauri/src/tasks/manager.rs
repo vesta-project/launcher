@@ -24,9 +24,69 @@ pub struct TaskContext {
     pub cancel_rx: watch::Receiver<bool>,
     pub pause_rx: watch::Receiver<bool>,
     pub progress_channel: Option<Channel<ProgressUpdate>>,
+    pub overall_range: (i32, i32),
 }
 
 impl TaskContext {
+    pub fn with_overall_range(&self, start: i32, end: i32) -> Self {
+        let mut context = self.clone();
+        let (low, high) = self.overall_range;
+        context.overall_range = (
+            low + (high - low) * start / 100,
+            low + (high - low) * end / 100,
+        );
+        context
+    }
+    pub fn set_file_name(&self, name: &str) {
+        let name = name.rsplit(['/', '\\']).next().unwrap_or_default();
+        super::activity::publish(
+            &self.app_handle,
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "attempt": self.activity_attempt, "fileName": name,
+            }),
+        );
+    }
+
+    pub fn set_stage(&self, stage: &str) {
+        super::activity::publish(
+            &self.app_handle,
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "attempt": self.activity_attempt,
+                "stage": stage, "items": null, "bytes": null, "fileName": null,
+            }),
+        );
+    }
+    pub fn update_items(&self, done: u64, total: Option<u64>) {
+        super::activity::publish(
+            &self.app_handle,
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "attempt": self.activity_attempt, "items": { "done": done, "total": total },
+            }),
+        );
+    }
+    pub fn update_bytes(&self, done: u64, total: Option<u64>) {
+        super::activity::publish(
+            &self.app_handle,
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "attempt": self.activity_attempt, "bytes": { "done": done, "total": total },
+            }),
+        );
+    }
+    pub fn set_subject(&self, subject: super::activity::Subject) {
+        super::activity::publish(
+            &self.app_handle,
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "attempt": self.activity_attempt,
+                "target": subject.instance_id.as_ref().map(|id| serde_json::json!({"instanceId": id})), "subject": subject,
+            }),
+        );
+    }
+
     /// Independent of notifications: silent tasks and deleted completions still
     /// reach the rewrite activity store. Missing fields are partial updates.
     fn activity_progress(
@@ -48,6 +108,8 @@ impl TaskContext {
 
     /// Overall task estimate; only the authoritative terminal event reaches 100%.
     pub fn update_overall_progress(&self, percent: i32) {
+        let (low, high) = self.overall_range;
+        let percent = low + (high - low) * percent.clamp(0, 100) / 100;
         let _ = crate::tasks::activity::publish(
             &self.app_handle,
             "core://activity-progress",
@@ -198,13 +260,37 @@ pub trait Task: Send + Sync {
     fn notification_context(&self) -> Option<NotificationContext> {
         None
     }
-    /// Presentation policy for the titlebar activity consumer.
-    fn activity_kind(&self) -> &'static str {
-        if self.show_notification() {
-            "task"
-        } else {
-            "background"
+    fn activity_kind(&self) -> super::activity::ActivityKind {
+        super::activity::ActivityKind::Task
+    }
+    /// Notification persistence/silence has no bearing on activity visibility.
+    fn activity_visibility(&self) -> super::activity::Visibility {
+        super::activity::Visibility::Foreground
+    }
+    fn activity_subject(&self) -> Option<super::activity::Subject> {
+        let context = self.notification_context()?;
+        if context.kind == "instance" {
+            return context
+                .id?
+                .parse()
+                .ok()
+                .map(|id| super::activity::instance_subject(id, context.label));
         }
+        Some(super::activity::Subject {
+            id: context.id,
+            name: context.label.unwrap_or_default(),
+            icon_url: context.icon_url,
+            instance_id: self.activity_instance_id(),
+        })
+    }
+    fn activity_source(&self) -> Option<super::activity::Subject> {
+        None
+    }
+    fn activity_destination(&self) -> Option<super::activity::Subject> {
+        None
+    }
+    fn activity_mode(&self) -> Option<&'static str> {
+        None
     }
     fn completion_action(&self) -> Option<&'static str> {
         self.notification_context()
@@ -539,6 +625,8 @@ impl TaskManager {
                     "core://activity",
                     serde_json::json!({
                         "id": client_key, "attempt": activity_attempt, "kind": task.activity_kind(),
+                        "visibility": task.activity_visibility(), "subject": task.activity_subject(),
+                        "source": task.activity_source(), "destination": task.activity_destination(), "mode": task.activity_mode(), "stage": "preparing",
                         "state": "queued", "title": task_name, "context": notification_context,
                         "cancellable": is_cancellable, "step": task.starting_description(),
                         "totalSteps": initial_total_steps,
@@ -563,6 +651,7 @@ impl TaskManager {
                     let _conflict_guard = conflicts.acquire(conflict_keys).await;
 
                     let mut ctx = TaskContext {
+                        overall_range: (0, 100),
                         app_handle: app.clone(),
                         notification_id: key_clone.clone(),
                         activity_attempt: activity_attempt.clone(),

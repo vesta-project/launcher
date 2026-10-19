@@ -9,6 +9,18 @@ pub struct DownloadJavaTask {
 }
 
 impl Task for DownloadJavaTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::JavaDownload
+    }
+    fn activity_subject(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::Subject {
+            id: Some(self.major_version.to_string()),
+            name: self.major_version.to_string(),
+            icon_url: None,
+            instance_id: None,
+        })
+    }
+
     fn name(&self) -> String {
         format!("Downloading Java {}", self.major_version)
     }
@@ -46,6 +58,7 @@ impl Task for DownloadJavaTask {
                 last_emit: std::sync::Mutex::new(std::time::Instant::now()),
             };
 
+            ctx.set_stage("downloading");
             install_managed_java(&ctx.app_handle, major, &reporter).await?;
             Ok(())
         })
@@ -59,7 +72,13 @@ struct TaskProgressReporter {
 }
 
 impl ProgressReporter for TaskProgressReporter {
+    fn set_stage(&self, stage: &str) {
+        self.ctx.set_stage(stage);
+    }
     fn start_step(&self, name: &str, total_steps: Option<u32>) {
+        if let Some(total) = total_steps {
+            self.ctx.update_items(0, Some(total as u64));
+        }
         self.ctx.update_description(name.to_string());
         if let Some(ref channel) = self.ctx.progress_channel {
             let _ = channel.send(ProgressUpdate::Step {
@@ -70,9 +89,22 @@ impl ProgressReporter for TaskProgressReporter {
     }
 
     fn update_bytes(&self, transferred: u64, total: Option<u64>) {
-        if let Some(total) = total {
-            let percent = (transferred as f64 / total as f64 * 100.0) as i32;
-            self.set_percent(percent);
+        if let Some(total) = total.filter(|total| *total > 0) {
+            let before = self.last_percent.load(std::sync::atomic::Ordering::Relaxed);
+            self.set_percent(
+                ((transferred as f64 / total as f64) * 100.0).clamp(0.0, 100.0) as i32,
+            );
+            if before != self.last_percent.load(std::sync::atomic::Ordering::Relaxed)
+                || transferred >= total
+            {
+                self.ctx.update_bytes(transferred, Some(total));
+            }
+        } else {
+            let mut last = self.last_emit.lock().unwrap();
+            if last.elapsed() >= std::time::Duration::from_millis(150) {
+                *last = std::time::Instant::now();
+                self.ctx.update_bytes(transferred, None);
+            }
         }
     }
 
@@ -95,6 +127,9 @@ impl ProgressReporter for TaskProgressReporter {
         if allow {
             self.last_percent
                 .store(percent, std::sync::atomic::Ordering::Relaxed);
+            if percent >= 0 {
+                self.ctx.update_overall_progress(percent * 9 / 10);
+            }
             self.ctx.update_progress(percent, None, None);
         }
     }
@@ -104,6 +139,7 @@ impl ProgressReporter for TaskProgressReporter {
     }
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
+        self.ctx.update_items(current as u64, total.map(u64::from));
         let known_percent = self.last_percent.load(std::sync::atomic::Ordering::Relaxed);
         self.ctx.update_progress(
             if known_percent >= 0 {

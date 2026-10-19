@@ -90,7 +90,8 @@ impl ModpackInstaller {
             log::info!("Using pre-interpreted modpack metadata for {}", meta.name);
             meta
         } else {
-            reporter.start_step("Analyzing modpack ZIP", Some(100));
+            reporter.set_stage("analyzing");
+            reporter.start_step("Analyzing modpack ZIP", None);
             let zip_path = zip_path.to_path_buf();
             task::spawn_blocking(move || get_modpack_metadata(&zip_path))
                 .await
@@ -137,6 +138,7 @@ impl ModpackInstaller {
 
         // Step 4: Extract overrides with config preservation
         reporter.set_overall_percent(50);
+        reporter.set_stage("extracting");
         reporter.start_step("Extracting files", None);
         log::info!(
             "[ModpackInstaller] Extracting overrides with prefix: {:?}",
@@ -174,6 +176,7 @@ impl ModpackInstaller {
         reporter.set_overall_percent(55);
         // Step 5: Download additional mods
         if !metadata.mods.is_empty() {
+            reporter.set_stage("downloading_resources");
             reporter.start_step("Downloading resources", Some(metadata.mods.len() as u32));
             let downloader = BatchDownloader::new(crate::client::shared_client().clone(), 8);
 
@@ -302,8 +305,10 @@ impl ModpackInstaller {
             // Step 6: Persist modpack manifest for future repair
             if !reporter.is_dry_run() {
                 if cf_resolved.is_empty() {
+                    reporter.set_stage("finalizing");
                     reporter.start_step("Saving modpack manifest", None);
                 } else {
+                    reporter.set_stage("downloading_resources");
                     reporter.start_step(
                         "Recording downloaded resources",
                         Some(cf_resolved.len() as u32),
@@ -469,6 +474,7 @@ impl ModpackInstaller {
 
         // Step A: Re-extract overrides from ZIP for missing override files
         if !diff.overrides_to_fix.is_empty() {
+            reporter.set_stage("extracting");
             reporter.start_step("Re-extracting modpack overrides", None);
             let (_extracted, skipped_configs) = extract_overrides_with_config_policy(
                 zip_path,
@@ -489,6 +495,7 @@ impl ModpackInstaller {
 
         // Step B: Re-download missing/corrupt resources from their sources
         if !diff.resources_to_fix.is_empty() {
+            reporter.set_stage("downloading_resources");
             reporter.start_step(
                 "Downloading missing resources",
                 Some(diff.resources_to_fix.len() as u32),

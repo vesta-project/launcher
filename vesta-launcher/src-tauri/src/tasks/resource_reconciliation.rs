@@ -25,6 +25,19 @@ impl ResourceEnrichmentTask {
 }
 
 impl Task for ResourceEnrichmentTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ResourceEnrichment
+    }
+    fn activity_visibility(&self) -> crate::tasks::activity::Visibility {
+        crate::tasks::activity::Visibility::Background
+    }
+    fn activity_subject(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::instance_subject(
+            self.instance_id,
+            Some(self.instance_name.clone()),
+        ))
+    }
+
     fn name(&self) -> String {
         format!("Enrich resources for {}", self.instance_name)
     }
@@ -51,7 +64,9 @@ impl Task for ResourceEnrichmentTask {
         let candidates = self.candidates.clone();
         let reason = self.reason.clone();
         Box::pin(async move {
+            ctx.set_stage("matching_resources");
             let total = candidates.len();
+            ctx.update_items(0, Some(total as u64));
             ctx.update_full(
                 crate::notifications::models::PROGRESS_INDETERMINATE,
                 format!("Matching {total} indexed resources with providers…"),

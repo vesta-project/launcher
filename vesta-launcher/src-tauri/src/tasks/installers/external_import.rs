@@ -29,6 +29,10 @@ impl ImportExternalInstanceTask {
 }
 
 impl Task for ImportExternalInstanceTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::LauncherImport
+    }
+
     fn completion_action(&self) -> Option<&'static str> {
         Some("play")
     }
@@ -70,6 +74,7 @@ impl Task for ImportExternalInstanceTask {
         let app_handle = ctx.app_handle.clone();
 
         Box::pin(async move {
+            ctx.set_stage("copying_files");
             let started_at = std::time::Instant::now();
             log::info!(
                 "[external_import] start instance_id={} source={}",
@@ -101,6 +106,7 @@ impl Task for ImportExternalInstanceTask {
             } else {
                 ctx.update_description("Preparing launcher file copy...".to_string());
             }
+            ctx.update_overall_progress(5);
             ctx.update_full(
                 5,
                 "Preparing launcher file copy...".to_string(),
@@ -110,6 +116,8 @@ impl Task for ImportExternalInstanceTask {
             log::info!("[external_import] copy-start instance_id={}", instance_id);
 
             let watcher = app_handle.state::<ResourceWatcher>();
+            ctx.update_overall_progress(15);
+            ctx.set_stage("stopping_watcher");
             ctx.update_full(
                 15,
                 "Waiting for watcher handoff...".to_string(),
@@ -131,6 +139,7 @@ impl Task for ImportExternalInstanceTask {
                         "[external_import] watcher-unwatch-done instance_id={}",
                         instance_id
                     );
+                    ctx.update_overall_progress(20);
                     ctx.update_full(
                         20,
                         "Watcher handoff complete. Starting copy...".to_string(),
@@ -144,6 +153,7 @@ impl Task for ImportExternalInstanceTask {
                         instance_id,
                         e
                     );
+                    ctx.update_overall_progress(20);
                     ctx.update_full(
                         20,
                         "Watcher handoff skipped. Starting copy...".to_string(),
@@ -156,6 +166,7 @@ impl Task for ImportExternalInstanceTask {
                         "[external_import] watcher-unwatch-timeout instance_id={} timeout_secs=8",
                         instance_id
                     );
+                    ctx.update_overall_progress(20);
                     ctx.update_full(
                         20,
                         "Watcher handoff timed out. Continuing copy...".to_string(),
@@ -188,6 +199,8 @@ impl Task for ImportExternalInstanceTask {
                 "[external_import] copy-worker-dispatch instance_id={}",
                 instance_id
             );
+            ctx.update_overall_progress(30);
+            ctx.set_stage("copying_files");
             ctx.update_full(
                 30,
                 "Copying launcher files... (0 files)".to_string(),
@@ -237,7 +250,9 @@ impl Task for ImportExternalInstanceTask {
                     }
                 }
                 let copied = copied_files.load(Ordering::Relaxed);
+                ctx.update_items(copied as u64, None);
                 if copied == 0 {
+                    ctx.update_overall_progress(30);
                     ctx.update_full(
                         30,
                         "Copying launcher files... (0 files)".to_string(),
@@ -245,6 +260,7 @@ impl Task for ImportExternalInstanceTask {
                         Some(3),
                     );
                 } else {
+                    ctx.update_overall_progress(30);
                     ctx.update_full(
                         30,
                         format!("Copying launcher files... ({copied} files)"),
@@ -275,6 +291,7 @@ impl Task for ImportExternalInstanceTask {
             }
             log::info!("[external_import] copy-end instance_id={}", instance_id);
             let copied_total = copied_files.load(Ordering::Relaxed);
+            ctx.update_overall_progress(80);
             ctx.update_full(
                 80,
                 format!("Copy complete ({} files). Finalizing...", copied_total),
@@ -297,6 +314,7 @@ impl Task for ImportExternalInstanceTask {
                         "[external_import] finalize-watch-done instance_id={}",
                         instance_id
                     );
+                    ctx.update_overall_progress(86);
                     ctx.update_full(
                         86,
                         "Finalizing import... (watcher attached)".to_string(),
@@ -310,6 +328,7 @@ impl Task for ImportExternalInstanceTask {
                         instance_id,
                         e
                     );
+                    ctx.update_overall_progress(86);
                     ctx.update_full(
                         86,
                         "Finalizing import... (watcher attach skipped)".to_string(),
@@ -322,6 +341,7 @@ impl Task for ImportExternalInstanceTask {
                         "[external_import] finalize-watch-timeout instance_id={} timeout_secs=8",
                         instance_id
                     );
+                    ctx.update_overall_progress(86);
                     ctx.update_full(
                         86,
                         "Finalizing import... (watcher attach timed out)".to_string(),
@@ -348,6 +368,7 @@ impl Task for ImportExternalInstanceTask {
                 "[external_import] finalize-status-update-done instance_id={}",
                 instance_id
             );
+            ctx.update_overall_progress(92);
             ctx.update_full(
                 92,
                 "Finalizing import... (runtime verification queued)".to_string(),
@@ -382,6 +403,7 @@ impl Task for ImportExternalInstanceTask {
             );
 
             ctx.update_description("Import completed".to_string());
+            ctx.update_overall_progress(100);
             ctx.update_full(100, "Import completed".to_string(), Some(3), Some(3));
             log::info!(
                 "[external_import] completed instance_id={} elapsed_ms={}",

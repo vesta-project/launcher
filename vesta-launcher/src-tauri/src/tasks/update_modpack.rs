@@ -30,6 +30,7 @@ impl UpdateModpackTask {
     async fn wait_for_instance_exit(game_dir: &PathBuf, ctx: &TaskContext) -> Result<(), String> {
         let mut cancel = ctx.cancel_rx.clone();
         while safeguards::check_instance_not_running(game_dir).is_err() {
+            ctx.set_stage("waiting_for_exit");
             ctx.update_description(
                 "Update queued — close Minecraft for this instance to continue, or cancel."
                     .to_string(),
@@ -51,6 +52,10 @@ impl UpdateModpackTask {
 }
 
 impl Task for UpdateModpackTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ModpackUpdate
+    }
+
     fn name(&self) -> String {
         "Updating Modpack".to_string()
     }
@@ -210,6 +215,8 @@ impl Task for UpdateModpackTask {
                 let skipped_deletions = outcome.skipped_deletions;
                 let preserved_worlds = outcome.preserved_worlds;
 
+                ctx.set_stage("finalizing");
+                ctx.update_overall_progress(90);
                 ctx.update_full(
                     90,
                     "Saving manifest and finalizing...".to_string(),
@@ -312,6 +319,8 @@ impl Task for UpdateModpackTask {
                     String::new()
                 };
 
+                ctx.set_stage("finalizing");
+                ctx.update_overall_progress(100);
                 ctx.update_full(
                     100,
                     if already_up_to_date {

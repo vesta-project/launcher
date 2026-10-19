@@ -5,6 +5,66 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// Stable presentation vocabulary; never derive these identifiers from English copy.
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityKind {
+    Task,
+    InstanceInstall,
+    ModpackInstall,
+    ModpackUpdate,
+    ModpackExport,
+    ResourceInstall,
+    JavaDownload,
+    LauncherImport,
+    ImportResync,
+    ResourceEnrichment,
+    ManifestRefresh,
+    ProfileSync,
+    InstanceDuplicate,
+    InstanceReset,
+    InstanceRepair,
+    InstanceDelete,
+    WorldTransfer,
+    DropApply,
+}
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Visibility {
+    Foreground,
+    Background,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subject {
+    pub id: Option<String>,
+    pub name: String,
+    pub icon_url: Option<String>,
+    pub instance_id: Option<String>,
+}
+
+pub fn instance_subject(id: i32, name: Option<String>) -> Subject {
+    use diesel::prelude::*;
+    let name = name
+        .or_else(|| {
+            let mut conn = crate::utils::db::get_vesta_conn().ok()?;
+            crate::schema::instance::table
+                .find(id)
+                .select(crate::schema::instance::name)
+                .first::<String>(&mut conn)
+                .ok()
+        })
+        .unwrap_or_default();
+    Subject {
+        id: Some(id.to_string()),
+        name,
+        icon_url: None,
+        instance_id: Some(id.to_string()),
+    }
+}
+
 #[derive(Clone, Serialize)]
 pub struct ActivityRecord {
     pub revision: u64,
@@ -75,13 +135,14 @@ impl TaskActivityStore {
             let mut row = Map::new();
             row.insert("startedAt".into(), now.into());
             row.insert("progress".into(), (-1).into());
-            row.insert("overallProgress".into(), (-1).into());
+            row.insert("overallProgress".into(), 0.into());
+            row.insert("overall".into(), 0.into());
             row
         } else {
             old?.activity.as_object()?.clone()
         };
         for (key, value) in fields {
-            if !value.is_null() {
+            if !value.is_null() || matches!(key.as_str(), "items" | "bytes" | "fileName") {
                 row.insert(key.clone(), value.clone());
             }
         }
@@ -107,12 +168,32 @@ impl TaskActivityStore {
                 }
             }
         }
+        let overall = row
+            .get("overall")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+            .max(
+                row.get("overallProgress")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0),
+            )
+            .max(if new_attempt {
+                0
+            } else {
+                old.and_then(|r| r.activity.get("overall"))
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0)
+            })
+            .clamp(0, 99);
+        row.insert("overall".into(), overall.into());
+        row.insert("overallProgress".into(), overall.into());
         let mut activity = Value::Object(row);
         if terminal(&activity) {
             activity["finishedAt"] = now.into();
             activity["cancellable"] = false.into();
             if activity["state"] == "done" {
                 activity["progress"] = 100.into();
+                activity["overall"] = 100.into();
                 if activity["overallProgress"]
                     .as_i64()
                     .is_some_and(|value| value >= 0)
@@ -166,4 +247,58 @@ pub fn publish(app: &AppHandle, legacy_event: &str, patch: Value) {
         }
     }
     let _ = app.emit(legacy_event, patch);
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn overall_is_monotonic_across_stages_and_attempts_are_isolated() {
+        let store = TaskActivityStore::default();
+        store
+            .record(
+                &json!({"id":"a", "attempt":"one", "state":"queued", "kind":"instance_install"}),
+            )
+            .unwrap();
+        store
+            .record(&json!({"id":"a", "attempt":"one", "state":"running", "overallProgress":70}))
+            .unwrap();
+        let event = store.record(&json!({"id":"a", "attempt":"one", "stage":"downloading_assets", "progress":0, "overallProgress":20})).unwrap();
+        assert_eq!(event.record.activity["overall"], 70);
+        assert_eq!(event.record.activity["overallProgress"], 70);
+        let event = store
+            .record(&json!({"id":"a", "overallProgress":150}))
+            .unwrap();
+        assert_eq!(event.record.activity["overall"], 99);
+        let event = store.record(&json!({"id":"a", "state":"done"})).unwrap();
+        assert_eq!(event.record.activity["overall"], 100);
+        assert!(store
+            .record(&json!({"id":"a", "attempt":"one", "progress":20}))
+            .is_none());
+        let event = store
+            .record(&json!({"id":"a", "attempt":"two", "state":"queued"}))
+            .unwrap();
+        assert_eq!(event.record.activity["overall"], 0);
+        assert!(store
+            .record(&json!({"id":"a", "attempt":"one", "progress":90}))
+            .is_none());
+    }
+
+    #[test]
+    fn stage_changes_clear_units_without_erasing_subject_or_source() {
+        let store = TaskActivityStore::default();
+        store.record(&json!({"id":"a", "state":"queued", "subject":{"id":"target", "name":"New"}, "source":{"id":"source", "name":"Old"}, "visibility":"foreground"})).unwrap();
+        store.record(&json!({"id":"a", "stage":"downloading", "items":{"done":1,"total":3}, "bytes":{"done":12,"total":38}})).unwrap();
+        let event = store
+            .record(&json!({"id":"a", "stage":"verifying", "items":null,"bytes":null}))
+            .unwrap();
+        assert!(event.record.activity["items"].is_null());
+        assert!(event.record.activity["bytes"].is_null());
+        assert_eq!(event.record.activity["source"]["id"], "source");
+        assert_eq!(event.record.activity["subject"]["id"], "target");
+        assert_eq!(event.record.activity["visibility"], "foreground");
+        assert_eq!(store.snapshot().activities.len(), 1);
+    }
 }

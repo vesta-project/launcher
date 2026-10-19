@@ -987,6 +987,10 @@ fn selection_conflicts(instance_id: i32, selections: &[ApplySelection]) -> Vec<S
 }
 
 impl Task for ApplyDropTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::DropApply
+    }
+
     fn name(&self) -> String {
         format!(
             "Applying dropped resources to {}",
@@ -1031,6 +1035,7 @@ impl Task for ApplyDropTask {
         })
     }
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
+        ctx.set_stage("applying");
         let operation = self.operation.clone();
         let inspected = self.inspected.clone();
         let selections = self.selections.clone();
@@ -1338,6 +1343,9 @@ fn apply_local(
             .find(|c| c.id == selected.resource.candidate_id)
             .map(|c| c.name.as_str())
             .unwrap_or("Resource");
+        ctx.set_file_name(name);
+        ctx.update_items(index as u64, Some(selections.len() as u64));
+        ctx.update_overall_progress((index * 90 / selections.len().max(1)) as i32);
         progress(app, operation, format!("Copying {name}…"), false);
         let item_result = apply_item(app, operation, inspected, selected, ctx, &mut report);
         if let Err(reason) = item_result {

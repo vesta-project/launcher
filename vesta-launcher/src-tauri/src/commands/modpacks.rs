@@ -2486,6 +2486,7 @@ pub async fn export_instance_to_modpack(
         .clone();
 
     let task = ModpackExportTask {
+        instance_id: inst.id,
         instance_name: modpack_name,
         game_dir,
         output_path,

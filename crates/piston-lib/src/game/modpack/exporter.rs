@@ -84,6 +84,7 @@ pub fn export_modpack<P: AsRef<Path>>(
 
     zip.finish()?;
     reporter.set_percent(100);
+    reporter.set_overall_percent(100);
     Ok(())
 }
 
@@ -139,6 +140,7 @@ fn export_modrinth<W: Write + std::io::Seek>(
 
         let percent = (i as f32 / total_entries as f32 * 100.0) as i32;
         reporter.set_percent(percent);
+        reporter.set_overall_percent(percent);
 
         match entry {
             ExportEntry::Mod {
@@ -267,6 +269,7 @@ fn export_curseforge<W: Write + std::io::Seek>(
 
         let percent = (i as f32 / total_entries as f32 * 100.0) as i32;
         reporter.set_percent(percent);
+        reporter.set_overall_percent(percent);
 
         match entry {
             ExportEntry::Mod {

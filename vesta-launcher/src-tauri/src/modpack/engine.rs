@@ -66,6 +66,8 @@ pub async fn plan(
     target_version_id: &str,
     ctx: &TaskContext,
 ) -> Result<UpdatePlan, String> {
+    ctx.set_stage("loading_metadata");
+    ctx.update_overall_progress(5);
     ctx.update_full(5, "Loading old manifest...".to_string(), Some(0), Some(6));
     let progress = TaskBootstrapProgress(ctx);
     let mut old_manifest =
@@ -75,6 +77,8 @@ pub async fn plan(
     manifest::backfill_manifest_hashes(&mut old_manifest, game_dir, instance.id)
         .map_err(|error| format!("Failed to backfill old manifest hashes: {}", error))?;
 
+    ctx.set_stage("loading_metadata");
+    ctx.update_overall_progress(10);
     ctx.update_full(
         10,
         "Fetching new modpack version...".to_string(),
@@ -85,6 +89,8 @@ pub async fn plan(
         fetch_target_manifest(app_handle, instance, target_version_id).await?;
     let format = new_manifest.source;
 
+    ctx.set_stage("verifying");
+    ctx.update_overall_progress(15);
     ctx.update_full(
         15,
         "Scanning current files...".to_string(),
@@ -99,6 +105,8 @@ pub async fn plan(
         scan_started.elapsed()
     );
 
+    ctx.set_stage("analyzing");
+    ctx.update_overall_progress(20);
     ctx.update_full(
         20,
         "Computing update plan (three-way diff)...".to_string(),
@@ -123,6 +131,8 @@ pub async fn apply(
     plan: &mut UpdatePlan,
     ctx: &TaskContext,
 ) -> Result<AppliedUpdate, String> {
+    ctx.set_stage("analyzing");
+    ctx.update_overall_progress(25);
     ctx.update_full(
         25,
         "Evaluating conflicts and merging configs...".to_string(),
@@ -138,6 +148,8 @@ pub async fn apply(
     );
     resolve_missing_zip_overrides(&mut plan.actions, game_dir, &plan.zip_path, plan.format);
 
+    ctx.set_stage("copying_files");
+    ctx.update_overall_progress(30);
     ctx.update_full(
         30,
         "Preparing update staging area...".to_string(),
@@ -224,6 +236,8 @@ pub async fn apply(
     )
     .map_err(|error| format!("Failed to prepare update rollback: {}", error))?;
 
+    ctx.set_stage("copying_files");
+    ctx.update_overall_progress(65);
     ctx.update_full(
         65,
         "Preserving existing world saves...".to_string(),
@@ -231,6 +245,8 @@ pub async fn apply(
         Some(6),
     );
 
+    ctx.set_stage("removing_files");
+    ctx.update_overall_progress(70);
     ctx.update_full(
         70,
         "Cleaning up removed files...".to_string(),
@@ -238,6 +254,8 @@ pub async fn apply(
         Some(6),
     );
 
+    ctx.set_stage("applying");
+    ctx.update_overall_progress(80);
     ctx.update_full(
         80,
         "Applying update (atomic swap)...".to_string(),
@@ -365,7 +383,9 @@ fn rollback_rotations(
 
 fn update_stage_progress(ctx: &TaskContext, staged: usize, total: usize, message: String) {
     let progress = 30 + ((staged as f64 / total.max(1) as f64) * 30.0) as i32;
-    ctx.update_full(progress, message, Some(2), Some(6));
+    ctx.update_items(staged as u64, Some(total as u64));
+    ctx.update_overall_progress(progress);
+    ctx.update_full(progress, message, Some(staged as i32), Some(total as i32));
 }
 
 fn resolve_merges(

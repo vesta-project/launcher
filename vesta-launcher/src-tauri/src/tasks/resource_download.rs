@@ -282,6 +282,9 @@ async fn download_artifact(
     index: usize,
     total: usize,
 ) -> Result<String, String> {
+    ctx.set_stage("downloading_resources");
+    ctx.set_file_name(&artifact.file_name);
+    ctx.update_items(index.saturating_sub(1) as u64, Some(total as u64));
     let url = Url::parse(&artifact.url)
         .map_err(|error| format!("Invalid download URL '{}': {error}", artifact.url))?;
     let mut response = piston_lib::client::shared_client()
@@ -327,10 +330,18 @@ async fn download_artifact(
         } else {
             ((downloaded as f64 / expected_bytes as f64 * 100.0) as i32).clamp(0, 99)
         };
+        ctx.update_bytes(downloaded, (expected_bytes > 0).then_some(expected_bytes));
+        // Byte percentage is local to this artifact; completed artifacts own item counts.
+        if percent >= 0 {
+            ctx.update_overall_progress(
+                ((index.saturating_sub(1) as f64 + percent as f64 / 100.0) / total.max(1) as f64
+                    * 90.0) as i32,
+            );
+        }
         ctx.update_full(
             percent,
             format!("Downloading {}", artifact.file_name),
-            Some(index as i32),
+            Some(index.saturating_sub(1) as i32),
             Some(total as i32),
         );
     }
@@ -343,6 +354,8 @@ async fn download_artifact(
             artifact.file_name, artifact.sha1, computed
         ));
     }
+    ctx.update_items(index as u64, Some(total as u64));
+    ctx.update_overall_progress((index * 90 / total.max(1)) as i32);
     Ok(computed)
 }
 
@@ -407,6 +420,10 @@ async fn rollback_publication(published: &[PublishedArtifact]) {
 }
 
 impl Task for ResourceDownloadTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ResourceInstall
+    }
+
     fn activity_instance_id(&self) -> Option<String> {
         Some(match &self.target {
             ResourceInstallTarget::Instance { instance_id } => instance_id.to_string(),
@@ -643,6 +660,8 @@ impl Task for ResourceDownloadTask {
                     staged.push((artifact.clone(), staged_path, hash));
                 }
 
+                ctx.set_stage("finalizing");
+                ctx.update_overall_progress(90);
                 if world_artifacts > 0 {
                     let (artifact, archive_path, hash) = staged
                         .into_iter()
@@ -668,7 +687,7 @@ impl Task for ResourceDownloadTask {
                             "versionId": version.id,
                             "fileName": artifact.file_name
                         }),
-                        ctx.clone(),
+                        ctx.with_overall_range(90, 99),
                     )
                     .await?;
                     return Ok(());

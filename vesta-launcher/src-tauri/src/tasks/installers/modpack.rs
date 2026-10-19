@@ -223,6 +223,10 @@ impl InstallModpackTask {
 }
 
 impl Task for InstallModpackTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ModpackInstall
+    }
+
     fn completion_action(&self) -> Option<&'static str> {
         Some("play")
     }
@@ -275,6 +279,7 @@ impl Task for InstallModpackTask {
             let modpack_path = match source {
                 ModpackSource::Path(p) => p,
                 ModpackSource::Url(u) => {
+                    reporter.set_stage("downloading");
                     reporter.start_step("Downloading archive", None);
 
                     let client = piston_lib::client::shared_client();
@@ -406,6 +411,7 @@ impl Task for InstallModpackTask {
             use diesel::prelude::*;
 
             ctx.update_overall_progress(92);
+            reporter.set_stage("installing_java");
             reporter.start_step("Setting up Java", None);
             crate::utils::java::ensure_java_for_instance(
                 &app_handle,

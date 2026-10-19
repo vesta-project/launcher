@@ -25,6 +25,13 @@ impl ImportResourceResyncTask {
 }
 
 impl Task for ImportResourceResyncTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ImportResync
+    }
+    fn activity_visibility(&self) -> crate::tasks::activity::Visibility {
+        crate::tasks::activity::Visibility::Background
+    }
+
     fn name(&self) -> String {
         format!("Resync imported resources for {}", self.instance_name)
     }
@@ -62,6 +69,7 @@ impl Task for ImportResourceResyncTask {
         let app_handle = ctx.app_handle.clone();
 
         Box::pin(async move {
+            ctx.set_stage("reconciling");
             log::info!(
                 "[external_import_resync] start instance_id={} target={}",
                 instance_id,
@@ -123,6 +131,8 @@ impl Task for ImportResourceResyncTask {
                         if let Some(progress) = maybe_progress {
                             let denom = progress.total.max(1);
                             let pct = ((progress.processed.saturating_mul(100)) / denom) as i32;
+                            ctx.update_items(progress.processed as u64, Some(progress.total as u64));
+                            ctx.update_overall_progress(pct.min(99));
                             ctx.update_full(
                                 pct.min(99),
                                 format!(

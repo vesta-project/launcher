@@ -50,6 +50,10 @@ impl InstallInstanceTask {
 }
 
 impl Task for InstallInstanceTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::InstanceInstall
+    }
+
     fn conflict_keys(&self) -> Vec<String> {
         vec![crate::tasks::manager::instance_play_conflict_key(
             self.instance.id,
@@ -369,11 +373,17 @@ pub struct TauriProgressReporter {
 }
 
 impl ProgressReporter for TauriProgressReporter {
+    fn set_stage(&self, stage: &str) {
+        self.ctx.set_stage(stage);
+    }
     fn set_overall_percent(&self, percent: i32) {
         self.ctx.update_overall_progress(percent);
     }
 
     fn start_step(&self, name: &str, total_steps: Option<u32>) {
+        if let Some(total) = total_steps {
+            self.ctx.update_items(0, Some(total as u64));
+        }
         let name_str = name.to_string();
         let name_log = name_str.clone();
         let ctx = self.ctx.clone();
@@ -417,10 +427,21 @@ impl ProgressReporter for TauriProgressReporter {
     }
 
     fn update_bytes(&self, transferred: u64, total: Option<u64>) {
-        if let Some(total) = total {
-            if total > 0 {
-                let percent = ((transferred as f64 / total as f64) * 100.0) as i32;
-                self.set_percent(percent);
+        if let Some(total) = total.filter(|total| *total > 0) {
+            let before = self.last_percent.load(std::sync::atomic::Ordering::Relaxed);
+            self.set_percent(
+                ((transferred as f64 / total as f64) * 100.0).clamp(0.0, 100.0) as i32,
+            );
+            if before != self.last_percent.load(std::sync::atomic::Ordering::Relaxed)
+                || transferred >= total
+            {
+                self.ctx.update_bytes(transferred, Some(total));
+            }
+        } else {
+            let mut last = self.last_emit.lock().unwrap();
+            if last.elapsed() >= std::time::Duration::from_millis(150) {
+                *last = std::time::Instant::now();
+                self.ctx.update_bytes(transferred, None);
             }
         }
     }
@@ -480,6 +501,7 @@ impl ProgressReporter for TauriProgressReporter {
     }
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
+        self.ctx.update_items(current as u64, total.map(u64::from));
         let current_i32 = current as i32;
         let total_i32 = total.map(|t| t as i32);
 

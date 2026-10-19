@@ -27,6 +27,8 @@ pub async fn install_world_archive(
         return Err("Archive does not contain a Java folder world".to_string());
     }
 
+    ctx.set_stage("analyzing");
+    ctx.update_overall_progress(20);
     ctx.update_full(
         20,
         "Choosing worlds to install…".to_string(),
@@ -48,6 +50,8 @@ pub async fn install_world_archive(
         return Err("World installation cancelled".to_string());
     }
 
+    ctx.set_stage("extracting");
+    ctx.update_overall_progress(30);
     ctx.update_full(
         30,
         "Extracting selected worlds…".to_string(),
@@ -76,6 +80,8 @@ pub async fn install_world_archive(
                         .unwrap_or(0)
                         .min(65)) as i32)
                 };
+                progress_ctx.update_bytes(written, Some(total));
+                progress_ctx.update_overall_progress(percent);
                 progress_ctx.update_progress(percent, Some(2), Some(3));
                 Ok(())
             },
@@ -84,6 +90,7 @@ pub async fn install_world_archive(
     .await
     .map_err(|error| format!("World extraction task failed: {error}"))??;
 
+    ctx.update_overall_progress(100);
     ctx.update_full(100, "Worlds installed".to_string(), Some(3), Some(3));
     if let Some(world_manager) = app_handle.try_state::<crate::worlds::WorldManager>() {
         world_manager.invalidate(instance.id);

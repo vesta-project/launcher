@@ -59,6 +59,9 @@ impl ProgressRange {
 }
 
 impl ProgressReporter for ProgressRange {
+    fn set_stage(&self, stage: &str) {
+        self.inner.set_stage(stage);
+    }
     fn start_step(&self, name: &str, total: Option<u32>) {
         self.inner.start_step(name, total);
     }

@@ -24,8 +24,11 @@ impl GenerateManifestTask {
 }
 
 impl Task for GenerateManifestTask {
-    fn activity_kind(&self) -> &'static str {
-        "background"
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ManifestRefresh
+    }
+    fn activity_visibility(&self) -> crate::tasks::activity::Visibility {
+        crate::tasks::activity::Visibility::Background
     }
 
     fn name(&self) -> String {
@@ -73,6 +76,7 @@ impl Task for GenerateManifestTask {
         let force_refresh = self.force_refresh;
 
         Box::pin(async move {
+            ctx.set_stage("loading_metadata");
             log::info!(
                 "Starting PistonManifest generation (force_refresh: {})",
                 force_refresh
@@ -87,6 +91,7 @@ impl Task for GenerateManifestTask {
             log::info!("Config directory resolved: {:?}", config_dir);
             let data_dir = config_dir.join("data");
 
+            ctx.update_overall_progress(10);
             ctx.update_full(
                 10,
                 if force_refresh {
@@ -128,6 +133,7 @@ impl Task for GenerateManifestTask {
                 metadata.last_updated
             );
 
+            ctx.update_overall_progress(100);
             ctx.update_full(100, "Manifest ready".to_string(), Some(5), Some(5));
 
             // Update in-memory cache for fast subsequent access

@@ -36,6 +36,8 @@ pub const DEFAULT_ARTIFACT_CACHE_MAX_BYTES: u64 = 1024 * 1024 * 1024;
 /// Progress reporter trait for installer operations
 /// Implementations forward updates to the UI/notification system
 pub trait ProgressReporter: Send + Sync {
+    /// Stable stage key for localized consumers, independent of legacy messages.
+    fn set_stage(&self, _stage: &str) {}
     /// Start a new step with optional total steps
     fn start_step(&self, name: &str, total_steps: Option<u32>);
 

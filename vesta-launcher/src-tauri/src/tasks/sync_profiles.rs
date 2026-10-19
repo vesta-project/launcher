@@ -278,12 +278,16 @@ pub async fn sync_account_profile_data(
 }
 
 impl Task for SyncAccountProfilesTask {
-    fn activity_kind(&self) -> &'static str {
-        "background"
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ProfileSync
+    }
+    fn activity_visibility(&self) -> crate::tasks::activity::Visibility {
+        crate::tasks::activity::Visibility::Background
     }
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         Box::pin(async move {
+            ctx.set_stage("syncing_profiles");
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
             let accounts = account::table
@@ -296,9 +300,15 @@ impl Task for SyncAccountProfilesTask {
                 return Ok(());
             }
 
-            ctx.update_full(0, "Initializing sync...".into(), Some(1), Some(100));
+            ctx.update_full(
+                0,
+                "Initializing sync...".into(),
+                Some(0),
+                Some(accounts.len() as i32),
+            );
 
             let total = accounts.len();
+            ctx.update_items(0, Some(total as u64));
             for (idx, acc) in accounts.into_iter().enumerate() {
                 let p = (((idx + 1) as f32 / total as f32) * 100.0) as i32;
                 ctx.update_full(
@@ -310,6 +320,8 @@ impl Task for SyncAccountProfilesTask {
 
                 let _ =
                     sync_account_profile_data(&acc.uuid, Some(ctx.app_handle.clone()), true).await;
+                ctx.update_items((idx + 1) as u64, Some(total as u64));
+                ctx.update_overall_progress(p);
             }
 
             Ok(())

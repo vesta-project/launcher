@@ -10,6 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct ModpackExportTask {
+    pub instance_id: i32,
     pub instance_name: String,
     pub game_dir: String,
     pub output_path: String,
@@ -19,6 +20,19 @@ pub struct ModpackExportTask {
 }
 
 impl Task for ModpackExportTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::ModpackExport
+    }
+    fn activity_subject(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::instance_subject(
+            self.instance_id,
+            None,
+        ))
+    }
+    fn activity_instance_id(&self) -> Option<String> {
+        Some(self.instance_id.to_string())
+    }
+
     fn name(&self) -> String {
         format!("Exporting Modpack: {}", self.instance_name)
     }
@@ -68,6 +82,7 @@ impl Task for ModpackExportTask {
         });
 
         Box::pin(async move {
+            ctx.set_stage("exporting");
             // If exporting to CurseForge, we need to ensure we have numeric IDs for linking.
             // If IDs are non-numeric (e.g. from Modrinth), we try to resolve them via hash.
             if format == ModpackFormat::CurseForge {

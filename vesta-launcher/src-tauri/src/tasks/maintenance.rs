@@ -32,6 +32,27 @@ impl CloneInstanceTask {
 }
 
 impl Task for CloneInstanceTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::InstanceDuplicate
+    }
+    fn activity_subject(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::Subject {
+            id: None,
+            name: self.new_name.clone().unwrap_or_default(),
+            icon_url: None,
+            instance_id: None,
+        })
+    }
+    fn activity_source(&self) -> Option<crate::tasks::activity::Subject> {
+        Some(crate::tasks::activity::instance_subject(
+            self.source_id,
+            None,
+        ))
+    }
+    fn activity_instance_id(&self) -> Option<String> {
+        None
+    }
+
     fn conflict_keys(&self) -> Vec<String> {
         vec![crate::tasks::manager::instance_play_conflict_key(
             self.source_id,
@@ -102,6 +123,12 @@ impl Task for CloneInstanceTask {
 
                 let base_name = new_name_opt.unwrap_or_else(|| source.name.clone());
                 let final_name = compute_unique_name(&base_name, &seen_names);
+                ctx.set_subject(crate::tasks::activity::Subject {
+                    id: None,
+                    name: final_name.clone(),
+                    icon_url: None,
+                    instance_id: None,
+                });
 
                 let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
                 let app_config_dir =
@@ -113,6 +140,8 @@ impl Task for CloneInstanceTask {
                 let final_slug = compute_unique_slug(&final_name, &seen_slugs, &instances_root);
                 new_dir = instances_root.join(&final_slug);
 
+                ctx.set_stage("locating_files");
+                ctx.update_overall_progress(10);
                 ctx.update_full(
                     10,
                     "Locating source instance files...".to_string(),
@@ -124,6 +153,8 @@ impl Task for CloneInstanceTask {
                     resolve_clone_source_directory(&source, &instances_root, &data_dir)?;
 
                 let source_file_count = count_files_in_directory(&source_dir);
+                ctx.set_stage("copying_files");
+                ctx.update_overall_progress(25);
                 ctx.update_full(
                     25,
                     format!("Copying files for {}...", final_name),
@@ -146,6 +177,8 @@ impl Task for CloneInstanceTask {
                     );
                 }
 
+                ctx.set_stage("saving_records");
+                ctx.update_overall_progress(55);
                 ctx.update_full(
                     55,
                     "Creating database record...".to_string(),
@@ -210,6 +243,7 @@ impl Task for CloneInstanceTask {
                     .map_err(|e| format!("Failed to read inserted instance id: {}", e))?;
                 let inserted_id = inserted_id as i32;
                 created_instance_id = Some(inserted_id);
+                ctx.set_subject(crate::tasks::activity::instance_subject(inserted_id, None));
 
                 clone_installed_resources(
                     &mut conn,
@@ -219,6 +253,8 @@ impl Task for CloneInstanceTask {
                     &new_dir,
                 )?;
 
+                ctx.set_stage("finalizing");
+                ctx.update_overall_progress(85);
                 ctx.update_full(
                     85,
                     "Indexing duplicated resources...".to_string(),
@@ -413,6 +449,10 @@ impl ResetInstanceTask {
 }
 
 impl Task for ResetInstanceTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::InstanceReset
+    }
+
     fn conflict_keys(&self) -> Vec<String> {
         vec![crate::tasks::manager::instance_play_conflict_key(
             self.instance_id,
@@ -462,6 +502,7 @@ impl Task for ResetInstanceTask {
                 .map_err(|e| format!("Instance not found: {}", e))?;
 
             if let Some(ref gd) = inst.game_directory {
+                ctx.set_stage("removing_files");
                 ctx.update_description("Wiping instance directory...".to_string());
                 let gd_path = PathBuf::from(gd);
                 if gd_path.exists() {
@@ -476,10 +517,11 @@ impl Task for ResetInstanceTask {
                 }
             }
 
+            ctx.set_stage("installing");
             ctx.update_description("Reinstalling...".to_string());
             let mut install_task = InstallInstanceTask::new(inst);
             install_task.set_update_notification_title(false);
-            install_task.run(ctx).await?;
+            install_task.run(ctx.with_overall_range(10, 95)).await?;
 
             Ok(())
         })
@@ -508,6 +550,10 @@ impl RepairInstanceTask {
 }
 
 impl Task for RepairInstanceTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::InstanceRepair
+    }
+
     fn conflict_keys(&self) -> Vec<String> {
         vec![crate::tasks::manager::instance_play_conflict_key(
             self.instance_id,
@@ -600,6 +646,8 @@ impl Task for RepairInstanceTask {
             };
 
             // Phase 1: Verification with progress
+            ctx.set_stage("verifying");
+            ctx.update_overall_progress(5);
             ctx.update_full(
                 5,
                 format!("Verifying instance integrity (scope: {})...", repair_scope),
@@ -673,6 +721,8 @@ impl Task for RepairInstanceTask {
 
             // Phase 2: If not ready, run installer to fix version/lib issues
             if !verify_result.ready && repair_scope != "resources" {
+                ctx.set_stage("downloading_resources");
+                ctx.update_overall_progress(30);
                 ctx.update_full(
                     30,
                     "Repairing instance files...".to_string(),
@@ -681,9 +731,11 @@ impl Task for RepairInstanceTask {
                 );
                 let mut install_task = InstallInstanceTask::new(inst.clone());
                 install_task.set_update_notification_title(false);
-                install_task.run(ctx.clone()).await?;
+                install_task.run(ctx.with_overall_range(30, 80)).await?;
                 ctx.update_progress(80, Some(1), Some(3));
             } else if verify_result.ready {
+                ctx.set_stage("verifying");
+                ctx.update_overall_progress(50);
                 ctx.update_full(
                     50,
                     "Instance files verified — no issues found.".to_string(),
@@ -719,6 +771,8 @@ impl Task for RepairInstanceTask {
                             );
                         }
                     }
+                    ctx.set_stage("downloading_resources");
+                    ctx.update_overall_progress(85);
                     ctx.update_full(
                         85,
                         "Repairing modpack files...".to_string(),
@@ -766,6 +820,8 @@ impl Task for RepairInstanceTask {
                         inst.modpack_platform.as_deref().unwrap_or("?"),
                         inst.modpack_id.as_deref().unwrap_or("?")
                     );
+                    ctx.set_stage("downloading_resources");
+                    ctx.update_overall_progress(85);
                     ctx.update_full(
                         85,
                         "Reconstructing modpack manifest...".to_string(),
@@ -844,8 +900,11 @@ impl Task for RepairInstanceTask {
                     total_issues
                 ),
             };
+            ctx.set_stage("finalizing");
+            ctx.update_overall_progress(95);
             ctx.update_full(95, final_desc, Some(3), Some(3));
 
+            ctx.set_stage("installing_java");
             ctx.update_description("Setting up Java runtime...".to_string());
             if let Err(e) =
                 crate::utils::java::ensure_java_for_instance(&app_handle, &inst, None, None).await
@@ -895,6 +954,10 @@ impl DeleteInstanceTask {
 }
 
 impl Task for DeleteInstanceTask {
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
+        crate::tasks::activity::ActivityKind::InstanceDelete
+    }
+
     fn conflict_keys(&self) -> Vec<String> {
         vec![crate::tasks::manager::instance_play_conflict_key(
             self.instance_id,
@@ -936,6 +999,8 @@ impl Task for DeleteInstanceTask {
 
         Box::pin(async move {
             log::info!("[delete_instance_task] start instance_id={}", instance_id);
+            ctx.set_stage("stopping_watcher");
+            ctx.update_overall_progress(5);
             ctx.update_full(5, "Stopping watcher...".to_string(), Some(1), Some(5));
             let watcher = ctx
                 .app_handle
@@ -953,6 +1018,8 @@ impl Task for DeleteInstanceTask {
                 );
             }
 
+            ctx.set_stage("loading_metadata");
+            ctx.update_overall_progress(25);
             ctx.update_full(
                 25,
                 "Resolving instance details...".to_string(),
@@ -970,6 +1037,8 @@ impl Task for DeleteInstanceTask {
             let game_dir = inst.game_directory.clone();
 
             if let Some(gd) = game_dir {
+                ctx.set_stage("removing_files");
+                ctx.update_overall_progress(55);
                 ctx.update_full(
                     55,
                     "Removing instance files...".to_string(),
@@ -994,6 +1063,8 @@ impl Task for DeleteInstanceTask {
                 }
             }
 
+            ctx.set_stage("removing_records");
+            ctx.update_overall_progress(80);
             ctx.update_full(
                 80,
                 "Removing database references...".to_string(),
@@ -1013,6 +1084,8 @@ impl Task for DeleteInstanceTask {
             })
             .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
 
+            ctx.set_stage("finalizing");
+            ctx.update_overall_progress(95);
             ctx.update_full(95, "Finalizing...".to_string(), Some(5), Some(5));
             use tauri::Emitter;
             let _ = ctx.app_handle.emit(
