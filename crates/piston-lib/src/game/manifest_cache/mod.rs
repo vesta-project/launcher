@@ -7,8 +7,8 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 
 use crate::game::metadata::types::{
-    GameVersionMetadata, LatestVersions, LoaderVersionInfo, ModloaderType, MojangVersionManifest,
-    PistonMetadata,
+    manifest_cache_key, modrinth_manifest_url, GameVersionMetadata, LatestVersions,
+    LoaderVersionInfo, ModloaderType, ModrinthManifest, MojangVersionManifest, PistonMetadata,
 };
 use serde::{Deserialize, Serialize};
 
@@ -46,7 +46,7 @@ pub const MANIFEST_SLUGS: &[&str] = &["minecraft", "fabric", "quilt", "forge", "
 
 /// A cache for individual loader/Minecraft version manifests.
 ///
-/// Each manifest is cached separately on disk at `MANIFESTS_DIR/{slug}.json`.
+/// Each manifest is cached separately on disk at `MANIFESTS_DIR/{cache_key}.json`.
 /// In-memory entries are kept for fast access. Background ETag revalidation
 /// keeps things fresh without re-downloading unchanged manifests.
 pub struct ManifestCache {
@@ -167,7 +167,9 @@ impl ManifestCache {
     pub async fn get_or_fetch(&self, slug: &str) -> Result<Arc<serde_json::Value>> {
         // Offline mode: read from disk only, fail if not cached
         if self.offline {
-            let disk_path = self.cache_dir.join(format!("{slug}.json"));
+            let disk_path = self
+                .cache_dir
+                .join(format!("{}.json", manifest_cache_key(slug)));
             let content = tokio::fs::read_to_string(&disk_path)
                 .await
                 .map_err(|e| anyhow::anyhow!("Manifest '{}' not cached on disk: {}", slug, e))?;
@@ -187,8 +189,10 @@ impl ManifestCache {
         }
 
         // Try disk cache
-        let disk_path = self.cache_dir.join(format!("{slug}.json"));
-        let _from_disk = if disk_path.exists() {
+        let disk_path = self
+            .cache_dir
+            .join(format!("{}.json", manifest_cache_key(slug)));
+        let from_disk = if disk_path.exists() {
             match tokio::fs::read_to_string(&disk_path).await {
                 Ok(content) => {
                     match serde_json::from_str::<CachedManifest>(&content) {
@@ -254,7 +258,27 @@ impl ManifestCache {
         };
 
         // Fetch fresh
-        self.fetch_and_cache(slug, &disk_path).await
+        match self.fetch_and_cache(slug, &disk_path).await {
+            Ok(data) => Ok(data),
+            Err(error) => {
+                if let Some(cached) = from_disk {
+                    log::warn!(
+                        "Failed to refresh {slug} manifest; using cached metadata: {error:#}"
+                    );
+                    let data = Arc::new(cached.data);
+                    self.store_in_memory(
+                        slug,
+                        Arc::clone(&data),
+                        cached.etag,
+                        cached.last_modified,
+                    )
+                    .await;
+                    Ok(data)
+                } else {
+                    Err(error)
+                }
+            }
+        }
     }
 
     /// Lightweight ETag revalidation — sends `If-None-Match`.
@@ -277,6 +301,7 @@ impl ManifestCache {
         if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(None);
         }
+        let resp = resp.error_for_status()?;
         // Capture new headers from the 200 response
         let new_etag = resp
             .headers()
@@ -300,7 +325,7 @@ impl ManifestCache {
         disk_path: &Path,
     ) -> Result<Arc<serde_json::Value>> {
         let url = manifest_url(slug);
-        let resp = self.client.get(&url).send().await?;
+        let resp = self.client.get(&url).send().await?.error_for_status()?;
         let etag = resp
             .headers()
             .get(reqwest::header::ETAG)
@@ -376,93 +401,51 @@ impl ManifestCache {
         let mc_data = self.get_or_fetch("minecraft").await?;
         let mc_manifest: MojangVersionManifest = serde_json::from_value((*mc_data).clone())?;
 
-        let fabric = self.get_or_fetch("fabric").await.ok();
-        let quilt = self.get_or_fetch("quilt").await.ok();
-        let forge = self.get_or_fetch("forge").await.ok();
-        let neo = self.get_or_fetch("neo").await.ok();
-
-        // Pre-parse each loader manifest ONCE — avoids re-parsing for every version.
-        struct LoaderInfo {
-            /// Map of version_id → loader versions (Forge/NeoForge style)
-            per_version: HashMap<String, Vec<LoaderVersionInfo>>,
-            /// Set of version IDs that this loader supports (Fabric/Quilt style)
-            supported_versions: std::collections::HashSet<String>,
-            /// Dummy entry loaders (Fabric/Quilt style)
-            dummy_loaders: Vec<LoaderVersionInfo>,
-        }
-
-        fn parse_loader(manifest: &Option<Arc<serde_json::Value>>) -> Option<LoaderInfo> {
-            let parsed: crate::game::metadata::types::ModrinthManifest =
-                match serde_json::from_value((**manifest.as_ref()?).clone()) {
-                    Ok(m) => m,
-                    Err(_) => return None,
-                };
-
-            let mut per_version = HashMap::new();
-            let mut supported_versions = std::collections::HashSet::new();
-            let mut dummy_loaders = Vec::new();
-
-            for gv in &parsed.game_versions {
-                if crate::game::metadata::types::is_dummy_game_version(&gv.id) {
-                    // Fabric/Quilt: dummy entry holds all loader versions
-                    dummy_loaders = gv
-                        .loaders
-                        .iter()
-                        .map(|lv| LoaderVersionInfo {
-                            version: lv.id.clone(),
-                            stable: lv.stable,
-                            url: Some(lv.url.clone()),
-                            sha1: None,
-                            metadata: None,
-                        })
-                        .collect();
-                } else if !gv.loaders.is_empty() {
-                    // Forge/NeoForge: each version has its own non‑empty loader list
-                    per_version.insert(
-                        gv.id.clone(),
-                        gv.loaders
-                            .iter()
-                            .map(|lv| LoaderVersionInfo {
-                                version: lv.id.clone(),
-                                stable: lv.stable,
-                                url: Some(lv.url.clone()),
-                                sha1: None,
-                                metadata: None,
-                            })
-                            .collect(),
-                    );
-                } else {
-                    // Fabric/Quilt: named entry with empty loaders — marks support
-                    supported_versions.insert(gv.id.clone());
-                }
+        let mut manifests = Vec::new();
+        for (loader, slug) in [
+            (ModloaderType::Fabric, "fabric"),
+            (ModloaderType::Quilt, "quilt"),
+            (ModloaderType::Forge, "forge"),
+            (ModloaderType::NeoForge, "neo"),
+        ] {
+            let parsed = match self.get_or_fetch(slug).await {
+                Ok(data) => serde_json::from_value::<ModrinthManifest>((*data).clone())
+                    .map_err(anyhow::Error::from),
+                Err(error) => Err(error),
+            };
+            match parsed {
+                Ok(manifest) => manifests.push((loader, manifest)),
+                Err(error) => log::warn!("Failed to load {slug} metadata: {error:#}"),
             }
-
-            Some(LoaderInfo {
-                per_version,
-                supported_versions,
-                dummy_loaders,
-            })
         }
-
-        let loader_infos = [
-            (ModloaderType::Fabric, parse_loader(&fabric)),
-            (ModloaderType::Quilt, parse_loader(&quilt)),
-            (ModloaderType::Forge, parse_loader(&forge)),
-            (ModloaderType::NeoForge, parse_loader(&neo)),
-        ];
+        // Index once, borrowing each group's loader list instead of cloning it per game.
+        let mut loader_infos = Vec::new();
+        for (loader, manifest) in &manifests {
+            match manifest.loaders_by_game() {
+                Ok(index) => loader_infos.push((*loader, index)),
+                Err(error) => log::warn!("Invalid {loader} metadata: {error:#}"),
+            }
+        }
 
         let mut game_versions = Vec::new();
         for mv in &mc_manifest.versions {
             let mut loaders = HashMap::new();
 
-            for (loader_type, info) in &loader_infos {
-                let Some(info) = info else {
-                    continue;
-                };
-                if let Some(versions) = info.per_version.get(&mv.id) {
-                    loaders.insert(*loader_type, versions.clone());
-                } else if info.supported_versions.contains(&mv.id) {
-                    loaders.insert(*loader_type, info.dummy_loaders.clone());
+            for (loader_type, index) in &loader_infos {
+                if let Some(versions) = index.get(mv.id.as_str()).filter(|v| !v.is_empty()) {
+                    loaders.insert(
+                        *loader_type,
+                        versions
+                            .iter()
+                            .map(|loader| LoaderVersionInfo {
+                                version: loader.id.clone(),
+                                stable: loader.stable,
+                                url: Some(loader.url.clone()),
+                                sha1: None,
+                                metadata: None,
+                            })
+                            .collect(),
+                    );
                 }
             }
 
@@ -553,15 +536,10 @@ impl ManifestCache {
 }
 
 fn manifest_url(slug: &str) -> String {
-    match slug {
-        "minecraft" => {
-            "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json".to_string()
-        }
-        "fabric" => "https://launcher-meta.modrinth.com/fabric/v0/manifest.json".to_string(),
-        "quilt" => "https://launcher-meta.modrinth.com/quilt/v0/manifest.json".to_string(),
-        "forge" => "https://launcher-meta.modrinth.com/forge/v0/manifest.json".to_string(),
-        "neo" => "https://launcher-meta.modrinth.com/neo/v0/manifest.json".to_string(),
-        _ => format!("https://launcher-meta.modrinth.com/{slug}/v0/manifest.json"),
+    if slug == "minecraft" {
+        "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json".to_string()
+    } else {
+        modrinth_manifest_url(slug)
     }
 }
 

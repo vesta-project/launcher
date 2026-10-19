@@ -1,5 +1,6 @@
 use crate::game::installer::core::batch::{BatchArtifact, BatchDownloader};
 use crate::game::installer::install_instance;
+use crate::game::installer::progress::ProgressRange;
 use crate::game::installer::types::{
     InstallSpec, ModloaderType as InstallerModloaderType, ProgressReporter,
 };
@@ -82,6 +83,8 @@ impl ModpackInstaller {
     )> {
         log::info!("Installing modpack from ZIP: {:?}", zip_path);
 
+        // Overall stage weights are work estimates, independent of bytes/time.
+        reporter.set_overall_percent(0);
         // Step 1: Parse metadata
         let metadata = if let Some(meta) = metadata {
             log::info!("Using pre-interpreted modpack metadata for {}", meta.name);
@@ -130,10 +133,11 @@ impl ModpackInstaller {
             spec.modloader,
             spec.modloader_version
         );
-        install_instance(spec, reporter.clone()).await?;
+        install_instance(spec, ProgressRange::operation(reporter.clone(), 5, 50)).await?;
 
         // Step 4: Extract overrides with config preservation
-        reporter.start_step("Extracting modpack files", None);
+        reporter.set_overall_percent(50);
+        reporter.start_step("Extracting files", None);
         log::info!(
             "[ModpackInstaller] Extracting overrides with prefix: {:?}",
             metadata.root_prefix
@@ -167,12 +171,10 @@ impl ModpackInstaller {
             }
         }
 
+        reporter.set_overall_percent(55);
         // Step 5: Download additional mods
         if !metadata.mods.is_empty() {
-            reporter.start_step(
-                "Downloading modpack resources",
-                Some(metadata.mods.len() as u32),
-            );
+            reporter.start_step("Downloading resources", Some(metadata.mods.len() as u32));
             let downloader = BatchDownloader::new(crate::client::shared_client().clone(), 8);
 
             let mut artifacts = Vec::new();
@@ -287,10 +289,16 @@ impl ModpackInstaller {
 
             if !artifacts.is_empty() {
                 downloader
-                    .download_all(artifacts, reporter.clone(), 0, 100.0)
+                    .download_all(
+                        artifacts,
+                        ProgressRange::stage(reporter.clone(), 55, 95),
+                        0,
+                        100.0,
+                    )
                     .await?;
             }
 
+            reporter.set_overall_percent(95);
             // Step 6: Persist modpack manifest for future repair
             if !reporter.is_dry_run() {
                 if cf_resolved.is_empty() {
@@ -377,6 +385,7 @@ impl ModpackInstaller {
             }
         }
 
+        reporter.set_overall_percent(100);
         reporter.done(true, Some("Modpack installation complete"));
         Ok((metadata, override_files))
     }

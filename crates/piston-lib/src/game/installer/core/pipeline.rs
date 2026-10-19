@@ -42,7 +42,7 @@ pub async fn process_and_download_libraries(
         let library_specs = library_specs_from_regular_libraries(&regular_libs);
 
         lib_downloader
-            .download_libraries_concurrent(library_specs, spec.concurrency, 40, 40)
+            .download_libraries_concurrent(library_specs, spec.concurrency, 0, 80)
             .await?;
     }
 
@@ -118,7 +118,7 @@ pub async fn process_and_download_libraries(
                             );
                             let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
                             let progress =
-                                80 + ((count as f32 / total_natives as f32) * 10.0) as i32;
+                                80 + ((count as f32 / total_natives as f32) * 20.0) as i32;
                             reporter.set_percent(progress);
                             return Ok(());
                         }
@@ -131,7 +131,7 @@ pub async fn process_and_download_libraries(
                             log::warn!("Cannot read native JAR {}: {}", name, e);
                             let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
                             let progress =
-                                80 + ((count as f32 / total_natives as f32) * 10.0) as i32;
+                                80 + ((count as f32 / total_natives as f32) * 20.0) as i32;
                             reporter.set_percent(progress);
                             return Ok(());
                         }
@@ -142,7 +142,7 @@ pub async fn process_and_download_libraries(
                     }
 
                     let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
-                    let progress = 80 + ((count as f32 / total_natives as f32) * 10.0) as i32;
+                    let progress = 80 + ((count as f32 / total_natives as f32) * 20.0) as i32;
                     reporter.set_percent(progress);
                     log::debug!("Extracted native: {} ({}/{})", name, count, total_natives);
 

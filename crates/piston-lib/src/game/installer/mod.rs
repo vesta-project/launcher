@@ -2,6 +2,7 @@ pub mod cache;
 pub mod config;
 pub mod core;
 pub mod modloaders;
+pub mod progress;
 pub mod types;
 pub mod verifier;
 
@@ -227,6 +228,7 @@ fn collect_missing_asset_downloads(
 }
 
 fn complete_install_progress(spec: &InstallSpec, reporter: &dyn ProgressReporter, message: &str) {
+    reporter.set_overall_percent(100);
     if spec.finalize_reporter {
         reporter.set_percent(100);
         reporter.done(true, Some(message));
@@ -262,6 +264,7 @@ async fn install_instance_inner(
         }
     }
 
+    reporter.set_overall_percent(0);
     reporter.start_step("Verifying local runtime artifacts", None);
     let preflight = verify_instance_readiness(&spec)?;
     log::info!(
@@ -311,8 +314,8 @@ async fn install_instance_inner(
     let client = crate::client::shared_client();
 
     // 1a. Fetch / use cached version info
+    reporter.set_overall_percent(2);
     reporter.start_step("Loading version metadata", None);
-    reporter.set_percent(5);
 
     let version_json_path = spec
         .versions_dir()
@@ -403,8 +406,8 @@ async fn install_instance_inner(
     // ------------------------------------------------------------------
     // Phase 2: Download client jar + assets
     // ------------------------------------------------------------------
+    reporter.set_overall_percent(10);
     reporter.start_step("Downloading game client", None);
-    reporter.set_percent(15);
 
     let installed_id = runtime_plan.installed_version_id.clone();
     let client_jar_path = runtime_plan.installed_client_jar.clone();
@@ -425,8 +428,8 @@ async fn install_instance_inner(
     }
 
     // 2b. Download asset index
+    reporter.set_overall_percent(20);
     reporter.start_step("Downloading asset index", None);
-    reporter.set_percent(20);
 
     if let Some(asset_index) = &runtime_plan.manifest.asset_index {
         let asset_index_id = &asset_index.id;
@@ -461,8 +464,8 @@ async fn install_instance_inner(
         }
 
         // 2c. Download assets
+        reporter.set_overall_percent(25);
         reporter.start_step("Downloading assets", None);
-        reporter.set_percent(30);
 
         let asset_index_path = asset_index_path.clone();
         let asset_index_parse_start = Instant::now();
@@ -495,7 +498,12 @@ async fn install_instance_inner(
                 let batch = BatchDownloader::new(client.clone(), spec.concurrency);
                 let asset_batch_start = Instant::now();
                 batch
-                    .download_all(assets_to_download, reporter.clone(), 30, 10.0)
+                    .download_all(
+                        assets_to_download,
+                        progress::ProgressRange::stage(reporter.clone(), 25, 45),
+                        0,
+                        100.0,
+                    )
                     .await?;
                 log::info!(
                     "[installer] asset batch complete elapsed_ms={}",
@@ -508,8 +516,8 @@ async fn install_instance_inner(
     // ------------------------------------------------------------------
     // Phase 3: Unified library download + native extraction
     // ------------------------------------------------------------------
+    reporter.set_overall_percent(45);
     reporter.start_step("Downloading libraries", None);
-    reporter.set_percent(40);
 
     let unified =
         process_and_download_libraries(&spec, &runtime_plan, client.clone(), reporter.clone())
@@ -522,8 +530,8 @@ async fn install_instance_inner(
         if let Some(processors) = &profile.processors {
             if !processors.is_empty() {
                 if let Some(data) = &profile.data {
+                    reporter.set_overall_percent(85);
                     reporter.start_step("Running forge processors", None);
-                    reporter.set_percent(90);
 
                     crate::game::installer::modloaders::execute_loader_processors(
                         &spec,
@@ -541,8 +549,8 @@ async fn install_instance_inner(
     // ------------------------------------------------------------------
     // Phase 5: Setup JRE
     // ------------------------------------------------------------------
+    reporter.set_overall_percent(93);
     reporter.start_step("Setting up Java runtime", None);
-    reporter.set_percent(95);
 
     let java_ver = JavaVersion::new(runtime_plan.java_requirement.major_version);
 
@@ -560,8 +568,8 @@ async fn install_instance_inner(
         // at its original path so that subsequent modloader installs can
         // read it as a `VersionManifest` (which has `downloads.artifact.url`).
         if installed_id != spec.version_id {
+            reporter.set_overall_percent(98);
             reporter.start_step("Finalizing installation", None);
-            reporter.set_percent(98);
 
             let installed_dir = spec.versions_dir().join(&installed_id);
             tokio::fs::create_dir_all(&installed_dir).await?;

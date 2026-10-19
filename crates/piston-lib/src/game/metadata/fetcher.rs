@@ -4,7 +4,7 @@ use crate::game::java_policy::{
 };
 use anyhow::{Context, Result};
 use chrono::Utc;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 const MODRINTH_MC_MANIFEST_URL: &str =
     "https://launcher-meta.modrinth.com/minecraft/v0/manifest.json";
@@ -12,12 +12,6 @@ const MODRINTH_MC_MANIFEST_URL: &str =
 const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const JAVA_RUNTIME_ALL_URL: &str =
     "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
-
-/// Format versions for Modrinth endpoints (same as daedalus CURRENT_*_FORMAT_VERSION)
-const MODRINTH_FABRIC_FORMAT: usize = 0;
-const MODRINTH_QUILT_FORMAT: usize = 0;
-const MODRINTH_FORGE_FORMAT: usize = 0;
-const MODRINTH_NEO_FORMAT: usize = 0;
 
 #[derive(Debug, serde::Deserialize)]
 struct RuntimeAllJavaEntry {
@@ -45,35 +39,29 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
 
     // Fetch all modloader manifests from Modrinth in parallel
     log::info!("Fetching modloader metadata from Modrinth...");
-    let fabric_fut = fetch_modrinth_manifest(http_client, "fabric", MODRINTH_FABRIC_FORMAT);
-    let quilt_fut = fetch_modrinth_manifest(http_client, "quilt", MODRINTH_QUILT_FORMAT);
-    let forge_fut = fetch_modrinth_manifest(http_client, "forge", MODRINTH_FORGE_FORMAT);
-    let neo_fut = fetch_modrinth_manifest(http_client, "neo", MODRINTH_NEO_FORMAT);
+    let fabric_fut = fetch_modrinth_manifest(http_client, "fabric");
+    let quilt_fut = fetch_modrinth_manifest(http_client, "quilt");
+    let forge_fut = fetch_modrinth_manifest(http_client, "forge");
+    let neo_fut = fetch_modrinth_manifest(http_client, "neo");
 
     let (fabric_res, quilt_res, forge_res, neo_res) =
         tokio::join!(fabric_fut, quilt_fut, forge_fut, neo_fut);
 
-    // Apply Fabric (Fabric-style manifest — single dummy entry with all loaders)
+    // Apply Fabric (universal loader list)
     match fabric_res {
         Ok(manifest) => {
-            let count = apply_fabric_style_from_modrinth(
-                &mut game_versions,
-                ModloaderType::Fabric,
-                &manifest,
-            );
+            let count =
+                apply_modrinth_manifest(&mut game_versions, ModloaderType::Fabric, &manifest);
             log::info!("Fabric: applied {} loader versions", count);
         }
         Err(e) => log::error!("Failed to fetch Fabric metadata: {}", e),
     }
 
-    // Apply Quilt (same Fabric-style manifest)
+    // Apply Quilt (Minecraft versions reference profile groups)
     match quilt_res {
         Ok(manifest) => {
-            let count = apply_fabric_style_from_modrinth(
-                &mut game_versions,
-                ModloaderType::Quilt,
-                &manifest,
-            );
+            let count =
+                apply_modrinth_manifest(&mut game_versions, ModloaderType::Quilt, &manifest);
             log::info!("Quilt: applied {} loader versions", count);
         }
         Err(e) => log::error!("Failed to fetch Quilt metadata: {}", e),
@@ -82,11 +70,8 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
     // Apply Forge (per-version entries)
     match forge_res {
         Ok(manifest) => {
-            let count = apply_forge_style_from_modrinth(
-                &mut game_versions,
-                ModloaderType::Forge,
-                &manifest,
-            );
+            let count =
+                apply_modrinth_manifest(&mut game_versions, ModloaderType::Forge, &manifest);
             log::info!("Forge: applied {} loaders across all versions", count);
         }
         Err(e) => log::error!("Failed to fetch Forge metadata: {}", e),
@@ -95,11 +80,8 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
     // Apply NeoForge (per-version entries)
     match neo_res {
         Ok(manifest) => {
-            let count = apply_forge_style_from_modrinth(
-                &mut game_versions,
-                ModloaderType::NeoForge,
-                &manifest,
-            );
+            let count =
+                apply_modrinth_manifest(&mut game_versions, ModloaderType::NeoForge, &manifest);
             log::info!("NeoForge: applied {} loaders across all versions", count);
         }
         Err(e) => log::error!("Failed to fetch NeoForge metadata: {}", e),
@@ -144,12 +126,8 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
 async fn fetch_modrinth_manifest(
     client: &reqwest::Client,
     loader: &str,
-    format_version: usize,
 ) -> Result<ModrinthManifest> {
-    let url = format!(
-        "{}/{}/v{}/manifest.json",
-        MODRINTH_BASE_URL, loader, format_version
-    );
+    let url = modrinth_manifest_url(loader);
 
     log::debug!("Fetching Modrinth manifest: {}", url);
     let resp = send_with_retry(client, &url, 3, 1000).await?;
@@ -162,6 +140,12 @@ async fn fetch_modrinth_manifest(
         .game_versions
         .iter()
         .map(|gv| gv.loaders.len())
+        .chain(
+            manifest
+                .version_groups
+                .iter()
+                .map(|group| group.loaders.len()),
+        )
         .sum();
     log::info!(
         "Modrinth {}: {} game version entries, {} loader versions total",
@@ -173,111 +157,38 @@ async fn fetch_modrinth_manifest(
     Ok(manifest)
 }
 
-/// Apply Fabric/Quilt-style manifest to game versions.
-///
-/// These manifests have one dummy entry (id = "modrinth.gameVersion placeholder") that contains ALL loader
-/// versions, plus additional entries with real MC version IDs and empty loader lists.
-/// The loader versions from the dummy entry get applied to every MC version that appears
-/// as a non-dummy entry in the manifest.
-///
-/// Returns the number of loader versions applied.
-fn apply_fabric_style_from_modrinth(
+/// Resolve grouped Quilt, universal Fabric and per-game Forge/NeoForge metadata.
+fn apply_modrinth_manifest(
     game_versions: &mut [GameVersionMetadata],
     loader_type: ModloaderType,
     manifest: &ModrinthManifest,
 ) -> usize {
-    // Find the dummy entry that holds all loader versions
-    let dummy_entry = manifest
-        .game_versions
-        .iter()
-        .find(|gv| is_dummy_game_version(&gv.id));
-
-    // Build the set of supported MC version IDs (non-dummy entries)
-    let supported_versions: HashSet<&str> = manifest
-        .game_versions
-        .iter()
-        .filter(|gv| !is_dummy_game_version(&gv.id))
-        .map(|gv| gv.id.as_str())
-        .collect();
-
-    let Some(dummy) = dummy_entry else {
-        log::warn!("{} manifest has no dummy entry", loader_type.as_str());
-        return 0;
+    let index = match manifest.loaders_by_game() {
+        Ok(index) => index,
+        Err(error) => {
+            log::error!("Invalid {loader_type} metadata: {error:#}");
+            return 0;
+        }
     };
-
-    // Build loader version infos from the dummy entry
-    let loader_infos: Vec<LoaderVersionInfo> = dummy
-        .loaders
-        .iter()
-        .map(|l| LoaderVersionInfo {
-            version: l.id.clone(),
-            stable: l.stable,
-            url: Some(l.url.clone()),
-            sha1: None,
-            metadata: None,
-        })
-        .collect();
-
-    let loader_count = loader_infos.len();
-    if loader_infos.is_empty() {
-        return 0;
-    }
-
-    // Apply to every supported MC version
-    for version in game_versions.iter_mut() {
-        if supported_versions.contains(version.id.as_str()) {
-            // Deduplicate: Modrinth may already have loaders for this version from a previous
-            // (fallback) run. Overwrite with the full Modrinth set.
-            version.loaders.insert(loader_type, loader_infos.clone());
-        }
-    }
-
-    loader_count
-}
-
-/// Apply Forge/NeoForge-style manifest to game versions.
-///
-/// These manifests have per-game-version entries where each entry carries its own loader versions.
-/// Different MC versions support different Forge/NeoForge versions.
-///
-/// Returns the total number of loader versions applied across all game versions.
-fn apply_forge_style_from_modrinth(
-    game_versions: &mut [GameVersionMetadata],
-    loader_type: ModloaderType,
-    manifest: &ModrinthManifest,
-) -> usize {
-    // Build a map from MC version id → loader infos (skip dummy entries if any)
-    let version_map: HashMap<&str, Vec<LoaderVersionInfo>> = manifest
-        .game_versions
-        .iter()
-        .filter(|gv| !is_dummy_game_version(&gv.id) && !gv.loaders.is_empty())
-        .map(|gv| {
-            let loaders: Vec<LoaderVersionInfo> = gv
-                .loaders
-                .iter()
-                .map(|l| LoaderVersionInfo {
-                    version: l.id.clone(),
-                    stable: l.stable,
-                    url: Some(l.url.clone()),
-                    sha1: None,
-                    metadata: None,
-                })
-                .collect();
-            (gv.id.as_str(), loaders)
-        })
-        .collect();
-
     let mut total_applied = 0;
-
-    for version in game_versions.iter_mut() {
-        if let Some(loaders) = version_map.get(version.id.as_str()) {
-            if !loaders.is_empty() {
-                total_applied += loaders.len();
-                version.loaders.insert(loader_type, loaders.clone());
-            }
+    for game in game_versions {
+        if let Some(versions) = index.get(game.id.as_str()).filter(|v| !v.is_empty()) {
+            total_applied += versions.len();
+            game.loaders.insert(
+                loader_type,
+                versions
+                    .iter()
+                    .map(|loader| LoaderVersionInfo {
+                        version: loader.id.clone(),
+                        stable: loader.stable,
+                        url: Some(loader.url.clone()),
+                        sha1: None,
+                        metadata: None,
+                    })
+                    .collect(),
+            );
         }
     }
-
     total_applied
 }
 

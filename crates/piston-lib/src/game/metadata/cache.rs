@@ -1,10 +1,10 @@
-use super::types::PistonMetadata;
+use super::types::{manifest_cache_key, PistonMetadata};
 use crate::game::manifest_cache::ManifestCache;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 /// Legacy metadata cache path — kept for backward compatibility.
-/// The new ManifestCache stores individual manifests at `data/manifests/{slug}.json`.
+/// The new ManifestCache stores individual manifests at `data/manifests/{cache_key}.json`.
 pub fn metadata_cache_path(data_dir: &Path) -> PathBuf {
     data_dir.join("piston_manifest.json")
 }
@@ -30,7 +30,7 @@ pub async fn load_cached_metadata_if_present(data_dir: &Path) -> Result<Option<P
         .all(|slug| {
             data_dir
                 .join("manifests")
-                .join(format!("{slug}.json"))
+                .join(format!("{}.json", manifest_cache_key(slug)))
                 .exists()
         });
     let java_info_cached = data_dir.join("manifests").join("java_info.json").exists();
@@ -50,7 +50,9 @@ pub async fn refresh_metadata(data_dir: &Path) -> Result<PistonMetadata> {
     // expensive to rediscover one version at a time. build_piston_metadata will
     // still refresh the runtime-major list and merge it with the existing map.
     for slug in crate::game::manifest_cache::MANIFEST_SLUGS {
-        let disk_path = data_dir.join("manifests").join(format!("{slug}.json"));
+        let disk_path = data_dir
+            .join("manifests")
+            .join(format!("{}.json", manifest_cache_key(slug)));
         if disk_path.exists() {
             tokio::fs::remove_file(&disk_path).await.ok();
         }

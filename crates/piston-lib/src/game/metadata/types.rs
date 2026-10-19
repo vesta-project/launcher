@@ -126,12 +126,23 @@ pub const MODRINTH_BASE_URL: &str = "https://launcher-meta.modrinth.com";
 #[serde(rename_all = "camelCase")]
 pub struct ModrinthManifest {
     pub game_versions: Vec<ModrinthGameVersion>,
+    #[serde(default)]
+    pub version_groups: Vec<ModrinthVersionGroup>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModrinthGameVersion {
     pub id: String,
     pub stable: bool,
+    pub loaders: Vec<ModrinthLoaderVersion>,
+    pub version_group: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthVersionGroup {
+    pub id: String,
     pub loaders: Vec<ModrinthLoaderVersion>,
 }
 
@@ -140,6 +151,69 @@ pub struct ModrinthLoaderVersion {
     pub id: String,
     pub url: String,
     pub stable: bool,
+}
+
+/// Format selection is shared by metadata discovery, cache identity and installation.
+pub fn modrinth_manifest_format(loader: &str) -> usize {
+    match loader {
+        "quilt" => 1,
+        _ => 0,
+    }
+}
+
+pub fn modrinth_manifest_url(loader: &str) -> String {
+    format!(
+        "{}/{}/v{}/manifest.json",
+        MODRINTH_BASE_URL,
+        loader,
+        modrinth_manifest_format(loader)
+    )
+}
+
+/// Separate formats on disk: v0 entries retain their existing filenames.
+pub fn manifest_cache_key(loader: &str) -> String {
+    match modrinth_manifest_format(loader) {
+        0 => loader.to_string(),
+        version => format!("{loader}-v{version}"),
+    }
+}
+
+impl ModrinthManifest {
+    /// Resolve all supported games once. Group references are authoritative;
+    /// never substitute a different group's profile when a reference is invalid.
+    pub fn loaders_by_game(&self) -> anyhow::Result<HashMap<&str, &[ModrinthLoaderVersion]>> {
+        let groups: HashMap<&str, &[ModrinthLoaderVersion]> = self
+            .version_groups
+            .iter()
+            .map(|group| (group.id.as_str(), group.loaders.as_slice()))
+            .collect();
+        let universal = self
+            .game_versions
+            .iter()
+            .find(|game| is_dummy_game_version(&game.id))
+            .map(|game| game.loaders.as_slice())
+            .unwrap_or(&[]);
+        self.game_versions
+            .iter()
+            .filter(|game| !is_dummy_game_version(&game.id))
+            .map(|game| {
+                let loaders = if let Some(group) = &game.version_group {
+                    *groups.get(group.as_str()).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Minecraft {} references missing loader version group {}",
+                            game.id,
+                            group
+                        )
+                    })?
+                } else if !game.loaders.is_empty() {
+                    game.loaders.as_slice()
+                } else {
+                    universal
+                };
+                Ok((game.id.as_str(), loaders))
+            })
+            .collect()
+    }
 }
 
 /// Placeholder string that Modrinth uses in Fabric/Quilt profiles for the

@@ -42,8 +42,11 @@ pub trait ProgressReporter: Send + Sync {
     /// Update bytes transferred for download progress
     fn update_bytes(&self, transferred: u64, total: Option<u64>);
 
-    /// Set overall percentage (0-100, or -1 for indeterminate)
+    /// Set current-stage percentage (0-100, or -1 for indeterminate)
     fn set_percent(&self, percent: i32);
+
+    /// Estimated progress across the complete operation, independent of stage-local percent.
+    fn set_overall_percent(&self, _percent: i32) {}
 
     /// Set a short status message
     fn set_message(&self, message: &str);

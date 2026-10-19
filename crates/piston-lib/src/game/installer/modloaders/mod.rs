@@ -9,7 +9,7 @@ use crate::game::launcher::version_parser::{
     Arguments, Artifact, ExtractRules, Library, LibraryDownloads, Rule, VersionManifest,
 };
 use crate::game::metadata::{
-    is_dummy_game_version, ModrinthArtifact, ModrinthLoaderProfile, ModrinthManifest,
+    modrinth_manifest_url, ModrinthArtifact, ModrinthLoaderProfile, ModrinthManifest,
     ModrinthProcessor, ModrinthSidedDataEntry,
 };
 use crate::utils::process::PistonCommandExt;
@@ -36,10 +36,7 @@ pub async fn resolve_loader_profile(
         ModloaderType::Vanilla => unreachable!(),
     };
 
-    let manifest_url = format!(
-        "https://launcher-meta.modrinth.com/{}/v0/manifest.json",
-        loader_slug
-    );
+    let manifest_url = modrinth_manifest_url(loader_slug);
     let manifest: ModrinthManifest = client
         .get(&manifest_url)
         .send()
@@ -51,68 +48,30 @@ pub async fn resolve_loader_profile(
         .await
         .with_context(|| format!("Failed to parse manifest: {}", manifest_url))?;
 
-    let selected = match loader {
-        ModloaderType::Fabric | ModloaderType::Quilt => {
-            let supports_version = manifest
-                .game_versions
-                .iter()
-                .any(|gv| !is_dummy_game_version(&gv.id) && gv.id == spec.version_id);
-            if !supports_version {
-                anyhow::bail!(
-                    "{} does not support Minecraft {}",
-                    loader.as_str(),
-                    spec.version_id
-                );
-            }
-
-            let dummy = manifest
-                .game_versions
-                .iter()
-                .find(|gv| is_dummy_game_version(&gv.id))
-                .context("Loader manifest missing dummy loader list entry")?;
-
-            if let Some(wanted) = spec.modloader_version.as_deref() {
-                dummy
-                    .loaders
-                    .iter()
-                    .find(|l| l.id == wanted)
-                    .context(format!("Requested loader version not found: {}", wanted))?
-            } else {
-                dummy
-                    .loaders
-                    .iter()
-                    .find(|l| l.stable)
-                    .or_else(|| dummy.loaders.first())
-                    .context("No loader versions available in manifest")?
-            }
-        }
-        ModloaderType::Forge | ModloaderType::NeoForge => {
-            let game_entry = manifest
-                .game_versions
-                .iter()
-                .find(|gv| gv.id == spec.version_id)
-                .context(format!(
-                    "{} has no loaders for Minecraft {}",
-                    loader.as_str(),
-                    spec.version_id
-                ))?;
-
-            if let Some(wanted) = spec.modloader_version.as_deref() {
-                game_entry
-                    .loaders
-                    .iter()
-                    .find(|l| l.id == wanted)
-                    .context(format!("Requested loader version not found: {}", wanted))?
-            } else {
-                game_entry
-                    .loaders
-                    .iter()
-                    .find(|l| l.stable)
-                    .or_else(|| game_entry.loaders.first())
-                    .context("No loader versions available for this Minecraft version")?
-            }
-        }
-        ModloaderType::Vanilla => unreachable!(),
+    let loaders_by_game = manifest.loaders_by_game()?;
+    let versions = loaders_by_game
+        .get(spec.version_id.as_str())
+        .context(format!(
+            "{} has no loaders for Minecraft {}",
+            loader.as_str(),
+            spec.version_id
+        ))?;
+    let selected = if let Some(wanted) = spec.modloader_version.as_deref() {
+        versions
+            .iter()
+            .find(|version| version.id == wanted)
+            .context(format!(
+                "Requested {} version {} not found for Minecraft {}",
+                loader.as_str(),
+                wanted,
+                spec.version_id
+            ))?
+    } else {
+        versions
+            .iter()
+            .find(|version| version.stable)
+            .or_else(|| versions.first())
+            .context("No loader versions available for this Minecraft version")?
     };
 
     reporter.set_message(&format!(
