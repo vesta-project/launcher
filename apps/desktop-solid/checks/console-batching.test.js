@@ -19,12 +19,18 @@ async function sessionHarness() {
         name: "console-host-fixture",
         setup(build) {
           build.onResolve(
+            { filter: /^\.\.\/\.\.\/localization$/ },
+            () => ({ path: 'localization', namespace: 'fixture' }),
+          );
+          build.onResolve(
             { filter: /^\.\/(native-service|details)$/ },
             ({ path }) => ({ path, namespace: "fixture" }),
           );
           build.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({
             contents:
-              path === "./details"
+              path === "localization"
+                ? "export const t = (id) => id;"
+                : path === "./details"
                 ? "export const logFor = () => [];"
                 : "export const nativeInstances = false; export const nativeRecord = () => undefined; export const reportInstanceError = () => {};",
             loader: "js",

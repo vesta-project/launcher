@@ -13,7 +13,7 @@ async function harness(entry, run) {
   const directory = await mkdtemp(join(tmpdir(), 'vesta-browse-install-'));
   const key = `vestaInstall${crypto.randomUUID().replaceAll('-', '')}`;
   const control = { notices: [], installs: [], handoffs: [], events: new Map(), versions: [release],
-    invoke: async () => {}, worlds: [], install: async () => ({ kind: 'started' }) };
+    versionReads: 0, invoke: async () => {}, worlds: [], install: async () => ({ kind: 'started' }) };
   globalThis[key] = control;
   const prefix = `const c = globalThis[${JSON.stringify(key)}];`;
   const fixtures = {
@@ -29,8 +29,8 @@ async function harness(entry, run) {
     '../instances/native-service': 'export const nativeInstances = true;',
     '../../features/instances/native-service': 'export const nativeInstances = true;',
     '../../features/instances/details': 'export const worldsFor = () => [];',
-    './browse-projects': 'export const loadVersions = async () => c.versions;',
-    '../../features/browse/browse-projects': 'export const loadVersions = async () => c.versions;',
+    './browse-projects': 'export const loadVersions = async () => { c.versionReads++; return c.versions; };',
+    '../../features/browse/browse-projects': 'export const loadVersions = async () => { c.versionReads++; return c.versions; };',
     './browse-store': 'export const setNotice = (value) => c.notices.push(value), installInto = (...args) => c.install(...args);',
     '../../features/browse/browse-store': `export const gameVersion = () => null, loader = () => null, setNotice = (value) => c.notices.push(value), installInto = (...args) => c.install(...args);`,
     '../../features/browse/browse-api': 'export const installResource = async (request) => { c.installs.push(request); return "task"; };',
@@ -134,13 +134,22 @@ test('deletion queued before the create command returns cancels the resource con
     expect(c.notices[0].text).toContain('browse.new-instance-removed');
   }));
 
-test('Browse carries the provider project and selected pack release through the archive handoff', () =>
+test('Browse opens Create before resolving the provider project and selected pack release', () =>
   harness('pages/browse/install-actions.ts', async (api, c) => {
     const pack = { ...project, resource_type: 'modpack', summary: 'Short summary', description: 'Long body' };
     c.versions = [{ ...release, project_id: project.id, version_number: 'Pack 2.0', loaders: ['mrpack', 'fabric'] }];
     await api.runInstall(pack, 'modpack', undefined);
-    expect(c.handoffs).toEqual([{ kind: 'url', value: release.download_url,
-      online: { project: pack, release: c.versions[0] } }]);
+    expect(c.handoffs).toHaveLength(1);
+    expect(typeof c.handoffs[0]).toBe('function');
+    expect(c.versionReads).toBe(0);
+    const versions = c.versions;
+    const loading = deferred();
+    c.versions = loading.promise;
+    const source = c.handoffs[0]();
+    expect(c.versionReads).toBe(1);
+    loading.resolve(versions);
+    expect(await source).toEqual({ kind: 'url', value: release.download_url,
+      online: { project: pack, release: versions[0] } });
   }));
 
 test('a version page installs exactly its version: into the target, through the picker, or as a pack', () =>
@@ -161,7 +170,9 @@ test('a version page installs exactly its version: into the target, through the 
     const pack = { ...project, resource_type: 'modpack' };
     c.versions = [{ ...release, id: 'newest', download_url: 'https://example.test/newest.mrpack' }];
     await api.runInstall(pack, 'modpack', undefined, older);
-    expect(c.handoffs.at(-1)).toEqual({ kind: 'url', value: older.download_url, online: { project: pack, release: older } });
+    expect(typeof c.handoffs.at(-1)).toBe('function');
+    expect(await c.handoffs.at(-1)()).toEqual({ kind: 'url', value: older.download_url, online: { project: pack, release: older } });
+    expect(c.versionReads).toBe(0);
   }));
 
 test('a pinned data pack goes into the chosen world as that version, not the best match for the world', () =>

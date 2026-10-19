@@ -21,6 +21,8 @@ const args = {
   message: "Network error",
   bits: "64",
   count: 2,
+  visible: 1,
+  total: 2,
   expected: 21,
   fallback: "none",
   found: 17,
@@ -59,12 +61,12 @@ describe("localization catalogs", () => {
   });
 
   it("supports Fluent variable interpolation and English plural selection", () => {
-    const one = formatMessage(english, "common.selected-count", { count: 1 });
-    const many = formatMessage(english, "common.selected-count", { count: 3 });
+    const one = formatMessage(english, "console.line-count", { visible: 1, total: 1 });
+    const many = formatMessage(english, "console.line-count", { visible: 2, total: 3 });
     const withoutIsolation = (value) => value?.replace(/[\u2068\u2069]/g, "");
 
-    expect(withoutIsolation(one)).toBe("1 selected");
-    expect(withoutIsolation(many)).toBe("3 selected");
+    expect(withoutIsolation(one)).toBe("1 of 1 line");
+    expect(withoutIsolation(many)).toBe("2 of 3 lines");
     expect(formatMessage(english, "worlds.delete-title", args)).toContain(
       "Test instance",
     );

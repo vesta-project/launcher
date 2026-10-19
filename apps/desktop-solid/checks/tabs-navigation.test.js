@@ -164,7 +164,7 @@ test('uncontrolled tabs still choose an initial enabled tab', () => {
 });
 
 
-test('back goes from tab to overview to library without phantom entries; settings returns to its tab', async () => {
+test('back visits tab history then overview and library; settings returns to its tab', async () => {
   const mounted = await runtime.navigation();
   const settle = async () => {
     for (let i = 0; i < 12; i++) {await Promise.resolve(); runtime.flush();}
@@ -172,18 +172,21 @@ test('back goes from tab to overview to library without phantom entries; setting
   try {
     const {router, transition, history, location} = mounted;
     router.navigate('/library/example'); runtime.flush();
-    router.navigate('/library/example/resources', {replace: true}); runtime.flush();
-    expect(history.length).toBe(2);
+    router.navigate('/library/example/resources'); runtime.flush();
+    router.navigate('/library/example/worlds'); runtime.flush();
+    expect(history.length).toBe(4);
+    transition.goBack('/library/example'); await settle();
+    expect(location.hash).toBe('#/library/example/resources');
     transition.goBack('/library/example'); await settle();
     expect(location.hash).toBe('#/library/example');
-    expect(history.length).toBe(2);
+    expect(history.length).toBe(4);
     transition.goBack('/library'); await settle();
     expect(location.hash).toBe('#/library');
     expect(router.canGoBack()).toBe(false);
     router.navigate('/library/example'); runtime.flush();
-    router.navigate('/library/example/resources', {replace: true}); runtime.flush();
+    router.navigate('/library/example/resources'); runtime.flush();
     router.navigate('/library/example/settings'); runtime.flush();
-    expect(history.length).toBe(3);
+    expect(history.length).toBe(4);
     transition.goBack('/library/example'); await settle();
     expect(location.hash).toBe('#/library/example/resources');
   } finally {mounted.restore();}

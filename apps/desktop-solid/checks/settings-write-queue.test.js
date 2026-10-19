@@ -138,7 +138,7 @@ test("native window preferences remain outside the theme document", async () => 
 test('default rewrite theme is Vesta and excludes all window settings', async () => {
   const { defaultTheme, themeSettings } = await import('../src/features/settings/theme-model');
   expect(defaultTheme.id).toBe('vesta');
-  expect(defaultTheme.hue).toBe(185);
+  expect(defaultTheme.hue).toBe(207);
   const fields = themeSettings(defaultTheme);
   expect(fields.theme_id).toBe('vesta');
   expect(fields).not.toHaveProperty('theme_window_effect');

@@ -45,7 +45,7 @@ test("materials resolve to structurally different tokens", () => {
   expect(Number(frosted["--vesta-theme-grain-opacity"])).toBeGreaterThan(0);
   expect(
     Number(resolveThemeTokens({ ...defaultTheme, material: "frosted", grain: 100 })["--vesta-theme-grain-opacity"]),
-  ).toBeCloseTo(0.8);
+  ).toBeCloseTo(0.08);
 });
 
 test("every material and background control resolves to a real token change", () => {
