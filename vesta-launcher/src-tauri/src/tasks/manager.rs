@@ -19,6 +19,7 @@ use unicode_normalization::UnicodeNormalization;
 pub struct TaskContext {
     pub app_handle: AppHandle,
     pub notification_id: String,
+    pub activity_attempt: String,
     pub notifications_enabled: bool,
     pub cancel_rx: watch::Receiver<bool>,
     pub pause_rx: watch::Receiver<bool>,
@@ -35,11 +36,23 @@ impl TaskContext {
         current: Option<i32>,
         total: Option<i32>,
     ) {
-        let _ = self.app_handle.emit(
+        let _ = crate::tasks::activity::publish(
+            &self.app_handle,
             "core://activity-progress",
             serde_json::json!({
-                "id": self.notification_id, "progress": progress,
+                "id": self.notification_id, "attempt": self.activity_attempt, "progress": progress,
                 "step": description, "currentStep": current, "totalSteps": total,
+            }),
+        );
+    }
+
+    /// Overall task estimate; only the authoritative terminal event reaches 100%.
+    pub fn update_overall_progress(&self, percent: i32) {
+        let _ = crate::tasks::activity::publish(
+            &self.app_handle,
+            "core://activity-progress",
+            serde_json::json!({
+                "id": self.notification_id, "attempt": self.activity_attempt, "overallProgress": percent.clamp(0, 99),
             }),
         );
     }
@@ -105,10 +118,11 @@ impl TaskContext {
     }
 
     pub fn set_title(&self, title: String) {
-        let _ = self.app_handle.emit(
+        let _ = crate::tasks::activity::publish(
+            &self.app_handle,
             "core://activity-progress",
             serde_json::json!({
-                "id": self.notification_id, "title": title,
+                "id": self.notification_id, "attempt": self.activity_attempt, "title": title,
             }),
         );
         if !self.notifications_enabled {
@@ -376,6 +390,7 @@ pub struct TaskManager {
     pause_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
     active_tasks: Arc<Mutex<HashMap<String, String>>>,
     conflicts: TaskConflictCoordinator,
+    pub(super) activity: super::activity::TaskActivityStore,
 }
 
 impl TaskManager {
@@ -429,6 +444,7 @@ impl TaskManager {
                     }
                 }
 
+                let activity_attempt = format!("{client_key}:{id}");
                 // Track active task
                 manager_active_tasks
                     .lock()
@@ -518,14 +534,18 @@ impl TaskManager {
                         .insert(client_key.clone(), pause_tx);
                 }
 
-                let _ = manager_app.emit("core://activity", serde_json::json!({
-                    "id": client_key, "kind": task.activity_kind(),
-                    "state": "queued", "title": task_name, "context": notification_context,
-                    "cancellable": is_cancellable, "step": task.starting_description(),
-                    "totalSteps": initial_total_steps,
-                    "action": task.completion_action(),
-                    "target": task.activity_instance_id().map(|instance_id| serde_json::json!({ "instanceId": instance_id })),
-                }));
+                let _ = crate::tasks::activity::publish(
+                    &manager_app,
+                    "core://activity",
+                    serde_json::json!({
+                        "id": client_key, "attempt": activity_attempt, "kind": task.activity_kind(),
+                        "state": "queued", "title": task_name, "context": notification_context,
+                        "cancellable": is_cancellable, "step": task.starting_description(),
+                        "totalSteps": initial_total_steps,
+                        "action": task.completion_action(),
+                        "target": task.activity_instance_id().map(|instance_id| serde_json::json!({ "instanceId": instance_id })),
+                    }),
+                );
                 let app = manager_app.clone();
                 let tokens = manager_tokens.clone();
                 let p_tokens = manager_pause_tokens.clone();
@@ -545,6 +565,7 @@ impl TaskManager {
                     let mut ctx = TaskContext {
                         app_handle: app.clone(),
                         notification_id: key_clone.clone(),
+                        activity_attempt: activity_attempt.clone(),
                         notifications_enabled,
                         cancel_rx: rx.clone(),
                         pause_rx: pause_rx.clone(),
@@ -553,7 +574,8 @@ impl TaskManager {
 
                     // Check if cancelled while waiting for conflict locks.
                     if *ctx.cancel_rx.borrow() {
-                        let _ = app.emit(
+                        let _ = crate::tasks::activity::publish(
+                            &app,
                             "core://activity",
                             serde_json::json!({ "id": key_clone, "state": "cancelled" }),
                         );
@@ -606,9 +628,13 @@ impl TaskManager {
                     log::info!("TaskManager: Running readiness for task: {}", task_name);
                     if let Err(ready_error) = task.ready(ctx.clone()).await {
                         log::error!("Task readiness failed: {}", ready_error);
-                        let _ = app.emit("core://activity", serde_json::json!({
-                            "id": key_clone, "state": if *ctx.cancel_rx.borrow() { "cancelled" } else { "failed" }, "error": ready_error,
-                        }));
+                        let _ = crate::tasks::activity::publish(
+                            &app,
+                            "core://activity",
+                            serde_json::json!({
+                                "id": key_clone, "state": if *ctx.cancel_rx.borrow() { "cancelled" } else { "failed" }, "error": ready_error,
+                            }),
+                        );
                         if let Some(ref channel) = ctx.progress_channel {
                             let _ = channel.send(ProgressUpdate::Finished {
                                 success: false,
@@ -677,7 +703,8 @@ impl TaskManager {
                     let permit = match worker_semaphore.acquire_owned().await {
                         Ok(permit) => permit,
                         Err(_) => {
-                            let _ = app.emit(
+                            let _ = crate::tasks::activity::publish(
+                                &app,
                                 "core://activity",
                                 serde_json::json!({ "id": key_clone, "state": "cancelled" }),
                             );
@@ -699,7 +726,8 @@ impl TaskManager {
 
                     // Check if cancelled while waiting
                     if *ctx.cancel_rx.borrow() {
-                        let _ = app.emit(
+                        let _ = crate::tasks::activity::publish(
+                            &app,
                             "core://activity",
                             serde_json::json!({ "id": key_clone, "state": "cancelled" }),
                         );
@@ -767,17 +795,22 @@ impl TaskManager {
                         );
                     }
 
-                    let _ = app.emit(
+                    let _ = crate::tasks::activity::publish(
+                        &app,
                         "core://activity",
                         serde_json::json!({ "id": key_clone, "state": "running" }),
                     );
                     let run_result = task.run(ctx.clone()).await;
-                    let _ = app.emit("core://activity", serde_json::json!({
-                        "id": key_clone,
-                        "state": match &run_result { _ if *ctx.cancel_rx.borrow() => "cancelled", Ok(_) => "done", Err(_) => "failed" },
-                        "error": run_result.as_ref().err(),
-                        "step": if run_result.is_ok() { Some(task.completion_description()) } else { None },
-                    }));
+                    let _ = crate::tasks::activity::publish(
+                        &app,
+                        "core://activity",
+                        serde_json::json!({
+                            "id": key_clone,
+                            "state": match &run_result { _ if *ctx.cancel_rx.borrow() => "cancelled", Ok(_) => "done", Err(_) => "failed" },
+                            "error": run_result.as_ref().err(),
+                            "step": if run_result.is_ok() { Some(task.completion_description()) } else { None },
+                        }),
+                    );
 
                     // Cleanup tokens after run
                     if is_cancellable {
@@ -891,7 +924,12 @@ impl TaskManager {
             pause_tokens,
             active_tasks,
             conflicts,
+            activity: super::activity::TaskActivityStore::default(),
         }
+    }
+
+    pub fn activity_snapshot(&self) -> super::activity::ActivitySnapshot {
+        self.activity.snapshot()
     }
 
     pub fn get_active_tasks(&self) -> Vec<String> {

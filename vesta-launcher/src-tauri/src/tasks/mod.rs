@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod installers;
 pub mod maintenance;
 pub mod manager;

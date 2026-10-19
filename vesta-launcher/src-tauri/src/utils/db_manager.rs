@@ -212,6 +212,20 @@ fn legacy_config_dir_candidates(base_config_dir: &Path) -> Vec<PathBuf> {
     ]
 }
 
+/// Called only by the rewrite executable, before backend initialization.
+/// Stable launcher processes never select this profile.
+pub fn configure_rewrite_profile(debug_default: PathBuf) -> Result<()> {
+    let root = if cfg!(debug_assertions) {
+        std::env::var_os("VESTA_DEV_PROFILE_DIR").map(PathBuf::from).unwrap_or(debug_default)
+    } else {
+        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Unable to find config directory"))?
+            .config_dir().join("VestaLauncherRewrite")
+    };
+    anyhow::ensure!(root.is_absolute(), "Rewrite profile must be an absolute path");
+    std::env::set_var("VESTA_REWRITE_PROFILE_DIR", root);
+    Ok(())
+}
+
 /// Get the application's config directory.
 /// - Windows: `%APPDATA%/.VestaLauncher`
 /// - macOS: `~/Library/Application Support/VestaLauncher`
@@ -220,6 +234,12 @@ fn legacy_config_dir_candidates(base_config_dir: &Path) -> Vec<PathBuf> {
 /// On non-Windows platforms, this migrates the legacy `.VestaLauncher` folder
 /// to `VestaLauncher` when needed.
 pub fn get_app_config_dir() -> Result<PathBuf> {
+    if let Some(root) = std::env::var_os("VESTA_REWRITE_PROFILE_DIR") {
+        let root = PathBuf::from(root);
+        anyhow::ensure!(root.is_absolute(), "Rewrite profile must be an absolute path");
+        std::fs::create_dir_all(&root)?;
+        return Ok(root);
+    }
     let base_dirs = BaseDirs::new()
         .ok_or_else(|| anyhow::anyhow!("Failed to determine user's config directory"))?;
 

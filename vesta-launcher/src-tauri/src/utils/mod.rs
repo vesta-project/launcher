@@ -15,6 +15,7 @@ pub mod db; // New Diesel connection management
 pub mod db_manager;
 mod errors;
 pub mod file_drop;
+pub mod file_manager;
 pub mod instance_helpers;
 pub mod instance_runtime;
 pub mod launch_intents;

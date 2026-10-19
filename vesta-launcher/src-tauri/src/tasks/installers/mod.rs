@@ -141,6 +141,7 @@ impl Task for InstallInstanceTask {
                 instance.modloader_version
             );
 
+            ctx.update_overall_progress(0);
             // Resolve directories
             let config_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| {
                 log::error!("[InstallTask] Failed to get config directory: {}", e);
@@ -368,6 +369,10 @@ pub struct TauriProgressReporter {
 }
 
 impl ProgressReporter for TauriProgressReporter {
+    fn set_overall_percent(&self, percent: i32) {
+        self.ctx.update_overall_progress(percent);
+    }
+
     fn start_step(&self, name: &str, total_steps: Option<u32>) {
         let name_str = name.to_string();
         let name_log = name_str.clone();

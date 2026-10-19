@@ -11,3 +11,10 @@ pub async fn set_worker_limit(state: State<'_, TaskManager>, limit: usize) -> Re
 pub async fn cancel_task(state: State<'_, TaskManager>, client_key: String) -> Result<(), String> {
     state.cancel_task(&client_key)
 }
+
+#[tauri::command]
+pub fn get_activity_snapshot(
+    state: State<'_, TaskManager>,
+) -> crate::tasks::activity::ActivitySnapshot {
+    state.activity_snapshot()
+}

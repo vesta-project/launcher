@@ -68,6 +68,8 @@ fn build_main_window(
         "account_summaries": account_summaries,
     });
     let native_file_drop_probe = native_file_drop_probe_enabled();
+    let native_file_drop_enabled =
+        app.config().identifier == "com.vesta.launcher.rewrite" || native_file_drop_probe;
     let initialization_script = format!(
         "window.__VESTA_OS__ = {os}; window.__VESTA_BOOTSTRAP__ = {bootstrap}; window.__VESTA_NATIVE_FILE_DROP_PROBE__ = {probe};",
         os = serde_json::to_string(os).expect("serialize startup OS"),
@@ -86,13 +88,9 @@ fn build_main_window(
             .visible(false)
             .transparent(true)
             .decorations(false);
-    // Keep Tauri's native drag handler disabled unless the Stage 0 probe is
-    // explicitly enabled. Enabling it is gated because Tauri replaces the
-    // WebView2 drop handler on Windows, which conflicts with HTML5 DnD
-    // (tauri-apps/tauri#15138), and the main window is created hidden at
-    // runtime (tauri-apps/tauri#14643). The probe stays opt-in until verified
-    // on real OSes.
-    let builder = if native_file_drop_probe {
+    // The rewrite uses native path delivery exclusively. Preserve the old shell's
+    // opt-in probe: enabling Tauri's WebView2 handler there conflicts with HTML5 DnD.
+    let builder = if native_file_drop_enabled {
         builder
     } else {
         builder.disable_drag_drop_handler()

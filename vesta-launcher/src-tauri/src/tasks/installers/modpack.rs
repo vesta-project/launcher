@@ -228,7 +228,7 @@ impl Task for InstallModpackTask {
     }
 
     fn name(&self) -> String {
-        format!("Install Modpack {}", self.instance.name)
+        format!("Install {}", self.instance.name)
     }
 
     fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
@@ -257,6 +257,7 @@ impl Task for InstallModpackTask {
         let app_handle = ctx.app_handle.clone();
 
         Box::pin(async move {
+            ctx.update_overall_progress(0);
             // Initialize reporter
             let reporter: std::sync::Arc<dyn ProgressReporter> =
                 std::sync::Arc::new(TauriProgressReporter {
@@ -274,7 +275,7 @@ impl Task for InstallModpackTask {
             let modpack_path = match source {
                 ModpackSource::Path(p) => p,
                 ModpackSource::Url(u) => {
-                    reporter.set_message("Downloading modpack zip...");
+                    reporter.start_step("Downloading archive", None);
 
                     let client = piston_lib::client::shared_client();
 
@@ -293,6 +294,12 @@ impl Task for InstallModpackTask {
                     let mut file = fs::File::create(&path).await.map_err(|e| e.to_string())?;
                     let mut stream = response.bytes_stream();
 
+                    let archive_progress =
+                        piston_lib::game::installer::progress::ProgressRange::stage(
+                            reporter.clone(),
+                            0,
+                            5,
+                        );
                     let mut downloaded: u64 = 0;
                     use futures_util::StreamExt;
                     use tokio::io::AsyncWriteExt;
@@ -302,9 +309,9 @@ impl Task for InstallModpackTask {
                         file.write_all(&chunk).await.map_err(|e| e.to_string())?;
                         downloaded += chunk.len() as u64;
 
-                        if let Some(total) = total_size {
+                        if let Some(total) = total_size.filter(|total| *total > 0) {
                             let percent = (downloaded as f32 / total as f32) * 100.0;
-                            reporter.set_percent(percent as i32);
+                            archive_progress.set_percent(percent as i32);
                         }
                     }
                     path
@@ -341,7 +348,11 @@ impl Task for InstallModpackTask {
                 metadata,
                 &game_dir,
                 &data_dir,
-                reporter.clone(),
+                piston_lib::game::installer::progress::ProgressRange::operation(
+                    reporter.clone(),
+                    5,
+                    92,
+                ),
                 Some(resolver.clone()),
                 java_path,
             )
@@ -394,12 +405,8 @@ impl Task for InstallModpackTask {
             use crate::schema::instance::dsl as inst_dsl;
             use diesel::prelude::*;
 
-            ctx.update_full(
-                PROGRESS_INDETERMINATE,
-                "Downloads complete. Setting up Java runtime…".to_string(),
-                None,
-                None,
-            );
+            ctx.update_overall_progress(92);
+            reporter.start_step("Setting up Java", None);
             crate::utils::java::ensure_java_for_instance(
                 &app_handle,
                 &final_instance,
@@ -455,6 +462,7 @@ impl Task for InstallModpackTask {
                 .persist(&game_dir)
                 .map_err(|error| format!("Failed to save root modpack manifest: {error}"))?;
 
+            ctx.update_overall_progress(97);
             let prepared = prepare_manifest_resource_rows(
                 &app_handle,
                 instance.id,
@@ -466,6 +474,7 @@ impl Task for InstallModpackTask {
             )
             .await?;
 
+            ctx.update_overall_progress(99);
             ctx.update_description("Attaching resource watcher…".to_string());
             let watcher = app_handle.state::<crate::resources::watcher::ResourceWatcher>();
             watcher
@@ -564,6 +573,7 @@ fn manifest_resource_candidates(
 
     paths
         .into_iter()
+        .filter(|path| crate::resources::ledger::is_resource_artifact(path))
         .filter(|path| seen.insert(crate::utils::instance_helpers::normalize_path(path)))
         .map(|path| crate::resources::reconciliation::ResourceCandidate {
             resolved: known_resolutions

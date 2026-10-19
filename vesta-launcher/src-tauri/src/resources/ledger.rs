@@ -845,7 +845,9 @@ fn remove_missing_in_folder_with_conn(
         .into_iter()
         .filter(|resource| resource.local_path.starts_with(&prefix))
     {
-        if !Path::new(&resource.local_path).exists() {
+        if !is_resource_artifact(Path::new(&resource.local_path))
+            || !Path::new(&resource.local_path).exists()
+        {
             removed +=
                 diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
                     .execute(conn)?;
@@ -861,7 +863,10 @@ pub fn remove_missing(instance_id: i32) -> Result<usize> {
         .load::<InstalledResource>(&mut conn)?;
     let missing_ids = resources
         .into_iter()
-        .filter(|resource| !Path::new(&resource.local_path).exists())
+        .filter(|resource| {
+            !is_resource_artifact(Path::new(&resource.local_path))
+                || !Path::new(&resource.local_path).exists()
+        })
         .map(|resource| resource.id)
         .collect::<Vec<_>>();
     if missing_ids.is_empty() {
@@ -1350,6 +1355,9 @@ fn record_remote_with_conn(
     provenance: Option<ResourceProvenance>,
     resource_type: Option<&str>,
 ) -> Result<bool> {
+    if !is_resource_artifact(path) {
+        return Ok(false);
+    }
     let path = normalize_path(path);
     let platform = format!("{platform:?}").to_ascii_lowercase();
     let provenance = provenance.unwrap_or_else(ResourceProvenance::custom);
@@ -1571,6 +1579,9 @@ fn record_download_with_conn(
         metadata,
         replaces_path,
     } = entry;
+    if !is_resource_artifact(&path) {
+        return Ok(());
+    }
     let path = normalize_path(&path);
     let platform = format!("{platform:?}").to_ascii_lowercase();
     let resource_type = resource_type.to_ascii_lowercase();
@@ -1840,7 +1851,22 @@ pub fn toggled_path(path: &Path, enabled: bool) -> PathBuf {
     }
 }
 
+/// Only resource archives are Ledger artifacts; text/configuration sidecars
+/// remain ordinary instance files even when shipped inside resource folders.
+pub(crate) fn is_resource_artifact(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let name = name.strip_suffix(".disabled").unwrap_or(&name);
+    name.ends_with(".jar") || name.ends_with(".zip")
+}
+
 pub(crate) fn resource_type_for_path(path: &Path) -> Option<&'static str> {
+    if !is_resource_artifact(path) {
+        return None;
+    }
     match path
         .parent()
         .and_then(|parent| parent.file_name())

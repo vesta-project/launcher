@@ -344,7 +344,12 @@ pub async fn get_installed_resources(
         .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?
         .into_iter()
-        .filter(|resource| !resource.resource_type.eq_ignore_ascii_case("datapack"))
+        .filter(|resource| {
+            !resource.resource_type.eq_ignore_ascii_case("datapack")
+                && crate::resources::ledger::is_resource_artifact(std::path::Path::new(
+                    &resource.local_path,
+                ))
+        })
         .collect();
 
     Ok(resources)
@@ -372,7 +377,12 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
             .filter(ir_dsl::instance_id.eq(instance_id))
             .load::<InstalledResource>(&mut conn)?
             .into_iter()
-            .filter(|resource| !resource.resource_type.eq_ignore_ascii_case("datapack"))
+            .filter(|resource| {
+                !resource.resource_type.eq_ignore_ascii_case("datapack")
+                    && crate::resources::ledger::is_resource_artifact(std::path::Path::new(
+                        &resource.local_path,
+                    ))
+            })
             .collect::<Vec<_>>();
 
         let mut refs = Vec::new();
@@ -1016,6 +1026,18 @@ pub async fn find_peer_resource(
 }
 
 #[tauri::command]
+pub async fn open_resource_in_folder(instance_id: i32, resource_id: i32) -> Result<()> {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+        let resource = crate::resources::ledger::get_resource(instance_id, resource_id)?;
+        crate::utils::file_manager::reveal(std::path::Path::new(&resource.local_path))
+            .map_err(|error| anyhow!(error))
+    })
+    .await
+    .map_err(|error| anyhow!(error))??;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn delete_resource(
     app_handle: tauri::AppHandle,
     task_manager: State<'_, TaskManager>,
@@ -1038,6 +1060,12 @@ pub async fn delete_resource(
     let _mutation_guard = task_manager.acquire_conflicts([conflict_key]).await;
     resource = crate::resources::ledger::get_resource(instance_id, resource_id)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if resource.source_kind == "modpack" {
+        return Err(anyhow!(
+            "Modpack resources cannot be removed individually. Disable them instead."
+        )
+        .into());
+    }
     if resource.resource_type.eq_ignore_ascii_case("resourcepack") {
         if crate::worlds::datapacks::companion_resourcepack_may_be_referenced(
             instance_id,

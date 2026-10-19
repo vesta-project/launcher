@@ -652,11 +652,7 @@ fn world_datapack_directories(game_path: &Path) -> Vec<PathBuf> {
 }
 
 fn is_resource_file(path: &Path) -> bool {
-    let s = path.to_string_lossy().to_lowercase();
-    s.ends_with(".jar")
-        || s.ends_with(".zip")
-        || s.ends_with(".jar.disabled")
-        || s.ends_with(".zip.disabled")
+    crate::resources::ledger::is_resource_artifact(path)
 }
 
 pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i32) -> Result<()> {
