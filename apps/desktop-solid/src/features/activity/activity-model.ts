@@ -1,10 +1,20 @@
-export type ActivityKind = 'task' | 'background';
+import type { ActivitySubject, ActivityCount } from './activity-text';
+export type ActivityKind = 'task' | 'background' | 'instance_install' | 'modpack_install' | 'modpack_update' | 'modpack_export' | 'resource_install' | 'java_download' | 'launcher_import' | 'import_resync' | 'resource_enrichment' | 'manifest_refresh' | 'profile_sync' | 'instance_duplicate' | 'instance_reset' | 'instance_repair' | 'instance_delete' | 'world_transfer' | 'drop_apply';
 export type ActivityState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 export interface Activity {
   id: string;
   /** Native Task Manager attempt; retries may reuse a logical task ID. */
   attempt?: string;
   kind: ActivityKind;
+  visibility?: 'foreground' | 'background';
+  subject?: ActivitySubject | null;
+  source?: ActivitySubject | null;
+  destination?: ActivitySubject | null;
+  mode?: 'copy' | 'move' | null;
+  stage?: string;
+  items?: ActivityCount | null;
+  bytes?: ActivityCount | null;
+  fileName?: string | null;
   state: ActivityState;
   title: string;
   subtitle?: string;
@@ -39,13 +49,15 @@ export const SUCCESS_DURATION = 6000;
 export const active = (activity: Activity) => activity.state === 'running' || activity.state === 'queued';
 export const terminal = (activity: Activity) => !active(activity);
 
+export const isForeground = (activity: Activity) => activity.visibility ? activity.visibility === 'foreground' : activity.kind !== 'background';
+
 export function visibleTaskList(rows: readonly Activity[], now: number): Activity[] {
-  return rows.filter((a) => a.kind === 'task' && !a.pillDismissed && (active(a)
+  return rows.filter((a) => isForeground(a) && !a.pillDismissed && (active(a)
     || (a.state === 'failed' && !a.seen)
     || (a.state === 'done' && now < (a.finishedAt ?? now) + SUCCESS_DURATION)));
 }
 export function backgroundList(rows: readonly Activity[], now: number): Activity[] {
-  return rows.filter((a) => a.kind === 'background' && a.state === 'running' && now - a.startedAt >= BACKGROUND_DELAY);
+  return rows.filter((a) => !isForeground(a) && a.state === 'running' && now - a.startedAt >= BACKGROUND_DELAY);
 }
 export const activityProgress = (activity: Activity) => activity.overallProgress ?? activity.progress;
 

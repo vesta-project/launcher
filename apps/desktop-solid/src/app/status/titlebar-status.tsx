@@ -1,5 +1,5 @@
-import { Button, IconButton, Popover } from "@vesta/ui";
-import { For, Match, Show, Switch, createSignal } from "solid-js";
+import { Button, IconButton, Popover } from '@vesta/ui';
+import { For, Match, Show, Switch, createSignal } from 'solid-js';
 import {
   downloadUpdate,
   notificationKey,
@@ -7,15 +7,15 @@ import {
   restartToUpdate,
   updaterState,
   type HostNotification,
-} from "../../features/activity";
-import { formatRelative } from "../../features/browse/browse-model";
-import { Icon } from "../../components/icon";
-import { locale, t } from "../../localization";
-import { percentText } from "./format";
-import "./titlebar-status.css";
+} from '../../features/activity';
+import { formatRelative } from '../../features/browse/browse-model';
+import { Icon } from '../../components/icon';
+import { locale, t } from '../../localization';
+import { percentText } from './format';
+import './titlebar-status.css';
 
-/** An icon with the small accent dot that says "something is waiting here". */
-function Badged(props: { icon: string; dot: boolean; tone?: "danger" }) {
+/** An icon with the small accent dot that says 'something is waiting here'. */
+function Badged(props: { icon: string; dot: boolean; tone?: 'danger' }) {
   return (
     <span data-vesta="titlebar-badge">
       <Icon name={props.icon} size={14} />
@@ -28,20 +28,20 @@ function Badged(props: { icon: string; dot: boolean; tone?: "danger" }) {
 
 /**
  * Launcher self-update: a download button with a dot while an update is available, a ring
- * while it downloads, then a compact "Restart" chip. Hidden when there is nothing to do.
+ * while it downloads, then a compact 'Restart' chip. Hidden when there is nothing to do.
  */
 export function UpdateControl() {
   const ready = () => {
     const state = updaterState();
-    return state.state === "ready" ? state : undefined;
+    return state.state === 'ready' ? state : undefined;
   };
   const available = () => {
     const state = updaterState();
-    return state.state === "available" ? state : undefined;
+    return state.state === 'available' ? state : undefined;
   };
   const downloading = () => {
     const state = updaterState();
-    return state.state === "downloading" ? state : undefined;
+    return state.state === 'downloading' ? state : undefined;
   };
   // Command failures are on the state; keep the user's next step and put the reason in its name.
   const withError = (label: string, error: string | undefined) =>
@@ -56,14 +56,14 @@ export function UpdateControl() {
               variant="ghost"
               size="sm"
               label={withError(
-                t("activity.update-available", { version: state().version }),
+                t('activity.update-available', { version: state().version }),
                 state().error,
               )}
               icon={
                 <Badged
                   icon="icons/actions/download"
                   dot
-                  tone={state().error ? "danger" : undefined}
+                  tone={state().error ? 'danger' : undefined}
                 />
               }
               onClick={() => void downloadUpdate().catch(() => undefined)}
@@ -77,7 +77,7 @@ export function UpdateControl() {
             data-vesta="titlebar-status-item"
             data-kind="update-progress"
             role="progressbar"
-            aria-label={t("activity.update-downloading", { version: state().version })}
+            aria-label={t('activity.update-downloading', { version: state().version })}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={
@@ -86,9 +86,9 @@ export function UpdateControl() {
             aria-valuetext={
               state().progress === undefined ? undefined : percentText(state().progress!)
             }
-            data-tip={t("activity.update-downloading", { version: state().version })}
-            data-indeterminate={state().progress === undefined ? "" : undefined}
-            style={{ "--update-progress": String(state().progress ?? 0) }}
+            data-tip={t('activity.update-downloading', { version: state().version })}
+            data-indeterminate={state().progress === undefined ? '' : undefined}
+            style={{ '--update-progress': String(state().progress ?? 0) }}
           >
             <svg data-vesta="titlebar-update-ring" viewBox="0 0 22 22" aria-hidden="true">
               <circle data-vesta="titlebar-update-ring-track" cx="11" cy="11" r="9" />
@@ -110,19 +110,19 @@ export function UpdateControl() {
             <button
               type="button"
               data-vesta="titlebar-restart"
-              data-error={state().error ? "" : undefined}
+              data-error={state().error ? '' : undefined}
               aria-label={withError(
-                t("activity.update-restart-label", { version: state().version }),
+                t('activity.update-restart-label', { version: state().version }),
                 state().error,
               )}
               data-tip={withError(
-                t("activity.update-restart-label", { version: state().version }),
+                t('activity.update-restart-label', { version: state().version }),
                 state().error,
               )}
               onClick={() => void restartToUpdate().catch(() => undefined)}
             >
               <Icon name="icons/actions/refresh" size={12} />
-              <span data-vesta="titlebar-restart-label">{t("activity.update-restart")}</span>
+              <span data-vesta="titlebar-restart-label">{t('activity.update-restart')}</span>
             </button>
           </span>
         )}
@@ -131,20 +131,20 @@ export function UpdateControl() {
   );
 }
 
-const severityIcon: Record<HostNotification["severity"], string> = {
-  info: "icons/status/bell",
-  success: "icons/controls/check",
-  warning: "icons/controls/warning",
-  error: "icons/status/error",
+const severityIcon: Record<HostNotification['severity'], string> = {
+  info: 'icons/status/bell',
+  success: 'icons/controls/check',
+  warning: 'icons/controls/warning',
+  error: 'icons/status/error',
 };
 
 function InboxRow(props: { row: HostNotification }) {
   const [pendingAction, setPendingAction] = createSignal<string>();
-  const [actionError, setActionError] = createSignal("");
-  const runAction = async (action: NonNullable<HostNotification["actions"]>[number]) => {
+  const [actionError, setActionError] = createSignal('');
+  const runAction = async (action: NonNullable<HostNotification['actions']>[number]) => {
     if (pendingAction()) return;
     setPendingAction(action.id);
-    setActionError("");
+    setActionError('');
     try {
       await notifications.invokeAction(props.row, action);
     } catch (reason) {
@@ -155,12 +155,12 @@ function InboxRow(props: { row: HostNotification }) {
   };
   const key = () => notificationKey(props.row);
   const when = () =>
-    props.row.created_at ? formatRelative(props.row.created_at, Date.now(), locale()) : "";
+    props.row.created_at ? formatRelative(props.row.created_at, Date.now(), locale()) : '';
   return (
     <li
       data-vesta="inbox-row"
       data-severity={props.row.severity}
-      data-unread={props.row.read ? undefined : ""}
+      data-unread={props.row.read ? undefined : ''}
     >
       <span data-vesta="inbox-row-icon" aria-hidden="true">
         <Icon name={severityIcon[props.row.severity] ?? severityIcon.info} size={14} />
@@ -179,11 +179,11 @@ function InboxRow(props: { row: HostNotification }) {
                   variant="outline"
                   disabled={!!pendingAction()}
                   tone={
-                    action.type === "danger" || action.type === "destructive"
-                      ? "danger"
-                      : action.type === "primary"
-                        ? "accent"
-                        : "neutral"
+                    action.type === 'danger' || action.type === 'destructive'
+                      ? 'danger'
+                      : action.type === 'primary'
+                        ? 'accent'
+                        : 'neutral'
                   }
                   onClick={() => void runAction(action)}
                 >
@@ -208,7 +208,7 @@ function InboxRow(props: { row: HostNotification }) {
             variant="ghost"
             size="sm"
             disabled={!!pendingAction()}
-            label={t("activity.inbox-dismiss")}
+            label={t('activity.inbox-dismiss')}
             icon={<Icon name="icons/actions/close" size={12} />}
             onClick={() => void notifications.dismiss(key()).catch(() => undefined)}
           />
@@ -223,7 +223,7 @@ function InboxRow(props: { row: HostNotification }) {
  * something is unread. Opening it reads everything; × removes one row, Clear all the rest.
  */
 export function InboxControl() {
-  const [open, setOpen] = createSignal(false, { name: "inboxOpen" });
+  const [open, setOpen] = createSignal(false, { name: 'inboxOpen' });
   const unread = () => notifications.unreadCount();
   const readAll = () => {
     for (const row of notifications.list())
@@ -247,7 +247,7 @@ export function InboxControl() {
           open={open()}
           onOpenChange={toggle}
           placement="bottom-end"
-          title={t("activity.inbox-title")}
+          title={t('activity.inbox-title')}
           class="inbox-panel"
           trigger={(triggerProps) => (
             <IconButton
@@ -256,8 +256,8 @@ export function InboxControl() {
               size="sm"
               label={
                 unread()
-                  ? t("activity.inbox-label", { count: unread() })
-                  : t("activity.inbox-title")
+                  ? t('activity.inbox-label', { count: unread() })
+                  : t('activity.inbox-title')
               }
               icon={<Badged icon="icons/status/bell" dot={unread() > 0} />}
             />
@@ -266,12 +266,12 @@ export function InboxControl() {
           <div data-vesta="inbox-panel">
             <Show when={notifications.list().length > 0}>
               <Button class="inbox-clear-all" size="sm" variant="ghost" onClick={clearAll}>
-                {t("activity.inbox-clear-all")}
+                {t('activity.inbox-clear-all')}
               </Button>
             </Show>
             <Show
               when={notifications.list().length}
-              fallback={<p data-vesta="inbox-empty">{t("activity.inbox-empty")}</p>}
+              fallback={<p data-vesta="inbox-empty">{t('activity.inbox-empty')}</p>}
             >
               <ul data-vesta="inbox-rows">
                 <For each={notifications.list()} keyed={(row) => notificationKey(row)}>

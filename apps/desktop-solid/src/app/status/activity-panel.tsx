@@ -9,14 +9,13 @@ import {
   dismissActivity,
   type Activity,
 } from '../../features/activity';
-import { activityProgress, terminal } from '../../features/activity/activity-model';
+import { activityProgress, isForeground, terminal } from '../../features/activity/activity-model';
 import { formatRelative } from '../../features/browse/browse-model';
 import { playInstance } from '../../features/instances/catalog';
 import { Icon } from '../../components/icon';
 import { locale, t } from '../../localization';
 import { transitionTo } from '../transition';
 import { ActivityIcon } from './activity-icon';
-import { percentText } from './format';
 import './activity-panel.css';
 
 const routeOf = (activity: Activity) =>
@@ -35,7 +34,7 @@ function byPlace(a: Activity, b: Activity) {
 function stepText(activity: Activity): string {
   if (activity.step) return activity.step;
   if (activity.totalSteps) return t('activity.step-count', { count: activity.currentStep ?? 0, max: activity.totalSteps });
-  return activity.progress === undefined ? t('activity.working') : percentText(activity.progress);
+  return t('activity.working');
 }
 
 /** Keep diagnostics on one line until the user asks to read the full message. */
@@ -135,9 +134,10 @@ function TaskRow(props: { activity: Activity; now: number; onNavigate: () => voi
             aria-label={props.activity.title}
           />
           <span data-vesta="activity-row-step" data-tip-overflow>{stepText(props.activity)}</span>
-          <Show when={props.activity.overallProgress !== undefined && props.activity.progress !== undefined}>
-            <span data-vesta="activity-row-stage-percent" title={stepText(props.activity)}>{percentText(props.activity.progress!)}</span>
+          <Show when={props.activity.fileName}>
+            <small data-vesta="activity-row-file" data-tip-overflow>{props.activity.fileName?.split(/[\\/]/).pop()}</small>
           </Show>
+
         </Show>
         <Show when={props.activity.state === 'queued'}>
           <span data-vesta="activity-row-step">{t('activity.queued')}</span>
@@ -169,13 +169,13 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
     return () => clearInterval(timer);
   });
 
-  const tasks = createMemo(() => activities().filter((row) => row.kind === 'task').sort(byPlace), {
+  const tasks = createMemo(() => activities().filter((row) => isForeground(row)).sort(byPlace), {
     name: 'activityPanelTasks',
   });
   const background = createMemo(
     () => [
       ...backgroundActivities(),
-      ...activities().filter((row) => row.kind === 'background' && row.state === 'failed'),
+      ...activities().filter((row) => !isForeground(row) && row.state === 'failed'),
     ],
     { name: 'activityPanelBackground' },
   );

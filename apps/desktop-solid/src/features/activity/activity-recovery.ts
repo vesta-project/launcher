@@ -1,8 +1,9 @@
+import type { StructuredActivity } from './activity-text';
 /** Native progress is 0–100; normalization belongs to the desktop Adapter. */
-export interface NativeActivity {
+export interface NativeActivity extends StructuredActivity {
   id: string;
   attempt?: string;
-  kind: 'task' | 'background';
+  kind: string;
   state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
   title: string;
   progress?: number | null;

@@ -76,8 +76,8 @@ active foreground tasks. Unknown progress makes the aggregate indeterminate. Kno
 step counts estimate remaining weight as max(1, total-current); unknown weights use
 one unit. These are estimates across heterogeneous operations, not byte-accurate
 predictions. Installer tasks now provide `overallProgress` separately from their stage-local
-`progress`. The panel bar and pill prefer that overall estimate; stage progress appears as a
-compact percentage beside the current action. The Ledger prevents overall regressions within
+`progress`. The panel bar and pill use that overall estimate; stage text carries item or byte
+counts, with no second percentage reading. The Ledger prevents overall regressions within
 one task attempt, and only authoritative completion reaches 100%. Pipeline ranges compose
 nested runtime/modpack work; download ranges publish only changed integer estimates. Older
 producers without an overall value retain their existing progress behavior. Native activity
@@ -191,14 +191,73 @@ Still needed for richer/fully recoverable telemetry:
 2. Rescan should emit these same lifecycle/progress events (including error exits), or
    its future rewrite caller should bridge its private Channel into receiveActivity.
    Do not infer success from resource-row changes or notification deletion.
-3. Add transferredBytes/totalBytes, phase name, comparable remaining-work units and
-   phase/overall semantics to ProgressReporter/TaskContext events. Current counters
-   support counts, but cannot reliably produce “Java 21 · 38 MB” or byte-based weights.
+3. Structured progress is implemented below. Existing producer estimates remain coarse;
+   unknown totals stay omitted rather than inventing byte totals.
 4. Include an image URL and version subtitle in task presentation metadata for icons
    even before the instance catalog loads. Currently these are best-effort enrichment.
 5. Other host Java discovery/metadata callers and ordinary resource-watcher scans have
    no global lifecycle telemetry. Only the wrapped rewrite calls and TaskManager
    enrichment/manifests are represented; add quiet producer events at those boundaries.
-6. Host-origin task titles/descriptions remain existing host English. New frontend
-   labels use Fluent/messages.ts; localizing host prose requires typed message IDs/args
-   in the task presentation contract rather than guessing translations from strings.
+6. Known host kinds use the structured Fluent formatter below. Legacy and unknown
+   kinds preserve host title/subtitle/step text for compatibility.
+
+## Structured naming and progress contract
+
+TaskManager owns the native contract in `tasks/activity.rs` and the epoch/revision
+snapshot. Producers declare `ActivityKind` explicitly; no kind or stage is inferred
+from English strings. Legacy `title`, `step`, `progress`, `currentStep`, `totalSteps`,
+context, notification descriptions and private progress channels remain available.
+
+Full native rows carry:
+
+- `kind`: `instance_install`, `modpack_install`, `modpack_update`, `modpack_export`,
+  `resource_install`, `java_download`, `launcher_import`, `import_resync`,
+  `resource_enrichment`, `manifest_refresh`, `profile_sync`, `instance_duplicate`,
+  `instance_reset`, `instance_repair`, `instance_delete`, `world_transfer`, `drop_apply`.
+  Generic/test tasks retain `task`. Client-only legacy `task`/`background` also work.
+- `subject`: `{ id, name, iconUrl?, instanceId? }`. Missing database labels are
+  resolved once at queue time, before deletion. Resource subjects keep project identity
+  and target instance. Java uses the major version. Export has an explicit instance ID.
+- Duplicate `subject` is the target (ID absent until created), with separate `source`.
+  Its requested/unique name updates before copying; creation updates subject and route
+  to the new instance. It never navigates to the source as its completion target.
+- World transfer uses `mode: copy|move` (same-instance duplicate is copy), a world
+  subject, and `source`/`destination` instance subjects. Routes target the destination.
+- `stage`: stable snake_case keys, scoped by kind. Runtime stages include
+  `loading_metadata`, `downloading_client`, `downloading_libraries`,
+  `downloading_assets`, `running_processors`, `installing_java`, `verifying`,
+  `finalizing`. Archive/resource workflows use `analyzing`, `extracting`,
+  `downloading_resources`, `copying_files`, `reconciling`, `matching_resources`,
+  `saving_records`. Maintenance uses `locating_files`, `removing_files`,
+  `removing_records`, `stopping_watcher`; updates can use `waiting_for_exit`.
+  Other stable keys are `preparing`, `installing`, `downloading`, `applying`,
+  `exporting`, `syncing_profiles`. Stage changes clear old counters and filenames.
+- `items: { done, total? }` and `bytes: { done, total? }` are independent counters.
+  Legacy step counts remain logical workflow steps and are not promoted to item
+  counts. Only actual producer item counters enter `items`; byte percent never becomes an item count. Resource bytes describe the current artifact; items count completed artifacts.
+  Profile sync uses the account count from initialization onward.
+- `overall`: integer 0..100, mirrored by legacy `overallProgress`. Whole-task
+  estimates are monotonic within an attempt, clamped to 99 while active, and reach
+  100 only on successful completion. Stage-local `progress` may restart. Nested
+  repair/reset installs map into a TaskContext range; piston ProgressRange composes
+  runtime/modpack estimates. A retry resets overall; stale attempt callbacks are ignored.
+- `visibility: foreground|background`: explicit policy independent of notification
+  silence. Import resync, resource enrichment, manifest refresh and profile sync are
+  background. User-started installs, maintenance actions, exports, transfers and
+  dropped-resource apply are foreground, including notification-silent drop tasks.
+- Optional `fileName` is a basename for the panel only, with ellipsis/overflow tooltip.
+  Structured title/step text excludes paths and usernames.
+
+`activity-text.ts` is a pure formatter supplied the current Fluent translator/locale.
+`activity-sync.ts` normalizes native overall percentages and formats known kinds from
+`locales/en/activity.ftl`/`messages.ts`. Unknown kinds alone fall back to legacy copy.
+Unknown stage keys show the localized generic working label. Byte text uses decimal
+SI units and localized number formatting; bytes take precedence when both counters
+exist. Example: `Downloading libraries · 47/112` or `Downloading · 12 MB / 38 MB`.
+The bar is the sole progress percentage; step text never repeats it. Quiet idle faces
+retain their spinner and never borrow a successful completion check mark.
+
+Checks: `checks/activity-text.test.js` covers all production kinds, unknown/legacy
+fallback, subjects/modes, byte and item units, visibility and monotonic/retry behavior.
+Rust activity contract tests cover snapshot counter resets, completion clamps and stale
+attempt rejection. These are non-visual tests; real installation runs remain manual.

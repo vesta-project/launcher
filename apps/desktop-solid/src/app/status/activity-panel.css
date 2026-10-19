@@ -136,6 +136,16 @@
     white-space: nowrap;
   }
 
+
+  :where([data-vesta='activity-row-file']) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-inline-size: 0;
+    max-inline-size: 25%;
+    color: var(--vesta-color-text-subtle);
+  }
+
   :where([data-vesta='activity-row-actions']) {
     position: relative;
     z-index: 1;
@@ -166,17 +176,11 @@
 
   :where([data-vesta='activity-row-step']) {
     flex: none;
-    max-inline-size: 35%;
+    max-inline-size: 60%;
     overflow: hidden;
     font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  :where([data-vesta='activity-row-stage-percent']) {
-    flex: none;
-    font-variant-numeric: tabular-nums;
-    color: var(--vesta-color-text-subtle);
   }
 
   :where([data-vesta='activity-row'][data-state='queued']) :where([data-vesta='activity-row-step']) {

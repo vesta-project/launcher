@@ -1,3 +1,4 @@
+import { isForeground } from '../../features/activity/activity-model';
 import { Popover } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { activities, backgroundActivities, dismissActivity, markSeen, pillState, type Activity, type PillState } from '../../features/activity';
@@ -55,9 +56,7 @@ function PillFace(props: { state: Shown; face: Face }) {
   return (
     <span data-vesta="status-pill-face" data-face={props.face}>
       <Show when={props.face === 'quiet'}>
-        <Show when={pillState().state === 'quiet'} fallback={<Icon name="icons/controls/check" size={12} />}>
-          <span data-vesta="status-spinner" aria-hidden="true" />
-        </Show>
+        <span data-vesta="status-spinner" aria-hidden="true" />
       </Show>
 
       <Show when={props.face === 'single' || props.face === 'success'}>
@@ -133,7 +132,7 @@ export function StatusPill() {
   createEffect(
     () => pillState().state === 'idle'
       && !backgroundActivities().length
-      && !activities().some((row) => row.kind === 'task' || row.state === 'failed'),
+      && !activities().some((row) => isForeground(row) || row.state === 'failed'),
     (empty) => { if (empty) setOpen(false); },
   );
   const collapsed = createMemo(() => pillState().state === 'idle' && !open(), { name: 'activityPillCollapsed' });

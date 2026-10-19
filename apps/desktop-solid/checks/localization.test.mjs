@@ -14,6 +14,10 @@ const sources = await Promise.all(
 );
 const english = createFluentBundle("en", sources);
 const args = {
+  stage: "Downloading",
+  done: "12 MB",
+  source: "Original",
+  target: "Copy",
   amount: 16,
   author: "Pack author",
   code: 1,

@@ -5,7 +5,9 @@ import { configureActivityCancellation, receiveActivity, reportActivityError, st
 import { receiveNotification, updateNotification, type HostNotification } from './notifications';
 import { checkForUpdates, downloadUpdate, restartToUpdate } from '../settings/updates';
 import { nativeRecord, displayImage } from '../instances/native-service';
-import type { ActivityPatch } from './activity-model';
+import { formatActivityText } from './activity-text';
+import { locale, t } from '../../localization';
+import type { ActivityKind, ActivityPatch } from './activity-model';
 import { ActivityRecovery, type ActivityEvent, type ActivitySnapshot, type NativeActivity } from './activity-recovery';
 
 const hostIds = new Set<string>();
@@ -15,16 +17,19 @@ function taskEvent(event: NativeActivity) {
   const record = context?.kind === 'instance' && context.id ? untrack(() => nativeRecord(context.id!)) : undefined;
   const patch: ActivityPatch = {
     ...raw,
+    kind: raw.kind as ActivityKind,
     progress: progress != null && progress >= 0 ? progress / 100 : undefined,
-    overallProgress: overallProgress != null && overallProgress >= 0 ? overallProgress / 100 : undefined,
+    overallProgress: event.overall != null ? event.overall / 100 : overallProgress != null && overallProgress >= 0 ? overallProgress / 100 : undefined,
     currentStep: currentStep ?? undefined, totalSteps: totalSteps ?? undefined,
     ...(record ? { icon: displayImage(record), subtitle: [record.minecraftVersion, record.modloader].filter(Boolean).join(' · ') } : {}),
     ...(context ? {
-      target: raw.target ?? (context.kind === 'instance' && context.id ? { instanceId: context.id } : undefined),
+      target: raw.target ?? (!event.subject && context.kind === 'instance' && context.id ? { instanceId: context.id } : undefined),
       ...(context.iconUrl ? { icon: context.iconUrl } : {}), iconFallback: context.label?.slice(0, 2),
     } : {}),
     weight: totalSteps && totalSteps > 0 ? Math.max(1, totalSteps - (currentStep ?? 0)) : undefined,
   };
+  Object.assign(patch, untrack(() => formatActivityText(event, t, locale())));
+  if (event.subject?.iconUrl) patch.icon = event.subject.iconUrl;
   const previous = untrack(activities).find((activity) => activity.id === event.id);
   receiveActivity(patch, previous?.attempt === event.attempt && previous?.state === event.state && (event.state === 'running' || event.state === 'queued'));
 }
