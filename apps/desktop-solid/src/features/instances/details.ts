@@ -19,6 +19,8 @@ export interface InstalledResource {
   id: string;
   kind: ResourceKind;
   filename: string;
+  /** Verified provider identity, absent for unidentified local files. */
+  project?: { source: 'modrinth' | 'curseforge' | 'smithed'; id: string };
   bundled?: boolean;
   name: string;
   author: string;
@@ -389,7 +391,7 @@ export function setResourcesEnabled(
 
 export function removeResources(instanceId: string, ids: string[]) {
   if (nativeInstances) return mutateNativeResources(instanceId, ids, "delete");
-  update(instanceId, (list) => list.filter((item) => !ids.includes(item.id)));
+  update(instanceId, (list) => list.filter((item) => item.bundled || item.readOnly || !ids.includes(item.id)));
 }
 
 export function applyUpdates(instanceId: string, ids: string[]) {

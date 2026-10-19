@@ -37,6 +37,9 @@ import { loadMetadata } from "../../../features/instances/metadata";
 import { instancePending } from "../../../features/instances/native-service";
 import { Icon } from "../../../components/icon";
 import { t } from "../../../localization";
+import { navigate } from "../../../app/router";
+import { projectPath } from "../../../features/browse/browse-model";
+import { prefetchProject } from "../../../features/browse/browse-projects";
 import "./versions-tab.css";
 
 export function VersionsTab(props: { entry: InstanceEntry }) {
@@ -243,6 +246,12 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         }
       >
         {(linked) => {
+          const source = () => linked().source === "CurseForge" ? "curseforge" : "modrinth";
+          const path = () => linked().projectId ? projectPath(source(), linked().projectId!) : undefined;
+          const warmProject = () => {
+            const projectId = linked().projectId;
+            if (projectId) prefetchProject(source(), projectId);
+          };
           const releases = createMemo(
             () => {
               const query = releaseQuery().trim().toLowerCase();
@@ -258,22 +267,35 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
             <section data-vesta="pack-view">
               {/* The pack as one line: what is installed, whether it is current, and its actions. */}
               <header data-vesta="pack-head">
-                <img data-vesta="pack-icon" src={linked().icon} alt="" />
-                <div data-vesta="pack-title">
-                  <span data-vesta="pack-name">
-                    <strong>{linked().name}</strong>
-                    <span data-vesta="source-tag" data-source={linked().source.toLowerCase()}>
-                      {linked().source}
+                <a
+                  data-vesta="pack-identity"
+                  href={path() ? `#${path()}` : undefined}
+                  onPointerEnter={warmProject}
+                  onFocus={warmProject}
+                  onClick={(event) => {
+                    const next = path();
+                    if (!next || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    navigate(next);
+                  }}
+                >
+                  <img data-vesta="pack-icon" src={linked().icon} alt="" />
+                  <div data-vesta="pack-title">
+                    <span data-vesta="pack-name">
+                      <strong>{linked().name}</strong>
+                      <span data-vesta="source-tag" data-source={linked().source.toLowerCase()}>
+                        {linked().source}
+                      </span>
                     </span>
-                  </span>
-                  <span data-vesta="pack-meta">
-                    {linked().installedLabel ?? linked().installed}
-                    <span aria-hidden="true">·</span>
-                    Minecraft {store.state().engine.minecraft}
-                    <span aria-hidden="true">·</span>
-                    {loaderName(store.state().engine.loader)}
-                  </span>
-                </div>
+                    <span data-vesta="pack-meta">
+                      {linked().installedLabel ?? linked().installed}
+                      <span aria-hidden="true">·</span>
+                      Minecraft {store.state().engine.minecraft}
+                      <span aria-hidden="true">·</span>
+                      {loaderName(store.state().engine.loader)}
+                    </span>
+                  </div>
+                </a>
                 <div data-vesta="pack-status">
                   <Show
                     when={updateTarget(linked())}
@@ -413,11 +435,11 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         <Show when={pending()}>
           {(next) => (
             <dl data-vesta="version-comparison">
-              <dt>Minecraft</dt>
+              <dt>{t("versions.minecraft-version")}</dt>
               <dd>
                 {store.state().engine.minecraft} → {next().engine.minecraft}
               </dd>
-              <dt>Modloader</dt>
+              <dt>{t("versions.modloader")}</dt>
               <dd>
                 {store.state().engine.loader}{" "}
                 {store.state().engine.loaderVersion} → {next().engine.loader}{" "}

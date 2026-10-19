@@ -10,7 +10,7 @@ import { findInstance } from '../features/instances/catalog';
 import { detectPlatform } from './platform';
 import { StatusPill } from './status/status-pill';
 import { InboxControl, UpdateControl } from './status/titlebar-status';
-import { route } from './router';
+import { canGoBack, route } from './router';
 import { goBack, transitionTo } from './transition';
 import { isSection, sectionLabels } from '../pages/settings/sections';
 import { t } from '../localization';
@@ -208,16 +208,14 @@ export function Titlebar() {
   return (
     <header data-vesta="titlebar" data-platform={platform} data-tauri-drag-region="deep">
       <div data-vesta="titlebar-start">
-        <Show when={location().back}>
-          {(back) => (
-            <IconButton
-              variant="ghost"
-              size="sm"
-              label={t('common.back')}
-              icon={<Icon name="icons/navigation/arrow-back" size={14} />}
-              onClick={() => goBack(back().to, findInstance(route().section)?.instance.id)}
-            />
-          )}
+        <Show when={canGoBack() || location().back}>
+          <IconButton
+            variant="ghost"
+            size="sm"
+            label={t('common.back')}
+            icon={<Icon name="icons/navigation/arrow-back" size={14} />}
+            onClick={() => goBack(location().back?.to ?? '/library')}
+          />
         </Show>
         <Menu
           placement="bottom-start"

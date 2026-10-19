@@ -26,6 +26,7 @@ import {
   onSettled,
 } from "solid-js";
 import { navigate } from "../../../app/router";
+import { t } from "../../../localization";
 import { VirtualList } from "../../../components/virtual-list";
 import { Icon } from "../../../components/icon";
 import { consoleSession } from "../../../features/instances/console-session";
@@ -125,9 +126,9 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
   const copy = async (filtered: boolean) => {
     try {
       await navigator.clipboard.writeText(raw(filtered));
-      setCopyStatus("Copied");
+      setCopyStatus(t("console.copy-status"));
     } catch {
-      setCopyStatus("Copy failed — select and copy the text below.");
+      setCopyStatus(t("console.copy-failed"));
     }
   };
   const patch = (next: Partial<ReturnType<typeof state>>) =>
@@ -205,30 +206,30 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
       <header data-vesta="console-toolbar">
         <Select
           size="sm"
-          aria-label="Log source"
+          aria-label={t("console.log-source")}
           class="console-source"
           value={state().source}
           onChange={choose}
           options={session.sources().map((item) => ({
             value: item.id,
-            label: item.name,
+            label: item.kind === "live" ? t("console.live-output") : item.name,
             description:
               item.kind === "live"
                 ? props.entry.state.kind === "running"
-                  ? "Live game output"
-                  : "Retained output · game stopped"
+                  ? t("console.source-live-game")
+                  : t("console.source-stopped")
                 : `${item.modified} · ${item.size}`,
           }))}
         />
         <TextField
           size="sm"
           class="console-search"
-          aria-label="Search log"
-          placeholder="Search log"
+          aria-label={t("console.search-log")}
+          placeholder={t("console.search-log")}
           value={state().query}
           onChange={(query) => patch({ query })}
         />
-        <div data-vesta="console-levels" role="group" aria-label="Levels">
+        <div data-vesta="console-levels" role="group" aria-label={t("console.levels")}>
           <For each={levels}>
             {(level) => (
               <button
@@ -258,13 +259,13 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
               variant="ghost"
               size="sm"
               tooltip={false}
-              label="Log actions"
+              label={t("console.log-actions")}
               icon={<Icon name="icons/content/ellipsis-v" />}
             />
           )}
         >
           <Show when={compact()}>
-            <MenuSub label="Levels">
+            <MenuSub label={t("console.levels")}>
               <For each={levels}>
                 {(level) => (
                   <MenuCheckboxItem
@@ -279,33 +280,33 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
             <MenuSeparator />
           </Show>
           <MenuItem onSelect={() => void copy(true)}>
-            Copy displayed output
+            {t("console.copy-displayed")}
           </MenuItem>
-          <MenuItem onSelect={() => void copy(false)}>Copy entire log</MenuItem>
+          <MenuItem onSelect={() => void copy(false)}>{t("console.copy-entire")}</MenuItem>
           <MenuCheckboxItem
             checked={state().wrap}
             onChange={(wrap) => patch({ wrap })}
           >
-            Wrap long lines
+            {t("console.wrap-lines")}
           </MenuCheckboxItem>
           <MenuCheckboxItem checked={metadata()} onChange={setMetadata}>
-            Show levels and threads
+            {t("console.show-levels-threads")}
           </MenuCheckboxItem>
           <MenuSeparator />
           <MenuItem onSelect={() => session.clearDisplay()}>
-            Clear display
+            {t("console.clear-display")}
           </MenuItem>
           <MenuItem
             disabled={!state().hiddenUntil[state().source]}
             onSelect={() => session.restoreDisplay()}
           >
-            Restore displayed output
+            {t("console.restore-display")}
           </MenuItem>
           <MenuItem
             disabled={!nativeInstances}
             onSelect={() => void openNativeLogsFolder(props.entry.instance.id)}
           >
-            Open logs folder
+            {t("console.open-logs")}
           </MenuItem>
           <Show when={props.entry.state.kind === "crashed"}>
             <MenuSeparator />
@@ -325,7 +326,7 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
         data-vesta="console-log"
         data-wrap={state().wrap ? "" : undefined}
         role="region"
-        aria-label={`${source().name} log output`}
+        aria-label={t("console.log-output", { name: source().kind === "live" ? t("console.live-output") : source().name })}
         tabindex={0}
         ref={setViewport}
         onScroll={scroll}
@@ -335,8 +336,8 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
           fallback={
             <p data-vesta="console-empty">
               {state().query || state().levels.length < 4
-                ? "No lines match the current filters."
-                : "No displayed output."}
+                ? t("console.no-filter-matches")
+                : t("console.no-output")}
             </p>
           }
         >
@@ -367,7 +368,7 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
                   });
                 }}
               >
-                Show earlier lines
+                {t("console.show-earlier")}
               </Button>
             </Show>
             <Show when={earlierEnd() !== null}>
@@ -376,7 +377,7 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
                 variant="ghost"
                 onClick={() => setEarlierEnd(null)}
               >
-                Show latest lines
+                {t("console.show-latest")}
               </Button>
             </Show>
             <For
@@ -390,15 +391,15 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
       </div>
       <footer
         data-vesta="console-status"
-        title={`${source().path ?? "Current launcher capture"} · ${source().modified} ${source().size}`}
+        title={`${source().path ?? t("console.current-capture")} · ${source().modified} ${source().size}`}
       >
         <span role="status">
           {copyStatus() ||
             (state().source === "live" && !state().follow
-              ? "Following paused"
+              ? t("console.following-paused")
               : source().kind === "file"
-                ? `${source().path} · ${source().modified} · ${visible().length} of ${session.lines().length} lines`
-                : `${visible().length} of ${session.lines().length} lines`)}
+                ? `${source().path} · ${source().modified} · ${t("console.line-count", { visible: visible().length, total: session.lines().length })}`
+                : t("console.line-count", { visible: visible().length, total: session.lines().length }))}
         </span>
         <Show when={state().source === "live" && !state().follow}>
           <Button
@@ -409,7 +410,7 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
               patch({ follow: true });
             }}
           >
-            Jump to latest
+            {t("console.jump-latest")}
           </Button>
         </Show>
       </footer>

@@ -8,10 +8,11 @@ import {
   type Component,
 } from "solid-js";
 import { isServer } from "@solidjs/web";
-import { canGoBack, navigate, route } from "../../../app/router";
+import { canGoBack, route } from "../../../app/router";
 import { Board } from "../../../components/board";
 import { EmptyState } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
+import { transitionTo } from "../../../app/transition";
 import { resourcesFor, worldsFor } from "../../../features/instances/details";
 import {
   findInstance,
@@ -22,7 +23,6 @@ import {
   instancesLoaded,
 } from "../../../features/instances/native-service";
 import { useNativeDetails } from "../../../features/instances/native-details";
-import { NativeImportDialog } from "../../../features/instances/native-import-dialog";
 import { ConsoleTab } from "./console-tab";
 import { CrashTab } from "./crash-tab";
 import { InstanceHeader } from "./instance-header";
@@ -144,22 +144,14 @@ function InstanceContent(props: { id: string }) {
   const open = (tab: string) => {
     if (tab === "settings") setPreviousTab(active());
     else setPreviousTab(tab);
-    // Tabs swap in place; back goes up to the overview (see goBack). Settings is a sub-page
-    // that back returns from, so it keeps its own entry.
-    navigate(
-      tab === "overview"
-        ? `/library/${props.id}`
-        : `/library/${props.id}/${tab}`,
-      {
-        replace: tab !== "settings",
-      },
-    );
+    // Every section is a real history entry. The instance owner remains mounted,
+    // so changing tabs does not restart its header or native subscriptions.
+    transitionTo(tab === "overview" ? `/library/${props.id}` : `/library/${props.id}/${tab}`);
   };
   const settings = () => route().detail === "settings";
   return (
     <Board fixed class="instance-board">
       <div data-vesta="instance-layout">
-        <NativeImportDialog instanceId={props.id} />
         <InstanceHeader
           entry={entry()}
           compact={settings()}
@@ -201,16 +193,19 @@ function InstanceContent(props: { id: string }) {
               </TabList>
               <For each={tabs()}>
                 {(tab) => (
-                  <TabPanel
-                    value={tab.id}
-                    class={
-                      tab.flush
-                        ? "instance-pane instance-pane-flush"
-                        : "instance-pane"
-                    }
-                  >
-                    <tab.view entry={entry()} />
-                  </TabPanel>
+                  <Show when={active() === tab.id}>
+                    <TabPanel
+                      forceMount
+                      value={tab.id}
+                      class={
+                        tab.flush
+                          ? "instance-pane instance-pane-flush"
+                          : "instance-pane"
+                      }
+                    >
+                      <tab.view entry={entry()} />
+                    </TabPanel>
+                  </Show>
                 )}
               </For>
             </Tabs>

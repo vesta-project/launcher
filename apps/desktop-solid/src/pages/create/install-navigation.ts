@@ -2,9 +2,11 @@ import { navigate } from "../../app/router";
 import type { PackSource } from "../../features/installation/install-service";
 import type { PendingResourceInstall } from "../../features/browse/new-instance-install";
 let pendingResource: PendingResourceInstall | undefined;
-let pendingSource: PackSource | undefined;
+/** Resolve provider metadata inside the destination, so navigation never waits on IPC. */
+export type InstallSourceHandoff = PackSource | (() => Promise<PackSource>);
+let pendingSource: InstallSourceHandoff | undefined;
 /** One-shot handoff from the launcher-import page to archive installation. */
-export function openInstallSource(source: PackSource) {
+export function openInstallSource(source: InstallSourceHandoff) {
   pendingResource = undefined;
   pendingSource = source;
   navigate("/create");

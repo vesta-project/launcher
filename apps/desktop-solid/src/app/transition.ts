@@ -1,123 +1,79 @@
-import { flush, onSettled } from 'solid-js';
+import { flush } from 'solid-js';
 import { setting } from '../features/settings/config';
-import { canGoBack, navigate, parseRoute, route } from './router';
+import { canGoBack, navigate, parseRoute, previousPath, route } from './router';
 
-let active: ViewTransition | undefined;
-let pending: Promise<void> | undefined;
-
-const reducedMotion = () =>
-  setting('reduced_motion') ||
+let ticket = 0;
+let active: { transition: ViewTransition; cleanup: () => void } | undefined;
+const reducedMotion = () => setting('reduced_motion') ||
   (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-/** Wait for Solid's route update, including any held render, before the new snapshot. */
-async function renderRoute(commit: () => void | Promise<void>) {
-  await commit();
-  await new Promise<void>((resolve) => {
-    // Settling can keep deferring while something streams (console output, a live preview);
-    // the snapshot only needs the new route on screen, so cap the wait.
-    const timer = setTimeout(resolve, 300);
-    onSettled(() => {
-      clearTimeout(timer);
-      resolve();
-    });
-    flush();
-  });
+function stopTransition() {
+  active?.transition.skipTransition();
+  active?.cleanup();
+  active = undefined;
 }
 
-/** Names belong to this snapshot pair, never to the resting page. */
-async function runTransition(commit: () => void | Promise<void>, instanceId?: string, animate = true) {
-  if (!animate || typeof document === 'undefined' || !document.startViewTransition || reducedMotion()) {
-    await renderRoute(commit);
+/** Ordinary navigation commits immediately. Only an explicit card-to-header move takes a snapshot. */
+export function transitionTo(to: string, instanceId?: string, options?: { replace?: boolean }) {
+  const current = route();
+  const next = parseRoute(to);
+  const fromHash = typeof location === 'undefined' ? '' : location.hash;
+  const mine = ++ticket;
+  stopTransition();
+  const morph = instanceId && current.page === 'library' && !current.section
+    && next.page === 'library' && next.section === instanceId;
+  if (!morph || typeof document === 'undefined' || !document.startViewTransition || reducedMotion()) {
+    navigate(to, options);
     return;
   }
-
   const named = new Map<HTMLElement, string>();
   const name = (element: HTMLElement | null, value: string) => {
     if (!element || named.has(element)) return;
     named.set(element, element.style.viewTransitionName);
     element.style.viewTransitionName = value;
   };
-  const nameInstance = () => {
-    if (!instanceId || route().page !== 'library') return;
-    const kind = route().section ? 'instance-header' : 'instance-card';
-    if (route().section && route().section !== instanceId) return;
-    const element = [...document.querySelectorAll<HTMLElement>(`[data-vesta="${kind}"]`)].find(
-      (element) => element.dataset.instanceId === instanceId,
-    );
-    name(element ?? null, 'instance-art');
-  };
+  let cleaned = false;
   const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     for (const [element, previous] of named) element.style.viewTransitionName = previous;
   };
-
+  const instanceElement = (kind: string) => [...document.querySelectorAll<HTMLElement>(`[data-vesta="${kind}"]`)]
+    .find((element) => element.dataset.instanceId === instanceId) ?? null;
+  name(document.querySelector('[data-vesta="titlebar"]'), 'titlebar');
+  name(document.querySelector('[data-vesta="rail"]'), 'rail');
+  name(instanceElement('instance-card'), 'instance-art');
   try {
-    name(document.querySelector('[data-vesta="titlebar"]'), 'titlebar');
-    name(document.querySelector('[data-vesta="rail"]'), 'rail');
-    nameInstance();
-    const transition = document.startViewTransition(async () => {
-      await renderRoute(commit);
-      nameInstance();
+    const transition = document.startViewTransition(() => {
+      // A later navigation wins even if this snapshot callback has not run yet.
+      if (mine !== ticket || location.hash !== fromHash) return;
+      navigate(to, options);
+      flush();
+      name(instanceElement('instance-header'), 'instance-art');
     });
-    active = transition;
-    // A skipped/unsupported snapshot can reject ready even though the route committed.
-    void transition.ready.catch(() => {});
-    await transition.finished;
-  } finally {
-    active = undefined;
+    const run = { transition, cleanup };
+    active = run;
+    void transition.ready.catch(() => undefined);
+    void transition.finished.catch(() => undefined).finally(() => {
+      cleanup();
+      if (active === run) active = undefined;
+    });
+  } catch {
     cleanup();
+    if (mine === ticket) navigate(to, options);
   }
 }
 
-/** Finish an interrupted snapshot pair before assigning names for the next one. */
-function transition(commit: () => void | Promise<void>, instanceId?: string, animate = true) {
-  active?.skipTransition();
-  const run = () => runTransition(commit, instanceId, animate);
-  const result = pending ? pending.then(run) : run();
-  const settled = result.catch((error) => console.warn('Route transition failed', error));
-  pending = settled;
-  void settled.then(() => {
-    if (pending === settled) pending = undefined;
-  });
-}
-
-export function transitionTo(to: string, instanceId?: string, options?: { replace?: boolean }) {
-  if (typeof location !== 'undefined' && location.hash.slice(1) === to) return;
+/** Back follows actual tab/page history, without snapshots, settle timers or a transition queue. */
+export function goBack(fallback: string, _instanceId?: string) {
+  ++ticket;
+  stopTransition();
   const current = route();
-  const next = parseRoute(to);
-  const sameInstance =
-    current.page === 'library' && next.page === 'library' && !!current.section && current.section === next.section;
-  const sharedId =
-    instanceId ??
-    (current.page === 'library' ? current.section : undefined) ??
-    (next.page === 'library' ? next.section : undefined);
-  transition(() => navigate(to, options), sharedId, !sameInstance);
-}
-
-/** Back stays inside the snapshot callback until the router has received popstate. */
-export function goBack(fallback: string, instanceId?: string) {
-  const current = route();
-  // Installation Back follows the parent flow, rather than previous providers.
-  if (current.page === 'create') return transitionTo(current.section === 'import' ? '/create' : '/library');
-  // Instance tabs are levels, not history: back from one goes up to the overview, whose own
-  // entry then goes back to wherever the instance was opened from.
-  if (current.page === 'library' && current.section && current.detail && !current.item)
-    if (current.detail !== 'overview' && current.detail !== 'settings')
-      return transitionTo(`/library/${current.section}`, instanceId, { replace: true });
-  if (!canGoBack()) return transitionTo(fallback, instanceId);
-  transition(
-    () =>
-      new Promise<void>((resolve) => {
-        // Transitions run one after another, so a back that never reports must not wedge
-        // every later navigation behind it.
-        const done = () => {
-          clearTimeout(timer);
-          window.removeEventListener('popstate', done);
-          resolve();
-        };
-        const timer = setTimeout(done, 500);
-        window.addEventListener('popstate', done);
-        history.back();
-      }),
-    instanceId ?? (current.page === 'library' ? current.section : undefined),
-  );
+  // Import Back remains the install-flow parent, rather than a previously selected provider.
+  if (current.page === 'create' && current.section === 'import' && previousPath() !== '/create') {
+    navigate('/create', { replace: true });
+    return;
+  }
+  if (canGoBack()) history.back();
+  else navigate(fallback, { replace: true });
 }

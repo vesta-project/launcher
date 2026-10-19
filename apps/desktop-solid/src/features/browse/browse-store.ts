@@ -401,7 +401,7 @@ export async function loadResults(q: BrowseQuery, force = false) {
     publish(cached.data!);
     setWarning(false);
   }
-  setPending(true);
+  setPending(!searchCache.isFresh(key));
   setFailure(undefined);
   try {
     const set = await searchCache.read(key, fetchPage(q, key));
@@ -424,6 +424,19 @@ export async function loadResults(q: BrowseQuery, force = false) {
       setFailure(errorText(reason));
     }
   }
+}
+
+/** Warm the exact upcoming query without changing visible filters, target, results or scroll. */
+export function prefetchBrowse(id?: string) {
+  const current = untrack(query);
+  const instance = id && id !== appliedTarget ? findInstance(id)?.instance : undefined;
+  const q = instance ? normalizeQuery({ ...current, page: 1,
+    gameVersion: instance.minecraftVersion,
+    loader: typeUsesLoader(current.type) && instance.modloader !== 'vanilla' ? instance.modloader : null,
+  }) : current;
+  const key = queryKey(q);
+  ensureCategories(q.source);
+  void searchCache.read(key, fetchPage(q, key)).catch(() => undefined);
 }
 
 export const retry = () => loadResults(untrack(query), true);

@@ -25,24 +25,7 @@
     scrollbar-color: var(--vesta-color-border-strong) transparent;
   }
 
-  /* Grain overlay for the panel; on the frame so it does not scroll with the board's content. */
-  :where([data-vesta='board-frame'])::after {
-    content: '';
-    position: absolute;
-    inset: var(--board-inset);
-    border-radius: var(--vesta-radius-container);
-    pointer-events: none;
-    opacity: var(--vesta-theme-grain-opacity, 0);
-    background-image: var(--vesta-theme-grain-image, none);
-    background-size: 128px 128px;
-    mix-blend-mode: soft-light;
-  }
-
-  @supports (mix-blend-mode: overlay) {
-    :where([data-vesta='board-frame'])::after {
-      mix-blend-mode: overlay;
-    }
-  }
+  /* The shell owns page grain; do not paint another texture over board content. */
 
   /* Less framing as the window narrows, like the demo. */
   @container app (max-width: 640px) {

@@ -6,6 +6,7 @@ import { logCatchup } from './native-details-model';
 import { createSignal, untrack } from "solid-js";
 import { logFor } from "./details";
 import { parseLog, type ParsedLog } from "./interaction-utils";
+import { t } from "../../localization";
 
 export interface LogSource {
   id: string;
@@ -18,10 +19,10 @@ export interface LogSource {
 export const logSources: LogSource[] = [
   {
     id: "live",
-    name: "Live output",
+    name: t("console.live-output"),
     kind: "live",
     size: "",
-    modified: "Current launcher capture",
+    modified: t("console.current-capture"),
   },
   {
     id: "session",

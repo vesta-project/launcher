@@ -1,3 +1,4 @@
+import { useNativeDropZone } from '../../features/file-drop/zone';
 import {
   enrichLocalPack,
   packArtwork,
@@ -68,6 +69,7 @@ export function CreatePage() {
 }
 
 function InstanceInstallForm() {
+  const sourceHandoff = takeInstallSource();
   const [pendingResource, setPendingResource] = createSignal(takeResourceInstall(), { name: "installPendingResource" });
   const [name, setName] = createSignal("", { name: "installName" });
   const [icon, setIcon] = createSignal(defaultInstanceIcons[0].value, { name: "installIcon" });
@@ -78,7 +80,7 @@ function InstanceInstallForm() {
   const [memory, setMemory] = createSignal([2048, 4096], { name: "installMemory" });
   const [busy, setBusy] = createSignal(false, { name: "installSubmitting" });
   const [matching, setMatching] = createSignal(false, { name: "installPackMatching" });
-  const [reading, setReading] = createSignal(false, { name: "installSourceLoading" });
+  const [reading, setReading] = createSignal(!!sourceHandoff, { name: "installSourceLoading" });
   const [error, setError] = createSignal("", { name: "installError" });
   const [source, setSource] = createSignal<PackSource>();
   const [pack, setPack] = createSignal<PackInfo>();
@@ -168,8 +170,10 @@ function InstanceInstallForm() {
       nameEdited = iconEdited = true;
       setExperimental(true);
     }
-    const handoff = takeInstallSource();
-    if (handoff) void loadSource(handoff);
+    if (sourceHandoff) {
+      if (typeof sourceHandoff === "function") void resolveSource(sourceHandoff);
+      else void loadSource(sourceHandoff);
+    }
     void loadMetadata();
     if (nativeInstances)
       void Promise.all([
@@ -194,6 +198,21 @@ function InstanceInstallForm() {
       setUploadedInstanceIcons((icons) => [...new Set([...icons, value])]);
     } catch (reason) {
       if (!disposed) setError(String(reason));
+    }
+  };
+  const resolveSource = async (resolve: () => Promise<PackSource>) => {
+    const generation = ++request;
+    setReading(true);
+    setError("");
+    try {
+      const next = await resolve();
+      // Back, a native drop or another source choice retires this handoff.
+      if (disposed || generation !== request) return;
+      await loadSource(next);
+    } catch (reason) {
+      if (!disposed && generation === request) setError(String(reason));
+    } finally {
+      if (!disposed && generation === request) setReading(false);
     }
   };
   const loadSource = async (next: PackSource) => {
@@ -240,18 +259,24 @@ function InstanceInstallForm() {
             if (!disposed && generation === request) setMatching(false);
           });
       }
-      // Archive files remain tied to their exact contents. Online releases use concrete download URLs.
+      // The selected release is already usable. Optional release switching must not
+      // keep the form hidden, and reuses the same cache as Browse and hover prefetch.
+      if (next.online) setReleases([next.online.release]);
       if (next.kind === "url") {
-        try {
-          const versions = (await packReleases(info)).filter((version) => version.download_url);
-          if (!disposed && generation === request) {
-            setReleases(versions);
-            if (info.modpackId && !versions.some((version) => version.id === info.modpackVersionId))
-              setReleaseError(t("install.release-unavailable"));
-          }
-        } catch (reason) {
-          if (!disposed && generation === request) setReleaseError(String(reason));
-        }
+        void packReleases(info).then((items) => {
+          if (disposed || generation !== request) return;
+          const versions = items.filter((version) => version.download_url);
+          // A pinned release can be absent from a provider's paginated list.
+          // Keep its exact download instead of discarding an already valid selection.
+          const selected = next.online?.release;
+          setReleases(selected && !versions.some((version) => version.id === selected.id)
+            ? [selected, ...versions] : versions);
+          if (!selected && info.modpackId && !versions.some((version) => version.id === info.modpackVersionId))
+            setReleaseError(t("install.release-unavailable"));
+        }).catch((reason) => {
+          // Switching releases is optional when Browse supplied an exact release.
+          if (!disposed && generation === request && !next.online) setReleaseError(String(reason));
+        });
       }
     } catch (reason) {
       if (!disposed && generation === request) setError(String(reason));
@@ -313,9 +338,14 @@ function InstanceInstallForm() {
       if (!disposed) setBusy(false);
     }
   };
+  let dropElement: HTMLFormElement | undefined;
+  useNativeDropZone({ element: () => dropElement, accept: 'files', extensions: ['.zip', '.mrpack'], disabled: busy,
+    drop: (paths) => { if (paths.length === 1) void loadSource({ kind: 'file', value: paths[0]! }); else setError(t('drop.single-pack')); },
+  });
   return (
     <Board fixed>
       <form
+        ref={(element) => { dropElement = element; }}
         data-vesta="instance-install"
         data-modpack={pack() ? "" : undefined}
         onSubmit={(event) => {
@@ -449,6 +479,7 @@ function InstanceInstallForm() {
                             value: item.id,
                             label: item.version_number,
                           }))}
+                          pageSize={80}
                           onChange={chooseRelease}
                           aria-label={t("install.release")}
                           disabled={locked()}

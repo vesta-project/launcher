@@ -1,3 +1,9 @@
+import { useNavigationPreloading } from "./navigation-preload";
+import { NativeImportDialog } from '../features/instances/native-import-dialog';
+import { useNativeDropZone } from '../features/file-drop/zone';
+import { DropTargetDialog, reviewUntargetedDrop } from '../features/file-drop/drop-target-dialog';
+import { startNativeFileDrop } from '../features/file-drop/native-bridge';
+import { onSettled } from 'solid-js';
 import { useWindowEffects } from '../features/settings/window-effects';
 import { useThemeRuntime } from '../features/settings/theme-runtime';
 import { Match, Switch, Show, onCleanup } from 'solid-js';
@@ -29,7 +35,9 @@ import { useShortcutRuntime } from '../features/settings/shortcut-runtime';
 
 /** Window frame: titlebar across the top, then the rail beside the scene. */
 export function Shell() {
+  onSettled(() => startNativeFileDrop());
   usePreferences();
+  useNavigationPreloading();
   useThemeRuntime();
   useWindowEffects();
   useAccountSync();
@@ -41,6 +49,8 @@ export function Shell() {
   useInstanceSync();
   useInstanceShortcutRuntime();
   useMouseBack();
+  let dropElement: HTMLElement | undefined;
+  useNativeDropZone({ element: () => dropElement, disabled: () => route().page === 'create', drop: reviewUntargetedDrop });
 
   return (
     <div data-vesta="shell">
@@ -50,6 +60,8 @@ export function Shell() {
       <ToastRegion />
       <LinkPreview />
       <ExternalLinkDialog />
+      <DropTargetDialog />
+      <NativeImportDialog />
       <Show when={instanceError()}><div data-vesta="instance-service-error" role="alert">
         <span>{instanceError()}</span>
         <Button size="sm" variant="ghost" onClick={()=>{clearInstanceError();void refreshNativeInstances(true);}}>{t('common.retry')}</Button>
@@ -57,7 +69,7 @@ export function Shell() {
       </div></Show>
       <div data-vesta="shell-body">
         <Rail />
-        <main data-vesta="scene" id="scene" tabindex={-1}>
+        <main ref={(element) => { dropElement = element; }} data-vesta="scene" id="scene" tabindex={-1}>
           <Switch>
             <Match when={route().page === 'library'}>
               <LibraryPage />
@@ -85,9 +97,15 @@ function useMouseBack() {
     if (event.button !== 3) return;
     event.preventDefault();
     const current = route();
-    if (current.page === 'library' && !current.section) return;
     goBack('/library', findInstance(current.section)?.instance.id);
   };
+  const preventNativeBack = (event: MouseEvent) => { if (event.button === 3) event.preventDefault(); };
+  window.addEventListener('mousedown', preventNativeBack);
+  window.addEventListener('auxclick', preventNativeBack);
   window.addEventListener('mouseup', onMouseUp);
-  onCleanup(() => window.removeEventListener('mouseup', onMouseUp));
+  onCleanup(() => {
+    window.removeEventListener('mousedown', preventNativeBack);
+    window.removeEventListener('auxclick', preventNativeBack);
+    window.removeEventListener('mouseup', onMouseUp);
+  });
 }

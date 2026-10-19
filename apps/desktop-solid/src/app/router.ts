@@ -65,7 +65,7 @@ export const route = (): Route => parseRoute(path());
  * (settings sections) that back should skip over.
  */
 export function navigate(to: string, options?: { replace?: boolean }) {
-  if (!hasWindow || location.hash.slice(1) === to) return;
+  if (!hasWindow || read() === to) return;
   // The History API writes the entry and its depth in one step. Assigning location.hash and
   // then stamping it races WebKit's own entry bookkeeping, which left back with a dead step.
   if (options?.replace) history.replaceState({ ...history.state, vesta: historyDepth() }, '', `#${to}`);

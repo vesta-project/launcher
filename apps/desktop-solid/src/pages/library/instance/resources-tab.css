@@ -191,6 +191,19 @@
     align-items: center;
     gap: var(--vesta-space-3);
     min-inline-size: 0;
+    color: inherit;
+    text-decoration: none;
+    cursor: default;
+  }
+
+  :where([data-vesta="resource-identity"][href]):hover :where([data-vesta="resource-title"]) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  :where([data-vesta="resource-identity"]):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-space-1);
   }
 
   :where([data-vesta="resource-identity"] > img) {

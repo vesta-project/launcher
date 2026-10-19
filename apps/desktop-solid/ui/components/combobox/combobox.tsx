@@ -21,6 +21,8 @@ export interface ComboboxProps {
   options: ComboboxOption[];
   /** Bound large catalogues; searching still considers every option. */
   maxOptions?: number;
+  /** Render an initial batch, then append more near the bottom of the menu. */
+  pageSize?: number;
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
@@ -52,8 +54,11 @@ export function Combobox(props: ComboboxProps) {
   // A selected label is display text, not a search query. Only an actual input
   // event starts filtering; programmatic value/focus updates must not narrow it.
   const [query, setQuery] = createSignal<string | undefined>(undefined, { name: 'comboboxQuery' });
+  const [pages, setPages] = createSignal(1, { name: 'comboboxPages' });
   let isOpen = false;
-  const resetSearchForOpening = () => { if (!isOpen) setQuery(undefined); };
+  const resetSearchForOpening = () => {
+    if (!isOpen) { setQuery(undefined); setPages(1); }
+  };
   const textFilter = createFilter({ sensitivity: 'base' });
   const matches = (option: ComboboxOption) => {
     const text = query();
@@ -70,8 +75,18 @@ export function Combobox(props: ComboboxProps) {
   const value = createMemo(() => props.value, { name: 'comboboxValue' });
   const find = (key: string | undefined) => options().find((option) => option.value === key);
   const selected = createMemo(() => find(value()), { name: 'comboboxSelected' });
-  const displayed = createMemo(() => boundOptions(options(), matches, selected(), props.maxOptions),
+  const batchSize = () => props.pageSize === undefined ? undefined : Math.max(1, Math.floor(props.pageSize));
+  const displayed = createMemo(() => boundOptions(options(), matches, selected(),
+    batchSize() === undefined ? props.maxOptions : batchSize()! * pages()),
     { name: 'comboboxCollection' });
+  const revealMore = (event: Event & { currentTarget: HTMLDivElement }) => {
+    const size = batchSize();
+    const menu = event.currentTarget;
+    if (size !== undefined && size * untrack(pages) < untrack(options).length
+      && menu.scrollHeight - menu.scrollTop - menu.clientHeight < 100) {
+      setPages((count) => count + 1);
+    }
+  };
 
   return (
     <KobalteCombobox<ComboboxOption>
@@ -134,7 +149,7 @@ export function Combobox(props: ComboboxProps) {
       </Show>
       <KobalteCombobox.HiddenSelect />
       <KobalteCombobox.Control data-vesta="field-control">
-        <KobalteCombobox.Input data-vesta="field-input" aria-label={props['aria-label']} onInput={(event) => setQuery(event.currentTarget.value)}
+        <KobalteCombobox.Input data-vesta="field-input" aria-label={props['aria-label']} onInput={(event) => { setPages(1); setQuery(event.currentTarget.value); }}
           onFocus={resetSearchForOpening}
           onClick={resetSearchForOpening}
           onKeyDown={(event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') resetSearchForOpening(); }}
@@ -154,7 +169,7 @@ export function Combobox(props: ComboboxProps) {
         </Show>
       </Show>
       <KobalteCombobox.Portal mount={mount}>
-        <KobalteCombobox.Content data-vesta="select-content" data-vesta-popover-owner={popoverOwners.join(' ') || undefined}>
+        <KobalteCombobox.Content data-vesta="select-content" onScroll={revealMore} data-vesta-popover-owner={popoverOwners.join(' ') || undefined}>
           <KobalteCombobox.Listbox data-vesta="select-listbox" />
         </KobalteCombobox.Content>
       </KobalteCombobox.Portal>

@@ -558,4 +558,23 @@
     transform: none;
     transition: none;
   }
+  :where([data-vesta='instance-card-drop-hint']) {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3);
+    background: color-mix(in oklab, var(--vesta-color-canvas) 85%, transparent);
+    color: var(--vesta-color-text);
+    text-align: center;
+    text-shadow: none;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    pointer-events: none;
+  }
+
 }

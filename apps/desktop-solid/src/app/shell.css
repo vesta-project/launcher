@@ -37,11 +37,6 @@
     mix-blend-mode: soft-light;
   }
 
-  @supports (mix-blend-mode: overlay) {
-    :where([data-vesta='shell'])::after {
-      mix-blend-mode: overlay;
-    }
-  }
 
   /*
    * With a native window effect the page itself must not paint: the shell draws the one

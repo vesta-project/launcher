@@ -1,0 +1,10 @@
+@layer launcher {
+  [data-native-drop="active"] {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-accent);
+    outline-offset: -2px;
+  }
+  [data-native-drop="rejected"] {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-danger);
+    outline-offset: -2px;
+  }
+}

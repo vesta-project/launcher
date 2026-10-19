@@ -1,3 +1,5 @@
+import { useNativeDropZone } from '../../../features/file-drop/zone';
+import { importNativePaths } from '../../../features/instances/native-import-dialog';
 import {
   Button,
   Checkbox,
@@ -38,6 +40,8 @@ import "./worlds-tab.css";
 export function WorldsTab(props: { entry: InstanceEntry }) {
   const busy = () => nativeInstances && (instancePending(props.entry.instance.id) || ["running", "warming", "installing"].includes(props.entry.state.kind));
   const id = () => props.entry.instance.id;
+  let dropElement: HTMLDivElement | undefined;
+  useNativeDropZone({ element: () => dropElement, disabled: busy, drop: (paths) => { void importNativePaths(id(), paths); } });
   const [query, setQuery] = createSignal("");
   const [sort, setSort] = createSignal("recency");
   const [deleting, setDeleting] = createSignal<WorldInfo>();
@@ -88,7 +92,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
     );
   };
   return (
-    <div data-vesta="worlds">
+    <div ref={(element) => { dropElement = element; }} data-vesta="worlds">
       <Show
         when={chosen()}
         fallback={

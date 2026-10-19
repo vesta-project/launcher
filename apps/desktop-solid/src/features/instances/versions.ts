@@ -176,15 +176,19 @@ export async function applyEngineVersion(
 }
 export function unlinkPack(id: string, removeBundled: boolean) {
   if (nativeInstances) return performNative(id, async (record) => {
+    let bundled: NativeResource[] = [];
     if (removeBundled) {
       await invoke('backfill_modpack_resource_provenance', { instanceId: record.id });
-      const rows = await invoke<NativeResource[]>('get_installed_resources', { instanceId: record.id });
-      for (const row of rows.filter((row) => row.source_kind === 'modpack')) {
-        await invoke('delete_resource', { instanceId: record.id, resourceId: row.id });
-      }
+      bundled = (await invoke<NativeResource[]>('get_installed_resources', { instanceId: record.id }))
+        .filter((row) => row.source_kind === 'modpack');
     }
+    // Explicit unlink releases ownership before its optional cleanup. Ordinary
+    // Resources deletion must never remove files while the pack owns them.
     await invoke('update_instance', { instanceData: { ...record, modpackId: null, modpackVersionId: null, modpackPlatform: null, modpackIconUrl: null } });
     await invoke('clear_modpack_resource_provenance', { instanceId: record.id });
+    for (const row of bundled) {
+      await invoke('delete_resource', { instanceId: record.id, resourceId: row.id });
+    }
   });
   versionStore(id).setState((state) => ({ ...state, pack: undefined }));
   unlinkBundledResources(id, removeBundled);

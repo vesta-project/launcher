@@ -1,3 +1,6 @@
+import { useNativeDropZone } from '../../../features/file-drop/zone';
+import { importNativePaths } from '../../../features/instances/native-import-dialog';
+import { resourceScope } from '../../../features/instances/native-details-model';
 import {
   Button,
   Checkbox,
@@ -11,12 +14,14 @@ import {
   TextField,
 } from "@vesta/ui";
 import { Show, createMemo, createSignal, untrack } from "solid-js";
-import { useNativeDetails } from "../../../features/instances/native-details";
+import { revealNativeResource, useNativeDetails } from "../../../features/instances/native-details";
 import {
   nativeInstances,
   instancePending,
 } from "../../../features/instances/native-service";
 import { navigate } from "../../../app/router";
+import { projectPath } from "../../../features/browse/browse-model";
+import { prefetchProject } from "../../../features/browse/browse-projects";
 import { EmptyState } from "../../../components/empty-state";
 import { VirtualList } from "../../../components/virtual-list";
 import { Icon } from "../../../components/icon";
@@ -84,6 +89,11 @@ function ResourceList(props: {
     nativeInstances &&
     (instancePending(props.entry.instance.id) ||
       ["running", "warming", "installing"].includes(props.entry.state.kind));
+  let dropElement: HTMLDivElement | undefined;
+  useNativeDropZone({ element: () => dropElement, disabled: busy, drop: (paths) => {
+    const scope = resourceScope(props.scope);
+    void importNativePaths(props.entry.instance.id, paths, scope.world);
+  } });
   const [filter, setFilter] = createSignal<Filter>("all", {
     name: "resources:filter",
   });
@@ -158,6 +168,9 @@ function ResourceList(props: {
     selectedItems()
       .filter((item) => item.update)
       .map((item) => item.id);
+  const removableIds = createMemo(() => new Set(all().filter((item) => !item.bundled && !item.readOnly).map((item) => item.id)),
+    { name: "resources:removable" });
+  const canRemove = (ids: readonly string[]) => ids.length > 0 && ids.every((id) => removableIds().has(id));
   /** One toggle for the selection: disable if anything is on, otherwise enable. */
   const anyEnabled = () => selectedItems().some((item) => item.enabled);
   const clear = () => setSelected([]);
@@ -206,6 +219,27 @@ function ResourceList(props: {
     <div
       data-vesta="table-row"
       role="presentation"
+      onPointerEnter={() => {
+        const project = item().project;
+        if (project) prefetchProject(project.source, project.id);
+      }}
+      onClick={(event) => {
+        const project = item().project;
+        if (!project || event.defaultPrevented || event.button !== 0
+          || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const target = event.target;
+        // Solid portal events can bubble through their logical owner even when
+        // the menu is mounted outside the row in the DOM.
+        if (!(target instanceof Node) || !event.currentTarget.contains(target)) return;
+        // The name stays a keyboard-accessible link. All other row space opens
+        // details, while embedded controls keep their own actions.
+        if (target instanceof Element && target.closest(
+          'a, button, input, select, textarea, label, [role="button"], [role="checkbox"], [role="switch"], [data-vesta="checkbox"], [data-vesta="switch"]',
+        )) return;
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed && event.currentTarget.contains(selection.anchorNode)) return;
+        navigate(projectPath(project.source, project.id));
+      }}
       class={{
         "resource-row": true,
         "row-selected": selectedSet().has(item().id),
@@ -223,7 +257,16 @@ function ResourceList(props: {
         />
       </div>
       <div data-vesta="table-cell" role="cell" class="col-name">
-        <div data-vesta="resource-identity">
+        <a data-vesta="resource-identity"
+          href={item().project ? `#${projectPath(item().project!.source, item().project!.id)}` : undefined}
+          onFocus={() => { const project = item().project; if (project) prefetchProject(project.source, project.id); }}
+          onClick={(event) => {
+            const project = item().project;
+            if (!project || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            navigate(projectPath(project.source, project.id));
+          }}
+        >
           <img
             src={item().icon}
             alt=""
@@ -246,7 +289,7 @@ function ResourceList(props: {
               </span>
             </span>
           </span>
-        </div>
+        </a>
       </div>
       <div data-vesta="table-cell" role="cell" class="col-version">
         <span data-vesta="resource-version">
@@ -330,15 +373,16 @@ function ResourceList(props: {
                 {t("common.update-to", { version: item().update! })}
               </MenuItem>
             </Show>
-            <MenuItem icon={<Icon name="icons/content/folder" />} disabled>
+            <MenuItem icon={<Icon name="icons/content/folder" />} disabled={!nativeInstances}
+              onSelect={() => void revealNativeResource(props.scope, item().id)}>
               {t("resources.show-in-folder")}
             </MenuItem>
             <MenuSeparator />
             <MenuItem
-              disabled={busy() || item().readOnly}
+              disabled={busy() || !canRemove([item().id])}
               tone="danger"
               icon={<Icon name="icons/actions/delete" />}
-              onSelect={() => setDeleting([item().id])}
+              onSelect={() => { if (canRemove([item().id])) setDeleting([item().id]); }}
             >
               {t("resources.remove")}
             </MenuItem>
@@ -349,7 +393,7 @@ function ResourceList(props: {
   );
 
   return (
-    <div data-vesta="resources">
+    <div ref={(element) => { dropElement = element; }} data-vesta="resources">
       <div
         data-vesta="resources-toolbar"
         data-selecting={count() ? "" : undefined}
@@ -395,6 +439,7 @@ function ResourceList(props: {
                 size="sm"
                 tone="accent"
                 icon={<Icon name="icons/actions/add" />}
+                data-preload-browse={props.entry.instance.id}
                 onClick={() => navigate(`/browse/for/${props.entry.instance.id}`)}
               >
                 {t("resources.add")}
@@ -441,10 +486,10 @@ function ResourceList(props: {
               </Button>
               <Button
                 size="sm"
-                disabled={busy()}
+                disabled={busy() || !canRemove([...selectedSet()])}
                 tone="danger"
                 icon={<Icon name="icons/actions/delete" />}
-                onClick={() => setDeleting([...selectedSet()])}
+                onClick={() => { const ids = [...selectedSet()]; if (canRemove(ids)) setDeleting(ids); }}
               >
                 {t("resources.remove-selected")}
               </Button>
@@ -652,8 +697,9 @@ function ResourceList(props: {
             </Button>
             <Button
               tone="danger"
-              disabled={busy()}
+              disabled={busy() || !canRemove(deleting())}
               onClick={() => {
+                if (!canRemove(deleting())) return;
                 removeResources(props.scope, deleting());
                 setSelected((list) =>
                   list.filter((id) => !deleting().includes(id)),

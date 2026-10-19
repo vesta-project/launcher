@@ -25,6 +25,8 @@ export interface NativeDatapack {
 export function resourceFromNative(row: NativeResource, icon: string, update?: NativeVersion): InstalledResource {
   return {
     id: String(row.id), kind: row.resource_type as InstalledResource['kind'],
+    project: row.remote_id && ['modrinth', 'curseforge', 'smithed'].includes(row.platform)
+      ? { source: row.platform as NonNullable<InstalledResource['project']>['source'], id: row.remote_id } : undefined,
     filename: row.local_path.split(/[\\/]/).at(-1) || row.local_path,
     name: row.display_name, author: '', version: row.current_version, enabled: row.is_enabled,
     bundled: row.source_kind === 'modpack', update: update?.version_number,

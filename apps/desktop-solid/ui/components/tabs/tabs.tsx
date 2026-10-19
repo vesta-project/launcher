@@ -99,6 +99,8 @@ export function Tab(props: TabProps) {
 }
 
 export interface TabPanelProps {
+  /** Render immediately when an external owner controls mounting, without presence delays. */
+  forceMount?: boolean;
   /** The `value` of the tab that shows this panel. */
   value: string;
   class?: string;
@@ -108,7 +110,7 @@ export interface TabPanelProps {
 
 export function TabPanel(props: TabPanelProps) {
   return (
-    <KobalteTabs.Content data-vesta="tab-panel" value={props.value} class={props.class} style={props.style}>
+    <KobalteTabs.Content data-vesta="tab-panel" value={props.value} forceMount={props.forceMount} class={props.class} style={props.style}>
       {props.children}
     </KobalteTabs.Content>
   );

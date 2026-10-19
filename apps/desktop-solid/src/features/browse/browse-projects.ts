@@ -146,14 +146,19 @@ export function seedProjects(hits: readonly ResourceProject[]) {
 const maxInFlight = 2;
 const maxQueued = 6;
 let inFlight = 0;
+const prefetching = new Set<string>();
 const queue: { platform: SourceId; id: string }[] = [];
 
 function pump() {
   while (inFlight < maxInFlight && queue.length) {
     const next = queue.shift()!;
+    const key = projectKey(next.platform, next.id);
+    if (projectCache.isFresh(key) && versionsCache.isFresh(key)) continue;
+    prefetching.add(key);
     inFlight++;
     void Promise.allSettled([loadProject(next.platform, next.id), loadVersions(next.platform, next.id)]).then(() => {
       inFlight--;
+      prefetching.delete(key);
       pump();
     });
   }
@@ -161,7 +166,8 @@ function pump() {
 
 export function prefetchProject(platform: SourceId, id: string) {
   const key = projectKey(platform, id);
-  if (queue.some((item) => projectKey(item.platform, item.id) === key)) return;
+  if (prefetching.has(key) || (projectCache.isFresh(key) && versionsCache.isFresh(key))
+    || queue.some((item) => projectKey(item.platform, item.id) === key)) return;
   queue.push({ platform, id });
   while (queue.length > maxQueued) queue.shift();
   pump();

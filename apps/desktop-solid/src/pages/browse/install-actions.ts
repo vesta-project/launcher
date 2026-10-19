@@ -53,20 +53,21 @@ function packRelease(versions: readonly ResourceVersion[], minecraft: string | n
   )[0];
 }
 
-async function startPack(project: ResourceProject, pinned?: ResourceVersion) {
-  try {
-    const release = pinned ?? packRelease(await loadVersions(project.source, project.id), gameVersion(), loader());
+function startPack(project: ResourceProject, pinned?: ResourceVersion) {
+  // Capture the choice now; later filter changes must not change the requested release.
+  const minecraft = gameVersion();
+  const packLoader = loader();
+  openInstallSource(async () => {
+    const release = pinned ?? packRelease(await loadVersions(project.source, project.id), minecraft, packLoader);
     const url = release
       ? hasDownloadableArtifact(release)
         ? release.download_url || release.files?.[0]?.url
         : undefined
       : undefined;
     if (!release || !url) throw new Error(t('install.release-unavailable'));
-    // Preserve provider identity and the exact release instead of re-inferring them from a CDN URL.
-    openInstallSource({ kind: 'url', value: url, online: { project, release } });
-  } catch (reason) {
-    setNotice({ tone: 'danger', text: t('browse.install-failed', { message: String(reason) }) });
-  }
+    // Preserve provider identity and exact release; no archive download before confirmation.
+    return { kind: 'url', value: url, online: { project, release } };
+  });
 }
 
 export function reportOutcome(project: ResourceProject, instanceName: string, outcome: InstallOutcome) {

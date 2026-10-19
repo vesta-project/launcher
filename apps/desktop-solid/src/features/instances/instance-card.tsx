@@ -55,6 +55,7 @@ export interface InstanceCardActions {
 }
 
 export interface InstanceCardProps extends InstanceCardActions {
+  dropState?: 'active' | 'rejected';
   pending?: boolean;
   instance: InstanceCardData;
   state?: InstanceCardState;
@@ -356,6 +357,12 @@ export function InstanceCard(props: InstanceCardProps) {
             </Show>
           </div>
         </div>
+      </Show>
+      <Show when={props.dropState}>
+        <span data-vesta="instance-card-drop-hint" data-state={props.dropState}>
+          <Icon name="icons/actions/add" size={20} />
+          <span>{t(props.dropState === 'active' ? 'drop.add-to-instance' : 'drop.supported-files')}</span>
+        </span>
       </Show>
     </div>
   );

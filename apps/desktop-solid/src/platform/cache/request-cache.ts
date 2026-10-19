@@ -68,6 +68,11 @@ export class RequestCache<T> {
     return entry;
   }
 
+  isFresh(key: string): boolean {
+    const entry = this.entries.get(key);
+    return !!entry?.hasData && this.now() < entry.freshUntil;
+  }
+
   peek(key: string): CacheSnapshot<T> | undefined {
     const entry = this.entries.get(key);
     return entry && this.snapshot(entry);

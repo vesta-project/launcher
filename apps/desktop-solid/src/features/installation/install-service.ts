@@ -1,3 +1,5 @@
+import { loadVersions } from "../browse/browse-projects";
+import { hasDownloadableArtifact, isSourceId } from "../browse/browse-model";
 import { onlinePackInfo, type OnlinePackSelection } from "./online-pack";
 import type { PackSourceMatch } from "./pack-metadata";
 import { invoke } from "@tauri-apps/api/core";
@@ -45,14 +47,15 @@ export const readPack = (source: PackSource): Promise<PackInfo> =>
     source.kind === "file" ? "get_modpack_info" : "get_modpack_info_from_url",
     source.kind === "file" ? { path: source.value } : { url: source.value },
   );
-export const packReleases = (info: PackInfo) =>
-  info.modpackId && info.modpackPlatform
-    ? invoke<PackRelease[]>("get_resource_versions", {
-        platform: info.modpackPlatform,
-        projectId: info.modpackId,
-        ignoreCache: false,
-      })
+/** Share Browse's version cache and in-flight reads instead of repeating the same IPC. */
+export const packReleases = (info: PackInfo): Promise<PackRelease[]> =>
+  info.modpackId && info.modpackPlatform && isSourceId(info.modpackPlatform)
+    ? loadVersions(info.modpackPlatform, info.modpackId).then((versions) => versions.map((version) => ({
+        ...version,
+        download_url: hasDownloadableArtifact(version) ? version.download_url || version.files?.[0]?.url || "" : "",
+      })))
     : Promise.resolve([]);
+
 export async function installationDefaults() {
   return invoke<{ default_min_memory: number; default_max_memory: number }>("get_config");
 }

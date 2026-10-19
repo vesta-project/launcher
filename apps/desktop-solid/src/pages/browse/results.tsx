@@ -105,6 +105,21 @@ export function Results() {
     if (key) rememberScroll(key, top);
   });
 
+  // Warm only the first two cards after rendering; hover/focus uses the same bounded queue.
+  createEffect(
+    () => results()?.key,
+    () => {
+      const projects = untrack(() => results()?.hits.slice(0, 2) ?? []);
+      const warm = () => projects.forEach((project) => prefetchProject(project.source, project.id));
+      if (typeof requestIdleCallback === 'function') {
+        const handle = requestIdleCallback(warm, { timeout: 1500 });
+        return () => cancelIdleCallback(handle);
+      }
+      const timer = setTimeout(warm, 300);
+      return () => clearTimeout(timer);
+    },
+  );
+
   const hover = (event: PointerEvent) => {
     const card = cardOf(event.target);
     if (!card || card === hoveredCard) return;
@@ -112,7 +127,7 @@ export function Results() {
     hoveredCard = card;
     hoverTimer = setTimeout(
       () => prefetchProject(card.dataset.platform as SourceId, card.dataset.project as string),
-      250,
+      150,
     );
   };
   const leave = (event: PointerEvent) => {

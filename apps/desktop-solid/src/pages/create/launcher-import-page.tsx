@@ -1,3 +1,4 @@
+import { goBack } from "../../app/transition";
 import { Button, IconButton, Select, TextField } from "@vesta/ui";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { open as openFolder } from "@tauri-apps/plugin-shell";
@@ -552,7 +553,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
         </div>
         <footer data-vesta="install-footer">
           <span data-vesta="import-footer-selection">{!dirty() ? current()?.name : undefined}</span>
-          <Button variant="ghost" onClick={() => navigate("/create")} disabled={busy()}>
+          <Button variant="ghost" onClick={() => goBack("/create")} disabled={busy()}>
             {t("common.cancel")}
           </Button>
           <Button
@@ -574,7 +575,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
           }}
           onLauncher={(value) => {
             setChangeImport(false);
-            navigate(`/create/import/${value}`);
+            navigate(`/create/import/${value}`, { replace: true });
           }}
         />
       </Show>
