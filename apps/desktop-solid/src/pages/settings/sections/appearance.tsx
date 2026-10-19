@@ -56,9 +56,14 @@ function ThemePreview(props: {
       style={props.tokens}
       aria-hidden="true"
     >
-      <span data-vesta="prefs-theme-preview-surface" />
-      <span data-vesta="prefs-theme-preview-ink" />
-      <span data-vesta="prefs-theme-preview-accent" />
+      <span data-vesta="prefs-theme-preview-rail"><i /><i /></span>
+      <span data-vesta="prefs-theme-preview-body">
+        <span data-vesta="prefs-theme-preview-heading" />
+        <span data-vesta="prefs-theme-preview-surface">
+          <span data-vesta="prefs-theme-preview-ink" />
+          <span data-vesta="prefs-theme-preview-accent" />
+        </span>
+      </span>
     </span>
   );
 }
@@ -97,33 +102,11 @@ export function AppearanceSettings() {
     },
     { name: "themePreviews" },
   );
-  const modified = createMemo(() => {
-    const current = currentTheme();
-    const defaults =
-      themePresets.find((preset) => preset.id === current.id)?.values ?? themePresets[0]!.values;
-    return (Object.keys(defaults) as (keyof ThemeValues)[]).some(
-      (key) =>
-        key !== "mode" &&
-        (key !== "hue" || definition().hueAdjustable) &&
-        current[key] !== defaults[key],
-    );
-  });
-  const restore = () =>
-    choose(themePresets.find((preset) => preset.id === definition().id) ?? themePresets[0]!);
   const hue = () => setting("theme_primary_hue");
 
   return (
     <>
-      <Card
-        title={t("prefs.appearance.theme")}
-        action={
-          <Show when={modified()}>
-            <Button size="sm" variant="ghost" onClick={restore}>
-              {t("prefs.appearance.restore")}
-            </Button>
-          </Show>
-        }
-      >
+      <Card title={t("prefs.appearance.theme")}>
         <ul data-vesta="prefs-themes">
           <For each={themePresets}>
             {(preset) => {

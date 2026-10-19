@@ -10,7 +10,8 @@
  * Knobs:   --image-viewer-scrim, --image-viewer-blur, --image-viewer-shade,
  *          --image-viewer-fg(-muted|-subtle), --image-viewer-control-bg(-hover),
  *          --image-viewer-control-border(-hover), --image-viewer-nav-bg(-hover),
- *          --image-viewer-image-shadow
+ *          --image-viewer-image-shadow, --image-viewer-chrome-size,
+ *          --image-viewer-side-space
  */
 @layer ui.tokens, ui.base, ui.components;
 
@@ -33,6 +34,8 @@
     --image-viewer-nav-bg: color-mix(in oklab, oklch(0 0 0 / 0.4), var(--vesta-color-accent) 8%);
     --image-viewer-nav-bg-hover: color-mix(in oklab, oklch(0 0 0 / 0.7), var(--vesta-color-accent) 10%);
     --image-viewer-image-shadow: 0 20px 50px oklch(0 0 0 / 0.5);
+    --image-viewer-chrome-size: 80px;
+    --image-viewer-side-space: calc(var(--vesta-space-6) + 40px + var(--vesta-space-3));
   }
 
   :where([data-vesta='image-viewer-backdrop']) {
@@ -92,7 +95,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--vesta-space-3);
-    block-size: 80px;
+    block-size: var(--image-viewer-chrome-size);
     padding-inline: var(--vesta-space-6);
     background: linear-gradient(to bottom, var(--image-viewer-shade), transparent);
   }
@@ -103,7 +106,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--vesta-space-1);
-    block-size: 80px;
+    block-size: var(--image-viewer-chrome-size);
     background: linear-gradient(to top, var(--image-viewer-shade), transparent);
   }
 
@@ -139,6 +142,16 @@
   :where([data-vesta='image-viewer-date']) {
     color: var(--image-viewer-fg-muted);
     font-size: var(--vesta-text-sm);
+  }
+
+  /* Untitled galleries still name the dialog for assistive technology. */
+  :where([data-vesta='image-viewer-title'][data-placeholder]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   :where([data-vesta='image-viewer-actions']) {
@@ -217,18 +230,28 @@
   }
 
   :where([data-vesta='image-viewer-image-wrap']) {
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
     inline-size: 100%;
     block-size: 100%;
     overflow: hidden;
+    /* Fit inside the actual space between chrome/navigation controls. Keep this
+       box stable when chrome hides, so idle UI never resizes the image. */
+    padding-block: var(--image-viewer-chrome-size);
+    padding-inline: var(--image-viewer-side-space);
   }
 
   :where([data-vesta='image-viewer-image']) {
     display: block;
-    max-inline-size: 85%;
-    max-block-size: 80%;
+    flex: none;
+    inline-size: auto;
+    block-size: auto;
+    min-inline-size: 0;
+    min-block-size: 0;
+    max-inline-size: 100%;
+    max-block-size: 100%;
     object-fit: contain;
     border-radius: var(--vesta-radius-sm);
     box-shadow: var(--image-viewer-image-shadow);

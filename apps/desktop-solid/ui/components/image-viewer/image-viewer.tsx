@@ -153,6 +153,7 @@ export function ImageViewer(props: ImageViewerProps) {
   };
 
   const current = createMemo(() => list()[index()]);
+  const title = () => current()?.title || props.title;
   const multi = () => list().length > 1;
   const imageScale = () => props.scale ?? 1;
 
@@ -321,14 +322,19 @@ export function ImageViewer(props: ImageViewerProps) {
     navStartX = e.clientX;
     navStartScroll = track.scrollLeft;
     suppressNavClick = false;
-    setNavDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // A press is still a click. Capturing here retargets image clicks to this
+    // container and runs its background-close handler instead of click-to-zoom.
   };
 
   const handleNavPointerMove = (e: PointerEvent & { currentTarget: HTMLElement }) => {
-    if (!navDragging() || navPointerId !== e.pointerId || !track) return;
+    if (navPointerId !== e.pointerId || !track) return;
     const dx = e.clientX - navStartX;
-    if (Math.abs(dx) > 3) suppressNavClick = true;
+    if (!navDragging()) {
+      if (Math.abs(dx) <= 3) return;
+      setNavDragging(true);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    suppressNavClick = true;
     track.scrollLeft = navStartScroll - dx;
   };
 
@@ -337,11 +343,14 @@ export function ImageViewer(props: ImageViewerProps) {
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
-    const dx = e.clientX - navStartX;
-    const start = Math.round(navStartScroll / track.clientWidth);
-    const target = Math.abs(dx) >= track.clientWidth * NAV_DRAG_THRESHOLD ? start + (dx < 0 ? 1 : -1) : start;
+    const wasDragging = navDragging();
     navPointerId = null;
     setNavDragging(false);
+    if (!wasDragging) return;
+    const dx = e.clientX - navStartX;
+    const start = Math.round(navStartScroll / track.clientWidth);
+    const target = e.type === 'pointercancel' ? start
+      : Math.abs(dx) >= track.clientWidth * NAV_DRAG_THRESHOLD ? start + (dx < 0 ? 1 : -1) : start;
     // Dragging past either end wraps around, like the buttons.
     if (target < 0 || target >= list().length) setIndex(target);
     else scrollToIndex(target);
@@ -477,8 +486,8 @@ export function ImageViewer(props: ImageViewerProps) {
               onFocusOut={handleControlBlur}
             >
               <div data-vesta="image-viewer-info">
-                <KobalteDialog.Title data-vesta="image-viewer-title">
-                  {current()?.title || props.title || 'Image'}
+                <KobalteDialog.Title data-vesta="image-viewer-title" data-placeholder={title() ? undefined : ''}>
+                  {title() || 'Image'}
                 </KobalteDialog.Title>
                 <Show when={current()?.date || props.date}>
                   <div data-vesta="image-viewer-date">{current()?.date || props.date}</div>
@@ -586,6 +595,7 @@ export function ImageViewer(props: ImageViewerProps) {
                             <img
                               data-vesta="image-viewer-image"
                               src={image.src}
+                              draggable="false"
                               alt={image.alt ?? image.title ?? ''}
                               style={{
                                 '--image-scale': String(imageScale()),

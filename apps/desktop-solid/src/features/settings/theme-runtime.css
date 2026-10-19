@@ -40,7 +40,7 @@
     --overlay-shadow: var(--vesta-edge-highlight), var(--vesta-shadow-lg);
   }
 
-  /* Frosted: milky diffusion, soft border. Grain (all but flat) is the ::after overlay below. */
+  /* Frosted: milky diffusion, soft border. Grain (all but flat) stays behind the overlay content below. */
   :root[data-vesta-material='frosted'] :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
     --overlay-bg: color-mix(
       in oklab,
@@ -65,18 +65,13 @@
     content: '';
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: -1;
     border-radius: inherit;
     pointer-events: none;
     opacity: var(--vesta-theme-grain-opacity, 0);
     background-image: var(--vesta-theme-grain-image, none);
     background-size: 128px 128px;
     mix-blend-mode: soft-light;
-  }
-  @supports (mix-blend-mode: overlay) {
-    :root:not([data-vesta-material='flat']) :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog'])::after {
-      mix-blend-mode: overlay;
-    }
   }
 
   /* Flat: opaque, crisp 1px border, small shadow. */

@@ -15,7 +15,7 @@ export const themeFields = {
 export const defaultTheme = {
   id: "vesta",
   mode: "system",
-  hue: 185,
+  hue: 207,
   material: "glass",
   translucency: 60,
   grain: 20,
@@ -87,7 +87,7 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
   {
     id: "vesta",
     name: "Vesta",
-    hue: 185,
+    hue: 207,
     hueAdjustable: true,
     neutral: { hue: "accent", chroma: { dark: 0.01, light: 0.025 } },
     accentChroma: { dark: 0.12, light: 0.16 },
@@ -320,11 +320,11 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
       : frosted
         ? "blur(28px) saturate(1.1)"
         : "blur(12px) saturate(1.4)",
-    // Grain is texture, not transparency: 0..100 maps to 0..0.8 intensity of a full-contrast noise
-    // overlay (blended with overlay/soft-light). Flat material is opaque and crisp, so it has none.
+    // Keep the full slider range subtle: 0..100 maps to 0..0.08 opacity.
+    // Texture belongs behind content; flat material has none.
     "--vesta-theme-grain-opacity": flat
       ? "0"
-      : String(Math.round(clamp(theme.grain, 0, 100) * 8) / 1000),
+      : String(Math.round(clamp(theme.grain, 0, 100) * 8) / 10000),
     "--vesta-theme-background": background,
     "--vesta-theme-shadow-sm": shadows[0]!,
     "--vesta-theme-shadow-md": shadows[1]!,

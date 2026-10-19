@@ -2,7 +2,7 @@
 @layer launcher {
   :where([data-vesta="prefs-themes"]) {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(96px, 112px));
+    grid-template-columns: repeat(auto-fill, minmax(104px, 112px));
     gap: var(--vesta-space-3);
     margin: 0;
     padding: var(--vesta-space-1) var(--vesta-space-4) var(--vesta-space-4);
@@ -14,7 +14,7 @@
   :where([data-vesta="prefs-theme"]) {
     display: flex;
     flex-direction: column;
-    gap: var(--vesta-space-2);
+    gap: var(--vesta-space-1);
     inline-size: 100%;
     padding: 0;
     border: 0;
@@ -33,6 +33,8 @@
   :where([data-vesta="prefs-theme-frame"]) {
     position: relative;
     display: block;
+    inline-size: 100%;
+    aspect-ratio: 1;
     border: 1px solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-container);
     overflow: hidden;
@@ -61,36 +63,70 @@
     white-space: nowrap;
     font-weight: var(--vesta-weight-medium);
   }
+  /* Show the interface's main surfaces without miniature controls or text. */
   :where([data-vesta="prefs-theme-preview"]) {
-    position: relative;
-    display: block;
-    aspect-ratio: 1;
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template: minmax(0, 1fr) / 18% minmax(0, 1fr);
     overflow: hidden;
     background: var(--vesta-theme-background, none), var(--vesta-color-canvas);
     color: var(--vesta-color-text);
   }
-  :where([data-vesta="prefs-theme-preview-surface"]) {
-    position: absolute;
-    inset: 24% 14% 14%;
-    border: 1px solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    background: var(--vesta-color-panel);
-    box-shadow: var(--vesta-shadow-sm);
+  :where([data-vesta="prefs-theme-preview-rail"]) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-block-start: 12px;
+    border-inline-end: 1px solid var(--vesta-color-border);
+    background: var(--vesta-color-chrome);
   }
-  :where([data-vesta="prefs-theme-preview-ink"]) {
-    position: absolute;
-    inset: 38% auto auto 24%;
-    inline-size: 28%;
-    block-size: 5%;
+  :where([data-vesta="prefs-theme-preview-rail"]) > i {
+    inline-size: 10px;
+    block-size: 10px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill-active);
+  }
+  :where([data-vesta="prefs-theme-preview-rail"]) > i:first-child {
+    background: var(--vesta-color-accent);
+  }
+  :where([data-vesta="prefs-theme-preview-body"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: 12px 8px 8px;
+  }
+  :where([data-vesta="prefs-theme-preview-heading"]) {
+    inline-size: 55%;
+    block-size: 5px;
     border-radius: var(--vesta-radius-sm);
     background: currentColor;
-    opacity: 0.7;
+  }
+  :where([data-vesta="prefs-theme-preview-surface"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-start;
+    min-block-size: 0;
+    padding: 8px;
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-panel);
+  }
+  :where([data-vesta="prefs-theme-preview-ink"]) {
+    inline-size: 65%;
+    block-size: 4px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-text-muted);
   }
   :where([data-vesta="prefs-theme-preview-accent"]) {
-    position: absolute;
-    inset: auto 24% 25% auto;
-    inline-size: 26%;
-    block-size: 17%;
+    align-self: flex-end;
+    inline-size: 26px;
+    block-size: 14px;
     border-radius: var(--vesta-radius-control);
     background: var(--vesta-color-accent);
   }

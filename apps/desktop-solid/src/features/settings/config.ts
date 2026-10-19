@@ -99,7 +99,7 @@ export const configDefaults: LauncherConfig = {
 
   theme: "system",
   theme_id: "vesta",
-  theme_primary_hue: 185,
+  theme_primary_hue: 207,
   theme_style: "glass",
   theme_window_effect: "none",
   theme_background_opacity: 100,
