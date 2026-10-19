@@ -3,7 +3,6 @@ account-trigger = Account: { $name }
 account-loading = Loading accounts…
 account-empty-title = No account selected
 account-empty-description = Sign in with Microsoft to add your Minecraft account.
-account-manage = Manage skins & account
 account-copy-failed = Could not copy. Try again.
 account-action-failed = Couldn't complete the account action. Try again.
 account-log-out = Log out

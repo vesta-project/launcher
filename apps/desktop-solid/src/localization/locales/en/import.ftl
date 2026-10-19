@@ -14,7 +14,6 @@ import-last-played = Last played
 import-size = Size
 import-source = Source
 import-project-id = Project ID
-import-open-folder = Open game directory in file manager
 import-instance = Instance
 import-preview = Selected instance
 import-preview-empty = No instance selected

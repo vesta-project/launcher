@@ -70,6 +70,12 @@ export async function cancelActivity(id: string) {
 }
 /** Hides pill presence, retaining the panel row. */
 export function dismissActivity(id: string) { flushActivityProgress(); ledger.dismiss(id); publish(); }
+/** Authoritative native snapshots retire vanished running rows, preserving terminal history. */
+export function retireHostActivities(ids: readonly string[]) {
+  ids.forEach((id) => pending.delete(id));
+  ledger.retireActive(ids);
+  publish();
+}
 export function clearFinished() { flushActivityProgress(); ledger.clearFinished(); publish(); }
 /** Used by the simulator to remove only its own terminal history. */
 export function clearFinishedActivities(ids: readonly string[]) { flushActivityProgress(); ledger.clearFinished(ids); publish(); }

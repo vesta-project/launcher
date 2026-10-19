@@ -1,4 +1,6 @@
 import { navigate } from "../../app/router";
+import { nativeRecords } from "../instances/native-service";
+import { notificationDestination } from "./notification-routes";
 import { openExternal } from "../links/external-links";
 import { t } from "../../localization";
 import { createMemo, createRoot, createSignal } from "solid-js";
@@ -25,7 +27,7 @@ const [list, setList] = createSignal<readonly HostNotification[]>([], { name: "a
 const unreadCount = createRoot(() =>
   createMemo(() => list().filter((a) => !a.read).length, { name: "attentionUnread" }),
 );
-const updaterKeys = new Set(["app_update", "launcher_update"]);
+const updaterKeys = new Set(["app_update"]);
 export function receiveNotification(row: HostNotification) {
   if (
     row.notification_type === "progress" ||
@@ -82,10 +84,10 @@ async function invokeAction(
     return;
   }
   if (action.id === "navigate") {
-    const path = payload?.path;
-    if (typeof path !== "string" || !/^\/(library|browse|create|settings)(\/|$)/.test(path))
-      throw new Error(t("activity.action-unavailable"));
-    navigate(path);
+    const destination = payload ? notificationDestination(payload, nativeRecords()) : undefined;
+    if (!destination) throw new Error(t("activity.action-unavailable"));
+    if ('url' in destination) await openExternal(destination.url);
+    else navigate(destination.route);
     return;
   }
   if (!isTauri()) throw new Error(t("activity.action-unavailable"));

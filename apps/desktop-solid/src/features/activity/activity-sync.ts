@@ -1,37 +1,32 @@
 import { untrack } from 'solid-js';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { configureActivityCancellation, receiveActivity, reportActivityError, stopActivityTimers, activities } from './activity-store';
+import { configureActivityCancellation, receiveActivity, reportActivityError, stopActivityTimers, activities, retireHostActivities, flushActivityProgress } from './activity-store';
 import { receiveNotification, updateNotification, type HostNotification } from './notifications';
 import { checkForUpdates, downloadUpdate, restartToUpdate } from '../settings/updates';
 import { nativeRecord, displayImage } from '../instances/native-service';
 import type { ActivityPatch } from './activity-model';
+import { ActivityRecovery, type ActivityEvent, type ActivitySnapshot, type NativeActivity } from './activity-recovery';
 
-interface Context { kind?: string; id?: string; label?: string; iconUrl?: string }
-interface TaskEvent extends ActivityPatch { context?: Context; totalSteps?: number }
-interface ProgressEvent { id: string; progress?: number | null; step?: string | null; title?: string; currentStep?: number | null; totalSteps?: number | null }
-function target(context?: Context) {
-  if (context?.kind === 'instance' && context.id) return { instanceId: context.id };
-  return undefined;
-}
-function taskEvent(event: TaskEvent) {
-  const { context, totalSteps, ...raw } = event;
-  const patch = Object.fromEntries(Object.entries(raw).filter(([, value]) => value != null)) as ActivityPatch;
+const hostIds = new Set<string>();
+/** Full native rows normalize percentages once; notifications never imply running work. */
+function taskEvent(event: NativeActivity) {
+  const { context, totalSteps, currentStep, progress, overallProgress, ...raw } = event;
   const record = context?.kind === 'instance' && context.id ? untrack(() => nativeRecord(context.id!)) : undefined;
-  receiveActivity({ ...patch, ...(record ? { icon: displayImage(record), subtitle: [record.minecraftVersion, record.modloader].filter(Boolean).join(' · ') } : {}), ...(context ? { target: patch.target ?? target(context), ...(context.iconUrl ? { icon: context.iconUrl } : {}), iconFallback: context.label?.slice(0, 2) } : {}),
-    ...(totalSteps && totalSteps > 0 ? { weight: totalSteps } : {}) });
-}
-/** Legacy progress snapshot hydration. Dedicated lifecycle events remain authoritative. */
-function seedProgress(row: HostNotification) {
-  if (row.notification_type !== 'progress' || row.client_key === 'app_update') return;
-  let context: Context | undefined;
-  try { context = JSON.parse(row.metadata || '{}').context; } catch { /* legacy metadata */ }
-  const id = row.client_key || String(row.id);
-  if (untrack(activities).some((a) => a.id === id)) return;
-  receiveActivity({ id, title: row.title, kind: id.startsWith('generate_manifest') ? 'background' : 'task', state: 'running',
-    progress: row.progress != null && row.progress >= 0 ? row.progress / 100 : undefined,
-    step: row.description ?? undefined, target: target(context), icon: context?.iconUrl,
-    startedAt: Date.parse(row.created_at ?? '') || Date.now(), cancellable: !!row.actions?.some((a) => a.id === 'cancel_task') });
+  const patch: ActivityPatch = {
+    ...raw,
+    progress: progress != null && progress >= 0 ? progress / 100 : undefined,
+    overallProgress: overallProgress != null && overallProgress >= 0 ? overallProgress / 100 : undefined,
+    currentStep: currentStep ?? undefined, totalSteps: totalSteps ?? undefined,
+    ...(record ? { icon: displayImage(record), subtitle: [record.minecraftVersion, record.modloader].filter(Boolean).join(' · ') } : {}),
+    ...(context ? {
+      target: raw.target ?? (context.kind === 'instance' && context.id ? { instanceId: context.id } : undefined),
+      ...(context.iconUrl ? { icon: context.iconUrl } : {}), iconFallback: context.label?.slice(0, 2),
+    } : {}),
+    weight: totalSteps && totalSteps > 0 ? Math.max(1, totalSteps - (currentStep ?? 0)) : undefined,
+  };
+  const previous = untrack(activities).find((activity) => activity.id === event.id);
+  receiveActivity(patch, previous?.attempt === event.attempt && previous?.state === event.state && (event.state === 'running' || event.state === 'queued'));
 }
 let owners = 0;
 let release: (() => void) | undefined;
@@ -41,6 +36,29 @@ export function startActivitySync(): () => void {
   if (++owners === 1) {
     let disposed = false;
     const stops: UnlistenFn[] = [];
+    const recovery = new ActivityRecovery(hostIds, taskEvent, retireHostActivities);
+    let snapshotRequest: Promise<void> | undefined;
+    let snapshotAgain = false;
+    const refreshActivities = (changedEpoch = false) => {
+      if (disposed) return Promise.resolve();
+      if (snapshotRequest) {
+        snapshotAgain ||= changedEpoch;
+        return snapshotRequest;
+      }
+      const epochAtRequest = recovery.epoch;
+      snapshotRequest = invoke<ActivitySnapshot>('get_activity_snapshot').then((snapshot) => {
+        if (disposed) return;
+        // A live event from another backend lifetime supersedes an older reply.
+        if (recovery.epoch !== epochAtRequest && recovery.epoch !== snapshot.epoch) return;
+        recovery.snapshot(snapshot);
+        flushActivityProgress();
+      }).catch((error) => { if (!disposed) reportActivityError(error); })
+        .finally(() => {
+          snapshotRequest = undefined;
+          if (snapshotAgain && !disposed) { snapshotAgain = false; void refreshActivities(); }
+        });
+      return snapshotRequest;
+    };
     const inboxTouched = new Set<string>();
     let inboxCleared = false;
     let hydratingInbox = true;
@@ -56,23 +74,23 @@ export function startActivitySync(): () => void {
       updateNotification(patch);
     };
     const register = async <T>(name: string, handler: (event: T) => void) => {
-      const stop = await listen<T>(name, ({ payload }) => { if (!disposed) handler(payload); });
-      if (disposed) stop(); else stops.push(stop);
+      try {
+        const stop = await listen<T>(name, ({ payload }) => { if (!disposed) handler(payload); });
+        if (disposed) stop(); else stops.push(stop);
+      } catch (error) { if (!disposed) reportActivityError(error); }
     };
     configureActivityCancellation((id) => invoke('cancel_task', { clientKey: id }));
-    release = () => { disposed = true; stops.forEach((stop) => stop()); stopActivityTimers(); };
+    const focus = () => { void refreshActivities(); };
+    release = () => {
+      disposed = true;
+      window.removeEventListener('focus', focus);
+      stops.forEach((stop) => stop()); stopActivityTimers();
+    };
     void (async () => {
       await Promise.all([
-        register<TaskEvent>('core://activity', taskEvent),
-        register<ProgressEvent>('core://activity-progress', (event) => {
-          const patch: ActivityPatch = { id: event.id };
-          if (event.progress != null) patch.progress = event.progress >= 0 ? event.progress / 100 : undefined;
-          if (event.step != null) patch.step = event.step;
-          if (event.title !== undefined) patch.title = event.title;
-          if (event.currentStep != null) patch.currentStep = event.currentStep;
-          if (event.totalSteps != null) patch.totalSteps = event.totalSteps;
-          if (event.totalSteps && event.totalSteps > 0) patch.weight = Math.max(1, event.totalSteps - (event.currentStep ?? 0));
-          receiveActivity(patch, true);
+        register<ActivityEvent>('core://activity-state', (event) => {
+          if (!recovery.receive(event)) void refreshActivities(true);
+          else if (recovery.needsCompaction) void refreshActivities();
         }),
         register<HostNotification>('core://notification', inboxEvent),
         register<HostNotification>('core://notification-progress', inboxEvent),
@@ -81,13 +99,19 @@ export function startActivitySync(): () => void {
         register('core://download-app-update', () => { void downloadUpdate().catch(reportActivityError); }),
         register('core://install-app-update', () => { void restartToUpdate().catch(reportActivityError); }),
       ]);
-      // Subscribe before snapshot; never overwrite lifecycle events already received.
-      const rows = await invoke<HostNotification[]>('list_notifications', { filters: null });
       if (disposed) return;
-      rows.reverse().forEach((row) => {
-        seedProgress(row);
-        if (!inboxCleared && !inboxTouched.has(row.client_key ?? '') && !inboxTouched.has(String(row.id))) receiveNotification(row);
-      });
+      window.addEventListener('focus', focus);
+      // Task recovery and attention-inbox hydration are independent reads.
+      await Promise.all([
+        refreshActivities(),
+        invoke<HostNotification[]>('list_notifications', { filters: null }).then((rows) => {
+          if (disposed) return;
+          rows.reverse().forEach((row) => {
+            if (!inboxCleared && !inboxTouched.has(row.client_key ?? '') && !inboxTouched.has(String(row.id))) receiveNotification(row);
+          });
+        }).catch((error) => { if (!disposed) reportActivityError(error); }),
+      ]);
+      if (disposed) return;
       hydratingInbox = false;
       inboxTouched.clear();
     })().catch(reportActivityError);

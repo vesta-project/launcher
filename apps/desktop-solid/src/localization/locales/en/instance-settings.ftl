@@ -39,7 +39,6 @@ instance-settings-allocation = Allocation
 instance-settings-memory-range = { $min } – { $max } GB
 instance-settings-gigabytes = { $amount } GB
 instance-settings-megabytes = { $amount } MB
-instance-settings-memory-installed = { $value } installed
 instance-settings-memory-start = Start (-Xms)
 instance-settings-memory-limit = Limit (-Xmx)
 instance-settings-memory-warning = Leaving less than 10% of memory for your system can make everything slow.
@@ -56,7 +55,6 @@ instance-settings-minimize = Minimize
 instance-settings-hide-to-tray = Hide to tray
 instance-settings-quit-launcher = Quit the launcher
 instance-settings-environment-variables = Environment variables
-instance-settings-environment-description = One KEY=value per line.
 instance-settings-environment-format = One KEY=value per line.
 instance-settings-launch-hooks = Launch hooks
 instance-settings-before-launch = Before launch
@@ -101,5 +99,3 @@ instance-settings-unsaved-changes = Unsaved changes
 instance-settings-save = Save
 instance-settings-discard = Discard
 instance-settings-gb-installed = { $value } installed
-instance-settings-exporting = Exporting…
-instance-settings-custom-icon-error = Could not open this image. Try a PNG or JPEG.

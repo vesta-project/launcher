@@ -58,3 +58,6 @@ activity-inbox-clear-all = Clear all
 activity-inbox-dismiss = Dismiss
 
 activity-action-unavailable = This action is not available in this version of the launcher.
+
+activity-error-more = More
+activity-error-less = Less

@@ -1,6 +1,6 @@
 import { Popover } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
-import { dismissActivity, markSeen, pillState, type Activity, type PillState } from '../../features/activity';
+import { activities, backgroundActivities, dismissActivity, markSeen, pillState, type Activity, type PillState } from '../../features/activity';
 import { playInstance } from '../../features/instances/catalog';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
@@ -55,7 +55,9 @@ function PillFace(props: { state: Shown; face: Face }) {
   return (
     <span data-vesta="status-pill-face" data-face={props.face}>
       <Show when={props.face === 'quiet'}>
-        <span data-vesta="status-spinner" aria-hidden="true" />
+        <Show when={pillState().state === 'quiet'} fallback={<Icon name="icons/controls/check" size={12} />}>
+          <span data-vesta="status-spinner" aria-hidden="true" />
+        </Show>
       </Show>
 
       <Show when={props.face === 'single' || props.face === 'success'}>
@@ -126,6 +128,14 @@ export function StatusPill() {
     },
     { name: 'activityPillShown' },
   );
+  // Finished background refreshes leave no actionable history in this panel.
+  // Close only an empty panel; retain task history and failures the user is inspecting.
+  createEffect(
+    () => pillState().state === 'idle'
+      && !backgroundActivities().length
+      && !activities().some((row) => row.kind === 'task' || row.state === 'failed'),
+    (empty) => { if (empty) setOpen(false); },
+  );
   const collapsed = createMemo(() => pillState().state === 'idle' && !open(), { name: 'activityPillCollapsed' });
   const face = createMemo(() => {
     const state = shown();
@@ -142,7 +152,7 @@ export function StatusPill() {
   };
   const label = () => {
     const state = shown();
-    if (!state) return t('activity.panel-title');
+    if (!state || pillState().state === 'idle') return t('activity.panel-title');
     const status = statusText(state);
     const value = progress();
     return state.state === 'running' && value !== undefined
@@ -159,7 +169,7 @@ export function StatusPill() {
   // Quiet work has nothing visible but a spinner, so the hint names it.
   const tip = () => {
     const state = shown();
-    return state?.state === 'quiet' ? quietTitle(state.activities) : undefined;
+    return state?.state === 'quiet' && pillState().state === 'quiet' ? quietTitle(state.activities) : undefined;
   };
   const play = () => {
     const state = shown();

@@ -2,13 +2,18 @@ export type ActivityKind = 'task' | 'background';
 export type ActivityState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 export interface Activity {
   id: string;
+  /** Native Task Manager attempt; retries may reuse a logical task ID. */
+  attempt?: string;
   kind: ActivityKind;
   state: ActivityState;
   title: string;
   subtitle?: string;
   icon?: string;
   iconFallback?: string;
+  /** Current stage-local progress. */
   progress?: number;
+  /** Explicit whole-operation estimate, when provided by the task. */
+  overallProgress?: number;
   /** Estimated remaining units, comparable across tasks; unknown uses one unit. */
   weight?: number;
   step?: string;
@@ -42,15 +47,17 @@ export function visibleTaskList(rows: readonly Activity[], now: number): Activit
 export function backgroundList(rows: readonly Activity[], now: number): Activity[] {
   return rows.filter((a) => a.kind === 'background' && a.state === 'running' && now - a.startedAt >= BACKGROUND_DELAY);
 }
+export const activityProgress = (activity: Activity) => activity.overallProgress ?? activity.progress;
+
 /** Remaining-work weighted progress. An unknown task makes the aggregate indeterminate. */
 export function weightedProgress(rows: readonly Activity[]): number | undefined {
   const running = rows.filter(active);
-  if (!running.length || running.some((a) => a.progress === undefined)) return undefined;
+  if (!running.length || running.some((a) => activityProgress(a) === undefined)) return undefined;
   let weighted = 0;
   let weights = 0;
   for (const a of running) {
     const weight = a.weight !== undefined && Number.isFinite(a.weight) && a.weight > 0 ? a.weight : 1;
-    weighted += a.progress! * weight;
+    weighted += activityProgress(a)! * weight;
     weights += weight;
   }
   return weighted / weights;
@@ -73,19 +80,29 @@ export class ActivityLedger {
   rows: readonly Activity[] = [];
   upsert(patch: ActivityPatch, now: number) {
     const old = this.rows.find((a) => a.id === patch.id);
-    const restarting = old && terminal(old) && (patch.state === 'queued' || patch.state === 'running');
+    const restarting = old && ((patch.attempt !== undefined && patch.attempt !== old.attempt)
+      || (terminal(old) && (patch.state === 'queued' || patch.state === 'running')));
     const base = !old || restarting ? { kind: 'task' as const, state: 'queued' as const, title: '', startedAt: now, cancellable: false } : old;
     const next: Activity = { ...base, ...patch };
     if (next.progress !== undefined) next.progress = Number.isFinite(next.progress) ? Math.max(0, Math.min(1, next.progress)) : undefined;
+    if (next.overallProgress !== undefined) {
+      next.overallProgress = Number.isFinite(next.overallProgress) ? Math.max(0, Math.min(1, next.overallProgress)) : undefined;
+      if (!restarting && old?.overallProgress !== undefined && next.overallProgress !== undefined)
+        next.overallProgress = Math.max(old.overallProgress, next.overallProgress);
+    }
     if (terminal(next)) {
       next.finishedAt ??= now;
       next.cancellable = false;
-      if (next.state === 'done') next.progress = 1;
-    } else if (next.state === 'running' && old?.state === 'queued') next.startedAt = now;
+      if (next.state === 'done') { next.progress = 1; if (next.overallProgress !== undefined) next.overallProgress = 1; }
+    } else if (next.state === 'running' && old?.state === 'queued' && patch.startedAt === undefined) next.startedAt = now;
     this.rows = [next, ...this.rows.filter((a) => a.id !== next.id)];
     // Unseen failures are never evicted. Other terminal history is bounded.
     let finished = 0;
     this.rows = this.rows.filter((a) => !terminal(a) || (a.state === 'failed' && !a.seen) || ++finished <= 50);
+  }
+  retireActive(ids: readonly string[]) {
+    const missing = new Set(ids);
+    this.rows = this.rows.filter((row) => !missing.has(row.id) || terminal(row));
   }
   dismiss(id: string) { this.rows = this.rows.map((a) => a.id === id ? { ...a, pillDismissed: true, seen: true } : a); }
   markSeen(ids?: readonly string[]) { this.rows = this.rows.map((a) => a.state === 'failed' && (!ids || ids.includes(a.id)) ? { ...a, seen: true } : a); }

@@ -75,7 +75,14 @@ Overall progress uses `sum(progress * remainingWeight) / sum(remainingWeight)` o
 active foreground tasks. Unknown progress makes the aggregate indeterminate. Known
 step counts estimate remaining weight as max(1, total-current); unknown weights use
 one unit. These are estimates across heterogeneous operations, not byte-accurate
-predictions. Host runtime progress is often phase-local and may reset between phases.
+predictions. Installer tasks now provide `overallProgress` separately from their stage-local
+`progress`. The panel bar and pill prefer that overall estimate; stage progress appears as a
+compact percentage beside the current action. The Ledger prevents overall regressions within
+one task attempt, and only authoritative completion reaches 100%. Pipeline ranges compose
+nested runtime/modpack work; download ranges publish only changed integer estimates. Older
+producers without an overall value retain their existing progress behavior. Native activity
+recovery uses TaskManager snapshots with both values, never persisted progress notifications.
+The Clear finished action appears only when displayed terminal rows can actually be removed.
 
 The adapter batches progress per id for 100ms, immediately publishes lifecycle events,
 and uses boundary timers (no polling loop) for quiet/success visibility. Memo equality
@@ -158,10 +165,14 @@ render these actions but do not invoke native launch for those IDs.
 
 Added without command registration changes:
 
-- `core://activity`: id and partial state; queued includes title, kind, cancellable,
+- `core://activity-state`: epoch, revision and one full native activity row, emitted from
+  the same in-memory owner as `get_activity_snapshot`. The rewrite consumes this stream;
+  progress notifications remain inbox-only. Initial load and window focus fetch a snapshot,
+  sharing in-flight requests; no progress polling or disk mirror.
+- `core://activity`: legacy id and partial state; queued includes title, kind, cancellable,
   context, target, action, initial step and totalSteps. Terminal events explicitly
   report done/failed/cancelled and error, independently of notification deletion.
-- `core://activity-progress`: id and optional percent (host 0–100, -1 unknown), step,
+- `core://activity-progress`: id, optional overallProgress estimate, and optional percent (host 0–100, -1 unknown), step,
   title, currentStep and totalSteps. TaskContext emits even for silent tasks.
 - Task trait policies: activity_kind, activity_instance_id, completion_action.
   Instance icons/version subtitles use the already-loaded rewrite catalog; resource
@@ -169,12 +180,14 @@ Added without command registration changes:
 
 Still needed for richer/fully recoverable telemetry:
 
-1. A TaskManager snapshot Interface (active id, kind, state, title, startedAt, progress,
-   counters, context, target/action) and existing-command exposure or a new registered
-   command. The new frontend hydrates persisted progress notifications after attaching
-   listeners, but silent work already underway before subscription cannot be recovered;
-   queued legacy snapshots also lack an explicit state. New command registration would
-   touch protected commands/mod.rs/lib.rs, so it was not attempted.
+1. TaskManager snapshot recovery is implemented: `get_activity_snapshot` and
+   `core://activity-state` share a backend epoch and revisions. Full rows preserve state,
+   timestamps, overall/local progress, attempt, counters, target/action and context. The
+   frontend subscribes before hydration, rejects stale rows, compacts revisions on focus,
+   and retires vanished active rows without touching client-owned work or finished history.
+   Retrying the same logical ID uses a new attempt; old reporter callbacks are ignored.
+   Native terminal history is capped at 50; active work is never evicted. This is recovery
+   of the running backend's presentation, not persistent execution/restart of Tasks.
 2. Rescan should emit these same lifecycle/progress events (including error exits), or
    its future rewrite caller should bridge its private Channel into receiveActivity.
    Do not infer success from resource-row changes or notification deletion.

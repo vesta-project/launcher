@@ -156,6 +156,7 @@
 
   .activity-row-progress {
     flex: 1;
+    min-inline-size: 0;
   }
 
   /* Keep the fill moving smoothly between the 100ms batched updates. */
@@ -165,11 +166,17 @@
 
   :where([data-vesta='activity-row-step']) {
     flex: none;
-    max-inline-size: 55%;
+    max-inline-size: 35%;
     overflow: hidden;
     font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  :where([data-vesta='activity-row-stage-percent']) {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    color: var(--vesta-color-text-subtle);
   }
 
   :where([data-vesta='activity-row'][data-state='queued']) :where([data-vesta='activity-row-step']) {
@@ -195,6 +202,39 @@
   :where([data-vesta='activity-row-error']) {
     min-inline-size: 0;
     overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='activity-row-error']) {
+    display: flex;
+    flex: 1;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  :where([data-vesta='activity-error-text']) {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: text;
+  }
+
+  :where([data-vesta='activity-row-error'][data-expanded]) :where([data-vesta='activity-error-text']) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='activity-error-toggle']) {
+    flex: none;
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: default;
   }
 
   :where([data-vesta='activity-row-detail']) > :where([data-vesta='icon']) {

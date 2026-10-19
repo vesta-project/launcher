@@ -41,8 +41,6 @@ instance-actions-new-window = Open in New Window
 instance-actions-content = Add Content
 instance-actions-pin = Pin to sidebar
 instance-actions-unpin = Unpin from sidebar
-instance-actions-desktop-launch = Add to desktop (launch directly)
-instance-actions-desktop-page = Add to desktop (open page)
 instance-actions-copy-link = Copy page link
 instance-actions-logs = Open logs folder
 instance-actions-crash = View crash report
@@ -52,3 +50,47 @@ instance-actions-shortcut-created = Shortcut created
 instance-actions-shortcut-failed = Shortcut failed
 instance-actions-link-copied = Page link copied
 instance-actions-intent-failed = Could not open instance
+
+drop-rejected = Some dropped items are unreadable or unsupported here.
+drop-single-pack = Drop one modpack archive at a time.
+drop-review = Review imported resources
+drop-kind = Resource type
+drop-world = Target world
+drop-choose-world = Choose a world
+drop-dependencies = Download dependencies
+drop-no-candidates = No supported resources were found.
+drop-start-failed = Native file drop could not be initialized.
+drop-target = Import destination
+drop-choose-target = Choose an instance or modpack import.
+
+console-live-output = Live output
+console-current-capture = Current launcher capture
+console-source-live-game = Live game output
+console-source-stopped = Retained output · game stopped
+console-log-source = Log source
+console-search-log = Search log
+console-levels = Levels
+console-log-actions = Log actions
+console-copy-displayed = Copy displayed output
+console-copy-entire = Copy entire log
+console-wrap-lines = Wrap long lines
+console-show-levels-threads = Show levels and threads
+console-clear-display = Clear display
+console-restore-display = Restore displayed output
+console-open-logs = Open logs folder
+console-no-filter-matches = No lines match the current filters.
+console-no-output = No displayed output.
+console-show-earlier = Show earlier lines
+console-show-latest = Show latest lines
+console-following-paused = Following paused
+console-line-count = { $visible } of { $total } { $total ->
+    [one] line
+   *[other] lines
+}
+console-jump-latest = Jump to latest
+console-copy-status = Copied
+console-copy-failed = Copy failed — select and copy the text below.
+console-log-output = { $name } log output
+
+drop-add-to-instance = Release to add resources
+drop-supported-files = Drop .jar or .zip files

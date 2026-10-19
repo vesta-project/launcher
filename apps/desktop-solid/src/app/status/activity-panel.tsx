@@ -9,6 +9,7 @@ import {
   dismissActivity,
   type Activity,
 } from '../../features/activity';
+import { activityProgress, terminal } from '../../features/activity/activity-model';
 import { formatRelative } from '../../features/browse/browse-model';
 import { playInstance } from '../../features/instances/catalog';
 import { Icon } from '../../components/icon';
@@ -35,6 +36,31 @@ function stepText(activity: Activity): string {
   if (activity.step) return activity.step;
   if (activity.totalSteps) return t('activity.step-count', { count: activity.currentStep ?? 0, max: activity.totalSteps });
   return activity.progress === undefined ? t('activity.working') : percentText(activity.progress);
+}
+
+/** Keep diagnostics on one line until the user asks to read the full message. */
+function ActivityError(props: { message: string }) {
+  let text: HTMLSpanElement | undefined;
+  const [expanded, setExpanded] = createSignal(false);
+  const [overflowing, setOverflowing] = createSignal(false);
+  onSettled(() => {
+    if (!text) return;
+    const observer = new ResizeObserver(() => {
+      if (text) setOverflowing(text.scrollWidth > text.clientWidth);
+    });
+    observer.observe(text);
+    return () => observer.disconnect();
+  });
+  return (
+    <span data-vesta="activity-row-error" data-expanded={expanded() ? '' : undefined}>
+      <span ref={(element: HTMLSpanElement) => (text = element)} data-vesta="activity-error-text">{props.message}</span>
+      <Show when={overflowing() || expanded()}>
+        <button type="button" data-vesta="activity-error-toggle" aria-expanded={expanded() ? "true" : "false"} onClick={() => setExpanded(!expanded())}>
+          {t(expanded() ? 'activity.error-less' : 'activity.error-more')}
+        </button>
+      </Show>
+    </span>
+  );
 }
 
 function TaskRow(props: { activity: Activity; now: number; onNavigate: () => void }) {
@@ -105,10 +131,13 @@ function TaskRow(props: { activity: Activity; now: number; onNavigate: () => voi
         <Show when={props.activity.state === 'running'}>
           <Progress
             class="activity-row-progress"
-            value={props.activity.progress === undefined ? undefined : props.activity.progress * 100}
+            value={activityProgress(props.activity) === undefined ? undefined : activityProgress(props.activity)! * 100}
             aria-label={props.activity.title}
           />
           <span data-vesta="activity-row-step" data-tip-overflow>{stepText(props.activity)}</span>
+          <Show when={props.activity.overallProgress !== undefined && props.activity.progress !== undefined}>
+            <span data-vesta="activity-row-stage-percent" title={stepText(props.activity)}>{percentText(props.activity.progress!)}</span>
+          </Show>
         </Show>
         <Show when={props.activity.state === 'queued'}>
           <span data-vesta="activity-row-step">{t('activity.queued')}</span>
@@ -124,7 +153,7 @@ function TaskRow(props: { activity: Activity; now: number; onNavigate: () => voi
         </Show>
         <Show when={props.activity.state === 'failed'}>
           <Icon name="icons/status/error" size={11} />
-          <span data-vesta="activity-row-error">{props.activity.error || t('activity.failed')}</span>
+          <ActivityError message={props.activity.error || t('activity.failed')} />
         </Show>
       </div>
     </li>
@@ -150,19 +179,21 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
     ],
     { name: 'activityPanelBackground' },
   );
-  const hasFinished = () => activities().some((row) => row.state !== 'running' && row.state !== 'queued');
+  // Hidden successful background work must not expose an ineffective clear action.
+  const hasFinished = () => tasks().some(terminal) || background().some(terminal);
 
   return (
     <div data-vesta="activity-panel">
-      <Button
-        class="activity-panel-clear"
-        size="sm"
-        variant="ghost"
-        disabled={!hasFinished()}
-        onClick={clearFinished}
-      >
-        {t('activity.clear-finished')}
-      </Button>
+      <Show when={hasFinished()}>
+        <Button
+          class="activity-panel-clear"
+          size="sm"
+          variant="ghost"
+          onClick={clearFinished}
+        >
+          {t('activity.clear-finished')}
+        </Button>
+      </Show>
 
       <Show when={activityError()}>
         <p data-vesta="activity-panel-error" role="alert">{activityError()}</p>
@@ -191,7 +222,7 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
                     </Show>
                     <span data-vesta="activity-background-name" data-tip-overflow>{row().title}</span>
                     <Show when={row().state === 'failed' && row().error}>
-                      <span data-vesta="activity-row-error">{row().error}</span>
+                      <ActivityError message={row().error!} />
                     </Show>
                   </li>
                 )}
