@@ -27,6 +27,11 @@ export interface Activity {
   /** Estimated remaining units, comparable across tasks; unknown uses one unit. */
   weight?: number;
   step?: string;
+  /** Localised stage words and counter ("Downloading assets", "2,531 / 4,102"), when structured. */
+  stageLabel?: string;
+  counter?: string;
+  /** Past-tense title for finished rows ("Deleted Vanilla Perfected"). */
+  doneTitle?: string;
   currentStep?: number;
   totalSteps?: number;
   startedAt: number;

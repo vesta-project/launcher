@@ -34,7 +34,9 @@ function statusText(state: Shown): string {
     case 'running':
       return t('activity.status-running', { count: state.count, title: state.activities[0]!.title });
     case 'success':
-      return t('activity.status-success', { title: state.activity.title });
+      return state.activity.action === 'play' || !state.activity.doneTitle
+        ? t('activity.status-success', { title: state.activity.title })
+        : state.activity.doneTitle;
     case 'failed':
       return t('activity.status-failed', { title: state.activity.title });
   }
@@ -95,7 +97,9 @@ function PillFace(props: { state: Shown; face: Face }) {
             : props.face === 'multi'
               ? countLabel(running()?.activities ?? [])
               : props.face === 'success'
-                ? t('activity.ready')
+                ? leadOf(props.state).action === 'play'
+                  ? t('activity.ready')
+                  : (leadOf(props.state).doneTitle ?? t('activity.ready'))
                 : statusText(props.state)}
         </span>
       </Show>

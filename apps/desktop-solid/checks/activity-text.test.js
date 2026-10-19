@@ -21,12 +21,13 @@ const titles = {
 };
 for (const [kind, title] of Object.entries(titles)) {
   test(`structured ${kind} uses English Fluent copy and safe stage text`, () => {
-    expect(format({ kind })).toEqual({ title, subtitle: undefined, step: 'Downloading libraries' });
+    expect(format({ kind })).toMatchObject({ title, subtitle: undefined, step: 'Downloading libraries', stageLabel: 'Downloading libraries', counter: undefined });
+    expect(format({ kind }).doneTitle).toBeString();
   });
 }
 test('unknown and legacy kinds preserve legacy text', () => {
   for (const kind of ['future_task', 'task', 'background', 'constructor', '__proto__'])
-    expect(format({ kind, subtitle: 'Legacy subtitle' })).toEqual({ title: 'Legacy title', subtitle: 'Legacy subtitle', step: '/private/raw-file.jar' });
+    expect(format({ kind, subtitle: 'Legacy subtitle' })).toEqual({ title: 'Legacy title', subtitle: 'Legacy subtitle', step: '/private/raw-file.jar', stageLabel: undefined, counter: undefined, doneTitle: undefined });
 });
 test('separates byte progress from item counts and supports unknown totals', () => {
   expect(format({ items: { done: 47, total: 112 } }).step).toBe('Downloading libraries · 47/112');
@@ -35,6 +36,13 @@ test('separates byte progress from item counts and supports unknown totals', () 
   expect(format({ items: { done: 47 } }).step).toBe('Downloading libraries · 47');
   expect(format({ items: { done: 0, total: 0 } }).step).toBe('Downloading libraries · 0/0');
   expect(formatActivityBytes(-1, 'en')).toBe('0 byte');
+});
+test('finished rows use past tense and the counter is kept apart from the stage words', () => {
+  expect(format({ kind: 'instance_delete' }).doneTitle).toBe('Deleted Fabulously Optimized');
+  expect(format({ kind: 'world_transfer', mode: 'move' }).doneTitle).toBe('Moved Fabulously Optimized');
+  expect(format({ items: { done: 2531, total: 4102 } })).toMatchObject({ stageLabel: 'Downloading libraries', counter: '2,531 / 4,102' });
+  expect(format({ bytes: { done: 12_000_000, total: 38_000_000 } }).counter).toBe('12 MB / 38 MB');
+  expect(format({ items: { done: 47 } }).counter).toBe('47');
 });
 test('subjects, duplicate source and world transfer mode are independent of legacy prose', () => {
   expect(format({ kind: 'java_download', subject: { name: '21' } }).title).toBe('Java 21');

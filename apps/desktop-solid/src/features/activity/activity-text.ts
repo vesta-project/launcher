@@ -39,6 +39,26 @@ const titles: Record<string, MessageId> = {
   world_transfer: 'activity.kind-world-transfer',
   drop_apply: 'activity.kind-drop-apply',
 };
+/** Past tense for finished rows: "Deleted Vanilla Perfected", never "Deleting …" with a tick. */
+const finished: Record<string, MessageId> = {
+  instance_install: 'activity.done-instance-install',
+  modpack_install: 'activity.done-modpack-install',
+  modpack_update: 'activity.done-modpack-update',
+  modpack_export: 'activity.done-modpack-export',
+  resource_install: 'activity.done-resource-install',
+  java_download: 'activity.done-java-download',
+  launcher_import: 'activity.done-launcher-import',
+  import_resync: 'activity.done-import-resync',
+  resource_enrichment: 'activity.done-resource-enrichment',
+  manifest_refresh: 'activity.done-manifest-refresh',
+  profile_sync: 'activity.done-profile-sync',
+  instance_duplicate: 'activity.done-instance-duplicate',
+  instance_reset: 'activity.done-instance-reset',
+  instance_repair: 'activity.done-instance-repair',
+  instance_delete: 'activity.done-instance-delete',
+  world_transfer: 'activity.done-world-transfer',
+  drop_apply: 'activity.done-drop-apply',
+};
 const stages: Record<string, MessageId> = {
   preparing: 'activity.stage-preparing',
   installing: 'activity.stage-installing',
@@ -81,12 +101,14 @@ export function formatActivityBytes(value: number, locale: string): string {
 /** Pure formatter: the caller supplies its active Fluent translator and locale. */
 export function formatActivityText(activity: StructuredActivity, t: Translate, locale: string) {
   const titleId = Object.hasOwn(titles, activity.kind) ? titles[activity.kind] : undefined;
-  if (!titleId) return { title: activity.title, subtitle: activity.subtitle, step: activity.step };
+  if (!titleId) return { title: activity.title, subtitle: activity.subtitle, step: activity.step, stageLabel: undefined, counter: undefined, doneTitle: undefined };
   const fallback = activity.kind === 'world_transfer' ? 'activity.subject-world'
     : activity.kind === 'resource_install' ? 'activity.subject-resource'
     : activity.kind === 'java_download' ? 'activity.subject-java' : 'activity.subject-instance';
   const name = label(activity.subject?.name) ?? t(fallback);
-  const title = t(activity.kind === 'world_transfer' && activity.mode === 'move' ? 'activity.kind-world-move' : titleId, { name });
+  const move = activity.kind === 'world_transfer' && activity.mode === 'move';
+  const title = t(move ? 'activity.kind-world-move' : titleId, { name });
+  const doneTitle = t(move ? 'activity.done-world-move' : finished[activity.kind]!, { name });
   const source = label(activity.source?.name);
   const subtitle = source ? activity.kind === 'instance_duplicate'
     ? t('activity.duplicate-subtitle', { name: source })
@@ -94,6 +116,7 @@ export function formatActivityText(activity: StructuredActivity, t: Translate, l
   const stageId = activity.stage && Object.hasOwn(stages, activity.stage) ? stages[activity.stage] : undefined;
   const stage = t(stageId ?? 'activity.working');
   let step = stage;
+  let counterText: string | undefined;
   const counter = activity.bytes ?? activity.items;
   if (counter) {
     const bytes = !!activity.bytes;
@@ -101,6 +124,8 @@ export function formatActivityText(activity: StructuredActivity, t: Translate, l
     const total = counter.total == null ? undefined : bytes ? formatActivityBytes(counter.total, locale) : new Intl.NumberFormat(locale).format(finiteCount(counter.total));
     step = t(bytes ? total === undefined ? 'activity.stage-bytes-done' : 'activity.stage-bytes'
       : total === undefined ? 'activity.stage-items-done' : 'activity.stage-items', { stage, done, ...(total === undefined ? {} : { total }) });
+    counterText = total === undefined ? done : t('activity.counter', { done, total });
   }
-  return { title, subtitle, step };
+  // The stage and its counter are also kept apart, so a row can truncate the words but never the numbers.
+  return { title, subtitle, step, stageLabel: stage, counter: counterText, doneTitle };
 }

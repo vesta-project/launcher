@@ -9,17 +9,18 @@ import {
   dismissActivity,
   type Activity,
 } from '../../features/activity';
-import { activityProgress, isForeground, terminal } from '../../features/activity/activity-model';
+import { active, activityProgress, isForeground, terminal } from '../../features/activity/activity-model';
 import { formatRelative } from '../../features/browse/browse-model';
-import { playInstance } from '../../features/instances/catalog';
+import { findInstance, playInstance } from '../../features/instances/catalog';
 import { Icon } from '../../components/icon';
 import { locale, t } from '../../localization';
 import { transitionTo } from '../transition';
 import { ActivityIcon } from './activity-icon';
+import { percentText } from './format';
 import './activity-panel.css';
 
-const routeOf = (activity: Activity) =>
-  activity.target?.route ?? (activity.target?.instanceId ? `/library/${activity.target.instanceId}` : undefined);
+/** How long a finished row stays in the panel. Failures stay until dismissed. */
+const RECENT_WINDOW = 3 * 60_000;
 
 const ORDER: Record<Activity['state'], number> = { running: 0, queued: 1, failed: 2, done: 2, cancelled: 2 };
 /** Running, then queued (both oldest first), then finished (newest first). The ledger itself
@@ -30,7 +31,7 @@ function byPlace(a: Activity, b: Activity) {
   return ORDER[a.state] < 2 ? a.startedAt - b.startedAt : (b.finishedAt ?? 0) - (a.finishedAt ?? 0);
 }
 
-/** "Mods 47/112", else the step count, else the percentage. */
+/** Legacy rows without a structured stage: "Mods 47/112", else the step count. */
 function stepText(activity: Activity): string {
   if (activity.step) return activity.step;
   if (activity.totalSteps) return t('activity.step-count', { count: activity.currentStep ?? 0, max: activity.totalSteps });
@@ -62,39 +63,58 @@ function ActivityError(props: { message: string }) {
   );
 }
 
-function TaskRow(props: { activity: Activity; now: number; onNavigate: () => void }) {
-  const route = () => routeOf(props.activity);
-  const ago = () =>
-    formatRelative(new Date(props.activity.finishedAt ?? props.now).toISOString(), props.now, locale());
-  const go = (to: string) => {
-    props.onNavigate();
-    transitionTo(to);
-  };
-  const playable = () =>
-    props.activity.state === 'done' && props.activity.action === 'play' ? props.activity.target?.instanceId : undefined;
+/** The instance a row would open or play, only while it still exists (a deleted one never does). */
+function liveInstance(activity: Activity) {
+  if (activity.kind === 'instance_delete') return undefined;
+  const id = activity.target?.instanceId;
+  return id && findInstance(id) ? id : undefined;
+}
 
+const routeOf = (activity: Activity) => {
+  if (activity.kind === 'instance_delete') return undefined;
+  if (activity.target?.route) return activity.target.route;
+  const id = liveInstance(activity);
+  return id ? `/library/${id}` : undefined;
+};
+
+function RowTitle(props: { activity: Activity; text: string; onNavigate: () => void }) {
+  return (
+    <Show
+      when={routeOf(props.activity)}
+      fallback={<span data-vesta="activity-row-title" data-tip-overflow>{props.text}</span>}
+    >
+      {(to) => (
+        <button
+          type="button"
+          data-vesta="activity-row-title"
+          data-tip-overflow
+          onClick={() => {
+            props.onNavigate();
+            transitionTo(to());
+          }}
+        >
+          {props.text}
+        </button>
+      )}
+    </Show>
+  );
+}
+
+/** Running or queued: title and percentage, a full-width bar, then the stage and its counter. */
+function LiveRow(props: { activity: Activity; onNavigate: () => void }) {
+  const value = () => activityProgress(props.activity);
+  const queued = () => props.activity.state === 'queued';
   return (
     <li data-vesta="activity-row" data-state={props.activity.state}>
       <ActivityIcon activity={props.activity} size="row" />
-      <div data-vesta="activity-row-head">
-        <Show
-          when={route()}
-          fallback={<span data-vesta="activity-row-title" data-tip-overflow>{props.activity.title}</span>}
-        >
-          {(to) => (
-            <button type="button" data-vesta="activity-row-title" data-tip-overflow onClick={() => go(to())}>
-              {props.activity.title}
-            </button>
-          )}
+      <div data-vesta="activity-row-line">
+        <RowTitle activity={props.activity} text={props.activity.title} onNavigate={props.onNavigate} />
+        <Show when={!queued() && value() !== undefined}>
+          <span data-vesta="activity-row-percent">{percentText(value()!)}</span>
         </Show>
-        <Show when={props.activity.subtitle}>
-          <small data-vesta="activity-row-subtitle">{props.activity.subtitle}</small>
-        </Show>
-      </div>
-
-      <div data-vesta="activity-row-actions">
-        <Show when={props.activity.cancellable && (props.activity.state === 'running' || props.activity.state === 'queued')}>
+        <Show when={props.activity.cancellable}>
           <IconButton
+            class="activity-row-cancel"
             variant="ghost"
             size="sm"
             label={t('activity.cancel', { title: props.activity.title })}
@@ -102,59 +122,96 @@ function TaskRow(props: { activity: Activity; now: number; onNavigate: () => voi
             onClick={() => void cancelActivity(props.activity.id).catch(() => undefined)}
           />
         </Show>
-        <Show when={playable()}>
-          {(id) => (
+      </div>
+      <Progress
+        class="activity-row-progress"
+        value={queued() ? 0 : value() === undefined ? undefined : value()! * 100}
+        aria-label={props.activity.title}
+      />
+      <div data-vesta="activity-row-status">
+        <span data-vesta="activity-row-stage" data-tip-overflow>
+          {queued() ? t('activity.queued') : (props.activity.stageLabel ?? stepText(props.activity))}
+        </span>
+        <Show when={!queued() && props.activity.counter}>
+          <span data-vesta="activity-row-counter">{props.activity.counter}</span>
+        </Show>
+      </div>
+    </li>
+  );
+}
+
+/** Finished or cancelled: one quiet line in past tense, with Play only when it still applies. */
+function RecentRow(props: { activity: Activity; now: number; onNavigate: () => void }) {
+  const ago = () =>
+    formatRelative(new Date(props.activity.finishedAt ?? props.now).toISOString(), props.now, locale());
+  const cancelled = () => props.activity.state === 'cancelled';
+  const playable = () =>
+    !cancelled() && props.activity.action === 'play' ? liveInstance(props.activity) : undefined;
+  return (
+    <li data-vesta="activity-recent-row" data-state={props.activity.state}>
+      <ActivityIcon activity={props.activity} />
+      <Icon name={cancelled() ? 'icons/actions/close' : 'icons/controls/check'} size={11} />
+      <RowTitle
+        activity={props.activity}
+        text={cancelled() ? props.activity.title : (props.activity.doneTitle ?? props.activity.title)}
+        onNavigate={props.onNavigate}
+      />
+      <span data-vesta="activity-recent-time">
+        {cancelled() ? t('activity.cancelled-ago', { time: ago() }) : ago()}
+      </span>
+      <Show when={playable()}>
+        {(id) => (
+          <Button
+            size="sm"
+            tone="accent"
+            icon={<Icon name="icons/actions/play" size={10} />}
+            onClick={() => {
+              playInstance(id());
+              dismissActivity(props.activity.id);
+            }}
+          >
+            {t('common.play')}
+          </Button>
+        )}
+      </Show>
+    </li>
+  );
+}
+
+/** Failed: stays until dismissed, with the error and a way to the instance when it still exists. */
+function FailedRow(props: { activity: Activity; onNavigate: () => void }) {
+  const route = () => routeOf(props.activity);
+  return (
+    <li data-vesta="activity-row" data-state="failed">
+      <ActivityIcon activity={props.activity} size="row" />
+      <div data-vesta="activity-row-line">
+        <RowTitle activity={props.activity} text={props.activity.title} onNavigate={props.onNavigate} />
+        <Show when={route()}>
+          {(to) => (
             <Button
               size="sm"
-              tone="accent"
-              icon={<Icon name="icons/actions/play" size={10} />}
+              variant="outline"
               onClick={() => {
-                playInstance(id());
-                dismissActivity(props.activity.id);
+                props.onNavigate();
+                transitionTo(to());
               }}
             >
-              {t('common.play')}
-            </Button>
-          )}
-        </Show>
-        <Show when={!playable() && (props.activity.state === 'done' || props.activity.state === 'failed') && route()}>
-          {(to) => (
-            <Button size="sm" variant="outline" onClick={() => go(to())}>
               {t('activity.open')}
             </Button>
           )}
         </Show>
+        <IconButton
+          class="activity-row-cancel"
+          variant="ghost"
+          size="sm"
+          label={t('activity.inbox-dismiss')}
+          icon={<Icon name="icons/actions/close" size={12} />}
+          onClick={() => dismissActivity(props.activity.id)}
+        />
       </div>
-
-      <div data-vesta="activity-row-detail">
-        <Show when={props.activity.state === 'running'}>
-          <Progress
-            class="activity-row-progress"
-            value={activityProgress(props.activity) === undefined ? undefined : activityProgress(props.activity)! * 100}
-            aria-label={props.activity.title}
-          />
-          <span data-vesta="activity-row-step" data-tip-overflow>{stepText(props.activity)}</span>
-          <Show when={props.activity.fileName}>
-            <small data-vesta="activity-row-file" data-tip-overflow>{props.activity.fileName?.split(/[\\/]/).pop()}</small>
-          </Show>
-
-        </Show>
-        <Show when={props.activity.state === 'queued'}>
-          <span data-vesta="activity-row-step">{t('activity.queued')}</span>
-        </Show>
-        <Show when={props.activity.state === 'done'}>
-          <Icon name="icons/controls/check" size={11} />
-          <span data-vesta="activity-row-step">
-            {t(props.activity.action === 'play' ? 'activity.installed-ago' : 'activity.finished-ago', { time: ago() })}
-          </span>
-        </Show>
-        <Show when={props.activity.state === 'cancelled'}>
-          <span data-vesta="activity-row-step">{t('activity.cancelled-ago', { time: ago() })}</span>
-        </Show>
-        <Show when={props.activity.state === 'failed'}>
-          <Icon name="icons/status/error" size={11} />
-          <ActivityError message={props.activity.error || t('activity.failed')} />
-        </Show>
+      <div data-vesta="activity-row-status">
+        <Icon name="icons/status/error" size={11} />
+        <ActivityError message={props.activity.error || t('activity.failed')} />
       </div>
     </li>
   );
@@ -165,13 +222,25 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
   // Relative times ("2 minutes ago") only need to move while the panel is open.
   const [now, setNow] = createSignal(Date.now(), { name: 'activityPanelClock' });
   onSettled(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(timer);
   });
 
-  const tasks = createMemo(() => activities().filter((row) => isForeground(row)).sort(byPlace), {
-    name: 'activityPanelTasks',
+  const foreground = createMemo(() => activities().filter((row) => isForeground(row)), {
+    name: 'activityPanelForeground',
   });
+  const live = createMemo(() => foreground().filter(active).sort(byPlace), { name: 'activityPanelLive' });
+  const failed = createMemo(() => foreground().filter((row) => row.state === 'failed').sort(byPlace), {
+    name: 'activityPanelFailed',
+  });
+  // Finished work is a short receipt, not a history: it leaves the panel a few minutes later.
+  const recent = createMemo(
+    () =>
+      foreground()
+        .filter((row) => (row.state === 'done' || row.state === 'cancelled') && now() - (row.finishedAt ?? 0) < RECENT_WINDOW)
+        .sort(byPlace),
+    { name: 'activityPanelRecent' },
+  );
   const background = createMemo(
     () => [
       ...backgroundActivities(),
@@ -179,8 +248,8 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
     ],
     { name: 'activityPanelBackground' },
   );
-  // Hidden successful background work must not expose an ineffective clear action.
-  const hasFinished = () => tasks().some(terminal) || background().some(terminal);
+  const hasFinished = () => recent().length > 0 || failed().length > 0 || background().some(terminal);
+  const empty = () => !live().length && !failed().length && !recent().length && !background().length;
 
   return (
     <div data-vesta="activity-panel">
@@ -199,20 +268,30 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
         <p data-vesta="activity-panel-error" role="alert">{activityError()}</p>
       </Show>
 
-      <Show
-        when={tasks().length || background().length}
-        fallback={<p data-vesta="activity-panel-empty">{t('activity.empty')}</p>}
-      >
-        <Show when={tasks().length}>
+      <Show when={!empty()} fallback={<p data-vesta="activity-panel-empty">{t('activity.empty')}</p>}>
+        <Show when={live().length || failed().length}>
           <ul data-vesta="activity-rows">
-            <For each={tasks()} keyed={(row) => row.id}>
-              {(row) => <TaskRow activity={row()} now={now()} onNavigate={props.onNavigate} />}
+            <For each={failed()} keyed={(row) => row.id}>
+              {(row) => <FailedRow activity={row()} onNavigate={props.onNavigate} />}
+            </For>
+            <For each={live()} keyed={(row) => row.id}>
+              {(row) => <LiveRow activity={row()} onNavigate={props.onNavigate} />}
             </For>
           </ul>
         </Show>
+        <Show when={recent().length}>
+          <section data-vesta="activity-recent">
+            <h3 data-vesta="activity-section-title">{t('activity.recent')}</h3>
+            <ul data-vesta="activity-recent-rows">
+              <For each={recent()} keyed={(row) => row.id}>
+                {(row) => <RecentRow activity={row()} now={now()} onNavigate={props.onNavigate} />}
+              </For>
+            </ul>
+          </section>
+        </Show>
         <Show when={background().length}>
           <section data-vesta="activity-background">
-            <h3 data-vesta="activity-background-title">{t('activity.background')}</h3>
+            <h3 data-vesta="activity-section-title">{t('activity.background')}</h3>
             <ul data-vesta="activity-background-rows">
               <For each={background()} keyed={(row) => row.id}>
                 {(row) => (

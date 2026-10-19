@@ -1,11 +1,17 @@
 /*
  * Activity panel (the popover under the status pill).
- * Hooks:  .activity-panel (popover), .activity-panel-clear, .activity-row-progress
- *         [data-vesta=activity-panel] -error -empty, [data-vesta=activity-rows]
- *         [data-vesta=activity-row] -head -title -subtitle -actions -detail -step -error
- *         [data-vesta=activity-background] -title -rows -row -name
- * States: activity-row / activity-background-row: data-state (queued | running | done | failed | cancelled)
- * The row title is the row's link: its ::after covers the row; the actions sit above it.
+ * Hooks:  .activity-panel (popover), .activity-panel-clear, .activity-row-progress, .activity-row-cancel
+ *         [data-vesta=activity-panel] -error -empty, [data-vesta=activity-rows], [data-vesta=activity-section-title]
+ *         [data-vesta=activity-row] -line -title -percent -status -stage -counter -error
+ *         [data-vesta=activity-recent] -rows -row -time
+ *         [data-vesta=activity-background] -rows -row -name
+ * States: activity-row / activity-recent-row / activity-background-row: data-state
+ *         (queued | running | done | failed | cancelled)
+ *
+ * A live row reads top to bottom: what (title, percent), how far (a full-width bar), where
+ * (stage words, then the counter, which never truncates). Finished rows shrink to one past-tense
+ * line under Recent and leave after a few minutes; failures keep a full row until dismissed.
+ * The row title is the row's link: its ::after covers the row; the buttons sit above it.
  */
 @layer launcher {
   .activity-panel {
@@ -65,10 +71,10 @@
   :where([data-vesta='activity-row']) {
     position: relative;
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-columns: 28px minmax(0, 1fr);
     align-items: center;
-    gap: 3px 10px;
-    padding: 8px 12px;
+    gap: 5px 10px;
+    padding: 9px 12px 10px;
     animation: activity-row-in var(--vesta-duration-slow) var(--vesta-ease-out);
     transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
@@ -77,26 +83,25 @@
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
-  :where([data-vesta='activity-row']:has(button[data-vesta='activity-row-title']:hover)) {
+  :where([data-vesta='activity-row'], [data-vesta='activity-recent-row']):has(button[data-vesta='activity-row-title']:hover) {
     background: var(--vesta-color-fill);
   }
 
   :where([data-vesta='activity-row']) > :where([data-vesta='activity-icon']) {
-    grid-row: span 2;
+    grid-row: 1 / span 3;
+    align-self: start;
   }
 
-  :where([data-vesta='activity-row'][data-state='done'], [data-vesta='activity-row'][data-state='cancelled']) > :where([data-vesta='activity-icon']) {
-    opacity: 0.8;
-  }
-
-  :where([data-vesta='activity-row-head']) {
+  :where([data-vesta='activity-row-line']) {
     display: flex;
-    align-items: baseline;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
     min-inline-size: 0;
+    min-block-size: 20px;
   }
 
   :where([data-vesta='activity-row-title']) {
+    flex: 1;
     min-inline-size: 0;
     margin: 0;
     padding: 0;
@@ -105,7 +110,7 @@
     background: none;
     color: var(--vesta-color-text);
     font: inherit;
-    font-size: var(--vesta-text-md);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
     text-align: start;
     text-overflow: ellipsis;
@@ -126,46 +131,28 @@
     outline-offset: -2px;
   }
 
-  :where([data-vesta='activity-row-subtitle']) {
+  :where([data-vesta='activity-row-percent']) {
     flex: none;
-    max-inline-size: 45%;
-    overflow: hidden;
-    color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--vesta-color-accent-text);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+    font-variant-numeric: tabular-nums;
   }
 
-
-  :where([data-vesta='activity-row-file']) {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-inline-size: 0;
-    max-inline-size: 25%;
-    color: var(--vesta-color-text-subtle);
-  }
-
-  :where([data-vesta='activity-row-actions']) {
+  /* Buttons sit above the row-wide title link. */
+  :where([data-vesta='activity-row-line'], [data-vesta='activity-recent-row']) :where(button:not([data-vesta='activity-row-title'])) {
     position: relative;
     z-index: 1;
-    display: flex;
-    align-items: center;
-    gap: 4px;
   }
 
-  :where([data-vesta='activity-row-detail']) {
-    display: flex;
-    grid-column: 2 / 4;
-    align-items: center;
-    gap: 8px;
-    min-inline-size: 0;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+  .activity-row-cancel {
+    flex: none;
+    margin-block: -4px;
+    margin-inline-end: -6px;
   }
 
   .activity-row-progress {
-    flex: 1;
+    grid-column: 2;
     min-inline-size: 0;
   }
 
@@ -174,33 +161,90 @@
     transition-duration: 360ms;
   }
 
-  :where([data-vesta='activity-row-step']) {
-    flex: none;
-    max-inline-size: 60%;
+  :where([data-vesta='activity-row-status']) {
+    display: flex;
+    grid-column: 2;
+    align-items: baseline;
+    gap: 4px 10px;
+    min-inline-size: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='activity-row-stage']) {
+    flex: 1;
+    min-inline-size: 0;
     overflow: hidden;
-    font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  :where([data-vesta='activity-row'][data-state='queued']) :where([data-vesta='activity-row-step']) {
-    max-inline-size: none;
+  :where([data-vesta='activity-row-counter']) {
+    flex: none;
+    color: var(--vesta-color-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='activity-row'][data-state='queued']) :where([data-vesta='activity-row-stage']) {
     color: var(--vesta-color-warning-text);
   }
 
-  :where([data-vesta='activity-row'][data-state='done']) :where([data-vesta='activity-row-detail']) {
-    gap: 4px;
+  :where([data-vesta='activity-row'][data-state='failed']) :where([data-vesta='activity-row-status']) {
+    align-items: flex-start;
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='activity-row-status']) > :where([data-vesta='icon']) {
+    flex: none;
+    margin-block-start: 1px;
+  }
+
+  /* Recent: finished work as a short receipt. */
+  :where([data-vesta='activity-recent']) {
+    padding: 4px 0 6px;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='activity-recent-rows']) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='activity-recent-row']) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-block-size: 32px;
+    padding: 3px 12px;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    animation: activity-row-in var(--vesta-duration-slow) var(--vesta-ease-out);
+  }
+
+  :where([data-vesta='activity-recent-row']) > :where([data-vesta='activity-icon']) {
+    opacity: 0.85;
+  }
+
+  :where([data-vesta='activity-recent-row']) > :where([data-vesta='icon']) {
+    flex: none;
     color: var(--vesta-color-success-text);
   }
 
-  :where([data-vesta='activity-row'][data-state='done']) :where([data-vesta='activity-row-step']) {
-    max-inline-size: none;
+  :where([data-vesta='activity-recent-row'][data-state='cancelled']) > :where([data-vesta='icon']) {
+    color: var(--vesta-color-text-subtle);
   }
 
-  :where([data-vesta='activity-row'][data-state='failed']) :where([data-vesta='activity-row-detail']) {
-    align-items: flex-start;
-    gap: 4px;
-    color: var(--vesta-color-danger-text);
+  :where([data-vesta='activity-recent-row']) :where([data-vesta='activity-row-title']) {
+    color: var(--vesta-color-text-muted);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='activity-recent-time']) {
+    flex: none;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
   }
 
   :where([data-vesta='activity-row-error']) {
@@ -241,17 +285,13 @@
     cursor: default;
   }
 
-  :where([data-vesta='activity-row-detail']) > :where([data-vesta='icon']) {
-    flex: none;
-  }
-
   :where([data-vesta='activity-background']) {
-    padding: 6px 12px 10px;
+    padding: 4px 0 10px;
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
-  :where([data-vesta='activity-background-title']) {
-    margin: 2px 0 4px;
+  :where([data-vesta='activity-section-title']) {
+    margin: 4px 12px;
     color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
@@ -264,7 +304,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 2px 8px;
-    padding-block: 3px;
+    padding: 3px 12px;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
     animation: activity-row-in var(--vesta-duration-slow) var(--vesta-ease-out);
