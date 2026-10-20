@@ -1,0 +1,18 @@
+@layer launcher {
+  :where([data-vesta='resource-review']) { display: flex; flex-direction: column; gap: var(--vesta-space-4); min-inline-size: 0; }
+  :where([data-vesta='resource-review-destination']) { display: flex; align-items: center; gap: var(--vesta-space-2); margin: 0; font-size: var(--vesta-text-sm); color: var(--vesta-color-text-muted); }
+  :where([data-vesta='resource-review-files']) { display: grid; gap: var(--vesta-space-2); }
+  :where([data-vesta='resource-review-file']) { display: flex; align-items: center; gap: var(--vesta-space-3); padding: var(--vesta-space-3); background: var(--vesta-color-surface-sunken); border-radius: var(--vesta-radius-container); }
+  :where([data-vesta='resource-review-file'] > strong) { min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--vesta-text-md); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta='resource-review-notes']) { margin: 0; padding-inline-start: var(--vesta-space-4); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); overflow-wrap: anywhere; }
+  :where([data-vesta='resource-review-help']) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta='resource-review-candidates']) { display: grid; border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta='resource-review-candidate']) { display: flex; align-items: center; flex-wrap: wrap; gap: var(--vesta-space-3); padding-block: var(--vesta-space-3); border-block-end: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta='resource-review-candidate'] > [data-vesta='checkbox']) { flex: 1 1 240px; min-inline-size: 0; }
+  :where([data-vesta='resource-review-candidate'] [data-vesta='checkbox-label']) { overflow-wrap: anywhere; }
+  :where([data-vesta='resource-review-controls']) { display: flex; flex-wrap: wrap; gap: var(--vesta-space-2); }
+  :where([data-vesta='resource-review-dependencies']) { display: grid; gap: var(--vesta-space-3); }
+  :where([data-vesta='resource-review-dependencies'] > ul) { margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta='resource-review-dependencies'] li) { display: flex; justify-content: space-between; gap: var(--vesta-space-3); padding-block: var(--vesta-space-2); border-block-end: var(--vesta-border-width) solid var(--vesta-color-border); overflow-wrap: anywhere; }
+  :where([data-vesta='resource-review-dependencies'] li > span) { color: var(--vesta-color-text-muted); }
+}

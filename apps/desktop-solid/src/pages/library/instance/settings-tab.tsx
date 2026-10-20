@@ -1,3 +1,4 @@
+import { GameOptionsDialog } from './game-options-dialog';
 import { requestNativeExport } from "../../../features/instances/native-export-dialog";
 import { nativeInstances, saveNativeInstance, duplicateNativeInstance, repairNativeInstance, resetNativeInstance, deleteNativeInstance, instancePending, systemMemoryMb as nativeMemory, loadSystemMemory } from "../../../features/instances/native-service";
 import {
@@ -193,6 +194,7 @@ export function InstanceSettingsTab(props: {
   const [draft, setDraft] = createSignal(
     untrack(() => ({ ...store.values() })),
   );
+  const [gameOptionsOpen, setGameOptionsOpen] = createSignal(false, { name: 'instanceGameOptionsOpen' });
   const [current, setCurrent] = createSignal("general");
   let jumpedAt = 0;
   const [confirm, setConfirm] = createSignal<"reset" | "delete">();
@@ -298,6 +300,7 @@ export function InstanceSettingsTab(props: {
 
   return (
     <div data-vesta="instance-settings">
+      <GameOptionsDialog id={id} name={props.entry.instance.name} disabled={busy()} open={gameOptionsOpen()} onOpenChange={setGameOptionsOpen} />
       <nav data-vesta="instance-settings-nav" aria-label={t("instance-settings.sections-aria")}>
         <Button
           size="sm"
@@ -370,7 +373,7 @@ export function InstanceSettingsTab(props: {
               label={t("instance-settings.minecraft-options")}
               description={t("instance-settings.minecraft-options-description")}
             >
-              <Button size="sm" variant="outline" disabled>
+              <Button size="sm" variant="outline" onClick={() => setGameOptionsOpen(true)}>
                 {t("instance-settings.edit")}
               </Button>
             </SettingRow>

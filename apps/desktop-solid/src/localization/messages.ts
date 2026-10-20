@@ -1,5 +1,17 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "drop.review-dependencies",
+  "drop.destination",
+  "drop.files",
+  "drop.choose-resources",
+  "drop.dependencies-help",
+  "drop.kind-for",
+  "drop.world-for",
+
+  "instance-options.idle",
+  "instance-options.missing",
+  "instance-options.unsaved",
+  "instance-options.reload",
   "onboarding.import-summary",
   "import.picker-launcher",
   "import.picker-empty",

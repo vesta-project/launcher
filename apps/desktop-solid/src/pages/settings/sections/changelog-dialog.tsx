@@ -1,5 +1,5 @@
-import { Button, Dialog, Skeleton } from '@vesta/ui';
-import { For, Match, Show, Switch, createEffect, createSignal, untrack } from 'solid-js';
+import { Button, Dialog, Select, Skeleton } from '@vesta/ui';
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { loadReleases, sameVersion, type Release } from '../../../features/changelog/changelog';
 import { openExternal } from '../../../features/links/external-links';
@@ -7,18 +7,13 @@ import { formatDate, t } from '../../../localization';
 import { RichTextView } from '../../browse/project/rich-text-view';
 import './changelog-dialog.css';
 
-const anchor = (tag: string) => `changelog-${tag.replace(/[^\w.-]/g, '')}`;
-
-/**
- * "What's new": every release, newest first. The list on the left jumps to a release and
- * follows the reading position as the notes scroll; the running version is marked.
- */
+/** A release picker beside one bounded reading pane; narrow windows use a select. */
 export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boolean) => void; version: string }) {
   const [releases, setReleases] = createSignal<Release[]>();
   const [error, setError] = createSignal<string>();
   const [active, setActive] = createSignal<string>();
   let notes: HTMLDivElement | undefined;
-  let jumping = false;
+  const selected = createMemo(() => releases()?.find((release) => release.tag === active()) ?? releases()?.[0]);
 
   const load = () => {
     setError(undefined);
@@ -36,25 +31,9 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
     },
   );
 
-  // Scroll-spy: the release whose heading last passed the top of the notes is the current one.
-  const follow = () => {
-    if (jumping || !notes) return;
-    const top = notes.getBoundingClientRect().top + 24;
-    let current: string | undefined;
-    for (const section of notes.querySelectorAll<HTMLElement>('[data-vesta="changelog-release"]')) {
-      if (section.getBoundingClientRect().top <= top) current = section.dataset.tag;
-      else break;
-    }
-    setActive(current ?? releases()?.[0]?.tag);
-  };
   const jump = (tag: string) => {
-    const section = notes?.querySelector<HTMLElement>(`#${anchor(tag)}`);
-    if (!section || !notes) return;
     setActive(tag);
-    jumping = true;
-    const offset = section.getBoundingClientRect().top - notes.getBoundingClientRect().top;
-    notes.scrollTo({ top: notes.scrollTop + offset, behavior: 'smooth' });
-    setTimeout(() => (jumping = false), 600);
+    if (notes) notes.scrollTop = 0;
   };
 
   const date = (value: string) => {
@@ -94,6 +73,10 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
         <Match when={releases()}>
           {(rows) => (
             <div data-vesta="changelog">
+              <div data-vesta="changelog-picker">
+                <Select size="sm" aria-label={t('prefs.about.changelog-versions')} value={selected()?.tag}
+                  onChange={jump} options={rows().map((row) => ({ value: row.tag, label: row.tag }))} />
+              </div>
               <nav data-vesta="changelog-versions" aria-label={t('prefs.about.changelog-versions')}>
                 <For each={rows()} keyed={(row) => row.tag}>
                   {(release) => (
@@ -114,10 +97,10 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
                   )}
                 </For>
               </nav>
-              <div data-vesta="changelog-notes" ref={(element: HTMLDivElement) => (notes = element)} onScroll={follow}>
-                <For each={rows()} keyed={(row) => row.tag}>
+              <div data-vesta="changelog-notes" ref={(element: HTMLDivElement) => (notes = element)}>
+                <Show when={selected()}>
                   {(release) => (
-                    <section data-vesta="changelog-release" id={anchor(release().tag)} data-tag={release().tag}>
+                    <section data-vesta="changelog-release" data-tag={release().tag}>
                       <header data-vesta="changelog-release-head">
                         <h3 data-vesta="changelog-release-title">{release().name}</h3>
                         <span data-vesta="changelog-release-meta">
@@ -141,7 +124,7 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
                       </Show>
                     </section>
                   )}
-                </For>
+                </Show>
               </div>
             </div>
           )}

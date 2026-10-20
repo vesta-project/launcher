@@ -106,7 +106,7 @@ function keybindGroup(key: string): string {
   return Object.entries(keybindGroups).find(([, names]) => names.includes(name))?.[0] ?? 'other';
 }
 /** Every value the source bundle holds, grouped for the category sidebar. */
-export function syncItems(snapshot: SyncSnapshot): SyncItem[] {
+export function syncItems(snapshot: Pick<SyncSnapshot, 'category' | 'sharedValues' | 'catalog'>): SyncItem[] {
   const known = new Map(snapshot.catalog.map((entry) => [entry.key, entry]));
   return Object.entries(snapshot.sharedValues)
     .filter(([key]) => (snapshot.category === 'keybinds') === key.startsWith('key_'))

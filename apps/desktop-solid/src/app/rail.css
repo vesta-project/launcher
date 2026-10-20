@@ -130,13 +130,19 @@
     border: var(--vesta-border-width) solid oklch(1 0 0 / 0.15);
     border-radius: var(--rail-button-radius);
     /* The art stops at the border, so the ring is a clean line like the profile button's. */
-    background:
-      var(--pin-image) center / cover no-repeat,
-      var(--vesta-color-fill);
+    background: var(--vesta-color-fill);
     background-clip: padding-box;
     background-origin: padding-box;
     transition: border-color var(--vesta-duration-fast)
       var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta="rail-pin-image"]) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: inherit;
+    object-fit: cover;
   }
 
   :where([data-vesta="rail-pin"]:hover) {

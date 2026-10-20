@@ -6,15 +6,28 @@ import { nativeInstances, performNative, reportInstanceError } from './native-se
 import { loadNativeWorlds } from './native-details';
 import { worldsFor } from './details';
 import type { WorldRef } from './native-details-model';
+import { Icon } from '../../components/icon';
+import './native-import-dialog.css';
 import { t } from '../../localization';
 
 interface Choice {
-  decisionId: string; operationId: string; instanceId: number; phase: string;
+  decisionId: string; operationId: string; instanceId: number; instanceName: string; phase: string;
   candidates: { id: string; name: string; kinds: string[] }[];
   dependencies: { name: string; version: string }[]; notes: string[];
 }
 interface ArchiveChoice { installId: string; candidates: { id: string; name: string }[] }
 let ready: Promise<unknown> | undefined;
+// Filenames only, bounded per window. Keep identity through the later dependency decision.
+const [droppedFiles, setDroppedFiles] = createSignal(new Map<string, string[]>());
+const leafName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+function rememberDroppedFiles(id: string, paths: string[]) {
+  setDroppedFiles((current) => {
+    const next = new Map(current).set(id, paths.map(leafName));
+    while (next.size > 64) next.delete(next.keys().next().value!);
+    return next;
+  });
+}
+
 const [operationWorlds, setOperationWorlds] = createSignal(new Map<string, WorldRef>());
 const worldExpiry = new Map<string, ReturnType<typeof setTimeout>>();
 function forgetOperationWorld(id: string) {
@@ -35,7 +48,10 @@ export async function importNativePaths(id: string, paths: string[], world?: Wor
     if (ready !== session) return;
     await performNative(id, async () => {
       const operationId = await invoke<string>('start_resource_drop', { instanceId: Number(id), paths });
-      if (ready === session && world) rememberOperationWorld(operationId, world);
+      if (ready === session) {
+        rememberDroppedFiles(operationId, paths);
+        if (world) rememberOperationWorld(operationId, world);
+      }
     });
   } catch (reason) { reportInstanceError(reason); }
 }
@@ -112,22 +128,51 @@ export function NativeImportDialog() {
       disposed = true; stops.forEach((stop) => stop());
       if (ready === pending) ready = undefined;
       for (const timer of worldExpiry.values()) clearTimeout(timer);
-      worldExpiry.clear(); setOperationWorlds(new Map());
+      worldExpiry.clear(); setOperationWorlds(new Map()); setDroppedFiles(new Map());
       // Dispose pending decisions only; already-running copies/installations remain Rust-owned.
       for (const current of choices()) void invoke('cancel_resource_drop', { operationId: current.operationId }).catch(reportInstanceError);
       for (const current of archives()) void invoke('submit_world_archive_selection', { installId: current.installId, selectedCandidateIds: [] }).catch(reportInstanceError);
     };
   });
-  return <Dialog closeLabel={t('nav.close')} open={!!choice() || !!archive()} title={t('drop.review')} onOpenChange={(open) => { if (!open) void submit(true); }}
+  return <Dialog closeLabel={t('nav.close')} open={!!choice() || !!archive()} title={choice()?.phase === 'dependencies' ? t('drop.review-dependencies') : t('drop.review')} class="resource-review-dialog" size="lg" onOpenChange={(open) => { if (!open) void submit(true); }}
     footer={<><Button variant="ghost" disabled={submitting()} onClick={() => void submit(true)}>{t('common.cancel')}</Button>
-      <Button tone="accent" disabled={submitting() || (choice()?.phase !== 'dependencies' && (selected().length === 0 || selected().some((id) => { const candidate = choice()?.candidates.find((row) => row.id === id); return (kinds()[id] ?? candidate?.kinds[0]) === 'dataPack' && !operationWorlds().get(choice()!.operationId) && !targetWorlds()[id]; })))} onClick={() => void submit()}>{t('worlds.import')}</Button></>}>
-    <For each={choice()?.notes ?? []}>{(note) => <p>{note}</p>}</For>
-    <Show when={choice()?.phase === 'dependencies'}><Checkbox label={t('drop.dependencies')} checked={dependencies()} onChange={setDependencies} /><For each={choice()?.dependencies ?? []}>{(item) => <p>{item.name} {item.version}</p>}</For></Show>
-    <For each={candidates()}>{(item) => <div>
-      <Checkbox label={item.name} checked={selected().includes(item.id)} onChange={(checked) => setSelected((ids) => checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))} />
-      <Show when={item.kinds.length > 1}><Select aria-label={t('drop.kind')} value={kinds()[item.id] ?? item.kinds[0]} options={item.kinds.map((kind) => ({ value: kind, label: kindLabels[kind]?.() ?? kind }))} onChange={(kind) => setKinds((values) => ({ ...values, [item.id]: kind }))} /></Show>
-      <Show when={(kinds()[item.id] ?? item.kinds[0]) === 'dataPack' && !operationWorlds().get(choice()!.operationId)}><Select aria-label={t('drop.world')} placeholder={t('drop.choose-world')} value={targetWorlds()[item.id] ?? ''} options={availableWorlds().map((world) => ({ value: world.id, label: world.name }))} onChange={(world) => setTargetWorlds((values) => ({ ...values, [item.id]: world }))} /></Show>
-    </div>}</For>
-    <Show when={choice()?.phase === 'resources' && !candidates().length}><p>{t('drop.no-candidates')}</p></Show>
+      <Button tone="accent" disabled={submitting() || (choice()?.phase !== 'dependencies' && (selected().length === 0 || selected().some((id) => { const candidate = choice()?.candidates.find((row) => row.id === id); return (kinds()[id] ?? candidate?.kinds[0]) === 'dataPack' && !operationWorlds().get(choice()!.operationId) && !targetWorlds()[id]; })))} onClick={() => void submit()}>{choice()?.phase === 'dependencies' ? t('welcome.continue') : t('drop.add-to')}</Button></>}>
+    <div data-vesta="resource-review">
+      <Show when={choice()}>{(current) => <p data-vesta="resource-review-destination">
+        <Icon name="icons/rail/library" size={16} />
+        {t('drop.destination', { name: current().instanceName })}
+      </p>}</Show>
+      <Show when={choice() && droppedFiles().get(choice()!.operationId)?.length}>
+        <section data-vesta="resource-review-files" aria-label={t('drop.files')}>
+          <For each={droppedFiles().get(choice()!.operationId) ?? []}>{(name) => <div data-vesta="resource-review-file">
+            <Icon name="icons/content/file" size={20} /><strong>{name}</strong>
+          </div>}</For>
+        </section>
+      </Show>
+      <Show when={choice()?.notes.length}>
+        <ul data-vesta="resource-review-notes"><For each={choice()?.notes ?? []}>{(note) => <li>{note}</li>}</For></ul>
+      </Show>
+      <Show when={choice()?.phase === 'dependencies'}>
+        <section data-vesta="resource-review-dependencies">
+          <Checkbox label={t('drop.dependencies')} description={t('drop.dependencies-help')} checked={dependencies()} disabled={submitting()} onChange={setDependencies} />
+          <ul><For each={choice()?.dependencies ?? []}>{(item) => <li><strong>{item.name}</strong><span>{item.version}</span></li>}</For></ul>
+        </section>
+      </Show>
+      <Show when={candidates().length}>
+        <p data-vesta="resource-review-help">{t('drop.choose-resources')}</p>
+        <div data-vesta="resource-review-candidates">
+          <For each={candidates()}>{(item) => <div data-vesta="resource-review-candidate" data-selected={selected().includes(item.id) ? '' : undefined}>
+            <Checkbox label={item.name} checked={selected().includes(item.id)} disabled={submitting()}
+              description={item.kinds.length === 1 ? (kindLabels[item.kinds[0]!]?.() ?? item.kinds[0]) : undefined}
+              onChange={(checked) => setSelected((ids) => checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))} />
+            <div data-vesta="resource-review-controls">
+              <Show when={item.kinds.length > 1}><Select size="sm" aria-label={t('drop.kind-for', { name: item.name })} value={kinds()[item.id] ?? item.kinds[0]} options={item.kinds.map((kind) => ({ value: kind, label: kindLabels[kind]?.() ?? kind }))} disabled={submitting()} onChange={(kind) => setKinds((values) => ({ ...values, [item.id]: kind }))} /></Show>
+              <Show when={(kinds()[item.id] ?? item.kinds[0]) === 'dataPack' && !operationWorlds().get(choice()!.operationId)}><Select size="sm" aria-label={t('drop.world-for', { name: item.name })} placeholder={t('drop.choose-world')} value={targetWorlds()[item.id] ?? ''} options={availableWorlds().map((world) => ({ value: world.id, label: world.name }))} disabled={submitting()} onChange={(world) => setTargetWorlds((values) => ({ ...values, [item.id]: world }))} /></Show>
+            </div>
+          </div>}</For>
+        </div>
+      </Show>
+      <Show when={choice()?.phase === 'resources' && !candidates().length}><p>{t('drop.no-candidates')}</p></Show>
+    </div>
   </Dialog>;
 }

@@ -1,0 +1,16 @@
+@layer launcher {
+  :where([data-vesta='game-options-editor']) {
+    --sync-control-width: 220px;
+    --sync-list-height: min(460px, 50vh);
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+  }
+  :where([data-vesta='game-options-tabs']) { margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+  :where([data-vesta='game-options-tabs']:disabled) { opacity: var(--vesta-opacity-disabled); }
+  :where([data-vesta='game-options-actions']) { display: flex; align-items: center; flex-wrap: wrap; gap: var(--vesta-space-2); }
+  :where([data-vesta='game-options-actions'] > span) { margin-inline-end: auto; }
+  :where([data-vesta='game-options-hint'], [data-vesta='game-options-actions'] > span) { margin-block: 0; font-size: var(--vesta-text-sm); color: var(--vesta-color-text-muted); }
+  .game-options-dialog [data-vesta='prefs-sync-toolbar'] { flex-wrap: wrap; }
+}

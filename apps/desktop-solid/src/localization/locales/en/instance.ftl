@@ -96,6 +96,19 @@ drop-add-to-instance = Release to add resources
 drop-supported-files = Drop .jar or .zip files
 drop-release = Release to add
 drop-cannot-add = These files can't go here
-drop-add-to = Add to { $name }
+drop-add-to = Add resource
 drop-float-library = Drop onto an instance to add files
 drop-float-anywhere = Release to choose an instance
+
+instance-options-idle = Close Minecraft and wait for instance tasks to finish before editing.
+instance-options-missing = No options file yet. Start Minecraft once to generate its settings.
+instance-options-unsaved = Unsaved changes
+instance-options-reload = Reload from disk
+
+drop-review-dependencies = Required dependencies
+drop-destination = Adding to { $name }
+drop-files = Dropped files
+drop-choose-resources = Choose the resources to add. Review the type and destination before continuing.
+drop-dependencies-help = These resources are already added. Install the dependencies below so they can work correctly.
+drop-kind-for = Resource type for { $name }
+drop-world-for = Target world for { $name }

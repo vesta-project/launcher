@@ -54,7 +54,7 @@ function LibraryInstanceItem(props: { id: string; context: LibraryContext }) {
     extensions: ['.jar', '.zip'],
     disabled: () => libraryArranging() || instancePending(props.id) || ['installing', 'pending', 'verifying-runtime', 'launch-preflight-repair']
       .includes(nativeRecord(props.id)?.installationStatus ?? ''),
-    hint: () => t('drop.add-to', { name: entry()?.instance.name ?? '' }),
+    hint: () => t('drop.add-to'),
     drop: (paths) => { void importNativePaths(props.id, paths); },
   });
   const open = (to: string) => {

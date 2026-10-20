@@ -5,8 +5,8 @@
  *         -badge (data-tone), -notes, -release (data-tag), -release-head, -release-title,
  *         -release-meta, -release-empty, -message, .changelog-release-link
  *
- * Two columns: versions on the left (follows the reading position), notes on the right in one
- * scrolling column. Below 620px the versions collapse into a scrolling strip above the notes.
+ * Two columns: release selection on the left, one scrolling release on the right.
+ * Below 620px a select replaces the version list.
  */
 @layer launcher {
   .changelog-dialog {
@@ -14,13 +14,23 @@
   }
 
   :where([data-vesta='changelog']) {
-    container: changelog / inline-size;
     display: grid;
     grid-template-columns: 180px minmax(0, 1fr);
     gap: var(--vesta-space-4);
     block-size: min(70vh, 640px);
     min-block-size: 0;
+    min-inline-size: 0;
+    overflow: hidden;
   }
+
+  .changelog-dialog > [data-vesta='dialog-body'] {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    container: changelog / inline-size;
+  }
+
+  :where([data-vesta='changelog-picker']) { display: none; }
 
   :where([data-vesta='changelog-versions']) {
     display: flex;
@@ -34,10 +44,12 @@
 
   :where([data-vesta='changelog-version']) {
     display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-start;
     flex-wrap: wrap;
-    align-items: center;
     gap: 4px 6px;
-    min-block-size: 30px;
+    min-block-size: 44px;
     padding: 4px var(--vesta-space-2);
     border: 0;
     border-radius: var(--vesta-radius-md);
@@ -86,13 +98,16 @@
     flex-direction: column;
     gap: var(--vesta-space-6);
     min-block-size: 0;
+    min-inline-size: 0;
     padding-inline-end: var(--vesta-space-2);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
 
   :where([data-vesta='changelog-release']) {
-    scroll-margin-block-start: var(--vesta-space-2);
+    flex: none;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
   }
 
   :where([data-vesta='changelog-release']) + :where([data-vesta='changelog-release']) {
@@ -151,18 +166,9 @@
       grid-template-rows: auto minmax(0, 1fr);
     }
 
-    :where([data-vesta='changelog-versions']) {
-      flex-direction: row;
-      padding: 0 0 var(--vesta-space-2);
-      overflow-x: auto;
-      overflow-y: hidden;
-      border-inline-end: 0;
-      border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
-    }
-
-    :where([data-vesta='changelog-version']) {
-      flex: none;
-      flex-wrap: nowrap;
-    }
+    :where([data-vesta='changelog-versions']) { display: none; }
+    :where([data-vesta='changelog-picker']) { display: block; }
+    :where([data-vesta='changelog-release-head']) { grid-template-columns: minmax(0, 1fr); }
+    .changelog-release-link { grid-row: auto; grid-column: auto; justify-self: start; }
   }
 }

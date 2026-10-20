@@ -1,5 +1,9 @@
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, mergeElementProps } from '@vesta/ui';
 import { For, Show } from 'solid-js';
+import { setType } from '../features/browse/browse-store';
+import { nativeInstances, openNativeInstanceFolder } from '../features/instances/native-service';
+import { beginLibraryArrange } from '../features/instances/library-layout';
+import { instances } from '../features/instances/catalog';
 import { Icon } from '../components/icon';
 import { AccountMenu } from '../features/accounts/account-menu';
 import { movePin, pinnedInstances, playInstance, retryInstance, togglePin } from '../features/instances/catalog';
@@ -11,12 +15,12 @@ import './rail.css';
 
 function RailLink(props: { item: NavItem }) {
   return (
-    <Tooltip
+    <ContextMenu trigger={(contextProps) => <Tooltip
       content={t(props.item.label)}
       placement="right"
       trigger={(triggerProps) => (
         <a
-          {...triggerProps}
+          {...mergeElementProps<Record<string, unknown>>(triggerProps, contextProps)}
           data-vesta="rail-button"
           href={`#${props.item.href}`}
           aria-label={t(props.item.label)}
@@ -31,7 +35,28 @@ function RailLink(props: { item: NavItem }) {
           <Icon name={props.item.icon} size={22} />
         </a>
       )}
-    />
+    />}>
+      <ContextMenuItem onSelect={() => transitionTo(props.item.href)}>{t(props.item.label)}</ContextMenuItem>
+      <ContextMenuSeparator />
+      <Show when={props.item.id === 'library'}>
+        <ContextMenuItem onSelect={() => transitionTo('/create')}>{t('nav.create')}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => { transitionTo('/library'); beginLibraryArrange(instances().map((entry) => entry.instance.id)); }}>{t('library.arrange')}</ContextMenuItem>
+      </Show>
+      <Show when={props.item.id === 'create'}>
+        <ContextMenuItem onSelect={() => transitionTo('/create/import')}>{t('install.import')}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => { setType('modpack'); transitionTo('/browse'); }}>{t('browse.kind-modpack')}</ContextMenuItem>
+      </Show>
+      <Show when={props.item.id === 'browse'}>
+        <For each={['mod', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'] as const}>
+          {(kind) => <ContextMenuItem onSelect={() => { setType(kind); transitionTo('/browse'); }}>{t(`browse.kind-${kind}`)}</ContextMenuItem>}
+        </For>
+      </Show>
+      <Show when={props.item.id === 'settings'}>
+        <ContextMenuItem onSelect={() => transitionTo('/settings/appearance')}>{t('prefs.appearance.title')}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => transitionTo('/settings/defaults')}>{t('prefs.defaults.title')}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => transitionTo('/settings/about')}>{t('prefs.about.title')}</ContextMenuItem>
+      </Show>
+    </ContextMenu>
   );
 }
 
@@ -84,17 +109,14 @@ export function Rail() {
                           aria-current={
                             route().page === 'library' && route().section === entry().instance.id ? 'page' : undefined
                           }
-                          style={
-                            {
-                              '--pin-image': `url('${entry().instance.image}')`,
-                            } as never
-                          }
                           onClick={(event) => {
                             event.preventDefault();
                             if (route().page === 'library' && route().section === entry().instance.id) return;
                             transitionTo(`/library/${entry().instance.id}`);
                           }}
-                        />
+                        >
+                          <img data-vesta="rail-pin-image" src={entry().instance.image} alt="" draggable="false" />
+                        </a>
                       )}
                     />
                   )}
@@ -113,6 +135,9 @@ export function Rail() {
                         ? t('common.resume-installation')
                         : t('common.play')}
                   </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => transitionTo(`/library/${entry().instance.id}`)}>{t('instance-actions.details')}</ContextMenuItem>
+                  <ContextMenuItem onSelect={() => transitionTo(`/library/${entry().instance.id}/settings`)}>{t('nav.settings')}</ContextMenuItem>
+                  <Show when={nativeInstances}><ContextMenuItem onSelect={() => void openNativeInstanceFolder(entry().instance.id)}>{t('instance-actions.folders')}</ContextMenuItem></Show>
                   <ContextMenuSeparator />
                   <ContextMenuItem disabled={index() === 0} onSelect={() => movePin(entry().instance.id, -1)}>
                     {t('common.move-up')}

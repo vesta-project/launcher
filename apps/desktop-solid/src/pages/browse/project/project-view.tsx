@@ -226,7 +226,8 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
           </TabList>
           <StripTarget kind={props.project.resource_type} />
         </div>
-        <TabPanel value="description" class="project-pane">
+        <TabPanel value="description" class="project-pane" forceMount
+          style={{ display: active() === 'description' ? undefined : 'none' }}>
           <ProjectOverview data={props.data} project={props.project} />
         </TabPanel>
         <Show when={gallery() > 0}>
