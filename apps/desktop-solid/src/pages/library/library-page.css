@@ -1,7 +1,14 @@
 /*
- * Library grid, tightening as the window narrows, as in the demo.
- * Hooks: [data-vesta=library-grid]
- * Knobs: --library-grid-min, --library-grid-gap, --library-grid-padding
+ * Library grid, tightening as the window narrows, as in the demo, plus arranging and groups.
+ * Hooks: [data-vesta=library-grid] (data-arranging), [data-library-item] (data-dragging,
+ *        data-moving), [data-vesta=library-card-slot], [data-vesta=library-handle],
+ *        [data-vesta=library-folder] (data-arranging, data-drop-state=pending|ready),
+ *        [data-vesta=library-folder-preview|mini|caption], [data-vesta=library-folder-popup],
+ *        [data-vesta=library-folder-settings|name|colors|color], [data-vesta=library-ghost],
+ *        [data-vesta=library-ghost-body], [data-vesta=library-arrange-bar|hint],
+ *        [data-vesta=library-save-error], [data-vesta=library-announcer]
+ * Knobs: --library-grid-min, --library-grid-gap, --library-grid-padding, --library-folder-hue,
+ *        --library-ghost-scale, --library-ghost-tilt (written while carrying)
  */
 @layer launcher {
   :where([data-vesta='library-grid']) {
@@ -47,5 +54,333 @@
       --library-grid-gap: 9px;
       --library-grid-padding: 12px;
     }
+  }
+}
+
+@layer launcher {
+  /* ---- Cards while arranging ---- */
+  :where([data-vesta='library-grid'] > [data-library-item]) {
+    position: relative;
+  }
+
+  :where([data-vesta='library-card-slot']) {
+    inline-size: 100%;
+    max-inline-size: 200px;
+    border-radius: var(--vesta-radius-container);
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Covers the card while arranging: the card itself is inert, this is what you carry. */
+  :where([data-vesta='library-handle']) {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    max-inline-size: 200px;
+    margin-inline: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--vesta-radius-container);
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  :where([data-vesta='library-handle']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta='library-grid'][data-arranging] > [data-library-item]) {
+    touch-action: none;
+    cursor: grab;
+  }
+
+  /* The old launcher's wiggle: arranging cards sway slightly out of step. */
+  :where([data-vesta='library-grid'][data-arranging] > [data-library-item]) > :where([data-vesta='library-card-slot'], [data-vesta='library-folder']) {
+    animation: vesta-library-wiggle 520ms ease-in-out infinite alternate;
+    transform-origin: 50% 80%;
+  }
+
+  :where([data-vesta='library-grid'][data-arranging] > [data-library-item]:nth-child(even)) > :where([data-vesta='library-card-slot'], [data-vesta='library-folder']) {
+    animation-delay: -280ms;
+    animation-direction: alternate-reverse;
+  }
+
+  :where([data-library-item][data-dragging]) {
+    opacity: 0.25;
+  }
+
+  /* Being moved with the keyboard: lifted and ringed until placed. */
+  :where([data-library-item][data-moving]) > :where([data-vesta='library-card-slot'], [data-vesta='library-folder']) {
+    outline: var(--vesta-focus-width) dashed var(--vesta-color-accent);
+    outline-offset: 4px;
+    transform: translateY(-3px);
+    animation: none;
+  }
+
+  /* ---- Group tile ---- */
+  :where([data-vesta='library-folder']) {
+    --library-folder-hue: 205;
+
+    position: relative;
+    display: block;
+    inline-size: 100%;
+    max-inline-size: 200px;
+    aspect-ratio: 1;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid oklch(1 0 0 / 0.08);
+    border-radius: var(--vesta-radius-container);
+    background: hsl(var(--library-folder-hue) 45% 55% / 14%);
+    box-shadow: 0 2px 6px oklch(0 0 0 / 0.12), inset 0 1px 0 oklch(1 0 0 / 0.04);
+    color: oklch(0.98 0 0);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+    transition:
+      box-shadow var(--vesta-duration-normal) var(--vesta-ease-standard),
+      transform var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  @media (hover: hover) {
+    :where([data-vesta='library-folder']:not([data-arranging]):hover) {
+      box-shadow: 0 8px 24px oklch(0 0 0 / 0.18), inset 0 1px 0 oklch(1 0 0 / 0.04);
+      transform: scale(1.03);
+    }
+  }
+
+  :where([data-vesta='library-folder']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta='library-folder'][data-arranging]) {
+    cursor: grab;
+  }
+
+  /* A file dwelling on the tile (pending) or a card that would go in (ready). */
+  :where([data-vesta='library-folder'][data-drop-state='pending']) {
+    border-color: color-mix(in oklab, var(--vesta-color-accent) 45%, transparent);
+    border-style: dashed;
+  }
+
+  :where([data-vesta='library-folder'][data-drop-state='ready']) {
+    border-color: var(--vesta-color-accent);
+    box-shadow: 0 0 0 2px var(--vesta-color-accent), 0 0 22px color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
+    transform: scale(1.05);
+  }
+
+  :where([data-vesta='library-folder-preview']) {
+    position: absolute;
+    inset: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  :where([data-vesta='library-folder-mini']) {
+    min-inline-size: 0;
+    border: var(--vesta-border-width) solid oklch(1 0 0 / 0.08);
+    border-radius: var(--vesta-radius-md);
+    background-image:
+      linear-gradient(160deg, oklch(1 0 0 / 0.06), transparent 40%),
+      radial-gradient(109% 80% at 48% 0%, oklch(0.75 0 0 / 0.1), oklch(0.25 0 0 / 0.3) 45%, oklch(0 0 0 / 0.65)),
+      var(--library-folder-mini-image);
+    background-position: center;
+    background-size: cover;
+    box-shadow: 0 2px 6px oklch(0 0 0 / 0.12);
+  }
+
+  :where([data-vesta='library-folder-caption']) {
+    position: absolute;
+    inset: auto 0 0;
+    overflow: hidden;
+    padding: 48px var(--vesta-space-4) var(--vesta-space-4);
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      hsl(var(--library-folder-hue) 25% 5% / 22%) 25%,
+      hsl(var(--library-folder-hue) 25% 5% / 74%) 58%,
+      hsl(var(--library-folder-hue) 25% 5% / 92%) 100%
+    );
+    font-size: var(--vesta-text-md);
+    font-weight: 700;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 4px oklch(0 0 0 / 0.75), 0 2px 12px oklch(0 0 0 / 0.6);
+    white-space: nowrap;
+  }
+
+  /* ---- Open group ---- */
+  :where([data-vesta='library-folder-popup']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    min-block-size: 0;
+  }
+
+  :where([data-vesta='library-folder-popup'] [data-vesta='library-grid']) {
+    --library-grid-padding: var(--vesta-space-2);
+
+    max-block-size: min(60vh, 560px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  :where([data-vesta='library-folder-settings']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='library-folder-name']) {
+    flex: 1;
+    min-inline-size: 0;
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='library-folder-name']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 1px;
+  }
+
+  :where([data-vesta='library-folder-colors']) {
+    display: flex;
+    gap: var(--vesta-space-1-5);
+  }
+
+  :where([data-vesta='library-folder-color']) {
+    inline-size: 20px;
+    block-size: 20px;
+    padding: 0;
+    border: var(--vesta-border-width) solid hsl(var(--library-folder-swatch) 65% 75% / 65%);
+    border-radius: var(--vesta-radius-full);
+    background: hsl(var(--library-folder-swatch) 55% 55% / 75%);
+    cursor: default;
+  }
+
+  :where([data-vesta='library-folder-color'][aria-pressed='true']) {
+    outline: 2px solid var(--vesta-color-text);
+    outline-offset: 2px;
+  }
+
+  :where([data-vesta='library-folder-color']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+
+  /* ---- Carried preview: hangs from the grabbed point and sways with speed ---- */
+  :where([data-vesta='library-ghost']) {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    z-index: calc(var(--vesta-z-modal) + 1);
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  :where([data-vesta='library-ghost-body']) {
+    filter: drop-shadow(0 12px 20px oklch(0 0 0 / 0.3));
+    transform: scale(var(--library-ghost-scale, 0.9)) rotate(var(--library-ghost-tilt, 1.2deg));
+    transform-origin: var(--library-ghost-origin, 50% 50%);
+    animation: vesta-library-lift 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  :where([data-vesta='library-ghost-body']) > * {
+    animation: none;
+  }
+
+  :where([data-vesta='library-ghost']) :where([data-vesta='library-card-slot'], [data-vesta='library-folder']) {
+    animation: none;
+  }
+
+  /* ---- Arrange bar, save error, announcements ---- */
+  :where([data-vesta='library-arrange-bar']) {
+    position: sticky;
+    inset-block-end: var(--vesta-space-5);
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-4);
+    inline-size: fit-content;
+    margin: 0 auto var(--vesta-space-5);
+    padding: var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-5);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-surface-raised);
+    box-shadow: var(--vesta-shadow-md);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    white-space: nowrap;
+  }
+
+  @container app (max-width: 520px) {
+    :where([data-vesta='library-arrange-hint']) {
+      display: none;
+    }
+  }
+
+  :where([data-vesta='library-save-error']) {
+    margin: 0 var(--library-grid-padding, 40px) var(--vesta-space-4);
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='library-announcer']) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @keyframes vesta-library-wiggle {
+    from { transform: rotate(-0.45deg); }
+    to { transform: rotate(0.45deg); }
+  }
+
+  @keyframes vesta-library-lift {
+    from { transform: scale(1) rotate(0); }
+  }
+
+  /* Reduced motion: no wiggle, no tilt, no hover growth. The carried preview still shrinks. */
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='library-grid'][data-arranging] > [data-library-item]) > :where([data-vesta='library-card-slot'], [data-vesta='library-folder']),
+    :where([data-vesta='library-ghost-body']) {
+      animation: none;
+    }
+
+    :where([data-vesta='library-ghost-body']) {
+      transform: scale(var(--library-ghost-scale, 0.9));
+    }
+
+    :where([data-vesta='library-folder']) {
+      transition: none;
+      transform: none;
+    }
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='library-grid'][data-arranging] > [data-library-item]) > :where([data-vesta='library-card-slot'], [data-vesta='library-folder']),
+  html[data-vesta-reduced-motion] :where([data-vesta='library-ghost-body']) {
+    animation: none;
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='library-ghost-body']) {
+    transform: scale(var(--library-ghost-scale, 0.9));
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='library-folder']) {
+    transition: none;
+    transform: none;
   }
 }

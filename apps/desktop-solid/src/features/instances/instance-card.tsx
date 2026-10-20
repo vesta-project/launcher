@@ -4,7 +4,7 @@ import { ContextMenu, ContextMenuItem, Tooltip } from '@vesta/ui';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import './instance-card.css';
-import { InstanceActionItems } from './action-menu';
+import { InstanceActionItems, type InstanceArrangeActions } from './action-menu';
 
 /**
  * What the card shows. Each value mirrors a state the old launcher card had.
@@ -52,6 +52,8 @@ export interface InstanceCardActions {
   onExport?: () => void;
   onHardReset?: () => void;
   onUninstall?: () => void;
+  /** Library position actions for the context menu. */
+  arrange?: InstanceArrangeActions;
 }
 
 export interface InstanceCardProps extends InstanceCardActions {
@@ -291,26 +293,24 @@ export function InstanceCard(props: InstanceCardProps) {
         <div data-vesta="instance-card-top">
           <div data-vesta="instance-card-indicators">
             <Show when={statusTags[kind()]}>
-              <span
-                data-vesta="instance-card-tag"
-                data-status={kind()}
-                role={kind() === 'crashed' ? 'button' : undefined}
-                tabindex={kind() === 'crashed' ? 0 : undefined}
-                onClick={(event) => {
-                  if (kind() !== 'crashed') return;
-                  event.stopPropagation();
-                  props.onOpenCrash?.();
-                }}
-                onKeyDown={(event) => {
-                  if (kind() !== 'crashed' || (event.key !== 'Enter' && event.key !== ' ')) return;
-                  // Handled here so the card's own Enter/Space handler does not also fire.
-                  event.preventDefault();
-                  event.stopPropagation();
-                  props.onOpenCrash?.();
-                }}
+              <Show
+                when={kind() === 'crashed'}
+                fallback={<span data-vesta="instance-card-tag" data-status={kind()}>{statusTags[kind()]}</span>}
               >
-                {statusTags[kind()]}
-              </span>
+                <button
+                  type="button"
+                  data-vesta="instance-card-tag"
+                  data-status={kind()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onOpenCrash?.();
+                  }}
+                  // The card's own Enter/Space handler only fires for the card itself.
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  {statusTags[kind()]}
+                </button>
+              </Show>
             </Show>
           </div>
           <Tooltip

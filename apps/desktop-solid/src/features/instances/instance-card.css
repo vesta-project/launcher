@@ -3,6 +3,7 @@
  * idle, installing, failed, interrupted, warming, running, crashed.
  *
  * Hooks:   [data-vesta=instance-card] [data-vesta=instance-card-top|bottom|overlay]
+ *          [data-vesta=drop-decor] (file drop ring, see file-drop/drop.css)
  *          [data-vesta=instance-card-indicators] [data-vesta=instance-card-tag]
  *          [data-vesta=instance-card-play] [data-vesta=instance-card-name]
  *          [data-vesta=instance-card-crash] [data-vesta=instance-card-meta]
@@ -207,6 +208,18 @@
     cursor: default;
   }
 
+  /* The crash tag opens the crash details, so it is a real button with the tag's look. */
+  :where(button[data-vesta='instance-card-tag']) {
+    margin: 0;
+    font-family: inherit;
+    text-shadow: inherit;
+  }
+
+  :where(button[data-vesta='instance-card-tag']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
   /* ---- Reveal the action on card hover or keyboard focus.
      Pressing keeps the hover fill and shrinks the control. ---- */
   :where([data-vesta='instance-card-play']) {
@@ -240,8 +253,7 @@
   }
 
   :where([data-vesta='instance-card']:hover) :where([data-vesta='instance-card-play']),
-  :where([data-vesta='instance-card']:focus-visible) :where([data-vesta='instance-card-play']),
-  :where([data-vesta='instance-card-play']:focus-visible) {
+  :where([data-vesta='instance-card']:focus-within) :where([data-vesta='instance-card-play']) {
     opacity: 1;
     pointer-events: auto;
   }

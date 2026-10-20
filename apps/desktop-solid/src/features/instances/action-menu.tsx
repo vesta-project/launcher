@@ -7,7 +7,7 @@ import {
   MenuSub,
   toast,
 } from "@vesta/ui";
-import { Show, untrack } from "solid-js";
+import { For, Show, untrack } from "solid-js";
 import { Icon } from "../../components/icon";
 import { navigate } from "../../app/router";
 import { t } from "../../localization";
@@ -31,6 +31,25 @@ async function run(result: Promise<boolean>) {
     const error = instanceError();
     if (error) toast.show({ title: t("management.error"), description: error, tone: "danger" });
   }
+}
+
+/**
+ * Library arranging without dragging, for the library card's context menu. The library page
+ * supplies it; the instance header has no library position, so it leaves it out.
+ */
+export interface InstanceArrangeActions {
+  canMoveEarlier: () => boolean;
+  canMoveLater: () => boolean;
+  moveEarlier: () => void;
+  moveLater: () => void;
+  /** Groups this instance could move into, excluding its own. */
+  groups: () => { id: string; name: string }[];
+  /** The group the instance is in, or null at the top level. */
+  group: () => string | null;
+  moveToGroup: (id: string | null) => void;
+  newGroup: () => void;
+  moveWithKeyboard: () => void;
+  arrangeLibrary: () => void;
 }
 
 /** One action list for the instance header and library context menu. */
@@ -78,6 +97,32 @@ export function InstanceActionItems(
           {t("instance-actions.logs")}
         </Item>
       </Sub>
+      <Show when={props.context ? props.arrange : undefined}>
+        {(arrange) => (
+          <>
+            <Separator />
+            <Item icon={<Icon name="icons/navigation/arrow-back" />} disabled={!arrange().canMoveEarlier()} onSelect={() => arrange().moveEarlier()}>
+              {t("library.move-earlier")}
+            </Item>
+            <Item icon={<Icon name="icons/navigation/arrow-forward" />} disabled={!arrange().canMoveLater()} onSelect={() => arrange().moveLater()}>
+              {t("library.move-later")}
+            </Item>
+            <Sub label={t("library.move-to-group")} icon={<Icon name="icons/content/folder" />}>
+              <Show when={arrange().group()}>
+                <Item onSelect={() => arrange().moveToGroup(null)}>{t("library.remove-from-group")}</Item>
+              </Show>
+              <For each={arrange().groups()}>
+                {(group) => <Item onSelect={() => arrange().moveToGroup(group.id)}>{group.name}</Item>}
+              </For>
+              <Item icon={<Icon name="icons/actions/add" />} onSelect={() => arrange().newGroup()}>
+                {t("library.new-group-with")}
+              </Item>
+            </Sub>
+            <Item icon={<Icon name="icons/content/keyboard" />} onSelect={() => arrange().moveWithKeyboard()}>{t("library.move-keyboard")}</Item>
+            <Item icon={<Icon name="icons/actions/move" />} onSelect={() => arrange().arrangeLibrary()}>{t("library.arrange")}</Item>
+          </>
+        )}
+      </Show>
       <Show when={props.state?.kind === "crashed"}>
         <Item icon={<Icon name="icons/status/error" />} onSelect={() => props.onOpenCrash ? props.onOpenCrash() : open("crash")}>
           {t("instance-actions.crash")}

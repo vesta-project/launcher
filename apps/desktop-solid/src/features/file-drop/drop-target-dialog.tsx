@@ -20,7 +20,7 @@ export function DropTargetDialog() {
       void importNativePaths(id, files); close(); navigate(`/library/${id}/resources`);
     }
   };
-  return <Dialog open={paths().length > 0} title={t('drop.review')} onOpenChange={(open) => { if (!open) close(); }}
+  return <Dialog open={paths().length > 0} title={t('drop.review')} closeLabel={t('nav.close')} onOpenChange={(open) => { if (!open) close(); }}
     footer={<><Button variant="ghost" onClick={close}>{t('common.cancel')}</Button><Button tone="accent" disabled={!target()} onClick={submit}>{t('install.import-action')}</Button></>}>
     <Select aria-label={t('drop.target')} placeholder={t('drop.choose-target')} value={target()} onChange={setTarget}
       options={[
