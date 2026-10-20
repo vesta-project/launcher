@@ -1,6 +1,6 @@
 import { createEffect, createMemo, onCleanup } from "solid-js";
 import { setThemeSchemeOverride, type SchemePreference } from '../../app/preferences';
-import { appearanceSnapshot, authorThemePreview, authorThemesReady, useAuthorThemeSync } from './author-themes';
+import { appearanceSnapshot, authorThemePreview, authorThemesAvailable, authorThemesError, authorThemesReady, useAuthorThemeSync } from './author-themes';
 import { generatedThemeStyles, selectedAuthorTheme } from './author-theme-model';
 import { setting } from "./config";
 import {
@@ -31,6 +31,8 @@ function createGrainImage(size = 128): string | null {
 
 /** One application-level bridge; the independent UI library only consumes its public tokens. */
 export function useThemeRuntime() {
+  let finishStartup!: () => void;
+  const ready = new Promise<void>((resolve) => { finishStartup = resolve; });
   useAuthorThemeSync();
   const grain = createGrainImage();
   // Three sheets with different lifetimes, so frequent edits never reparse the others:
@@ -45,7 +47,6 @@ export function useThemeRuntime() {
   author.dataset.vestaThemeStyles = 'author';
   document.head.append(grainSheet, generated, author);
   const activeAuthor = createMemo(() => {
-    if (!authorThemesReady()) return undefined;
     const snapshot = authorThemePreview()?.candidate ?? appearanceSnapshot();
     return selectedAuthorTheme(snapshot);
   }, {
@@ -122,4 +123,13 @@ export function useThemeRuntime() {
       root.dataset.vestaAccent = accent;
     },
   );
+  // Presentation also waits for a paint after this promise, so the generated sheet,
+  // canonical author sheet, root hooks and scheme have all reached the document.
+  // A failed initial read allows the existing fallback UI and theme error to appear.
+  createEffect(
+    () => !authorThemesAvailable || authorThemesReady() || authorThemesError() !== undefined,
+    (settled) => { if (settled) finishStartup(); },
+    { name: 'initialThemeReady' },
+  );
+  return ready;
 }

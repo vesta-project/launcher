@@ -32,7 +32,7 @@ function afterNextPaint(): Promise<void> {
 }
 
 /** Connect the bare main window to the existing host without starting legacy UI services. */
-export function startDesktop(): () => void {
+export function startDesktop(themeReady: Promise<void>): () => void {
   if (!isTauri()) return () => {};
 
   const stopActivity = startActivitySync();
@@ -69,6 +69,10 @@ export function startDesktop(): () => void {
     }
     unlistenExit = unlisten;
 
+    // The host keeps the initial window hidden. Do not reveal a built-in theme
+    // while the canonical saved author theme is still being loaded/applied.
+    await themeReady;
+    if (disposed) return;
     await afterNextPaint();
     if (disposed) return;
     await invoke('present_window_when_ready', { label: getCurrentWindow().label });

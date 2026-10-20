@@ -27,13 +27,14 @@ export async function refreshAuthorThemes(): Promise<AppearanceSnapshot> {
     const snapshot = await invoke<AppearanceSnapshot>('get_author_theme_state');
     acceptAppearance(snapshot);
     if (started === request) {
-      setAuthorThemesReady(document.visibilityState !== 'hidden');
+      // Hydration is valid even while the native window is waiting to be presented.
+      setAuthorThemesReady(true);
       setAuthorThemesError(undefined);
     }
     return untrack(appearanceSnapshot)!;
   } catch (error) {
     if (started === request) {
-      setAuthorThemesReady(false);
+      // Keep the last canonical theme during transient read failures.
       setAuthorThemesError(String(error));
       clearLocalPreview();
     }
@@ -113,12 +114,11 @@ export function useAuthorThemeSync() {
     let disposed = false;
     const stops: (() => void)[] = [];
     const refresh = () => {
-      if (!disposed && document.visibilityState !== 'hidden')
+      if (!disposed)
         void refreshAuthorThemes().catch(() => {});
     };
     const visibility = () => {
       if (document.visibilityState === 'hidden') {
-        setAuthorThemesReady(false);
         void cancelAuthorThemePreview().catch(() => {});
       } else refresh();
     };
@@ -149,7 +149,6 @@ export function useAuthorThemeSync() {
       window.removeEventListener('pagehide', leaving);
       for (const stop of stops) stop();
       leaving();
-      setAuthorThemesReady(false);
     };
   });
 }

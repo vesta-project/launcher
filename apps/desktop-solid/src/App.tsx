@@ -20,7 +20,7 @@ if (import.meta.env.DEV) void import('./features/activity/activity-fixtures');
 export default function App() {
   // Appearance and settings are app-wide: the welcome flow previews theme changes live too.
   usePreferences();
-  useThemeRuntime();
+  const themeReady = useThemeRuntime();
   useWindowEffects();
   useConfigSync();
   useReducedMotion();
@@ -30,7 +30,7 @@ export default function App() {
     () =>
       untrack(() => {
         initializeLocalization();
-        const stopDesktop = startDesktop();
+        const stopDesktop = startDesktop(themeReady);
         const stopOnboarding = startOnboarding();
         return () => { stopOnboarding(); stopDesktop(); };
       }),
