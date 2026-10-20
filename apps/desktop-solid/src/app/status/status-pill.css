@@ -230,6 +230,21 @@
     margin-inline-start: -6px;
   }
 
+  :where([data-vesta="status-pill-face"][data-face="ready"])
+    :where([data-vesta="status-pill-stack"]) > :where([data-vesta="activity-icon"]:nth-child(1)) {
+    z-index: 3;
+  }
+
+  :where([data-vesta="status-pill-face"][data-face="ready"])
+    :where([data-vesta="status-pill-stack"]) > :where([data-vesta="activity-icon"]:nth-child(2)) {
+    z-index: 2;
+  }
+
+  :where([data-vesta="status-pill-face"][data-face="ready"])
+    :where([data-vesta="status-pill-stack"]) > :where([data-vesta="activity-icon"]:nth-child(3)) {
+    z-index: 1;
+  }
+
   :where([data-vesta="status-pill-more"]) {
     margin-inline-start: 4px;
     color: var(--vesta-color-text-muted);
