@@ -1,0 +1,168 @@
+/*
+ * Changelog ("What's new") dialog.
+ *
+ * Hooks:  .changelog-dialog, [data-vesta=changelog], -versions, -version (aria-current), -version-tag,
+ *         -badge (data-tone), -notes, -release (data-tag), -release-head, -release-title,
+ *         -release-meta, -release-empty, -message, .changelog-release-link
+ *
+ * Two columns: versions on the left (follows the reading position), notes on the right in one
+ * scrolling column. Below 620px the versions collapse into a scrolling strip above the notes.
+ */
+@layer launcher {
+  .changelog-dialog {
+    --dialog-width: min(920px, calc(100vw - 48px));
+  }
+
+  :where([data-vesta='changelog']) {
+    container: changelog / inline-size;
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: var(--vesta-space-4);
+    block-size: min(70vh, 640px);
+    min-block-size: 0;
+  }
+
+  :where([data-vesta='changelog-versions']) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-block-size: 0;
+    padding-inline-end: var(--vesta-space-2);
+    overflow-y: auto;
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='changelog-version']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    min-block-size: 30px;
+    padding: 4px var(--vesta-space-2);
+    border: 0;
+    border-radius: var(--vesta-radius-md);
+    background: none;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+    text-align: start;
+    cursor: default;
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='changelog-version']:hover) {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='changelog-version'][aria-current='true']) {
+    background: var(--vesta-color-fill-active);
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='changelog-version']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: -2px;
+  }
+
+  :where([data-vesta='changelog-badge']) {
+    padding: 1px 5px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill-active);
+    color: var(--vesta-color-text-subtle);
+    font-size: 10px;
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='changelog-badge'][data-tone='accent']) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 22%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='changelog-notes']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-6);
+    min-block-size: 0;
+    padding-inline-end: var(--vesta-space-2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  :where([data-vesta='changelog-release']) {
+    scroll-margin-block-start: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='changelog-release']) + :where([data-vesta='changelog-release']) {
+    padding-block-start: var(--vesta-space-6);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='changelog-release-head']) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px var(--vesta-space-2);
+    margin-block-end: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='changelog-release-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-xl);
+    font-weight: var(--vesta-weight-bold);
+    letter-spacing: -0.01em;
+  }
+
+  .changelog-release-link {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  :where([data-vesta='changelog-release-meta']) {
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='changelog-release-empty'], [data-vesta='changelog-message']) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='changelog-message']) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+    padding-block: var(--vesta-space-4);
+  }
+
+  :where([data-vesta='changelog-message']) :where(small) {
+    color: var(--vesta-color-text-subtle);
+    overflow-wrap: anywhere;
+  }
+
+  @container changelog (max-width: 620px) {
+    :where([data-vesta='changelog']) {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    :where([data-vesta='changelog-versions']) {
+      flex-direction: row;
+      padding: 0 0 var(--vesta-space-2);
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-inline-end: 0;
+      border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    }
+
+    :where([data-vesta='changelog-version']) {
+      flex: none;
+      flex-wrap: nowrap;
+    }
+  }
+}

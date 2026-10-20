@@ -12,6 +12,7 @@ import { resetOnboarding } from '../../../features/onboarding';
 import { resetConfig, setting, updateSetting } from '../../../features/settings/config';
 import { updateStatus, checkForUpdates } from '../../../features/settings/updates';
 import { t } from '../../../localization';
+import { ChangelogDialog } from './changelog-dialog';
 import { Card, ToggleRow } from '../parts';
 import './about.css';
 
@@ -40,6 +41,7 @@ const openLink = (url: string) => void openExternal(url);
 
 export function AboutSettings() {
   const [version, setVersion] = createSignal('0.2.0-dev');
+  const [changelogOpen, setChangelogOpen] = createSignal(false, { name: 'changelogOpen' });
   const status = () => updateStatus().state;
   const [resetting, setResetting] = createSignal(false);
   const [importing, setImporting] = createSignal(false);
@@ -49,6 +51,7 @@ export function AboutSettings() {
   });
   return (
     <>
+      <ChangelogDialog open={changelogOpen()} onOpenChange={setChangelogOpen} version={version()} />
       <Show when={importing()}>
         <ImportDialog
           open
@@ -107,8 +110,7 @@ export function AboutSettings() {
           <Button
             variant="outline"
             icon={<Icon name="icons/content/history" />}
-            disabled
-            title={t('prefs.coming-soon')}
+            onClick={() => setChangelogOpen(true)}
           >
             {t('prefs.about.view')}
           </Button>

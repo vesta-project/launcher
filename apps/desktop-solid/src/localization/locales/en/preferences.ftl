@@ -454,3 +454,13 @@ prefs-general-trusted-sites-none = Links that leave the launcher ask before open
 prefs-general-trusted-sites-forget = Forget all
 prefs-about-checking = Checking for updates…
 prefs-about-update-available = An update is available.
+
+## Changelog
+prefs-about-whats-new = What's new
+prefs-about-changelog-error = Couldn't load the release notes. Check your connection and try again.
+prefs-about-changelog-empty = There are no published releases yet.
+prefs-about-changelog-versions = Releases
+prefs-about-changelog-current = This version
+prefs-about-changelog-prerelease = Pre-release
+prefs-about-changelog-github = GitHub
+prefs-about-changelog-no-notes = No notes for this release.
