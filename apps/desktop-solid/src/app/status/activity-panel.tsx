@@ -7,9 +7,10 @@ import {
   cancelActivity,
   clearFinished,
   dismissActivity,
+  readyActivities,
   type Activity,
 } from '../../features/activity';
-import { active, activityProgress, isForeground, terminal } from '../../features/activity/activity-model';
+import { active, activityProgress, awaitingPlay, isForeground, terminal } from '../../features/activity/activity-model';
 import { formatRelative } from '../../features/browse/browse-model';
 import { findInstance, playInstance } from '../../features/instances/catalog';
 import { Icon } from '../../components/icon';
@@ -19,7 +20,8 @@ import { ActivityIcon } from './activity-icon';
 import { percentText } from './format';
 import './activity-panel.css';
 
-/** How long a finished row stays in the panel. Failures stay until dismissed. */
+/** How long a finished row stays in the panel. Failures stay until dismissed, and installs
+ * stay under "Ready to play" until played or dismissed. */
 const RECENT_WINDOW = 3 * 60_000;
 
 const ORDER: Record<Activity['state'], number> = { running: 0, queued: 1, failed: 2, done: 2, cancelled: 2 };
@@ -140,8 +142,9 @@ function LiveRow(props: { activity: Activity; onNavigate: () => void }) {
   );
 }
 
-/** Finished or cancelled: one quiet line in past tense, with Play only when it still applies. */
-function RecentRow(props: { activity: Activity; now: number; onNavigate: () => void }) {
+/** Finished or cancelled: one quiet line in past tense, with Play only when it still applies.
+ * A ready install can also be dismissed, which ends its wait in the pill. */
+function RecentRow(props: { activity: Activity; now: number; ready?: boolean; onNavigate: () => void }) {
   const ago = () =>
     formatRelative(new Date(props.activity.finishedAt ?? props.now).toISOString(), props.now, locale());
   const cancelled = () => props.activity.state === 'cancelled';
@@ -165,14 +168,23 @@ function RecentRow(props: { activity: Activity; now: number; onNavigate: () => v
             size="sm"
             tone="accent"
             icon={<Icon name="icons/actions/play" size={10} />}
-            onClick={() => {
-              playInstance(id());
-              dismissActivity(props.activity.id);
-            }}
+            onClick={() => playInstance(id())}
           >
             {t('common.play')}
           </Button>
         )}
+      </Show>
+      <Show when={props.ready}>
+        <IconButton
+          class="activity-row-cancel"
+          variant="ghost"
+          size="sm"
+          label={t('activity.ready-dismiss', {
+            title: findInstance(props.activity.target?.instanceId)?.instance.name ?? props.activity.subject?.name ?? props.activity.title,
+          })}
+          icon={<Icon name="icons/actions/close" size={12} />}
+          onClick={() => dismissActivity(props.activity.id)}
+        />
       </Show>
     </li>
   );
@@ -234,10 +246,12 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
     name: 'activityPanelFailed',
   });
   // Finished work is a short receipt, not a history: it leaves the panel a few minutes later.
+  // Unplayed installs wait in their own section instead (newest first, live instances only).
   const recent = createMemo(
     () =>
       foreground()
-        .filter((row) => (row.state === 'done' || row.state === 'cancelled') && now() - (row.finishedAt ?? 0) < RECENT_WINDOW)
+        .filter((row) => (row.state === 'done' || row.state === 'cancelled') && !awaitingPlay(row)
+          && now() - (row.finishedAt ?? 0) < RECENT_WINDOW)
         .sort(byPlace),
     { name: 'activityPanelRecent' },
   );
@@ -248,8 +262,10 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
     ],
     { name: 'activityPanelBackground' },
   );
-  const hasFinished = () => recent().length > 0 || failed().length > 0 || background().some(terminal);
-  const empty = () => !live().length && !failed().length && !recent().length && !background().length;
+  const hasFinished = () =>
+    readyActivities().length > 0 || recent().length > 0 || failed().length > 0 || background().some(terminal);
+  const empty = () =>
+    !live().length && !failed().length && !readyActivities().length && !recent().length && !background().length;
 
   return (
     <div data-vesta="activity-panel">
@@ -278,6 +294,16 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
               {(row) => <LiveRow activity={row()} onNavigate={props.onNavigate} />}
             </For>
           </ul>
+        </Show>
+        <Show when={readyActivities().length}>
+          <section data-vesta="activity-recent" data-section="ready">
+            <h3 data-vesta="activity-section-title">{t('activity.ready-to-play')}</h3>
+            <ul data-vesta="activity-recent-rows">
+              <For each={readyActivities()} keyed={(row) => row.id}>
+                {(row) => <RecentRow activity={row()} now={now()} ready onNavigate={props.onNavigate} />}
+              </For>
+            </ul>
+          </section>
         </Show>
         <Show when={recent().length}>
           <section data-vesta="activity-recent">

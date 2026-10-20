@@ -63,7 +63,7 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange} size="lg" class="changelog-dialog" title={t('prefs.about.whats-new')}>
+    <Dialog closeLabel={t('nav.close')} open={props.open} onOpenChange={props.onOpenChange} size="lg" class="changelog-dialog" title={t('prefs.about.whats-new')}>
       <Switch>
         <Match when={error()}>
           {(message) => (

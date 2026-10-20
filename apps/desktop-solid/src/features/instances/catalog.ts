@@ -160,6 +160,9 @@ export const instances = () => nativeInstances ? nativeEntries().map((entry) => 
 export type InstanceEntry = (typeof seed)[number];
 export const findInstance = (id: string | undefined) =>
   instances().find((entry) => entry.instance.id === id);
+/** Instances whose game is running; a launch from any path shows up here once it succeeds. */
+export const playingInstanceIds = () =>
+  instances().flatMap((entry) => (entry.state.kind === "running" ? [entry.instance.id] : []));
 export const pinnedInstances = () =>
   pinIds().flatMap((id) => {
     const entry = findInstance(id);

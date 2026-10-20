@@ -109,6 +109,7 @@ export function ImportedThemes() {
         <p data-vesta="prefs-imported-note">{t('prefs.appearance.imported-recovery')}</p>
       </div>
       <Dialog
+        closeLabel={t('nav.close')}
         size="sm"
         title={t('prefs.appearance.remove-theme')}
         description={t('prefs.appearance.remove-theme-description', { name: removing()?.name ?? '' })}

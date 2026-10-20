@@ -382,6 +382,7 @@ export function AccountSettings() {
       </Card>
 
       <Dialog
+        closeLabel={t('nav.close')}
         size="sm"
         open={!!removing()}
         onOpenChange={(open) => !open && setRemoving(undefined)}

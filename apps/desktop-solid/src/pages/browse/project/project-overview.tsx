@@ -356,6 +356,8 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
         images={viewerImages()}
         index={viewing() ?? 0}
         onIndexChange={setViewing}
+        previousLabel={t('common.previous-image')}
+        nextLabel={t('common.next-image')}
       />
     </div>
   );

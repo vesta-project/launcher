@@ -6,7 +6,7 @@
  *         -ring-track -ring-value -alert -label -percent -play -play-label
  *         [data-vesta=status-spinner] [data-vesta=status-live] (polite announcements)
  *         [data-vesta=activity-icon] -initials
- * States: status-pill: data-face (quiet | single | multi | success | failed), data-collapsed,
+ * States: status-pill: data-face (quiet | single | multi | success | failed | ready), data-collapsed,
  *         data-open, data-indeterminate. activity-icon: data-size (pill | row), data-fallback
  * Knobs:  --status-pill-height, --status-pill-progress (0–1, set inline), --status-pill-tint,
  *         --status-pill-edge, --status-pill-morph (width/state duration), --status-pill-ease,
@@ -111,7 +111,7 @@
     background: var(--vesta-color-fill);
   }
 
-  :where([data-vesta="status-pill"][data-face="success"]) {
+  :where([data-vesta="status-pill"][data-face="success"], [data-vesta="status-pill"][data-face="ready"]) {
     --status-pill-tint: color-mix(in oklab, var(--vesta-color-success) 24%, transparent);
     --status-pill-edge: transparent;
     --status-pill-border: var(--vesta-color-success-border);
@@ -200,7 +200,7 @@
     padding-inline-start: 8px;
   }
 
-  :where([data-vesta="status-pill-face"][data-face="success"]) {
+  :where([data-vesta="status-pill-face"][data-face="success"], [data-vesta="status-pill-face"][data-face="ready"]) {
     padding-inline-end: 4px;
   }
 

@@ -38,6 +38,14 @@ activity-status-running = { $count ->
 activity-status-percent = { $label }, { $value } done
 activity-status-success = { $title } is ready
 activity-status-failed = { $title } failed
+activity-status-ready-more = { $count ->
+    [one] { $title } and { $count } other are ready
+   *[other] { $title } and { $count } others are ready
+  }
+# Finished installs wait in the pill and panel until played or dismissed.
+activity-ready-to-play = Ready to play
+activity-play-ready = Play { $title }
+activity-ready-dismiss = Dismiss { $title }
 
 # Launcher self-update control.
 activity-update-available = Download Vesta { $version }

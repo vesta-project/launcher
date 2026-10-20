@@ -249,6 +249,7 @@ export function StorageSettings() {
       </Card>
 
       <Dialog
+        closeLabel={t('nav.close')}
         size="sm"
         open={confirming()}
         onOpenChange={setConfirming}

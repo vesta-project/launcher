@@ -32,6 +32,8 @@ export function ProjectGallery(props: { project: ResourceProject }) {
         images={images()}
         index={viewing() ?? 0}
         onIndexChange={setViewing}
+        previousLabel={t('common.previous-image')}
+        nextLabel={t('common.next-image')}
       />
     </>
   );

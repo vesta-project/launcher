@@ -261,7 +261,7 @@
     cursor: zoom-in;
     transform-origin: var(--zoom-x, center) var(--zoom-y, center);
     transform: translate(var(--pan-x, 0px), var(--pan-y, 0px)) scale(var(--image-scale, 1));
-    transition: transform 0.4s var(--vesta-ease-out);
+    transition: transform var(--vesta-duration-slow) var(--vesta-ease-out);
   }
 
   :where([data-vesta='image-viewer'][data-pixelated]) :where([data-vesta='image-viewer-image']) {
@@ -274,7 +274,7 @@
     cursor: grab;
     transform: translate(var(--pan-x, 0px), var(--pan-y, 0px))
       scale(calc(2.2 * var(--image-scale, 1)));
-    transition: transform 0.1s linear;
+    transition: transform var(--vesta-duration-fast) linear;
   }
 
   :where([data-vesta='image-viewer-image-wrap'][data-zoomed][data-panned]) :where([data-vesta='image-viewer-image']) {

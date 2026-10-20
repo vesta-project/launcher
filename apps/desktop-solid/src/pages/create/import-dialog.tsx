@@ -98,6 +98,7 @@ export function ImportDialog(props: {
   );
   return (
     <Dialog
+      closeLabel={t('nav.close')}
       open={props.open}
       onOpenChange={(open) => {
         if (!open) close();

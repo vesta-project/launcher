@@ -40,7 +40,7 @@
   }
   :where(
     [data-vesta="icon-picker-trigger"]:hover [data-vesta="icon-picker-edit"],
-    [data-vesta="icon-picker-trigger"]:focus-visible
+    [data-vesta="icon-picker-trigger"]:focus-within
       [data-vesta="icon-picker-edit"]
   ) {
     opacity: 1;

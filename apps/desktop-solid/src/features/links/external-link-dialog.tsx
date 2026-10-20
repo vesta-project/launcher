@@ -36,6 +36,7 @@ export function ExternalLinkDialog() {
 
   return (
     <Dialog
+      closeLabel={t('nav.close')}
       size="sm"
       open={!!pendingLink()}
       onOpenChange={(open) => !open && close(false)}

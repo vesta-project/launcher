@@ -1,8 +1,17 @@
 import { isForeground } from '../../features/activity/activity-model';
 import { Popover } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
-import { activities, backgroundActivities, dismissActivity, markSeen, pillState, type Activity, type PillState } from '../../features/activity';
-import { playInstance } from '../../features/instances/catalog';
+import {
+  activities,
+  backgroundActivities,
+  configureActivityTargets,
+  markInstancesPlayed,
+  markSeen,
+  pillState,
+  type Activity,
+  type PillState,
+} from '../../features/activity';
+import { findInstance, playInstance, playingInstanceIds } from '../../features/instances/catalog';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import { percentText } from './format';
@@ -11,11 +20,21 @@ import { ActivityPanel } from './activity-panel';
 import './status-pill.css';
 
 type Shown = Exclude<PillState, { state: 'idle' }>;
-type Face = 'quiet' | 'single' | 'multi' | 'success' | 'failed';
+type Face = 'quiet' | 'single' | 'multi' | 'success' | 'failed' | 'ready';
 
 const faceOf = (state: Shown): Face =>
   state.state === 'running' ? (state.count > 1 ? 'multi' : 'single') : state.state;
 const leadOf = (state: Shown): Activity => ('activity' in state ? state.activity : state.activities[0]!);
+
+// Ready installs wait only while their instance is still in the library.
+configureActivityTargets((id) => !!findInstance(id));
+
+/** The instance's current name, so a rename after install still reads correctly. */
+const readyName = (activity: Activity) =>
+  findInstance(activity.target?.instanceId)?.instance.name
+  ?? activity.subject?.name
+  ?? activity.doneTitle
+  ?? activity.title;
 
 /** "3 installs" when every running task ends in Play (instance installs), else "3 tasks". */
 const countLabel = (rows: readonly Activity[]) =>
@@ -39,6 +58,10 @@ function statusText(state: Shown): string {
         : state.activity.doneTitle;
     case 'failed':
       return t('activity.status-failed', { title: state.activity.title });
+    case 'ready':
+      return state.activities.length > 1
+        ? t('activity.status-ready-more', { title: readyName(state.activities[0]!), count: state.activities.length - 1 })
+        : t('activity.status-success', { title: readyName(state.activities[0]!) });
   }
 }
 
@@ -55,6 +78,7 @@ function Ring() {
 /** The visible contents for one face. Re-created (and faded in) when the face changes. */
 function PillFace(props: { state: Shown; face: Face }) {
   const running = () => (props.state.state === 'running' ? props.state : undefined);
+  const ready = () => (props.state.state === 'ready' ? props.state : undefined);
   return (
     <span data-vesta="status-pill-face" data-face={props.face}>
       <Show when={props.face === 'quiet'}>
@@ -86,6 +110,22 @@ function PillFace(props: { state: Shown; face: Face }) {
         )}
       </Show>
 
+      <Show when={props.face === 'ready' && ready()}>
+        {(state) => (
+          <span data-vesta="status-pill-lead">
+            <span data-vesta="status-pill-stack">
+              <ActivityIcon activity={state().activities[0]!} />
+              <For each={state().icons} keyed={(row) => row.id}>
+                {(row) => <ActivityIcon activity={row()} />}
+              </For>
+              <Show when={state().extraCount > 0}>
+                <b data-vesta="status-pill-more">+{state().extraCount}</b>
+              </Show>
+            </span>
+          </span>
+        )}
+      </Show>
+
       <Show when={props.face === 'failed'}>
         <b data-vesta="status-pill-alert" aria-hidden="true">!</b>
       </Show>
@@ -94,7 +134,9 @@ function PillFace(props: { state: Shown; face: Face }) {
         <span data-vesta="status-pill-label" data-tip-overflow>
           {props.face === 'single'
             ? leadOf(props.state).title
-            : props.face === 'multi'
+            : props.face === 'ready'
+              ? readyName(leadOf(props.state))
+              : props.face === 'multi'
               ? countLabel(running()?.activities ?? [])
               : props.face === 'success'
                 ? leadOf(props.state).action === 'play'
@@ -146,6 +188,7 @@ export function StatusPill() {
   }, { name: 'activityPillFace' });
   const faceKey = createMemo(() => {
     const state = shown();
+    // A ready face keys on its lead, so playing the front install fades in the next one.
     return state ? `${faceOf(state)}:${faceOf(state) === 'multi' ? '' : leadOf(state).id}` : undefined;
   }, { name: 'activityPillFaceKey' });
   const progress = () => {
@@ -163,12 +206,24 @@ export function StatusPill() {
       : status;
   };
   // Announce state changes, not progress ticks; quiet work is not worth interrupting for.
-  const announcement = createMemo(() => {
+  // A ready install is announced once: returning after other work or moving to the front is silent.
+  const announcement = createMemo<{ text: string; announced: ReadonlySet<string> }>((previous) => {
+    const announced = previous?.announced ?? new Set<string>();
     const state = pillState();
-    if (state.state === 'idle' || state.state === 'quiet') return '';
+    if (state.state === 'idle' || state.state === 'quiet') return { text: '', announced };
+    if (state.state === 'ready') {
+      if (state.activities.every((row) => announced.has(row.id))) return { text: '', announced };
+      return { text: statusText(state), announced: new Set([...announced, ...state.activities.map((row) => row.id)]) };
+    }
     const status = statusText(state);
-    return state.state === 'failed' && state.activity.error ? `${status}. ${state.activity.error}` : status;
-  }, { name: 'activityAnnouncement' });
+    return {
+      text: state.state === 'failed' && state.activity.error ? `${status}. ${state.activity.error}` : status,
+      announced,
+    };
+  }, {
+    name: 'activityAnnouncement',
+    equals: (a, b) => a.text === b.text && a.announced === b.announced,
+  });
   // Quiet work has nothing visible but a spinner, so the hint names it.
   const tip = () => {
     const state = shown();
@@ -176,10 +231,17 @@ export function StatusPill() {
   };
   const play = () => {
     const state = shown();
-    return state?.state === 'success' && state.activity.action === 'play' && state.activity.target?.instanceId
-      ? state.activity
-      : undefined;
+    return state?.state === 'ready' ? state.activities[0] : undefined;
   };
+
+  // A successful launch from anywhere (pill, panel, card, shortcut) ends the wait; a failed
+  // launch never reaches "running", so the install stays ready.
+  let playing: readonly string[] = untrack(playingInstanceIds);
+  createEffect(playingInstanceIds, (ids) => {
+    const started = ids.filter((id) => !playing.includes(id));
+    playing = ids;
+    markInstancesPlayed(started);
+  });
 
   const fit = (isCollapsed: boolean) => {
     if (!pill) return;
@@ -246,12 +308,9 @@ export function StatusPill() {
               <button
                 type="button"
                 data-vesta="status-pill-play"
+                aria-label={t('activity.play-ready', { title: readyName(activity()) })}
                 tabindex={collapsed() ? -1 : undefined}
-                onClick={() => {
-                  const target = activity();
-                  playInstance(target.target!.instanceId!);
-                  dismissActivity(target.id);
-                }}
+                onClick={() => playInstance(activity().target!.instanceId!)}
               >
                 <Icon name="icons/actions/play" size={10} />
                 <span data-vesta="status-pill-play-label">{t('common.play')}</span>
@@ -261,7 +320,7 @@ export function StatusPill() {
         </div>
       </div>
       <span data-vesta="status-live" aria-live="polite">
-        {announcement()}
+        {announcement().text}
       </span>
     </div>
   );

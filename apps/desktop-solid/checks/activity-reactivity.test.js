@@ -60,6 +60,14 @@ test('reactive store coalesces deltas, preserves terminal transitions and wakes 
     store.advance(1);
     expect(store.snapshot().pill.state).toBe('idle');
     expect(store.snapshot().rows).toHaveLength(1);
+    store.receiveActivity({ id: 'ready', title: 'Pack', state: 'running', action: 'play', target: { instanceId: '7' } });
+    store.receiveActivity({ id: 'ready', state: 'done' });
+    store.advance(60_000);
+    expect(store.snapshot().pill.state).toBe('ready');
+    expect(store.timerCount()).toBe(0);
+    store.markInstancesPlayed(['7']);
+    store.advance(0);
+    expect(store.snapshot().pill.state).toBe('idle');
     store.receiveActivity({ id: 'quiet', kind: 'background', title: 'Index', state: 'running' });
     store.advance(1499);
     expect(store.snapshot().pill.state).toBe('idle');

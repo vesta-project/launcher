@@ -71,3 +71,16 @@ Follow `button` (reference implementation) and `field` (shared form anatomy):
 - They share the `--overlay-*` surface knobs (`overlay/overlay.css`). Enter/exit motion must be keyframe animations on `data-expanded`/`data-closed`; Kobalte waits for `animationend` before unmounting.
 - When one element receives two sets of Kobalte props (e.g. an IconButton's tooltip plus a menu trigger), merge them with `mergeElementProps` (`internal/props.ts`) so handlers chain and Solid 2 ref arrays survive.
 - Form toggles share `choice/choice.css`; labelled inputs share `field/field.css`.
+
+## Accessibility rules
+
+- Hover-only actions also show on `:focus-within`, so keyboard users reach them.
+- Icon-only buttons take a `label`; it is the accessible name and the tooltip.
+- Dialogs take a `title`, and callers pass a localized `closeLabel` (the English default is a fallback only).
+- Never `outline: none` without a replacement `:focus-visible` ring from `base.css`.
+- Use native controls (`button`, `a href`), not clickable `div`s. Desktop cursor is `default`.
+- State is not colour-only: pair it with text, a shape, or an ARIA attribute.
+- Forced colours drop background and border tints, so background-only state also needs an outline under `@media (forced-colors: active)`.
+- Reduced motion: use `--vesta-duration-*` tokens, never literal durations; they zero out under `prefers-reduced-motion`.
+- Timed UI is explained where it lives. The image viewer hides its chrome after 3.5 s idle, but not while hovered or focused; any key or pointer brings it back.
+- Shared UI never imports launcher i18n. Localized strings arrive as props (`closeLabel`, `previousLabel`, `nextLabel`).

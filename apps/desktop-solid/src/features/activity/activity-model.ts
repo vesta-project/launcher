@@ -42,24 +42,50 @@ export interface Activity {
   action?: 'play' | 'open';
   seen?: boolean;
   pillDismissed?: boolean;
+  /** Set once the install's instance has started playing; ends its "ready to play" state. */
+  played?: boolean;
 }
 export type ActivityPatch = Partial<Activity> & Pick<Activity, 'id'>;
 export type PillState =
   | { state: 'idle' }
   | { state: 'quiet'; activities: readonly Activity[] }
   | { state: 'running'; activities: readonly Activity[]; count: number; icons: readonly Activity[]; extraCount: number; progress?: number }
-  | { state: 'success' | 'failed'; activity: Activity };
+  | { state: 'success' | 'failed'; activity: Activity }
+  /** Finished installs waiting to be played, newest first; older ones stack behind the lead. */
+  | { state: 'ready'; activities: readonly Activity[]; icons: readonly Activity[]; extraCount: number };
 export const BACKGROUND_DELAY = 1500;
 export const SUCCESS_DURATION = 6000;
 export const active = (activity: Activity) => activity.state === 'running' || activity.state === 'queued';
 export const terminal = (activity: Activity) => !active(activity);
 
 export const isForeground = (activity: Activity) => activity.visibility ? activity.visibility === 'foreground' : activity.kind !== 'background';
+/** Whether an instance still exists; the store supplies the catalog's answer. */
+export type TargetLive = (instanceId: string) => boolean;
+const anyTarget: TargetLive = () => true;
 
-export function visibleTaskList(rows: readonly Activity[], now: number): Activity[] {
-  return rows.filter((a) => isForeground(a) && !a.pillDismissed && (active(a)
+/** A finished install that offers Play and has not been played or dismissed. It stays in the
+ * pill (in memory only) instead of expiring like other successes. */
+export const awaitingPlay = (a: Activity) => isForeground(a) && a.state === 'done' && a.action === 'play'
+  && !!a.target?.instanceId && !a.played && !a.pillDismissed;
+
+/** Ready installs whose instance still exists, newest first, one per instance. */
+export function readyList(rows: readonly Activity[], live: TargetLive = anyTarget): Activity[] {
+  const seen = new Set<string>();
+  return rows.filter(awaitingPlay)
+    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
+    .filter((a) => {
+      const id = a.target!.instanceId!;
+      if (seen.has(id) || !live(id)) return false;
+      seen.add(id);
+      return true;
+    });
+}
+
+export function visibleTaskList(rows: readonly Activity[], now: number, live: TargetLive = anyTarget): Activity[] {
+  const ready = new Set(readyList(rows, live));
+  return rows.filter((a) => ready.has(a) || (isForeground(a) && !a.pillDismissed && !awaitingPlay(a) && (active(a)
     || (a.state === 'failed' && !a.seen)
-    || (a.state === 'done' && now < (a.finishedAt ?? now) + SUCCESS_DURATION)));
+    || (a.state === 'done' && !a.played && now < (a.finishedAt ?? now) + SUCCESS_DURATION))));
 }
 export function backgroundList(rows: readonly Activity[], now: number): Activity[] {
   return rows.filter((a) => !isForeground(a) && a.state === 'running' && now - a.startedAt >= BACKGROUND_DELAY);
@@ -79,15 +105,18 @@ export function weightedProgress(rows: readonly Activity[]): number | undefined 
   }
   return weighted / weights;
 }
-export function selectPill(rows: readonly Activity[], now: number): PillState {
-  const visible = visibleTaskList(rows, now);
+export function selectPill(rows: readonly Activity[], now: number, live: TargetLive = anyTarget): PillState {
+  const visible = visibleTaskList(rows, now, live);
   const running = visible.filter(active);
   if (running.length) return { state: 'running', activities: running, count: running.length, icons: running.slice(0, 3), extraCount: Math.max(0, running.length - 3), progress: weightedProgress(running) };
   // Quiet failures also need attention, even if they failed before the delay.
   const failed = rows.find((a) => a.state === 'failed' && !a.seen && !a.pillDismissed);
   if (failed) return { state: 'failed', activity: failed };
-  const done = visible.find((a) => a.state === 'done');
+  const done = visible.find((a) => a.state === 'done' && !awaitingPlay(a));
   if (done) return { state: 'success', activity: done };
+  // Running work and short successes pass in front; ready installs return afterwards.
+  const ready = readyList(rows, live);
+  if (ready.length) return { state: 'ready', activities: ready, icons: ready.slice(1, 3), extraCount: Math.max(0, ready.length - 3) };
   const background = backgroundList(rows, now);
   return background.length ? { state: 'quiet', activities: background } : { state: 'idle' };
 }
@@ -113,15 +142,20 @@ export class ActivityLedger {
       if (next.state === 'done') { next.progress = 1; if (next.overallProgress !== undefined) next.overallProgress = 1; }
     } else if (next.state === 'running' && old?.state === 'queued' && patch.startedAt === undefined) next.startedAt = now;
     this.rows = [next, ...this.rows.filter((a) => a.id !== next.id)];
-    // Unseen failures are never evicted. Other terminal history is bounded.
+    // Unseen failures and unplayed installs are never evicted. Other terminal history is bounded.
     let finished = 0;
-    this.rows = this.rows.filter((a) => !terminal(a) || (a.state === 'failed' && !a.seen) || ++finished <= 50);
+    this.rows = this.rows.filter((a) => !terminal(a) || (a.state === 'failed' && !a.seen) || awaitingPlay(a) || ++finished <= 50);
   }
   retireActive(ids: readonly string[]) {
     const missing = new Set(ids);
     this.rows = this.rows.filter((row) => !missing.has(row.id) || terminal(row));
   }
   dismiss(id: string) { this.rows = this.rows.map((a) => a.id === id ? { ...a, pillDismissed: true, seen: true } : a); }
+  /** An instance started playing (from any path): its finished installs are no longer waiting. */
+  markPlayed(instanceIds: readonly string[]) {
+    if (!instanceIds.length) return;
+    this.rows = this.rows.map((a) => awaitingPlay(a) && instanceIds.includes(a.target!.instanceId!) ? { ...a, played: true } : a);
+  }
   markSeen(ids?: readonly string[]) { this.rows = this.rows.map((a) => a.state === 'failed' && (!ids || ids.includes(a.id)) ? { ...a, seen: true } : a); }
   clearFinished(ids?: readonly string[]) { this.rows = this.rows.filter((row) => active(row) || (!!ids && !ids.includes(row.id))); }
 }

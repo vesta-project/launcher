@@ -128,6 +128,7 @@ export function InstancePickerDialog() {
 
   return (
     <Dialog
+      closeLabel={t('nav.close')}
       open={!!pickerProject()}
       onOpenChange={(open) => !open && closePicker()}
       size="md"

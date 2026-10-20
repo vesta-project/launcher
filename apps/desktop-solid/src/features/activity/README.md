@@ -14,7 +14,7 @@ Types are defined in `activity-model.ts`:
   optional progress (0–1; undefined means indeterminate), optional weight
   (remaining work estimate), optional step/currentStep/totalSteps, startedAt,
   optional finishedAt/error, cancellable, optional target `{ instanceId?, route? }`,
-  optional action `'play' | 'open'`, optional seen/pillDismissed.
+  optional action `'play' | 'open'`, optional seen/pillDismissed/played.
 - `ActivityPatch`: partial Activity with required id.
 - `PillState`: discriminated by `state`:
   - idle: no additional data
@@ -22,6 +22,8 @@ Types are defined in `activity-model.ts`:
   - running: `activities`, `count`, `icons` (up to three Activity records),
     `extraCount`, optional `progress`
   - success/failed: `activity` (includes action and target)
+  - ready: `activities` (unplayed installs, newest first, one per live instance),
+    `icons` (up to two older ones stacked behind the lead), `extraCount`
 - `UpdaterState`: idle (optional error), available (version, optional error),
   downloading (version, optional progress), ready (version, optional error).
 - `HostNotification`: host's snake_case inbox row, including read and actions.
@@ -67,9 +69,14 @@ remains. `markSeen()` acknowledges all existing failures; pass only displayed ID
 when the panel shows a subset. Opening a panel should acknowledge its displayed
 failures. `clearFinished` explicitly removes all terminal rows, including failures.
 Success expires from the pill 6000ms after completion, independently of panel history.
+A finished install with action `'play'` and a target instance is the exception: it stays
+ready (in memory only) until that instance starts running from any launch path
+(`markInstancesPlayed`), the user dismisses it, or the app restarts. It is hidden while
+its instance is missing (`configureActivityTargets`) and is never evicted from history.
 Quiet work appears after 1500ms of running (queue time does not count). Cancelled work
 has no success flash. Running work takes pill priority, then unseen failures, then
-recent task success, then quiet work. Unseen background failures also get attention.
+recent task success, then ready installs, then quiet work. Unseen background failures
+also get attention.
 
 Overall progress uses `sum(progress * remainingWeight) / sum(remainingWeight)` over
 active foreground tasks. Unknown progress makes the aggregate indeterminate. Known

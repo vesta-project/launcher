@@ -41,6 +41,10 @@ export interface ImageViewerProps {
   onOpenFolder?: (src: string) => void;
   /** Show the delete action when `onDelete` is set. Defaults to true. */
   showDelete?: boolean;
+  /** Accessible name for the previous-image button. Defaults to "Previous image". */
+  previousLabel?: string;
+  /** Accessible name for the next-image button. Defaults to "Next image". */
+  nextLabel?: string;
   /** Base image scale before zoom. Defaults to 1. */
   scale?: number;
   /** Pixelate scaling (Minecraft screenshots). */
@@ -72,6 +76,8 @@ export function ImageViewer(props: ImageViewerProps) {
   const [showUI, setShowUI] = createSignal(true);
   const [zoomOrigin, setZoomOrigin] = createSignal(DEFAULT_ZOOM_ORIGIN);
   const [controlHovered, setControlHovered] = createSignal(false);
+  /** Focus anywhere in the viewer keeps the chrome visible, like hover does. */
+  const [focusInside, setFocusInside] = createSignal(false);
   const [panOffset, setPanOffset] = createSignal({ x: 0, y: 0 });
   const [dragging, setDragging] = createSignal(false);
   /** Mouse drag-to-navigate in progress (touch and trackpads scroll natively). */
@@ -181,7 +187,7 @@ export function ImageViewer(props: ImageViewerProps) {
   const scheduleUIHide = () => {
     clearIdleTimer();
     idleTimer = window.setTimeout(() => {
-      if (!controlHovered()) setShowUI(false);
+      if (!controlHovered() && !focusInside()) setShowUI(false);
     }, UI_IDLE_TIMEOUT_MS);
   };
 
@@ -216,6 +222,18 @@ export function ImageViewer(props: ImageViewerProps) {
     if (!next || !container.contains(next)) handleControlHoverEnd();
   };
 
+  const handleViewerFocusIn = () => {
+    setFocusInside(true);
+    revealUI();
+  };
+
+  const handleViewerFocusOut = (e: FocusEvent) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && (e.currentTarget as HTMLElement).contains(next)) return;
+    setFocusInside(false);
+    scheduleUIHide();
+  };
+
   createEffect(
     () => props.index,
     (idx) => {
@@ -245,16 +263,18 @@ export function ImageViewer(props: ImageViewerProps) {
             setIndex(index() + 1);
           }
         };
-        window.addEventListener('keydown', onKeyDown);
+        // Capture phase: any key reveals the chrome, even when a child stops propagation.
+        window.addEventListener('keydown', onKeyDown, true);
         window.addEventListener('pointerdown', revealUI, true);
         onCleanup(() => {
-          window.removeEventListener('keydown', onKeyDown);
+          window.removeEventListener('keydown', onKeyDown, true);
           window.removeEventListener('pointerdown', revealUI, true);
           clearIdleTimer();
         });
       } else {
         clearIdleTimer();
         setControlHovered(false);
+        setFocusInside(false);
         setShowUI(true);
       }
     },
@@ -472,8 +492,10 @@ export function ImageViewer(props: ImageViewerProps) {
             data-pixelated={props.pixelated ? '' : undefined}
             class={props.class}
             onPointerMove={revealUI}
+            onFocusIn={handleViewerFocusIn}
+            onFocusOut={handleViewerFocusOut}
             onMouseLeave={() => {
-              if (!zoomed() && !controlHovered()) setShowUI(false);
+              if (!zoomed() && !controlHovered() && !focusInside()) setShowUI(false);
             }}
             onOpenAutoFocus={(e: Event) => e.preventDefault()}
           >
@@ -628,7 +650,7 @@ export function ImageViewer(props: ImageViewerProps) {
                   <IconButton
                     size="lg"
                     icon={<ChevronLeftGlyph />}
-                    label="Previous image"
+                    label={props.previousLabel ?? 'Previous image'}
                     tooltip={false}
                     onMouseEnter={handleControlHoverStart}
                     onMouseLeave={handleControlHoverEnd}
@@ -645,7 +667,7 @@ export function ImageViewer(props: ImageViewerProps) {
                   <IconButton
                     size="lg"
                     icon={<ChevronRightGlyph />}
-                    label="Next image"
+                    label={props.nextLabel ?? 'Next image'}
                     tooltip={false}
                     onMouseEnter={handleControlHoverStart}
                     onMouseLeave={handleControlHoverEnd}

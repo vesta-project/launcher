@@ -26,7 +26,7 @@ export interface DialogProps {
   class?: string;
   /** Show the header close button. Escape and the backdrop still close. Defaults to true. */
   closeButton?: boolean;
-  /** Label for the close button. Defaults to "Close". */
+  /** Accessible name for the close button. Pass a localized string; defaults to "Close". */
   closeLabel?: string;
   /** Override where focus returns when a programmatic dialog closes. */
   onCloseAutoFocus?: (event: Event) => void;

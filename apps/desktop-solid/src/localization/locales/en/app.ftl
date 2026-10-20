@@ -22,6 +22,8 @@ common-move-down = Move down
 common-unpin = Unpin from sidebar
 common-open-instance = Open { $name }
 common-none = None
+common-previous-image = Previous image
+common-next-image = Next image
 
 nav-library = Library
 nav-create = Add instance

@@ -153,8 +153,17 @@
   :where([data-vesta="rail-pin"][data-status="crashed"]) {
     --pin-status-color: var(--vesta-color-danger);
   }
-  :where([data-vesta="rail-pin"][aria-current="page"]) {
-    outline: none;
+  /* The pinned list clips overflow, so the ring sits on the tile's edge instead of outside it. */
+  :where([data-vesta="rail-pin"]:focus-visible) {
+    outline-offset: 0;
+  }
+
+  /* Forced colors drop background and border tints, so the active tile gets an outline instead. */
+  @media (forced-colors: active) {
+    :where([data-vesta="rail-button"][aria-current="page"], [data-vesta="rail-pin"][aria-current="page"]) {
+      outline: var(--vesta-focus-width) solid CanvasText;
+      outline-offset: 0;
+    }
   }
   :where([data-vesta="rail-nav"]) {
     flex: none;

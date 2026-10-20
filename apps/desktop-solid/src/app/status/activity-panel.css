@@ -3,7 +3,7 @@
  * Hooks:  .activity-panel (popover), .activity-panel-clear, .activity-row-progress, .activity-row-cancel
  *         [data-vesta=activity-panel] -error -empty, [data-vesta=activity-rows], [data-vesta=activity-section-title]
  *         [data-vesta=activity-row] -line -title -percent -status -stage -counter -error
- *         [data-vesta=activity-recent] -rows -row -time
+ *         [data-vesta=activity-recent] -rows -row -time (data-section=ready: installs waiting for Play)
  *         [data-vesta=activity-background] -rows -row -name
  * States: activity-row / activity-recent-row / activity-background-row: data-state
  *         (queued | running | done | failed | cancelled)

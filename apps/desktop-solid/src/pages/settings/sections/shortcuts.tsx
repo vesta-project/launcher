@@ -97,6 +97,7 @@ export function ShortcutsSettings() {
       </For>
 
       <Dialog
+        closeLabel={t('nav.close')}
         size="sm"
         open={!!conflict()}
         onOpenChange={(open) => !open && setConflict(undefined)}

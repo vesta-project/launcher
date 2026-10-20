@@ -178,6 +178,7 @@ export function AboutSettings() {
       </Card>
 
       <Dialog
+        closeLabel={t('nav.close')}
         size="sm"
         open={resetting()}
         onOpenChange={setResetting}

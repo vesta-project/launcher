@@ -35,6 +35,13 @@ function RailLink(props: { item: NavItem }) {
   );
 }
 
+/** Pin state for the tooltip and accessible name. Pins show no visible text; running and crashed use the instance status copy. */
+function pinStatus(kind: string): string | undefined {
+  if (kind === 'running') return t('instance.running');
+  if (kind === 'crashed') return t('instance.crashed');
+  return undefined;
+}
+
 /** Persistent navigation: account, destinations, pinned instances, settings. */
 export function Rail() {
   const move = (event: KeyboardEvent) => {
@@ -65,7 +72,7 @@ export function Rail() {
                 <ContextMenu
                   trigger={(contextProps) => (
                     <Tooltip
-                      content={`${entry().instance.name} · ${entry().state.kind === 'running' ? t('instance.running') : entry().state.kind === 'crashed' ? t('instance.crashed') : entry().instance.minecraftVersion}`}
+                      content={`${entry().instance.name} · ${pinStatus(entry().state.kind) ?? entry().instance.minecraftVersion}`}
                       placement="right"
                       trigger={(triggerProps) => (
                         <a
@@ -73,7 +80,7 @@ export function Rail() {
                           data-vesta="rail-pin"
                           data-status={entry().state.kind}
                           href={`#/library/${entry().instance.id}`}
-                          aria-label={t('common.open-instance', { name: entry().instance.name })}
+                          aria-label={[t('common.open-instance', { name: entry().instance.name }), pinStatus(entry().state.kind)].filter(Boolean).join(', ')}
                           aria-current={
                             route().page === 'library' && route().section === entry().instance.id ? 'page' : undefined
                           }

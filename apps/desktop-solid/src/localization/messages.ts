@@ -255,6 +255,8 @@ export const messageIds = [
   "common.unpin",
   "common.open-instance",
   "common.none",
+  "common.previous-image",
+  "common.next-image",
   "nav.library",
   "nav.create",
   "nav.browse",
@@ -1405,6 +1407,10 @@ export const messageIds = [
   "console.log-output",
   "import.scan-timeout",
   "import.scan-error",
+  "activity.status-ready-more",
+  "activity.ready-to-play",
+  "activity.play-ready",
+  "activity.ready-dismiss",
 ] as const;
 
 export type MessageId = (typeof messageIds)[number];

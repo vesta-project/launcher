@@ -1,10 +1,12 @@
 import { createMemo, createRoot, createSignal } from 'solid-js';
-import { ActivityLedger, active, BACKGROUND_DELAY, SUCCESS_DURATION, backgroundList, selectPill, visibleTaskList, weightedProgress, isForeground, type Activity, type ActivityPatch, type PillState } from './activity-model';
+import { ActivityLedger, active, awaitingPlay, BACKGROUND_DELAY, SUCCESS_DURATION, backgroundList, readyList, selectPill, visibleTaskList, weightedProgress, isForeground, type Activity, type ActivityPatch, type PillState, type TargetLive } from './activity-model';
 export type { Activity, ActivityKind, ActivityState, ActivityPatch, PillState } from './activity-model';
 
 const ledger = new ActivityLedger();
 const [activities, setActivities] = createSignal<readonly Activity[]>([], { name: 'activities' });
 const [clock, setClock] = createSignal(Date.now(), { name: 'activityClock' });
+// Held as an object so the setter never mistakes the predicate for an updater function.
+const [targets, setTargets] = createSignal<{ live: TargetLive }>({ live: () => true }, { name: 'activityTargets' });
 const [activityError, setActivityError] = createSignal<string | undefined>(undefined, { name: 'activityError' });
 export { activities, activityError };
 let wake: ReturnType<typeof setTimeout> | undefined;
@@ -16,16 +18,18 @@ function samePill(a: PillState, b: PillState): boolean {
   if (a.state === 'idle' && b.state === 'idle') return true;
   if (a.state === 'quiet' && b.state === 'quiet') return sameRows(a.activities, b.activities);
   if (a.state === 'running' && b.state === 'running') return a.progress === b.progress && sameRows(a.activities, b.activities);
+  if (a.state === 'ready' && b.state === 'ready') return sameRows(a.activities, b.activities);
   if ((a.state === 'success' || a.state === 'failed') && a.state === b.state && 'activity' in b) return a.activity === b.activity;
   return false;
 }
 const sameRows = (a: readonly Activity[], b: readonly Activity[]) => a.length === b.length && a.every((row, i) => row === b[i]);
-export const { visibleTasks, backgroundActivities, overallProgress, pillState } = createRoot(() => {
-  const visibleTasks = createMemo(() => visibleTaskList(activities(), clock()), { name: 'visibleActivities', equals: sameRows });
+export const { visibleTasks, backgroundActivities, readyActivities, overallProgress, pillState } = createRoot(() => {
+  const visibleTasks = createMemo(() => visibleTaskList(activities(), clock(), targets().live), { name: 'visibleActivities', equals: sameRows });
+  const readyActivities = createMemo(() => readyList(activities(), targets().live), { name: 'readyActivities', equals: sameRows });
   const backgroundActivities = createMemo(() => backgroundList(activities(), clock()), { name: 'backgroundActivities', equals: sameRows });
   const overallProgress = createMemo(() => weightedProgress(activities().filter((a) => isForeground(a) && !a.pillDismissed)), { name: 'overallActivityProgress' });
-  const pillState = createMemo<PillState>(() => selectPill(activities(), clock()), { name: 'activityPill', equals: samePill });
-  return { visibleTasks, backgroundActivities, overallProgress, pillState };
+  const pillState = createMemo<PillState>(() => selectPill(activities(), clock(), targets().live), { name: 'activityPill', equals: samePill });
+  return { visibleTasks, backgroundActivities, readyActivities, overallProgress, pillState };
 });
 function publish() {
   const now = Date.now();
@@ -33,7 +37,7 @@ function publish() {
   setClock(now);
   clearTimeout(wake);
   const deadlines = ledger.rows.flatMap((a) => !isForeground(a) && a.state === 'running' ? [a.startedAt + BACKGROUND_DELAY]
-    : isForeground(a) && a.state === 'done' && !a.pillDismissed ? [(a.finishedAt ?? now) + SUCCESS_DURATION] : []).filter((at) => at > now);
+    : isForeground(a) && a.state === 'done' && !a.pillDismissed && !awaitingPlay(a) ? [(a.finishedAt ?? now) + SUCCESS_DURATION] : []).filter((at) => at > now);
   if (deadlines.length) wake = setTimeout(publish, Math.min(...deadlines) - now);
 }
 export function flushActivityProgress() {
@@ -74,6 +78,15 @@ export function dismissActivity(id: string) { flushActivityProgress(); ledger.di
 export function retireHostActivities(ids: readonly string[]) {
   ids.forEach((id) => pending.delete(id));
   ledger.retireActive(ids);
+  publish();
+}
+/** Ready installs only show while `live` (a reactive catalog lookup) says their instance exists. */
+export function configureActivityTargets(live: TargetLive) { setTargets({ live }); }
+/** Instances that just started playing, from any launch path, stop waiting in the pill. */
+export function markInstancesPlayed(instanceIds: readonly string[]) {
+  if (!instanceIds.length) return;
+  flushActivityProgress();
+  ledger.markPlayed(instanceIds);
   publish();
 }
 export function clearFinished() { flushActivityProgress(); ledger.clearFinished(); publish(); }

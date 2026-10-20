@@ -11,7 +11,7 @@ export function SyncSourceDialog() {
     const options = () => instances().filter((entry) => entry.state.kind === 'idle').map((entry) => ({
       value: entry.instance.id, label: entry.instance.name,
     }));
-    return <Dialog open onOpenChange={(open) => { if (!open) cancelSyncSourceRequest(); }}
+    return <Dialog closeLabel={t('nav.close')} open onOpenChange={(open) => { if (!open) cancelSyncSourceRequest(); }}
       title={t('prefs.sync.source-title')}
       description={t('prefs.sync.source-description')}
       footer={<><Button variant="ghost" onClick={cancelSyncSourceRequest}>{t('common.cancel')}</Button>

@@ -8,6 +8,7 @@ import { closeWorldChoice, installIntoWorld, worldChoice } from './install-actio
 export function WorldPickerDialog() {
   return (
     <Dialog
+      closeLabel={t('nav.close')}
       open={!!worldChoice()}
       onOpenChange={(open) => !open && closeWorldChoice()}
       size="md"
