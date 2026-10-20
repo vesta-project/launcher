@@ -54,6 +54,8 @@
   }
 
   :where([data-vesta-scheme='light']) {
+    /* Resolve the hue alias here as well as on dark roots. */
+    --vesta-accent-h: var(--vesta-theme-accent-hue, var(--vesta-accent-hue));
     --vesta-neutral-chroma: var(--vesta-theme-neutral-chroma-light, 0.025);
     --vesta-neutral-lift: var(--vesta-theme-neutral-lift-light, 0);
     --vesta-accent-chroma: var(--vesta-theme-accent-chroma-light, 0.16);

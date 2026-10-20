@@ -7,7 +7,15 @@
   :root {
     color-scheme: light;
     --vesta-font-sans: Tahoma, 'MS Sans Serif', Arial, sans-serif;
-    --vesta-color-canvas: #d4d0c8;
+    --vesta-color-canvas: #3a6ea5;
+    --vesta-color-canvas-fill: #3a6ea5;
+    --vesta-color-chrome: #d4d0c8;
+    --vesta-color-panel: #d4d0c8;
+    --vesta-theme-background: none;
+    --vesta-theme-grain-opacity: 0;
+    --vesta-theme-overlay-blur: none;
+    --vesta-color-tooltip: #ffffe1;
+    --vesta-color-tooltip-text: #000;
     --vesta-color-surface: #d4d0c8;
     --vesta-color-surface-raised: #d4d0c8;
     --vesta-color-surface-sunken: #fff;
@@ -31,6 +39,9 @@
     --vesta-color-danger-text: #a00000;
     --vesta-color-danger-border: #a00000;
     --vesta-color-on-danger: #fff;
+    --vesta-color-success-text: #145214;
+    --vesta-color-warning-text: #654500;
+    --vesta-color-info-text: #0a246a;
     --vesta-color-focus: #000;
     --vesta-color-overlay: #d4d0c8;
     --vesta-color-overlay-text: #000;
@@ -214,4 +225,82 @@
     outline: 1px dotted #000;
     outline-offset: 2px;
   }
+  /* Launcher surfaces use public hooks, leaving artwork and preset miniatures intact. */
+  :root :where([data-vesta='board']) {
+    --board-bg: #d4d0c8;
+    box-shadow: var(--classic-sunken);
+  }
+
+  :root :where([data-vesta='titlebar'], [data-vesta='rail']) {
+    background: #d4d0c8;
+    color: #000;
+  }
+
+  :root :where([data-vesta='prefs-page-icon'], [data-vesta='prefs-java-mark'], [data-vesta='prefs-sync-icon']) {
+    background: #d4d0c8;
+    color: #000;
+    border-radius: 0;
+    box-shadow: var(--classic-raised);
+  }
+
+  :root :where([data-vesta='resources']) {
+    --resource-pack-tint: #c0c0c0;
+  }
+
+  :root :where([data-vesta='segmented-control']) {
+    --segmented-track-bg: #b0ada6;
+    --segmented-item-fg: #000;
+    --segmented-item-fg-hover: #000;
+    --segmented-item-fg-selected: #000;
+    --segmented-thumb-bg: #d4d0c8;
+    --segmented-thumb-shadow: var(--classic-sunken);
+    box-shadow: var(--classic-sunken);
+  }
+
+  :root :where([data-vesta='segmented-item']:not([data-disabled]):hover) {
+    background: #dfdfdf;
+    box-shadow: var(--classic-raised);
+  }
+
+  :root :where([data-vesta='field']:has([data-vesta='slider-track'])) {
+    --slider-track-size: 4px;
+    --slider-track-bg: #808080;
+    --slider-fill-bg: #0a246a;
+    --slider-thumb-bg: #d4d0c8;
+    --slider-thumb-border: transparent;
+  }
+
+  :root :where([data-vesta='slider-track']) {
+    box-shadow: var(--classic-sunken);
+  }
+
+  :root :where([data-vesta='slider-thumb']) {
+    box-shadow: var(--classic-raised);
+  }
+
+  :root :where([data-vesta='tab']:not([data-disabled]):hover) {
+    background: #dfdfdf;
+  }
+
+  :root :where([data-vesta='project-link'], [data-vesta='project-creator'], [data-vesta='project-header-author']) {
+    color: #000;
+  }
+
+  :root :where([data-vesta='project-link']:hover, [data-vesta='project-creator']:hover, [data-vesta='project-header-author']:hover) {
+    background: #0a246a;
+    color: #fff;
+  }
+
+  :root :where([data-vesta='dialog-header']) {
+    min-block-size: 24px;
+    flex: none;
+    margin-inline: 4px;
+    padding-inline: 6px;
+  }
+
+  :root :where([data-vesta='dialog-title']) {
+    color: #fff;
+    text-shadow: 1px 1px #0a246a;
+  }
+
 }
