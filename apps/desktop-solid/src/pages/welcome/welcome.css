@@ -1,15 +1,15 @@
 /*
  * First-run welcome flow: one card over the old launcher's drifting backdrop.
  *
- * Hooks:  [data-vesta=welcome] (root; data-step), -bar, -progress (on the card), -progress-step (data-state), -progress-label,
+ * Hooks:  [data-vesta=welcome] (root; data-step), -bar, -bar-end, -progress (in the titlebar), -progress-step (data-state), -progress-label,
  *         -stage, -card (data-step), -step (data-direction forward | back), -head, -title, -lead,
  *         -head (data-split), -head-text, -foot, -foot-spacer, -actions (data-align), -quiet-link, -error,
- *         -spinner, .welcome-mode
+ *         -spinner, .welcome-mode, .welcome-language
  *         atmosphere: -atmosphere (data-calm), -orb, -specks, -speck, -light
  *         splash: -splash, -wordmark, -tagline, -splash-actions, -offline-hint, .welcome-start
  *         credits: -credits, -credits-text, -credits-subtext, -credits-logos, -credit, -credit-name, -credits-hint
- *         auth: -auth, -auth-idle, -auth-offline, -auth-code, -auth-moves, -auth-move, -auth-move-number,
- *               -auth-move-text, -code (data-copied, data-expired), -code-value, -code-hint,
+ *         auth: -auth, -auth-idle, -auth-offline, -auth-code, -auth-where, -code (data-copied,
+ *               data-expired), -code-tiles, -code-tile, -code-hint, -head (data-align=center),
  *               -auth-waiting, -auth-timer (data-low), .welcome-microsoft
  *         theme: -theme, -theme-grid
  *         first instance: -first, -choices, -choice (data-selected), -choice-button, -choice-icon,
@@ -47,38 +47,32 @@
     flex: none;
     justify-content: center;
     align-items: center;
-    block-size: 32px;
-    padding-inline: 78px;
+    block-size: 34px;
+    padding-inline: 180px;
   }
 
-  :where([data-vesta='welcome-bar']) :where([data-vesta='window-controls']) {
-    position: absolute;
-    inset-block: 0;
-    inset-inline-end: 4px;
-    display: flex;
-    align-items: center;
-  }
 
-  /* Progress lives on the card itself: a row of short segments along its top edge, with the
-     current step's name beneath. Done segments are full, the current one fills in. */
+  /* Progress sits in the titlebar: short segments, each with its step name beneath. Done
+     segments are full, the current one fills in as you arrive. */
   :where([data-vesta='welcome-progress']) {
     display: grid;
-    grid-template-columns: repeat(var(--welcome-progress-count, 3), minmax(0, 1fr));
+    grid-template-columns: repeat(var(--welcome-progress-count, 3), 96px);
     gap: 6px;
     margin: 0;
-    padding: 18px 32px 0;
+    padding: 0;
     list-style: none;
   }
 
   :where([data-vesta='welcome-progress-step']) {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 4px;
     min-inline-size: 0;
     color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    font-size: 10.5px;
     font-weight: var(--vesta-weight-medium);
     letter-spacing: 0.02em;
+    text-align: center;
   }
 
   :where([data-vesta='welcome-progress-step'])::before {
@@ -91,12 +85,11 @@
     transition: background-size 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  :where([data-vesta='welcome-progress-step'][data-state='done']) {
+  :where([data-vesta='welcome-progress-step']:is([data-state='done'], [data-state='current'])) {
     --welcome-segment: 100%;
   }
 
   :where([data-vesta='welcome-progress-step'][data-state='current']) {
-    --welcome-segment: 100%;
     color: var(--vesta-color-text);
   }
 
@@ -114,6 +107,19 @@
     from {
       background-size: 0% 100%, auto;
     }
+  }
+
+  :where([data-vesta='welcome-bar-end']) {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 6px;
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  .welcome-language {
+    inline-size: 150px;
   }
 
   /* ---- Stage and card ---- */
@@ -428,62 +434,23 @@
     animation: welcome-rise 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  :where([data-vesta='welcome-auth-moves']) {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--vesta-space-2) var(--vesta-space-6);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-md);
+  :where([data-vesta='welcome-head'][data-align='center']) {
+    text-align: center;
   }
 
-  :where([data-vesta='welcome-auth-move']) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
-  }
-
-  :where([data-vesta='welcome-auth-move-number']) {
-    display: grid;
-    place-items: center;
-    inline-size: 20px;
-    block-size: 20px;
-    border-radius: 50%;
-    background: var(--vesta-color-fill-active);
-    color: var(--vesta-color-text);
-    font-size: var(--vesta-text-xs);
-    font-weight: var(--vesta-weight-semibold);
-  }
-
-  :where([data-vesta='welcome-auth-move-text']) :where(strong) {
-    color: var(--vesta-color-text);
-    font-weight: var(--vesta-weight-semibold);
-  }
-
-  /* The code is the hero: big, monospaced, and itself a copy button. */
+  /* The code is the hero: one tile per character, and the whole strip copies on click. */
   :where([data-vesta='welcome-code']) {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--vesta-space-2);
-    min-inline-size: 280px;
-    padding: var(--vesta-space-4) var(--vesta-space-6) var(--vesta-space-3);
-    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
+    padding: var(--vesta-space-2);
+    border: 0;
     border-radius: var(--vesta-radius-xl);
-    background: var(--vesta-color-surface-sunken);
+    background: none;
     color: var(--vesta-color-text);
     font: inherit;
     cursor: default;
-    transition:
-      border-color var(--vesta-duration-normal) var(--vesta-ease-standard),
-      background-color var(--vesta-duration-normal) var(--vesta-ease-standard);
-  }
-
-  :where([data-vesta='welcome-code']:hover:not(:disabled)) {
-    border-color: var(--vesta-color-accent-border);
   }
 
   :where([data-vesta='welcome-code']:focus-visible) {
@@ -491,23 +458,46 @@
     outline-offset: 2px;
   }
 
-  :where([data-vesta='welcome-code'][data-copied]) {
-    border-style: solid;
-    border-color: var(--vesta-color-success-border);
+  :where([data-vesta='welcome-code-tiles']) {
+    display: flex;
+    gap: 6px;
   }
 
-  :where([data-vesta='welcome-code-value']) {
+  :where([data-vesta='welcome-code-tile']) {
+    display: grid;
+    place-items: center;
+    inline-size: 38px;
+    block-size: 46px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface-sunken);
     color: var(--vesta-color-accent-text);
     font-family: var(--vesta-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-    font-size: 30px;
+    font-size: 22px;
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.16em;
-    user-select: all;
+    transition:
+      border-color var(--vesta-duration-normal) var(--vesta-ease-standard),
+      transform var(--vesta-duration-normal) var(--vesta-ease-standard);
+    animation: welcome-rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  :where([data-vesta='welcome-code'][data-expired]) :where([data-vesta='welcome-code-value']) {
+  /* A visual gap in the middle of an eight-character code (XXXX XXXX). */
+  :where([data-vesta='welcome-code-tile']:nth-child(4):nth-last-child(5)) {
+    margin-inline-end: 8px;
+  }
+
+  :where([data-vesta='welcome-code']:hover:not(:disabled)) :where([data-vesta='welcome-code-tile']) {
+    border-color: var(--vesta-color-accent-border);
+  }
+
+  :where([data-vesta='welcome-code'][data-copied]) :where([data-vesta='welcome-code-tile']) {
+    border-color: var(--vesta-color-success-border);
+    color: var(--vesta-color-success-text);
+  }
+
+  :where([data-vesta='welcome-code'][data-expired]) :where([data-vesta='welcome-code-tile']) {
     color: var(--vesta-color-text-subtle);
-    text-decoration: line-through;
+    opacity: 0.6;
   }
 
   :where([data-vesta='welcome-code-hint']) {
@@ -520,6 +510,16 @@
 
   :where([data-vesta='welcome-code'][data-copied]) :where([data-vesta='welcome-code-hint']) {
     color: var(--vesta-color-success-text);
+  }
+
+  :where([data-vesta='welcome-auth-where']) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-md);
+  }
+
+  :where([data-vesta='welcome-auth-where']) :where(strong) {
+    color: var(--vesta-color-text);
   }
 
   :where([data-vesta='welcome-auth-waiting']) {
@@ -999,12 +999,6 @@
   }
 }
 
-@layer launcher {
-  :where([data-vesta='welcome-progress']) + :where(*) :where([data-vesta='welcome-step']),
-  :where([data-vesta='welcome-progress']) + :where([data-vesta='welcome-step']) {
-    padding-block-start: 22px;
-  }
-}
 
 @layer launcher {
   /* The import picker opens inside its choice row, like the modpack grid. */

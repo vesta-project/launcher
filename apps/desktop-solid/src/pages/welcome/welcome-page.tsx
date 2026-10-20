@@ -1,10 +1,18 @@
-import { TooltipHints } from '@vesta/ui';
+import { Select, TooltipHints } from '@vesta/ui';
 import { For, Match, Show, Switch, createMemo } from 'solid-js';
 import { detectPlatform } from '../../app/platform';
 import { WindowControls } from '../../app/titlebar';
 import { ExternalLinkDialog } from '../../features/links/external-link-dialog';
 import { onboarding, type OnboardingStep } from '../../features/onboarding';
-import { t } from '../../localization';
+import { updateSetting } from '../../features/settings/config';
+import {
+  SYSTEM_LANGUAGE,
+  getSupportedLocales,
+  languagePreference,
+  setLocale,
+  t,
+  type LocalePreference,
+} from '../../localization';
 import { Atmosphere } from './atmosphere';
 import { AuthStep } from './auth-step';
 import { FirstInstanceStep } from './first-instance-step';
@@ -26,6 +34,12 @@ const stepLabels = {
  * First run: one card over a slowly drifting backdrop, a step at a time. The titlebar is
  * only a drag strip (plus window controls off macOS); there is no rail or breadcrumb yet.
  */
+/** The language can be chosen before anything else, so it sits in the corner from the start. */
+const languages = () => [
+  { value: SYSTEM_LANGUAGE, label: t('common.system-default') },
+  ...getSupportedLocales().map((locale) => ({ value: locale.code, label: locale.nativeName })),
+];
+
 export function WelcomePage() {
   const position = createMemo(() => counted.indexOf(onboarding.step()), { name: 'welcomePosition' });
   // The intro keeps its full atmosphere; once a theme is chosen the backdrop calms down.
@@ -35,32 +49,45 @@ export function WelcomePage() {
     <div data-vesta="welcome" data-step={onboarding.step()} data-tauri-drag-region="deep">
       <Atmosphere calm={calm()} />
       <header data-vesta="welcome-bar" data-platform={platform}>
-        <Show when={platform === 'windows' || platform === 'linux'}>
-          <WindowControls />
+        <Show when={position() >= 0 && !onboarding.loginOnly()}>
+          <ol
+            data-vesta="welcome-progress"
+            aria-label={t('welcome.progress')}
+            style={{ '--welcome-progress-count': String(counted.length) }}
+          >
+            <For each={counted}>
+              {(step, index) => (
+                <li
+                  data-vesta="welcome-progress-step"
+                  data-state={index() < position() ? 'done' : index() === position() ? 'current' : undefined}
+                  aria-current={index() === position() ? 'step' : undefined}
+                >
+                  <span data-vesta="welcome-progress-label">{t(stepLabels[step as keyof typeof stepLabels])}</span>
+                </li>
+              )}
+            </For>
+          </ol>
         </Show>
+        <div data-vesta="welcome-bar-end">
+          <Select
+            size="sm"
+            class="welcome-language"
+            aria-label={t('prefs.general.language')}
+            value={languagePreference()}
+            options={languages()}
+            onChange={(value) => {
+              setLocale(value as LocalePreference);
+              updateSetting('language', value);
+            }}
+          />
+          <Show when={platform === 'windows' || platform === 'linux'}>
+            <WindowControls />
+          </Show>
+        </div>
       </header>
 
       <main data-vesta="welcome-stage">
         <section data-vesta="welcome-card" data-step={onboarding.step()}>
-          <Show when={position() >= 0 && !onboarding.loginOnly()}>
-            <ol
-              data-vesta="welcome-progress"
-              aria-label={t('welcome.progress')}
-              style={{ '--welcome-progress-count': String(counted.length) }}
-            >
-              <For each={counted}>
-                {(step, index) => (
-                  <li
-                    data-vesta="welcome-progress-step"
-                    data-state={index() < position() ? 'done' : index() === position() ? 'current' : undefined}
-                    aria-current={index() === position() ? 'step' : undefined}
-                  >
-                    <span data-vesta="welcome-progress-label">{t(stepLabels[step as keyof typeof stepLabels])}</span>
-                  </li>
-                )}
-              </For>
-            </ol>
-          </Show>
           <Show when={onboarding.step()} keyed>
             {(step) => (
               <div data-vesta="welcome-step" data-direction={onboarding.direction() > 0 ? 'forward' : 'back'}>

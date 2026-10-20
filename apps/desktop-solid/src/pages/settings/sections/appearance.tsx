@@ -20,6 +20,12 @@ import "./appearance.css";
 
 type Preset = (typeof themePresets)[number];
 
+const materialLabels = {
+  glass: 'prefs.appearance.style-glass',
+  frosted: 'prefs.appearance.style-frosted',
+  flat: 'prefs.appearance.style-flat',
+} as const;
+
 /** The live theme settings, in the shape the token resolver takes. */
 function currentTheme(): ThemeValues {
   return {
@@ -56,12 +62,16 @@ function ThemePreview(props: {
       style={props.tokens}
       aria-hidden="true"
     >
-      <span data-vesta="prefs-theme-preview-rail"><i /><i /></span>
-      <span data-vesta="prefs-theme-preview-body">
+      <span data-vesta="prefs-theme-preview-bar">
+        <i data-vesta="prefs-theme-preview-pill" />
+      </span>
+      <span data-vesta="prefs-theme-preview-rail"><i /><i /><i /></span>
+      <span data-vesta="prefs-theme-preview-board">
         <span data-vesta="prefs-theme-preview-heading" />
-        <span data-vesta="prefs-theme-preview-surface">
-          <span data-vesta="prefs-theme-preview-ink" />
-          <span data-vesta="prefs-theme-preview-accent" />
+        <span data-vesta="prefs-theme-preview-cards">
+          <span data-vesta="prefs-theme-preview-card" data-accent="" />
+          <span data-vesta="prefs-theme-preview-card" />
+          <span data-vesta="prefs-theme-preview-card" />
         </span>
       </span>
     </span>
@@ -131,6 +141,9 @@ export function ThemeGrid() {
                 </span>
                 <span data-vesta="prefs-theme-caption">
                   <span data-vesta="prefs-theme-name">{preset.name}</span>
+                  <span data-vesta="prefs-theme-material">
+                    {t(materialLabels[preview().material as keyof typeof materialLabels] ?? 'prefs.appearance.style-glass')}
+                  </span>
                 </span>
               </button>
             </li>

@@ -1,5 +1,5 @@
 import { Button } from '@vesta/ui';
-import { Match, Show, Switch, createMemo, createSignal, onSettled } from 'solid-js';
+import { For, Match, Show, Switch, createMemo, createSignal, onSettled } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { onboarding, signIn } from '../../features/onboarding';
 import { t } from '../../localization';
@@ -46,7 +46,7 @@ export function AuthStep() {
 
   return (
     <div data-vesta="welcome-auth">
-      <header data-vesta="welcome-head">
+      <header data-vesta="welcome-head" data-align="center">
         <h2 data-vesta="welcome-title">{t('welcome.auth-title')}</h2>
         <p data-vesta="welcome-lead">{t('welcome.auth-lead')}</p>
       </header>
@@ -62,19 +62,7 @@ export function AuthStep() {
 
         <Match when={state().phase === 'waiting' && state().code}>
           <div data-vesta="welcome-auth-code">
-            <ol data-vesta="welcome-auth-moves">
-              <li data-vesta="welcome-auth-move">
-                <span data-vesta="welcome-auth-move-number">1</span>
-                <span data-vesta="welcome-auth-move-text">{t('welcome.auth-move-copy')}</span>
-              </li>
-              <li data-vesta="welcome-auth-move">
-                <span data-vesta="welcome-auth-move-number">2</span>
-                <span data-vesta="welcome-auth-move-text">
-                  {t('welcome.auth-move-paste')} <strong>microsoft.com/link</strong>
-                </span>
-              </li>
-            </ol>
-
+            {/* The code reads as tiles, one per character, so it is easy to copy by eye too. */}
             <button
               type="button"
               data-vesta="welcome-code"
@@ -84,12 +72,19 @@ export function AuthStep() {
               disabled={expired()}
               onClick={() => void copy()}
             >
-              <span data-vesta="welcome-code-value">{state().code}</span>
+              <span data-vesta="welcome-code-tiles" aria-hidden="true">
+                <For each={[...state().code!.replace(/[^\w]/g, '')]}>
+                  {(char) => <span data-vesta="welcome-code-tile">{char}</span>}
+                </For>
+              </span>
               <span data-vesta="welcome-code-hint">
                 <Icon name={copied() ? 'icons/controls/check' : 'icons/actions/copy'} size={12} />
                 {copied() ? t('welcome.auth-copied') : t('welcome.auth-copy')}
               </span>
             </button>
+            <p data-vesta="welcome-auth-where">
+              {t('welcome.auth-move-paste')} <strong>microsoft.com/link</strong>
+            </p>
 
             <Show
               when={!expired()}

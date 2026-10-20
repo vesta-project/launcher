@@ -1,7 +1,7 @@
-import { Checkbox, SegmentedControl, Skeleton } from '@vesta/ui';
+import { Checkbox, Select, Skeleton } from '@vesta/ui';
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../components/icon';
-import { loadCandidates, type ImportCandidate, type LauncherSummary } from '../../features/launcher-import';
+import { candidateState, loadCandidates, type ImportCandidate, type LauncherSummary } from '../../features/launcher-import';
 import { t } from '../../localization';
 import './import-picker.css';
 
@@ -17,28 +17,28 @@ export function ImportPicker(props: {
   onSelection: (launcher: string, candidates: ImportCandidate[]) => void;
 }) {
   const [launcher, setLauncher] = createSignal(untrack(() => props.launchers[0]?.id ?? ''), { name: 'importPickerLauncher' });
-  const [candidates, setCandidates] = createSignal<ImportCandidate[] | undefined>(undefined, { name: 'importPickerCandidates' });
-  const [error, setError] = createSignal<string>();
   const [picked, setPicked] = createSignal<ReadonlySet<string>>(new Set(), { name: 'importPickerPicked' });
+  // Scans are preloaded in the background, so the state is usually ready before this opens.
+  const state = createMemo(() => candidateState(launcher()), { name: 'importPickerState' });
+  const candidates = () => (state().status === 'ready' ? state().candidates ?? [] : undefined);
+  const error = () => (state().status === 'error' ? state().error : undefined);
+  const seeded = new Set<string>();
 
   createEffect(
     () => launcher(),
     (id) => {
-      if (!id) return;
-      let current = true;
-      setCandidates(undefined);
-      setError(undefined);
-      loadCandidates(id)
-        .then((rows) => {
-          if (!current) return;
-          setCandidates(rows);
-          // Start with everything new picked: most people bring their whole launcher across.
-          setPicked(new Set(rows.filter((row) => !row.alreadyImported).map((row) => row.key)));
-        })
-        .catch((reason) => current && setError(reason instanceof Error ? reason.message : String(reason)));
-      return () => {
-        current = false;
-      };
+      // Joins the in-flight preload when there is one; a no-op once cached.
+      if (id && untrack(state).status === 'idle') void loadCandidates(id).catch(() => undefined);
+    },
+  );
+  // The first time a launcher's list arrives, start with everything new picked: most people
+  // bring their whole launcher across. Later visits keep whatever was chosen.
+  createEffect(
+    () => ({ id: launcher(), rows: candidates() }),
+    ({ id, rows }) => {
+      if (!rows || seeded.has(id)) return;
+      seeded.add(id);
+      setPicked(new Set(rows.filter((row) => !row.alreadyImported).map((row) => row.key)));
     },
   );
 
@@ -50,7 +50,10 @@ export function ImportPicker(props: {
   });
   createEffect(
     () => selection(),
-    (rows) => untrack(() => props.onSelection(launcher(), rows)),
+    // Block body: an expression body would hand the caller's return value back as a cleanup.
+    (rows) => {
+      untrack(() => props.onSelection(launcher(), rows));
+    },
   );
 
   const toggle = (key: string, on: boolean) => {
@@ -67,20 +70,47 @@ export function ImportPicker(props: {
 
   return (
     <div data-vesta="import-picker">
+      <div data-vesta="import-picker-layout" data-multiple={props.launchers.length > 1 ? '' : undefined}>
       <Show when={props.launchers.length > 1}>
-        <SegmentedControl
+        {/* Launchers as a column beside the list (a dropdown when the space is narrow). */}
+        <ul data-vesta="import-picker-launchers" aria-label={t('import.picker-launcher')}>
+          <For each={props.launchers}>
+            {(item) => (
+              <li>
+                <button
+                  type="button"
+                  data-vesta="import-picker-launcher"
+                  aria-pressed={launcher() === item.id ? 'true' : 'false'}
+                  data-empty={item.instanceCount === 0 ? '' : undefined}
+                  onClick={() => setLauncher(item.id)}
+                >
+                  <Show when={item.icon} fallback={<Icon name="icons/content/cube" size={14} />}>
+                    {(icon) => <Icon name={icon()} size={14} />}
+                  </Show>
+                  <span data-vesta="import-picker-launcher-name" data-tip-overflow>{item.label}</span>
+                  <Show when={item.instanceCount !== undefined}>
+                    <span data-vesta="import-picker-launcher-count">{item.instanceCount}</span>
+                  </Show>
+                </button>
+              </li>
+            )}
+          </For>
+        </ul>
+        <Select
           size="sm"
-          class="import-picker-launchers"
+          class="import-picker-launcher-select"
           aria-label={t('import.picker-launcher')}
           value={launcher()}
           onChange={setLauncher}
           options={props.launchers.map((item) => ({
             value: item.id,
-            label: item.label,
-            icon: item.icon ? <Icon name={item.icon} size={14} /> : undefined,
+            label: item.instanceCount === undefined ? item.label : `${item.label} (${item.instanceCount})`,
+            icon: item.icon ? () => <Icon name={item.icon!} size={14} /> : undefined,
           }))}
         />
       </Show>
+
+      <div data-vesta="import-picker-main">
 
       <Switch>
         <Match when={error()}>
@@ -156,6 +186,8 @@ export function ImportPicker(props: {
           )}
         </Match>
       </Switch>
+      </div>
+      </div>
     </div>
   );
 }

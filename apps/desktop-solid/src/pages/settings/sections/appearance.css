@@ -1,9 +1,16 @@
-/* Compact theme swatches, scoped to each theme's actual palette and material tokens. */
 @layer launcher {
+  /*
+   * Theme tiles: a miniature of the launcher window in that theme's real tokens (titlebar with
+   * the status pill, rail, board with instance cards, one in the accent). Landscape like the
+   * window itself; the selected tile gets an accent ring with a gap and a check.
+   * Hooks: prefs-themes, prefs-theme (aria-pressed), -frame, -check, -caption, -name, -material,
+   *        -preview (data-material, data-vesta-accent), -preview-bar, -pill, -rail, -board,
+   *        -heading, -cards, -card (data-accent)
+   */
   :where([data-vesta="prefs-themes"]) {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(104px, 112px));
-    gap: var(--vesta-space-3);
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--vesta-space-4) var(--vesta-space-3);
     margin: 0;
     padding: var(--vesta-space-1) var(--vesta-space-4) var(--vesta-space-4);
     list-style: none;
@@ -14,11 +21,10 @@
   :where([data-vesta="prefs-theme"]) {
     display: flex;
     flex-direction: column;
-    gap: var(--vesta-space-1);
+    gap: var(--vesta-space-2);
     inline-size: 100%;
     padding: 0;
     border: 0;
-    border-radius: var(--vesta-radius-container);
     background: none;
     color: var(--vesta-color-text);
     font: inherit;
@@ -27,108 +33,165 @@
     cursor: default;
   }
   :where([data-vesta="prefs-theme"]:focus-visible) {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: var(--vesta-focus-offset);
+    outline: none;
   }
   :where([data-vesta="prefs-theme-frame"]) {
     position: relative;
     display: block;
     inline-size: 100%;
-    aspect-ratio: 1;
-    border: 1px solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    overflow: hidden;
+    aspect-ratio: 16 / 10;
+    border-radius: var(--vesta-radius-xl);
+    box-shadow:
+      0 0 0 1px var(--vesta-color-border),
+      var(--vesta-shadow-sm);
+    transition:
+      box-shadow var(--vesta-duration-normal) var(--vesta-ease-standard),
+      transform var(--vesta-duration-normal) var(--vesta-ease-standard);
   }
   :where([data-vesta="prefs-theme"]:hover [data-vesta="prefs-theme-frame"]) {
-    border-color: var(--vesta-color-border-strong);
+    box-shadow:
+      0 0 0 1px var(--vesta-color-border-strong),
+      var(--vesta-shadow-md);
+    transform: translateY(-1px);
   }
   :where([data-vesta="prefs-theme"][aria-pressed="true"] [data-vesta="prefs-theme-frame"]) {
-    border-color: var(--vesta-color-accent);
-    box-shadow: 0 0 0 1px var(--vesta-color-accent);
+    box-shadow:
+      0 0 0 2px var(--vesta-color-surface),
+      0 0 0 4px var(--vesta-color-accent),
+      var(--vesta-shadow-md);
+  }
+  :where([data-vesta="prefs-theme"]:focus-visible [data-vesta="prefs-theme-frame"]) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 5px;
   }
   :where([data-vesta="prefs-theme-check"]) {
     position: absolute;
-    inset: 4px 4px auto auto;
+    z-index: 1;
+    inset: auto -6px -6px auto;
     display: grid;
     place-items: center;
-    inline-size: 16px;
-    block-size: 16px;
-    border-radius: var(--vesta-radius-sm);
+    inline-size: 20px;
+    block-size: 20px;
+    border: 2px solid var(--vesta-color-surface);
+    border-radius: 50%;
     background: var(--vesta-color-accent);
     color: var(--vesta-color-on-accent);
+    animation: prefs-theme-check 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
-  :where([data-vesta="prefs-theme-caption"], [data-vesta="prefs-theme-name"]) {
+  :where([data-vesta="prefs-theme-caption"]) {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    padding-inline: 2px;
+  }
+  :where([data-vesta="prefs-theme-name"]) {
     overflow: hidden;
+    font-weight: var(--vesta-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: var(--vesta-weight-medium);
   }
-  /* Show the interface's main surfaces without miniature controls or text. */
+  :where([data-vesta="prefs-theme-material"]) {
+    flex: none;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="prefs-theme"][aria-pressed="true"] [data-vesta="prefs-theme-name"]) {
+    color: var(--vesta-color-accent-text);
+  }
+  /* The window in miniature: chrome across the top and down the left, the board inset. */
   :where([data-vesta="prefs-theme-preview"]) {
     position: absolute;
     inset: 0;
     display: grid;
-    grid-template: minmax(0, 1fr) / 18% minmax(0, 1fr);
+    grid-template: 14% minmax(0, 1fr) / 13% minmax(0, 1fr);
     overflow: hidden;
+    border-radius: inherit;
     background: var(--vesta-theme-background, none), var(--vesta-color-canvas);
     color: var(--vesta-color-text);
+  }
+  :where([data-vesta="prefs-theme-preview-bar"]) {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    align-items: center;
+    padding-inline: 8%;
+    background: var(--vesta-color-chrome);
+  }
+  :where([data-vesta="prefs-theme-preview-pill"]) {
+    inline-size: 22%;
+    block-size: 46%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, color-mix(in oklab, var(--vesta-color-accent) 55%, transparent) 60%, var(--vesta-color-fill-active) 60%);
   }
   :where([data-vesta="prefs-theme-preview-rail"]) {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding-block-start: 12px;
-    border-inline-end: 1px solid var(--vesta-color-border);
+    gap: 9%;
+    padding-block-start: 18%;
     background: var(--vesta-color-chrome);
   }
   :where([data-vesta="prefs-theme-preview-rail"]) > i {
-    inline-size: 10px;
-    block-size: 10px;
-    border-radius: var(--vesta-radius-sm);
+    inline-size: 46%;
+    aspect-ratio: 1;
+    border-radius: 30%;
     background: var(--vesta-color-fill-active);
   }
   :where([data-vesta="prefs-theme-preview-rail"]) > i:first-child {
     background: var(--vesta-color-accent);
   }
-  :where([data-vesta="prefs-theme-preview-body"]) {
+  :where([data-vesta="prefs-theme-preview-board"]) {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 9%;
     min-inline-size: 0;
     min-block-size: 0;
-    padding: 12px 8px 8px;
+    margin: 0 0 0 0;
+    padding: 9% 8%;
+    border-start-start-radius: 10%;
+    background: var(--vesta-color-panel);
+    box-shadow: inset 1px 1px 0 var(--vesta-color-border);
   }
   :where([data-vesta="prefs-theme-preview-heading"]) {
-    inline-size: 55%;
-    block-size: 5px;
-    border-radius: var(--vesta-radius-sm);
-    background: currentColor;
+    inline-size: 42%;
+    block-size: 7%;
+    min-block-size: 3px;
+    border-radius: 2px;
+    background: var(--vesta-color-text);
+    opacity: 0.85;
   }
-  :where([data-vesta="prefs-theme-preview-surface"]) {
-    display: flex;
+  :where([data-vesta="prefs-theme-preview-cards"]) {
+    display: grid;
     flex: 1;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: flex-start;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8%;
     min-block-size: 0;
-    padding: 8px;
-    border: 1px solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-control);
-    background: var(--vesta-color-panel);
   }
-  :where([data-vesta="prefs-theme-preview-ink"]) {
-    inline-size: 65%;
-    block-size: 4px;
-    border-radius: var(--vesta-radius-sm);
-    background: var(--vesta-color-text-muted);
+  :where([data-vesta="prefs-theme-preview-card"]) {
+    border-radius: 14%;
+    background:
+      linear-gradient(var(--vesta-color-fill-active), var(--vesta-color-fill-active)) bottom / 100% 34% no-repeat,
+      var(--vesta-color-surface-raised);
+    box-shadow: 0 0 0 1px var(--vesta-color-border);
   }
-  :where([data-vesta="prefs-theme-preview-accent"]) {
-    align-self: flex-end;
-    inline-size: 26px;
-    block-size: 14px;
-    border-radius: var(--vesta-radius-control);
-    background: var(--vesta-color-accent);
+  :where([data-vesta="prefs-theme-preview-card"][data-accent]) {
+    background:
+      linear-gradient(var(--vesta-color-surface-raised), var(--vesta-color-surface-raised)) bottom / 100% 34% no-repeat,
+      linear-gradient(150deg, var(--vesta-color-accent), color-mix(in oklab, var(--vesta-color-accent) 40%, var(--vesta-color-surface-raised)));
+  }
+  /* Glass and frosted show a lit top edge on the board, like the real window. */
+  :where([data-vesta="prefs-theme-preview"]:not([data-material="flat"])) :where([data-vesta="prefs-theme-preview-board"]) {
+    box-shadow:
+      inset 1px 1px 0 color-mix(in oklab, white 14%, transparent),
+      inset 0 0 0 1px var(--vesta-color-border);
+  }
+  @keyframes prefs-theme-check {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
   }
   :where([data-vesta="prefs-material-note"]) {
     margin: 0;

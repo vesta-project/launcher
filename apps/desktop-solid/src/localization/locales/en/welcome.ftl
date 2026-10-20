@@ -21,11 +21,10 @@ welcome-telemetry = Share crash and error reports.
 welcome-privacy-policy = Privacy policy
 
 welcome-auth-title = Sign in to Minecraft
-welcome-auth-lead = Use your Microsoft account. You sign in on Microsoft's own page; Vesta never sees your password.
+welcome-auth-lead = Sign in on Microsoft's own page. Vesta never sees your password.
 welcome-auth-microsoft = Sign in with Microsoft
 welcome-auth-connecting = Connecting…
-welcome-auth-move-copy = Copy this code
-welcome-auth-move-paste = Paste it at
+welcome-auth-move-paste = Then enter it at
 welcome-auth-copy = Click to copy
 welcome-auth-copied = Copied
 welcome-auth-copy-code = Copy code { $code }

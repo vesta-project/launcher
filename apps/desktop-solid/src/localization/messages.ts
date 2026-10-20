@@ -30,7 +30,6 @@ export const messageIds = [
   "welcome.auth-lead",
   "welcome.auth-microsoft",
   "welcome.auth-connecting",
-  "welcome.auth-move-copy",
   "welcome.auth-move-paste",
   "welcome.auth-copy",
   "welcome.auth-copied",
