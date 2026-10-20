@@ -92,7 +92,7 @@ fn encode_image_as_data_url(path: &Path) -> Option<String> {
         Some("webp") => "image/webp",
         _ => return None,
     };
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = crate::launcher_import::providers::read_small_icon(path)?;
     let encoded = general_purpose::STANDARD.encode(bytes);
     Some(format!("data:{mime};base64,{encoded}"))
 }

@@ -146,7 +146,7 @@ fn encode_pack_icon(root: &Path, pack_dir: &Path, pack_slug: &str) -> Option<Str
         if !icon.is_file() {
             continue;
         }
-        let bytes = std::fs::read(&icon).ok()?;
+        let bytes = crate::launcher_import::providers::read_small_icon(&icon)?;
         let mime = match icon
             .extension()
             .and_then(|ext| ext.to_str())

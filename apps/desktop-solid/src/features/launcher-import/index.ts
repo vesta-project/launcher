@@ -1,5 +1,7 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
+import { t } from '../../localization';
+export type { CandidateState } from './service';
 import { createLauncherImport, type ImportSource } from './service';
 import { fixtureCandidates, fixtureLaunchers } from './fixtures';
 import type { HostCandidate, LauncherSummary } from './model';
@@ -13,7 +15,7 @@ const service = createLauncherImport({
   list: (launcher, path) => native ? invoke<HostCandidate[]>('list_external_instances', {
     launcher, basePathOverride: path ?? null,
   }) : Promise.resolve(fixtureCandidates(launcher)),
-  existing: () => native ? invoke<ImportSource[]>('list_instances') : Promise.resolve(previewImports),
+  existing: () => native ? invoke<ImportSource[]>('list_external_import_origins') : Promise.resolve(previewImports),
   enqueue: async (launcher, candidate, path) => {
     if (!native) {
       previewImports.push({ importLauncherKind: launcher, importInstancePath: candidate.key });
@@ -24,6 +26,19 @@ const service = createLauncherImport({
   },
   icon: (path) => native && /^(\/|[A-Za-z]:[\\/])/.test(path) ? convertFileSrc(path) : path,
   publish,
+  errorMessage: (error) => t(String(error).includes('launcher-import-timeout') ? 'import.scan-timeout' : 'import.scan-error'),
 });
 export { detectedLaunchers };
-export const { refreshLaunchers, loadCandidates, importMany, detectedLauncherPaths } = service;
+export const { refreshLaunchers, ensureLaunchers, loadCandidates, importMany, detectedLauncherPaths, candidateState, preloadLaunchers } = service;
+
+/** Optional statistics for the detailed Create preview; listing remains lightweight. */
+export async function loadCandidateDetails(launcher: string, candidate: import('./model').ImportCandidate, path?: string): Promise<HostCandidate> {
+  if (!native) return candidate.raw as HostCandidate;
+  try {
+    return await invoke<HostCandidate>('get_external_instance_details', {
+      launcher, instancePath: candidate.key, basePathOverride: path?.trim() || null,
+    });
+  } catch (error) {
+    throw new Error(t(String(error).includes('launcher-import-timeout') ? 'import.scan-timeout' : 'import.scan-error'));
+  }
+}

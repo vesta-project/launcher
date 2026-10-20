@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { preloadLaunchers } from '../launcher-import';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { createSignal, untrack } from 'solid-js';
 import { navigate } from '../../app/router';
@@ -117,6 +118,8 @@ export async function resetOnboarding() {
 let startup: Promise<void> | undefined;
 /** Mount once from App, retaining network listeners for exactly the App lifetime. */
 export function startOnboarding(): () => void {
+  // Discovery starts independently of pack/config/auth latency.
+  void preloadLaunchers().catch(() => {});
   const syncOnline = () => setOnline(navigator.onLine);
   window.addEventListener('online', syncOnline);
   window.addEventListener('offline', syncOnline);

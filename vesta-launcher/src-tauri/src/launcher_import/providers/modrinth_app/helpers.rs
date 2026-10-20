@@ -22,7 +22,7 @@ pub(super) fn encode_icon_as_data_url(icon_path: &Path) -> Option<String> {
         _ => return None,
     };
 
-    let bytes = std::fs::read(icon_path).ok()?;
+    let bytes = crate::launcher_import::providers::read_small_icon(icon_path)?;
     let encoded = general_purpose::STANDARD.encode(bytes);
     Some(format!("data:{mime_type};base64,{encoded}"))
 }

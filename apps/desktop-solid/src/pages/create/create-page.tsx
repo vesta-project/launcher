@@ -1,3 +1,4 @@
+import { preloadLaunchers } from '../../features/launcher-import';
 import { useNativeDropZone } from '../../features/file-drop/zone';
 import {
   enrichLocalPack,
@@ -59,6 +60,7 @@ const loaderNames: Record<string, string> = {
 };
 
 export function CreatePage() {
+  onSettled(() => { void preloadLaunchers().catch(() => {}); });
   const selected = () =>
     route().section === "import" ? findLauncher(route().detail)?.value : undefined;
   return (

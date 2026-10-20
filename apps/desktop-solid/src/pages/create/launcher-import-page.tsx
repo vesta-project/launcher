@@ -2,7 +2,7 @@ import { goBack } from "../../app/transition";
 import { Button, IconButton, Select, TextField } from "@vesta/ui";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openFolder } from "@tauri-apps/plugin-shell";
-import { For, Show, createSignal, createUniqueId, onCleanup, onSettled, untrack } from "solid-js";
+import { For, Show, createEffect, createSignal, createUniqueId, onCleanup, onSettled, untrack } from "solid-js";
 import { Board } from "../../components/board";
 import { SettingsSection } from "../../components/setting-row";
 import { Icon } from "../../components/icon";
@@ -10,7 +10,7 @@ import { navigate } from "../../app/router";
 import { t, formatNumber } from "../../localization";
 import { nativeInstances, refreshNativeInstances } from "../../features/instances/native-service";
 import { findLauncher, byRecency, type LauncherKind } from "../../features/installation/launchers";
-import { detectedLauncherPaths, refreshLaunchers, loadCandidates, importMany, type HostCandidate as Candidate, type ImportCandidate } from "../../features/launcher-import";
+import { detectedLauncherPaths, refreshLaunchers, ensureLaunchers, preloadLaunchers, loadCandidates, loadCandidateDetails, importMany, type HostCandidate as Candidate, type ImportCandidate } from "../../features/launcher-import";
 import { ImportDialog } from "./import-dialog";
 import "./launcher-import-page.css";
 import { openInstallSource } from "./install-navigation";
@@ -75,13 +75,34 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
       if (!disposed && request === generation) setLoading(false);
     }
   };
-  const detectPaths = async () => {
+  // Enrich only the selected preview. Switching/disposal drops late statistics.
+  createEffect(
+    () => selected(),
+    (id) => {
+      if (!id) return;
+      const candidate = candidates.find((item) => item.key === id);
+      if (!candidate) return;
+      let current = true;
+      const request = generation;
+      void loadCandidateDetails(kind, candidate, untrack(path)).then((details) => {
+        if (current && !disposed && request === generation) {
+          setInstances((rows) => rows.map((row) => row.instancePath === id ? details : row));
+        }
+      }).catch((reason) => {
+        if (current && !disposed && request === generation) setError(String(reason));
+      });
+      return () => { current = false; };
+    },
+  );
+  const detectPaths = async (refresh = true) => {
     const previous = path().trim();
     const request = ++generation;
     setLoading(true);
     setError("");
     try {
-      await refreshLaunchers();
+      if (refresh) await refreshLaunchers();
+      else await ensureLaunchers();
+      void preloadLaunchers().catch(() => {});
       const paths = detectedLauncherPaths(kind);
       if (disposed || request !== generation) return;
       // Keep manually chosen roots too; detection must not silently lose them.
@@ -98,7 +119,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
     }
   };
   onSettled(() => {
-    void detectPaths();
+    void detectPaths(false);
   });
 
   let previewElement!: HTMLElement;

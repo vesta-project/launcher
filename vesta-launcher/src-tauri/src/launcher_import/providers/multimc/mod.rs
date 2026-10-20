@@ -28,6 +28,21 @@ impl ExternalLauncherProvider for MultiMCProvider {
         candidate_paths_for_launcher(LauncherKind::MultiMC)
     }
 
+    fn instance_paths(&self, base_path: &Path) -> Result<Vec<String>> {
+        let root = resolve_instances_root(base_path);
+        if !root.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut paths = Vec::new();
+        for entry in std::fs::read_dir(root)? {
+            let path = entry?.path();
+            if path.is_dir() && path.join("instance.cfg").is_file() {
+                paths.push(path.to_string_lossy().into_owned());
+            }
+        }
+        Ok(paths)
+    }
+
     fn list_instances(&self, base_path: &Path) -> Result<Vec<ExternalInstanceCandidate>> {
         let instances_root = resolve_instances_root(base_path);
         let mut instances = list_cfg_instances(&instances_root)?;

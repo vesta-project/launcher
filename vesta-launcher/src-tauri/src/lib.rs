@@ -362,6 +362,8 @@ pub fn run(context: tauri::Context) {
             commands::sync::check_modpack_update,
             commands::sync::start_modpack_update,
             commands::launcher_imports::detect_external_launchers,
+            commands::launcher_imports::list_external_import_origins,
+            commands::launcher_imports::get_external_instance_details,
             commands::launcher_imports::list_external_instances,
             commands::launcher_imports::import_external_instance,
             utils::dialog_manager::submit_dialog_response,

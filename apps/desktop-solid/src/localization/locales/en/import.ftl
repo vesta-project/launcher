@@ -39,3 +39,6 @@ import-picker-mods = { $count ->
     [one] 1 mod
    *[other] { $count } mods
 }
+
+import-scan-timeout = This launcher took too long to respond. Try another launcher, or close it and try again.
+import-scan-error = Could not read this launcher’s instances. Check its folder permissions and try again.

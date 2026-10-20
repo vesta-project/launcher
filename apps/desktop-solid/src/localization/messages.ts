@@ -1373,6 +1373,8 @@ export const messageIds = [
   "console.copy-status",
   "console.copy-failed",
   "console.log-output",
+  "import.scan-timeout",
+  "import.scan-error",
 ] as const;
 
 export type MessageId = (typeof messageIds)[number];

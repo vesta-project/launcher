@@ -34,3 +34,32 @@ import. Fixture imports update an in-memory origin list without filesystem activ
 Onboarding's `importMany` authorizes, queues, and sets `chosen()` with the queued count;
 it leaves advancement/navigation to its caller. `importFrom` preserves the old route
 handoff for the current welcome UI.
+
+Discovery/counting and candidate reads run off the Tauri UI thread. Import-origin
+matching uses `list_external_import_origins`, a two-column DB projection, rather
+than `list_instances` (which processes icons synchronously). Listing does not walk
+game payloads for statistics; unknown optional statistics remain absent.
+`loadCandidateDetails(launcher, candidate, root?)` requests statistics only for the
+selected Create preview, using a bounded async host command. Late previews are discarded. Embedded
+artwork reads are capped at 64 KiB; larger optional artwork is omitted.
+
+- `candidateState(launcher, basePathOverride?)` is reactive and returns
+  `{ status: 'idle' | 'loading' | 'ready' | 'error', candidates?, error? }`.
+- `preloadLaunchers()` reuses discovery and preloads candidates, with at most two
+  launcher scans in flight. `ensureLaunchers()` waits only for cached discovery.
+- `refreshLaunchers()` explicitly invalidates scan/status generations. Timed-out
+  and invalidated results cannot republish state. Failed reads can be retried.
+- Detection supplies `instanceCount`; unknown counts stay undefined and confirmed
+  empty launchers are hidden. Successful candidate loads reconcile exact counts.
+- Host scan workers share two permits. Timeouts include permit waiting, and a
+  timed-out/cancelled worker retains its permit until blocking IO ends. OS IO
+  cannot be forcibly cancelled; retries therefore cannot create unbounded workers.
+  Discovery/count budgets are two seconds per phase/provider; candidate/origin
+  reads use 15 seconds, with a 20-second frontend fallback and localized errors.
+
+Onboarding starts preloading independently of configuration, authentication and
+pack reads. Create starts it on mount; explicit Reload still invalidates caches.
+
+Solid 2 effect apply callbacks must return only cleanup functions or undefined.
+Use a block body when forwarding selection callbacks: a caller may return its
+signal setter's value even when the callback Interface is typed `void`.

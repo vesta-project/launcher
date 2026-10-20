@@ -99,3 +99,112 @@ test('browser fixtures provide two launchers and eight candidates', () => {
   expect(fixtureLaunchers.length).toBe(2);
   expect(fixtureLaunchers.flatMap((row) => fixtureCandidates(row.kind)).length).toBe(8);
 });
+
+test('preload caps scans at two, caches results and publishes states/counts', async () => {
+  const gates = [deferred(), deferred(), deferred()];
+  const ids = ['prism', 'multimc', 'modrinthApp'];
+  let active = 0, maximum = 0;
+  const { api, calls } = setup({
+    detect: async () => ids.map((kind) => ({ kind, detectedPaths: [`/${kind}`] })),
+    list: async (id) => {
+      active++; maximum = Math.max(maximum, active);
+      await gates[ids.indexOf(id)].promise;
+      active--;
+      return fixtureCandidates('prism');
+    },
+  });
+  const preloaded = api.preloadLaunchers();
+  await Bun.sleep(5);
+  expect(api.candidateState('prism').status).toBe('loading');
+  expect(api.candidateState('modrinthApp').status).toBe('idle');
+  gates[0].resolve(); gates[1].resolve();
+  await Bun.sleep(5);
+  expect(api.candidateState('prism').status).toBe('ready');
+  expect(api.candidateState('modrinthApp').status).toBe('loading');
+  gates[2].resolve(); await preloaded;
+  expect(maximum).toBe(2);
+  expect((await api.loadCandidates('prism')).length).toBe(4);
+  expect(api.candidateState('prism').candidates.length).toBe(4);
+  expect(calls.published.at(-1).find((row) => row.id === 'prism').instanceCount).toBe(4);
+});
+
+test('timeout rejects readably, allows other launchers/retry and ignores late results', async () => {
+  const gate = deferred();
+  let reads = 0;
+  const { api } = setup({ timeoutMs: 10, errorMessage: () => 'Localized scan failure',
+    list: async () => ++reads === 1 ? gate.promise : [],
+  });
+  await expect(api.loadCandidates('prism')).rejects.toThrow('Localized scan failure');
+  expect(api.candidateState('prism')).toEqual({ status: 'error', error: 'Localized scan failure' });
+  await api.loadCandidates('modrinthApp');
+  await api.loadCandidates('prism');
+  gate.resolve(fixtureCandidates('prism')); await Bun.sleep(5);
+  expect(api.candidateState('prism')).toEqual({ status: 'ready', candidates: [] });
+});
+
+test('refresh and import invalidation prevent old scans from publishing state', async () => {
+  const gate = deferred();
+  const { api } = setup({ list: () => gate.promise });
+  const stale = api.loadCandidates('prism');
+  await api.refreshLaunchers();
+  gate.resolve(fixtureCandidates('prism')); await stale;
+  expect(api.candidateState('prism')).toEqual({ status: 'idle' });
+});
+
+test('empty launchers are hidden, unknown counts remain discoverable', async () => {
+  const { api, calls } = setup({ detect: async () => [
+    { kind: 'prism', detectedPaths: ['/prism'], instanceCount: 0 },
+    { kind: 'modrinthApp', detectedPaths: ['/modrinth'], instanceCount: null },
+  ] });
+  await api.refreshLaunchers();
+  expect(calls.published.at(-1).map((row) => row.id)).toEqual(['modrinthApp']);
+  expect(api.detectedLauncherPaths('prism')).toEqual(['/prism']);
+});
+
+test('candidateState is reactive through idle/loading/ready with no Solid diagnostics', async () => {
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { pathToFileURL } = await import('node:url');
+  const build = await Bun.build({
+    entrypoints: [new URL('../src/features/launcher-import/service.ts', import.meta.url).pathname],
+    target: 'bun', conditions: ['browser', 'development'],
+    plugins: [{ name: 'import-reactivity', setup(builder) {
+      builder.onLoad({ filter: /launcher-import\/service\.ts$/ }, async ({ path }) => ({
+        loader: 'ts', contents: await Bun.file(path).text() + `
+          export { createRoot, createEffect, flush } from 'solid-js';
+          export { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';
+        `,
+      }));
+    } }],
+  });
+  if (!build.success) throw new AggregateError(build.logs);
+  const dir = await mkdtemp(join(tmpdir(), 'vesta-import-reactivity-'));
+  try {
+    const path = join(dir, 'service.mjs');
+    await Bun.write(path, build.outputs[0]);
+    const runtime = await import(pathToFileURL(path).href);
+    const { artifact } = await runtime.captureArtifact(async () => {
+      const gate = deferred();
+      const observed = [];
+      let dispose;
+      const api = runtime.createRoot((stop) => {
+        dispose = stop;
+        const service = runtime.createLauncherImport({
+          detect: async () => [], list: () => gate.promise, existing: async () => [],
+          enqueue: async () => {}, icon: (value) => value, publish: () => {},
+        });
+        runtime.createEffect(() => service.candidateState('prism').status,
+          (status) => { observed.push(status); });
+        return service;
+      });
+      try {
+        runtime.flush();
+        const pending = api.loadCandidates('prism'); runtime.flush();
+        gate.resolve([]); await pending; runtime.flush();
+        expect(observed).toEqual(['idle', 'loading', 'ready']);
+      } finally { dispose(); }
+    }, { scenario: 'launcher-candidate-state' });
+    runtime.expectNoDiagnostics(artifact);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

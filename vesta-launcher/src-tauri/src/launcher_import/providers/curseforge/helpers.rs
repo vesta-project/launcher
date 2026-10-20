@@ -41,7 +41,7 @@ pub(super) fn collect_instances_from_root(
                 .map(|name| name.eq_ignore_ascii_case("MinecraftGameInstance.json"))
                 .unwrap_or(false)
         {
-            collect_direct_json_instances(root, &path, base_path, instances)?;
+            // The root metadata file was already parsed above.
             continue;
         }
 

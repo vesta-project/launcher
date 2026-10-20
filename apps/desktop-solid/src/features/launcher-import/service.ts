@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { findLauncher } from '../installation/launchers';
 import type { HostCandidate, ImportCandidate, ImportResult, LauncherSummary } from './model';
 
@@ -5,7 +6,12 @@ export interface ImportSource {
   importLauncherKind?: string | null;
   importInstancePath?: string | null;
 }
-interface Detected { kind: string; detectedPaths: string[] }
+export interface CandidateState {
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  candidates?: ImportCandidate[];
+  error?: string;
+}
+interface Detected { kind: string; detectedPaths: string[]; instanceCount?: number | null }
 interface Dependencies {
   detect(): Promise<Detected[]>;
   list(launcher: string, path?: string): Promise<HostCandidate[]>;
@@ -13,6 +19,8 @@ interface Dependencies {
   enqueue(launcher: string, candidate: ImportCandidate, path?: string): Promise<unknown>;
   icon(path: string): string;
   publish(launchers: LauncherSummary[]): void;
+  timeoutMs?: number;
+  errorMessage?(error: unknown): string;
 }
 
 /** One owner for host discovery, scan reuse and serialized record/task creation. */
@@ -21,19 +29,43 @@ export function createLauncherImport(deps: Dependencies) {
   let detected: Detected[] = [];
   let scans = new Map<string, Promise<ImportCandidate[]>>();
   let queue: Promise<unknown> = Promise.resolve();
+  let discovered = false;
+  let preload: Promise<void> | undefined;
+  const [states, setStates] = createSignal<Record<string, CandidateState>>({}, { name: 'importCandidateStates' });
+  // Foreground requests and preloads share the same two scan slots.
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  const schedule = <T>(work: () => Promise<T>) => new Promise<T>((resolve, reject) => {
+    const start = () => {
+      active++;
+      void work().then(resolve, reject).finally(() => { active--; waiting.shift()?.(); });
+    };
+    if (active < 2) start(); else waiting.push(start);
+  });
+  const bounded = async <T>(work: Promise<T>): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([work, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('launcher-import-timeout')), deps.timeoutMs ?? 20_000);
+      })]);
+    } finally { clearTimeout(timer); }
+  };
+  const publishLaunchers = () => deps.publish(detected.flatMap((row) => {
+    const visual = findLauncher(row.kind);
+    return visual && row.detectedPaths.length && row.instanceCount !== 0 ? [{ id: row.kind, label: visual.label,
+      icon: `branding/${visual.icon}`, path: row.detectedPaths[0], instanceCount: row.instanceCount ?? undefined }] : [];
+  }));
+  const invalidate = () => { scans = new Map(); setStates({}); preload = undefined; };
   const normalize = (path?: string) => path?.trim() || undefined;
   const scanKey = (launcher: string, path?: string) => JSON.stringify([launcher, normalize(path)]);
   const refreshLaunchers = (): Promise<void> => {
     if (detection) return detection;
     // A refresh starts a fresh scan generation without letting old requests refill it.
-    scans = new Map();
-    detection = deps.detect().then((rows) => {
+    invalidate();
+    detection = bounded(deps.detect()).then((rows) => {
       detected = rows;
-      deps.publish(rows.flatMap((row) => {
-        const visual = findLauncher(row.kind);
-        return visual && row.detectedPaths.length ? [{ id: row.kind, label: visual.label,
-          icon: `branding/${visual.icon}`, path: row.detectedPaths[0] }] : [];
-      }));
+      discovered = true;
+      publishLaunchers();
     }).finally(() => { detection = undefined; });
     return detection;
   };
@@ -42,7 +74,15 @@ export function createLauncherImport(deps: Dependencies) {
     const cached = scans.get(key);
     if (cached) return cached;
     const generation = scans;
-    const pending = Promise.all([deps.list(launcher, normalize(path)), deps.existing()]).then(([rows, existing]) =>
+    setStates((value) => ({ ...value, [key]: { status: 'loading' } }));
+    const update = (state: CandidateState) => {
+      if (generation === scans) setStates((value) => ({ ...value, [key]: state }));
+    };
+    const pending = schedule(async () => {
+      // A refresh may invalidate work before it gets a slot.
+      if (generation !== scans) throw new Error('launcher-import-invalidated');
+      return bounded(Promise.all([deps.list(launcher, normalize(path)), deps.existing()]));
+    }).then(([rows, existing]) =>
       rows.map((raw): ImportCandidate => {
         const date = raw.lastPlayedAtUnixMs == null ? undefined : new Date(raw.lastPlayedAtUnixMs);
         return { key: raw.instancePath, launcher, name: raw.name,
@@ -52,7 +92,19 @@ export function createLauncherImport(deps: Dependencies) {
           modCount: raw.modsCount ?? undefined,
           alreadyImported: existing.some((item) => item.importLauncherKind === launcher && item.importInstancePath === raw.instancePath), raw };
       }),
-    ).catch((error) => { generation.delete(key); throw error; });
+    ).then((candidates) => {
+      update({ status: 'ready', candidates });
+      if (generation === scans && !normalize(path)) {
+        const row = detected.find((row) => row.kind === launcher);
+        if (row) { row.instanceCount = candidates.length; publishLaunchers(); }
+      }
+      return candidates;
+    }).catch((reason) => {
+      generation.delete(key);
+      const error = new Error(deps.errorMessage?.(reason) ?? String(reason instanceof Error ? reason.message : reason));
+      update({ status: 'error', error: error.message });
+      throw error;
+    });
     generation.set(key, pending);
     return pending;
   };
@@ -69,13 +121,32 @@ export function createLauncherImport(deps: Dependencies) {
         } catch (error) { result.failed.push({ key: candidate.key, error: String(error) }); }
       }
       // Rescans must re-read persisted import origins, including partial successes.
-      scans.clear();
+      invalidate();
       return result;
     };
     const pending = queue.then(run);
     queue = pending.catch(() => undefined);
     return pending;
   };
-  return { refreshLaunchers, loadCandidates, importMany,
+  const ensureLaunchers = () => detection ?? (discovered ? Promise.resolve() : refreshLaunchers());
+  const preloadLaunchers = (): Promise<void> => {
+    if (preload) return preload;
+    // refreshLaunchers invalidates preload synchronously; assign after starting it.
+    const ready = ensureLaunchers();
+    preload = ready.then(async () => {
+      const generation = scans;
+      const launchers = detected.filter((row) => row.detectedPaths.length && row.instanceCount !== 0);
+      let index = 0;
+      await Promise.all(Array.from({ length: Math.min(2, launchers.length) }, async () => {
+        while (generation === scans && index < launchers.length) {
+          const launcher = launchers[index++];
+          await loadCandidates(launcher.kind).catch(() => {});
+        }
+      }));
+    }).catch((error) => { preload = undefined; throw error; });
+    return preload;
+  };
+  return { refreshLaunchers, ensureLaunchers, loadCandidates, importMany, preloadLaunchers,
+    candidateState: (launcher: string, path?: string): CandidateState => states()[scanKey(launcher, path)] ?? { status: 'idle' },
     detectedLauncherPaths: (launcher: string) => [...new Set(detected.find((row) => row.kind === launcher)?.detectedPaths.filter(Boolean) ?? [])] };
 }

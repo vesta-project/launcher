@@ -21,4 +21,26 @@ pub trait ExternalLauncherProvider: Send + Sync {
     fn display_name(&self) -> &'static str;
     fn detect_paths(&self) -> Vec<PathBuf>;
     fn list_instances(&self, base_path: &Path) -> Result<Vec<ExternalInstanceCandidate>>;
+    /// Provider metadata is needed for layouts whose identities live in JSON/DBs.
+    /// Never walk game payloads or compute per-instance statistics to count them.
+    fn instance_paths(&self, base_path: &Path) -> Result<Vec<String>> {
+        Ok(self
+            .list_instances(base_path)?
+            .into_iter()
+            .map(|row| row.instance_path)
+            .collect())
+    }
+}
+
+/// Artwork is optional: do not copy multi-megabyte images into candidate IPC.
+fn read_small_icon(path: &Path) -> Option<Vec<u8>> {
+    use std::io::Read;
+    const LIMIT: u64 = 64 * 1024;
+    let file = std::fs::File::open(path).ok()?;
+    if file.metadata().ok()?.len() > LIMIT {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() <= LIMIT as usize).then_some(bytes)
 }

@@ -25,11 +25,12 @@ fn launcher_kind_key(kind: &crate::launcher_import::types::LauncherKind) -> &'st
 }
 
 #[tauri::command]
-pub fn detect_external_launchers(
+pub async fn detect_external_launchers(
     import_manager: State<'_, ImportManager>,
 ) -> Result<Vec<DetectedLauncher>, String> {
     log::info!("[launcher_import] command detect_external_launchers");
-    Ok(import_manager.detect_launchers())
+    let manager = import_manager.inner().clone();
+    manager.detect_launchers().await
 }
 
 #[tauri::command]
@@ -47,13 +48,12 @@ pub async fn list_external_instances(
     let launcher_kind = launcher;
     let base_override = base_path_override;
 
-    tauri::async_runtime::spawn_blocking(move || {
+    crate::launcher_import::scan::blocking(std::time::Duration::from_secs(15), move || {
         manager
             .list_instances(&launcher_kind, base_override.as_deref())
-            .map_err(|e| e.to_string())
+            .map_err(|error| error.to_string())
     })
     .await
-    .map_err(|e| format!("Failed to list external instances: {}", e))?
 }
 
 #[tauri::command]
@@ -89,9 +89,16 @@ pub async fn import_external_instance(
         candidate
     } else {
         // Backward compatibility fallback for older frontend payloads.
-        let candidates = import_manager
-            .list_instances(&request.launcher, request.base_path_override.as_deref())
-            .map_err(|e| e.to_string())?;
+        let manager = import_manager.inner().clone();
+        let launcher = request.launcher.clone();
+        let root = request.base_path_override.clone();
+        let candidates =
+            crate::launcher_import::scan::blocking(std::time::Duration::from_secs(15), move || {
+                manager
+                    .list_instances(&launcher, root.as_deref())
+                    .map_err(|error| error.to_string())
+            })
+            .await?;
         candidates
             .into_iter()
             .find(|candidate| candidate.instance_path == request.instance_path)
@@ -141,4 +148,52 @@ pub async fn import_external_instance(
     );
 
     Ok(ImportExternalInstanceResponse { instance_id })
+}
+
+/// Import identity projection: no icon processing, game-directory reads or UI-thread IO.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportOrigin {
+    import_launcher_kind: Option<String>,
+    import_instance_path: Option<String>,
+}
+
+#[tauri::command]
+pub async fn list_external_import_origins() -> Result<Vec<ImportOrigin>, String> {
+    crate::launcher_import::scan::blocking(std::time::Duration::from_secs(15), || {
+        use crate::schema::instance::dsl::*;
+        use diesel::prelude::*;
+        let mut connection =
+            crate::utils::db::get_vesta_conn().map_err(|error| error.to_string())?;
+        instance
+            .select((import_launcher_kind, import_instance_path))
+            .load::<(Option<String>, Option<String>)>(&mut connection)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(kind, path)| ImportOrigin {
+                        import_launcher_kind: kind,
+                        import_instance_path: path,
+                    })
+                    .collect()
+            })
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+/// Detailed preview statistics are opt-in for one selected candidate, never listing.
+#[tauri::command]
+pub async fn get_external_instance_details(
+    import_manager: State<'_, ImportManager>,
+    launcher: crate::launcher_import::types::LauncherKind,
+    instance_path: String,
+    base_path_override: Option<String>,
+) -> Result<ExternalInstanceCandidate, String> {
+    let manager = import_manager.inner().clone();
+    crate::launcher_import::scan::blocking(std::time::Duration::from_secs(15), move || {
+        manager
+            .instance_details(&launcher, &instance_path, base_path_override.as_deref())
+            .map_err(|error| error.to_string())
+    })
+    .await
 }

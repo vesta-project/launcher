@@ -26,6 +26,8 @@ pub struct DetectedLauncher {
     pub kind: LauncherKind,
     pub display_name: String,
     pub detected_paths: Vec<String>,
+    /// Unknown when the lightweight count times out or a root cannot be read.
+    pub instance_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

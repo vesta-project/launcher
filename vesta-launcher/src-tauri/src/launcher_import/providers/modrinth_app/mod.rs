@@ -31,6 +31,46 @@ impl ExternalLauncherProvider for ModrinthAppProvider {
         candidate_paths_for_launcher(LauncherKind::ModrinthApp)
     }
 
+    fn instance_paths(&self, base_path: &Path) -> Result<Vec<String>> {
+        use diesel::prelude::*;
+        #[derive(diesel::QueryableByName)]
+        struct Identity {
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            path: String,
+        }
+        if let Some(db_path) = find_app_db(base_path) {
+            let mut connection =
+                diesel::sqlite::SqliteConnection::establish(db_path.to_string_lossy().as_ref())?;
+            let rows = diesel::sql_query("SELECT DISTINCT path FROM instances")
+                .load::<Identity>(&mut connection)
+                .or_else(|_| {
+                    diesel::sql_query("SELECT DISTINCT path FROM profiles")
+                        .load::<Identity>(&mut connection)
+                })?;
+            if !rows.is_empty() {
+                let root = db_path.parent().unwrap_or(base_path).join("profiles");
+                return Ok(rows
+                    .into_iter()
+                    .map(|row| {
+                        let path = PathBuf::from(row.path);
+                        if path.is_absolute() {
+                            path
+                        } else {
+                            root.join(path)
+                        }
+                        .to_string_lossy()
+                        .into_owned()
+                    })
+                    .collect());
+            }
+        }
+        Ok(self
+            .list_instances(base_path)?
+            .into_iter()
+            .map(|row| row.instance_path)
+            .collect())
+    }
+
     fn list_instances(&self, base_path: &Path) -> Result<Vec<ExternalInstanceCandidate>> {
         let mut instances = Vec::new();
         if !base_path.exists() {
@@ -133,5 +173,27 @@ impl ExternalLauncherProvider for ModrinthAppProvider {
         }
 
         Ok(instances)
+    }
+}
+
+#[cfg(test)]
+mod count_tests {
+    use super::*;
+    use diesel::{prelude::*, sqlite::SqliteConnection};
+
+    #[test]
+    fn count_uses_only_identities_without_profile_metadata_or_icons() {
+        let root = tempfile::tempdir().unwrap();
+        let db_path = root.path().join("app.db");
+        let mut connection = SqliteConnection::establish(db_path.to_str().unwrap()).unwrap();
+        diesel::sql_query("CREATE TABLE instances (path TEXT NOT NULL)")
+            .execute(&mut connection)
+            .unwrap();
+        diesel::sql_query("INSERT INTO instances VALUES ('one'), ('one'), ('two')")
+            .execute(&mut connection)
+            .unwrap();
+        let paths = ModrinthAppProvider.instance_paths(root.path()).unwrap();
+        assert_eq!(paths.len(), 2);
+        assert!(paths.iter().any(|path| path.ends_with("profiles/one")));
     }
 }

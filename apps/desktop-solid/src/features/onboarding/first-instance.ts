@@ -10,7 +10,7 @@ import { loadMetadata, metadata } from '../instances/metadata';
 import { refreshNativeInstances } from '../instances/native-service';
 import type { NativeInstance } from '../instances/native-model';
 import { t } from '../../localization';
-import { detectedLaunchers, refreshLaunchers, importMany as queueImports, type ImportCandidate, type ImportResult } from '../launcher-import';
+import { detectedLaunchers, preloadLaunchers, importMany as queueImports, type ImportCandidate, type ImportResult } from '../launcher-import';
 import { fixturePacks } from './onboarding-fixtures';
 import type { FeaturedPack } from './types';
 
@@ -28,9 +28,10 @@ const toPack = (project: ResourceProject): FeaturedPack => ({
 });
 let prefetched: Promise<void> | undefined;
 export function prefetchFirstInstance() {
+  void preloadLaunchers().catch(() => {});
   if (prefetched) return prefetched;
   prefetched = (async () => {
-    if (!native) { setPacks(fixturePacks); await refreshLaunchers(); setLatest('1.21.1'); return; }
+    if (!native) { setPacks(fixturePacks); setLatest('1.21.1'); return; }
     await Promise.allSettled([
       (async () => {
         try {
@@ -48,11 +49,6 @@ export function prefetchFirstInstance() {
           setPacks(projects.slice(0, 6).map(toPack));
           setPacksError(undefined);
         } catch { setPacks([]); setPacksError(t('onboarding.packs-error')); }
-      })(),
-      (async () => {
-        try {
-          await refreshLaunchers();
-        } catch { /* Discovery can be retried through the shared import module. */ }
       })(),
       loadMetadata().then(() => setLatest(untrack(metadata)?.latest.release)),
     ]);

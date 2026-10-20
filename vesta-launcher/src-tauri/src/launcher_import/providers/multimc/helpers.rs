@@ -6,7 +6,7 @@ pub(super) fn encode_png_as_data_url(path: &Path) -> Option<String> {
     if !path.exists() || !path.is_file() {
         return None;
     }
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = crate::launcher_import::providers::read_small_icon(path)?;
     let encoded = general_purpose::STANDARD.encode(bytes);
     Some(format!("data:image/png;base64,{encoded}"))
 }
