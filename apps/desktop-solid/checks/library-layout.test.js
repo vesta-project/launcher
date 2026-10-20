@@ -158,3 +158,27 @@ describe("the store", () => {
     expect(writes).toEqual([]);
   });
 });
+
+test("overlapping loads share one read and cannot revert a completed reorder", async () => {
+  const reads = [], writes = [];
+  const store = createLibraryLayoutStore({ load: () => new Promise((resolve) => reads.push(resolve)), save: async (value) => writes.push(JSON.parse(value)) });
+  const first = store.load(), second = store.load();
+  await Promise.resolve();
+  reads[0](doc({ version: 1, sort: "custom", order: [1, 2], groups: [] })); await first;
+  store.commit(moveEntry(store.layout(), ["1", "2"], "2", null, "1")); await store.flush();
+  // An implementation issuing duplicate reads receives the old snapshot after the save.
+  reads[1]?.(doc({ version: 1, sort: "custom", order: [1, 2], groups: [] }));
+  await second; await store.load();
+  expect(store.layout().order).toEqual(["2", "1"]); expect(writes[0].order).toEqual([2, 1]); expect(reads).toHaveLength(1);
+});
+test("shared failed load allows a fresh shared retry", async () => {
+  const reads = [];
+  const store = createLibraryLayoutStore({ load: () => new Promise((resolve, reject) => reads.push({ resolve, reject })), save: async () => {} });
+  const first = store.load(); expect(store.load()).toBe(first); await Promise.resolve();
+  const error = console.error; console.error = () => {};
+  try { reads[0].reject(new Error("offline")); await first; } finally { console.error = error; }
+  expect(store.loaded()).toBe(false); expect(store.saveError()).toBe(true);
+  const retry = store.load(); expect(retry).not.toBe(first); expect(store.load()).toBe(retry); await Promise.resolve(); expect(reads).toHaveLength(2);
+  reads[1].resolve(doc({ version: 1, sort: "custom", order: [2, 1], groups: [] })); await retry;
+  expect(store.loaded()).toBe(true); expect(store.saveError()).toBe(false); expect(store.layout().order).toEqual(["2", "1"]);
+});

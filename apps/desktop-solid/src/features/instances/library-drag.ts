@@ -332,7 +332,22 @@ export function createLibraryDrag(options: LibraryDragOptions) {
     schedule();
   };
 
+  // Clear ownership before releasing capture: lostpointercapture may dispatch synchronously.
+  const clearPress = () => {
+    const held = press;
+    press = undefined;
+    if (!held) return;
+    const { node, pointerId } = held;
+    node.removeEventListener('pointermove', onMove);
+    node.removeEventListener('pointerup', release);
+    node.removeEventListener('pointercancel', release);
+    node.removeEventListener('lostpointercapture', cancel);
+    if (node.hasPointerCapture(pointerId)) node.releasePointerCapture(pointerId);
+  };
+
   const finish = () => {
+    clearPress();
+    moved = false;
     clearTimeout(settleTimer);
     settling = false;
     if (frame) cancelAnimationFrame(frame);
@@ -349,6 +364,14 @@ export function createLibraryDrag(options: LibraryDragOptions) {
   /** Release: resolve groups and crossings, then save once. */
   const drop = () => {
     if (!drag) return;
+    // Pointerup can arrive before the queued move frame. Resolve the release geometry
+    // now, retaining a completed dwell only if it still hits the same card's middle.
+    if (settling) {
+      clearTimeout(settleTimer);
+      settling = false;
+      measure();
+    }
+    updateIntent();
     const { entry, container, snapshot } = drag;
     const ids = options.instanceIds();
     const target = groupTarget();
@@ -396,7 +419,7 @@ export function createLibraryDrag(options: LibraryDragOptions) {
   /** Escape, pointer cancel or the window losing focus: put everything back. */
   const cancel = () => {
     if (!drag) {
-      press = undefined;
+      finish();
       return;
     }
     const snapshot = drag.snapshot;
@@ -428,12 +451,7 @@ export function createLibraryDrag(options: LibraryDragOptions) {
 
   const release = (event: PointerEvent) => {
     if (!press || event.pointerId !== press.pointerId) return;
-    const node = press.node;
-    press = undefined;
-    node.removeEventListener('pointermove', onMove);
-    node.removeEventListener('pointerup', release);
-    node.removeEventListener('pointercancel', release);
-    if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
+    clearPress();
     if (!drag) return;
     point = { x: event.clientX, y: event.clientY };
     if (event.type === 'pointercancel') cancel();
@@ -458,6 +476,7 @@ export function createLibraryDrag(options: LibraryDragOptions) {
       node.addEventListener('pointermove', onMove);
       node.addEventListener('pointerup', release);
       node.addEventListener('pointercancel', release);
+      node.addEventListener('lostpointercapture', cancel);
     },
     cancel,
     dispose() {

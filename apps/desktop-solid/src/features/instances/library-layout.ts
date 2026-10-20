@@ -239,6 +239,7 @@ export function createLibraryLayoutStore(persistence: LayoutPersistence) {
   const [saveError, setSaveError] = createSignal(false, { name: 'libraryLayoutSaveError' });
   // Writes run one at a time so an older layout can never land after a newer one.
   let writes: Promise<void> = Promise.resolve();
+  let loading: Promise<void> | undefined;
 
   const persist = (next: LibraryLayout) => {
     if (!loaded()) return;
@@ -260,17 +261,24 @@ export function createLibraryLayoutStore(persistence: LayoutPersistence) {
     saveError,
     /** Resolves once every queued write has finished. */
     flush: () => writes,
-    async load() {
-      if (loaded()) return;
-      try {
-        setLayout(parseLayout(await persistence.load()));
-        setSaveError(false);
-        setLoaded(true);
-      } catch (error) {
-        // Stay unloaded: saving an empty layout now would overwrite the real one.
-        console.error('Failed to load library layout:', error);
-        setSaveError(true);
-      }
+    load(): Promise<void> {
+      if (loaded()) return Promise.resolve();
+      if (loading) return loading;
+      // All callers share one read, so no older response can overwrite a later edit.
+      loading = Promise.resolve().then(async () => {
+        try {
+          setLayout(parseLayout(await persistence.load()));
+          setSaveError(false);
+          setLoaded(true);
+        } catch (error) {
+          // Stay unloaded: saving an empty layout now would overwrite the real one.
+          console.error('Failed to load library layout:', error);
+          setSaveError(true);
+        } finally {
+          loading = undefined;
+        }
+      });
+      return loading;
     },
     /** Show a layout without saving it. */
     preview(next: LibraryLayout) {
