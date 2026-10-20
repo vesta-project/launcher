@@ -252,6 +252,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         )}
       </Show>
       <Dialog
+        closeLabel={t('nav.close')}
         title={t("worlds.delete-title", { name: deleting()?.name ?? "" })}
         description={t("worlds.delete-description")}
         size="sm"
@@ -283,6 +284,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
         }
       />
       <Dialog
+        closeLabel={t('nav.close')}
         title={t(transfer()?.duplicate ? "worlds.duplicate" : transfer()?.move ? "worlds.move-title" : "worlds.copy-title", { name: transfer()?.world.name ?? "" })}
         open={!!transfer()}
         onOpenChange={(open) => {

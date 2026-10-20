@@ -118,7 +118,7 @@ export function NativeImportDialog() {
       for (const current of archives()) void invoke('submit_world_archive_selection', { installId: current.installId, selectedCandidateIds: [] }).catch(reportInstanceError);
     };
   });
-  return <Dialog open={!!choice() || !!archive()} title={t('drop.review')} onOpenChange={(open) => { if (!open) void submit(true); }}
+  return <Dialog closeLabel={t('nav.close')} open={!!choice() || !!archive()} title={t('drop.review')} onOpenChange={(open) => { if (!open) void submit(true); }}
     footer={<><Button variant="ghost" disabled={submitting()} onClick={() => void submit(true)}>{t('common.cancel')}</Button>
       <Button tone="accent" disabled={submitting() || (choice()?.phase !== 'dependencies' && (selected().length === 0 || selected().some((id) => { const candidate = choice()?.candidates.find((row) => row.id === id); return (kinds()[id] ?? candidate?.kinds[0]) === 'dataPack' && !operationWorlds().get(choice()!.operationId) && !targetWorlds()[id]; })))} onClick={() => void submit()}>{t('worlds.import')}</Button></>}>
     <For each={choice()?.notes ?? []}>{(note) => <p>{note}</p>}</For>

@@ -38,6 +38,7 @@ export function InstanceDeleteDialog() {
     }
   };
   return <Dialog
+    closeLabel={t('nav.close')}
     title={t('instance-settings.delete-title', { name: entry()?.instance.name ?? '' })}
     description={t('instance-settings.delete-confirm-description')}
     open={!!entry()}

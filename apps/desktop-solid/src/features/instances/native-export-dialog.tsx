@@ -38,7 +38,7 @@ export function NativeExportDialog() {
     } catch (reason) { reportInstanceError(reason); }
     finally { setBusy(false); }
   };
-  return <Dialog title={t('instance-settings.export')} open={!!request()} onOpenChange={(open) => { if (!open && !busy()) close(); }}
+  return <Dialog closeLabel={t('nav.close')} title={t('instance-settings.export')} open={!!request()} onOpenChange={(open) => { if (!open && !busy()) close(); }}
     footer={<><Button variant="ghost" disabled={busy()} onClick={close}>{t('common.cancel')}</Button><Button tone="accent" disabled={busy() || !version().trim()} onClick={() => void exportPack()}>{t('instance-settings.export-action')}</Button></>}>
     <Select label={t('management.export-format')} value={format()} onChange={setFormat} options={[{ value: 'modrinth', label: 'Modrinth' }, { value: 'curseforge', label: 'CurseForge' }]} />
     <TextField label={t('management.export-version')} value={version()} onChange={setVersion} />

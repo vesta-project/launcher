@@ -678,6 +678,7 @@ function ResourceList(props: {
       </div>
 
       <Dialog
+        closeLabel={t('nav.close')}
         title={t(
           deleting().length === 1
             ? "resources.remove-title-one"

@@ -719,6 +719,7 @@ export function InstanceSettingsTab(props: {
       </div>
 
       <Dialog
+        closeLabel={t('nav.close')}
         title={
           confirm() === "delete"
             ? t("instance-settings.delete-title", { name: props.entry.instance.name })

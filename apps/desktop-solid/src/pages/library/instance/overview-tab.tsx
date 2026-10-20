@@ -247,12 +247,14 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
         }))}
         index={viewer() ?? 0}
         onIndexChange={setViewer}
+        previousLabel={t('common.previous-image')}
+        nextLabel={t('common.next-image')}
         onCopy={(src) => void copy(src)}
         onOpenFolder={nativeInstances ? (src) => { const path = shots().find((shot) => shot.src === src)?.path; if (path) void mutateNativeScreenshot(id(), path); } : undefined}
         onDelete={nativeInstances ? (src) => setDeleteShot(shots().find((shot) => shot.src === src)?.path) : undefined}
         showDelete={nativeInstances}
       />
-      <Dialog title={t('common.delete')} description={t('management.delete-screenshot')} open={!!deleteShot()} onOpenChange={(open) => { if (!open && !deletingShot()) setDeleteShot(undefined); }} size="sm"
+      <Dialog closeLabel={t('nav.close')} title={t('common.delete')} description={t('management.delete-screenshot')} open={!!deleteShot()} onOpenChange={(open) => { if (!open && !deletingShot()) setDeleteShot(undefined); }} size="sm"
         footer={<><Button variant="ghost" disabled={deletingShot()} onClick={() => setDeleteShot(undefined)}>{t('common.cancel')}</Button><Button tone="danger" disabled={deletingShot()} onClick={() => void deleteScreenshot()}>{t('common.delete')}</Button></>} />
     </div>
   );

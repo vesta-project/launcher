@@ -403,6 +403,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         </p>
       </Show>
       <Dialog
+        closeLabel={t('nav.close')}
         title={t("versions.change-title")}
         open={!!pending() && !pending()?.release}
         onOpenChange={(open) => {
@@ -461,6 +462,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
       <Show when={previewing()}>
         {(release) => (
           <Dialog
+            closeLabel={t('nav.close')}
             title={t(`linking.preview-title-${changeKind(pack(), release())}`, { version: release().label })}
             open
             onOpenChange={(open) => {
@@ -540,6 +542,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         }}
       />
       <Dialog
+        closeLabel={t('nav.close')}
         title={
           unlinking() === "delete"
             ? t("versions.delete-unlink-title")
@@ -789,6 +792,7 @@ function LinkDialog(props: {
   const selectedRelease = () => releases()?.find((item) => item.id === releaseId());
   return (
     <Dialog
+      closeLabel={t('nav.close')}
       title={t("linking.link-title")}
       description={t("linking.link-description")}
       open={props.open}
