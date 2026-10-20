@@ -1,0 +1,217 @@
+/* @vesta-theme
+ * name: Windows 2000
+ * contract: 1
+ * base: {"mode":"light","material":"flat","translucency":0,"grain":0,"gradient":false}
+ */
+@layer theme {
+  :root {
+    color-scheme: light;
+    --vesta-font-sans: Tahoma, 'MS Sans Serif', Arial, sans-serif;
+    --vesta-color-canvas: #d4d0c8;
+    --vesta-color-surface: #d4d0c8;
+    --vesta-color-surface-raised: #d4d0c8;
+    --vesta-color-surface-sunken: #fff;
+    --vesta-color-text: #000;
+    --vesta-color-text-muted: #333;
+    --vesta-color-text-subtle: #555;
+    --vesta-color-border: #808080;
+    --vesta-color-border-strong: #808080;
+    --vesta-color-fill: #d4d0c8;
+    --vesta-color-fill-hover: #dfdfdf;
+    --vesta-color-fill-active: #c0c0c0;
+    --vesta-color-accent: #0a246a;
+    --vesta-color-accent-hover: #153b8a;
+    --vesta-color-accent-active: #08205c;
+    --vesta-color-accent-text: #0a246a;
+    --vesta-color-accent-border: #0a246a;
+    --vesta-color-on-accent: #fff;
+    --vesta-color-danger: #a00000;
+    --vesta-color-danger-hover: #b00000;
+    --vesta-color-danger-active: #800000;
+    --vesta-color-danger-text: #a00000;
+    --vesta-color-danger-border: #a00000;
+    --vesta-color-on-danger: #fff;
+    --vesta-color-focus: #000;
+    --vesta-color-overlay: #d4d0c8;
+    --vesta-color-overlay-text: #000;
+    --vesta-color-scrim: rgb(0 0 0 / 20%);
+    /* Geometry aliases inherited from :root do not re-resolve at this scope. */
+    --vesta-radius-factor: 0;
+    --vesta-radius-sm: 0px;
+    --vesta-radius-md: 0px;
+    --vesta-radius-lg: 0px;
+    --vesta-radius-xl: 0px;
+    --vesta-radius-control: 0px;
+    --vesta-radius-container: 0px;
+    --vesta-radius-full: 0px;
+    --vesta-border-width: 1px;
+    --vesta-focus-width: 1px;
+    --vesta-focus-offset: -4px;
+    --classic-raised: inset 1px 1px 0 #fff, inset -1px -1px 0 #404040,
+      inset 2px 2px 0 #dfdfdf, inset -2px -2px 0 #808080;
+    --classic-sunken: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff,
+      inset 2px 2px 0 #404040, inset -2px -2px 0 #dfdfdf;
+  }
+
+  :root :where([data-vesta='button']) {
+    --button-bg: #d4d0c8;
+    --button-bg-hover: #dfdfdf;
+    --button-bg-active: #d4d0c8;
+    --button-fg: #000;
+    --button-border-color: transparent;
+    --button-font-weight: 400;
+    box-shadow: var(--classic-raised);
+  }
+
+  :root :where([data-vesta='button'][data-tone='danger']) {
+    --button-fg: var(--vesta-color-danger-text);
+  }
+
+  :root :where([data-vesta='button']:not([data-disabled])):active,
+  :root :where([data-vesta='button'][aria-expanded='true']) {
+    box-shadow: var(--classic-sunken);
+  }
+
+  :root :where([data-vesta='field']) {
+    --field-bg: #fff;
+    --field-fg: #000;
+    --field-border-color: transparent;
+    --field-border-color-hover: transparent;
+  }
+
+  :root :where([data-vesta='field-control']) {
+    box-shadow: var(--classic-sunken);
+  }
+
+  :root :where([data-vesta='field'][data-invalid]) :where([data-vesta='field-control']) {
+    box-shadow: var(--classic-sunken), 0 0 0 1px var(--vesta-color-danger-border);
+  }
+
+  :root :where([data-vesta='select-chevron']) {
+    background: #d4d0c8;
+    color: #000;
+    box-shadow: var(--classic-raised);
+  }
+
+  :root :where([data-vesta='checkbox']) {
+    --checkbox-bg: #fff;
+    --checkbox-border-color: transparent;
+    --checkbox-fg: #000;
+  }
+
+  :root :where([data-vesta='checkbox-control']) {
+    box-shadow: var(--classic-sunken);
+  }
+
+  /* Preserve the switch's real input, size and semantics; only its parts change. */
+  :root :where([data-vesta='switch-track']) {
+    position: relative;
+    background: transparent;
+  }
+
+  :root :where([data-vesta='switch-track'])::before {
+    content: '';
+    position: absolute;
+    inset-inline-end: 0;
+    inset-block-start: 0;
+    inline-size: var(--switch-height);
+    block-size: var(--switch-height);
+    background: #fff;
+    box-shadow: var(--classic-sunken);
+  }
+
+  :root :where([data-vesta='switch-thumb']) {
+    visibility: hidden;
+  }
+
+  :root :where([data-vesta='switch'][data-checked]) :where([data-vesta='switch-track'])::after {
+    content: '';
+    position: absolute;
+    inset-inline-end: calc(var(--switch-height) * 0.31);
+    inset-block-start: calc(var(--switch-height) * 0.18);
+    inline-size: calc(var(--switch-height) * 0.25);
+    block-size: calc(var(--switch-height) * 0.44);
+    border: solid #000;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  :root :where([data-vesta='tabs']) {
+    --tab-fg: #000;
+    --tab-fg-selected: #000;
+    --tab-fg-hover: #000;
+    --tab-bg-hover: #dfdfdf;
+  }
+
+  :root :where([data-vesta='tab-list']) {
+    border-block-end-color: #fff;
+  }
+
+  :root :where([data-vesta='tab']) {
+    box-shadow: var(--classic-raised);
+  }
+
+  :root :where([data-vesta='tab'][data-selected]) {
+    background: #d4d0c8;
+    box-shadow: inset 1px 1px 0 #fff, inset -1px 0 0 #808080;
+  }
+
+  :root :where([data-vesta='tab-indicator']) {
+    background: transparent;
+  }
+
+  :root :where([data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {
+    --overlay-bg: #d4d0c8;
+    --overlay-fg: #000;
+    --overlay-border-color: transparent;
+    --overlay-radius: 0px;
+    --overlay-backdrop: none;
+    --overlay-shadow: var(--classic-raised), 2px 2px 0 rgb(0 0 0 / 25%);
+  }
+
+  :root :where([data-vesta='menu-item'], [data-vesta='select-item']) {
+    --menu-item-highlight: #0a246a;
+    --menu-item-highlight-fg: #fff;
+  }
+
+  :root :where([data-vesta='menu-item'][data-tone='danger']) {
+    --menu-item-highlight: var(--vesta-color-danger);
+    --menu-item-highlight-fg: var(--vesta-color-on-danger);
+  }
+
+  :root :where([data-vesta='dialog-header']) {
+    background: linear-gradient(to right, #0a246a, #a6caf0);
+    color: #fff;
+  }
+
+  :root :where([data-vesta='dialog-title']) {
+    font-weight: 700;
+  }
+
+  :root :where([data-vesta][data-disabled]) {
+    opacity: 1;
+    color: #808080;
+    text-shadow: 1px 1px 0 #fff;
+  }
+
+  :root :where([data-vesta='field'][data-disabled]) {
+    --field-bg: #d4d0c8;
+    --field-fg: #808080;
+  }
+
+  :root :where([data-vesta='field'][data-disabled]) :where([data-vesta='field-control']) {
+    background: #d4d0c8;
+  }
+
+  :root :where([data-vesta]:not([data-vesta='field-input'])):focus-visible,
+  :root :where([data-vesta='field-control']):has(:focus-visible) {
+    outline: 1px dotted #000;
+    outline-offset: -4px;
+  }
+
+  :root :where([data-vesta='checkbox']:has(input:focus-visible)) :where([data-vesta='checkbox-control']),
+  :root :where([data-vesta='switch']:has(input:focus-visible)) :where([data-vesta='switch-track']) {
+    outline: 1px dotted #000;
+    outline-offset: 2px;
+  }
+}

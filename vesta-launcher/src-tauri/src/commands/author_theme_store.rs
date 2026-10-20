@@ -89,6 +89,94 @@ pub struct AppearanceSnapshot {
     #[serde(skip)]
     pub(crate) safe_fallback: bool,
 }
+const HEADER_HELP: &str = "A .css theme must start with a header comment: /* @vesta-theme name: My theme */";
+
+/// Authors write either the `.vestatheme` JSON envelope or a plain stylesheet whose first
+/// comment is a `@vesta-theme` header (`name:`, optional `contract:` and `base:` lines).
+/// Either form may give a partial `base`; it is merged over the deterministic defaults, and
+/// unknown keys are still rejected.
+pub fn parse_author_source(contents: &str) -> Result<AuthorFile, String> {
+    let text = contents.trim_start_matches('\u{feff}');
+    let mut value: serde_json::Value = if text.trim_start().starts_with('{') {
+        serde_json::from_str(text).map_err(|e| format!("Invalid .vestatheme JSON: {e}"))?
+    } else {
+        css_envelope(text)?
+    };
+    if let Some(base) = value.get_mut("base") {
+        let partial = base
+            .as_object()
+            .ok_or("Theme base must be an object, e.g. { \"mode\": \"light\" }")?
+            .clone();
+        let mut full = serde_json::to_value(Theme::default()).map_err(|e| e.to_string())?;
+        for (key, entry) in partial {
+            full[key] = entry;
+        }
+        *base = full;
+    }
+    serde_json::from_value(value).map_err(|e| format!("Invalid theme file: {e}"))
+}
+
+fn css_envelope(text: &str) -> Result<serde_json::Value, String> {
+    let body = text.trim_start().strip_prefix("/*").ok_or(HEADER_HELP)?;
+    let end = body.find("*/").ok_or(HEADER_HELP)?;
+    let (header, css) = (&body[..end], &body[end + 2..]);
+    let mut name = None;
+    let mut contract = 1u32;
+    let mut base = None;
+    let mut tagged = false;
+    for (index, raw) in header.lines().enumerate() {
+        let line = raw.trim().trim_start_matches('*').trim();
+        if line.is_empty() {
+            continue;
+        }
+        if !tagged {
+            let rest = line.strip_prefix("@vesta-theme").ok_or(HEADER_HELP)?.trim();
+            tagged = true;
+            if rest.is_empty() {
+                continue;
+            }
+            return Err(format!("Theme header line {}: put each setting on its own line", index + 1));
+        }
+        let (key, value) = line
+            .split_once(':')
+            .ok_or_else(|| format!("Theme header line {}: expected `key: value`", index + 1))?;
+        let value = value.trim();
+        match key.trim() {
+            "name" => name = Some(value.to_string()),
+            "contract" => {
+                contract = value.parse().map_err(|_| {
+                    format!("Theme header line {}: contract must be a number", index + 1)
+                })?
+            }
+            "base" => {
+                base = Some(serde_json::from_str::<serde_json::Value>(value).map_err(|e| {
+                    format!("Theme header line {}: base must be a JSON object ({e})", index + 1)
+                })?)
+            }
+            other => {
+                return Err(format!(
+                    "Theme header line {}: unknown key `{other}` (use name, contract or base)",
+                    index + 1
+                ))
+            }
+        }
+    }
+    if !tagged {
+        return Err(HEADER_HELP.into());
+    }
+    let mut value = serde_json::json!({
+        "type": "vesta-author-theme",
+        "formatVersion": 1,
+        "contractVersion": contract,
+        "name": name.ok_or("Theme header needs a `name:` line")?,
+        "css": css.trim(),
+    });
+    if let Some(base) = base {
+        value["base"] = base;
+    }
+    Ok(value)
+}
+
 pub fn bounded_read(path: &Path, max: usize) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     std::fs::File::open(path)
@@ -214,8 +302,7 @@ impl Store {
         if self.imports.len() >= 16 {
             return Err("Theme library is full (16 entries)".into());
         }
-        let source: AuthorFile =
-            serde_json::from_str(contents).map_err(|e| format!("Invalid .vestatheme JSON: {e}"))?;
+        let source = parse_author_source(contents)?;
         source.validate()?;
         if self
             .imports
@@ -392,6 +479,39 @@ mod tests {
             Store::read(root.path()).unwrap().snapshot().imports[0].css,
             saved.imports[0].css
         );
+    }
+    #[test]
+    fn classic_stylesheet_form_imports_like_the_envelope() {
+        let root = tempfile::tempdir().unwrap();
+        let mut s = Store::read(root.path()).unwrap();
+        s.import(include_str!("../../../../apps/desktop-solid/examples/windows-2000.css"))
+            .unwrap();
+        let saved = s.persist(root.path()).unwrap();
+        assert_eq!(saved.imports[0].name, "Windows 2000");
+        assert!(saved.imports[0].css.starts_with("@layer theme.author {"));
+        let base = serde_json::to_value(&saved.imports[0].base).unwrap();
+        assert_eq!(base["mode"], "light");
+        assert_eq!(base["material"], "flat");
+        // Unlisted settings come from the defaults.
+        assert_eq!(base["id"], "vesta");
+    }
+    #[test]
+    fn stylesheet_headers_report_their_line() {
+        for (input, needle) in [
+            ("a{color:red}", "header comment"),
+            ("/* @vesta-theme\n * colour: red\n */ a{color:red}", "line 2: unknown key"),
+            ("/* @vesta-theme\n * base: {mode}\n */ a{color:red}", "line 2: base must be a JSON object"),
+            ("/* @vesta-theme */ a{color:red}", "needs a `name:` line"),
+            ("/* @vesta-theme\n name: X\n base: {\"shade\": 1}\n */ a{color:red}", "unknown field"),
+        ] {
+            let error = parse_author_source(input).unwrap_err();
+            assert!(error.contains(needle), "{input:?} gave {error:?}");
+        }
+        let partial = parse_author_source(
+            &file("Partial", "a{color:red}").replace("\"css\"", "\"base\":{\"mode\":\"dark\"},\"css\""),
+        )
+        .unwrap();
+        assert_eq!(serde_json::to_value(&partial.base).unwrap()["mode"], "dark");
     }
     #[test]
     fn strict_envelope_bounds_and_reset_preserve_library() {

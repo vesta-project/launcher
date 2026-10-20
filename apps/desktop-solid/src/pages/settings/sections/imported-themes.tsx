@@ -50,7 +50,7 @@ export function ImportedThemes() {
             <input
               ref={(element) => { picker = element; }}
               type="file"
-              accept=".vestatheme,application/json"
+              accept=".css,.vestatheme,text/css,application/json"
               hidden
               aria-label={t('prefs.appearance.import-file')}
               onChange={(event) => {

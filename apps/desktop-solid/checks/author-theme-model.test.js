@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
-import { classicAuthorTheme } from '../scripts/classic-theme.mjs';
+import { classicAuthorTheme, classicStylesheet } from '../scripts/classic-theme.mjs';
 import { generatedThemeStyles, isCurrentAppearance, MAX_THEME_FILE_BYTES } from '../src/features/settings/author-theme-model';
 
 test('generated theme tokens live in the lower owned sublayer, not inline', () => {
@@ -25,4 +25,11 @@ test('importable classic sample is exactly the trusted fixture at document scope
   expect(sample.base.mode).toBe('light');
   expect(Buffer.byteLength(raw)).toBeLessThan(MAX_THEME_FILE_BYTES);
   expect(sample.type).toBe('vesta-author-theme');
+});
+
+test('the stylesheet form of the classic sample is derived from the same fixture', async () => {
+  const fixture = await readFile(new URL('../src/styles/themes/windows-2000.css', import.meta.url), 'utf8');
+  const sheet = await readFile(new URL('../examples/windows-2000.css', import.meta.url), 'utf8');
+  expect(sheet).toBe(classicStylesheet(fixture));
+  expect(sheet.startsWith('/* @vesta-theme')).toBe(true);
 });
