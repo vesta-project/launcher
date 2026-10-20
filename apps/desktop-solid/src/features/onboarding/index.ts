@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { preloadLaunchers } from '../launcher-import';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { createSignal, untrack } from 'solid-js';
@@ -120,6 +121,22 @@ let startup: Promise<void> | undefined;
 export function startOnboarding(): () => void {
   // Discovery starts independently of pack/config/auth latency.
   void preloadLaunchers().catch(() => {});
+  let disposed = false;
+  const stops: (() => void)[] = [];
+  const retain = (stop: () => void) => { if (disposed) stop(); else stops.push(stop); };
+  const activated = () => {
+    void (startup ?? Promise.resolve()).then(() => {
+      if (!disposed) return flow.accountActivated();
+    }).catch((error) => console.error('Unable to reconcile guest session:', error));
+  };
+  if (native) {
+    void Promise.all([
+      listen<{ field: string }>('config-updated', (event) => {
+        if (event.payload.field === 'active_account_uuid') activated();
+      }).then(retain),
+      listen('core://accounts-changed', activated).then(retain),
+    ]).catch((error) => console.error('Guest account subscription failed:', error));
+  }
   const syncOnline = () => setOnline(navigator.onLine);
   window.addEventListener('online', syncOnline);
   window.addEventListener('offline', syncOnline);
@@ -132,6 +149,8 @@ export function startOnboarding(): () => void {
     });
   }
   return () => {
+    disposed = true;
+    stops.forEach((stop) => stop());
     window.removeEventListener('online', syncOnline);
     window.removeEventListener('offline', syncOnline);
     void signIn.cancel();

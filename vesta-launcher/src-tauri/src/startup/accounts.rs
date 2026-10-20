@@ -87,28 +87,45 @@ fn cleanup_guest_session() {
     }
 
     log::info!("[startup] Cleaning up stale guest session...");
-    if let Err(error) = std::fs::remove_file(marker_path) {
-        log::warn!("Failed to remove stale guest marker: {}", error);
+    if let Err(error) = remove_guest_session() {
+        log::warn!("Failed to clean up stale guest session: {}", error);
+        return;
     }
-
-    if let Ok(mut conn) = get_vesta_conn() {
-        use crate::schema::account::dsl::*;
-        if let Err(error) =
-            diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID))).execute(&mut conn)
-        {
-            log::warn!("Failed to remove stale guest account: {}", error);
-        }
-    }
-
     if let Ok(mut config) = get_app_config() {
-        if config.active_account_uuid == Some(crate::auth::GUEST_UUID.to_string()) {
+        // A leftover marker after successful activation must not erase real setup progress.
+        if config.active_account_uuid.as_deref() == Some(crate::auth::GUEST_UUID) {
             config.active_account_uuid = None;
+            config.setup_completed = false;
+            config.setup_step = 0;
         }
-        config.setup_completed = false;
-        config.setup_step = 0;
         if let Err(error) = update_app_config(&config) {
             log::warn!("Failed to reset config after guest cleanup: {}", error);
         }
+    }
+}
+
+/// Shared by successful login, account switching, and stale startup cleanup.
+/// Delete the account even if its marker is already absent; retain the marker on DB failure.
+pub fn remove_guest_session() -> Result<(), String> {
+    let mut conn = get_vesta_conn().map_err(|error| error.to_string())?;
+    let marker = get_app_config_dir()
+        .map_err(|error| error.to_string())?
+        .join(".guest_mode");
+    remove_guest_account_and_marker(&mut conn, &marker)
+}
+
+fn remove_guest_account_and_marker(
+    conn: &mut diesel::SqliteConnection,
+    marker: &std::path::Path,
+) -> Result<(), String> {
+    use crate::schema::account::dsl::*;
+    diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID)))
+        .execute(conn)
+        .map_err(|error| error.to_string())?;
+    match std::fs::remove_file(marker) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
     }
 }
 
@@ -133,5 +150,40 @@ fn cleanup_demo_account() {
                 log::warn!("Failed to clear active demo account: {}", error);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod guest_cleanup_tests {
+    use super::*;
+
+    #[test]
+    fn removes_guest_with_or_without_marker_and_preserves_real_account() {
+        use crate::schema::account::dsl::*;
+        let root = tempfile::tempdir().unwrap();
+        let marker = root.path().join(".guest_mode");
+        let mut conn = diesel::SqliteConnection::establish(":memory:").unwrap();
+        diesel::sql_query("CREATE TABLE account (uuid TEXT PRIMARY KEY)")
+            .execute(&mut conn)
+            .unwrap();
+        diesel::sql_query("INSERT INTO account VALUES ('real')")
+            .execute(&mut conn)
+            .unwrap();
+        for with_marker in [true, false] {
+            diesel::insert_into(account)
+                .values(uuid.eq(crate::auth::GUEST_UUID))
+                .execute(&mut conn)
+                .unwrap();
+            if with_marker {
+                std::fs::write(&marker, "").unwrap();
+            }
+            remove_guest_account_and_marker(&mut conn, &marker).unwrap();
+            assert!(!marker.exists());
+            assert_eq!(
+                account.select(uuid).load::<String>(&mut conn).unwrap(),
+                vec!["real"]
+            );
+        }
+        remove_guest_account_and_marker(&mut conn, &marker).unwrap();
     }
 }

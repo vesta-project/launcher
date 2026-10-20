@@ -94,6 +94,24 @@ export class OnboardingFlow {
     this.update({ status: 'active', step: 'auth', direction: 1, loginOnly: true });
     this.transport.prefetch();
   }
+  /** A shell account change ends exploration without opening setup mid-session. */
+  accountActivated() { return this.serialize(async () => {
+    if (!this.state.guest) return;
+    const account = await this.transport.account();
+    if (!account || isGuest(account)) return;
+    this.update({ guest: false });
+    if (this.state.status === 'active' && this.state.step === 'auth') {
+      if (this.completed) await this.finishNow('/library');
+      else { this.update({ loginOnly: false }); await this.move('theme'); }
+      return;
+    }
+    if (!this.completed) {
+      const config = await this.transport.config();
+      const step = Math.max(hostSteps.theme, hostSteps[this.state.step], hostSteps[resumeStep(config.setup_step)]);
+      await this.transport.persist(step);
+      this.update({ step: resumeStep(step) });
+    }
+  }); }
   authenticated() { return this.serialize(async () => {
     this.update({ guest: false });
     if (this.completed) await this.finishNow('/library');

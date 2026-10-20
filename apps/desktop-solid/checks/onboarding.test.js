@@ -78,3 +78,25 @@ describe('onboarding navigation and completion', () => {
     await flow.finish(); expect(calls.complete).toBe(2);
   });
 });
+
+test('sign-in elsewhere ends guest mode and saves account progress without opening setup', async () => {
+  const { flow, calls, login } = setup();
+  await flow.initialize(); await flow.continueAsGuest();
+  const routes = [...calls.routes];
+  await flow.accountActivated();
+  expect(flow.state.guest).toBe(true);
+  login(); await flow.accountActivated(); await flow.accountActivated();
+  expect(flow.state).toMatchObject({ status: 'done', guest: false, step: 'theme' });
+  expect(calls.routes).toEqual(routes);
+  expect(calls.persisted.at(-1)).toBe(4);
+  expect(calls.complete).toBe(0);
+});
+
+test('account activation during chip sign-in continues setup and tolerates login completion', async () => {
+  const { flow, login } = setup();
+  await flow.initialize(); await flow.continueAsGuest(); flow.signInFromGuest();
+  login(); await flow.accountActivated();
+  expect(flow.state).toMatchObject({ status: 'active', step: 'theme', guest: false });
+  await flow.authenticated();
+  expect(flow.state).toMatchObject({ status: 'active', step: 'theme', guest: false, loginOnly: false });
+});

@@ -770,28 +770,15 @@ async fn process_login_completion(
     let mut config = get_app_config()
         .map_err(|error| AuthFailure::internal(format!("Failed to get app config: {error}")))?;
     config.active_account_uuid = Some(normalized_uuid.clone());
+    if !config.setup_completed {
+        config.setup_step = config.setup_step.max(4);
+    }
     update_app_config(&config)
         .map_err(|error| AuthFailure::internal(format!("Failed to update app config: {error}")))?;
 
-    // Remote authentication and persistence have succeeded. Guest cleanup is
-    // deliberately last so a failed first login never destroys setup state.
-    if let Ok(dir) = crate::utils::db_manager::get_app_config_dir() {
-        let marker_path = dir.join(".guest_mode");
-        if marker_path.exists() {
-            log::info!("[auth] Cleaning up guest session after successful authentication...");
-            let marker_clone = marker_path.clone();
-            let _ = task::spawn_blocking(move || std::fs::remove_file(marker_clone)).await;
-            if let Some(nm) =
-                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
-            {
-                let _ = nm.delete("guest_mode_warning".to_string());
-            }
-            if let Ok(mut connection) = get_vesta_conn() {
-                let _ =
-                    diesel::delete(account.filter(uuid.eq(GUEST_UUID))).execute(&mut connection);
-            }
-        }
-    }
+    // Activation is durable before guest cleanup. A failed login retains exploration.
+    let cleanup_app = app_handle.clone();
+    let _ = task::spawn_blocking(move || cleanup_guest_after_activation(&cleanup_app)).await;
 
     // Emit config update event so UI knows active account changed
     let _ = app_handle.emit(
@@ -824,13 +811,15 @@ pub fn get_accounts() -> Result<Vec<Account>, String> {
 
 /// Display data only: used by startup snapshots and the rewrite request cache.
 #[tauri::command]
-pub async fn get_account_summaries() -> Result<Vec<crate::models::account::AccountSummary>, String> {
+pub async fn get_account_summaries() -> Result<Vec<crate::models::account::AccountSummary>, String>
+{
     tauri::async_runtime::spawn_blocking(load_account_summaries)
         .await
         .map_err(|error| error.to_string())?
 }
 
-pub(crate) fn load_account_summaries() -> Result<Vec<crate::models::account::AccountSummary>, String> {
+pub(crate) fn load_account_summaries() -> Result<Vec<crate::models::account::AccountSummary>, String>
+{
     use crate::models::account::AccountSummary;
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     account
@@ -1174,6 +1163,9 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     // Update config
     let mut config = get_app_config().map_err(|e| e.to_string())?;
     config.active_account_uuid = Some(target_uuid.clone());
+    if target_account.account_type == "Microsoft" && !config.setup_completed {
+        config.setup_step = config.setup_step.max(4);
+    }
 
     // Apply account theme settings to global config, falling back to canonical payloads.
     let mut updates = std::collections::HashMap::new();
@@ -1222,6 +1214,10 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     }
 
     update_app_config(&config).map_err(|e| e.to_string())?;
+
+    if target_account.account_type == "Microsoft" {
+        cleanup_guest_after_activation(&app_handle);
+    }
 
     // Emit events for each updated field so the UI updates
     for (field_name, value) in updates {
@@ -1564,5 +1560,19 @@ mod tests {
         assert!(should_publish_auth_service_unavailable(
             true, true, false, true, &outage
         ));
+    }
+}
+
+fn cleanup_guest_after_activation(app_handle: &AppHandle) {
+    if let Err(error) = crate::startup::accounts::remove_guest_session() {
+        log::warn!(
+            "Failed to clean up guest session after account activation: {}",
+            error
+        );
+    }
+    if let Some(manager) =
+        app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+    {
+        let _ = manager.delete("guest_mode_warning".to_string());
     }
 }
