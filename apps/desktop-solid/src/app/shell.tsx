@@ -1,5 +1,6 @@
 import { useNavigationPreloading } from "./navigation-preload";
 import { NativeImportDialog } from '../features/instances/native-import-dialog';
+import { InstanceDeleteDialog } from '../features/instances/delete-dialog';
 import { useNativeDropZone } from '../features/file-drop/zone';
 import { DropTargetDialog, reviewUntargetedDrop } from '../features/file-drop/drop-target-dialog';
 import { startNativeFileDrop } from '../features/file-drop/native-bridge';
@@ -52,6 +53,7 @@ export function Shell() {
       <ExternalLinkDialog />
       <DropTargetDialog />
       <NativeImportDialog />
+      <InstanceDeleteDialog />
       <Show when={instanceError()}><div data-vesta="instance-service-error" role="alert">
         <span>{instanceError()}</span>
         <Button size="sm" variant="ghost" onClick={()=>{clearInstanceError();void refreshNativeInstances(true);}}>{t('common.retry')}</Button>

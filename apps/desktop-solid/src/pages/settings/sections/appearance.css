@@ -1,12 +1,11 @@
 @layer launcher {
   /*
-   * Theme tiles: a miniature of the launcher window in that theme's real tokens (titlebar with
-   * the status pill, rail, board with instance cards, one in the accent). Landscape like the
-   * window itself; the selected tile gets an accent ring with a gap and a check.
+   * Theme tiles: a simple miniature of the launcher in that theme's real tokens (rail, board,
+   * two instance cards, one in the accent). The selected tile gets an accent ring and a check.
    * Hooks: prefs-themes, prefs-theme (aria-pressed), -frame (a size container), -check, -caption,
-   *        -name, -material, -preview (data-material, data-vesta-accent), -preview-bar, -crumb,
-   *        -pill, -rail, -board, -head, -heading, -search, -cards, -card (data-accent, data-art)
-   * Knobs: --u (one window pixel), --card-hue
+   *        -name, -material, -preview (data-material, data-vesta-accent), -preview-rail,
+   *        -preview-board, -preview-card (data-accent)
+   * Knobs: --u (one window pixel)
    */
   :where([data-vesta="prefs-themes"]) {
     display: grid;
@@ -102,153 +101,84 @@
     color: var(--vesta-color-accent-text);
   }
   /*
-   * The window in miniature, laid out in "window pixels": the frame is a size container and
-   * --u is one pixel of a 600px-wide launcher, so the titlebar, rail, board inset and square
-   * instance cards keep the real proportions at any tile size.
+   * The window in miniature, kept to two things: the rail and the board with two instance
+   * cards. Sizes are in "window pixels" (--u is one pixel of a 300px-wide launcher; the frame
+   * is a size container) so the proportions hold at any tile size.
    */
   :where([data-vesta="prefs-theme-frame"]) {
     container-type: inline-size;
   }
   :where([data-vesta="prefs-theme-preview"]) {
-    --u: calc(100cqi / 600);
+    --u: calc(100cqi / 300);
+    /* Re-resolve geometry here: inherited radii were computed for the active theme. */
+    --vesta-radius-lg: calc(8 * var(--vesta-radius-factor) * var(--u));
+    --vesta-radius-container: var(--vesta-radius-lg);
+    --preview-border-width: calc(var(--vesta-border-width) / 1px * var(--u));
 
     position: absolute;
     inset: 0;
     display: grid;
-    grid-template: calc(30 * var(--u)) minmax(0, 1fr) / calc(48 * var(--u)) minmax(0, 1fr);
+    grid-template-columns: calc(54 * var(--u)) minmax(0, 1fr);
     overflow: hidden;
     border-radius: inherit;
     background: var(--vesta-theme-background, none), var(--vesta-color-canvas);
     color: var(--vesta-color-text);
   }
-  :where([data-vesta="prefs-theme-preview-bar"]) {
-    display: flex;
-    grid-column: 1 / -1;
-    justify-content: space-between;
-    align-items: center;
-    padding-inline: calc(70 * var(--u)) calc(14 * var(--u));
-    background: var(--vesta-color-chrome);
-  }
-  :where([data-vesta="prefs-theme-preview-crumb"]) {
-    inline-size: calc(90 * var(--u));
-    block-size: calc(6 * var(--u));
-    margin-inline-start: auto;
-    border-radius: calc(3 * var(--u));
-    background: var(--vesta-color-text-subtle);
-  }
-  :where([data-vesta="prefs-theme-preview-pill"]) {
-    inline-size: calc(84 * var(--u));
-    block-size: calc(16 * var(--u));
-    margin-inline-start: auto;
-    border-radius: calc(8 * var(--u));
-    background:
-      linear-gradient(90deg, color-mix(in oklab, var(--vesta-color-accent) 45%, transparent) 62%, transparent 62%),
-      var(--vesta-color-fill);
-    box-shadow: inset 0 0 0 calc(1 * var(--u)) var(--vesta-color-border);
-  }
   :where([data-vesta="prefs-theme-preview-rail"]) {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: calc(10 * var(--u));
-    padding-block-start: calc(10 * var(--u));
+    gap: calc(12 * var(--u));
+    padding-block-start: calc(18 * var(--u));
     background: var(--vesta-color-chrome);
   }
   :where([data-vesta="prefs-theme-preview-rail"]) > i {
-    inline-size: calc(26 * var(--u));
-    block-size: calc(26 * var(--u));
-    border-radius: calc(7 * var(--u));
-    background: var(--vesta-color-fill);
+    inline-size: calc(30 * var(--u));
+    block-size: calc(30 * var(--u));
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-fill-active);
   }
   :where([data-vesta="prefs-theme-preview-rail"]) > i:first-child {
-    background: color-mix(in oklab, var(--vesta-color-accent) 30%, var(--vesta-color-fill));
-    box-shadow: inset calc(-2 * var(--u)) 0 0 var(--vesta-color-accent);
+    background: var(--vesta-color-accent);
   }
   :where([data-vesta="prefs-theme-preview-board"]) {
     display: flex;
-    flex-direction: column;
+    align-items: flex-start;
     gap: calc(12 * var(--u));
     min-inline-size: 0;
-    min-block-size: 0;
-    margin: 0 calc(8 * var(--u)) calc(8 * var(--u)) 0;
-    padding: calc(16 * var(--u));
+    margin: calc(10 * var(--u));
+    padding: calc(18 * var(--u));
     overflow: hidden;
-    border-radius: calc(10 * var(--u));
+    border-radius: var(--vesta-radius-container);
     background: var(--vesta-color-panel);
-    box-shadow: inset 0 0 0 calc(1 * var(--u)) var(--vesta-color-border);
+    box-shadow: var(--vesta-edge-highlight, inset 0 0 0 0 transparent);
   }
-  :where([data-vesta="prefs-theme-preview-head"]) {
-    display: flex;
-    flex: none;
-    justify-content: space-between;
-    align-items: center;
-  }
-  :where([data-vesta="prefs-theme-preview-heading"]) {
-    inline-size: calc(80 * var(--u));
-    block-size: calc(10 * var(--u));
-    border-radius: calc(3 * var(--u));
-    background: var(--vesta-color-text);
-    opacity: 0.85;
-  }
-  :where([data-vesta="prefs-theme-preview-search"]) {
-    inline-size: calc(120 * var(--u));
-    block-size: calc(18 * var(--u));
-    border-radius: calc(5 * var(--u));
-    background: var(--vesta-color-fill);
-    box-shadow: inset 0 0 0 calc(1 * var(--u)) var(--vesta-color-border);
-  }
-  /* Square instance cards like the Library: art filling the tile, the name over a scrim. */
-  :where([data-vesta="prefs-theme-preview-cards"]) {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: calc(10 * var(--u));
-  }
+  /* Two square instance cards: art filling the tile and a name bar over a soft scrim. */
   :where([data-vesta="prefs-theme-preview-card"]) {
     position: relative;
+    flex: none;
+    inline-size: calc(84 * var(--u));
     aspect-ratio: 1;
     overflow: hidden;
-    border-radius: calc(8 * var(--u));
+    border-radius: var(--vesta-radius-container);
     background:
-      linear-gradient(to top, oklch(0 0 0 / 0.5), transparent 55%),
-      linear-gradient(150deg, oklch(0.62 0.09 var(--card-hue, 150)), oklch(0.4 0.07 calc(var(--card-hue, 150) + 40)));
-    box-shadow: inset 0 0 0 calc(1 * var(--u)) var(--vesta-color-border);
-  }
-  :where([data-vesta="prefs-theme-preview-card"][data-art="2"]) {
-    --card-hue: 60;
-  }
-  :where([data-vesta="prefs-theme-preview-card"][data-art="3"]) {
-    --card-hue: 230;
-  }
-  :where([data-vesta="prefs-theme-preview-card"][data-art="4"]) {
-    --card-hue: 20;
+      linear-gradient(to top, oklch(0 0 0 / 0.45), transparent 55%),
+      var(--vesta-color-surface-raised);
+    border: var(--preview-border-width) solid oklch(1 0 0 / 0.08);
+    box-shadow: var(--vesta-theme-shadow-sm);
   }
   :where([data-vesta="prefs-theme-preview-card"][data-accent]) {
     background:
-      linear-gradient(to top, oklch(0 0 0 / 0.5), transparent 55%),
+      linear-gradient(to top, oklch(0 0 0 / 0.45), transparent 55%),
       linear-gradient(150deg, var(--vesta-color-accent), color-mix(in oklab, var(--vesta-color-accent) 45%, black));
   }
   :where([data-vesta="prefs-theme-preview-card"]) > i {
     position: absolute;
-    inset: auto auto calc(9 * var(--u)) calc(9 * var(--u));
-    inline-size: 50%;
+    inset: auto auto calc(10 * var(--u)) calc(10 * var(--u));
+    inline-size: 48%;
     block-size: calc(7 * var(--u));
     border-radius: calc(3 * var(--u));
     background: oklch(0.98 0 0 / 0.9);
-  }
-  :where([data-vesta="prefs-theme-preview-card"]) > b {
-    position: absolute;
-    inset: auto calc(8 * var(--u)) calc(7 * var(--u)) auto;
-    inline-size: calc(22 * var(--u));
-    block-size: calc(22 * var(--u));
-    border-radius: 50%;
-    background: var(--vesta-color-accent);
-    box-shadow: 0 calc(2 * var(--u)) calc(6 * var(--u)) oklch(0 0 0 / 0.35);
-  }
-  /* Glass and frosted show a lit top edge on the board, like the real window. */
-  :where([data-vesta="prefs-theme-preview"]:not([data-material="flat"])) :where([data-vesta="prefs-theme-preview-board"]) {
-    box-shadow:
-      inset 0 calc(1 * var(--u)) 0 color-mix(in oklab, white 14%, transparent),
-      inset 0 0 0 calc(1 * var(--u)) var(--vesta-color-border);
   }
   @keyframes prefs-theme-check {
     from {

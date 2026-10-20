@@ -14,6 +14,7 @@ import { t } from "../../localization";
 import { togglePin } from "./catalog";
 import type { InstanceCardActions, InstanceCardData, InstanceCardState } from "./instance-card";
 import { requestNativeExport } from "./native-export-dialog";
+import { requestInstanceDelete } from "./delete-dialog";
 import { createInstanceShortcut, copyInstanceLink } from "./shortcuts";
 import {
   nativeInstances,
@@ -99,6 +100,10 @@ export function InstanceActionItems(
       </Item>
       <Item icon={<Icon name="icons/actions/upload" />} disabled={locked() || (!nativeInstances && !props.onExport)} onSelect={() => props.onExport ? props.onExport() : void run(requestNativeExport(id()))}>
         {t("instance-settings.export")}
+      </Item>
+      <Separator />
+      <Item icon={<Icon name="icons/actions/delete" />} tone="danger" disabled={locked()} onSelect={() => requestInstanceDelete(id())}>
+        {t("instance-settings.delete-action")}
       </Item>
     </>
   );

@@ -62,26 +62,10 @@ function ThemePreview(props: {
       style={props.tokens}
       aria-hidden="true"
     >
-      <span data-vesta="prefs-theme-preview-bar">
-        <i data-vesta="prefs-theme-preview-crumb" />
-        <i data-vesta="prefs-theme-preview-pill" />
-      </span>
-      <span data-vesta="prefs-theme-preview-rail"><i /><i /><i /><i /></span>
+      <span data-vesta="prefs-theme-preview-rail"><i /><i /><i /></span>
       <span data-vesta="prefs-theme-preview-board">
-        <span data-vesta="prefs-theme-preview-head">
-          <i data-vesta="prefs-theme-preview-heading" />
-          <i data-vesta="prefs-theme-preview-search" />
-        </span>
-        <span data-vesta="prefs-theme-preview-cards">
-          <span data-vesta="prefs-theme-preview-card" data-accent=""><i /><b /></span>
-          <span data-vesta="prefs-theme-preview-card" data-art="2"><i /></span>
-          <span data-vesta="prefs-theme-preview-card" data-art="3"><i /></span>
-          <span data-vesta="prefs-theme-preview-card" data-art="4"><i /></span>
-          <span data-vesta="prefs-theme-preview-card" data-art="3"><i /></span>
-          <span data-vesta="prefs-theme-preview-card" data-art="2"><i /></span>
-          <span data-vesta="prefs-theme-preview-card" data-art="4"><i /></span>
-          <span data-vesta="prefs-theme-preview-card" data-art="3"><i /></span>
-        </span>
+        <span data-vesta="prefs-theme-preview-card" data-accent=""><i /></span>
+        <span data-vesta="prefs-theme-preview-card"><i /></span>
       </span>
     </span>
   );

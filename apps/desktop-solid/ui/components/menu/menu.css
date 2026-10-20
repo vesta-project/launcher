@@ -61,6 +61,11 @@
     user-select: none;
   }
 
+  :where([data-vesta='menu-item'][data-tone='danger']) {
+    --menu-item-highlight: var(--vesta-color-danger);
+    --menu-item-highlight-fg: var(--vesta-color-on-danger);
+  }
+
   :where([data-vesta='menu-item'][data-tone='neutral'], [data-vesta='select-item']) {
     --menu-icon-color: var(--vesta-color-text-muted);
   }
