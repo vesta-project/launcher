@@ -1,7 +1,8 @@
 import { useNavigationPreloading } from "./navigation-preload";
 import { NativeImportDialog } from '../features/instances/native-import-dialog';
 import { InstanceDeleteDialog } from '../features/instances/delete-dialog';
-import { useNativeDropZone } from '../features/file-drop/zone';
+import { useNativeDropZone, watchFileDrag } from '../features/file-drop/zone';
+import { FileDragHint } from '../features/file-drop/drag-hint';
 import { DropTargetDialog, reviewUntargetedDrop } from '../features/file-drop/drop-target-dialog';
 import { startNativeFileDrop } from '../features/file-drop/native-bridge';
 import { onSettled } from 'solid-js';
@@ -32,6 +33,7 @@ import { useShortcutRuntime } from '../features/settings/shortcut-runtime';
 /** Window frame: titlebar across the top, then the rail beside the scene. */
 export function Shell() {
   onSettled(() => startNativeFileDrop());
+  onSettled(() => watchFileDrag());
   useNavigationPreloading();
   useAccountSync();
   useShortcutRuntime();
@@ -41,7 +43,9 @@ export function Shell() {
   useInstanceShortcutRuntime();
   useMouseBack();
   let dropElement: HTMLElement | undefined;
-  useNativeDropZone({ element: () => dropElement, disabled: () => route().page === 'create', drop: reviewUntargetedDrop });
+  // Catch-all: drops that miss every target still ask which instance should get them,
+  // but it stays quiet so the whole window never lights up.
+  useNativeDropZone({ element: () => dropElement, disabled: () => route().page === 'create', drop: reviewUntargetedDrop, quiet: true });
 
   return (
     <div data-vesta="shell">
@@ -52,6 +56,7 @@ export function Shell() {
       <LinkPreview />
       <ExternalLinkDialog />
       <DropTargetDialog />
+      <FileDragHint enabled={route().page !== 'create'} onLibrary={route().page === 'library' && !route().section} />
       <NativeImportDialog />
       <InstanceDeleteDialog />
       <Show when={instanceError()}><div data-vesta="instance-service-error" role="alert">

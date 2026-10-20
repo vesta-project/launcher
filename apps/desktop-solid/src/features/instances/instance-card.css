@@ -543,6 +543,51 @@
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.12);
   }
 
+  /* ---- File drop: the card catches the files. The ring and pill are drawn by drop.css on
+     the [data-vesta=drop-decor] child; the card itself lifts, shakes or squashes. ---- */
+  :where([data-vesta='instance-card'][data-drop-target='active']) {
+    border-color: var(--vesta-color-accent);
+    box-shadow:
+      0 12px 28px oklch(0 0 0 / 0.26),
+      0 0 22px color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
+    transform: translateY(-4px) scale(1.03);
+  }
+
+  :where([data-vesta='instance-card'][data-drop-target='active'])::after {
+    transform: scale(1.06);
+  }
+
+  :where([data-vesta='instance-card'][data-drop-target='rejected']) {
+    border-color: var(--vesta-color-danger);
+    animation: vesta-instance-card-refuse 380ms var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='instance-card'][data-drop-landed]:not([data-drop-target])) {
+    animation: vesta-instance-card-caught 460ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes vesta-instance-card-refuse {
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+  }
+
+  @keyframes vesta-instance-card-caught {
+    30% { transform: scale(0.96); }
+    65% { transform: scale(1.02); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='instance-card'][data-drop-target], [data-vesta='instance-card'][data-drop-landed]) {
+      animation: none;
+    }
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='instance-card'][data-drop-target], [data-vesta='instance-card'][data-drop-landed]) {
+    animation: none;
+  }
+
   /* Reduced motion keeps the card, artwork and pressed controls at their resting size. */
   @media (prefers-reduced-motion: reduce) {
     :where([data-vesta='instance-card'], [data-vesta='instance-card-play'], [data-vesta='instance-card-retry']),
@@ -557,24 +602,6 @@
   html[data-vesta-reduced-motion] :where([data-vesta='instance-card'])::after {
     transform: none;
     transition: none;
-  }
-  :where([data-vesta='instance-card-drop-hint']) {
-    position: absolute;
-    inset: 0;
-    z-index: 5;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--vesta-space-2);
-    padding: var(--vesta-space-3);
-    background: color-mix(in oklab, var(--vesta-color-canvas) 85%, transparent);
-    color: var(--vesta-color-text);
-    text-align: center;
-    text-shadow: none;
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-medium);
-    pointer-events: none;
   }
 
 }

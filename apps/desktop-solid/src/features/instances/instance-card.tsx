@@ -55,7 +55,6 @@ export interface InstanceCardActions {
 }
 
 export interface InstanceCardProps extends InstanceCardActions {
-  dropState?: 'active' | 'rejected';
   pending?: boolean;
   instance: InstanceCardData;
   state?: InstanceCardState;
@@ -232,6 +231,7 @@ export function InstanceCard(props: InstanceCardProps) {
       data-tone={cardTone[kind()] ?? 'neutral'}
       data-modloader={props.instance.modloader}
       data-leaving={leaving() ? '' : undefined}
+      data-drop-decor
       role="group"
       aria-label={props.instance.name}
       tabindex={0}
@@ -358,12 +358,8 @@ export function InstanceCard(props: InstanceCardProps) {
           </div>
         </div>
       </Show>
-      <Show when={props.dropState}>
-        <span data-vesta="instance-card-drop-hint" data-state={props.dropState}>
-          <Icon name="icons/actions/add" size={20} />
-          <span>{t(props.dropState === 'active' ? 'drop.add-to-instance' : 'drop.supported-files')}</span>
-        </span>
-      </Show>
+      {/* File drop feedback is drawn here because the card's own ::before/::after hold its art. */}
+      <span data-vesta="drop-decor" aria-hidden="true" />
     </div>
   );
 

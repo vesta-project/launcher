@@ -1,10 +1,188 @@
+/*
+ * Native file drop feedback: one look for every drop target, carried over from the old
+ * launcher's drop-target. A ring is drawn inside the element (never past it, so it cannot
+ * resize a container or add a scrollbar) with a small pill at the top that follows it in.
+ *
+ * Hooks:  [data-drop-target=active|rejected] the pointer is over this zone with files
+ *         [data-drop-hint]     words for the pill (set alongside data-drop-target)
+ *         [data-drop-invite]   files are being dragged over the window and this zone is open
+ *         [data-drop-landed]   short pulse after files were caught
+ *         [data-drop-decor]    the element owns its ::before/::after; the look is drawn on its
+ *                              [data-vesta=drop-decor] child instead, which mirrors the hooks
+ *         [data-vesta=drop-float]  window pill while files are over no target
+ *         html[data-file-drag] while files are dragged over the window
+ * Knobs:  --drop-ring-width, --drop-ring-color, --drop-tint, --drop-pill-bg, --drop-pill-text
+ */
 @layer launcher {
-  [data-native-drop="active"] {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-accent);
-    outline-offset: -2px;
+  :where([data-drop-zone], [data-vesta='drop-decor'], [data-vesta='drop-float']) {
+    --drop-ring-width: 2px;
+    --drop-ring-color: var(--vesta-color-accent);
+    --drop-tint: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+    --drop-pill-bg: var(--vesta-color-surface-raised);
+    --drop-pill-text: var(--vesta-color-text);
   }
-  [data-native-drop="rejected"] {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-danger);
-    outline-offset: -2px;
+
+  :where([data-drop-target='rejected']) {
+    --drop-ring-color: var(--vesta-color-danger);
+    --drop-tint: color-mix(in oklab, var(--vesta-color-danger) 14%, transparent);
+  }
+
+  :where([data-drop-target], [data-drop-invite], [data-drop-landed]):where(:not([data-drop-decor])) {
+    position: relative;
+  }
+
+  /* Not wrapped in :where so it beats a host's generic `> *` child rule. */
+  [data-vesta='drop-decor'] {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  /* Invited: a faint dashed ring says "this one takes files" before the pointer arrives. */
+  :is([data-drop-target], [data-drop-invite], [data-drop-landed]):not([data-drop-decor])::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    box-sizing: border-box;
+    border: var(--drop-ring-width) dashed color-mix(in oklab, var(--drop-ring-color) 45%, transparent);
+    border-radius: inherit;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  /* Over it: a solid ring and a soft tint. */
+  [data-drop-target]:not([data-drop-decor])::after {
+    border-style: solid;
+    border-color: var(--drop-ring-color);
+    background: var(--drop-tint);
+    box-shadow: inset 0 0 24px color-mix(in oklab, var(--drop-ring-color) 28%, transparent);
+  }
+
+  [data-drop-target][data-drop-hint]:not([data-drop-decor])::before {
+    content: attr(data-drop-hint);
+    position: absolute;
+    inset-block-start: var(--vesta-space-3);
+    inset-inline-start: 50%;
+    z-index: 4;
+    box-sizing: border-box;
+    max-inline-size: calc(100% - var(--vesta-space-4));
+    overflow: hidden;
+    padding: 5px 10px;
+    border: var(--vesta-border-width) solid var(--drop-ring-color);
+    border-radius: var(--vesta-radius-full);
+    background: var(--drop-pill-bg);
+    box-shadow: var(--vesta-shadow-sm);
+    color: var(--drop-pill-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-medium);
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    text-shadow: none;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  /* Window pill: files are over the window but not over anything that takes them. */
+  :where([data-vesta='drop-float']) {
+    position: fixed;
+    inset-block-end: var(--vesta-space-8);
+    inset-inline-start: 50%;
+    z-index: var(--vesta-z-toast);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    max-inline-size: calc(100vw - var(--vesta-space-8));
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border: var(--vesta-border-width) dashed color-mix(in oklab, var(--drop-ring-color) 60%, transparent);
+    border-radius: var(--vesta-radius-full);
+    background: var(--drop-pill-bg);
+    box-shadow: var(--vesta-shadow-md);
+    color: var(--drop-pill-text);
+    font-size: var(--vesta-text-sm);
+    white-space: nowrap;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  :where([data-vesta='drop-float']) > :where([data-vesta='icon']) {
+    color: var(--drop-ring-color);
+  }
+
+  /*
+   * Motion only when nobody asked for less, so reduced motion shows the ring and pill
+   * together with no entrance delay. Changing the animation name between invited and over
+   * replays the entrance when the pointer arrives.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    html:not([data-vesta-reduced-motion]) :is([data-drop-invite]):not([data-drop-decor])::after {
+      animation: vesta-drop-invite 420ms var(--vesta-ease-out);
+    }
+
+    html:not([data-vesta-reduced-motion]) [data-drop-target]:not([data-drop-decor])::after {
+      animation: vesta-drop-ring 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    html:not([data-vesta-reduced-motion]) [data-drop-target][data-drop-hint]:not([data-drop-decor])::before {
+      animation: vesta-drop-pill 460ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
+    }
+
+    html:not([data-vesta-reduced-motion]) [data-drop-landed]:not([data-drop-target]):not([data-drop-decor])::after {
+      animation: vesta-drop-landed 620ms var(--vesta-ease-out) forwards;
+    }
+
+    html:not([data-vesta-reduced-motion]) :where([data-vesta='drop-float']) {
+      animation: vesta-drop-float 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+
+  /* Without motion the caught pulse still needs to go away. */
+  [data-drop-landed]:not([data-drop-target]):not([data-drop-invite]):not([data-drop-decor])::after {
+    border-style: solid;
+    border-color: transparent;
+  }
+
+  @keyframes vesta-drop-invite {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes vesta-drop-ring {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+  }
+
+  @keyframes vesta-drop-pill {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -6px) scale(0.92);
+    }
+  }
+
+  @keyframes vesta-drop-landed {
+    from {
+      border-color: var(--drop-ring-color);
+      background: var(--drop-tint);
+      box-shadow: inset 0 0 0 0 color-mix(in oklab, var(--drop-ring-color) 40%, transparent);
+    }
+
+    to {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: inset 0 0 0 24px transparent;
+    }
+  }
+
+  @keyframes vesta-drop-float {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 8px) scale(0.96);
+    }
   }
 }

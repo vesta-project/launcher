@@ -1,4 +1,4 @@
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Button } from '@vesta/ui';
 import { EmptyState } from '../../components/empty-state';
 import { t } from '../../localization';
@@ -12,13 +12,11 @@ import { transitionTo } from '../../app/transition';
 import { InstancePage } from './instance/instance-page';
 import './library-page.css';
 import { useNativeDropZone } from '../../features/file-drop/zone';
-import type { DropZoneState } from '../../features/file-drop/drop-controller';
 import { importNativePaths } from '../../features/instances/native-import-dialog';
 
 /** Each actual tile is a native drop target, ahead of the scene's untargeted fallback. */
 function LibraryInstanceCard(props: { entry: InstanceEntry }) {
   let item: HTMLLIElement | undefined;
-  const [dropState, setDropState] = createSignal<DropZoneState>('idle', { name: 'instanceCardDrop' });
   const id = () => props.entry.instance.id;
   useNativeDropZone({
     element: () => item?.querySelector<HTMLElement>('[data-vesta="instance-card"]') ?? undefined,
@@ -26,7 +24,7 @@ function LibraryInstanceCard(props: { entry: InstanceEntry }) {
     extensions: ['.jar', '.zip'],
     disabled: () => instancePending(id()) || ['installing', 'pending', 'verifying-runtime', 'launch-preflight-repair']
       .includes(nativeRecord(id())?.installationStatus ?? ''),
-    onStateChange: setDropState,
+    hint: () => t('drop.add-to', { name: props.entry.instance.name }),
     drop: (paths) => { void importNativePaths(id(), paths); },
   });
   return (
@@ -35,7 +33,6 @@ function LibraryInstanceCard(props: { entry: InstanceEntry }) {
         instance={props.entry.instance}
         state={props.entry.state}
         pending={instancePending(id())}
-        dropState={dropState() === 'idle' ? undefined : dropState() as 'active' | 'rejected'}
         onOpen={() => transitionTo(`/library/${id()}`, id())}
         onOpenCrash={() => transitionTo(`/library/${id()}/crash`, id())}
         onPlay={() => playInstance(id())}

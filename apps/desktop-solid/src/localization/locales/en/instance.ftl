@@ -96,3 +96,6 @@ drop-add-to-instance = Release to add resources
 drop-supported-files = Drop .jar or .zip files
 drop-release = Release to add
 drop-cannot-add = These files can't go here
+drop-add-to = Add to { $name }
+drop-float-library = Drop onto an instance to add files
+drop-float-anywhere = Release to choose an instance
