@@ -1607,7 +1607,10 @@ pub async fn launch_instance(
             crate::utils::sandbox_policy::resolve_sandbox_settings(&instance_data, &app_config)?;
         let mic_allowed = vesta_sandbox::resolve_preset(sandbox.preset).mic_allowed;
         if mic_allowed {
-            ensure_microphone_permission().await?;
+            // Non-blocking for now: a denied or failed request only warns.
+            if let Err(error) = ensure_microphone_permission().await {
+                log::warn!("[macOS Permissions] {}. Continuing launch.", error);
+            }
         } else {
             log::info!(
                 "[macOS Permissions] Skipping microphone permission request (sandbox preset denies mic)"
