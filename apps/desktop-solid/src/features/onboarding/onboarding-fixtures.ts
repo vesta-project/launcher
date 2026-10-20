@@ -1,5 +1,5 @@
 import type { AuthEvent } from '../accounts/login-session';
-import type { FeaturedPack, DetectedLauncher } from './types';
+import type { FeaturedPack } from './types';
 import type { SetupAccount, SetupConfig } from './flow';
 
 // Session-only preview state. Nothing here is written to browser storage.
@@ -29,7 +29,3 @@ export const fixturePacks: FeaturedPack[] = [
   ['sop', 'Simply Optimized'], ['fabulously-optimized', 'Fabulously Optimized'],
   ['adrenaline', 'Adrenaline'], ['additive', 'Additive'], ['cobblemon', 'Cobblemon'], ['prominence-2-rpg', 'Prominence II RPG'],
 ].map(([projectId, name]) => ({ projectId, name, source: 'modrinth', author: 'Modrinth community', minecraft: '1.21.1', loader: 'fabric' }));
-export const fixtureLaunchers: DetectedLauncher[] = [
-  { id: 'prism', label: 'Prism Launcher', instanceCount: 3, icon: 'branding/launchers/prism-launcher' },
-  { id: 'modrinthApp', label: 'Modrinth App', instanceCount: 2, icon: 'branding/sources/modrinth' },
-];

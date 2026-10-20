@@ -10,16 +10,17 @@ import { loadMetadata, metadata } from '../instances/metadata';
 import { refreshNativeInstances } from '../instances/native-service';
 import type { NativeInstance } from '../instances/native-model';
 import { t } from '../../localization';
-import { fixturePacks, fixtureLaunchers } from './onboarding-fixtures';
-import type { DetectedLauncher, FeaturedPack } from './types';
+import { detectedLaunchers, refreshLaunchers, importMany as queueImports, type ImportCandidate, type ImportResult } from '../launcher-import';
+import { fixturePacks } from './onboarding-fixtures';
+import type { FeaturedPack } from './types';
 
 /** Resolve these through Browse's normal cache; failed entries are filled by download rank. */
 export const FEATURED_PACK_IDS = ['sop', 'fabulously-optimized', 'adrenaline', 'additive', 'cobblemon-fabric', 'prominence-2-rpg'] as const;
 const native = typeof window !== 'undefined' && isTauri();
 const [packs, setPacks] = createSignal<FeaturedPack[] | undefined>(undefined, { name: 'onboardingPacks' });
 const [packsError, setPacksError] = createSignal<string | undefined>(undefined, { name: 'onboardingPacksError' });
-const [launchers, setLaunchers] = createSignal<DetectedLauncher[] | undefined>(undefined, { name: 'onboardingLaunchers' });
-const [chosen, setChosen] = createSignal<{ kind: 'pack' | 'blank' | 'import'; name: string; iconUrl?: string } | undefined>(undefined, { name: 'onboardingChosenInstance' });
+const launchers = detectedLaunchers;
+const [chosen, setChosen] = createSignal<{ kind: 'pack' | 'blank' | 'import'; name: string; iconUrl?: string; count?: number } | undefined>(undefined, { name: 'onboardingChosenInstance' });
 const [latest, setLatest] = createSignal<string | undefined>(undefined, { name: 'onboardingLatestRelease' });
 const toPack = (project: ResourceProject): FeaturedPack => ({
   projectId: project.id, source: 'modrinth', name: project.name, author: project.author,
@@ -29,7 +30,7 @@ let prefetched: Promise<void> | undefined;
 export function prefetchFirstInstance() {
   if (prefetched) return prefetched;
   prefetched = (async () => {
-    if (!native) { setPacks(fixturePacks); setLaunchers(fixtureLaunchers); setLatest('1.21.1'); return; }
+    if (!native) { setPacks(fixturePacks); await refreshLaunchers(); setLatest('1.21.1'); return; }
     await Promise.allSettled([
       (async () => {
         try {
@@ -50,12 +51,8 @@ export function prefetchFirstInstance() {
       })(),
       (async () => {
         try {
-          const detected = await invoke<{ kind: string; detectedPaths: string[] }[]>('detect_external_launchers');
-          setLaunchers(detected.flatMap((row) => {
-            const visual = findLauncher(row.kind);
-            return visual && row.detectedPaths.length ? [{ id: row.kind, label: visual.label, icon: `branding/${visual.icon}`, path: row.detectedPaths[0] }] : [];
-          }));
-        } catch { setLaunchers([]); }
+          await refreshLaunchers();
+        } catch { /* Discovery can be retried through the shared import module. */ }
       })(),
       loadMetadata().then(() => setLatest(untrack(metadata)?.latest.release)),
     ]);
@@ -68,6 +65,7 @@ export function createFirstInstance(actions: {
 }) {
   let pending: Promise<void> | undefined;
   let selectedKey: string | undefined;
+  let pendingImports: Promise<ImportResult> | undefined;
   let recovery: { key: string; id: number } | undefined;
   const once = (work: () => Promise<void>) => {
     if (pending) return pending;
@@ -130,6 +128,22 @@ export function createFirstInstance(actions: {
       } catch { throw new Error(t(recovery ? 'onboarding.install-recovery' : 'onboarding.install-error')); }
       await actions.advance();
     }),
+    importMany: (id: string, candidates: ImportCandidate[], basePathOverride?: string): Promise<ImportResult> => {
+      if (pendingImports) return pendingImports;
+      pendingImports = (async () => {
+        const launcher = findLauncher(id);
+        if (!launcher) throw new Error(t('onboarding.launcher-error'));
+        await actions.authorize();
+        const result = await queueImports(id, candidates, basePathOverride);
+        if (result.queued) {
+          selectedKey = `import:${id}`;
+          setChosen({ kind: 'import', count: result.queued,
+            name: t('onboarding.import-summary', { count: result.queued, launcher: launcher.label }) });
+        }
+        return result;
+      })().finally(() => { pendingImports = undefined; });
+      return pendingImports;
+    },
     importFrom: (id: string) => once(async () => {
       const launcher = findLauncher(id);
       if (!launcher) throw new Error(t('onboarding.launcher-error'));
@@ -138,6 +152,6 @@ export function createFirstInstance(actions: {
       setChosen({ kind: 'import', name: launcher.label });
     }),
     skip: () => actions.advance(),
-    reset: () => { if (!pending) { selectedKey = undefined; recovery = undefined; setChosen(undefined); } },
+    reset: () => { if (!pending && !pendingImports) { selectedKey = undefined; recovery = undefined; setChosen(undefined); } },
   };
 }

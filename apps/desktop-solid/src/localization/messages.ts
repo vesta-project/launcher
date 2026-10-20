@@ -1,5 +1,6 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "onboarding.import-summary",
   "welcome.progress",
   "welcome.progress-auth",
   "welcome.progress-theme",

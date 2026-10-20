@@ -1,6 +1,6 @@
 import { goBack } from "../../app/transition";
 import { Button, IconButton, Select, TextField } from "@vesta/ui";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openFolder } from "@tauri-apps/plugin-shell";
 import { For, Show, createSignal, createUniqueId, onCleanup, onSettled, untrack } from "solid-js";
 import { Board } from "../../components/board";
@@ -10,34 +10,10 @@ import { navigate } from "../../app/router";
 import { t, formatNumber } from "../../localization";
 import { nativeInstances, refreshNativeInstances } from "../../features/instances/native-service";
 import { findLauncher, byRecency, type LauncherKind } from "../../features/installation/launchers";
+import { detectedLauncherPaths, refreshLaunchers, loadCandidates, importMany, type HostCandidate as Candidate, type ImportCandidate } from "../../features/launcher-import";
 import { ImportDialog } from "./import-dialog";
 import "./launcher-import-page.css";
 import { openInstallSource } from "./install-navigation";
-
-interface Candidate {
-  id: string;
-  name: string;
-  instancePath: string;
-  gameDirectory: string;
-  iconPath?: string | null;
-  minecraftVersion?: string | null;
-  modloader?: string | null;
-  modloaderVersion?: string | null;
-  modpackPlatform?: string | null;
-  modpackId?: string | null;
-  modpackVersionId?: string | null;
-  lastPlayedAtUnixMs?: number | null;
-  modsCount?: number | null;
-  resourcepacksCount?: number | null;
-  shaderpacksCount?: number | null;
-  worldsCount?: number | null;
-  screenshotsCount?: number | null;
-  gameDirectorySizeBytes?: number | null;
-}
-interface DetectedLauncher {
-  kind: LauncherKind;
-  detectedPaths: string[];
-}
 
 /** Port of the old ImportPage / LauncherDetailsPanel, after the launcher picker. */
 export function LauncherImportPage(props: { kind: LauncherKind }) {
@@ -59,6 +35,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
   const [changeImport, setChangeImport] = createSignal(false, {
     name: "launcherImportChangeMethod",
   });
+  let candidates: ImportCandidate[] = [];
   let generation = 0,
     disposed = false;
   onCleanup(() => {
@@ -75,7 +52,6 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
     setDirty(false);
   };
   const scan = async (nextPath = path()) => {
-    if (!nativeInstances) return;
     const request = ++generation;
     const root = nextPath.trim();
     if (root) setRoots((items) => (items.includes(root) ? items : [...items, root]));
@@ -85,11 +61,11 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
     setInstances([]);
     setScanned(false);
     try {
-      const list = await invoke<Candidate[]>("list_external_instances", {
-        launcher: kind,
-        basePathOverride: nextPath.trim() || null,
-      });
-      if (!disposed && request === generation) adopt(list);
+      const list = await loadCandidates(kind, nextPath);
+      if (!disposed && request === generation) {
+        candidates = list;
+        adopt(list.map((item) => item.raw as Candidate));
+      }
     } catch (reason) {
       if (!disposed && request === generation) {
         setError(String(reason));
@@ -100,18 +76,13 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
     }
   };
   const detectPaths = async () => {
-    if (!nativeInstances) return;
     const previous = path().trim();
     const request = ++generation;
     setLoading(true);
     setError("");
     try {
-      const detected = await invoke<DetectedLauncher[]>("detect_external_launchers");
-      const paths = [
-        ...new Set(
-          detected.find((item) => item.kind === kind)?.detectedPaths.filter(Boolean) ?? [],
-        ),
-      ];
+      await refreshLaunchers();
+      const paths = detectedLauncherPaths(kind);
       if (disposed || request !== generation) return;
       // Keep manually chosen roots too; detection must not silently lose them.
       const choices = previous && !paths.includes(previous) ? [...paths, previous] : paths;
@@ -179,15 +150,10 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
     setImporting(true);
     setError("");
     try {
-      await invoke("import_external_instance", {
-        request: {
-          launcher: kind,
-          instancePath: candidate.instancePath,
-          selectedInstance: candidate,
-          basePathOverride: path().trim() || null,
-          instanceNameOverride: null,
-        },
-      });
+      const selectedCandidate = candidates.find((item) => item.key === candidate.instancePath);
+      if (!selectedCandidate) return;
+      const result = await importMany(kind, [selectedCandidate], path());
+      if (result.failed.length) throw new Error(result.failed[0].error);
       await refreshNativeInstances(true);
       if (!disposed) navigate("/library");
     } catch (reason) {

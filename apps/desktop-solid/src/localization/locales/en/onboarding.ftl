@@ -11,3 +11,9 @@ onboarding-open-error = Couldn't open the sign-in page. Copy the code and open t
 onboarding-guest-error = Couldn't start a guest session. Try again.
 onboarding-save-error = Couldn't save setup progress. Try again.
 onboarding-finish-error = Couldn't finish setup. Try again.
+
+onboarding-import-summary =
+    { $count ->
+        [one] { $count } instance from { $launcher }
+       *[other] { $count } instances from { $launcher }
+    }
