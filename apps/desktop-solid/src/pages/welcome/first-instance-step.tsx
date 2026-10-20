@@ -3,7 +3,9 @@ import { Button, Skeleton } from '@vesta/ui';
 import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { formatCompact } from '../../features/browse/browse-model';
+import type { ImportCandidate } from '../../features/launcher-import';
 import { firstInstance, onboarding, type FeaturedPack } from '../../features/onboarding';
+import { ImportPicker } from '../create/import-picker';
 import { locale, t } from '../../localization';
 
 type Choice = 'import' | 'pack' | 'blank';
@@ -18,6 +20,10 @@ export function FirstInstanceStep() {
   const [pack, setPack] = createSignal<FeaturedPack | undefined>(undefined, { name: 'welcomePack' });
   const [busy, setBusy] = createSignal(false, { name: 'welcomeBusy' });
   const [error, setError] = createSignal<string>();
+  const [imports, setImports] = createSignal<{ launcher: string; candidates: ImportCandidate[] }>(
+    { launcher: '', candidates: [] },
+    { name: 'welcomeImports' },
+  );
 
   const launcher = createMemo(() => firstInstance.launchers()?.[0], { name: 'welcomeLauncher' });
   const moreLaunchers = () => Math.max(0, (firstInstance.launchers()?.length ?? 0) - 1);
@@ -26,7 +32,7 @@ export function FirstInstanceStep() {
   const action = () => {
     switch (choice()) {
       case 'import':
-        return t('welcome.first-do-import');
+        return t('welcome.first-do-import-count', { count: imports().candidates.length });
       case 'pack':
         return pack() ? t('welcome.first-do-pack', { name: pack()!.name }) : t('welcome.first-pick-pack');
       case 'blank':
@@ -35,14 +41,20 @@ export function FirstInstanceStep() {
         return t('welcome.continue');
     }
   };
-  const ready = () => (choice() === 'pack' ? !!pack() : choice() !== undefined);
+  const ready = () =>
+    choice() === 'pack' ? !!pack() : choice() === 'import' ? imports().candidates.length > 0 : choice() !== undefined;
 
   const run = async () => {
     if (!ready() || busy()) return;
     setBusy(true);
     setError(undefined);
     try {
-      if (choice() === 'import' && launcher()) await firstInstance.importFrom(launcher()!.id);
+      if (choice() === 'import') {
+        const { launcher: from, candidates } = imports();
+        const result = await firstInstance.importMany(from, candidates);
+        // Anything that could not be queued is reported here; what did queue carries on in the pill.
+        if (result.failed.length && !result.queued) throw new Error(result.failed[0]!.error);
+      }
       else if (choice() === 'pack' && pack()) await firstInstance.installPack(pack()!);
       else if (choice() === 'blank') await firstInstance.createBlank();
       await onboarding.next();
@@ -75,7 +87,16 @@ export function FirstInstanceStep() {
                     ? t('welcome.first-import-count', { launcher: found().label, count: found().instanceCount! })
                     : t('welcome.first-import-from', { launcher: found().label })
               }
-            />
+            >
+              <Show when={choice() === 'import'}>
+                <div data-vesta="welcome-import">
+                  <ImportPicker
+                    launchers={firstInstance.launchers() ?? []}
+                    onSelection={(from, candidates) => setImports({ launcher: from, candidates })}
+                  />
+                </div>
+              </Show>
+            </ChoiceRow>
           )}
         </Show>
 

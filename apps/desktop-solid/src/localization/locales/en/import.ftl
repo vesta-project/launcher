@@ -27,3 +27,15 @@ import-instance-count =
     }
 import-recent-first = Recent first
 import-reload = Reload
+
+## Multi-select instance picker
+import-picker-launcher = Launcher
+import-picker-empty = No instances found in this launcher.
+import-picker-selected = { $count } of { $total } selected
+import-picker-all = Select all
+import-picker-none = Select none
+import-picker-imported = Already imported
+import-picker-mods = { $count ->
+    [one] 1 mod
+   *[other] { $count } mods
+}

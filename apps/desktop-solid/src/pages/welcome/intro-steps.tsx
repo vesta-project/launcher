@@ -106,7 +106,7 @@ export function CompleteStep() {
             </Show>
             <span>
               {item().kind === 'import'
-                ? t('welcome.complete-import', { name: item().name })
+                ? t('welcome.complete-importing', { name: item().name })
                 : t('welcome.complete-installing', { name: item().name })}
             </span>
           </p>

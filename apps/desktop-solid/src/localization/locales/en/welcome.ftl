@@ -58,7 +58,11 @@ welcome-first-blank-title = Plain Minecraft
 welcome-first-blank-detail = Vanilla { $version }, no mods
 welcome-first-blank-detail-plain = Vanilla, latest release, no mods
 welcome-first-pick-pack = Pick a modpack
-welcome-first-do-import = Import and continue
+welcome-first-do-import-count = { $count ->
+    [0] Pick instances to import
+    [one] Import 1 instance
+   *[other] Import { $count } instances
+}
 welcome-first-do-pack = Install { $name }
 welcome-first-do-blank = Create and continue
 welcome-first-skip = Skip for now
@@ -66,7 +70,7 @@ welcome-first-skip = Skip for now
 welcome-complete-title = You're all set.
 welcome-complete-lead = Welcome to Vesta.
 welcome-complete-installing = { $name } is installing. You can follow it in the top bar.
-welcome-complete-import = Your instances from { $name } open next.
+welcome-complete-importing = Importing { $name }. You can follow it in the top bar.
 
 welcome-guest-label = Exploring as a guest
 welcome-guest-sign-in = Sign in

@@ -1005,3 +1005,15 @@
     padding-block-start: 22px;
   }
 }
+
+@layer launcher {
+  /* The import picker opens inside its choice row, like the modpack grid. */
+  :where([data-vesta='welcome-import']) {
+    padding: 0 var(--vesta-space-3) var(--vesta-space-3);
+    animation: welcome-rise 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='welcome-import']) :where([data-vesta='import-picker']) {
+    --import-picker-max-height: 200px;
+  }
+}

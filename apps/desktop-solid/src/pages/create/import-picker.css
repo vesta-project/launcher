@@ -1,0 +1,178 @@
+/*
+ * Multi-select picker for importing from other launchers (onboarding and Create).
+ *
+ * Hooks:  [data-vesta=import-picker], .import-picker-launchers, -message (data-tone), -bar,
+ *         -count, -all, -list, -row (data-imported), .import-picker-check, -entry, -icon, -text,
+ *         -name, -meta, -badge
+ * Knobs:  --import-picker-max-height (the list scrolls past it)
+ *
+ * Each row is a checkbox whose label holds the icon, name and details, so the whole row
+ * toggles. Already-imported instances stay visible, dimmed, with a badge.
+ */
+@layer launcher {
+  :where([data-vesta='import-picker']) {
+    --import-picker-max-height: 240px;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  .import-picker-launchers {
+    align-self: flex-start;
+  }
+
+  :where([data-vesta='import-picker-message']) {
+    margin: 0;
+    padding: var(--vesta-space-3) var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='import-picker-message'][data-tone='danger']) {
+    color: var(--vesta-color-danger-text);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='import-picker-bar']) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding-inline: var(--vesta-space-1);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='import-picker-all']) {
+    padding: 2px var(--vesta-space-1);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: none;
+    color: var(--vesta-color-accent-text);
+    font: inherit;
+    font-weight: var(--vesta-weight-medium);
+    cursor: default;
+  }
+
+  :where([data-vesta='import-picker-all']:hover) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='import-picker-all']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+  }
+
+  :where([data-vesta='import-picker-list']) {
+    display: flex;
+    flex-direction: column;
+    max-block-size: var(--import-picker-max-height);
+    margin: 0;
+    padding: 2px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface-sunken);
+    list-style: none;
+  }
+
+  :where([data-vesta='import-picker-row']) {
+    border-radius: var(--vesta-radius-md);
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='import-picker-row']:not([data-imported]):hover) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='import-picker-row']) > :where([data-vesta='skeleton']) {
+    margin: 6px 8px;
+  }
+
+
+  .import-picker-check {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: 6px 8px;
+  }
+
+  .import-picker-check :where([data-vesta='checkbox-label']) {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='import-picker-row'][data-imported]) {
+    display: flex;
+    align-items: center;
+    padding-inline-end: 8px;
+    opacity: 0.6;
+  }
+
+  :where([data-vesta='import-picker-row'][data-imported]) .import-picker-check {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='import-picker-entry']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='import-picker-icon']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+    overflow: hidden;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='import-picker-icon']) :where(img) {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+  }
+
+  :where([data-vesta='import-picker-text']) {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='import-picker-name']) {
+    overflow: hidden;
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='import-picker-meta']) {
+    overflow: hidden;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='import-picker-badge']) {
+    flex: none;
+    padding: 1px 6px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill-active);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+}
