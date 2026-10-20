@@ -22,12 +22,15 @@ describe('native account login', () => {
     emit({ stage: 'AuthCode', code: 'ABCD-EFGH', url: 'https://www.microsoft.com/link', expires_in: 900 });
     emit({ stage: 'Polling' });
     expect(states.at(-1)).toMatchObject({ open: true, phase: 'waiting', code: 'ABCD-EFGH' });
+    expect(states.at(-1).expiresAt).toBeGreaterThan(Date.now());
     await session.start();
     expect(calls.start).toBe(1);
     emit({ stage: 'Complete', user_uuid: 'uuid', user_username: 'Player' });
     expect(states.at(-1).open).toBe(false);
     expect(calls.complete).toBe(1);
     expect(calls.stop).toBe(1);
+    emit({ stage: 'Complete', user_uuid: 'uuid', user_username: 'Player' });
+    expect(calls.complete).toBe(1);
   });
 
   test('native Error events are failures even when start_login resolved successfully', async () => {

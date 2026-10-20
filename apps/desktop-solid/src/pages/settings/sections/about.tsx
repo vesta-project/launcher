@@ -1,5 +1,5 @@
 import { getVersion } from '@tauri-apps/api/app';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { Button, Dialog } from '@vesta/ui';
 import { For, Show, createSignal, onSettled } from 'solid-js';
 import { navigate } from '../../../app/router';
@@ -8,6 +8,7 @@ import { openInstallSource } from '../../create/install-navigation';
 import { Icon } from '../../../components/icon';
 import { openExternal } from '../../../features/links/external-links';
 import { SettingRow } from '../../../components/setting-row';
+import { resetOnboarding } from '../../../features/onboarding';
 import { resetConfig, setting, updateSetting } from '../../../features/settings/config';
 import { updateStatus, checkForUpdates } from '../../../features/settings/updates';
 import { t } from '../../../localization';
@@ -163,7 +164,7 @@ export function AboutSettings() {
           label={t('prefs.about.reset-onboarding')}
           description={t('prefs.about.reset-onboarding-description')}
         >
-          <Button variant="outline" onClick={() => isTauri() && void invoke('reset_onboarding')}>
+          <Button variant="outline" onClick={() => void resetOnboarding()}>
             {t('prefs.about.redo-setup')}
           </Button>
         </SettingRow>

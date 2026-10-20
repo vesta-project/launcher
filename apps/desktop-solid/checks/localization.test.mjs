@@ -31,6 +31,7 @@ const args = {
   fallback: "none",
   found: 17,
   label: "installing",
+  launcher: "Prism Launcher",
   limit: "1 GB",
   loader: "Fabric",
   max: 4,

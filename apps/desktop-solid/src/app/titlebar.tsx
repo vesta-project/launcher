@@ -9,6 +9,7 @@ import { findLauncher } from '../features/installation/launchers';
 import { findInstance } from '../features/instances/catalog';
 import { detectPlatform } from './platform';
 import { StatusPill } from './status/status-pill';
+import { GuestChip } from './status/guest-chip';
 import { InboxControl, UpdateControl } from './status/titlebar-status';
 import { canGoBack, route } from './router';
 import { goBack, transitionTo } from './transition';
@@ -156,7 +157,7 @@ function location(): {
 }
 
 /** macOS keeps its native traffic lights (overlay titlebar); other platforms draw their own. */
-function WindowControls() {
+export function WindowControls() {
   const win = () => getCurrentWindow();
   return (
     <div data-vesta="window-controls">
@@ -266,6 +267,7 @@ export function Titlebar() {
         <StatusPill />
         <UpdateControl />
         <InboxControl />
+        <GuestChip />
         <div data-vesta="titlebar-compact">
           <IconButton
             variant="ghost"

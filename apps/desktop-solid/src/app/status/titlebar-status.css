@@ -250,3 +250,52 @@
     }
   }
 }
+
+/* Guest reminder (src/app/status/guest-chip.tsx).
+ * Hooks: [data-vesta=titlebar-guest] -label -action */
+@layer launcher {
+  :where([data-vesta='titlebar-guest']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    block-size: 22px;
+    margin-inline-start: 4px;
+    padding: 0 3px 0 10px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-xs);
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  :where([data-vesta='titlebar-guest']:hover) {
+    border-color: var(--vesta-color-border-strong);
+  }
+
+  :where([data-vesta='titlebar-guest']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 1px;
+  }
+
+  :where([data-vesta='titlebar-guest-action']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    block-size: 16px;
+    padding-inline: 6px;
+    border-radius: calc(var(--vesta-radius-control) - 2px);
+    background: var(--vesta-color-surface-raised);
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  @container app (max-width: 820px) {
+    :where([data-vesta='titlebar-guest-label']) {
+      display: none;
+    }
+  }
+}

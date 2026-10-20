@@ -11,6 +11,7 @@ export interface LoginState {
   url?: string;
   error?: string;
   retryable?: boolean;
+  expiresAt?: number;
 }
 
 interface LoginTransport {
@@ -57,9 +58,11 @@ export class LoginSession {
         if (generation !== this.generation) return;
         switch (event.stage) {
           case 'Start': break;
-          case 'AuthCode': this.update({ code: event.code, url: event.url, phase: 'waiting' }); break;
+          case 'AuthCode': this.update({ code: event.code, url: event.url, expiresAt: Date.now() + event.expires_in * 1000, phase: 'waiting' }); break;
           case 'Polling': this.update({ phase: 'waiting' }); break; // retain device code
           case 'Complete':
+            ++this.generation;
+            this.nativeStarted = false;
             this.update({ open: false });
             this.release();
             this.transport.complete();
@@ -77,7 +80,7 @@ export class LoginSession {
       await this.transport.start();
       // cancel_login can race the request for a device code. Cancel again once start
       // has installed its polling task; a newer session is excluded by pending.
-      if (generation !== this.generation) await this.transport.cancel();
+      if (generation !== this.generation && this.nativeStarted) await this.transport.cancel();
     } catch (error) {
       if (generation === this.generation) {
         this.update({ phase: 'error', error: error instanceof Error ? error.message : String(error), retryable: true });

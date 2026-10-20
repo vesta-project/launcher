@@ -68,11 +68,11 @@ function ThemePreview(props: {
   );
 }
 
-export function AppearanceSettings() {
-  const [advanced, setAdvanced] = createSignal(false);
-  const glassy = () => setting("theme_style") !== "flat";
-  const frosted = () => setting("theme_style") === "frosted";
-  const effects = supportedWindowEffects;
+/**
+ * The theme presets as live previews; choosing one applies it at once. Shared with the
+ * welcome flow, which shows the same grid on its theme step.
+ */
+export function ThemeGrid() {
   const definition = () => themeDefinition(setting("theme_id"));
   const choose = (preset: Preset) => {
     // Colour mode and window effect are launcher-wide: a preset never changes them.
@@ -102,46 +102,57 @@ export function AppearanceSettings() {
     },
     { name: "themePreviews" },
   );
+  return (
+    <ul data-vesta="prefs-themes">
+      <For each={themePresets}>
+        {(preset) => {
+          const selected = () => definition().id === preset.id;
+          const preview = () => previews()[preset.id]!;
+          return (
+            <li>
+              <button
+                type="button"
+                data-vesta="prefs-theme"
+                data-theme={preset.id}
+                aria-pressed={selected() ? "true" : "false"}
+                onClick={() => choose(preset)}
+              >
+                <span data-vesta="prefs-theme-frame">
+                  <ThemePreview
+                    tokens={preview().tokens}
+                    material={preview().material}
+                    neutral={preset.definition.accentChroma.dark === 0}
+                  />
+                  <Show when={selected()}>
+                    <span data-vesta="prefs-theme-check" aria-hidden="true">
+                      <Icon name="icons/controls/check" size={11} />
+                    </span>
+                  </Show>
+                </span>
+                <span data-vesta="prefs-theme-caption">
+                  <span data-vesta="prefs-theme-name">{preset.name}</span>
+                </span>
+              </button>
+            </li>
+          );
+        }}
+      </For>
+    </ul>
+  );
+}
+
+export function AppearanceSettings() {
+  const [advanced, setAdvanced] = createSignal(false);
+  const glassy = () => setting("theme_style") !== "flat";
+  const frosted = () => setting("theme_style") === "frosted";
+  const effects = supportedWindowEffects;
+  const definition = () => themeDefinition(setting("theme_id"));
   const hue = () => setting("theme_primary_hue");
 
   return (
     <>
       <Card title={t("prefs.appearance.theme")}>
-        <ul data-vesta="prefs-themes">
-          <For each={themePresets}>
-            {(preset) => {
-              const selected = () => definition().id === preset.id;
-              const preview = () => previews()[preset.id]!;
-              return (
-                <li>
-                  <button
-                    type="button"
-                    data-vesta="prefs-theme"
-                    data-theme={preset.id}
-                    aria-pressed={selected() ? "true" : "false"}
-                    onClick={() => choose(preset)}
-                  >
-                    <span data-vesta="prefs-theme-frame">
-                      <ThemePreview
-                        tokens={preview().tokens}
-                        material={preview().material}
-                        neutral={preset.definition.accentChroma.dark === 0}
-                      />
-                      <Show when={selected()}>
-                        <span data-vesta="prefs-theme-check" aria-hidden="true">
-                          <Icon name="icons/controls/check" size={11} />
-                        </span>
-                      </Show>
-                    </span>
-                    <span data-vesta="prefs-theme-caption">
-                      <span data-vesta="prefs-theme-name">{preset.name}</span>
-                    </span>
-                  </button>
-                </li>
-              );
-            }}
-          </For>
-        </ul>
+        <ThemeGrid />
       </Card>
 
       <Card title={t("prefs.appearance.colour")}>

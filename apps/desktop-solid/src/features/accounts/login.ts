@@ -4,15 +4,22 @@ import { createSignal } from 'solid-js';
 import { LoginSession, type AuthEvent, type LoginState } from './login-session';
 
 const [loginState, setLoginState] = createSignal<LoginState>({ open: false, phase: 'starting' }, { name: 'accountLogin' });
-const session = new LoginSession({
-  listen: async (receive) => {
-    if (!isTauri()) throw new Error('Microsoft sign-in is available in the desktop app.');
-    return listen<AuthEvent>('vesta://auth', (event) => receive(event.payload));
-  },
-  start: () => invoke('start_login'),
-  cancel: () => invoke('cancel_login'),
-  complete: () => window.dispatchEvent(new Event('vesta:account-login-complete')),
-}, setLoginState);
+/** Independent sessions share the native transport without publishing dialog state. */
+export function createAccountLoginSession(publish: (state: LoginState) => void, complete: () => void) {
+  return new LoginSession({
+    listen: async (receive) => {
+      if (!isTauri()) throw new Error('Microsoft sign-in is available in the desktop app.');
+      return listen<AuthEvent>('vesta://auth', (event) => receive(event.payload));
+    },
+    start: () => invoke('start_login'),
+    cancel: () => invoke('cancel_login'),
+    complete: () => {
+      window.dispatchEvent(new Event('vesta:account-login-complete'));
+      complete();
+    },
+  }, publish);
+}
+const session = createAccountLoginSession(setLoginState, () => {});
 
 export { loginState };
 let focusOrigin: HTMLElement | undefined;

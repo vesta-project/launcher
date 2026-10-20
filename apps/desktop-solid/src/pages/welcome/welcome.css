@@ -1,0 +1,976 @@
+/*
+ * First-run welcome flow: one card over the old launcher's drifting backdrop.
+ *
+ * Hooks:  [data-vesta=welcome] (root; data-step), -bar, -progress, -progress-step, -progress-label,
+ *         -stage, -card (data-step), -step (data-direction forward | back), -head, -title, -lead,
+ *         -foot, -foot-spacer, -actions (data-align), -quiet-link, -error, -spinner
+ *         atmosphere: -atmosphere (data-calm), -orb, -specks, -speck, -light
+ *         splash: -splash, -wordmark, -tagline, -splash-actions, -offline-hint, .welcome-start
+ *         credits: -credits, -credits-text, -credits-subtext, -credits-logos, -credit, -credit-name, -credits-hint
+ *         auth: -auth, -auth-idle, -auth-offline, -auth-code, -auth-moves, -auth-move, -auth-move-number,
+ *               -auth-move-text, -code (data-copied, data-expired), -code-value, -code-hint,
+ *               -auth-waiting, -auth-timer (data-low), .welcome-microsoft
+ *         theme: -theme, -theme-grid
+ *         first instance: -first, -choices, -choice (data-selected), -choice-button, -choice-icon,
+ *               -choice-text, -choice-title, -choice-detail, -choice-radio, -packs, -pack (aria-pressed),
+ *               -pack-icon, -pack-name, -pack-meta
+ *         complete: -complete, -complete-mark, -complete-note, -complete-icon, .welcome-enter
+ *         telemetry: -telemetry, -telemetry-text
+ * Knobs:  --welcome-card-width, --welcome-light-x/-y (set by the pointer), --welcome-speck-start
+ *
+ * The card keeps one width for every step so moving between steps never jumps sideways; each
+ * step slides in from the direction of travel. The backdrop's orbs follow the accent hue, so
+ * the theme step re-tints the whole window live.
+ */
+@layer launcher {
+  :where([data-vesta='welcome']) {
+    --welcome-card-width: 600px;
+
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--vesta-color-canvas);
+    color: var(--vesta-color-text);
+  }
+
+  /* ---- Titlebar strip ---- */
+
+  :where([data-vesta='welcome-bar']) {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex: none;
+    justify-content: center;
+    align-items: center;
+    block-size: 32px;
+    padding-inline: 78px;
+  }
+
+  :where([data-vesta='welcome-bar']) :where([data-vesta='window-controls']) {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 4px;
+    display: flex;
+    align-items: center;
+  }
+
+  :where([data-vesta='welcome-progress']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='welcome-progress-step']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='welcome-progress-step']) + :where([data-vesta='welcome-progress-step'])::before {
+    inline-size: 18px;
+    block-size: 1px;
+    background: var(--vesta-color-border-strong);
+    content: '';
+  }
+
+  :where([data-vesta='welcome-progress-label']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  :where([data-vesta='welcome-progress-label'])::before {
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: 50%;
+    background: var(--vesta-color-border-strong);
+    content: '';
+    transition: background-color var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='welcome-progress-step'][data-state='current']) {
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='welcome-progress-step'][data-state='current']) :where([data-vesta='welcome-progress-label'])::before {
+    background: var(--vesta-color-accent-text);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--vesta-color-accent) 30%, transparent);
+  }
+
+  :where([data-vesta='welcome-progress-step'][data-state='done']) :where([data-vesta='welcome-progress-label'])::before {
+    background: var(--vesta-color-success-text);
+  }
+
+  /* ---- Stage and card ---- */
+
+  :where([data-vesta='welcome-stage']) {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+    min-block-size: 0;
+    padding: var(--vesta-space-4) var(--vesta-space-4) var(--vesta-space-8);
+  }
+
+  :where([data-vesta='welcome-card']) {
+    container: welcome-card / inline-size;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    inline-size: min(var(--welcome-card-width), 100%);
+    max-block-size: 100%;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-radius: calc(var(--vesta-radius-xl) * 1.5);
+    background: color-mix(in oklab, var(--vesta-color-surface) 82%, transparent);
+    box-shadow: var(--vesta-shadow-lg);
+    backdrop-filter: blur(18px) saturate(1.2);
+    transition: background-color 0.5s ease, border-color 0.5s ease;
+  }
+
+  /* The intro steps are statements, not forms: no frame, just the words over the backdrop. */
+  :where([data-vesta='welcome-card']:is([data-step='splash'], [data-step='credits'], [data-step='complete'])) {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  :where([data-vesta='welcome-step']) {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: 28px 32px 24px;
+    animation: welcome-step-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='welcome-step'][data-direction='back']) {
+    animation-name: welcome-step-back;
+  }
+
+  :where([data-vesta='welcome-head']) {
+    margin-block-end: var(--vesta-space-5);
+  }
+
+  :where([data-vesta='welcome-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-2xl);
+    font-weight: var(--vesta-weight-bold);
+    letter-spacing: -0.015em;
+  }
+
+  :where([data-vesta='welcome-lead']) {
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-md);
+    line-height: 1.5;
+  }
+
+  :where([data-vesta='welcome-foot']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin-block-start: var(--vesta-space-6);
+  }
+
+  :where([data-vesta='welcome-foot-spacer']) {
+    flex: 1;
+  }
+
+  :where([data-vesta='welcome-actions']) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='welcome-actions'][data-align='center']) {
+    justify-content: center;
+  }
+
+  :where([data-vesta='welcome-quiet-link']) {
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    border: 0;
+    border-radius: var(--vesta-radius-control);
+    background: none;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+    text-underline-offset: 3px;
+    cursor: default;
+    transition: color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='welcome-quiet-link']:hover:not(:disabled)) {
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='welcome-quiet-link']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 1px;
+  }
+
+  :where([data-vesta='welcome-error']) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+    margin: var(--vesta-space-3) 0 0;
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='welcome-error']) > :where([data-vesta='icon']) {
+    flex: none;
+    margin-block-start: 2px;
+  }
+
+  :where([data-vesta='welcome-spinner']) {
+    flex: none;
+    inline-size: 12px;
+    block-size: 12px;
+    border: 1.5px solid var(--vesta-color-fill-active);
+    border-block-start-color: var(--vesta-color-accent-text);
+    border-radius: 50%;
+    animation: welcome-spin 0.9s linear infinite;
+  }
+
+  /* ---- Splash ---- */
+
+  :where([data-vesta='welcome-splash']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding-block: var(--vesta-space-4);
+    text-align: center;
+  }
+
+  :where([data-vesta='welcome-wordmark']) {
+    margin: 0;
+    font-size: clamp(44px, 7vh, 64px);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 1;
+    background: linear-gradient(160deg, var(--vesta-color-text) 25%, var(--vesta-color-accent-text) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: welcome-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+
+  :where([data-vesta='welcome-tagline']) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: clamp(14px, 2vh, 17px);
+    font-weight: var(--vesta-weight-medium);
+    letter-spacing: 0.01em;
+    animation: welcome-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+  }
+
+  :where([data-vesta='welcome-splash-actions']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    margin-block-start: var(--vesta-space-6);
+    animation: welcome-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  }
+
+  .welcome-start {
+    min-inline-size: 240px;
+  }
+
+  :where([data-vesta='welcome-offline-hint']) {
+    max-inline-size: 300px;
+    margin: 0;
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+    line-height: 1.4;
+  }
+
+  /* ---- Credits ---- */
+
+  :where([data-vesta='welcome-credits']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-4);
+    padding-block: var(--vesta-space-4);
+    text-align: center;
+  }
+
+  :where([data-vesta='welcome-credits-text']) {
+    max-inline-size: 480px;
+    margin: 0;
+    font-size: clamp(16px, 2.2vh, 20px);
+    font-weight: var(--vesta-weight-medium);
+    line-height: 1.6;
+    animation: welcome-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='welcome-credits-subtext']) {
+    max-inline-size: 440px;
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: clamp(13px, 1.8vh, 15px);
+    line-height: 1.5;
+    animation: welcome-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  }
+
+  :where([data-vesta='welcome-credits-logos']) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--vesta-space-4) var(--vesta-space-6);
+    margin: var(--vesta-space-2) 0 0;
+    padding: 0;
+    list-style: none;
+    animation: welcome-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  }
+
+  :where([data-vesta='welcome-credit']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.75;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  :where([data-vesta='welcome-credit']:hover) {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+
+  :where([data-vesta='welcome-credit-name']) {
+    font-size: 10px;
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta='welcome-credits-hint']) {
+    margin: var(--vesta-space-4) 0 0;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+    letter-spacing: 0.03em;
+    animation: welcome-fade 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.8s both;
+  }
+
+  /* ---- Sign-in ---- */
+
+  :where([data-vesta='welcome-auth-idle'], [data-vesta='welcome-auth-offline']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding-block: var(--vesta-space-4);
+    text-align: center;
+  }
+
+  .welcome-microsoft {
+    min-inline-size: 260px;
+  }
+
+  :where([data-vesta='welcome-auth-offline']) :where(strong) {
+    font-size: var(--vesta-text-lg);
+  }
+
+  :where([data-vesta='welcome-auth-offline']) :where(p) {
+    max-inline-size: 320px;
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='welcome-auth-code']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-4);
+    animation: welcome-rise 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='welcome-auth-moves']) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--vesta-space-2) var(--vesta-space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-md);
+  }
+
+  :where([data-vesta='welcome-auth-move']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='welcome-auth-move-number']) {
+    display: grid;
+    place-items: center;
+    inline-size: 20px;
+    block-size: 20px;
+    border-radius: 50%;
+    background: var(--vesta-color-fill-active);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='welcome-auth-move-text']) :where(strong) {
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  /* The code is the hero: big, monospaced, and itself a copy button. */
+  :where([data-vesta='welcome-code']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 280px;
+    padding: var(--vesta-space-4) var(--vesta-space-6) var(--vesta-space-3);
+    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-xl);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text);
+    font: inherit;
+    cursor: default;
+    transition:
+      border-color var(--vesta-duration-normal) var(--vesta-ease-standard),
+      background-color var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='welcome-code']:hover:not(:disabled)) {
+    border-color: var(--vesta-color-accent-border);
+  }
+
+  :where([data-vesta='welcome-code']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+
+  :where([data-vesta='welcome-code'][data-copied]) {
+    border-style: solid;
+    border-color: var(--vesta-color-success-border);
+  }
+
+  :where([data-vesta='welcome-code-value']) {
+    color: var(--vesta-color-accent-text);
+    font-family: var(--vesta-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 30px;
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.16em;
+    user-select: all;
+  }
+
+  :where([data-vesta='welcome-code'][data-expired]) :where([data-vesta='welcome-code-value']) {
+    color: var(--vesta-color-text-subtle);
+    text-decoration: line-through;
+  }
+
+  :where([data-vesta='welcome-code-hint']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='welcome-code'][data-copied]) :where([data-vesta='welcome-code-hint']) {
+    color: var(--vesta-color-success-text);
+  }
+
+  :where([data-vesta='welcome-auth-waiting']) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='welcome-auth-timer']) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='welcome-auth-timer'])::before {
+    margin-inline-end: var(--vesta-space-2);
+    content: '·';
+  }
+
+  :where([data-vesta='welcome-auth-timer'][data-low]) {
+    color: var(--vesta-color-warning-text);
+  }
+
+  /* ---- Theme ---- */
+
+  :where([data-vesta='welcome-theme-grid']) :where([data-vesta='prefs-themes']) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0;
+  }
+
+  @container welcome-card (max-width: 420px) {
+    :where([data-vesta='welcome-theme-grid']) :where([data-vesta='prefs-themes']) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* ---- First instance ---- */
+
+  :where([data-vesta='welcome-choices']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='welcome-choice']) {
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-xl);
+    background: var(--vesta-color-fill);
+    transition:
+      border-color var(--vesta-duration-normal) var(--vesta-ease-standard),
+      background-color var(--vesta-duration-normal) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='welcome-choice']:hover) {
+    border-color: var(--vesta-color-border-strong);
+  }
+
+  :where([data-vesta='welcome-choice'][data-selected]) {
+    border-color: var(--vesta-color-accent-border);
+    background: color-mix(in oklab, var(--vesta-color-accent) 9%, var(--vesta-color-fill));
+  }
+
+  :where([data-vesta='welcome-choice-button']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    padding: var(--vesta-space-3);
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='welcome-choice-button']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: -2px;
+    border-radius: var(--vesta-radius-xl);
+  }
+
+  :where([data-vesta='welcome-choice-icon']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-fill-hover);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='welcome-choice'][data-selected]) :where([data-vesta='welcome-choice-icon']) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 22%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='welcome-choice-text']) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='welcome-choice-title']) {
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='welcome-choice-detail']) {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A radio dot: an empty ring that fills with the accent when chosen. */
+  :where([data-vesta='welcome-choice-radio']) {
+    flex: none;
+    inline-size: 16px;
+    block-size: 16px;
+    box-sizing: border-box;
+    border: 1.5px solid var(--vesta-color-border-strong);
+    border-radius: 50%;
+    transition:
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      border-width var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='welcome-choice'][data-selected]) :where([data-vesta='welcome-choice-radio']) {
+    border-width: 5px;
+    border-color: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='welcome-packs']) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--vesta-space-2);
+    padding: 0 var(--vesta-space-3) var(--vesta-space-3);
+    animation: welcome-rise 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @container welcome-card (max-width: 460px) {
+    :where([data-vesta='welcome-packs']) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  :where([data-vesta='welcome-packs']) > :where([data-vesta='welcome-error']) {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  :where([data-vesta='welcome-pack']) {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 0 var(--vesta-space-2);
+    min-inline-size: 0;
+    padding: var(--vesta-space-2);
+    border: var(--vesta-border-width) solid transparent;
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface-sunken);
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: default;
+    transition:
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='welcome-pack']:hover) {
+    border-color: var(--vesta-color-border-strong);
+  }
+
+  :where([data-vesta='welcome-pack'][aria-pressed='true']) {
+    border-color: var(--vesta-color-accent);
+    background: color-mix(in oklab, var(--vesta-color-accent) 14%, var(--vesta-color-surface-sunken));
+  }
+
+  :where([data-vesta='welcome-pack']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 1px;
+  }
+
+  :where([data-vesta='welcome-pack-icon']) {
+    display: grid;
+    grid-row: 1 / span 2;
+    place-items: center;
+    inline-size: 32px;
+    block-size: 32px;
+    overflow: hidden;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='welcome-pack-icon']) :where(img) {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  :where([data-vesta='welcome-pack-name']) {
+    overflow: hidden;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='welcome-pack-meta']) {
+    overflow: hidden;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---- Complete ---- */
+
+  :where([data-vesta='welcome-complete']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding-block: var(--vesta-space-4);
+    text-align: center;
+  }
+
+  :where([data-vesta='welcome-complete-mark']) {
+    display: grid;
+    place-items: center;
+    inline-size: 64px;
+    block-size: 64px;
+    margin-block-end: var(--vesta-space-2);
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--vesta-color-success) 22%, transparent);
+    color: var(--vesta-color-success-text);
+    animation: welcome-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='welcome-complete']) > :where([data-vesta='welcome-title']) {
+    animation: welcome-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  }
+
+  :where([data-vesta='welcome-complete']) > :where([data-vesta='welcome-lead']) {
+    animation: welcome-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+  }
+
+  :where([data-vesta='welcome-complete-note']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    max-inline-size: 420px;
+    margin: var(--vesta-space-3) 0 0;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-align: start;
+    animation: welcome-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+  }
+
+  :where([data-vesta='welcome-complete-icon']) {
+    flex: none;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: var(--vesta-radius-sm);
+    object-fit: cover;
+  }
+
+  .welcome-enter {
+    margin-block-start: var(--vesta-space-5);
+    animation: welcome-fade 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both;
+  }
+
+  /* ---- Telemetry (splash only) ---- */
+
+  :where([data-vesta='welcome-telemetry']) {
+    position: absolute;
+    z-index: 2;
+    inset-block-end: 12px;
+    inset-inline-start: 14px;
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    max-inline-size: 460px;
+    animation: welcome-fade 0.6s ease 0.5s both;
+  }
+
+  :where([data-vesta='welcome-telemetry-text']) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='welcome-telemetry-text']) :where(a) {
+    color: inherit;
+    text-underline-offset: 2px;
+    cursor: default;
+  }
+
+  /* ---- Atmosphere ---- */
+
+  :where([data-vesta='welcome-atmosphere']) {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: opacity 0.8s ease-out;
+  }
+
+  :where([data-vesta='welcome-atmosphere'][data-calm]) {
+    opacity: 0.55;
+  }
+
+  :where([data-vesta='welcome-orb']) {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    will-change: transform;
+  }
+
+  :where([data-vesta='welcome-orb']:nth-child(1)) {
+    inset-block-start: -10%;
+    inset-inline-start: -10%;
+    inline-size: min(60vw, 800px);
+    aspect-ratio: 1;
+    background: radial-gradient(circle, color-mix(in oklab, var(--vesta-color-accent) 45%, transparent), transparent 70%);
+    animation: welcome-drift-1 18s ease-in-out infinite;
+  }
+
+  :where([data-vesta='welcome-orb']:nth-child(2)) {
+    inset-block-start: 10%;
+    inset-inline-end: -15%;
+    inline-size: min(50vw, 700px);
+    aspect-ratio: 1;
+    background: radial-gradient(
+      circle,
+      oklch(from var(--vesta-color-accent) l c calc(h + 110) / 0.3),
+      transparent 70%
+    );
+    animation: welcome-drift-2 22s ease-in-out infinite;
+  }
+
+  :where([data-vesta='welcome-orb']:nth-child(3)) {
+    inset-block-end: -15%;
+    inset-inline-start: 20%;
+    inline-size: min(55vw, 750px);
+    aspect-ratio: 1;
+    background: radial-gradient(
+      circle,
+      oklch(from var(--vesta-color-accent) l c calc(h + 220) / 0.3),
+      transparent 70%
+    );
+    animation: welcome-drift-3 20s ease-in-out infinite;
+  }
+
+  :where([data-vesta='welcome-specks']) {
+    position: absolute;
+    inset: 32px 0 0;
+  }
+
+  :where([data-vesta='welcome-speck']) {
+    position: absolute;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--vesta-color-accent-text) 70%, transparent);
+    animation: welcome-speck linear infinite;
+  }
+
+  :where([data-vesta='welcome-light']) {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      circle at var(--welcome-light-x, 50%) var(--welcome-light-y, 50%),
+      color-mix(in oklab, var(--vesta-color-accent) 12%, transparent),
+      transparent 50%
+    );
+  }
+
+  /* ---- Motion ---- */
+
+  @keyframes welcome-step-in {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+  }
+
+  @keyframes welcome-step-back {
+    from {
+      opacity: 0;
+      transform: translateX(-24px);
+    }
+  }
+
+  @keyframes welcome-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+
+  @keyframes welcome-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes welcome-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  @keyframes welcome-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes welcome-drift-1 {
+    50% {
+      transform: translate3d(5%, 8%, 0) scale(1.05);
+    }
+  }
+
+  @keyframes welcome-drift-2 {
+    50% {
+      transform: translate3d(-6%, 5%, 0) scale(1.08);
+    }
+  }
+
+  @keyframes welcome-drift-3 {
+    50% {
+      transform: translate3d(4%, -6%, 0) scale(1.06);
+    }
+  }
+
+  @keyframes welcome-speck {
+    0% {
+      opacity: 0;
+      transform: translateY(var(--welcome-speck-start, 0px)) scale(1);
+    }
+    15%,
+    85% {
+      opacity: 0.6;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(calc(var(--welcome-speck-start, 0px) - 160px)) scale(0.6);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='welcome-orb'], [data-vesta='welcome-speck']) {
+      animation: none;
+    }
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='welcome-orb'], [data-vesta='welcome-speck']) {
+    animation: none;
+  }
+}
