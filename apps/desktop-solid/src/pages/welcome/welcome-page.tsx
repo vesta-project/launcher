@@ -35,21 +35,6 @@ export function WelcomePage() {
     <div data-vesta="welcome" data-step={onboarding.step()} data-tauri-drag-region="deep">
       <Atmosphere calm={calm()} />
       <header data-vesta="welcome-bar" data-platform={platform}>
-        <Show when={position() >= 0 && !onboarding.loginOnly()}>
-          <ol data-vesta="welcome-progress" aria-label={t('welcome.progress')}>
-            <For each={counted}>
-              {(step, index) => (
-              <li
-                data-vesta="welcome-progress-step"
-                data-state={index() < position() ? 'done' : index() === position() ? 'current' : undefined}
-                aria-current={index() === position() ? 'step' : undefined}
-              >
-                <span data-vesta="welcome-progress-label">{t(stepLabels[step as keyof typeof stepLabels])}</span>
-              </li>
-              )}
-            </For>
-          </ol>
-        </Show>
         <Show when={platform === 'windows' || platform === 'linux'}>
           <WindowControls />
         </Show>
@@ -57,6 +42,25 @@ export function WelcomePage() {
 
       <main data-vesta="welcome-stage">
         <section data-vesta="welcome-card" data-step={onboarding.step()}>
+          <Show when={position() >= 0 && !onboarding.loginOnly()}>
+            <ol
+              data-vesta="welcome-progress"
+              aria-label={t('welcome.progress')}
+              style={{ '--welcome-progress-count': String(counted.length) }}
+            >
+              <For each={counted}>
+                {(step, index) => (
+                  <li
+                    data-vesta="welcome-progress-step"
+                    data-state={index() < position() ? 'done' : index() === position() ? 'current' : undefined}
+                    aria-current={index() === position() ? 'step' : undefined}
+                  >
+                    <span data-vesta="welcome-progress-label">{t(stepLabels[step as keyof typeof stepLabels])}</span>
+                  </li>
+                )}
+              </For>
+            </ol>
+          </Show>
           <Show when={onboarding.step()} keyed>
             {(step) => (
               <div data-vesta="welcome-step" data-direction={onboarding.direction() > 0 ? 'forward' : 'back'}>

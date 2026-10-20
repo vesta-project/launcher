@@ -8,9 +8,22 @@ import { ThemeGrid } from '../settings/sections/appearance';
 export function ThemeStep() {
   return (
     <div data-vesta="welcome-theme">
-      <header data-vesta="welcome-head">
-        <h2 data-vesta="welcome-title">{t('welcome.theme-title')}</h2>
-        <p data-vesta="welcome-lead">{t('welcome.theme-lead')}</p>
+      <header data-vesta="welcome-head" data-split="">
+        <div data-vesta="welcome-head-text">
+          <h2 data-vesta="welcome-title">{t('welcome.theme-title')}</h2>
+          <p data-vesta="welcome-lead">{t('welcome.theme-lead')}</p>
+        </div>
+        <SegmentedControl
+          class="welcome-mode"
+          aria-label={t('prefs.appearance.color-mode')}
+          value={setting('theme')}
+          onChange={(value) => updateSetting('theme', value as never)}
+          options={[
+            { value: 'system', label: t('prefs.appearance.mode-system') },
+            { value: 'light', label: t('prefs.appearance.mode-light') },
+            { value: 'dark', label: t('prefs.appearance.mode-dark') },
+          ]}
+        />
       </header>
 
       <div data-vesta="welcome-theme-grid">
@@ -21,17 +34,6 @@ export function ThemeStep() {
         <Button variant="ghost" onClick={() => void onboarding.back()}>
           {t('common.back')}
         </Button>
-        <SegmentedControl
-          size="sm"
-          aria-label={t('prefs.appearance.color-mode')}
-          value={setting('theme')}
-          onChange={(value) => updateSetting('theme', value as never)}
-          options={[
-            { value: 'system', label: t('prefs.appearance.mode-system') },
-            { value: 'light', label: t('prefs.appearance.mode-light') },
-            { value: 'dark', label: t('prefs.appearance.mode-dark') },
-          ]}
-        />
         <span data-vesta="welcome-foot-spacer" />
         <Button tone="accent" onClick={() => void onboarding.next()}>
           {t('welcome.continue')}

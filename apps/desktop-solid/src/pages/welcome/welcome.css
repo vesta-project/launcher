@@ -1,9 +1,10 @@
 /*
  * First-run welcome flow: one card over the old launcher's drifting backdrop.
  *
- * Hooks:  [data-vesta=welcome] (root; data-step), -bar, -progress, -progress-step, -progress-label,
+ * Hooks:  [data-vesta=welcome] (root; data-step), -bar, -progress (on the card), -progress-step (data-state), -progress-label,
  *         -stage, -card (data-step), -step (data-direction forward | back), -head, -title, -lead,
- *         -foot, -foot-spacer, -actions (data-align), -quiet-link, -error, -spinner
+ *         -head (data-split), -head-text, -foot, -foot-spacer, -actions (data-align), -quiet-link, -error,
+ *         -spinner, .welcome-mode
  *         atmosphere: -atmosphere (data-calm), -orb, -specks, -speck, -light
  *         splash: -splash, -wordmark, -tagline, -splash-actions, -offline-hint, .welcome-start
  *         credits: -credits, -credits-text, -credits-subtext, -credits-logos, -credit, -credit-name, -credits-hint
@@ -16,7 +17,8 @@
  *               -pack-icon, -pack-name, -pack-meta
  *         complete: -complete, -complete-mark, -complete-note, -complete-icon, .welcome-enter
  *         telemetry: -telemetry, -telemetry-text
- * Knobs:  --welcome-card-width, --welcome-light-x/-y (set by the pointer), --welcome-speck-start
+ * Knobs:  --welcome-card-width, --welcome-light-x/-y (set by the pointer), --welcome-speck-start,
+ *         --welcome-progress-count (set inline), --welcome-segment
  *
  * The card keeps one width for every step so moving between steps never jumps sideways; each
  * step slides in from the direction of travel. The backdrop's orbs follow the accent hue, so
@@ -57,56 +59,61 @@
     align-items: center;
   }
 
+  /* Progress lives on the card itself: a row of short segments along its top edge, with the
+     current step's name beneath. Done segments are full, the current one fills in. */
   :where([data-vesta='welcome-progress']) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
+    display: grid;
+    grid-template-columns: repeat(var(--welcome-progress-count, 3), minmax(0, 1fr));
+    gap: 6px;
     margin: 0;
-    padding: 0;
+    padding: 18px 32px 0;
     list-style: none;
-    color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
   }
 
   :where([data-vesta='welcome-progress-step']) {
     display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
+    flex-direction: column;
+    gap: 7px;
+    min-inline-size: 0;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-medium);
+    letter-spacing: 0.02em;
   }
 
-  :where([data-vesta='welcome-progress-step']) + :where([data-vesta='welcome-progress-step'])::before {
-    inline-size: 18px;
-    block-size: 1px;
-    background: var(--vesta-color-border-strong);
+  :where([data-vesta='welcome-progress-step'])::before {
+    block-size: 3px;
+    border-radius: 2px;
+    background:
+      linear-gradient(var(--vesta-color-accent-text), var(--vesta-color-accent-text)) left / var(--welcome-segment, 0%) 100% no-repeat,
+      var(--vesta-color-fill-active);
     content: '';
+    transition: background-size 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  :where([data-vesta='welcome-progress-label']) {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  :where([data-vesta='welcome-progress-label'])::before {
-    inline-size: 6px;
-    block-size: 6px;
-    border-radius: 50%;
-    background: var(--vesta-color-border-strong);
-    content: '';
-    transition: background-color var(--vesta-duration-normal) var(--vesta-ease-standard);
+  :where([data-vesta='welcome-progress-step'][data-state='done']) {
+    --welcome-segment: 100%;
   }
 
   :where([data-vesta='welcome-progress-step'][data-state='current']) {
+    --welcome-segment: 100%;
     color: var(--vesta-color-text);
   }
 
-  :where([data-vesta='welcome-progress-step'][data-state='current']) :where([data-vesta='welcome-progress-label'])::before {
-    background: var(--vesta-color-accent-text);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--vesta-color-accent) 30%, transparent);
+  :where([data-vesta='welcome-progress-step'][data-state='current'])::before {
+    animation: welcome-segment 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  :where([data-vesta='welcome-progress-step'][data-state='done']) :where([data-vesta='welcome-progress-label'])::before {
-    background: var(--vesta-color-success-text);
+  :where([data-vesta='welcome-progress-label']) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @keyframes welcome-segment {
+    from {
+      background-size: 0% 100%, auto;
+    }
   }
 
   /* ---- Stage and card ---- */
@@ -161,6 +168,23 @@
 
   :where([data-vesta='welcome-head']) {
     margin-block-end: var(--vesta-space-5);
+  }
+
+  :where([data-vesta='welcome-head'][data-split]) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: var(--vesta-space-3) var(--vesta-space-4);
+  }
+
+  :where([data-vesta='welcome-head-text']) {
+    flex: 1 1 240px;
+    min-inline-size: 0;
+  }
+
+  .welcome-mode {
+    flex: none;
   }
 
   :where([data-vesta='welcome-title']) {
@@ -972,5 +996,12 @@
 
   html[data-vesta-reduced-motion] :where([data-vesta='welcome-orb'], [data-vesta='welcome-speck']) {
     animation: none;
+  }
+}
+
+@layer launcher {
+  :where([data-vesta='welcome-progress']) + :where(*) :where([data-vesta='welcome-step']),
+  :where([data-vesta='welcome-progress']) + :where([data-vesta='welcome-step']) {
+    padding-block-start: 22px;
   }
 }

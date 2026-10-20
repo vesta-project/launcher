@@ -7,12 +7,23 @@ import '@vesta/ui';
 import { startDesktop } from './platform/desktop';
 import { Shell } from './app/shell';
 import { initializeLocalization } from './localization';
+import { usePreferences } from './app/preferences';
+import { useConfigSync } from './features/settings/config';
+import { useReducedMotion } from './features/settings/reduced-motion';
+import { useThemeRuntime } from './features/settings/theme-runtime';
+import { useWindowEffects } from './features/settings/window-effects';
 import { onboarding, startOnboarding } from './features/onboarding';
 import { WelcomePage } from './pages/welcome/welcome-page';
 
 if (import.meta.env.DEV) void import('./features/activity/activity-fixtures');
 
 export default function App() {
+  // Appearance and settings are app-wide: the welcome flow previews theme changes live too.
+  usePreferences();
+  useThemeRuntime();
+  useWindowEffects();
+  useConfigSync();
+  useReducedMotion();
   // One-time start-up: its reads are snapshots, never dependencies.
   createEffect(
     () => undefined,
