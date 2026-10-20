@@ -117,7 +117,16 @@ pub fn ingest_launch_args(args: &[String]) {
         return;
     }
 
-    let tail = args[1..].to_vec();
+    // This switch is consumed by the host before hydration and must never
+    // change legacy CLI/file/deeplink interpretation in the renderer.
+    let tail: Vec<_> = args[1..]
+        .iter()
+        .filter(|arg| arg.as_str() != "--disable-custom-theme")
+        .cloned()
+        .collect();
+    if tail.is_empty() {
+        return;
+    }
     let has_cli_or_deeplink = tail
         .iter()
         .any(|arg| arg.starts_with('-') || arg.starts_with("vesta://"));
@@ -191,6 +200,36 @@ mod tests {
         }
     }
 
+    #[test]
+    fn author_recovery_switch_is_consumed_without_changing_other_intents() {
+        let _guard = TEST_LOCK.lock().expect("test lock");
+        reset_queue();
+        ingest_launch_args(&["vesta".into(), "--disable-custom-theme".into()]);
+        assert!(drain_queue().is_empty());
+        ingest_launch_args(&[
+            "vesta".into(),
+            "--disable-custom-theme".into(),
+            "/tmp/pack.mrpack".into(),
+        ]);
+        assert_eq!(
+            drain_queue(),
+            vec![QueuedIntent::Path {
+                path: "/tmp/pack.mrpack".into()
+            }]
+        );
+        ingest_launch_args(&[
+            "vesta".into(),
+            "--disable-custom-theme".into(),
+            "--open-resource".into(),
+            "modrinth".into(),
+        ]);
+        assert_eq!(
+            drain_queue(),
+            vec![QueuedIntent::Argv {
+                args: vec!["--open-resource".into(), "modrinth".into()]
+            }]
+        );
+    }
     #[test]
     fn ingest_launch_args_preserves_cli_argv() {
         let _guard = TEST_LOCK.lock().expect("test lock");

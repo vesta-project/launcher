@@ -1,0 +1,52 @@
+/* Development-story composition only; no launcher page imports this file. */
+@layer launcher {
+  .theme-proof-comparison {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+
+  .theme-proof-sample {
+    min-inline-size: 0;
+    padding: 20px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface);
+    color: var(--vesta-color-text);
+    font-family: var(--vesta-font-sans);
+    font-size: var(--vesta-text-md);
+    line-height: var(--vesta-leading-normal);
+  }
+
+  .theme-proof-heading h3 {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  .theme-proof-heading p {
+    margin: 4px 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  .theme-proof-group {
+    min-inline-size: 0;
+    margin: 0;
+    padding: 12px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+  }
+
+  .theme-proof-group legend {
+    padding-inline: 4px;
+    font-size: var(--vesta-text-sm);
+  }
+
+  .theme-proof-output {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+}

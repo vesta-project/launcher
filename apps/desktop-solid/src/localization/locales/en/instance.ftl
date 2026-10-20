@@ -94,3 +94,5 @@ console-log-output = { $name } log output
 
 drop-add-to-instance = Release to add resources
 drop-supported-files = Drop .jar or .zip files
+drop-release = Release to add
+drop-cannot-add = These files can't go here

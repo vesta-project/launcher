@@ -1,4 +1,50 @@
 @layer launcher {
+  :where([data-vesta="prefs-imported-themes"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
+  }
+  :where([data-vesta="prefs-imported-note"]) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="prefs-imported-list"]) {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  :where([data-vesta="prefs-imported-entry"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-3);
+    padding-block: var(--vesta-space-3);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="prefs-imported-name"]) {
+    display: grid;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+  :where([data-vesta="prefs-imported-name"] span) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="prefs-imported-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="prefs-imported-error"]) {
+    margin: 0;
+    color: var(--vesta-color-danger-text);
+    overflow-wrap: anywhere;
+  }
   /*
    * Theme tiles: a simple miniature of the launcher in that theme's real tokens (rail, board,
    * two instance cards, one in the accent). The selected tile gets an accent ring and a check.

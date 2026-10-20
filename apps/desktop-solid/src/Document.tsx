@@ -15,7 +15,7 @@ export default function Document(props: ParentProps) {
         <link rel="icon" href="/favicon.ico" />
         <title>Vesta Launcher</title>
         {/* Cascade order for the whole app, declared before any other CSS. */}
-        <style>{'@layer reset, ui, launcher, theme, preferences;'}</style>
+        <style>{'@layer reset, ui, launcher, theme, preferences; @layer theme.generated, theme.author;'}</style>
         <HydrationScript />
       </head>
       <body>{props.children}</body>

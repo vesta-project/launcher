@@ -9,6 +9,120 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+test("debounced writes run after their timeout", async () => {
+  const calls = [];
+  const queue = new SettingsWriteQueue(
+    async (updates) => calls.push(updates),
+    () => {},
+    () => {},
+    10,
+  );
+  const done = queue.enqueue("hue", 10);
+  await Promise.resolve();
+  expect(calls).toEqual([]);
+  await done;
+  expect(calls).toEqual([{ hue: 10 }]);
+});
+
+test("drain flushes a pending debounce and an idle drain resolves", async () => {
+  const calls = [];
+  const queue = new SettingsWriteQueue(
+    async (updates) => calls.push(updates),
+    () => {},
+    () => {},
+    60_000,
+  );
+  await queue.drain();
+  queue.enqueue("hue", 10);
+  await Promise.resolve();
+  queue.enqueue("hue", 20);
+  await queue.drain();
+  expect(calls).toEqual([{ hue: 20 }]);
+}, 1000);
+
+test("drain waits for active and queued writes, including edits added during drain", async () => {
+  const first = deferred();
+  const second = deferred();
+  const calls = [];
+  let settled = 0;
+  const queue = new SettingsWriteQueue(
+    async (updates) => {
+      calls.push(updates);
+      await (calls.length === 1 ? first.promise : second.promise);
+    },
+    () => {},
+    () => settled++,
+    60_000,
+  );
+  const running = queue.enqueue("hue", 10);
+  queue.flush();
+  await Promise.resolve();
+  queue.enqueue("hue", 20);
+  let drained = false;
+  const done = queue.drain().then(() => { drained = true; });
+  queue.enqueue("memory", 4096);
+  first.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(calls).toEqual([{ hue: 10 }, { hue: 20, memory: 4096 }]);
+  expect(drained).toBe(false);
+  second.resolve();
+  await done;
+  await running;
+  expect(settled).toBe(1);
+  expect(queue.pending()).toEqual({});
+}, 1000);
+
+test("drain rejects a failed current batch after remaining writes settle and recovers", async () => {
+  const second = deferred();
+  const failure = new Error("offline");
+  const failures = [];
+  let calls = 0;
+  const queue = new SettingsWriteQueue(
+    async () => {
+      if (++calls === 1) throw failure;
+      if (calls === 2) await second.promise;
+    },
+    (error) => failures.push(error),
+    () => {},
+  );
+  const running = queue.enqueue("hue", 10);
+  await Promise.resolve();
+  queue.enqueue("hue", 20);
+  await Promise.resolve();
+  // The first write has already failed, but its running batch is still active.
+  expect(failures).toEqual([failure]);
+  let drained = false;
+  const done = queue.drain();
+  const rejected = done.catch((error) => error);
+  done.then(() => { drained = true; }, () => { drained = true; });
+  await Promise.resolve();
+  expect(drained).toBe(false);
+  second.resolve();
+  expect(await rejected).toBe(failure);
+  await expect(running).resolves.toBeUndefined();
+  await queue.drain();
+  queue.enqueue("hue", 30);
+  await queue.drain();
+  expect(calls).toBe(3);
+}, 1000);
+
+test("concurrent drains reject a write that fails while draining", async () => {
+  const active = deferred();
+  const failure = new Error("offline");
+  const queue = new SettingsWriteQueue(async () => {
+    await active.promise;
+    throw failure;
+  }, () => {}, () => {}, 60_000);
+  const running = queue.enqueue("hue", 10);
+  const first = queue.drain().catch((error) => error);
+  const second = queue.drain().catch((error) => error);
+  active.resolve();
+  expect(await Promise.all([first, second])).toEqual([failure, failure]);
+  await expect(running).resolves.toBeUndefined();
+  await queue.drain();
+}, 1000);
+
 test("coalesces same-turn edits, serializes writes, and retains newer pending edits", async () => {
   const first = deferred();
   const calls = [];
@@ -92,11 +206,12 @@ test("OS failure prevents persisting an autostart state that did not take effect
   expect(calls).toEqual(["plugin:autostart|is_enabled", "plugin:autostart|enable"]);
 });
 
-test("rewrite themes use their own command and never write legacy config fields", async () => {
+test("rewrite themes use the revision authority and never write legacy config fields", async () => {
   const calls = [];
   await persistSettings(
     async (command, args) => {
       calls.push({ command, args });
+      if (command === 'get_author_theme_state') return { revision: 7 };
     },
     {
       theme_id: "vesta",
@@ -105,9 +220,11 @@ test("rewrite themes use their own command and never write legacy config fields"
     },
   );
   expect(calls).toEqual([
+    { command: 'get_author_theme_state', args: undefined },
     {
       command: "update_rewrite_theme",
       args: {
+        expectedRevision: 7,
         updates: { id: "vesta", hue: 185, grain: 25 },
       },
     },

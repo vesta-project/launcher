@@ -108,6 +108,11 @@ pub fn run(context: tauri::Context) {
             None,
         ))
         .setup(move |app| {
+            // Single-instance arbitration has completed before setup. Recover
+            // before the event loop can serve an authoritative CSS snapshot.
+            if let Err(error) = commands::author_themes::recover_from_args(Some(app.handle()), &std::env::args().collect::<Vec<_>>()) {
+                log::error!("Custom theme recovery failed: {error}");
+            }
             logging::register_log_plugin(app, log_level)?;
             setup::init(app)?;
             resources::manual_drop::register_notification_actions(app.handle());
@@ -124,6 +129,7 @@ pub fn run(context: tauri::Context) {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if let Err(error) = commands::author_themes::recover_from_args(Some(app), &args) { log::error!("Custom theme recovery failed: {error}"); }
             let _ = crate::utils::windows::ensure_main_window_visible(app);
 
             if args.len() > 1 {
@@ -251,6 +257,14 @@ pub fn run(context: tauri::Context) {
             commands::notifications::reset_notification_system,
             commands::skins::get_default_skins,
             commands::skins::get_complete_skin_data,
+            commands::author_themes::get_author_theme_state,
+            commands::author_themes::import_author_theme,
+            commands::author_themes::remove_author_theme,
+            commands::author_themes::disable_author_theme,
+            commands::author_themes::reset_author_theme_state,
+            commands::author_themes::begin_author_theme_preview,
+            commands::author_themes::confirm_author_theme_preview,
+            commands::author_themes::cancel_author_theme_preview,
             commands::rewrite_theme::get_rewrite_theme,
             commands::rewrite_theme::update_rewrite_theme,
             commands::themes::list_saved_themes,
@@ -368,7 +382,15 @@ pub fn run(context: tauri::Context) {
             commands::launcher_imports::import_external_instance,
             utils::dialog_manager::submit_dialog_response,
         ])
+        .on_page_load(|webview, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                commands::author_themes::abort_window_preview(webview.app_handle(), webview.label());
+            }
+        })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. }) {
+                commands::author_themes::abort_window_preview(window.app_handle(), window.label());
+            }
             match event {
                 tauri::WindowEvent::CloseRequested { api, .. }
                     if window.label() == "main" => {

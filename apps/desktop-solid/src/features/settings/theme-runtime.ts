@@ -1,4 +1,7 @@
-import { createEffect, createMemo } from "solid-js";
+import { createEffect, createMemo, onCleanup } from "solid-js";
+import { setThemeSchemeOverride, type SchemePreference } from '../../app/preferences';
+import { appearanceSnapshot, authorThemePreview, authorThemesReady, useAuthorThemeSync } from './author-themes';
+import { generatedThemeStyles, selectedAuthorTheme } from './author-theme-model';
 import { setting } from "./config";
 import {
   resolveThemeTokens,
@@ -28,14 +31,30 @@ function createGrainImage(size = 128): string | null {
 
 /** One application-level bridge; the independent UI library only consumes its public tokens. */
 export function useThemeRuntime() {
+  useAuthorThemeSync();
   const grain = createGrainImage();
-  if (grain)
-    document.documentElement.style.setProperty(
-      "--vesta-theme-grain-image",
-      `url("${grain}")`,
-    );
+  // Three sheets with different lifetimes, so frequent edits never reparse the others:
+  // the grain image (once), the generated tokens (each theme change, e.g. a hue drag) and
+  // the author theme (only when the chosen import or its preview changes).
+  const grainSheet = document.createElement('style');
+  grainSheet.dataset.vestaThemeStyles = 'grain';
+  if (grain) grainSheet.textContent = generatedThemeStyles({ '--vesta-theme-grain-image': `url("${grain}")` });
+  const generated = document.createElement('style');
+  generated.dataset.vestaThemeStyles = 'generated';
+  const author = document.createElement('style');
+  author.dataset.vestaThemeStyles = 'author';
+  document.head.append(grainSheet, generated, author);
+  const activeAuthor = createMemo(() => {
+    if (!authorThemesReady()) return undefined;
+    const snapshot = authorThemePreview()?.candidate ?? appearanceSnapshot();
+    return selectedAuthorTheme(snapshot);
+  }, {
+    name: 'activeAuthorTheme',
+    // Snapshots are replaced on every refresh; only a different theme is a change.
+    equals: (a, b) => a?.id === b?.id && a?.css === b?.css && JSON.stringify(a?.base) === JSON.stringify(b?.base),
+  });
   const theme = createMemo<ThemeValues>(
-    () => ({
+    () => activeAuthor()?.base ?? ({
       id: setting("theme_id"),
       mode: setting("theme"),
       hue: setting("theme_primary_hue"),
@@ -50,16 +69,41 @@ export function useThemeRuntime() {
     }),
     { name: "resolvedThemeSettings" },
   );
+  let clearedInline = false;
   createEffect(
-    () => resolveThemeTokens(theme()),
-    (tokens) => {
-      const root = document.documentElement;
-      // Update only changed properties. CSS handles palette derivation; no DOM measurement or rebuild.
-      for (const [key, value] of Object.entries(tokens))
-        if (root.style.getPropertyValue(key) !== value)
-          root.style.setProperty(key, value);
+    () => generatedThemeStyles({ ...resolveThemeTokens(theme()), '--vesta-accent-hue': String(theme().hue) }),
+    (text) => {
+      if (!clearedInline) {
+        // Earlier builds (and HMR upgrades) set tokens inline on <html>; inline would win.
+        clearedInline = true;
+        const style = document.documentElement.style;
+        // Copy first: removing properties changes the live declaration while iterating.
+        for (const key of Array.from(style)) if (key.startsWith('--vesta-')) style.removeProperty(key);
+      }
+      if (generated.textContent !== text) generated.textContent = text;
     },
+    { name: 'applyGeneratedTheme' },
   );
+  createEffect(
+    () => activeAuthor(),
+    (entry) => {
+      const root = document.documentElement;
+      // Host-canonical output, already wrapped in the author layer. Never raw file text.
+      const css = entry?.css ?? '';
+      if (author.textContent !== css) author.textContent = css;
+      if (entry) root.dataset.vestaAuthorTheme = entry.id;
+      else delete root.dataset.vestaAuthorTheme;
+      setThemeSchemeOverride(entry?.base.mode as SchemePreference | undefined);
+    },
+    { name: 'applyAuthorTheme' },
+  );
+  onCleanup(() => {
+    grainSheet.remove();
+    generated.remove();
+    author.remove();
+    delete document.documentElement.dataset.vestaAuthorTheme;
+    setThemeSchemeOverride(undefined);
+  });
   // Structural hooks for CSS. The applied native window effect is published by window-effects.ts
   // as data-vesta-window-effect (only after the native call succeeds).
   createEffect(

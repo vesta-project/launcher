@@ -1,4 +1,5 @@
 import { defaultTheme, themeFields, themeSettings, THEME_MIRROR_KEY } from "./theme-model";
+import { persistBuiltInTheme, refreshAuthorThemes } from './author-themes';
 import { setLocale, type LocalePreference } from "../../localization";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { isEnabled, enable, disable } from "@tauri-apps/plugin-autostart";
@@ -7,7 +8,7 @@ import { createSignal, onSettled, untrack, createMemo, createRoot } from "solid-
 import { CacheInvalidatedError, RequestCache } from "../../platform/cache/request-cache";
 import { persistSettings } from "./native-config";
 import { SettingsWriteQueue } from "./write-queue";
-import { setHue, setScheme, type SchemePreference } from "../../app/preferences";
+import { setScheme, type SchemePreference } from "../../app/preferences";
 
 /**
  * Application settings consumed by the existing pages. General settings use AppConfig;
@@ -212,7 +213,6 @@ if (hasWindow) window.addEventListener("pagehide", flushMirror);
 const initialConfig = { ...configDefaults, ...stored() };
 // Hydrate only the new theme mirror before the shell's first render, including browser previews.
 setScheme(initialConfig.theme);
-setHue(initialConfig.theme_primary_hue);
 const [config, setConfig] = createSignal<LauncherConfig>(initialConfig, { name: "launcherConfig" });
 export { config };
 
@@ -230,7 +230,7 @@ export const setting = <K extends keyof LauncherConfig>(key: K): LauncherConfig[
 
 /** Optimistic edits remain overlaid while serialized, coalesced writes reach Rust. */
 const writeQueue = new SettingsWriteQueue(
-  (updates) => persistSettings(invoke, updates, { isEnabled, enable, disable }),
+  (updates) => persistSettings(invoke, updates, { isEnabled, enable, disable }, persistBuiltInTheme),
   () => console.error("Unable to save launcher settings; reloading saved values."),
   () => void refreshConfig(true),
   200,
@@ -239,6 +239,12 @@ const writeQueue = new SettingsWriteQueue(
 /** Sliders render immediately; release commits their latest coalesced values. */
 export function flushSettings() {
   writeQueue.flush();
+  flushMirror();
+}
+
+/** Preview must not race an unacknowledged slider or preset write. */
+export async function drainSettings() {
+  await writeQueue.drain();
   flushMirror();
 }
 
@@ -263,7 +269,6 @@ export function updateSetting<K extends keyof LauncherConfig>(key: K, value: Lau
   });
   if (key === "language") setLocale(value as LocalePreference);
   if (key === "theme") setScheme(value as SchemePreference);
-  if (key === "theme_primary_hue") setHue(value as number);
   if (native && !localOnly.has(key)) {
     const persisted = key === "default_sandbox_extra_paths" ? JSON.stringify(value) : value;
     void writeQueue.enqueue(key, persisted);
@@ -303,14 +308,14 @@ export async function refreshConfig(force = false) {
     const value = await hostCache.read("config", async () => {
       const [host, theme] = await Promise.all([
         invoke<Record<string, unknown>>("get_config"),
-        invoke<Record<string, unknown>>("get_rewrite_theme"),
+        refreshAuthorThemes(),
       ]);
       // Only the new theme store may supply these fields.
       // OS registration can change outside the launcher; it is authoritative.
       let autostart = host.autostart_enabled;
       try { autostart = await isEnabled(); }
       catch (error) { console.error("Unable to read OS autostart state:", error); }
-      return { ...host, autostart_enabled: autostart, ...themeSettings(theme) };
+      return { ...host, autostart_enabled: autostart, ...themeSettings(theme.builtIn) };
     });
     setConfig((current) => {
       const next = { ...current, ...fromHost(value), ...fromHost(writeQueue.pending()) };
@@ -326,7 +331,6 @@ export async function refreshConfig(force = false) {
     const current = untrack(config);
     setLocale(current.language as LocalePreference);
     setScheme(current.theme);
-    setHue(current.theme_primary_hue);
   } catch (reason) {
     if (!(reason instanceof CacheInvalidatedError))
       console.error("Unable to load launcher settings:", reason);

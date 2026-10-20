@@ -24,15 +24,17 @@ function load(): Stored {
 
 const initial = load();
 export const [scheme, setScheme] = createSignal<SchemePreference>(initial.scheme, { name: 'scheme' });
-export const [hue, setHue] = createSignal(initial.hue, { name: 'hue' });
+export const [themeSchemeOverride, setThemeSchemeOverride] = createSignal<SchemePreference | undefined>(undefined, { name: 'themeSchemeOverride' });
 export const [railCollapsed, setRailCollapsed] = createSignal(initial.railCollapsed, { name: 'railCollapsed' });
 
 const media = hasWindow ? window.matchMedia('(prefers-color-scheme: light)') : undefined;
 const [systemLight, setSystemLight] = createSignal(media?.matches ?? false, { name: 'systemLight' });
 
 /** The colour scheme in effect: the preference, with 'system' resolved against the OS. */
-export const resolvedScheme = (): 'light' | 'dark' =>
-  scheme() === 'system' ? (systemLight() ? 'light' : 'dark') : scheme() === 'light' ? 'light' : 'dark';
+export const resolvedScheme = (): 'light' | 'dark' => {
+  const preference = themeSchemeOverride() ?? scheme();
+  return preference === 'system' ? (systemLight() ? 'light' : 'dark') : preference === 'light' ? 'light' : 'dark';
+};
 
 /**
  * Applies preferences to the document root. The scheme and accent live on <html>,
@@ -51,10 +53,6 @@ export function usePreferences() {
       document.documentElement.dataset.vestaScheme = resolved;
     },
   );
-
-  createEffect(hue, (value) => {
-    document.documentElement.style.setProperty('--vesta-accent-hue', String(value));
-  });
 
   // Appearance is persisted by the coalesced theme store, never once per drag frame.
   createEffect(railCollapsed, (collapsed) => {

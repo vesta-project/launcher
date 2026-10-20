@@ -4,13 +4,19 @@ type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>
 /** The OS owns autostart. Restore its prior state if saving the config fails. */
 export async function persistSettings(invoke: Invoke, updates: Record<string, unknown>, autostart?: {
   isEnabled: () => Promise<boolean>; enable: () => Promise<void>; disable: () => Promise<void>;
-}) {
+}, writeTheme?: (updates: Record<string, unknown>) => Promise<unknown>) {
   const isEnabled = () => autostart ? autostart.isEnabled() : invoke<boolean>("plugin:autostart|is_enabled");
   const setAutostart = (enabled: boolean) => autostart
     ? enabled ? autostart.enable() : autostart.disable()
     : invoke<void>(enabled ? "plugin:autostart|enable" : "plugin:autostart|disable");
   const { config, theme } = splitThemeUpdates(updates);
-  if (Object.keys(theme).length) await invoke("update_rewrite_theme", { updates: theme });
+  if (Object.keys(theme).length) {
+    if (writeTheme) await writeTheme(theme);
+    else {
+      const { revision } = await invoke<{ revision: number }>('get_author_theme_state');
+      await invoke('update_rewrite_theme', { updates: theme, expectedRevision: revision });
+    }
+  }
   if (!Object.keys(config).length) return;
   const requested = config.autostart_enabled;
   let previous: boolean | undefined;

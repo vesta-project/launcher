@@ -13,7 +13,9 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import { resolvedScheme } from "../../../app/preferences";
 import { Icon } from "../../../components/icon";
 import { SettingRow } from "../../../components/setting-row";
-import { setting, updateSetting, flushSettings } from "../../../features/settings/config";
+import { setting, updateSetting, flushSettings, drainSettings, refreshConfig } from "../../../features/settings/config";
+import { appearanceSnapshot, authorThemePreview, authorThemesAvailable, persistBuiltInTheme } from '../../../features/settings/author-themes';
+import { ImportedThemes } from './imported-themes';
 import { t } from "../../../localization";
 import { Card, Reveal, ToggleRow } from "../parts";
 import "./appearance.css";
@@ -77,11 +79,25 @@ function ThemePreview(props: {
  */
 export function ThemeGrid() {
   const definition = () => themeDefinition(setting("theme_id"));
-  const choose = (preset: Preset) => {
-    // Colour mode and window effect are launcher-wide: a preset never changes them.
-    for (const [key, value] of Object.entries(presetUpdates(preset.definition)))
-      updateSetting(key as Parameters<typeof updateSetting>[0], value as never);
-    flushSettings();
+  const [choosing, setChoosing] = createSignal(false, { name: 'themePresetChoosing' });
+  const [error, setError] = createSignal<string | undefined>(undefined, { name: 'themePresetError' });
+  const choose = async (preset: Preset) => {
+    if (choosing()) return;
+    setChoosing(true);
+    setError(undefined);
+    try {
+      // Selecting a preset also disables author CSS, even if its backing values were identical.
+      if (authorThemesAvailable) {
+        await drainSettings();
+        await persistBuiltInTheme(splitThemeUpdates(presetUpdates(preset.definition)).theme);
+        await refreshConfig(true);
+      } else {
+        for (const [key, value] of Object.entries(presetUpdates(preset.definition)))
+          updateSetting(key as Parameters<typeof updateSetting>[0], value as never);
+        flushSettings();
+      }
+    } catch (reason) { setError(String(reason)); }
+    finally { setChoosing(false); }
   };
   /*
    * Each preview shows what choosing it gives: the live settings for the current theme, and for
@@ -106,10 +122,11 @@ export function ThemeGrid() {
     { name: "themePreviews" },
   );
   return (
+    <>
     <ul data-vesta="prefs-themes">
       <For each={themePresets}>
         {(preset) => {
-          const selected = () => definition().id === preset.id;
+          const selected = () => !appearanceSnapshot()?.selected && !authorThemePreview() && definition().id === preset.id;
           const preview = () => previews()[preset.id]!;
           return (
             <li>
@@ -118,7 +135,8 @@ export function ThemeGrid() {
                 data-vesta="prefs-theme"
                 data-theme={preset.id}
                 aria-pressed={selected() ? "true" : "false"}
-                onClick={() => choose(preset)}
+                disabled={choosing() || !!authorThemePreview()}
+                onClick={() => void choose(preset)}
               >
                 <span data-vesta="prefs-theme-frame">
                   <ThemePreview
@@ -144,11 +162,14 @@ export function ThemeGrid() {
         }}
       </For>
     </ul>
+    <Show when={error()}>{(message) => <p role="alert">{message()}</p>}</Show>
+    </>
   );
 }
 
 export function AppearanceSettings() {
-  const [advanced, setAdvanced] = createSignal(false);
+  const [advanced, setAdvanced] = createSignal(false, { name: 'appearanceAdvanced' });
+  const custom = () => !!appearanceSnapshot()?.selected || !!authorThemePreview();
   const glassy = () => setting("theme_style") !== "flat";
   const frosted = () => setting("theme_style") === "frosted";
   const effects = supportedWindowEffects;
@@ -161,6 +182,11 @@ export function AppearanceSettings() {
         <ThemeGrid />
       </Card>
 
+      <ImportedThemes />
+      <Show when={custom()}>
+        <p data-vesta="prefs-imported-note">{t('prefs.appearance.imported-controls')}</p>
+      </Show>
+      <Show when={!custom()}>
       <Card title={t("prefs.appearance.colour")}>
         <SettingRow label={t("prefs.appearance.color-mode")}>
           <SegmentedControl
@@ -199,6 +225,7 @@ export function AppearanceSettings() {
         </Show>
       </Card>
 
+      </Show>
       <Card title={t("prefs.appearance.material")}>
         <SettingRow
           label={t("prefs.appearance.window-effect")}
@@ -224,6 +251,7 @@ export function AppearanceSettings() {
         </Show>
       </Card>
 
+      <Show when={!custom()}>
       <Card title={t("prefs.appearance.surfaces")}>
         <SettingRow label={t("prefs.appearance.style")}>
           <SegmentedControl
@@ -386,6 +414,7 @@ export function AppearanceSettings() {
           </Reveal>
         </Show>
       </Card>
+      </Show>
     </>
   );
 }

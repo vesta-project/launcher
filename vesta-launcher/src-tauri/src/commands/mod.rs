@@ -20,3 +20,7 @@ pub mod themes;
 pub mod worlds;
 
 pub mod rewrite_theme;
+
+pub(crate) mod author_css;
+pub mod author_theme_store;
+pub mod author_themes;

@@ -7,6 +7,8 @@ export class SettingsWriteQueue {
   private timer?: ReturnType<typeof setTimeout>;
   private batchStartedAt = 0;
   private flushRequested = false;
+  private draining = 0;
+  private failures: unknown[] = [];
 
   constructor(
     private readonly write: (updates: Record<string, unknown>) => Promise<unknown>,
@@ -28,6 +30,24 @@ export class SettingsWriteQueue {
     else if (this.running) this.flushRequested = true;
   }
 
+  /** Flush debounce and wait for the queue to settle, reporting this batch's first failure. */
+  async drain(): Promise<void> {
+    const failures: unknown[] = [];
+    this.draining++;
+    try {
+      while (this.running) {
+        const running = this.running;
+        const batchFailures = this.failures;
+        this.flush();
+        await running;
+        failures.push(...batchFailures);
+      }
+      if (failures.length) throw failures[0];
+    } finally {
+      this.draining--;
+    }
+  }
+
   enqueue(field: string, value: unknown) {
     this.queued[field] = value;
     if (this.wake) {
@@ -37,10 +57,11 @@ export class SettingsWriteQueue {
       this.timer = setTimeout(() => this.flush(), Math.min(this.intervalMs, remaining));
     }
     if (!this.running) {
+      this.failures = [];
       this.running = Promise.resolve().then(async () => {
         try {
           while (Object.keys(this.queued).length) {
-            if (this.intervalMs > 0 && !this.flushRequested)
+            if (this.intervalMs > 0 && !this.flushRequested && !this.draining)
               await new Promise<void>((resolve) => {
                 this.batchStartedAt = Date.now();
                 this.wake = resolve;
@@ -52,6 +73,7 @@ export class SettingsWriteQueue {
             try {
               await this.write(this.active);
             } catch (error) {
+              this.failures.push(error);
               this.failed(error);
             } finally {
               this.active = {};

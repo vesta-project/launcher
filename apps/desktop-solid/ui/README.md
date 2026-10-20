@@ -13,7 +13,7 @@ Run the visual workbench with `bun run workbench` (http://localhost:1431).
 
 ## Cascade layers
 
-`@layer reset, ui, launcher, theme, preferences;` is declared once by the host page. The library fills `ui.tokens`, `ui.base` and `ui.components`. Because later layers always win, the launcher and advanced themes override anything here **without `!important` or specificity tricks**. Never use `!important` in the library.
+`@layer reset, ui, launcher, theme, preferences;` is declared once by the host page. The library fills `ui.tokens`, `ui.base` and `ui.components`. Later layers override normal declarations in earlier stylesheet layers, so the launcher and advanced themes can override library styles **without `!important` or specificity tricks**. Within `theme`, the launcher declares `theme.generated, theme.author`: generated root inputs are stylesheet declarations, and native-validated author output goes into the later owned sublayer. This does not defeat conflicting inline properties on the same element; inline control measurements and overlay positioning remain application-owned. Never use `!important` in the library.
 
 ## Tokens
 
@@ -26,7 +26,7 @@ One vocabulary, `--vesta-*`. The library ships complete defaults; the launcher r
 | Space | `--vesta-space-{0-5,1,1-5,2,3,4,5,6,8,10,12}` from `--vesta-space-unit` |
 | Sizing | `--vesta-size-control-{sm,md,lg}` (24/28/32), `--vesta-size-icon-{sm,md,lg}` |
 | Type | `--vesta-font-{sans,mono}`, `--vesta-text-{xs…2xl}`, `--vesta-leading-*`, `--vesta-weight-*` |
-| Radii | `--vesta-radius-{sm,md,lg,xl,full}` scaled by `--vesta-radius-factor`; `--vesta-radius-{control,container}` |
+| Radii | `--vesta-radius-{sm,md,lg,xl}` scaled by `--vesta-radius-factor`; `--vesta-radius-{control,container}` aliases; `--vesta-radius-full` is an independent pill radius |
 | Lines, states | `--vesta-border-width`, `--vesta-focus-{width,offset}`, `--vesta-state-{hover,active,soft}`, `--vesta-opacity-disabled` |
 | Elevation | `--vesta-shadow-{sm,md,lg}` |
 | Motion | `--vesta-duration-{fast,normal,slow}`, `--vesta-ease-{standard,out}` (zeroed for reduced motion) |
@@ -37,6 +37,17 @@ Colour tokens are declared on scheme roots, `:where(:root, [data-vesta-scheme])`
 ## Hooks
 
 Every stable node carries `data-vesta="<component>"` or `data-vesta="<component>-<part>"`. State is exposed through `data-variant`, `data-tone`, `data-size` and Kobalte's state attributes (`data-disabled`, `data-invalid`, `data-expanded`, …). Generated class names and DOM nesting are not part of the contract.
+
+## Author-theme capability example
+
+Open **Foundations / Theme contract / Author stylesheet capability** in the workbench (`bun run workbench`, port 1431). The current reference and candidate render the same real controls; the development-only switch applies/removes a Windows 2000–inspired stylesheet without replacing them or resetting their state.
+
+- `src/styles/theme-contract.stories.tsx` owns the demo, its scope marker and an `OverlayMount` inside each sample. Dialogs, menus and a select nested in a dialog must inherit the owning sample's theme, not the neighbouring sample or workbench chrome.
+- `src/styles/themes/windows-2000.css` is a trusted, bundled author-style example in `@layer theme`. Its `[data-vesta-theme-example='windows-2000']` marker is fixture-owned, **not** a production preset or public import format. The benchmark intentionally uses a fixed light palette, including in a dark workbench surround.
+- Theme authors use semantic tokens for broad appearance and documented `data-vesta` parts/states for bevels, pressed controls, disabled treatment and focus. Do not target generated classes, depend on incidental nesting, inject replacement controls, or reorder the logical workflow. Keyboard focus uses real `:focus-visible`; popup highlighting uses the primitive's actual state.
+- A descendant's changed inputs do not recompute aliases already resolved on an ancestor: when scoping type or geometry, set the consumed aliases at that scope too. For example, setting only `--vesta-radius-factor: 0` on a subtree does not reset inherited control radii or the independent pill radius. Local `--tone-*` roles resolve on each toned control from the semantic colours; component knobs can then refine individual parts.
+
+This is a **styling capability fixture**, not an accessibility certification or a replacement for native verification. There is no new normal-settings control or shipped Classic preset. The native Imported themes integration has a separate parsed CSS/resource policy and Keep/Revert recovery flow; see [author format and recovery](../examples/README.md). `examples/windows-2000.vestatheme` is deterministically derived from this trusted fixture at document scope. Neither the fixture nor its generator validates untrusted CSS.
 
 ## Component checklist
 
