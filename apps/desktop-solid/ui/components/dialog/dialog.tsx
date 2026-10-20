@@ -24,6 +24,8 @@ export interface DialogProps {
   /** Width step. Defaults to `md`. */
   size?: DialogSize;
   class?: string;
+  /** Theme inputs for the portalled panel and its header/body. */
+  style?: JSX.CSSProperties;
   /** Show the header close button. Escape and the backdrop still close. Defaults to true. */
   closeButton?: boolean;
   /** Accessible name for the close button. Pass a localized string; defaults to "Close". */
@@ -43,7 +45,7 @@ export function Dialog(props: DialogProps) {
       <KobalteDialog.Portal mount={mount}>
         <KobalteDialog.Overlay data-vesta="dialog-backdrop" />
         <div data-vesta="dialog-positioner">
-          <KobalteDialog.Content onCloseAutoFocus={props.onCloseAutoFocus} class={props.class} data-vesta="dialog" data-size={props.size ?? 'md'}>
+          <KobalteDialog.Content onCloseAutoFocus={props.onCloseAutoFocus} class={props.class} style={props.style} data-vesta="dialog" data-size={props.size ?? 'md'}>
             <header data-vesta="dialog-header">
               <KobalteDialog.Title data-vesta="dialog-title">{props.title}</KobalteDialog.Title>
               <Show when={props.closeButton !== false}>

@@ -215,6 +215,12 @@
   }
 
   /* ---- Open group ---- */
+  .library-folder-popup {
+    --library-folder-tint: hsl(var(--library-folder-hue, 205) 45% 50%);
+    background: color-mix(in oklab, var(--library-folder-tint) 18%, var(--overlay-bg));
+    border-color: color-mix(in oklab, var(--library-folder-tint) 55%, var(--overlay-border-color));
+  }
+
   :where([data-vesta='library-folder-popup']) {
     display: flex;
     flex-direction: column;

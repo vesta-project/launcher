@@ -78,6 +78,7 @@ export function LibraryFolderPopup(props: {
       description={t('library.group-count', { count: props.count })}
       closeLabel={t('nav.close')}
       class="library-folder-popup"
+      style={{ '--library-folder-hue': String(props.group.color) } as JSX.CSSProperties}
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
@@ -89,7 +90,6 @@ export function LibraryFolderPopup(props: {
       <div
         data-vesta="library-folder-popup"
         data-folder-popup={props.group.id}
-        style={{ '--library-folder-hue': String(props.group.color) } as JSX.CSSProperties}
       >
         <Show when={props.arranging}>
           <div data-vesta="library-folder-settings">

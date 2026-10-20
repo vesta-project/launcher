@@ -14,6 +14,10 @@
     --vesta-theme-background: none;
     --vesta-theme-grain-opacity: 0;
     --vesta-theme-overlay-blur: none;
+    --memory-selected-bg: #c0c0c0;
+    --memory-selected-border: #808080;
+    --storage-segment-lightness: 0.5;
+    --storage-segment-chroma: 0.13;
     --vesta-color-tooltip: #ffffe1;
     --vesta-color-tooltip-text: #000;
     --vesta-color-surface: #d4d0c8;
@@ -236,10 +240,9 @@
     color: #000;
   }
 
-  [data-vesta-theme-example='windows-2000'] :where([data-vesta='prefs-page-icon'], [data-vesta='prefs-java-mark'], [data-vesta='prefs-sync-icon']) {
-    background: #d4d0c8;
-    color: #000;
-    border-radius: 0;
+  [data-vesta-theme-example='windows-2000'] :where([data-vesta-icon-tile]) {
+    --icon-tile-bg: #d4d0c8;
+    --icon-tile-fg: #000;
     box-shadow: var(--classic-raised);
   }
 
@@ -282,13 +285,20 @@
     background: #dfdfdf;
   }
 
-  [data-vesta-theme-example='windows-2000'] :where([data-vesta='project-link'], [data-vesta='project-creator'], [data-vesta='project-header-author']) {
+  [data-vesta-theme-example='windows-2000'] :where([data-vesta='project-link'], [data-vesta='project-creator']) {
     color: #000;
   }
 
   [data-vesta-theme-example='windows-2000'] :where([data-vesta='project-link']:hover, [data-vesta='project-creator']:hover, [data-vesta='project-header-author']:hover) {
     background: #0a246a;
     color: #fff;
+    --vesta-color-text-muted: #fff;
+    --vesta-color-text-subtle: #fff;
+  }
+
+  [data-vesta-theme-example='windows-2000'] :where([data-vesta='project-creator-avatar']) {
+    background: #d4d0c8;
+    color: #000;
   }
 
   [data-vesta-theme-example='windows-2000'] :where([data-vesta='dialog-header']) {
@@ -301,6 +311,12 @@
   [data-vesta-theme-example='windows-2000'] :where([data-vesta='dialog-title']) {
     color: #fff;
     text-shadow: 1px 1px #0a246a;
+  }
+
+  [data-vesta-theme-example='windows-2000'] :where([data-vesta='prefs-bar'], [data-vesta='prefs-instance-bar']) {
+    box-sizing: border-box;
+    padding: 2px;
+    box-shadow: var(--classic-sunken);
   }
 
 }
