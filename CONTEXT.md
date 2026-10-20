@@ -611,6 +611,34 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/commands/keybindings.rs`
 - `vesta-launcher/src-tauri/migrations/config/`
 
+### Server Connection
+
+A saved, profile-scoped association with a verified Vesta server identity and
+an explicit HTTPS endpoint/trust policy. Connection availability, device access
+and the remote Minecraft lifecycle are separate facts. Endpoint addresses and
+certificate fingerprints do not appoint an owner or replace stable server IDs.
+
+### Server Client
+
+The planned framework-independent `crates/vesta-server-client` owns the remote
+protocol, TLS trust, device sessions, bounded connection scheduling, streams and
+operation reconciliation. It uses the host's async runtime and does not depend
+on Tauri, the server runtime or `piston-lib`. It starts fresh from the rewritten
+launcher rather than importing the discarded integration experiment.
+
+### Server Manager
+
+The planned profile-scoped Tauri adapter shares client connections across
+windows and owns saved connections, native credential/signing adapters, tasks,
+notifications and scoped IPC subscriptions. Solid owns user interaction and
+presentation. Local client-game installation remains in the existing Instance
+and `piston-lib` modules; server processes remain owned by the remote agent.
+
+Primary design:
+
+- `docs/adr/0011-server-client-crate-and-native-host-adapters.md`
+- `docs/architecture/SERVER_CLIENT_BACKEND.md`
+
 ### Architecture Memory
 
 The repo-owned memory for domain language and load-bearing decisions.

@@ -3,9 +3,15 @@
 This document describes the high-level architecture of Vesta Launcher and where core responsibilities live in the repository.
 
 ## Core Components
+- `apps/desktop-solid/` — Active Solid 2 frontend and desktop entry point. Its native binary calls the shared `vesta_launcher::run` backend.
 - `vesta-launcher/src-tauri/` — Tauri host and Rust backend. Contains app configuration, Tauri commands, startup logic, and managers (e.g., `NotificationManager`, `TaskManager`, `NetworkManager`, `ResourceManager`).
 - `crates/piston-lib/` — Core launcher library. Implements installers (Vanilla, Fabric, Quilt, NeoForge/Forge), updater logic, installer processors, and platform-agnostic utilities.
-- `vesta-launcher/` — Frontend UI (SolidJS + Vite). Components, styling, state management, and the UI application.
+- `vesta-launcher/` — Retained frontend and shared Tauri backend source. The rewrite reuses `vesta-launcher/src-tauri` without depending on this retained frontend's components.
+
+Server integration is planned as a separate `crates/vesta-server-client` library
+with thin adapters in the shared Tauri host. See
+[Server Client Backend](SERVER_CLIENT_BACKEND.md) and
+[ADR-0011](../adr/0011-server-client-crate-and-native-host-adapters.md).
 
 ## Key Patterns
 - **Database:** SQLite via **Diesel ORM** (primary) and **rusqlite** (legacy/specific).

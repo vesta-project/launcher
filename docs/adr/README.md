@@ -29,6 +29,7 @@ not worth doing today.
 - [ADR-0008: Keep Command Execution In Frontend And Persist Keybindings In SQLite](0008-keyboard-command-catalog.md)
 - [ADR-0009: Keep Worlds Filesystem-Owned With Portable Vesta Manifests](0009-filesystem-owned-worlds-and-portable-world-manifests.md)
 - [ADR-0010: Instance OS Sandbox Via `vesta-sandbox`](0010-instance-os-sandbox-vesta-sandbox-crate.md)
+- [ADR-0011: Server Client Crate And Native Host Adapters](0011-server-client-crate-and-native-host-adapters.md)
 
 Use `0000-template.md` for the first decision and number accepted records as
 `0001-short-title.md`, `0002-short-title.md`, and so on.
