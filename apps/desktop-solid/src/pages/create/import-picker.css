@@ -1,8 +1,8 @@
 /*
  * Multi-select picker for importing from other launchers (onboarding and Create).
  *
- * Hooks:  [data-vesta=import-picker] (the container), -layout (data-multiple), -main, -launchers, -launcher (aria-pressed,
- *         data-empty), -launcher-name, -launcher-count, .import-picker-launcher-select, -message (data-tone), -bar,
+ * Hooks:  [data-vesta=import-picker], -main, .import-picker-launcher-select, -source (a lone launcher),
+ *         -message (data-tone), -bar,
  *         -count, -all, -list, -row (data-imported), .import-picker-check, -entry, -icon, -text,
  *         -name, -meta, -badge
  * Knobs:  --import-picker-max-height (the list scrolls past it)
@@ -14,23 +14,7 @@
   :where([data-vesta='import-picker']) {
     --import-picker-max-height: 240px;
 
-    container: import-picker / inline-size;
     min-inline-size: 0;
-  }
-
-  :where([data-vesta='import-picker-layout']) {
-    display: flex;
-    flex-direction: column;
-    gap: var(--vesta-space-2);
-    min-inline-size: 0;
-  }
-
-  /* Several launchers: a column of launchers beside the instance list. */
-  :where([data-vesta='import-picker-layout'][data-multiple]) {
-    display: grid;
-    grid-template-columns: minmax(130px, 34%) minmax(0, 1fr);
-    align-items: start;
-    gap: var(--vesta-space-2);
   }
 
   :where([data-vesta='import-picker-main']) {
@@ -40,85 +24,19 @@
     min-inline-size: 0;
   }
 
-  :where([data-vesta='import-picker-launchers']) {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    max-block-size: calc(var(--import-picker-max-height) + 26px);
-    margin: 0;
-    padding: 0;
-    overflow-y: auto;
-    list-style: none;
+  .import-picker-launcher-select {
+    inline-size: auto;
+    min-inline-size: 170px;
+    max-inline-size: 60%;
   }
 
-  :where([data-vesta='import-picker-launcher']) {
-    display: flex;
+  :where([data-vesta='import-picker-source']) {
+    display: inline-flex;
     align-items: center;
     gap: var(--vesta-space-2);
-    inline-size: 100%;
-    min-block-size: 30px;
-    padding: 0 var(--vesta-space-2);
-    border: 0;
-    border-radius: var(--vesta-radius-md);
-    background: none;
-    color: var(--vesta-color-text-muted);
-    font: inherit;
-    font-size: var(--vesta-text-sm);
-    text-align: start;
-    cursor: default;
-    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
-  }
-
-  :where([data-vesta='import-picker-launcher']:hover) {
-    background: var(--vesta-color-fill);
-  }
-
-  :where([data-vesta='import-picker-launcher'][aria-pressed='true']) {
-    background: var(--vesta-color-fill-active);
     color: var(--vesta-color-text);
-  }
-
-  :where([data-vesta='import-picker-launcher']:focus-visible) {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: -2px;
-  }
-
-  :where([data-vesta='import-picker-launcher'][data-empty]) {
-    opacity: 0.55;
-  }
-
-  :where([data-vesta='import-picker-launcher-name']) {
-    flex: 1;
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  :where([data-vesta='import-picker-launcher-count']) {
-    flex: none;
-    color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .import-picker-launcher-select {
-    display: none;
-  }
-
-  /* Too narrow for two columns: the launcher column becomes a dropdown above the list. */
-  @container import-picker (max-width: 420px) {
-    :where([data-vesta='import-picker-layout'][data-multiple]) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    :where([data-vesta='import-picker-launchers']) {
-      display: none;
-    }
-
-    .import-picker-launcher-select {
-      display: flex;
-    }
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
   }
 
   :where([data-vesta='import-picker-message']) {
@@ -135,13 +53,17 @@
 
   :where([data-vesta='import-picker-bar']) {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--vesta-space-2);
     padding-inline: var(--vesta-space-1);
     color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-xs);
     font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='import-picker-count']) {
+    margin-inline-start: auto;
   }
 
   :where([data-vesta='import-picker-all']) {

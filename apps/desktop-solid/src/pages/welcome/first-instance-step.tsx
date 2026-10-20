@@ -57,7 +57,8 @@ export function FirstInstanceStep() {
       }
       else if (choice() === 'pack' && pack()) await firstInstance.installPack(pack()!);
       else if (choice() === 'blank') await firstInstance.createBlank();
-      await onboarding.next();
+      // Some paths already advance; going to the step directly never skips past it.
+      await onboarding.goTo('complete');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -124,7 +125,7 @@ export function FirstInstanceStep() {
                           type="button"
                           data-vesta="welcome-pack"
                           aria-pressed={pack()?.projectId === item().projectId ? 'true' : 'false'}
-                          data-tip={item().summary}
+                          data-tip={item().summary ? `${item().name}: ${item().summary}` : item().name}
                           onClick={() => setPack(item())}
                         >
                           <span data-vesta="welcome-pack-icon">
@@ -132,7 +133,7 @@ export function FirstInstanceStep() {
                               {(src) => <img src={src()} alt="" loading="lazy" decoding="async" />}
                             </Show>
                           </span>
-                          <span data-vesta="welcome-pack-name" data-tip-overflow>{item().name}</span>
+                          <span data-vesta="welcome-pack-name">{item().name}</span>
                           <span data-vesta="welcome-pack-meta">
                             {[item().minecraft, item().downloads ? formatCompact(item().downloads!, locale()) : undefined]
                               .filter(Boolean)

@@ -8,6 +8,7 @@ export const messageIds = [
   "import.picker-none",
   "import.picker-imported",
   "import.picker-mods",
+  "import.picker-count",
   "welcome.first-do-import-count",
   "welcome.complete-importing",
   "welcome.progress",

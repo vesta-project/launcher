@@ -578,3 +578,75 @@
   }
 
 }
+
+/*
+ * Small cards keep what matters: the art, the name and the play button. The card is its own
+ * size container, so these steps follow the tile's width (grid, sidebar or settings preview)
+ * rather than the window. Crash summaries and overlay detail go first; the full story is one
+ * click away on the instance page.
+ */
+@layer launcher {
+  :where([data-vesta='instance-card']) {
+    container: instance-card / inline-size;
+  }
+
+  @container instance-card (max-width: 170px) {
+    :where([data-vesta='instance-card-crash']) {
+      display: none;
+    }
+
+    :where([data-vesta='instance-card-overlay']) {
+      padding: var(--vesta-space-3);
+    }
+
+    :where([data-vesta='instance-card-overlay-text'][data-clamp='3']) {
+      -webkit-line-clamp: 2;
+    }
+
+    :where([data-vesta='instance-card-name'], [data-vesta='instance-card-overlay-name']) {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+  }
+
+  @container instance-card (max-width: 130px) {
+    :where([data-vesta='instance-card-meta'], [data-vesta='instance-card-overlay-text']) {
+      display: none;
+    }
+
+    :where([data-vesta='instance-card-overlay']) > :where([data-vesta='icon']) {
+      display: none;
+    }
+
+    :where([data-vesta='instance-card-name'], [data-vesta='instance-card-overlay-name']) {
+      font-size: var(--vesta-text-sm);
+    }
+
+    /* The status tag shrinks to its coloured dot; the play button stays. */
+    :where([data-vesta='instance-card-tag']) {
+      display: block;
+      inline-size: 10px;
+      block-size: 10px;
+      min-inline-size: 0;
+      padding: 0;
+      overflow: hidden;
+      border-color: var(--instance-card-tag-bg);
+      border-radius: 50%;
+      background: currentColor;
+      font-size: 0;
+    }
+
+    :where([data-vesta='instance-card-retry']) > :where(span:not([data-vesta])) {
+      display: none;
+    }
+  }
+
+  @container instance-card (max-width: 96px) {
+    :where([data-vesta='instance-card-name'], [data-vesta='instance-card-overlay-name']) {
+      -webkit-line-clamp: 1;
+      font-size: var(--vesta-text-xs);
+    }
+  }
+}

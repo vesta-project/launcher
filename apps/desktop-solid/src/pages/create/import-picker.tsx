@@ -70,47 +70,47 @@ export function ImportPicker(props: {
 
   return (
     <div data-vesta="import-picker">
-      <div data-vesta="import-picker-layout" data-multiple={props.launchers.length > 1 ? '' : undefined}>
-      <Show when={props.launchers.length > 1}>
-        {/* Launchers as a column beside the list (a dropdown when the space is narrow). */}
-        <ul data-vesta="import-picker-launchers" aria-label={t('import.picker-launcher')}>
-          <For each={props.launchers}>
-            {(item) => (
-              <li>
-                <button
-                  type="button"
-                  data-vesta="import-picker-launcher"
-                  aria-pressed={launcher() === item.id ? 'true' : 'false'}
-                  data-empty={item.instanceCount === 0 ? '' : undefined}
-                  onClick={() => setLauncher(item.id)}
-                >
-                  <Show when={item.icon} fallback={<Icon name="icons/content/cube" size={14} />}>
-                    {(icon) => <Icon name={icon()} size={14} />}
-                  </Show>
-                  <span data-vesta="import-picker-launcher-name" data-tip-overflow>{item.label}</span>
-                  <Show when={item.instanceCount !== undefined}>
-                    <span data-vesta="import-picker-launcher-count">{item.instanceCount}</span>
-                  </Show>
-                </button>
-              </li>
-            )}
-          </For>
-        </ul>
-        <Select
-          size="sm"
-          class="import-picker-launcher-select"
-          aria-label={t('import.picker-launcher')}
-          value={launcher()}
-          onChange={setLauncher}
-          options={props.launchers.map((item) => ({
-            value: item.id,
-            label: item.instanceCount === undefined ? item.label : `${item.label} (${item.instanceCount})`,
-            icon: item.icon ? () => <Icon name={item.icon!} size={14} /> : undefined,
-          }))}
-        />
-      </Show>
-
       <div data-vesta="import-picker-main">
+      {/* Most people have one or two launchers, so choosing between them is a plain dropdown. */}
+      <div data-vesta="import-picker-bar">
+        <Show
+          when={props.launchers.length > 1}
+          fallback={
+            <span data-vesta="import-picker-source">
+              <Show when={props.launchers[0]?.icon}>{(icon) => <Icon name={icon()} size={14} />}</Show>
+              {props.launchers[0]?.label}
+            </span>
+          }
+        >
+          <Select
+            size="sm"
+            class="import-picker-launcher-select"
+            aria-label={t('import.picker-launcher')}
+            value={launcher()}
+            onChange={setLauncher}
+            options={props.launchers.map((item) => ({
+              value: item.id,
+              label: item.label,
+              description: item.instanceCount === undefined ? undefined : t('import.picker-count', { count: item.instanceCount }),
+              icon: item.icon ? () => <Icon name={item.icon!} size={14} /> : undefined,
+            }))}
+          />
+        </Show>
+        <Show when={candidates()?.length}>
+          <span data-vesta="import-picker-count">
+            {t('import.picker-selected', { count: selection().length, total: available().length })}
+          </span>
+          <Show when={available().length > 1}>
+            <button
+              type="button"
+              data-vesta="import-picker-all"
+              onClick={() => setPicked(all() ? new Set() : new Set(available().map((row) => row.key)))}
+            >
+              {all() ? t('import.picker-none') : t('import.picker-all')}
+            </button>
+          </Show>
+        </Show>
+      </div>
 
       <Switch>
         <Match when={error()}>
@@ -136,21 +136,6 @@ export function ImportPicker(props: {
         </Match>
         <Match when={candidates()}>
           {(rows) => (
-            <>
-              <div data-vesta="import-picker-bar">
-                <span data-vesta="import-picker-count">
-                  {t('import.picker-selected', { count: selection().length, total: available().length })}
-                </span>
-                <Show when={available().length > 1}>
-                  <button
-                    type="button"
-                    data-vesta="import-picker-all"
-                    onClick={() => setPicked(all() ? new Set() : new Set(available().map((row) => row.key)))}
-                  >
-                    {all() ? t('import.picker-none') : t('import.picker-all')}
-                  </button>
-                </Show>
-              </div>
               <ul data-vesta="import-picker-list">
                 <For each={rows()} keyed={(row) => row.key}>
                   {(row) => (
@@ -182,11 +167,9 @@ export function ImportPicker(props: {
                   )}
                 </For>
               </ul>
-            </>
           )}
         </Match>
       </Switch>
-      </div>
       </div>
     </div>
   );

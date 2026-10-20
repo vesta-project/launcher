@@ -419,38 +419,7 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     // Notify UI
     emit_account_heads_updated(&app_handle, Some(&guest_uuid), false);
 
-    // Create persistent warning notification
-    let manager = app_handle.state::<crate::notifications::manager::NotificationManager>();
-
-    use crate::notifications::models::{
-        CreateNotificationInput, NotificationAction, NotificationType,
-    };
-
-    let actions = vec![NotificationAction {
-        action_id: "logout_guest".to_string(),
-        label: "Sign In".to_string(),
-        action_type: "primary".to_string(),
-        payload: None,
-    }];
-
-    if let Err(e) = manager.create(CreateNotificationInput {
-        client_key: Some("guest_mode_warning".to_string()),
-        title: Some("Guest Mode Active".to_string()),
-        description: Some("You are in guest mode. Changes will not be saved, and certain features are restricted.".to_string()),
-        severity: Some("info".to_string()),
-        notification_type: Some(NotificationType::Patient),
-        dismissible: Some(false),
-        persist: Some(false), // Re-created on app launch via setup.rs logic if needed
-        silent: Some(false),  // Always show toast
-        actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
-        progress: None,
-        current_step: None,
-        total_steps: None,
-        metadata: None,
-        show_on_completion: None,
-    }) {
-        log::error!("Failed to create guest-mode notification: {}", e);
-    }
+    // The titlebar's guest chip is the reminder; no notification is created any more.
 
     Ok(())
 }
