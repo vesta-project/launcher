@@ -1,4 +1,4 @@
-use diesel::sql_types::{Nullable, Text};
+use diesel::sql_types::{BigInt, Nullable, Text};
 use diesel::QueryableByName;
 use serde::Deserialize;
 
@@ -17,16 +17,18 @@ pub(super) struct DbProfileRow {
     pub name: String,
     #[diesel(sql_type = Nullable<Text>)]
     pub icon_path: Option<String>,
-    #[diesel(sql_type = Text)]
-    pub game_version: String,
-    #[diesel(sql_type = Text)]
-    pub mod_loader: String,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub game_version: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub mod_loader: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     pub mod_loader_version: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     pub linked_project_id: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     pub linked_version_id: Option<String>,
+    #[diesel(sql_type = Nullable<BigInt>)]
+    pub last_played: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
