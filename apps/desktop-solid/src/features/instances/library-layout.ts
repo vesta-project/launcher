@@ -213,6 +213,19 @@ export function renameGroup(layout: LibraryLayout, id: string, name: string): Li
   return { ...layout, groups: layout.groups.map((group) => (group.id === id ? { ...group, name: trimmed } : group)) };
 }
 
+/** Dissolve a group in place, retaining its member order and every instance. */
+export function ungroup(layout: LibraryLayout, instanceIds: readonly string[], id: string): LibraryLayout {
+  const group = layout.groups.find((candidate) => candidate.id === id);
+  if (!group) return layout;
+  const members = groupMembers(group, new Set(instanceIds));
+  return {
+    ...layout,
+    sort: 'custom',
+    order: customOrder(layout, instanceIds).flatMap((entry) => entry === id ? members : [entry]),
+    groups: layout.groups.filter((candidate) => candidate.id !== id),
+  };
+}
+
 export function recolorGroup(layout: LibraryLayout, id: string, color: number): LibraryLayout {
   if (!Number.isFinite(color) || color < 0 || color > 360) return layout;
   return { ...layout, groups: layout.groups.map((group) => (group.id === id ? { ...group, color } : group)) };

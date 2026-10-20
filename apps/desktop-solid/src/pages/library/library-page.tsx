@@ -10,7 +10,7 @@ import { InstanceCard } from '../../features/instances/instance-card';
 import type { InstanceArrangeActions } from '../../features/instances/action-menu';
 import {
   beginLibraryArrange, containerOf, createGroup, customOrder, endLibraryArrange, groupMembers, isGroupEntry,
-  libraryArranging, libraryLayoutStore, moveEntry, recolorGroup, renameGroup, sameEntries,
+  libraryArranging, libraryLayoutStore, moveEntry, recolorGroup, renameGroup, sameEntries, ungroup,
   type LibraryEntry, type LibraryGroup,
 } from '../../features/instances/library-layout';
 import { beforeForIndex, keyboardMoveKeys } from '../../features/instances/library-arrange';
@@ -39,6 +39,8 @@ interface LibraryContext {
   moving: () => LibraryEntry | null;
   startKeyboardMove: (entry: LibraryEntry, key?: string) => void;
   arrange: (entry: LibraryEntry) => InstanceArrangeActions;
+  editGroup: (id: string) => void;
+  ungroup: (id: string) => void;
 }
 
 /**
@@ -136,6 +138,9 @@ function LibraryFolderItem(props: { id: string; context: LibraryContext }) {
             open={props.context.openGroup() === props.id}
             arranging={libraryArranging()}
             dropState={dropState()}
+            actions={props.context.arrange(props.id)}
+            onEdit={() => props.context.editGroup(props.id)}
+            onUngroup={() => props.context.ungroup(props.id)}
             onOpen={() => { if (!props.context.drag.suppressClick()) props.context.toggleGroup(props.id); }}
             onKeyDown={(event) => {
               if (!libraryArranging() || !keyboardMoveKeys.has(event.key)) return;
@@ -331,6 +336,15 @@ function LibraryGrid() {
   const context: LibraryContext = {
     byId, groups, ids, drag, openGroup, toggleGroup, fileHoverGroup, moving,
     startKeyboardMove, arrange,
+    editGroup: (id) => { beginLibraryArrange(ids()); setOpenGroup(id); },
+    ungroup: (id) => {
+      const name = nameOf(id);
+      const present = ids();
+      const first = groups().get(id)?.instances.find((member) => present.includes(member));
+      flipItems(null, () => store.update((layout) => ungroup(layout, present, id)));
+      setAnnouncement(t('library.ungrouped', { name }));
+      if (first) focusEntry(first);
+    },
   };
 
   const openGroupData = () => { const id = openGroup(); return id === null ? undefined : groups().get(id); };

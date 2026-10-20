@@ -61,6 +61,10 @@ library-group-count = { $count ->
    *[other] { $count } instances
   }
 library-group-name = Group name
+library-open-group = Open group
+library-edit-group = Edit name and colour
+library-ungroup = Ungroup instances
+library-ungrouped = Ungrouped { $name }.
 library-group-color = Group colour
 library-color-blue = Blue
 library-color-purple = Purple

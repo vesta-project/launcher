@@ -182,3 +182,23 @@ test("shared failed load allows a fresh shared retry", async () => {
   reads[1].resolve(doc({ version: 1, sort: "custom", order: [2, 1], groups: [] })); await retry;
   expect(store.loaded()).toBe(true); expect(store.saveError()).toBe(false); expect(store.layout().order).toEqual(["2", "1"]);
 });
+
+test("ungroup preserves member order in the group's position without losing other entries", async () => {
+  const { ungroup } = await import('../src/features/instances/library-layout');
+  const writes = [];
+  const original = { version: 1, sort: 'recent', order: ['3', 'group:a', 'group:b', '4'], groups: [
+    { id: 'group:a', name: 'A', color: 205, instances: ['2', 'missing', '1'] },
+    { id: 'group:b', name: 'B', color: 150, instances: ['5'] },
+  ] };
+  const store = createLibraryLayoutStore({ load: async () => doc(original), save: async (value) => writes.push(JSON.parse(value)) });
+  await store.load();
+  store.update((layout) => ungroup(layout, ['1', '2', '3', '4', '5', '6'], 'group:a'));
+  await store.flush();
+  expect(store.layout().order).toEqual(['3', '2', '1', 'group:b', '4', '6']);
+  expect(store.layout().groups.map((group) => group.id)).toEqual(['group:b']);
+  expect(store.layout().sort).toBe('custom');
+  expect(writes).toHaveLength(1);
+  expect(writes[0].order).toEqual([3, 2, 1, 'group:b', 4, 6]);
+  expect(original.groups[0].instances).toEqual(['2', 'missing', '1']);
+  expect(ungroup(store.layout(), ['1', '2'], 'group:absent')).toBe(store.layout());
+});
