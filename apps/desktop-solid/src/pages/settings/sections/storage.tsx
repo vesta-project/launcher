@@ -1,3 +1,4 @@
+import { IconTile } from '../../../components/icon-tile';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { Button, Dialog, SegmentedControl } from '@vesta/ui';
 import { For, Show, createMemo, createSignal } from 'solid-js';
@@ -154,15 +155,11 @@ export function StorageSettings() {
               <For each={instanceRows()}>
                 {(row) => (
                   <li tabindex={0} data-empty={row.bytes <= 0 ? '' : undefined}>
-                    <span
-                      data-vesta="prefs-instance-icon"
-                      aria-hidden="true"
-                      style={row.image ? { 'background-image': `url('${row.image}')` } : undefined}
-                    >
+                    <IconTile hook="prefs-instance-icon" size={28} image={row.image}>
                       <Show when={!row.image}>
                         <Icon name="icons/rail/library" size={14} />
                       </Show>
-                    </span>
+                    </IconTile>
                     <div data-vesta="prefs-instance-name">
                       <span>{row.name}</span>
                       <Show when={row.detail}>

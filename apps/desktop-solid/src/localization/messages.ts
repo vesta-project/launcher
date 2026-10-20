@@ -1,5 +1,9 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "create-menu.new",
+  "create-menu.file",
+  "create-menu.packs",
+  "create-menu.launcher",
   "drop.review-dependencies",
   "drop.destination",
   "drop.files",

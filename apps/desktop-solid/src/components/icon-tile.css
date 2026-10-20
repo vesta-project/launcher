@@ -1,0 +1,26 @@
+@layer launcher {
+  :where([data-vesta-icon-tile]) {
+    --icon-tile-bg: var(--vesta-color-fill);
+    --icon-tile-fg: var(--vesta-color-text);
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--icon-tile-size, 36px);
+    block-size: var(--icon-tile-size, 36px);
+    border-radius: var(--icon-tile-radius, var(--vesta-radius-container));
+    background: var(--icon-tile-bg);
+    color: var(--icon-tile-fg);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+  :where([data-vesta-icon-tile][data-tone='accent']) {
+    --icon-tile-bg: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+    --icon-tile-fg: var(--vesta-color-accent-text);
+  }
+  :where([data-vesta-icon-tile] > img) {
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+  }
+}

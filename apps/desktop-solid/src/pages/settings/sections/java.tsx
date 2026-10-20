@@ -1,3 +1,4 @@
+import { IconTile } from '../../../components/icon-tile';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { Badge, Button, IconButton, Menu, MenuItem, Skeleton } from '@vesta/ui';
 import { For, Show, createMemo, createSignal } from 'solid-js';
@@ -172,9 +173,9 @@ export function JavaSettings() {
               aria-label={environment.name}
             >
               <header>
-                <span data-vesta="prefs-java-mark" aria-hidden="true">
+                <IconTile hook="prefs-java-mark" tone={environment.active ? 'accent' : 'neutral'}>
                   {environment.major}
-                </span>
+                </IconTile>
                 <div>
                   <h3>{environment.name}</h3>
                   <p>

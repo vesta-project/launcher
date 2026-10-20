@@ -215,7 +215,7 @@
     gap: 14px;
     inline-size: 100%;
     padding: 12px 14px;
-    border-radius: 10px;
+    border-radius: var(--vesta-radius-container);
     border: 1px solid var(--vesta-color-border);
     background: var(--vesta-color-surface-sunken);
     color: var(--vesta-color-text);
@@ -236,17 +236,6 @@
   }
   :where(.install-import-row):disabled {
     opacity: var(--vesta-opacity-disabled);
-  }
-  :where(.install-import-row-icon) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    inline-size: 36px;
-    block-size: 36px;
-    flex: none;
-    border-radius: 8px;
-    background: var(--vesta-color-surface-raised);
-    color: var(--vesta-color-text-muted);
   }
   :where(.install-import-row-copy) {
     display: flex;
@@ -278,7 +267,7 @@
     flex-direction: column;
     gap: 8px;
     padding: 12px 14px;
-    border-radius: 10px;
+    border-radius: var(--vesta-radius-container);
     border: 1px solid var(--vesta-color-border);
     background: var(--vesta-color-surface-sunken);
   }
@@ -344,13 +333,9 @@
     padding: 8px 10px;
   }
   :where([data-vesta="memory-comparison"]) > div[data-selected] {
-    border: 1px solid color-mix(in oklab, var(--vesta-color-accent) 28%, var(--vesta-color-border));
-    border-radius: 8px;
-    background: color-mix(
-      in oklab,
-      var(--vesta-color-accent) 11%,
-      var(--vesta-color-surface-sunken)
-    );
+    border: var(--vesta-border-width) solid var(--memory-selected-border, color-mix(in oklab, var(--vesta-color-accent) 28%, var(--vesta-color-border)));
+    border-radius: var(--vesta-radius-container);
+    background: var(--memory-selected-bg, color-mix(in oklab, var(--vesta-color-accent) 11%, var(--vesta-color-surface-sunken)));
   }
   :where([data-vesta="memory-comparison"]) span {
     font-size: 9px;

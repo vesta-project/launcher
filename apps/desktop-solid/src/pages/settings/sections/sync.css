@@ -72,21 +72,6 @@
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta='prefs-sync-icon']) {
-    display: grid;
-    flex: none;
-    place-items: center;
-    inline-size: 32px;
-    block-size: 32px;
-    border-radius: var(--vesta-radius-control);
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-text-muted);
-  }
-
-  :where([data-vesta='prefs-sync-cards'] > li[data-on]) :where([data-vesta='prefs-sync-icon']) {
-    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
-    color: var(--vesta-color-accent-text);
-  }
 
   :where([data-vesta='prefs-sync-empty']) {
     display: flex;
@@ -329,7 +314,7 @@
     flex: none;
     inline-size: 24px;
     block-size: 24px;
-    border-radius: 6px;
+    border-radius: var(--vesta-radius-control);
     object-fit: cover;
     box-shadow: 0 0 0 1px var(--vesta-color-border);
   }

@@ -38,17 +38,6 @@
     white-space: nowrap;
   }
 
-  :where([data-vesta='prefs-feed-icon']) {
-    display: grid;
-    flex: none;
-    place-items: center;
-    inline-size: 32px;
-    block-size: 32px;
-    border-radius: 8px;
-    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
-    color: var(--vesta-color-accent-text);
-  }
-
   :where([data-vesta='prefs-add-feed']) {
     display: flex;
     gap: var(--vesta-space-2);

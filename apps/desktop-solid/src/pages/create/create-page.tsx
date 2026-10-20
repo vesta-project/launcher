@@ -45,7 +45,7 @@ import { route } from "../../app/router";
 import { findLauncher } from "../../features/installation/launchers";
 import { LauncherImportPage } from "./launcher-import-page";
 import { startPendingResourceInstallation } from "../../features/browse/new-instance-install";
-import { takeResourceInstall, takeInstallSource } from "./install-navigation";
+import { createActionKey, takeCreateAction, takeResourceInstall, takeInstallSource } from "./install-navigation";
 import { InstallMemoryCard } from "./memory-card";
 import { InstallPackDetails } from "./pack-details";
 import { ImportDialog } from "./import-dialog";
@@ -64,13 +64,14 @@ export function CreatePage() {
   const selected = () =>
     route().section === "import" ? findLauncher(route().detail)?.value : undefined;
   return (
-    <Show when={selected()} keyed fallback={<InstanceInstallForm />}>
+    <Show when={selected()} keyed fallback={<Show when={createActionKey()} keyed>{(_key) => <InstanceInstallForm />}</Show>}>
       {(kind) => <LauncherImportPage kind={kind} />}
     </Show>
   );
 }
 
 function InstanceInstallForm() {
+  const createAction = takeCreateAction();
   const sourceHandoff = takeInstallSource();
   const [pendingResource, setPendingResource] = createSignal(takeResourceInstall(), { name: "installPendingResource" });
   const [name, setName] = createSignal("", { name: "installName" });
@@ -88,7 +89,10 @@ function InstanceInstallForm() {
   const [pack, setPack] = createSignal<PackInfo>();
   const [releases, setReleases] = createSignal<PackRelease[]>([]);
   const [releaseError, setReleaseError] = createSignal("");
-  const [importOpen, setImportOpen] = createSignal(false);
+  const [importOpen, setImportOpen] = createSignal(!!createAction && createAction !== 'new');
+  const [importStep, setImportStep] = createSignal<'methods' | 'file' | 'launchers'>(
+    createAction === 'file' || createAction === 'launchers' ? createAction : 'methods',
+  );
   const [createdId, setCreatedId] = createSignal<number>();
   const [defaults, setDefaults] = createSignal<{
     default_min_memory: number;
@@ -366,7 +370,7 @@ function InstanceInstallForm() {
             </Show>
           </div>
           <div>
-            <Button variant="outline" disabled={locked()} onClick={() => setImportOpen(true)}>
+            <Button variant="outline" disabled={locked()} onClick={() => { setImportStep('methods'); setImportOpen(true); }}>
               {source() ? t("install.change-import") : t("install.import")}
             </Button>
           </div>
@@ -578,6 +582,7 @@ function InstanceInstallForm() {
       </form>
       <Show when={importOpen()}>
         <ImportDialog
+          initialStep={importStep()}
           initialUrl={source()?.kind === "url" ? source()?.value : undefined}
           open
           onClose={() => setImportOpen(false)}

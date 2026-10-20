@@ -1,5 +1,6 @@
+import { IconTile } from '../../components/icon-tile';
 import { Button, Dialog, IconButton, TextField } from "@vesta/ui";
-import { For, Show, createSignal, onCleanup, untrack } from "solid-js";
+import { For, Show, createSignal, onCleanup, onSettled, untrack } from "solid-js";
 import { Icon } from "../../components/icon";
 import { transitionTo } from "../../app/transition";
 import { setType } from "../../features/browse/browse-store";
@@ -18,10 +19,10 @@ export function ImportDialog(props: {
   onSource: (source: PackSource) => void;
   onLauncher: (kind: LauncherKind) => void;
   initialUrl?: string;
-  initialStep?: "methods" | "launchers";
+  initialStep?: "methods" | "launchers" | "file";
 }) {
   const [step, setStep] = createSignal<"methods" | "launchers">(
-    untrack(() => props.initialStep ?? "methods"),
+    untrack(() => props.initialStep === 'launchers' ? 'launchers' : 'methods'),
     { name: "importMethod" },
   );
   const [url, setUrl] = createSignal(
@@ -59,6 +60,9 @@ export function ImportDialog(props: {
       if (!disposed) setBusy(false);
     }
   };
+  onSettled(() => {
+    if (untrack(() => props.initialStep) === 'file' && nativeInstances) void local();
+  });
   const submitUrl = () => {
     try {
       const value = new URL(url().trim());
@@ -87,9 +91,9 @@ export function ImportDialog(props: {
       onClick={onClick}
       disabled={busy() || disabled}
     >
-      <span class="install-import-row-icon">
+      <IconTile hook="install-import-icon" class="install-import-row-icon">
         <Icon name={icon} size={20} />
-      </span>
+      </IconTile>
       <span class="install-import-row-copy">
         <span class="install-import-row-title">{title}</span>
         <span class="install-import-row-desc">{description}</span>
@@ -155,13 +159,13 @@ export function ImportDialog(props: {
             <button
               type="button"
               class="install-import-row"
-              disabled={busy() || !nativeInstances}
+              disabled={busy()}
               onClick={() => setStep("launchers")}
             >
-              <span class="install-import-row-icon install-import-launcher-stack">
+              <IconTile hook="install-import-icon" class="install-import-row-icon install-import-launcher-stack">
                 <Icon name="branding/launchers/prism-launcher" size={20} />
                 <Icon name="branding/sources/curseforge" size={20} />
-              </span>
+              </IconTile>
               <span class="install-import-row-copy">
                 <span class="install-import-row-title">
                   {t("install.from-launcher")}
@@ -228,9 +232,9 @@ export function ImportDialog(props: {
                     props.onLauncher(item.value);
                   }}
                 >
-                  <span class="install-import-row-icon">
+                  <IconTile hook="install-import-icon" class="install-import-row-icon">
                     <Icon name={"branding/" + item.icon} size={20} />
-                  </span>
+                  </IconTile>
                   <span class="install-import-row-title">{item.label}</span>
                 </button>
               )}

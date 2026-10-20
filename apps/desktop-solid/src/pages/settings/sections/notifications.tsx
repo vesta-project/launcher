@@ -1,3 +1,4 @@
+import { IconTile } from '../../../components/icon-tile';
 import { Button, IconButton, Switch, TextField } from '@vesta/ui';
 import { For, Show, createSignal } from 'solid-js';
 import { Icon } from '../../../components/icon';
@@ -140,9 +141,9 @@ export function NotificationsSettings() {
                 <For each={entries().filter((entry) => entry.group === group)}>
                   {(entry) => (
                     <li>
-                      <span data-vesta="prefs-feed-icon">
+                      <IconTile hook="prefs-feed-icon" size={32} tone="accent">
                         <Icon name={group === 'custom' ? 'icons/content/link' : 'icons/status/bell'} size={16} />
-                      </span>
+                      </IconTile>
                       <div>
                         <strong>{entry.name}</strong>
                         <span>{entryDetail(entry)}</span>

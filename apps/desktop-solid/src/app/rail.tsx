@@ -1,3 +1,4 @@
+import { requestCreateAction } from '../pages/create/install-navigation';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, mergeElementProps } from '@vesta/ui';
 import { For, Show } from 'solid-js';
 import { setType } from '../features/browse/browse-store';
@@ -36,15 +37,20 @@ function RailLink(props: { item: NavItem }) {
         </a>
       )}
     />}>
-      <ContextMenuItem onSelect={() => transitionTo(props.item.href)}>{t(props.item.label)}</ContextMenuItem>
-      <ContextMenuSeparator />
+      <Show when={props.item.id !== 'create'}>
+        <ContextMenuItem onSelect={() => transitionTo(props.item.href)}>{t(props.item.label)}</ContextMenuItem>
+        <ContextMenuSeparator />
+      </Show>
       <Show when={props.item.id === 'library'}>
         <ContextMenuItem onSelect={() => transitionTo('/create')}>{t('nav.create')}</ContextMenuItem>
         <ContextMenuItem onSelect={() => { transitionTo('/library'); beginLibraryArrange(instances().map((entry) => entry.instance.id)); }}>{t('library.arrange')}</ContextMenuItem>
       </Show>
       <Show when={props.item.id === 'create'}>
-        <ContextMenuItem onSelect={() => transitionTo('/create/import')}>{t('install.import')}</ContextMenuItem>
-        <ContextMenuItem onSelect={() => { setType('modpack'); transitionTo('/browse'); }}>{t('browse.kind-modpack')}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => requestCreateAction('new')}>{t('create-menu.new')}</ContextMenuItem>
+        <ContextMenuItem disabled={!nativeInstances} onSelect={() => requestCreateAction('file')}>{t('create-menu.file')}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => { setType('modpack'); transitionTo('/browse'); }}>{t('create-menu.packs')}</ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => requestCreateAction('launchers')}>{t('create-menu.launcher')}</ContextMenuItem>
       </Show>
       <Show when={props.item.id === 'browse'}>
         <For each={['mod', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'] as const}>

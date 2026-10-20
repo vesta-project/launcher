@@ -1,3 +1,4 @@
+import { IconTile } from '../../components/icon-tile';
 import { IconButton, Select, TextField } from '@vesta/ui';
 import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { navigate, route } from '../../app/router';
@@ -182,9 +183,9 @@ export function SettingsPage() {
           >
             <div data-vesta="prefs-page" data-section={active()}>
               <header data-vesta="prefs-page-header">
-                <span data-vesta="prefs-page-icon">
+                <IconTile hook="prefs-page-icon" tone="accent">
                   <Icon name={sectionIcons[active()]} size={18} />
-                </span>
+                </IconTile>
                 <div>
                   <h2>{t(sectionLabels[active()])}</h2>
                   <p>{t(sectionDescriptions[active()])}</p>
