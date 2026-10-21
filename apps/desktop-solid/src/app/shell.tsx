@@ -21,6 +21,8 @@ import { BrowsePage } from '../pages/browse/browse-page';
 import { CreatePage } from '../pages/create/create-page';
 import { LibraryPage } from '../pages/library/library-page';
 import { SettingsPage } from '../pages/settings/settings-page';
+import { ServersPage } from '../pages/servers/servers-page';
+import { useServerSync } from '../features/servers/store';
 import { Rail } from './rail';
 import { route } from './router';
 import { Titlebar } from './titlebar';
@@ -40,6 +42,7 @@ export function Shell() {
   useSettingsResourceSync();
   prefetchSettingsWhenIdle();
   useInstanceSync();
+  useServerSync();
   useInstanceShortcutRuntime();
   useMouseBack();
   let dropElement: HTMLElement | undefined;
@@ -76,6 +79,9 @@ export function Shell() {
             </Match>
             <Match when={route().page === 'create'}>
               <CreatePage />
+            </Match>
+            <Match when={route().page === 'servers'}>
+              <ServersPage />
             </Match>
             <Match when={route().page === 'settings'}>
               <SettingsPage />

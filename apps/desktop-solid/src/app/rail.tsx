@@ -10,7 +10,9 @@ import { AccountMenu } from '../features/accounts/account-menu';
 import { movePin, pinnedInstances, playInstance, retryInstance, togglePin } from '../features/instances/catalog';
 import { route } from './router';
 import { transitionTo } from './transition';
-import { mainNav, settingsNav, type NavItem } from './routes';
+import { mainNav, serversNav, settingsNav, type NavItem } from './routes';
+import { setting, updateSetting } from '../features/settings/config';
+import { RailServerPins } from '../pages/servers/rail-pins';
 import { t } from '../localization';
 import './rail.css';
 
@@ -57,6 +59,11 @@ function RailLink(props: { item: NavItem }) {
           {(kind) => <ContextMenuItem onSelect={() => { setType(kind); transitionTo('/browse'); }}>{t(`browse.kind-${kind}`)}</ContextMenuItem>}
         </For>
       </Show>
+      <Show when={props.item.id === 'servers'}>
+        <ContextMenuItem onSelect={() => transitionTo('/servers/add')}>{t('servers.add')}</ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => updateSetting('servers_in_rail', false)}>{t('servers.hide-from-sidebar')}</ContextMenuItem>
+      </Show>
       <Show when={props.item.id === 'settings'}>
         <ContextMenuItem onSelect={() => transitionTo('/settings/appearance')}>{t('prefs.appearance.title')}</ContextMenuItem>
         <ContextMenuItem onSelect={() => transitionTo('/settings/defaults')}>{t('prefs.defaults.title')}</ContextMenuItem>
@@ -93,6 +100,9 @@ export function Rail() {
 
         <nav data-vesta="rail-nav" aria-label={t('nav.launcher')}>
           <For each={mainNav}>{(item) => <RailLink item={item} />}</For>
+          <Show when={setting('servers_in_rail')}>
+            <RailLink item={serversNav} />
+          </Show>
         </nav>
 
         <Show when={pinnedInstances().length > 0}>
@@ -160,6 +170,7 @@ export function Rail() {
             </For>
           </div>
         </Show>
+        <RailServerPins />
       </div>
 
       <div data-vesta="rail-bottom">

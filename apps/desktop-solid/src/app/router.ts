@@ -30,7 +30,7 @@ export const canGoBack = () => historyDepth() > 0;
 /** The preceding in-app entry, preserved when replacing sibling views. */
 export const previousPath = () => hasWindow ? (history.state as { from?: string } | null)?.from : undefined;
 
-export type PageId = 'library' | 'browse' | 'create' | 'settings';
+export type PageId = 'library' | 'browse' | 'create' | 'servers' | 'settings';
 
 export interface Route {
   page: PageId;
@@ -44,7 +44,7 @@ export interface Route {
   rest: string[];
 }
 
-const pages: PageId[] = ['library', 'browse', 'create', 'settings'];
+const pages: PageId[] = ['library', 'browse', 'create', 'servers', 'settings'];
 
 export function parseRoute(value: string): Route {
   const [page, section, detail, item, ...rest] = value.split('/').filter(Boolean);

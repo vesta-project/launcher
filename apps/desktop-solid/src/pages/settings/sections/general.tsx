@@ -40,6 +40,12 @@ export function GeneralSettings() {
           checked={setting('reduced_motion')}
           onChange={(value) => updateSetting('reduced_motion', value)}
         />
+        <ToggleRow
+          label={t('prefs.general.servers-in-rail')}
+          description={t('prefs.general.servers-in-rail-description')}
+          checked={setting('servers_in_rail')}
+          onChange={(value) => updateSetting('servers_in_rail', value)}
+        />
       </Card>
 
       <Card title={t('prefs.general.startup')}>

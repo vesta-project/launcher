@@ -1,0 +1,142 @@
+import { For, Show } from 'solid-js';
+import { t } from '../../../localization';
+import { gate } from '../../../features/servers/capabilities';
+import { formatUptime, minecraftFact, playersFact, readinessReasonMessage, supervisorWarnings } from '../../../features/servers/model';
+import { isTerminal, operationStateMessage, operationTitle } from '../../../features/servers/operations-model';
+import { latestMetrics, serverMetrics, serverOperations, useServerTopic, useServersClock } from '../../../features/servers/store';
+import type { MetricsSample, ServerSnapshot } from '../../../features/servers/native';
+import { FactBadge, Freshness } from '../parts';
+
+const bytes = (value: string | null | undefined) => {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const gib = Number(value) / 1024 ** 3;
+  return gib >= 1 ? `${gib.toFixed(1)} GB` : `${Math.round(Number(value) / 1024 ** 2)} MB`;
+};
+
+export function OverviewTab(props: { snapshot: ServerSnapshot }) {
+  const now = useServersClock();
+  const id = () => props.snapshot.connection.id;
+  const metricsAllowed = () => gate(props.snapshot.capabilities, 'metrics.view') !== 'denied';
+  // Metrics stream only while the overview is visible and allowed.
+  useServerTopic(() => (metricsAllowed() && props.snapshot.state.phase === 'online' ? id() : undefined), 'metrics');
+  const status = () => props.snapshot.status;
+  const recent = () => serverOperations(id()).slice(0, 4);
+
+  return (
+    <div data-vesta="server-overview">
+      <Show when={supervisorWarnings(status()).length > 0 || status()?.readinessReason}>
+        <div data-vesta="server-callout" data-tone="warning" role="status">
+          <Show when={status()?.readinessReason}>{(reason) => <p>{t(readinessReasonMessage[reason()])}</p>}</Show>
+          <For each={supervisorWarnings(status())}>{(message) => <p>{t(message)}</p>}</For>
+        </div>
+      </Show>
+
+      <section data-vesta="server-cards">
+        <article data-vesta="server-stat">
+          <h2>{t('servers.overview.minecraft')}</h2>
+          <FactBadge fact={minecraftFact(status())} />
+          <dl>
+            <dt>{t('servers.overview.version')}</dt><dd>{props.snapshot.info?.minecraftVersion || t('servers.unknown')}</dd>
+            <dt>{t('servers.overview.uptime')}</dt><dd>{formatUptime(status()?.uptimeSeconds ?? null) ?? '—'}</dd>
+          </dl>
+          <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} />
+        </article>
+
+        <article data-vesta="server-stat">
+          <h2>{t('servers.overview.players')}</h2>
+          {(() => {
+            const fact = () => playersFact(status(), now());
+            return (
+              <>
+                <p data-vesta="server-stat-value">{t(fact().message, fact().args)}</p>
+                <Show when={fact().seen}>
+                  {(seen) => <span data-vesta="server-freshness">{t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</span>}
+                </Show>
+              </>
+            );
+          })()}
+          <Show when={latestMetrics(id())?.playersOnline != null && status()?.state === 'running'}>
+            <Sparkline samples={serverMetrics(id())} pick={(sample) => sample.playersOnline} />
+          </Show>
+        </article>
+
+        <Show when={metricsAllowed()}>
+          <article data-vesta="server-stat">
+            <h2>{t('servers.overview.performance')}</h2>
+            <Show when={latestMetrics(id())} fallback={<p data-vesta="server-muted">{status()?.state === 'running' ? t('servers.overview.waiting-metrics') : t('servers.overview.no-metrics')}</p>}>
+              {(sample) => (
+                <>
+                  <dl>
+                    <dt>TPS</dt><dd>{sample().tps ?? '—'}</dd>
+                    <dt>{t('servers.overview.cpu')}</dt><dd>{sample().cpuPercent == null ? '—' : `${sample().cpuPercent}%`}</dd>
+                    <dt>{t('servers.overview.memory')}</dt>
+                    <dd>{bytes(sample().memoryUsedBytes) ?? '—'}<Show when={bytes(sample().memoryMaxBytes)}> / {bytes(sample().memoryMaxBytes)}</Show></dd>
+                  </dl>
+                  <Sparkline samples={serverMetrics(id())} pick={(entry) => entry.cpuPercent} max={100} />
+                </>
+              )}
+            </Show>
+          </article>
+        </Show>
+
+        <Show when={props.snapshot.pack}>
+          {(pack) => (
+            <article data-vesta="server-stat">
+              <h2>{t('servers.overview.pack')}</h2>
+              <Show when={pack().status === 'published'} fallback={<p data-vesta="server-muted">{t('servers.overview.pack-unpublished')}</p>}>
+                <dl>
+                  <dt>{t('servers.overview.pack-revision')}</dt><dd>{pack().hostedRevision}</dd>
+                  <dt>{t('servers.overview.pack-minimum')}</dt><dd>{pack().minimumRevision}</dd>
+                </dl>
+              </Show>
+            </article>
+          )}
+        </Show>
+      </section>
+
+      <Show when={recent().length > 0}>
+        <section data-vesta="server-recent">
+          <h2>{t('servers.overview.recent')}</h2>
+          <ul>
+            <For each={recent()} keyed={(operation) => operation.operationId}>
+              {(operation) => (
+                <li data-terminal={isTerminal(operation()) ? '' : undefined} data-state={operation().state}>
+                  <span>{t(operationTitle(operation()))}</span>
+                  <span>{t(operationStateMessage(operation()))}</span>
+                </li>
+              )}
+            </For>
+          </ul>
+        </section>
+      </Show>
+
+      <dl data-vesta="server-about">
+        <dt>{t('servers.overview.agent')}</dt><dd>{props.snapshot.info?.agentVersion ?? t('servers.unknown')}</dd>
+        <dt>{t('servers.server-id')}</dt><dd><code>{props.snapshot.connection.serverId}</code></dd>
+      </dl>
+    </div>
+  );
+}
+
+/** Tiny line chart of the most recent samples; gaps for unknown values. */
+function Sparkline(props: { samples: MetricsSample[]; pick: (sample: MetricsSample) => number | null; max?: number }) {
+  const path = () => {
+    const values = props.samples.map(props.pick);
+    const known = values.filter((value): value is number => value !== null);
+    if (known.length < 2) return '';
+    const top = props.max ?? Math.max(...known, 1);
+    const step = 100 / Math.max(values.length - 1, 1);
+    let drawing = false;
+    return values.map((value, index) => {
+      if (value === null) { drawing = false; return ''; }
+      const command = `${drawing ? 'L' : 'M'}${(index * step).toFixed(2)},${(30 - (value / top) * 28).toFixed(2)}`;
+      drawing = true;
+      return command;
+    }).join(' ');
+  };
+  return (
+    <svg data-vesta="server-sparkline" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
+      <path d={path()} />
+    </svg>
+  );
+}

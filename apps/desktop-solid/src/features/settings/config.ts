@@ -27,6 +27,8 @@ export interface LauncherConfig {
   debug_logging: boolean;
   /** Local-only: shows the Developer page. Never sent to the host. */
   developer_mode: boolean;
+  /** Show the Servers destination in the sidebar. */
+  servers_in_rail: boolean;
   /** Local-only: sites whose links open without asking first (see features/links). */
   trusted_link_domains: string[];
 
@@ -83,6 +85,7 @@ export const configDefaults: LauncherConfig = {
   minimize_to_tray: false,
   debug_logging: false,
   developer_mode: false,
+  servers_in_rail: true,
   trusted_link_domains: [],
 
   max_download_threads: 4,
@@ -142,7 +145,7 @@ const secret = new Set<keyof LauncherConfig>([
 ]);
 
 /** Kept in the local mirror only; the host has no such field. */
-const localOnly = new Set<keyof LauncherConfig>(["developer_mode", "trusted_link_domains"]);
+const localOnly = new Set<keyof LauncherConfig>(["developer_mode", "trusted_link_domains", "servers_in_rail"]);
 
 /**
  * The last known configuration, read synchronously at startup so the Settings pages

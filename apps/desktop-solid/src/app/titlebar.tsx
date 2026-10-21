@@ -14,6 +14,7 @@ import { InboxControl, UpdateControl } from './status/titlebar-status';
 import { canGoBack, route } from './router';
 import { goBack, transitionTo } from './transition';
 import { isSection, sectionLabels } from '../pages/settings/sections';
+import { serverSnapshot } from '../features/servers/store';
 import { t } from '../localization';
 import type { MessageId } from '../localization/messages';
 import './titlebar.css';
@@ -141,6 +142,22 @@ function location(): {
         trail: [{ label: t('nav.library'), href: '#/library' }, { label: t('settings.new-instance-title') }],
         back: { to: '/library', label: t('nav.back-to-library') },
       };
+    }
+    case 'servers': {
+      const root = { label: t('nav.servers'), href: '#/servers' };
+      if (current.section === 'add') {
+        return { label: t('servers.add'), icon: 'icons/rail/servers', trail: [root, { label: t('servers.add') }], back: { to: '/servers', label: t('common.back') } };
+      }
+      const server = serverSnapshot(current.section);
+      if (server) {
+        return {
+          label: server.connection.name,
+          icon: 'icons/rail/servers',
+          trail: [root, { label: server.connection.name }],
+          back: { to: '/servers', label: t('common.back') },
+        };
+      }
+      return { label: t('nav.servers'), icon: 'icons/rail/servers', trail: [{ label: t('nav.servers') }] };
     }
     default: {
       const sectionId = isSection(current.section) ? sectionLabels[current.section] : undefined;

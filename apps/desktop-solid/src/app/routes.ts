@@ -15,5 +15,8 @@ export const mainNav: NavItem[] = [
   { id: 'browse', label: 'nav.browse', icon: 'icons/rail/browse', href: '/browse' },
 ];
 
+/** Optional rail destination; users can remove it from the sidebar (`servers_in_rail`). */
+export const serversNav: NavItem = { id: 'servers', label: 'nav.servers', icon: 'icons/rail/servers', href: '/servers' };
+
 /** Rail destination pinned to the bottom. */
 export const settingsNav: NavItem = { id: 'settings', label: 'nav.settings', icon: 'icons/rail/settings', href: '/settings' };
