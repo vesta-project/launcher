@@ -327,38 +327,9 @@
 
   /* Console */
   :where([data-vesta="server-console"]) { display: flex; flex-direction: column; block-size: 100%; min-block-size: 0; }
-  :where([data-vesta="server-console-count"]) { flex: 1; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); text-align: end; }
-  .server-console-notice { margin: var(--vesta-space-2) var(--instance-gutter) 0; }
-  :where([data-vesta="server-console-output"]) {
-    flex: 1;
-    min-block-size: 0;
-    overflow: auto;
-    padding: var(--vesta-space-2) var(--instance-gutter);
-    background: var(--vesta-color-surface-sunken);
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-    font-size: 12.5px;
-  }
-  :where([data-vesta="server-console-line"]) { overflow: hidden; line-height: 20px; text-overflow: ellipsis; white-space: pre; }
-  :where([data-vesta="server-console-line"][data-truncated])::after { content: " …"; color: var(--vesta-color-text-subtle); }
-  :where([data-vesta="server-console-gap"]) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    block-size: 20px;
-    color: oklch(0.8 0.13 75);
-    font-family: var(--vesta-font-sans, inherit);
-    font-size: var(--vesta-text-xs);
-  }
-  :where([data-vesta="server-console-gap"])::before { content: ""; flex: 0 0 24px; border-block-start: 1px dashed currentColor; }
-  :where([data-vesta="server-console-gap"]) button {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--vesta-color-accent-text);
-    font: inherit;
-    text-decoration: underline;
-    cursor: default;
-  }
+  /* The shared log view fills the room above the command row. */
+  [data-vesta="server-console"] > :where([data-vesta="console"]) { flex: 1; block-size: auto; }
+  .server-console-notice { margin: var(--vesta-space-2) var(--instance-gutter); }
   :where([data-vesta="server-console-input"]) {
     display: flex;
     align-items: center;

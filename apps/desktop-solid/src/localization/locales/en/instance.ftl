@@ -91,6 +91,7 @@ console-jump-latest = Jump to latest
 console-copy-status = Copied
 console-copy-failed = Copy failed — select and copy the text below.
 console-log-output = { $name } log output
+console-line-truncated = This line was shortened before it reached the launcher.
 
 drop-add-to-instance = Release to add resources
 drop-supported-files = Drop .jar or .zip files

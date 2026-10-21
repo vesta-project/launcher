@@ -207,11 +207,6 @@ servers-overview-agent = Vesta version
 
 # Console
 servers-console-notice = Console output can include sensitive information. Commands you send are kept by the server as task input.
-servers-console-lines = { $count ->
-    [one] { $count } line
-   *[other] { $count } lines
-  }
-servers-console-follow = Follow output
 servers-console-waiting = Waiting for output…
 servers-console-stopped = Minecraft isn't running
 servers-console-placeholder = Type a command, e.g. say Hello

@@ -25,6 +25,8 @@ const CHATTER = [
   '[Server thread/WARN]: Can\'t keep up! Is the server overloaded? Running 2034ms or 40 ticks behind',
   '[Server thread/INFO]: <{p}> brb',
 ];
+/** Minecraft's console time prefix, so fixture lines parse like real server output. */
+const stamp = (text: string, atMs: number) => `[${new Date(atMs).toTimeString().slice(0, 8)}] ${text}`;
 
 interface FixtureServer {
   snapshot: ServerSnapshot;
@@ -92,7 +94,9 @@ function seed(): FixtureServer[] {
     pending: new Map(), intents: new Map(),
   };
   for (let index = 0; index < 40; index++) {
-    survival.console.push({ cursor: String(++survival.cursor), text: sample(CHATTER).replace('{p}', sample(PLAYERS)), truncated: false });
+    // One line arrives cut short, as the agent does past its per-line bound.
+    const text = stamp(sample(CHATTER).replace('{p}', sample(PLAYERS)), now - (40 - index) * 15_000);
+    survival.console.push({ cursor: String(++survival.cursor), text, truncated: index === 30 });
   }
   const creative: FixtureServer = {
     snapshot: {
@@ -181,7 +185,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     emit(target.snapshot.connection.id, 'operations', { kind: 'operation', operation: clone(operation) });
   };
   const line = (target: FixtureServer, text: string) => {
-    const entry = { cursor: String(++target.cursor), text, truncated: false };
+    const entry = { cursor: String(++target.cursor), text: stamp(text, Date.now()), truncated: false };
     target.console.push(entry);
     if (target.console.length > 10_000) target.console.shift();
     emit(target.snapshot.connection.id, 'console', { kind: 'console', lines: [entry] });
