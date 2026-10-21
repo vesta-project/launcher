@@ -148,6 +148,63 @@ pub struct ServerOperation {
     pub finished_at_ms: Option<i64>,
     #[serde(default)]
     pub reconciling: bool,
+    pub kind: Option<String>,
+    pub actor: Option<Box<OperationActor>>,
+    pub summary: Option<Box<OperationSummary>>,
+    pub outcome: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum OperationActor {
+    Principal {
+        principal_id: String,
+        display_name: String,
+        device_name: Option<String>,
+        #[serde(rename = "self")]
+        is_self: bool,
+    },
+    Workflow {
+        name: String,
+    },
+    System {
+        name: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all_fields = "camelCase")]
+pub enum OperationSummary {
+    #[serde(rename = "console.command")]
+    ConsoleCommand { command: Option<String> },
+    #[serde(rename = "players.moderate")]
+    PlayersModerate {
+        action: String,
+        player: String,
+        reason: Option<String>,
+        duration_seconds: Option<u64>,
+    },
+    #[serde(rename = "lifecycle")]
+    Lifecycle {
+        action: LifecycleAction,
+        target_generation: Option<String>,
+        result_generation: Option<String>,
+    },
+    #[serde(rename = "purged")]
+    Purged,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LifecycleAction {
+    Start,
+    Stop,
+    Restart,
+    Kill,
 }
 impl ServerOperation {
     pub fn terminal(&self) -> bool {

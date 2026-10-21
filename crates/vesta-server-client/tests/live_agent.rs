@@ -163,6 +163,38 @@ async fn real_agent_pair_lifecycle_console_reconnect_revoke() {
     console.close(None).await.unwrap();
     tokio::time::sleep(Duration::from_millis(500)).await;
     println!("7 console: real inert-child output; page/stream cursors identical, cursor excludes that line");
+    let sent = client
+        .console_send("say Hello, players!", &generation, "live-console-details")
+        .await
+        .unwrap();
+    let detail = serde_json::to_value(&sent).unwrap();
+    assert_eq!(detail["kind"], "console.command");
+    assert_eq!(
+        detail["summary"],
+        serde_json::json!({"kind":"console.command", "command":"say Hello, players!"})
+    );
+    assert_eq!(detail["actor"]["kind"], "principal");
+    assert_eq!(detail["actor"]["principalId"], projection["principal_id"]);
+    assert_eq!(detail["actor"]["self"], true);
+    assert_eq!(detail["actor"]["deviceName"], "Vesta Launcher");
+    completed(&client, &sent.operation_id).await;
+    let finished = client.operation(&sent.operation_id).await.unwrap();
+    assert_eq!(finished.outcome.as_deref(), Some("stdin_written"));
+    let listed = client.operations(None).await.unwrap();
+    let listed = listed
+        .items
+        .iter()
+        .find(|op| op.operation_id == sent.operation_id)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&listed.summary).unwrap(),
+        detail["summary"]
+    );
+    assert_eq!(
+        serde_json::to_value(&listed.actor).unwrap(),
+        detail["actor"]
+    );
+    println!("7a operation details: real console text, own principal, device and stdin_written outcome; list/detail agree");
     let stopped = client
         .lifecycle("stop", Some(&generation), "live-stop-1")
         .await
