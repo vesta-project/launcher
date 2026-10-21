@@ -37,6 +37,8 @@ pub struct Client {
     mutations: Mutex<()>,
     intents: Mutex<HashMap<String, Intent>>,
     legacy_intents: StdMutex<HashSet<String>>,
+    principal_id: StdMutex<Option<String>>,
+    principal_lookup: Mutex<bool>,
 }
 #[derive(Clone)]
 enum Intent {
@@ -135,6 +137,8 @@ impl Client {
             mutations: Default::default(),
             intents: Default::default(),
             legacy_intents: Default::default(),
+            principal_id: Default::default(),
+            principal_lookup: Default::default(),
         })
     }
     pub async fn pair(
@@ -314,6 +318,13 @@ impl Client {
                     value.get("capabilities").cloned().unwrap_or(Value::Null),
                 )
                 .map_err(|_| Error::new(ErrorCode::Unsupported))?;
+                *self
+                    .principal_id
+                    .lock()
+                    .map_err(|_| Error::new(ErrorCode::Internal))? = value
+                    .get("principal_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
                 Ok(CapabilityView {
                     source: "session".into(),
                     granted,
@@ -521,8 +532,11 @@ impl Client {
             // Confirmation receipts do not carry a complete operation projection.
             return Ok(Submission::Prepared(receipt));
         }
-        let mut operation: ServerOperation =
-            from_wire(value).map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
+        let needs_detail = !has_operation_details(&value);
+        let mut operation = self
+            .decode_operation(value)
+            .await
+            .map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
         operation.intent = Some(path.replace('/', "."));
         self.intents.lock().await.insert(
             key,
@@ -532,6 +546,7 @@ impl Client {
                 operation: operation.clone(),
             },
         );
+        operation = self.enrich_accepted(operation, needs_detail).await;
         Ok(Submission::Operation(operation))
     }
     pub async fn kill_prepare(&self, expected: &str, intent: &str) -> Result<KillPreparation> {
@@ -601,8 +616,17 @@ impl Client {
             )
             .await;
         // Whether response was lost or received, reconcile this exact operation ID.
-        let observed = match result {
-            Ok(value) => from_wire(value),
+        let mut observed = match result {
+            Ok(value) => {
+                let needs_detail = !has_operation_details(&value);
+                match self.decode_operation(value).await {
+                    Ok(mut operation) => {
+                        operation.intent = Some(p.path.replace('/', "."));
+                        Ok(self.enrich_accepted(operation, needs_detail).await)
+                    }
+                    Err(e) => Err(e),
+                }
+            }
             Err(e)
                 if matches!(
                     e.code,
@@ -619,6 +643,9 @@ impl Client {
             }
             Err(e) => Err(e),
         };
+        if let Ok(operation) = &mut observed {
+            operation.intent = Some(p.path.replace('/', "."));
+        }
         if let Ok(operation) = &observed {
             self.intents.lock().await.insert(
                 key,
@@ -640,10 +667,11 @@ impl Client {
         {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
-        from_wire(
+        self.decode_operation(
             self.get(&format!("operations/{id}"), false, "tasks.view")
                 .await?,
         )
+        .await
     }
     pub async fn operations(&self, cursor: Option<&str>) -> Result<Page<ServerOperation>> {
         self.operations_with_priority(cursor, true).await
@@ -653,14 +681,73 @@ impl Client {
         cursor: Option<&str>,
         interactive: bool,
     ) -> Result<Page<ServerOperation>> {
-        from_wire(
-            self.get(
+        let value = self
+            .get(
                 &page_route("operations", cursor, 100)?,
                 interactive,
                 "tasks.view",
             )
-            .await?,
-        )
+            .await?;
+        #[derive(serde::Deserialize)]
+        struct WirePage {
+            items: Vec<Value>,
+            next_cursor: Option<String>,
+        }
+        let page: WirePage =
+            serde_json::from_value(value).map_err(|_| Error::new(ErrorCode::Unsupported))?;
+        let mut items = Vec::with_capacity(page.items.len());
+        for value in page.items {
+            items.push(self.decode_operation(value).await?);
+        }
+        Ok(Page {
+            items,
+            next_cursor: page.next_cursor,
+        })
+    }
+
+    async fn decode_operation(&self, value: Value) -> Result<ServerOperation> {
+        // Native refresh normally obtained this through GET /session already.
+        // Standalone/reconstructed clients resolve it lazily, once per connection.
+        if value
+            .get("actor")
+            .and_then(|actor| actor.get("principal_id"))
+            .is_some()
+        {
+            let mut attempted = self.principal_lookup.lock().await;
+            let missing = self
+                .principal_id
+                .lock()
+                .map_err(|_| Error::new(ErrorCode::Internal))?
+                .is_none();
+            if missing && !*attempted {
+                *attempted = true;
+                // Attribution failure must not discard a known accepted receipt.
+                let _ = self.capabilities(None).await;
+            }
+        }
+        let principal = self
+            .principal_id
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?;
+        crate::operations::decode(value, principal.as_deref())
+    }
+
+    async fn enrich_accepted(
+        &self,
+        operation: ServerOperation,
+        needs_detail: bool,
+    ) -> ServerOperation {
+        if needs_detail {
+            // Receipts predate the detail projection. One bounded authorized GET
+            // also handles terminal receipts, which will not be polled later.
+            // A denied/busy/unreachable read cannot undo remote acceptance.
+            if let Ok(mut detail) = self.operation(&operation.operation_id).await {
+                detail.intent = operation.intent;
+                detail.reconciling = operation.reconciling;
+                return detail;
+            }
+        }
+        operation
     }
     pub async fn console_page(&self, cursor: Option<&str>, limit: u16) -> Result<ConsolePage> {
         self.console_page_with_priority(cursor, limit, true).await
@@ -803,6 +890,11 @@ impl Client {
             Err(e) => Err(e),
         }
     }
+}
+fn has_operation_details(value: &Value) -> bool {
+    ["kind", "actor", "summary", "summary_purged", "outcome"]
+        .iter()
+        .all(|key| value.get(key).is_some())
 }
 fn page_route(route: &str, cursor: Option<&str>, limit: u16) -> Result<String> {
     let mut result = format!("{route}?limit={limit}");
