@@ -275,6 +275,83 @@ unavailable, session expired, revoked device, forbidden action, unsupported API,
 busy server, conflict, stream gap and outcome unknown. Ordinary outages do not
 erase pairing; rejected credentials do not trigger silent account replacement.
 
+## Review corrections (2026-10-21)
+
+A review of this plan against the server runtime at the same baseline commit found
+constraints that change the defaults above. Where they conflict, this section wins.
+The frontend plan is [Server Frontend](SERVER_FRONTEND.md).
+
+1. **Request rate, not concurrency, is the binding limit.** The agent applies one
+   fixed limiter to every route: 60 requests per minute per peer IP, plus 120 TLS
+   connections per minute (`vesta-transport/src/lib.rs`). Launchers behind one
+   household NAT share it. The scheduler therefore needs a per-server token bucket
+   (initially 40 requests/minute, with 10 of them reserved for user-initiated
+   actions) on top of the concurrency limits. Connection reuse is mandatory.
+   Polling a visible status view every 5 seconds alone costs 12 requests/minute,
+   so the polling fallback starts at 10 seconds. Operation polling runs only while
+   an operation is non-terminal, backing off from 2 to 10 seconds. A 429 response
+   pauses non-interactive work for that server and is never retried in a loop.
+   Ask the server to make the authenticated budget configurable.
+2. **WebSocket budget is two per device session.** Console and metrics streams
+   share a 32-global, two-per-device-session socket budget with pack realtime.
+   One console and one metrics stream use the whole allowance. The native owner
+   allocates sockets by visible demand: the console stream when a console is open,
+   metrics when a chart or overview is open. Opening a file follow takes over the
+   metrics slot, and metrics fall back to `/metrics/current` with ETags until the
+   follow closes. Pack realtime for the same device obeys the same budget.
+3. **No stable identity key exists yet.** The implemented trust anchor is the
+   pinned TLS leaf SHA-256 fingerprint plus the server-reported `server_id`,
+   approved by the user on first contact. Every fingerprint change blocks
+   management until the user approves it again. There is no continuity proof
+   yet, so a public-CA trust mode is not offered until the server implements
+   one. `vesta-agent pair` does not print the fingerprint today, though
+   `owner link` does. Ask the server to include it, plus a single pairing link
+   (endpoint, code, fingerprint, server ID), so that out-of-band comparison
+   becomes paste-once instead of manual.
+4. **Revocation is indistinguishable on the wire.** Unknown, revoked and
+   wrong-key devices all receive 401 `management_session_invalid` at session
+   issuance. Model this as "credentials rejected" and offer re-pairing. Never
+   display "revoked" unless the server reports it explicitly. A 401 on an
+   ordinary request renews the session once, single-flight, before reaching
+   that state.
+5. **Sessions are short and process-local.** Sessions last 15 minutes and end
+   when the agent restarts. Renew proactively about two minutes before expiry,
+   and treat a session loss after an agent restart as ordinary reconnection,
+   not a trust or credential failure.
+6. **Minecraft-account sign-in belongs in stage 2.** Owner direction 2 makes it
+   the expected common method. The `/api/v3/auth/minecraft/{challenge,complete}`
+   flow uses the launcher's existing Microsoft session to perform a Mojang
+   session join client-side. The access token is never sent to the Vesta agent.
+   The resulting role comes from an explicit `owner link` or the server's access
+   sources, never from the sign-in alone.
+7. **A lost pairing response cannot be recovered.** The code is consumed but the
+   client never learns its `device_id`, so it cannot request a session. The UI
+   asks for a new code. The orphaned device is visible to the owner via
+   `vesta-agent devices list`, and the keypair is discarded only after the user
+   confirms.
+8. **There is no self-capability route.** Pairing returns a role name.
+   Minecraft completion returns only `device_id`, and `/users/{id}` needs
+   `principals.view`. Capability gating is therefore a projection from the
+   known built-in role defaults plus learned 403 refusals. It is a UI hint and
+   never authority. Ask the server for an authenticated self projection (principal,
+   roles, effective capabilities).
+9. **Operations project state only.** There is no result/error detail and no
+   implemented cancel route, even though `cancel_requested` is projected. The UI
+   reports terminal states honestly ("failed", with a pointer to the console or
+   audit) and never offers remote cancellation.
+10. **Console delivery is sampled.** The stream delivers at most 16 lines per
+    250 ms. A noisy server produces gaps by design. Gap recovery fetches at most
+    one bounded HTTP page per gap within the rate budget. Beyond that, the UI
+    shows the skipped count and offers `logs/latest.log`.
+11. **Upload size is capped server-side.** Writes and uploads are limited to
+    16 MiB total in chunks of at most 1 MiB. Large-transfer work in stage 4
+    applies to downloads (`files/download`, streamed) and pack artifacts, not
+    uploads.
+12. **The contract document disagrees with itself.** For example, role routes
+    are listed as a non-goal but are implemented, and section 5 says realtime is
+    not implemented although console and metrics streams are. The rule above
+    stands: runtime routes and fixtures decide.
+
 ## Implementation stages and acceptance gates
 
 | Stage | Deliverable | Required evidence |

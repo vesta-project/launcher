@@ -9,6 +9,7 @@ Check this index for ongoing documentation work and areas needing contribution.
 - [Architecture Overview](architecture/ARCHITECTURE.md) — Patterns and high-level design.
 - [Architecture Decisions](adr/README.md) — Load-bearing architecture decisions.
 - [Server Client Backend](architecture/SERVER_CLIENT_BACKEND.md) — Crate boundaries, native integration, resource budgets and implementation stages for the rewritten launcher.
+- [Server Frontend](architecture/SERVER_FRONTEND.md) — Information architecture, flows, budgets, IPC surface, tests and milestones for server management in the rewrite.
 - [Piston Metadata](architecture/PISTON_METADATA.md) — Unified metadata system architecture.
 - [Instance Management Plan](architecture/INSTANCE_MANAGEMENT_PLAN.md) — Future planning for instances.
 
