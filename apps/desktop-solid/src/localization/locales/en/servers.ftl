@@ -235,7 +235,7 @@ servers-moderate-reason = Reason (optional)
 servers-moderate-apply = Apply
 servers-moderate-confirm = Confirm ({ $count } s)
 servers-moderate-op-warning = Operators can run powerful in-game commands. The server asks you to confirm.
-servers-moderate-delivery-note = "Sent" means the server delivered the command to Minecraft, not that Minecraft applied it.
+servers-moderate-delivery-note = "Completed" means the server delivered the command to Minecraft, not that Minecraft applied it.
 
 # Trust and access
 servers-trust-changed-title = This server's certificate changed
