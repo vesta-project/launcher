@@ -262,10 +262,7 @@ impl ServerManager {
                                 .unwrap_or(snapshot.clone());
                             snapshot.status = Some(status);
                             snapshot.status_observed_at_ms = Some(vesta_server_client::now_ms());
-                            snapshot.state = ConnectionState {
-                                phase: "online".into(),
-                                ..Default::default()
-                            };
+                            snapshot.state = online_state(client.transport.scheduler.paused_for());
                             let _ = self.publish_observation(&app, snapshot).await;
                             last_stream_status = Some(Instant::now());
                             last_status = Instant::now();

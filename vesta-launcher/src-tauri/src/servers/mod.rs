@@ -61,6 +61,17 @@ fn internal() -> Error {
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
+fn online_state(paused_for: Duration) -> ConnectionState {
+    let until = (!paused_for.is_zero())
+        .then(|| vesta_server_client::now_ms() + paused_for.as_millis() as i64);
+    ConnectionState {
+        phase: if until.is_some() { "backoff" } else { "online" }.into(),
+        retry_at_ms: until,
+        rate_limited_until_ms: until,
+        last_error: until.map(|_| ErrorCode::RateLimited),
+        ..Default::default()
+    }
+}
 fn coarse_state(
     snapshot: &ServerSnapshot,
 ) -> (&str, &str, Option<(&str, Option<&str>, Option<&str>, &str)>) {
@@ -702,15 +713,14 @@ impl ServerManager {
             Ok::<(), Error>(())
         }
         .await;
+        let mut paused_for = Duration::ZERO;
         if let Some(client) = slot.client.lock().await.as_ref() {
             snapshot.capabilities.refused = client.refused().await;
+            paused_for = client.transport.scheduler.paused_for();
         }
         match &result {
             Ok(()) => {
-                snapshot.state = ConnectionState {
-                    phase: "online".into(),
-                    ..Default::default()
-                };
+                snapshot.state = online_state(paused_for);
                 snapshot.connection.last_connected_at_ms = Some(vesta_server_client::now_ms());
             }
             Err(e) => {
