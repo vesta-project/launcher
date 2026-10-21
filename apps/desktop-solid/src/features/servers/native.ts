@@ -15,6 +15,7 @@
 //   derives the server Idempotency-Key from it and never invents a fresh key for
 //   an automatic retry.
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
+import { serversManageNative } from './native-manage';
 
 export const nativeServers = typeof window !== 'undefined' && isTauri();
 
@@ -374,6 +375,9 @@ export const serversNative = {
   moderateConfirm: (connectionId: ConnectionId, intentId: string) =>
     call<ServerOperation>('server_moderate_confirm', { connectionId, intentId }),
   ...serversFilesNative(),
+
+  // Backups, access and pack: see native-manage.ts.
+  ...serversManageNative,
 };
 
 export type ServersNative = typeof serversNative;

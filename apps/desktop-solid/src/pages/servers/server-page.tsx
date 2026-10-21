@@ -18,6 +18,8 @@ import { busyIntent } from '../../features/servers/operations-model';
 import { loadOperations, putOperations, putSnapshot, removeServer, serverCommand, serverOperations, serverSnapshot, serversLoaded, updateServer, useServerTopic, useServersClock } from '../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
 import { ActivityTab } from './tabs/activity-tab';
+import { AccessTab } from './tabs/access-tab';
+import { BackupsTab } from './tabs/backups-tab';
 import { ConnectionTab } from './tabs/connection-tab';
 import { ConsoleTab } from './tabs/console-tab';
 import { OverviewTab } from './tabs/overview-tab';
@@ -44,6 +46,8 @@ const tabs: TabDef[] = [
   { id: 'players', label: 'servers.tab.players', icon: 'icons/content/chat', needs: ['players.view'], view: PlayersTab },
   { id: 'files', label: 'server-files.tab', icon: 'icons/content/folder', needs: ['files.list'], flush: true, view: FilesTab },
   { id: 'settings', label: 'server-settings.tab', icon: 'icons/content/gear', needs: ['config.view'], flush: true, view: PropertiesTab },
+  { id: 'backups', label: 'servers.tab.backups', icon: 'icons/content/storage', needs: ['backups.view'], flush: true, view: BackupsTab },
+  { id: 'access', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ['principals.view', 'invitations.create', 'devices.revoke', 'access-sources.manage'], flush: true, view: AccessTab },
   { id: 'activity', label: 'servers.tab.activity', icon: 'icons/content/history', needs: ['tasks.view'], flush: true, view: ActivityTab },
   { id: 'connection', label: 'servers.tab.connection', icon: 'icons/security/network', needs: [], flush: true, view: ConnectionTab },
 ];
