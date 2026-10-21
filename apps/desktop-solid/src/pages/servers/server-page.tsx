@@ -24,6 +24,8 @@ import { ConnectionTab } from './tabs/connection-tab';
 import { ConsoleTab } from './tabs/console-tab';
 import { OverviewTab } from './tabs/overview-tab';
 import { PlayersTab } from './tabs/players-tab';
+import { FilesTab } from './tabs/files-tab';
+import { PropertiesTab } from './tabs/properties-tab';
 import { FingerprintView, Sensitive, ServerErrorNote, StatusDot } from './parts';
 import '../library/instance/instance-header.css';
 import '../library/instance/instance-page.css';
@@ -42,6 +44,8 @@ const tabs: TabDef[] = [
   { id: 'overview', label: 'servers.tab.overview', icon: 'icons/navigation/home', needs: [], view: OverviewTab },
   { id: 'console', label: 'servers.tab.console', icon: 'icons/content/terminal', needs: ['console.read'], flush: true, view: ConsoleTab },
   { id: 'players', label: 'servers.tab.players', icon: 'icons/content/chat', needs: ['players.view'], view: PlayersTab },
+  { id: 'files', label: 'server-files.tab', icon: 'icons/content/folder', needs: ['files.list'], flush: true, view: FilesTab },
+  { id: 'settings', label: 'server-settings.tab', icon: 'icons/content/gear', needs: ['config.view'], flush: true, view: PropertiesTab },
   { id: 'backups', label: 'servers.tab.backups', icon: 'icons/content/storage', needs: ['backups.view'], flush: true, view: BackupsTab },
   { id: 'access', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ['principals.view', 'invitations.create', 'devices.revoke', 'access-sources.manage'], flush: true, view: AccessTab },
   { id: 'activity', label: 'servers.tab.activity', icon: 'icons/content/history', needs: ['tasks.view'], flush: true, view: ActivityTab },
