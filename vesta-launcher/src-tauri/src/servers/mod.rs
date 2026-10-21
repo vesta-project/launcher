@@ -1,4 +1,5 @@
 mod credentials;
+mod files;
 mod store;
 mod subscriptions;
 mod tasks;
@@ -91,6 +92,9 @@ fn coarse_state(
     )
 }
 impl ServerManager {
+    pub(crate) async fn files_client(&self, id: &str) -> Result<Arc<Client>> {
+        self.client(id).await
+    }
     pub fn new() -> Result<Arc<Self>> {
         let root = crate::utils::db_manager::get_app_config_dir().map_err(|_| internal())?;
         Self::at_root(root)

@@ -121,6 +121,7 @@ pub fn run(context: tauri::Context) {
             Ok(())
         })
         .manage(utils::dialog_manager::DialogManager::new())
+        .manage(vesta_server_client::files::FileTransfers::default())
         .manage(utils::windows::MiniWindowRegistry::default())
         .manage(utils::launch_intents::PendingLaunchIntents::new())
         .manage(resources::manual_drop::ManualDropManager::default())
@@ -165,6 +166,24 @@ pub fn run(context: tauri::Context) {
             commands::servers::server_players_bans,
             commands::servers::server_moderate,
             commands::servers::server_moderate_confirm,
+            commands::server_files::server_files_list,
+            commands::server_files::server_file_read_text,
+            commands::server_files::server_file_write_text,
+            commands::server_files::server_file_mkdir,
+            commands::server_files::server_file_rename,
+            commands::server_files::server_file_delete,
+            commands::server_files::server_trash_list,
+            commands::server_files::server_trash_restore,
+            commands::server_files::server_file_upload_pick,
+            commands::server_files::server_file_upload_begin,
+            commands::server_files::server_file_upload_chunk,
+            commands::server_files::server_file_upload_finish,
+            commands::server_files::server_file_upload_abort,
+            commands::server_files::server_file_download,
+            commands::server_files::server_log_tail,
+            commands::server_files::server_log_lines,
+            commands::server_files::server_properties_get,
+            commands::server_files::server_properties_update,
             commands::game_options::get_game_options_catalog,
             commands::game_options::get_instance_game_options,
             commands::game_options::save_instance_game_options,

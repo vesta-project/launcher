@@ -1,5 +1,6 @@
 pub mod app;
 pub mod servers;
+pub mod server_files;
 pub mod file_drop;
 pub mod game_options;
 pub mod github;
