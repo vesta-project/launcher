@@ -672,9 +672,11 @@ impl ServerManager {
         let _gate = slot.refresh.lock().await;
         let mut snapshot = self.record(id).await?.snapshot;
         // Followers of one refresh consume its last observation, no extra HTTP.
-        if snapshot.status_observed_at_ms.is_some_and(|at| {
-            at >= vesta_server_client::now_ms() - started.elapsed().as_millis() as i64 - 250
-        }) {
+        if slot.client.lock().await.is_some()
+            && snapshot.status_observed_at_ms.is_some_and(|at| {
+                at >= vesta_server_client::now_ms() - started.elapsed().as_millis() as i64 - 250
+            })
+        {
             return Ok(());
         }
         let result = async {
