@@ -3,6 +3,10 @@
 Date: 2026-10-21. Architecture and implementation plan, not implemented feature
 coverage. Decision: [ADR-0011](../adr/0011-server-client-crate-and-native-host-adapters.md).
 
+The native subset bound by `servers/native.ts` is now implemented. See
+[implementation coverage, verification and run instructions](SERVER_CLIENT_BACKEND_IMPLEMENTATION.md)
+for its actual scope and remaining integration limits; later stages below remain plans.
+
 ## Starting point
 
 The integration starts from the rewritten launcher, without porting the old
