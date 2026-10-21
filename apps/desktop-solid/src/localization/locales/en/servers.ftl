@@ -207,7 +207,6 @@ servers-overview-agent = Vesta version
 
 # Console
 servers-console-notice = Console output can include sensitive information. Commands you send are kept by the server as task input.
-servers-console-load-earlier = Load earlier lines
 servers-console-lines = { $count ->
     [one] { $count } line
    *[other] { $count } lines
@@ -218,12 +217,10 @@ servers-console-stopped = Minecraft isn't running
 servers-console-placeholder = Type a command, e.g. say Hello
 servers-console-command = Console command
 servers-console-send = Send
-servers-console-sent = Sent to server.
 servers-console-empty = Enter a command.
 servers-console-too-long = Commands can be at most 1,024 bytes.
 servers-console-control-characters = Commands can't contain line breaks or control characters.
 servers-console-gap = Lines skipped while the server was busy
-servers-console-gap-load = Load missed lines
 servers-console-gap-latest-log = Older lines are in logs/latest.log
 
 # Moderation
@@ -237,7 +234,6 @@ servers-moderate-lightning = Strike with lightning
 servers-moderate-reason = Reason (optional)
 servers-moderate-apply = Apply
 servers-moderate-confirm = Confirm ({ $count } s)
-servers-moderate-sent = Sent to server
 servers-moderate-op-warning = Operators can run powerful in-game commands. The server asks you to confirm.
 servers-moderate-delivery-note = "Sent" means the server delivered the command to Minecraft, not that Minecraft applied it.
 
@@ -286,3 +282,15 @@ servers-error-unsupported = This server's Vesta version doesn't support that yet
 servers-error-outcome-unknown = We couldn't confirm whether the server received this. Checking…
 servers-error-invalid-input = Check the values you entered.
 servers-error-internal = Something went wrong in the launcher.
+servers-console-delivered = Delivered to Minecraft.
+servers-console-load-recent = Load recent history
+servers-console-send-again = Send again
+servers-operation-uncertain-retry = We couldn't confirm the server received this. Trying again is safe: the server won't run it twice.
+servers-players-names-withheld = { $count ->
+    [one] { $count } player online. Their name can't be shown.
+   *[other] { $count } players online. Their names can't be shown.
+  }
+servers-moderate-accepted = Accepted by server
+servers-moderate-confirm-target = Confirm making { $name } an operator. To choose someone else, close this and start again.
+servers-sign-in-storage-unavailable = This computer's secure credential store isn't available, so the launcher can't save this device's key.
+servers-sign-in-memory-only = Use for this session only (you'll need to pair again after restarting the launcher)

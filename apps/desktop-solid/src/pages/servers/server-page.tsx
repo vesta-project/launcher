@@ -1,5 +1,5 @@
 import { Button, Dialog, Tab, TabList, TabPanel, Tabs, Badge, toast } from '@vesta/ui';
-import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
+import { For, Show, createSignal, onCleanup, onSettled, untrack, type Component } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { Board } from '../../components/board';
 import { EmptyState } from '../../components/empty-state';
@@ -10,7 +10,8 @@ import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { anyVisible } from '../../features/servers/capabilities';
 import { errorMessage } from '../../features/servers/errors';
-import { accessFact, connectionFact, lifecycleControls, minecraftFact, newIntentId, statusDot, type LifecycleAction } from '../../features/servers/model';
+import { IntentMemo, accessFact, connectionFact, lifecycleControls, minecraftFactNow, newIntentId, statusDot, type LifecycleAction } from '../../features/servers/model';
+import { Dynamic } from '@solidjs/web';
 import { busyIntent } from '../../features/servers/operations-model';
 import { loadOperations, putOperations, putSnapshot, removeServer, serverCommand, serverOperations, serverSnapshot, serversLoaded, useServerTopic, useServersClock } from '../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
@@ -29,7 +30,7 @@ interface TabDef {
   /** Shown unless every listed capability is known to be absent. Empty means always. */
   needs: string[];
   flush?: boolean;
-  view: (props: { snapshot: ServerSnapshot }) => unknown;
+  view: Component<{ snapshot: ServerSnapshot }>;
 }
 
 const tabs: TabDef[] = [
@@ -113,7 +114,7 @@ function ServerContent(props: { id: string }) {
               {(tab) => (
                 <Show when={active() === tab.id}>
                   <TabPanel forceMount value={tab.id} class={tab.flush ? 'instance-pane instance-pane-flush' : 'instance-pane'}>
-                    {tab.view({ snapshot: snapshot() }) as never}
+                    <Dynamic component={tab.view} snapshot={snapshot()} />
                   </TabPanel>
                 </Show>
               )}
@@ -136,7 +137,7 @@ function ServerHeader(props: { snapshot: ServerSnapshot }) {
       <div data-vesta="server-header-text">
         <h1>{props.snapshot.connection.name}</h1>
         <div data-vesta="server-header-facts">
-          <FactBadge fact={minecraftFact(props.snapshot.status)} />
+          <FactBadge fact={minecraftFactNow(props.snapshot, now())} />
           <FactBadge fact={connectionFact(props.snapshot, now())} />
           <FactBadge fact={accessFact(props.snapshot)} />
           <span data-vesta="server-header-endpoint">{props.snapshot.connection.endpoint}</span>
@@ -161,18 +162,26 @@ export function LifecycleBar(props: { snapshot: ServerSnapshot }) {
   const controls = () => lifecycleControls(props.snapshot);
   const id = () => props.snapshot.connection.id;
   const pending = (action: LifecycleAction) => busyIntent(serverOperations(id()), `lifecycle.${action}`);
+  // Retrying the same action on the same run after an uncertain outcome reuses its intent.
+  const intents = new IntentMemo();
+  const [uncertain, setUncertain] = createSignal(false, { name: 'server-lifecycle:uncertain' });
 
   const submit = async (action: Exclude<LifecycleAction, 'kill'>) => {
+    const generation = props.snapshot.status?.generation ?? null;
+    const intentId = intents.idFor({ action, generation });
     setBusy(action);
     try {
-      const operation = await serverCommand((client) => client.lifecycle(id(), action, props.snapshot.status?.generation ?? null, newIntentId()));
+      const operation = await serverCommand((client) => client.lifecycle(id(), action, generation, intentId));
+      intents.settle();
       putOperations(id(), [{ ...operation, intent: operation.intent ?? `lifecycle.${action}` }]);
       toast.show({ title: t('servers.operation.accepted-toast', { name: t(actionLabels[action]) }), tone: 'neutral' });
     } catch (reason) {
       const error = reason as ServerCommandError;
+      intents.settle(error);
       toast.show({ title: t(errorMessage(error)), tone: error.code === 'stale_target' ? 'warning' : 'danger' });
       if (error.code === 'stale_target') void serverCommand((client) => client.snapshot(id(), true)).then(putSnapshot).catch(() => {});
     } finally {
+      setUncertain(intents.uncertain);
       setBusy(null);
     }
   };
@@ -181,6 +190,9 @@ export function LifecycleBar(props: { snapshot: ServerSnapshot }) {
     <div data-vesta="server-lifecycle">
       <Show when={controls().blocked && !controls().primary}>
         <span data-vesta="server-lifecycle-note">{t(controls().blocked!)}</span>
+      </Show>
+      <Show when={uncertain()}>
+        <span data-vesta="server-lifecycle-note" role="status">{t('servers.operation.uncertain-retry')}</span>
       </Show>
       <Show when={controls().restart}>
         <Button variant="outline" icon={<Icon name="icons/actions/reload" />} disabled={!!busy() || pending('restart')} onClick={() => void submit('restart')}>

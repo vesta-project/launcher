@@ -1,31 +1,53 @@
-// Server-keyed reactive state for the server UI. Each topic of each server updates
-// on its own; console history lives in a bounded buffer with a version signal so a
-// new batch reruns only that server's console view.
-import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+// Server-keyed reactive state for the server UI. Every server and topic has its own
+// signal, so an update to one server's snapshot, console, metrics or operations
+// reruns only the views reading that server and topic.
+import { createEffect, createMemo, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 import { ConsoleBuffer } from './console-model';
 import { toServerError } from './errors';
 import { mergeOperations } from './operations-model';
 import { serversApi, type ServersApi } from './service';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
-const [snapshots, setSnapshots] = createSignal<Record<ConnectionId, ServerSnapshot>>({}, { name: 'serverSnapshots' });
+/** One lazily created signal per connection id. */
+function keyed<T>(name: string, initial: () => T) {
+  const cells = new Map<ConnectionId, { read: Accessor<T>; write: (next: (current: T) => T) => void }>();
+  const cell = (id: ConnectionId) => {
+    let entry = cells.get(id);
+    if (!entry) {
+      const [read, set] = createSignal<T>(initial() as Exclude<T, Function>, { name: `${name}:${id}` });
+      entry = { read, write: (next) => set((current) => next(current)) };
+      cells.set(id, entry);
+    }
+    return entry;
+  };
+  return {
+    get: (id: ConnectionId) => cell(id).read(),
+    update: (id: ConnectionId, next: (current: T) => T) => cell(id).write(next),
+    delete: (id: ConnectionId) => { cells.get(id)?.write(initial); cells.delete(id); },
+  };
+}
+
+const snapshots = keyed<ServerSnapshot | undefined>('serverSnapshot', () => undefined);
+const operations = keyed<ServerOperation[]>('serverOperations', () => []);
+const metrics = keyed<MetricsSample[]>('serverMetrics', () => []);
+const consoleVersions = keyed<number>('serverConsoleVersion', () => 0);
 const [order, setOrder] = createSignal<ConnectionId[]>([], { name: 'serverOrder' });
 const [loaded, setLoaded] = createSignal(false, { name: 'serversLoaded' });
 const [listError, setListError] = createSignal<ServerCommandError | null>(null, { name: 'serversListError' });
-const [operationsById, setOperationsById] = createSignal<Record<ConnectionId, ServerOperation[]>>({}, { name: 'serverOperations' });
-const [metricsById, setMetricsById] = createSignal<Record<ConnectionId, MetricsSample[]>>({}, { name: 'serverMetrics' });
-const [consoleVersions, setConsoleVersions] = createSignal<Record<ConnectionId, number>>({}, { name: 'serverConsoleVersions' });
 
 const consoles = new Map<ConnectionId, ConsoleBuffer>();
 const METRIC_HISTORY = 90;
 
 export const serversLoaded = loaded;
 export const serversListError = listError;
-export const serverSnapshots = createMemo(() => order().map((id) => snapshots()[id]).filter(Boolean), { name: 'serverList' });
-export const serverSnapshot = (id: ConnectionId | undefined) => (id ? snapshots()[id] : undefined);
+export const serverSnapshots = createMemo(
+  () => order().map((id) => snapshots.get(id)).filter((snapshot): snapshot is ServerSnapshot => !!snapshot),
+  { name: 'serverList' },
+);
+export const serverSnapshot = (id: ConnectionId | undefined) => (id ? snapshots.get(id) : undefined);
 export const pinnedServers = createMemo(() => serverSnapshots().filter((snapshot) => snapshot.connection.pinned), { name: 'pinnedServers' });
-export const serverOperations = (id: ConnectionId) => operationsById()[id] ?? [];
-export const serverMetrics = (id: ConnectionId) => metricsById()[id] ?? [];
+export const serverOperations = (id: ConnectionId) => operations.get(id);
+export const serverMetrics = (id: ConnectionId) => metrics.get(id);
 export const latestMetrics = (id: ConnectionId) => serverMetrics(id).at(-1);
 
 /** The console buffer for a server; read `consoleVersion(id)` in a tracking scope to follow changes. */
@@ -34,23 +56,26 @@ export const consoleBuffer = (id: ConnectionId) => {
   if (!buffer) { buffer = new ConsoleBuffer(); consoles.set(id, buffer); }
   return buffer;
 };
-export const consoleVersion = (id: ConnectionId) => consoleVersions()[id] ?? 0;
-const bumpConsole = (id: ConnectionId) => setConsoleVersions((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }));
+export const consoleVersion = (id: ConnectionId) => consoleVersions.get(id);
+const bumpConsole = (id: ConnectionId) => consoleVersions.update(id, (current) => current + 1);
 
 export function putSnapshot(snapshot: ServerSnapshot) {
   const id = snapshot.connection.id;
-  setSnapshots((current) => ({ ...current, [id]: snapshot }));
-  setOrder((current) => (current.includes(id) ? current : [...current, id]));
+  snapshots.update(id, () => snapshot);
+  if (!untrack(order).includes(id)) setOrder((current) => [...current, id]);
 }
 
 function forget(id: ConnectionId) {
-  setSnapshots((current) => { const next = { ...current }; delete next[id]; return next; });
   setOrder((current) => current.filter((entry) => entry !== id));
+  snapshots.delete(id);
+  operations.delete(id);
+  metrics.delete(id);
+  consoleVersions.delete(id);
   consoles.delete(id);
 }
 
-export function putOperations(id: ConnectionId, operations: readonly ServerOperation[]) {
-  setOperationsById((current) => ({ ...current, [id]: mergeOperations(current[id] ?? [], operations) }));
+export function putOperations(id: ConnectionId, incoming: readonly ServerOperation[]) {
+  operations.update(id, (current) => mergeOperations(current, incoming));
 }
 
 let api: ServersApi | undefined;
@@ -62,18 +87,26 @@ export async function serverCommand<T>(run: (api: ServersApi) => Promise<T>): Pr
   catch (reason) { throw toServerError(reason); }
 }
 
+let listSequence = 0;
+/** Re-read saved connections. Only the newest response applies, so a slow reply can't restore removed servers. */
 export async function refreshServers() {
+  const sequence = ++listSequence;
   try {
     const list = await serverCommand((client) => client.list());
-    const next = Object.fromEntries(list.map((snapshot) => [snapshot.connection.id, snapshot]));
-    setSnapshots(next);
-    setOrder(list.map((snapshot) => snapshot.connection.id));
-    for (const id of consoles.keys()) if (!next[id]) consoles.delete(id);
+    if (sequence !== listSequence) return;
+    const ids = list.map((snapshot) => snapshot.connection.id);
+    for (const id of untrack(order)) if (!ids.includes(id)) forget(id);
+    for (const snapshot of list) {
+      // Unchanged snapshots keep their identity so readers don't rerun.
+      const current = untrack(() => snapshots.get(snapshot.connection.id));
+      if (!current || JSON.stringify(current) !== JSON.stringify(snapshot)) snapshots.update(snapshot.connection.id, () => snapshot);
+    }
+    setOrder(ids);
     setListError(null);
   } catch (reason) {
-    setListError(toServerError(reason));
+    if (sequence === listSequence) setListError(toServerError(reason));
   } finally {
-    setLoaded(true);
+    if (sequence === listSequence) setLoaded(true);
   }
 }
 
@@ -86,16 +119,23 @@ export async function updateServer(id: ConnectionId, patch: { name?: string; pin
   putSnapshot(await serverCommand((client) => client.update(id, patch)));
 }
 
+const LIST_REFRESH_COALESCE_MS = 250;
+
 /** Loads saved servers once per window and follows native change notifications. Call from the shell. */
 export function useServerSync() {
   let stop: (() => void) | undefined;
   let closed = false;
+  let pending: ReturnType<typeof setTimeout> | undefined;
   void refreshServers();
   void ready().then((client) => {
     if (closed) return;
-    stop = client.onChanged(() => void refreshServers());
+    // Bursts of change notifications collapse into one list read.
+    stop = client.onChanged(() => {
+      if (pending) return;
+      pending = setTimeout(() => { pending = undefined; void refreshServers(); }, LIST_REFRESH_COALESCE_MS);
+    });
   });
-  onCleanup(() => { closed = true; stop?.(); });
+  onCleanup(() => { closed = true; stop?.(); if (pending) clearTimeout(pending); });
 }
 
 /**
@@ -108,17 +148,17 @@ export function useServerTopic(id: () => ConnectionId | undefined, topic: Server
     let unsubscribe: (() => void) | undefined;
     let closed = false;
     void serverCommand((client) => client.subscribe(connectionId, topic, (event) => {
+      if (closed) return;
       switch (event.kind) {
         case 'snapshot': putSnapshot(event.snapshot); break;
         case 'console': consoleBuffer(connectionId).append(event.lines); bumpConsole(connectionId); break;
         case 'consoleGap': consoleBuffer(connectionId).gap(event.cursor); bumpConsole(connectionId); break;
-        case 'metrics':
-          setMetricsById((current) => ({ ...current, [connectionId]: [...(current[connectionId] ?? []), event.sample].slice(-METRIC_HISTORY) }));
-          break;
+        case 'metrics': metrics.update(connectionId, (current) => [...current, event.sample].slice(-METRIC_HISTORY)); break;
         case 'operation': putOperations(connectionId, [event.operation]); break;
         case 'resync':
           if (event.topic === 'status') void serverCommand((client) => client.snapshot(connectionId, true)).then(putSnapshot).catch(() => {});
           if (event.topic === 'operations') void loadOperations(connectionId).catch(() => {});
+          if (event.topic === 'console') { consoleBuffer(connectionId).gap(`resync:${Date.now()}`); bumpConsole(connectionId); }
           break;
       }
     })).then((close) => {
@@ -135,23 +175,13 @@ export async function loadOperations(id: ConnectionId) {
   return page;
 }
 
-/** Fetch a bounded page of older console lines before what is shown. */
-export async function loadEarlierConsole(id: ConnectionId) {
-  const buffer = consoleBuffer(id);
-  const first = untrack(() => buffer.entries.find((entry) => entry.kind === 'line'));
-  const page = await serverCommand((client) => client.consolePage(id, first?.cursor ?? null, 200));
-  const added = buffer.prepend(page.items);
-  bumpConsole(id);
-  return { added, more: page.nextCursor !== null };
-}
-
-/** One bounded fetch for lines skipped at a gap marker. */
-export async function recoverConsoleGap(id: ConnectionId, gapKey: string) {
-  const buffer = consoleBuffer(id);
-  const at = buffer.entries.findIndex((entry) => entry.key === gapKey);
-  const after = buffer.entries.slice(at + 1).find((entry) => entry.kind === 'line');
-  const page = await serverCommand((client) => client.consolePage(id, after?.cursor ?? null, 200));
-  const added = buffer.fill(gapKey, page.items);
+/**
+ * One bounded read of the server's retained console tail (the agent pages forward only,
+ * and lines evicted at a gap are gone). Lines already shown are merged by cursor.
+ */
+export async function loadConsoleTail(id: ConnectionId) {
+  const page = await serverCommand((client) => client.consolePage(id, null, 200));
+  const added = consoleBuffer(id).merge(page.items);
   bumpConsole(id);
   return added;
 }

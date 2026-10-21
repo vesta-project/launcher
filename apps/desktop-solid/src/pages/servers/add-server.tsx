@@ -39,6 +39,9 @@ export function AddServer() {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<ServerCommandError | null>(null);
   const [result, setResult] = createSignal<ServerSnapshot | null>(null);
+  /** Explicit consent to keep credentials in memory when secure storage is unavailable. */
+  const [memoryOnly, setMemoryOnly] = createSignal(false);
+  const storageBlocked = () => discovery()?.secureStorageAvailable === false && !memoryOnly();
 
   const parsed = createMemo(() => parseAddressInput(address()), { name: 'servers:add-address' });
   const problem = () => {
@@ -82,8 +85,8 @@ export function AddServer() {
     if (!found) return;
     void run(async () => {
       const snapshot = method() === 'code'
-        ? await serverCommand((client) => client.pair(found.discoveryId, normalizePairingCode(code())))
-        : await serverCommand((client) => client.signInMinecraft(found.discoveryId, account() ?? usableAccounts()[0]!.uuid));
+        ? await serverCommand((client) => client.pair(found.discoveryId, normalizePairingCode(code()), { memoryOnly: memoryOnly() }))
+        : await serverCommand((client) => client.signInMinecraft(found.discoveryId, account() ?? usableAccounts()[0]!.uuid, { memoryOnly: memoryOnly() }));
       putSnapshot(snapshot);
       setResult(snapshot);
       setStep('done');
@@ -204,12 +207,18 @@ export function AddServer() {
                   error={code().trim() && !isPairingCode(code()) ? t('servers.sign-in.code-format') : undefined}
                 />
               </Show>
+              <Show when={discovery()?.secureStorageAvailable === false}>
+                <div data-vesta="server-callout" data-tone="warning">
+                  <p>{t('servers.sign-in.storage-unavailable')}</p>
+                  <Checkbox checked={memoryOnly()} onChange={setMemoryOnly} label={t('servers.sign-in.memory-only')} />
+                </div>
+              </Show>
               <ServerErrorNote error={error()} />
               <footer>
                 <Button variant="ghost" onClick={back}>{t('common.back')}</Button>
                 <Button tone="accent"
                   type="submit"
-                  disabled={busy() || (method() === 'code' ? !isPairingCode(code()) : usableAccounts().length === 0)}
+                  disabled={busy() || storageBlocked() || (method() === 'code' ? !isPairingCode(code()) : usableAccounts().length === 0)}
                 >{busy() ? t('servers.sign-in.working') : t('servers.sign-in.submit')}</Button>
               </footer>
             </form>

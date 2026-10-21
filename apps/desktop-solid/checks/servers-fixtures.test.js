@@ -61,6 +61,22 @@ describe('[lifecycle] generation-bound operations', () => {
     await settle(900);
     expect((await servers.snapshot('fixture-survival')).status).toMatchObject({ state: 'stopped', generation: null });
   });
+  test('a retried stop with the same intent replays its operation instead of stopping twice', async () => {
+    const servers = api();
+    const generation = (await servers.snapshot('fixture-survival')).status.generation;
+    const first = await servers.lifecycle('fixture-survival', 'stop', generation, 'stop-once');
+    const retry = await servers.lifecycle('fixture-survival', 'stop', generation, 'stop-once');
+    expect(retry.operationId).toBe(first.operationId);
+    expect((await servers.operations('fixture-survival', null)).items.filter((operation) => operation.intent === 'lifecycle.stop' && operation.state !== 'succeeded')).toHaveLength(1);
+  });
+  test('a prepared kill cannot be confirmed once its run has already stopped', async () => {
+    const servers = api();
+    const generation = (await servers.snapshot('fixture-survival')).status.generation;
+    await servers.lifecycle('fixture-survival', 'stop', generation, 'stop-k');
+    await servers.killPrepare('fixture-survival', generation, 'late-kill');
+    await settle(3700);
+    await expect(servers.killConfirm('fixture-survival', 'late-kill')).rejects.toMatchObject({ code: 'stale_target' });
+  });
   test('an unreachable server rejects actions instead of pretending', async () => {
     const servers = api();
     await expect(servers.lifecycle('fixture-away', 'stop', 'x', 'i4')).rejects.toMatchObject({ code: 'unreachable' });
@@ -80,12 +96,22 @@ describe('[console] commands and history', () => {
     expect(received.some((event) => event.kind === 'console' && event.lines.some((line) => line.text.includes('say hi')))).toBe(true);
     close();
   });
-  test('console pages are bounded and walk backwards by cursor', async () => {
+  test('console pages read the retained tail, then continue forward like the agent', async () => {
     const servers = api();
-    const latest = await servers.consolePage('fixture-survival', null, 10);
-    expect(latest.items).toHaveLength(10);
-    const earlier = await servers.consolePage('fixture-survival', latest.items[0].cursor, 10);
-    expect(Number(earlier.items.at(-1).cursor)).toBeLessThan(Number(latest.items[0].cursor));
+    const tail = await servers.consolePage('fixture-survival', null, 10);
+    expect(tail.items).toHaveLength(10);
+    expect(tail.items.at(-1).cursor).toBe(tail.latestCursor);
+    const middle = await servers.consolePage('fixture-survival', tail.items[0].cursor, 3);
+    expect(middle.items.map((line) => line.cursor)).toEqual(tail.items.slice(1, 4).map((line) => line.cursor));
+    expect(middle.nextCursor).toBe(middle.items.at(-1).cursor);
+  });
+  test('a retried command with the same intent is one operation; a changed payload conflicts', async () => {
+    const servers = api();
+    const generation = (await servers.snapshot('fixture-survival')).status.generation;
+    const first = await servers.consoleSend('fixture-survival', 'say once', generation, 'same-intent');
+    const retry = await servers.consoleSend('fixture-survival', 'say once', generation, 'same-intent');
+    expect(retry.operationId).toBe(first.operationId);
+    await expect(servers.consoleSend('fixture-survival', 'say twice', generation, 'same-intent')).rejects.toMatchObject({ code: 'conflict' });
   });
 });
 
@@ -121,5 +147,16 @@ describe('[connections] local records', () => {
     await servers.remove('fixture-creative');
     await expect(servers.snapshot('fixture-creative')).rejects.toMatchObject({ code: 'not_found' });
     expect(changes.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('[credentials] no silent plaintext fallback', () => {
+  test('without secure storage, pairing needs explicit session-only consent and keeps the code usable', async () => {
+    const servers = api();
+    const found = await servers.discover('novault.example');
+    expect(found.secureStorageAvailable).toBe(false);
+    await expect(servers.pair(found.discoveryId, CODE)).rejects.toMatchObject({ code: 'credentials_unavailable' });
+    const snapshot = await servers.pair(found.discoveryId, CODE, { memoryOnly: true });
+    expect(snapshot.connection.memoryOnly).toBe(true);
   });
 });

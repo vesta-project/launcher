@@ -6,7 +6,7 @@ import { Icon } from '../../components/icon';
 import { route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
-import { accessFact, connectionFact, minecraftFact, playersFact, statusDot } from '../../features/servers/model';
+import { accessFact, connectionFact, minecraftFactNow, playersFact, statusDot } from '../../features/servers/model';
 import { usingFixtures } from '../../features/servers/service';
 import { refreshServers, serverSnapshots, serversListError, serversLoaded, updateServer, useServersClock } from '../../features/servers/store';
 import type { ServerSnapshot } from '../../features/servers/native';
@@ -90,7 +90,7 @@ function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
         onClick={() => void updateServer(props.snapshot.connection.id, { pinned: !props.snapshot.connection.pinned })}
       />
       <div data-vesta="server-card-facts">
-        <FactBadge fact={minecraftFact(props.snapshot.status)} />
+        <FactBadge fact={minecraftFactNow(props.snapshot, props.now)} />
         <Show when={props.snapshot.status && props.snapshot.status.state !== 'stopped'}>
           <FactBadge fact={playersFact(props.snapshot.status, props.now)} />
         </Show>

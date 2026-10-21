@@ -8,6 +8,7 @@ import {
   accessFact, age, connectionFact, consoleLineProblem, formatUptime, isPlayerName, lifecycleControls, minecraftFact, playersFact, statusDot,
 } from '../src/features/servers/model';
 import { busyIntent, isTerminal, mergeOperations, operationStateMessage } from '../src/features/servers/operations-model';
+import { IntentMemo, minecraftFactNow, outcomeUncertain } from '../src/features/servers/model';
 
 const FP = 'a3f19c0d7be24e86c5d9017f3a6b28e4c90d5f17e2b8a4c6d3e0f9b7a1c5e823';
 const status = (patch = {}) => ({
@@ -121,6 +122,7 @@ describe('[state] connection, access and Minecraft are separate facts', () => {
   test('unknown player counts are never shown as zero, and stale counts carry their age', () => {
     expect(playersFact(status({ playerCountKnown: false, playerCount: null }), 0).message).toBe('servers.players.unknown');
     expect(playersFact(status({ state: 'stopped' }), 0).message).toBe('servers.players.none-running');
+    expect(playersFact(null, 0).message).toBe('servers.players.unknown');
     const known = playersFact(status(), 61_000);
     expect(known.args).toEqual({ count: 2 });
     expect(known.seen).toEqual({ message: 'servers.age.minutes', count: 1 });
@@ -188,23 +190,29 @@ describe('[console] bounded history with visible gaps', () => {
     expect(buffer.dropped).toBe(50);
     expect(buffer.entries[0].cursor).toBe('50');
   });
-  test('merges overlapping stream and page lines by cursor', () => {
+  test('merges the retained tail around live lines by cursor overlap', () => {
     const buffer = new ConsoleBuffer();
     buffer.append(lines(10, 5));
     expect(buffer.append(lines(12, 5))).toBe(2);
-    expect(buffer.prepend(lines(5, 7))).toBe(5);
-    expect(buffer.entries.map((entry) => entry.cursor)).toEqual(['5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']);
+    // The tail page (oldest first) overlaps what the stream already delivered.
+    expect(buffer.merge(lines(5, 14))).toBe(7);
+    expect(buffer.entries.map((entry) => entry.cursor)).toEqual(['5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18']);
   });
-  test('a gap becomes one marker, recovered lines follow it, and the marker remains', () => {
+  test('a tail with no overlap goes on top behind a gap instead of inventing continuity', () => {
     const buffer = new ConsoleBuffer();
+    buffer.append(lines(100, 2));
+    buffer.merge(lines(0, 2));
+    expect(buffer.entries.map((entry) => entry.kind === 'gap' ? 'gap' : entry.cursor)).toEqual(['0', '1', 'gap', '100', '101']);
+  });
+  test('gaps stay visible markers, consecutive gaps collapse, and markers count toward the bound', () => {
+    const buffer = new ConsoleBuffer(4);
     buffer.append(lines(0, 2));
     buffer.gap('c');
     buffer.gap('c');
-    buffer.append(lines(10, 1));
     expect(buffer.entries.filter((entry) => entry.kind === 'gap')).toHaveLength(1);
-    const gap = buffer.entries.find((entry) => entry.kind === 'gap');
-    expect(buffer.fill(gap.key, lines(5, 2))).toBe(2);
-    expect(buffer.entries.map((entry) => entry.kind === 'gap' ? `gap:${entry.recovered}` : entry.cursor)).toEqual(['0', '1', 'gap:true', '5', '6', '10']);
+    buffer.append(lines(10, 3));
+    expect(buffer.entries).toHaveLength(4);
+    expect(buffer.entries.map((entry) => entry.kind === 'gap' ? 'gap' : entry.cursor)).toEqual(['gap', '10', '11', '12']);
   });
   test('command lines follow the server rules: ≤1,024 bytes and no control characters', () => {
     expect(consoleLineProblem('say hi')).toBeNull();
@@ -219,5 +227,41 @@ describe('[console] bounded history with visible gaps', () => {
     expect(isPlayerName('a'.repeat(17))).toBe(false);
     expect(isPlayerName('@a')).toBe(false);
     expect(isPlayerName('bob; op me')).toBe(false);
+  });
+});
+
+describe('[idempotency] retries never create a second intent', () => {
+  test('an uncertain outcome keeps the intent for an identical retry', () => {
+    let next = 0;
+    const memo = new IntentMemo(() => `id-${++next}`);
+    const first = memo.idFor({ text: 'say hi', generation: 'g1' });
+    memo.settle({ code: 'outcome_unknown' });
+    expect(memo.uncertain).toBe(true);
+    expect(memo.idFor({ text: 'say hi', generation: 'g1' })).toBe(first);
+    memo.settle();
+    expect(memo.idFor({ text: 'say hi', generation: 'g1' })).not.toBe(first);
+  });
+  test('a different payload or a definite rejection starts a new intent', () => {
+    let next = 0;
+    const memo = new IntentMemo(() => `id-${++next}`);
+    const first = memo.idFor({ action: 'stop', generation: 'g1' });
+    memo.settle({ code: 'timeout' });
+    expect(memo.idFor({ action: 'stop', generation: 'g2' })).not.toBe(first);
+    const second = memo.idFor({ action: 'start' });
+    memo.settle({ code: 'stale_target' });
+    expect(memo.uncertain).toBe(false);
+    expect(memo.idFor({ action: 'start' })).not.toBe(second);
+  });
+  test('only lost or ambiguous outcomes count as uncertain', () => {
+    for (const code of ['outcome_unknown', 'timeout', 'unreachable', 'internal', 'pair_outcome_unknown']) expect(outcomeUncertain(code), code).toBe(true);
+    for (const code of ['forbidden', 'stale_target', 'conflict', 'invalid_input', 'confirmation_expired']) expect(outcomeUncertain(code), code).toBe(false);
+  });
+});
+
+describe('[state] last-known Minecraft state while disconnected', () => {
+  test('shows the value with its age and without a success tone', () => {
+    const offline = snapshot({ state: { phase: 'backoff', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: 'unreachable' }, statusObservedAtMs: 0 });
+    expect(minecraftFactNow(offline, 120_000)).toMatchObject({ message: 'servers.minecraft.ready', tone: 'neutral', seen: { message: 'servers.age.minutes', count: 2 } });
+    expect(minecraftFactNow(snapshot(), 120_000).seen).toBeUndefined();
   });
 });

@@ -3,12 +3,14 @@ import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { VirtualList } from '../../../components/virtual-list';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
+import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
 import { errorMessage } from '../../../features/servers/errors';
-import { consoleLineProblem, newIntentId } from '../../../features/servers/model';
-import { consoleBuffer, consoleVersion, loadEarlierConsole, putOperations, recoverConsoleGap, serverCommand, useServerTopic } from '../../../features/servers/store';
+import { IntentMemo, consoleLineProblem } from '../../../features/servers/model';
+import { busyIntent, operationStateMessage } from '../../../features/servers/operations-model';
+import { consoleBuffer, consoleVersion, loadConsoleTail, putOperations, serverCommand, serverOperations, useServerTopic } from '../../../features/servers/store';
 import type { ConsoleEntry } from '../../../features/servers/console-model';
-import type { ServerSnapshot } from '../../../features/servers/native';
+import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 
 const NOTICE_KEY = 'vesta:servers:console-notice-seen';
 
@@ -19,17 +21,27 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
   const [follow, setFollow] = createSignal(true, { name: 'server-console:follow' });
   const [line, setLine] = createSignal('');
   const [sending, setSending] = createSignal(false);
-  const [feedback, setFeedback] = createSignal<string | null>(null);
-  const [recovered, setRecovered] = createSignal<Set<string>>(new Set());
+  /** The last command's operation, followed through the operations store. */
+  const [sentOperation, setSentOperation] = createSignal<string | null>(null);
+  const [failure, setFailure] = createSignal<{ message: MessageId; uncertain: boolean } | null>(null);
   const [noticeSeen, setNoticeSeen] = createSignal(typeof localStorage !== 'undefined' && localStorage.getItem(NOTICE_KEY) === '1');
-  const [loadingEarlier, setLoadingEarlier] = createSignal(false);
-  const [moreEarlier, setMoreEarlier] = createSignal(true);
+  const [loadingTail, setLoadingTail] = createSignal(false);
+  const [tailLoaded, setTailLoaded] = createSignal(false);
+  const intents = new IntentMemo();
 
   const entries = createMemo(() => { consoleVersion(id()); return [...consoleBuffer(id()).entries]; }, { name: 'server-console:entries' });
   const lineCount = createMemo(() => entries().reduce((count, entry) => count + (entry.kind === 'line' ? 1 : 0), 0), { name: 'server-console:line-count' });
   const canWrite = () => gate(props.snapshot.capabilities, 'console.write') !== 'denied';
   const running = () => props.snapshot.status?.state === 'running' && !!props.snapshot.status.generation;
   const problem = () => (line() ? consoleLineProblem(line()) : null);
+  const commandInFlight = () => busyIntent(serverOperations(id()), 'console.command');
+  const sentState = () => {
+    const operationId = sentOperation();
+    const operation = operationId ? serverOperations(id()).find((entry) => entry.operationId === operationId) : undefined;
+    // `succeeded` means the line reached Minecraft's input, not that Minecraft ran it.
+    if (operation?.state === 'succeeded') return t('servers.console.delivered');
+    return operation ? t(operationStateMessage(operation)) : null;
+  };
 
   createEffect(() => ({ count: entries().length, follow: follow() }), ({ follow: following }) => {
     if (!following) return;
@@ -47,38 +59,38 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
     const text = line();
     const generation = props.snapshot.status?.generation;
     if (!text || problem() || !generation) return;
+    // The same line on the same run after an uncertain outcome keeps its intent.
+    const intentId = intents.idFor({ text, generation });
     setSending(true);
-    setFeedback(null);
+    setFailure(null);
     try {
-      const operation = await serverCommand((client) => client.consoleSend(id(), text, generation, newIntentId()));
+      const operation = await serverCommand((client) => client.consoleSend(id(), text, generation, intentId));
+      intents.settle();
       putOperations(id(), [{ ...operation, intent: operation.intent ?? 'console.command' }]);
+      setSentOperation(operation.operationId);
       setLine('');
-      setFeedback(t('servers.console.sent'));
       setFollow(true);
     } catch (reason) {
-      setFeedback(t(errorMessage(reason)));
+      const error = reason as ServerCommandError;
+      intents.settle(error);
+      setFailure({ message: errorMessage(error), uncertain: intents.uncertain });
     } finally {
       setSending(false);
     }
   };
 
-  const recover = async (key: string) => {
-    setRecovered((current) => new Set(current).add(key));
-    try { await recoverConsoleGap(id(), key); } catch { /* the marker stays; latest.log remains available */ }
-  };
-
-  const earlier = async () => {
-    setLoadingEarlier(true);
-    try { setMoreEarlier((await loadEarlierConsole(id())).more); }
-    catch { setMoreEarlier(false); }
-    finally { setLoadingEarlier(false); }
+  const loadTail = async () => {
+    setLoadingTail(true);
+    try { await loadConsoleTail(id()); setTailLoaded(true); }
+    catch { /* live output continues; the button stays available */ }
+    finally { setLoadingTail(false); }
   };
 
   return (
     <div data-vesta="server-console">
       <div data-vesta="pane-toolbar">
-        <Button size="sm" variant="ghost" disabled={loadingEarlier() || !moreEarlier()} onClick={() => void earlier()}>
-          {t('servers.console.load-earlier')}
+        <Button size="sm" variant="ghost" disabled={loadingTail() || tailLoaded()} onClick={() => void loadTail()}>
+          {t('servers.console.load-recent')}
         </Button>
         <span data-vesta="server-console-count">{t('servers.console.lines', { count: lineCount() })}</span>
         <IconButton
@@ -99,7 +111,7 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
       <div data-vesta="server-console-output" ref={setViewport} onScroll={scroll} tabindex={0} role="log" aria-live="off">
         <Show when={entries().length} fallback={<p data-vesta="console-empty">{running() ? t('servers.console.waiting') : t('servers.console.stopped')}</p>}>
           <VirtualList items={entries()} key={(entry) => entry.key} rowHeight={20} scrollElement={viewport()}>
-            {(entry) => <ConsoleRow entry={entry()} recovered={recovered().has(entry().key)} onRecover={(key) => void recover(key)} />}
+            {(entry) => <ConsoleRow entry={entry()} />}
           </VirtualList>
         </Show>
       </div>
@@ -108,7 +120,7 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
           <span aria-hidden="true">›</span>
           <input
             value={line()}
-            onInput={(event) => { setLine(event.currentTarget.value); setFeedback(null); }}
+            onInput={(event) => { setLine(event.currentTarget.value); setFailure(null); setSentOperation(null); }}
             placeholder={running() ? t('servers.console.placeholder') : t('servers.console.stopped')}
             disabled={!running() || sending()}
             aria-label={t('servers.console.command')}
@@ -116,30 +128,34 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
             spellcheck="false"
             autocomplete="off"
           />
-          <Button size="sm" type="submit" disabled={!running() || sending() || !line() || !!problem()}>{t('servers.console.send')}</Button>
+          <Button size="sm" type="submit" disabled={!running() || sending() || commandInFlight() || !line() || !!problem()}>
+            {failure()?.uncertain ? t('servers.console.send-again') : t('servers.console.send')}
+          </Button>
         </form>
-        <Show when={problem() || feedback()}>
-          <p data-vesta="server-console-feedback" data-problem={problem() ? '' : undefined}>{problem() ? t(problem()!) : feedback()}</p>
+        <Show when={problem() || failure() || sentState()}>
+          <p data-vesta="server-console-feedback" data-problem={problem() || failure() ? '' : undefined} role="status">
+            {problem()
+              ? t(problem()!)
+              : failure()
+                ? `${t(failure()!.message)}${failure()!.uncertain ? ` ${t('servers.operation.uncertain-retry')}` : ''}`
+                : sentState()}
+          </p>
         </Show>
       </Show>
     </div>
   );
 }
 
-function ConsoleRow(props: { entry: ConsoleEntry; recovered: boolean; onRecover: (key: string) => void }) {
+function ConsoleRow(props: { entry: ConsoleEntry }) {
   return (
     <Show
-      when={props.entry.kind === 'gap' ? props.entry : undefined}
+      when={props.entry.kind === 'gap'}
       fallback={<div data-vesta="server-console-line" data-truncated={props.entry.kind === 'line' && props.entry.truncated ? '' : undefined}>{props.entry.kind === 'line' ? props.entry.text : ''}</div>}
     >
-      {(gap) => (
-        <div data-vesta="server-console-gap">
-          <span>{t('servers.console.gap')}</span>
-          <Show when={!gap().recovered && !props.recovered} fallback={<span>{t('servers.console.gap-latest-log')}</span>}>
-            <button type="button" onClick={() => props.onRecover(gap().key)}>{t('servers.console.gap-load')}</button>
-          </Show>
-        </div>
-      )}
+      <div data-vesta="server-console-gap" role="note">
+        <span>{t('servers.console.gap')}</span>
+        <span>{t('servers.console.gap-latest-log')}</span>
+      </div>
     </Show>
   );
 }

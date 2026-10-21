@@ -36,7 +36,9 @@ interface FixtureServer {
   ops: OperatorEntry[];
   bans: BanEntry[];
   /** Pending two-step confirmations keyed by intent. */
-  pending: Map<string, { kind: 'kill' | 'op'; expiresAtMs: number; request?: ModerationAction }>;
+  pending: Map<string, { kind: 'kill' | 'op'; expiresAtMs: number; generation: string; request?: ModerationAction }>;
+  /** Intent id → canonical payload and its operation, like the agent's idempotency receipts. */
+  intents: Map<string, { payload: string; operation: ServerOperation }>;
   ticker?: ReturnType<typeof setInterval>;
 }
 
@@ -87,7 +89,7 @@ function seed(): FixtureServer[] {
     whitelist: PLAYERS.slice(0, 5).map((name) => ({ name, uuid: crypto.randomUUID() })),
     ops: [{ name: 'Alex', uuid: crypto.randomUUID(), level: 4, bypassesPlayerLimit: false }],
     bans: [{ name: 'griefer_99', uuid: crypto.randomUUID(), reason: 'Griefing spawn', created: '2026-10-02 18:12:44 +0000', expires: 'forever', source: 'Server' }],
-    pending: new Map(),
+    pending: new Map(), intents: new Map(),
   };
   for (let index = 0; index < 40; index++) {
     survival.console.push({ cursor: String(++survival.cursor), text: sample(CHATTER).replace('{p}', sample(PLAYERS)), truncated: false });
@@ -103,7 +105,7 @@ function seed(): FixtureServer[] {
       capabilities: { source: 'role_defaults', granted: capabilitiesForRole('viewer') ?? [], refused: [] },
       restartRequired: false,
     },
-    online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(),
+    online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(), intents: new Map(),
   };
   const away: FixtureServer = {
     snapshot: {
@@ -116,7 +118,7 @@ function seed(): FixtureServer[] {
       capabilities: { source: 'role_defaults', granted: capabilitiesForRole('maintainer') ?? [], refused: [] },
       restartRequired: false,
     },
-    online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(),
+    online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(), intents: new Map(),
   };
   return [survival, creative, away];
 }
@@ -157,6 +159,16 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     target.operations.unshift(operation);
     emit(target.snapshot.connection.id, 'operations', { kind: 'operation', operation: clone(operation) });
     return operation;
+  };
+  /** Same intent and payload replays the original operation; a changed payload is a conflict. */
+  const replay = (target: FixtureServer, intentId: string, payload: unknown) => {
+    const known = target.intents.get(intentId);
+    if (!known) return undefined;
+    if (known.payload !== JSON.stringify(payload)) fail('conflict');
+    return clone(known.operation);
+  };
+  const remember = (target: FixtureServer, intentId: string, payload: unknown, operation: ServerOperation) => {
+    target.intents.set(intentId, { payload: JSON.stringify(payload), operation });
   };
   const advance = (target: FixtureServer, operation: ServerOperation, state: ServerOperation['state']) => {
     operation.state = state;
@@ -223,15 +235,19 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
         expectedFingerprint: parsed.kind === 'link' ? parsed.fingerprint : null,
         linkCode: parsed.kind === 'link' ? parsed.code : null,
         existingConnectionId: existing?.snapshot.connection.id ?? null,
+        // Hosts named novault… simulate a machine without a usable credential store.
+        secureStorageAvailable: !target.host.startsWith('novault'),
       };
       discoveries.set(discovery.discoveryId, discovery);
       const { address: _, ...result } = discovery;
       return result;
     },
 
-    async pair(discoveryId, code) {
+    async pair(discoveryId, code, options = {}) {
       await wait(700);
       const discovery = discoveries.get(discoveryId) ?? fail('not_found');
+      // The storage check happens before the code is redeemed, so the code stays usable.
+      if (!discovery.secureStorageAvailable && !options.memoryOnly) fail('credentials_unavailable');
       const normalized = normalizePairingCode(code);
       if (!isPairingCode(normalized)) fail('pair_code_invalid');
       if (normalized.startsWith('lost')) fail('pair_outcome_unknown');
@@ -240,7 +256,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const name = discovery.endpoint.split(':')[0].replace(/^\[|\]$/g, '');
       const entry: FixtureServer = {
         snapshot: {
-          connection: { ...connection(id, name, discovery.endpoint, 'owner'), serverId: discovery.serverId, fingerprint: discovery.fingerprint, lastConnectedAtMs: Date.now(), addedAtMs: Date.now() },
+          connection: { ...connection(id, name, discovery.endpoint, 'owner'), serverId: discovery.serverId, fingerprint: discovery.fingerprint, lastConnectedAtMs: Date.now(), addedAtMs: Date.now(), memoryOnly: !!options.memoryOnly },
           state: { phase: 'online', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
           info: { serverId: discovery.serverId, name, agentVersion: '0.9.0', minecraftVersion: '1.21.4', packVersion: '1.0' },
           status: status('stopped', null, null),
@@ -249,7 +265,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
           capabilities: { source: 'session', granted: capabilitiesForRole('owner') ?? [], refused: [] },
           restartRequired: false,
         },
-        online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(),
+        online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(), intents: new Map(),
       };
       servers.set(id, entry);
       discoveries.delete(discoveryId);
@@ -257,20 +273,21 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       return clone(entry.snapshot);
     },
 
-    async signInMinecraft(discoveryId) {
+    async signInMinecraft(discoveryId, _accountUuid, options = {}) {
       await wait(900);
       const discovery = discoveries.get(discoveryId) ?? fail('not_found');
+      if (!discovery.secureStorageAvailable && !options.memoryOnly) fail('credentials_unavailable');
       const id = `fixture-${hex(6)}`;
       const name = discovery.endpoint.split(':')[0];
       const entry: FixtureServer = {
         snapshot: {
-          connection: { ...connection(id, name, discovery.endpoint, null), serverId: discovery.serverId, fingerprint: discovery.fingerprint, signInMethod: 'minecraft' },
+          connection: { ...connection(id, name, discovery.endpoint, null), serverId: discovery.serverId, fingerprint: discovery.fingerprint, signInMethod: 'minecraft', memoryOnly: !!options.memoryOnly },
           state: { phase: 'online', access: 'no_management_access', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
           info: null, status: null, statusObservedAtMs: null, pack: null,
           capabilities: { source: 'session', granted: ['public.info', 'pack.download', 'pack.realtime'], refused: [] },
           restartRequired: false,
         },
-        online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(),
+        online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(), intents: new Map(),
       };
       servers.set(id, entry);
       changed();
@@ -328,12 +345,13 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const target = server(connectionId);
       requireOnline(target);
       requireCapability(target, `lifecycle.${action}`);
-      const existing = target.operations.find((operation) => operation.operationId === intentId);
-      if (existing) return clone(existing);
+      const replayed = replay(target, intentId, { action, expectedGeneration });
+      if (replayed) return replayed;
       const current = target.snapshot.status;
       if (action === 'start' && current?.state !== 'stopped') fail('stale_target');
       if (action !== 'start' && (current?.state !== 'running' || current.generation !== expectedGeneration)) fail('stale_target');
       const operation = record(target, `lifecycle.${action}`);
+      remember(target, intentId, { action, expectedGeneration }, operation);
       setTimeout(() => advance(target, operation, 'running'), 300);
       if (action === 'start' || action === 'restart') {
         if (action === 'restart') { setState(target, 'stopping', null); line(target, '[Server thread/INFO]: Stopping server'); }
@@ -371,18 +389,27 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       requireCapability(target, 'lifecycle.force_kill');
       if (target.snapshot.status?.generation !== expectedGeneration) fail('stale_target');
       const expiresAtMs = Date.now() + 120_000;
-      target.pending.set(intentId, { kind: 'kill', expiresAtMs });
+      target.pending.set(intentId, { kind: 'kill', expiresAtMs, generation: expectedGeneration });
       return { operationId: `op-${hex(10)}`, expiresAtMs };
     },
 
     async killConfirm(connectionId, intentId) {
       await wait();
       const target = server(connectionId);
+      const replayed = replay(target, intentId, { kill: true });
+      if (replayed) return replayed;
       const pending = target.pending.get(intentId);
-      if (!pending || pending.kind !== 'kill') fail('conflict');
-      if (pending!.expiresAtMs < Date.now()) fail('confirmation_expired');
+      if (!pending || pending.kind !== 'kill') return fail('conflict');
+      if (pending.expiresAtMs < Date.now()) fail('confirmation_expired');
+      requireCapability(target, 'lifecycle.force_kill');
+      const current = target.snapshot.status;
+      if (current?.generation !== pending.generation || (current.state !== 'stopping' && current.state !== 'draining')) {
+        target.pending.delete(intentId);
+        fail('stale_target');
+      }
       target.pending.delete(intentId);
       const operation = record(target, 'lifecycle.kill');
+      remember(target, intentId, { kill: true }, operation);
       setTimeout(() => {
         setState(target, 'stopped', null);
         target.online = [];
@@ -404,19 +431,24 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       await wait();
       const target = server(connectionId);
       requireCapability(target, 'console.read');
-      const before = cursor ? target.console.findIndex((entry) => entry.cursor === cursor) : target.console.length;
-      const end = before < 0 ? target.console.length : before;
-      const items = target.console.slice(Math.max(0, end - limit), end);
-      return { items: clone(items), nextCursor: end - limit > 0 ? items[0]?.cursor ?? null : null, latestCursor: String(target.cursor) };
+      if (cursor && !target.console.some((entry) => entry.cursor === cursor)) fail('conflict');
+      const start = cursor
+        ? target.console.findIndex((entry) => entry.cursor === cursor) + 1
+        : Math.max(0, target.console.length - limit);
+      const items = target.console.slice(start, start + limit);
+      return { items: clone(items), nextCursor: items.at(-1)?.cursor ?? cursor ?? String(target.cursor), latestCursor: String(target.cursor) };
     },
 
-    async consoleSend(connectionId, text, expectedGeneration) {
+    async consoleSend(connectionId, text, expectedGeneration, intentId) {
       await wait();
       const target = server(connectionId);
       requireOnline(target);
       requireCapability(target, 'console.write');
+      const replayed = replay(target, intentId, { text, expectedGeneration });
+      if (replayed) return replayed;
       if (target.snapshot.status?.state !== 'running' || target.snapshot.status.generation !== expectedGeneration) fail('stale_target');
       const operation = record(target, 'console.command');
+      remember(target, intentId, { text, expectedGeneration }, operation);
       setTimeout(() => {
         line(target, `[Server thread/INFO]: [Rcon: ${text}]`);
         advance(target, operation, 'succeeded');
@@ -441,23 +473,37 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const target = server(connectionId);
       requireOnline(target);
       requireCapability(target, request.action === 'op' || request.action === 'deop' ? 'players.operator' : 'players.moderate');
+      const replayed = replay(target, intentId, { request, expectedGeneration });
+      if (replayed) return { kind: 'operation', operation: replayed };
       if (target.snapshot.status?.generation !== expectedGeneration) fail('stale_target');
       if (request.action === 'op') {
         const expiresAtMs = Date.now() + 120_000;
-        target.pending.set(intentId, { kind: 'op', expiresAtMs, request });
+        target.pending.set(intentId, { kind: 'op', expiresAtMs, generation: expectedGeneration, request });
         return { kind: 'awaitingConfirmation', expiresAtMs };
       }
-      return { kind: 'operation', operation: applyModeration(target, request) };
+      const operation = applyModeration(target, request);
+      remember(target, intentId, { request, expectedGeneration }, operation);
+      return { kind: 'operation', operation: clone(operation) };
     },
 
     async moderateConfirm(connectionId, intentId) {
       await wait();
       const target = server(connectionId);
       const pending = target.pending.get(intentId);
-      if (!pending?.request) fail('conflict');
-      if (pending!.expiresAtMs < Date.now()) fail('confirmation_expired');
+      if (!pending?.request) {
+        const confirmed = target.intents.get(intentId);
+        return confirmed ? clone(confirmed.operation) : fail('conflict');
+      }
+      if (pending.expiresAtMs < Date.now()) fail('confirmation_expired');
+      requireCapability(target, 'players.operator');
+      if (target.snapshot.status?.generation !== pending.generation) {
+        target.pending.delete(intentId);
+        fail('stale_target');
+      }
       target.pending.delete(intentId);
-      return applyModeration(target, pending!.request!);
+      const operation = applyModeration(target, pending.request);
+      remember(target, intentId, { request: pending.request, expectedGeneration: pending.generation }, operation);
+      return clone(operation);
     },
 
     onChanged(listener) { listeners.add(listener); return () => listeners.delete(listener); },
@@ -482,7 +528,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     if (target.snapshot.status && target.snapshot.status.playerCountKnown) target.snapshot.status.playerCount = target.online.length;
     setTimeout(() => advance(target, operation, 'succeeded'), 300);
     publish(target);
-    return clone(operation);
+    return operation;
   }
 
   return api;

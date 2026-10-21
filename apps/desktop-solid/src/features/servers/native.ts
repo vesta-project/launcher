@@ -254,7 +254,10 @@ export type ServerEvent =
   /** The consumer fell behind or a stream restarted; re-read authoritative state. */
   | { kind: 'resync'; topic: ServerTopic };
 
-/** Global Tauri event emitted when the saved connection list or any snapshot changes. */
+/**
+ * Global Tauri event: the saved connection list or a connection's coarse state changed.
+ * Native code coalesces bursts; per-server detail flows through topic subscriptions.
+ */
 export const SERVERS_CHANGED_EVENT = 'core://servers-changed';
 
 // ------------------------------------------------------------------ discovery
@@ -274,6 +277,18 @@ export interface Discovery {
   linkCode: string | null;
   /** An existing saved connection to the same server, if any. */
   existingConnectionId: ConnectionId | null;
+  /** False when the OS credential store is unavailable; the UI then offers a session-only sign-in. */
+  secureStorageAvailable: boolean;
+}
+
+export interface SignInOptions {
+  /**
+   * Keep the device key and session in memory for this launcher session only. Chosen
+   * explicitly by the user when secure storage is unavailable; never a silent fallback.
+   * Without it, an unavailable store rejects with `credentials_unavailable` before the
+   * pairing code is redeemed.
+   */
+  memoryOnly?: boolean;
 }
 
 // ------------------------------------------------------------------- commands
@@ -286,10 +301,11 @@ export const serversNative = {
   /** Unauthenticated first contact: TLS handshake, fingerprint, `/api/v3/status`. Accepts a pairing link. */
   discover: (address: string) => call<Discovery>('server_discover', { address }),
   /** Redeem a pairing code. Never retried automatically; an uncertain outcome rejects with `pair_outcome_unknown`. */
-  pair: (discoveryId: string, code: string) => call<ServerSnapshot>('server_pair', { discoveryId, code }),
+  pair: (discoveryId: string, code: string, options: SignInOptions = {}) =>
+    call<ServerSnapshot>('server_pair', { discoveryId, code, memoryOnly: options.memoryOnly ?? false }),
   /** Enroll with a launcher Minecraft account via the server's Mojang join challenge. */
-  signInMinecraft: (discoveryId: string, accountUuid: string) =>
-    call<ServerSnapshot>('server_sign_in_minecraft', { discoveryId, accountUuid }),
+  signInMinecraft: (discoveryId: string, accountUuid: string, options: SignInOptions = {}) =>
+    call<ServerSnapshot>('server_sign_in_minecraft', { discoveryId, accountUuid, memoryOnly: options.memoryOnly ?? false }),
   /** Accept the currently presented fingerprint after the user compared it. */
   approveFingerprint: (connectionId: ConnectionId, fingerprint: string) =>
     call<ServerSnapshot>('server_trust_approve', { connectionId, fingerprint }),
@@ -316,6 +332,11 @@ export const serversNative = {
   operations: (connectionId: ConnectionId, cursor: string | null) =>
     call<Page<ServerOperation>>('server_operations', { connectionId, cursor }),
 
+  /**
+   * Agent semantics: `null` reads the bounded retained tail (oldest first); a cursor
+   * continues forward after that line. Lines evicted at a gap are not retrievable.
+   * Line cursors are identical in pages and stream events, so the UI can merge them.
+   */
   consolePage: (connectionId: ConnectionId, cursor: string | null, limit: number) =>
     call<ConsolePage>('server_console_page', { connectionId, cursor, limit }),
   consoleSend: (connectionId: ConnectionId, line: string, expectedGeneration: string, intentId: string) =>

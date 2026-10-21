@@ -3,7 +3,7 @@
 import type { MessageId } from '../../localization/messages';
 import type { Tone } from '@vesta/ui';
 import { gate } from './capabilities';
-import type { ServerSnapshot, ServerStatus } from './native';
+import type { ServerErrorCode, ServerSnapshot, ServerStatus } from './native';
 
 export interface Fact {
   tone: Tone;
@@ -98,7 +98,8 @@ export function supervisorWarnings(status: ServerStatus | null): MessageId[] {
 
 /** Player count is never shown as 0 unless the server observed 0 for the running game. */
 export function playersFact(status: ServerStatus | null, nowMs: number): Fact {
-  if (!status || status.state === 'stopped') return { tone: 'neutral', message: 'servers.players.none-running' };
+  if (!status) return { tone: 'neutral', message: 'servers.players.unknown' };
+  if (status.state === 'stopped') return { tone: 'neutral', message: 'servers.players.none-running' };
   if (!status.playerCountKnown || status.playerCount === null) return { tone: 'neutral', message: 'servers.players.unknown' };
   if (status.playerCountObservedAtMs === null) {
     return { tone: 'neutral', message: 'servers.players.count', args: { count: status.playerCount } };
@@ -181,4 +182,51 @@ export const isPlayerName = (value: string) => /^[A-Za-z0-9_]{1,16}$/.test(value
 export function newIntentId(): string {
   const random = globalThis.crypto?.randomUUID?.();
   return random ?? `intent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** Rejections that prove the server did not act on this exact request. */
+const DEFINITE_REJECTIONS: ReadonlySet<ServerErrorCode> = new Set([
+  'invalid_address', 'pair_code_invalid', 'credentials_rejected', 'credentials_unavailable', 'no_management_access',
+  'forbidden', 'not_found', 'stale_target', 'confirmation_expired', 'conflict', 'unsupported', 'invalid_input',
+  'fingerprint_mismatch', 'tls_failed',
+]);
+
+/** True when the server may or may not have accepted the request (lost response, timeout, …). */
+export const outcomeUncertain = (code: ServerErrorCode) => !DEFINITE_REJECTIONS.has(code);
+
+/**
+ * One intent id per user intent. Retrying the identical payload after an uncertain
+ * outcome reuses the id, so the server's idempotency key collapses duplicates; a new
+ * payload, a success or a definite rejection starts a new intent.
+ */
+export class IntentMemo {
+  private last: { payload: string; id: string; uncertain: boolean } | null = null;
+
+  constructor(private readonly create: () => string = newIntentId) {}
+
+  idFor(payload: unknown): string {
+    const key = JSON.stringify(payload);
+    if (this.last && this.last.payload === key) return this.last.id;
+    this.last = { payload: key, id: this.create(), uncertain: false };
+    return this.last.id;
+  }
+
+  /** Record the outcome of the attempt made with `idFor`. */
+  settle(error?: { code: ServerErrorCode } | null) {
+    if (!this.last) return;
+    if (error && outcomeUncertain(error.code)) this.last.uncertain = true;
+    else this.last = null;
+  }
+
+  /** An earlier attempt may have reached the server; the UI says so and offers the same retry. */
+  get uncertain() {
+    return this.last?.uncertain ?? false;
+  }
+}
+
+/** The Minecraft fact as shown while disconnected: the last known value, with its age. */
+export function minecraftFactNow(snapshot: ServerSnapshot, nowMs: number): Fact {
+  const fact = minecraftFact(snapshot.status);
+  if (snapshot.state.phase === 'online' || !snapshot.status || snapshot.statusObservedAtMs === null) return fact;
+  return { ...fact, tone: 'neutral', seen: age(snapshot.statusObservedAtMs, nowMs) };
 }
