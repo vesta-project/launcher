@@ -29,6 +29,7 @@ struct State {
     pairs: AtomicUsize,
     sessions: AtomicUsize,
     starts: AtomicUsize,
+    start_keys: Mutex<Vec<String>>,
     status_reads: AtomicUsize,
     reject_old: AtomicBool,
     uncertain: AtomicBool,
@@ -250,6 +251,12 @@ async fn route(
         }
         "/api/v3/manage/lifecycle/start" => {
             state.starts.fetch_add(1, Ordering::SeqCst);
+            state.start_keys.lock().unwrap().push(
+                req.headers()["idempotency-key"]
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            );
             assert!(req.headers()["idempotency-key"].as_bytes().len() >= 16);
             assert_eq!(body, json!({}));
             if state.uncertain.load(Ordering::SeqCst) {
@@ -422,6 +429,9 @@ async fn uncertain_submission_explicit_retry_replays_and_known_id_reconciles_by_
         "operation-1"
     );
     assert_eq!(agent.state.starts.load(Ordering::SeqCst), 3);
+    let keys = agent.state.start_keys.lock().unwrap().clone();
+    assert_eq!(keys.len(), 3);
+    assert!(keys.iter().all(|key| key == &keys[0]));
     // After a known receipt, local retries reconcile the exact accepted operation.
     client.lifecycle("start", None, "lost-start").await.unwrap();
     assert_eq!(agent.state.starts.load(Ordering::SeqCst), 3);
@@ -636,4 +646,20 @@ async fn proactive_renewal_before_expiry_is_single_flight() {
         call.await.unwrap().unwrap();
     }
     assert_eq!(agent.state.sessions.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn upgraded_uncertain_journals_reuse_the_original_wire_key() {
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    let old_key = vesta_server_client::operations::intent_key("old-uncertain").unwrap();
+    client.restore_legacy_intents([old_key.clone()]).unwrap();
+    client
+        .lifecycle("start", None, "old-uncertain")
+        .await
+        .unwrap();
+    assert_eq!(
+        agent.state.start_keys.lock().unwrap().as_slice(),
+        &[old_key]
+    );
 }
