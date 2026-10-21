@@ -18,6 +18,7 @@ use tokio_tungstenite::{
 pub type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 type SharedRead = Shared<BoxFuture<'static, Result<Value>>>;
 pub struct Transport {
+    read_epoch: std::sync::atomic::AtomicU64,
     endpoint: Endpoint,
     http: reqwest::Client,
     tls: Arc<rustls::ClientConfig>,
@@ -45,6 +46,7 @@ impl Transport {
             .map_err(|_| Error::new(ErrorCode::Internal))?;
         let scheduler = Scheduler::for_origin(endpoint.url().as_str())?;
         Ok(Arc::new(Self {
+            read_epoch: Default::default(),
             endpoint,
             http,
             tls: Arc::new(tls),
@@ -100,7 +102,8 @@ impl Transport {
         let credential = token
             .map(|v| trust::leaf_fingerprint(v.as_bytes()))
             .unwrap_or_default();
-        let cache_key = format!("{credential}:{path}");
+        let epoch = self.read_epoch.load(std::sync::atomic::Ordering::Acquire);
+        let cache_key = format!("{epoch}:{credential}:{path}");
         let future = {
             let mut reads = self.reads.lock().await;
             reads.retain(|_, (at, future)| {
@@ -234,7 +237,7 @@ impl Transport {
             }
         })?;
         if !status.is_success() {
-            return Err(Error::wire(
+            return Err(Error::wire_for_route(
                 status.as_u16(),
                 value
                     .pointer("/error/code")
@@ -242,6 +245,7 @@ impl Transport {
                     .and_then(Value::as_str)
                     .unwrap_or(""),
                 retry,
+                path,
             ));
         }
         // Implemented auth routes predate the v3 management envelope and return
@@ -251,6 +255,12 @@ impl Transport {
             return Err(Error::new(ErrorCode::Unsupported));
         }
         let data = value.get("data").cloned().unwrap_or(value);
+        if mutation && path.starts_with("/api/v3/manage/") {
+            // New reads must not reuse a pre-mutation projection. In-flight old
+            // readers may complete, but their epoch cannot repopulate the new cache.
+            self.read_epoch
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        }
         if conditional {
             if let Some(tag) = tag {
                 self.validators

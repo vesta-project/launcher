@@ -1,5 +1,5 @@
 //! Exercise the production profile store and OS credential adapter without Tauri.
-#[allow(dead_code)]
+#[allow(dead_code, clippy::items_after_test_module)]
 #[path = "../../../vesta-launcher/src-tauri/src/servers/credentials.rs"]
 mod credentials;
 #[allow(dead_code)]
