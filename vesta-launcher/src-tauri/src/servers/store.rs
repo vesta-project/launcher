@@ -18,6 +18,42 @@ pub struct Record {
 mod tests {
     use super::*;
     #[test]
+    fn session_only_connections_and_journals_never_survive_restart() {
+        let root = tempfile::tempdir().unwrap();
+        let snapshot: ServerSnapshot = serde_json::from_value(serde_json::json!({
+            "connection": {"id":"session-only", "name":"temporary", "endpoint":"localhost:8443", "serverId":"server", "fingerprint":"ab".repeat(32), "role":null, "signInMethod":"pairing_code", "memoryOnly":true, "pinned":false, "addedAtMs":0, "lastConnectedAtMs":null},
+            "state":{"phase":"online", "access":"paired", "retryAtMs":null, "rateLimitedUntilMs":null, "lastError":null},
+            "info":null, "status":null, "statusObservedAtMs":null, "pack":null,
+            "capabilities":{"source":"unknown", "granted":[], "refused":[]}, "restartRequired":false
+        })).unwrap();
+        let mut store = Store::default();
+        store.connections.push(Record {
+            snapshot,
+            device_id: "temporary-device".into(),
+            key_reference: "temporary-key".into(),
+        });
+        store.intents.push(PendingIntent {
+            connection_id: "session-only".into(),
+            key: "temporary-intent".into(),
+            key_version: 2,
+            action: "lifecycle.start".into(),
+            payload_hash: "hash".into(),
+            operation_id: None,
+            created_at_ms: 0,
+            terminal: false,
+            uncertain: true,
+        });
+        store.save(root.path()).unwrap();
+        let bytes = std::fs::read(root.path().join(FILE)).unwrap();
+        assert!(!String::from_utf8_lossy(&bytes).contains("temporary"));
+        assert!(Store::load(root.path()).unwrap().connections.is_empty());
+        // A profile written by an older launcher must also drop temporary entries.
+        std::fs::write(root.path().join(FILE), serde_json::to_vec(&store).unwrap()).unwrap();
+        let restarted = Store::load(root.path()).unwrap();
+        assert!(restarted.connections.is_empty());
+        assert!(restarted.intents.is_empty());
+    }
+    #[test]
     fn metadata_is_atomic_profile_isolated_and_does_not_store_mutation_payloads() {
         let a = tempfile::tempdir().unwrap();
         let b = tempfile::tempdir().unwrap();
@@ -25,6 +61,7 @@ mod tests {
         store.intents.push(PendingIntent {
             connection_id: "connection".into(),
             key: "launcher-hash".into(),
+            key_version: 2,
             action: "console.command".into(),
             payload_hash: "payload-hash".into(),
             operation_id: Some("operation".into()),
@@ -59,6 +96,9 @@ mod tests {
 pub struct PendingIntent {
     pub connection_id: String,
     pub key: String,
+    /// Missing on pre-followup journals, whose wire key must survive upgrade.
+    #[serde(default)]
+    pub key_version: u8,
     pub action: String,
     pub payload_hash: String,
     pub operation_id: Option<String>,
@@ -103,16 +143,36 @@ impl Store {
         {
             return Err(Error::new(ErrorCode::Internal));
         }
+        // Session-only entries, including metadata from older versions, are dropped.
+        let dropped: Vec<_> = store
+            .connections
+            .iter()
+            .filter(|r| r.snapshot.connection.memory_only)
+            .map(|r| r.snapshot.connection.id.clone())
+            .collect();
+        store
+            .connections
+            .retain(|r| !r.snapshot.connection.memory_only);
+        store
+            .intents
+            .retain(|i| !dropped.contains(&i.connection_id));
         for record in &mut store.connections {
             record.snapshot.state = Default::default();
-            if record.snapshot.connection.memory_only {
-                record.snapshot.state.access = "credentials_unavailable".into();
-            }
         }
         Ok(store)
     }
     pub fn save(&self, root: &Path) -> Result<()> {
-        let bytes = serde_json::to_vec(self).map_err(failed)?;
+        // Memory-only devices and their intent journals never enter profile storage.
+        let mut persisted = self.clone();
+        persisted
+            .connections
+            .retain(|r| !r.snapshot.connection.memory_only);
+        persisted.intents.retain(|i| {
+            !self.connections.iter().any(|r| {
+                r.snapshot.connection.id == i.connection_id && r.snapshot.connection.memory_only
+            })
+        });
+        let bytes = serde_json::to_vec(&persisted).map_err(failed)?;
         if bytes.len() as u64 > MAX_BYTES {
             return Err(Error::new(ErrorCode::ServerBusy));
         }

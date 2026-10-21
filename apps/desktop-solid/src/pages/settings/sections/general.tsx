@@ -91,6 +91,12 @@ export function GeneralSettings() {
           checked={setting('discord_presence_enabled')}
           onChange={(value) => updateSetting('discord_presence_enabled', value)}
         />
+        <ToggleRow
+          label={t('prefs.general.servers-privacy')}
+          description={t('prefs.general.servers-privacy-description')}
+          checked={setting('servers_privacy_mode')}
+          onChange={(value) => updateSetting('servers_privacy_mode', value)}
+        />
         <SettingRow
           label={t('prefs.general.trusted-sites')}
           description={

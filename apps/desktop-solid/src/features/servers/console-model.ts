@@ -5,18 +5,25 @@ import type { ConsoleLine } from './native';
 
 export const CONSOLE_LINE_LIMIT = 5000;
 
+/**
+ * `id` orders entries within one buffer: it increases from top to bottom and never
+ * repeats, even when a merged tail goes on top (those take ids below the first entry).
+ * Cursors are opaque, so views use `id` for ordering and display boundaries.
+ */
 export type ConsoleEntry =
-  | { key: string; kind: 'line'; cursor: string; text: string; truncated: boolean }
-  | { key: string; kind: 'gap'; cursor: string };
+  | { key: string; id: number; kind: 'line'; cursor: string; text: string; truncated: boolean }
+  | { key: string; id: number; kind: 'gap'; cursor: string };
 
-const lineEntry = (line: ConsoleLine): ConsoleEntry => ({
-  key: `l:${line.cursor}`, kind: 'line', cursor: line.cursor, text: line.text, truncated: line.truncated,
+const lineEntry = (line: ConsoleLine, id: number): ConsoleEntry => ({
+  key: `l:${line.cursor}`, id, kind: 'line', cursor: line.cursor, text: line.text, truncated: line.truncated,
 });
 
 export class ConsoleBuffer {
   readonly entries: ConsoleEntry[] = [];
   private readonly seen = new Set<string>();
   private gaps = 0;
+  /** The next id at the bottom; a merged top counts down from the first entry instead. */
+  private nextId = 0;
   dropped = 0;
 
   /** `limit` bounds all entries, gap markers included. */
@@ -28,7 +35,7 @@ export class ConsoleBuffer {
     for (const line of lines) {
       if (this.seen.has(line.cursor)) continue;
       this.seen.add(line.cursor);
-      this.entries.push(lineEntry(line));
+      this.entries.push(lineEntry(line, this.nextId++));
       added++;
     }
     this.trim();
@@ -38,7 +45,7 @@ export class ConsoleBuffer {
   /** Inserts a visible marker where the server skipped lines. Consecutive gaps collapse. */
   gap(cursor: string) {
     if (this.entries.at(-1)?.kind === 'gap') return;
-    this.entries.push({ key: `g:${cursor}:${this.gaps++}`, kind: 'gap', cursor });
+    this.entries.push({ key: `g:${cursor}:${this.gaps++}`, id: this.nextId++, kind: 'gap', cursor });
     this.trim();
   }
 
@@ -56,8 +63,9 @@ export class ConsoleBuffer {
     const before = overlap < 0 ? fresh : lines.slice(0, overlap).filter((line) => !this.seen.has(line.cursor));
     const after = overlap < 0 ? [] : lines.slice(overlap).filter((line) => !this.seen.has(line.cursor));
     for (const line of before) this.seen.add(line.cursor);
-    const top: ConsoleEntry[] = before.map(lineEntry);
-    if (overlap < 0) top.push({ key: `g:merge:${this.gaps++}`, kind: 'gap', cursor: '' });
+    const base = this.entries[0].id - before.length - (overlap < 0 ? 1 : 0);
+    const top: ConsoleEntry[] = before.map((line, index) => lineEntry(line, base + index));
+    if (overlap < 0) top.push({ key: `g:merge:${this.gaps++}`, id: base + before.length, kind: 'gap', cursor: '' });
     this.entries.unshift(...top);
     this.trim();
     this.append(after);

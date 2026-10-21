@@ -2,13 +2,16 @@ use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
     model::*,
-    operations::{generation, intent_key},
+    operations::{device_intent_key, generation, intent_key},
     transport::{Socket, Transport},
     Error, ErrorCode, Result,
 };
 use reqwest::Method;
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex as StdMutex},
+};
 use tokio::sync::Mutex;
 
 struct SessionState {
@@ -33,6 +36,9 @@ pub struct Client {
     prepared: Mutex<HashMap<String, Prepared>>,
     mutations: Mutex<()>,
     intents: Mutex<HashMap<String, Intent>>,
+    legacy_intents: StdMutex<HashSet<String>>,
+    principal_id: StdMutex<Option<String>>,
+    principal_lookup: Mutex<bool>,
 }
 #[derive(Clone)]
 enum Intent {
@@ -59,15 +65,47 @@ impl Submission {
     }
 }
 impl Client {
+    /// Preserve pre-followup journal keys so upgrading cannot submit an uncertain
+    /// old intent under a new key. Only hashes are restored, never payloads.
+    pub fn restore_legacy_intents(&self, keys: impl IntoIterator<Item = String>) -> Result<()> {
+        let mut legacy = self
+            .legacy_intents
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?;
+        for key in keys {
+            if legacy.len() >= 4096 {
+                return Err(Error::new(ErrorCode::ServerBusy));
+            }
+            legacy.insert(key);
+        }
+        Ok(())
+    }
+    fn intent_key(&self, intent: &str) -> Result<String> {
+        let old = intent_key(intent)?;
+        if self
+            .legacy_intents
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?
+            .contains(&old)
+        {
+            return Ok(old);
+        }
+        device_intent_key(&self.server_id, &self.device_id, intent)
+    }
+
     /// A trust approval retires every old pool/session, including memory-only
     /// connections, without moving the key through IPC or plaintext storage.
     pub fn repin(&self, transport: Arc<Transport>) -> Arc<Self> {
-        Self::new(
+        let client = Self::new(
             transport,
             self.server_id.clone(),
             self.device_id.clone(),
             self.signer.clone(),
-        )
+        );
+        if let Ok(legacy) = self.legacy_intents.lock() {
+            let _ = client.restore_legacy_intents(legacy.iter().cloned());
+        }
+        client
     }
     pub async fn renewal_delay(&self) -> std::time::Duration {
         let state = self.session.lock().await;
@@ -98,6 +136,9 @@ impl Client {
             prepared: Default::default(),
             mutations: Default::default(),
             intents: Default::default(),
+            legacy_intents: Default::default(),
+            principal_id: Default::default(),
+            principal_lookup: Default::default(),
         })
     }
     pub async fn pair(
@@ -277,6 +318,13 @@ impl Client {
                     value.get("capabilities").cloned().unwrap_or(Value::Null),
                 )
                 .map_err(|_| Error::new(ErrorCode::Unsupported))?;
+                *self
+                    .principal_id
+                    .lock()
+                    .map_err(|_| Error::new(ErrorCode::Internal))? = value
+                    .get("principal_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
                 Ok(CapabilityView {
                     source: "session".into(),
                     granted,
@@ -365,7 +413,7 @@ impl Client {
             .mutations
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let key = intent_key(intent)?;
+        let key = self.intent_key(intent)?;
         let digest = crate::trust::leaf_fingerprint(
             serde_json::to_string(&body)
                 .map_err(|_| Error::new(ErrorCode::Internal))?
@@ -400,15 +448,19 @@ impl Client {
                             }));
                         }
                     }
-                    return Err(Error::new(if old != path || d != digest {
-                        ErrorCode::Conflict
-                    } else {
-                        ErrorCode::OutcomeUnknown
-                    }));
+                    if old != path || d != digest {
+                        return Err(Error::new(ErrorCode::Conflict));
+                    }
+                    // An explicit identical retry reuses the durable key. The
+                    // agent replays its receipt if the first request committed.
                 }
             }
         }
-        if self.intents.lock().await.len() >= 4096 {
+        let full = {
+            let intents = self.intents.lock().await;
+            intents.len() >= 4096 && !intents.contains_key(&key)
+        };
+        if full {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
         // Record before I/O; cancellation/drop of the future is also uncertain.
@@ -438,6 +490,7 @@ impl Client {
                         | ErrorCode::Unreachable
                         | ErrorCode::OutcomeUnknown
                         | ErrorCode::Unsupported
+                        | ErrorCode::Internal
                 ) =>
             {
                 return Err(Error::new(ErrorCode::OutcomeUnknown))
@@ -479,8 +532,11 @@ impl Client {
             // Confirmation receipts do not carry a complete operation projection.
             return Ok(Submission::Prepared(receipt));
         }
-        let mut operation: ServerOperation =
-            from_wire(value).map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
+        let needs_detail = !has_operation_details(&value);
+        let mut operation = self
+            .decode_operation(value)
+            .await
+            .map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
         operation.intent = Some(path.replace('/', "."));
         self.intents.lock().await.insert(
             key,
@@ -490,6 +546,7 @@ impl Client {
                 operation: operation.clone(),
             },
         );
+        operation = self.enrich_accepted(operation, needs_detail).await;
         Ok(Submission::Operation(operation))
     }
     pub async fn kill_prepare(&self, expected: &str, intent: &str) -> Result<KillPreparation> {
@@ -511,7 +568,7 @@ impl Client {
     ) -> Result<KillPreparation> {
         let prepared = self.prepared.lock().await;
         let p = prepared
-            .get(&intent_key(intent)?)
+            .get(&self.intent_key(intent)?)
             .filter(|p| p.path == path && p.expires > crate::now_ms())
             .ok_or_else(|| Error::new(ErrorCode::ConfirmationExpired))?;
         Ok(KillPreparation {
@@ -524,7 +581,7 @@ impl Client {
             .mutations
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let key = intent_key(intent)?;
+        let key = self.intent_key(intent)?;
         let mut all = self.prepared.lock().await;
         let p = all
             .remove(&key)
@@ -559,8 +616,17 @@ impl Client {
             )
             .await;
         // Whether response was lost or received, reconcile this exact operation ID.
-        let observed = match result {
-            Ok(value) => from_wire(value),
+        let mut observed = match result {
+            Ok(value) => {
+                let needs_detail = !has_operation_details(&value);
+                match self.decode_operation(value).await {
+                    Ok(mut operation) => {
+                        operation.intent = Some(p.path.replace('/', "."));
+                        Ok(self.enrich_accepted(operation, needs_detail).await)
+                    }
+                    Err(e) => Err(e),
+                }
+            }
             Err(e)
                 if matches!(
                     e.code,
@@ -577,6 +643,9 @@ impl Client {
             }
             Err(e) => Err(e),
         };
+        if let Ok(operation) = &mut observed {
+            operation.intent = Some(p.path.replace('/', "."));
+        }
         if let Ok(operation) = &observed {
             self.intents.lock().await.insert(
                 key,
@@ -598,10 +667,11 @@ impl Client {
         {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
-        from_wire(
+        self.decode_operation(
             self.get(&format!("operations/{id}"), false, "tasks.view")
                 .await?,
         )
+        .await
     }
     pub async fn operations(&self, cursor: Option<&str>) -> Result<Page<ServerOperation>> {
         self.operations_with_priority(cursor, true).await
@@ -611,14 +681,73 @@ impl Client {
         cursor: Option<&str>,
         interactive: bool,
     ) -> Result<Page<ServerOperation>> {
-        from_wire(
-            self.get(
+        let value = self
+            .get(
                 &page_route("operations", cursor, 100)?,
                 interactive,
                 "tasks.view",
             )
-            .await?,
-        )
+            .await?;
+        #[derive(serde::Deserialize)]
+        struct WirePage {
+            items: Vec<Value>,
+            next_cursor: Option<String>,
+        }
+        let page: WirePage =
+            serde_json::from_value(value).map_err(|_| Error::new(ErrorCode::Unsupported))?;
+        let mut items = Vec::with_capacity(page.items.len());
+        for value in page.items {
+            items.push(self.decode_operation(value).await?);
+        }
+        Ok(Page {
+            items,
+            next_cursor: page.next_cursor,
+        })
+    }
+
+    async fn decode_operation(&self, value: Value) -> Result<ServerOperation> {
+        // Native refresh normally obtained this through GET /session already.
+        // Standalone/reconstructed clients resolve it lazily, once per connection.
+        if value
+            .get("actor")
+            .and_then(|actor| actor.get("principal_id"))
+            .is_some()
+        {
+            let mut attempted = self.principal_lookup.lock().await;
+            let missing = self
+                .principal_id
+                .lock()
+                .map_err(|_| Error::new(ErrorCode::Internal))?
+                .is_none();
+            if missing && !*attempted {
+                *attempted = true;
+                // Attribution failure must not discard a known accepted receipt.
+                let _ = self.capabilities(None).await;
+            }
+        }
+        let principal = self
+            .principal_id
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?;
+        crate::operations::decode(value, principal.as_deref())
+    }
+
+    async fn enrich_accepted(
+        &self,
+        operation: ServerOperation,
+        needs_detail: bool,
+    ) -> ServerOperation {
+        if needs_detail {
+            // Receipts predate the detail projection. One bounded authorized GET
+            // also handles terminal receipts, which will not be polled later.
+            // A denied/busy/unreachable read cannot undo remote acceptance.
+            if let Ok(mut detail) = self.operation(&operation.operation_id).await {
+                detail.intent = operation.intent;
+                detail.reconciling = operation.reconciling;
+                return detail;
+            }
+        }
+        operation
     }
     pub async fn console_page(&self, cursor: Option<&str>, limit: u16) -> Result<ConsolePage> {
         self.console_page_with_priority(cursor, limit, true).await
@@ -761,6 +890,11 @@ impl Client {
             Err(e) => Err(e),
         }
     }
+}
+fn has_operation_details(value: &Value) -> bool {
+    ["kind", "actor", "summary", "summary_purged", "outcome"]
+        .iter()
+        .all(|key| value.get(key).is_some())
 }
 fn page_route(route: &str, cursor: Option<&str>, limit: u16) -> Result<String> {
     let mut result = format!("{route}?limit={limit}");

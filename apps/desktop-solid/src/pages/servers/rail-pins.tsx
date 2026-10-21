@@ -1,21 +1,18 @@
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, mergeElementProps } from '@vesta/ui';
-import { For, Show } from 'solid-js';
+import { For } from 'solid-js';
 import { route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
+import { initials, serverArt } from '../../features/servers/art';
 import { minecraftFact, statusDot } from '../../features/servers/model';
 import { pinnedServers, updateServer } from '../../features/servers/store';
-import { StatusDot } from './parts';
 
-const initials = (name: string) =>
-  name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]!.toUpperCase()).join('') || '?';
+/** Status for the shared pin dot: green while ready, red when it needs attention. */
+const pinStatus = (dot: ReturnType<typeof statusDot>) => (dot === 'online' ? 'running' : dot === 'problem' ? 'crashed' : undefined);
 
-/** Pinned servers below pinned instances: initials tile with a status dot. */
+/** Pinned servers, rendered inside the rail's pinned list with the same tile as pinned instances. */
 export function RailServerPins() {
   return (
-    <Show when={pinnedServers().length > 0}>
-      <div data-vesta="rail-divider" />
-      <div data-vesta="rail-pinned">
         <For each={pinnedServers()} keyed={(snapshot) => snapshot.connection.id}>
           {(snapshot) => {
             const href = () => `/servers/${snapshot().connection.id}`;
@@ -29,14 +26,19 @@ export function RailServerPins() {
                     trigger={(triggerProps) => (
                       <a
                         {...mergeElementProps<Record<string, unknown>>(triggerProps, contextProps)}
-                        data-vesta="rail-server-pin"
+                        data-vesta="rail-pin"
+                        data-status={pinStatus(statusDot(snapshot()))}
                         href={`#${href()}`}
                         aria-label={label()}
                         aria-current={route().page === 'servers' && route().section === snapshot().connection.id ? 'page' : undefined}
                         onClick={(event) => { event.preventDefault(); transitionTo(href()); }}
                       >
-                        <span data-vesta="rail-server-initials">{initials(snapshot().connection.name)}</span>
-                        <StatusDot dot={statusDot(snapshot())} />
+                        <img
+                          data-vesta="rail-pin-image"
+                          src={serverArt(snapshot().connection.serverId || snapshot().connection.id, initials(snapshot().connection.name))}
+                          alt=""
+                          draggable="false"
+                        />
                       </a>
                     )}
                   />
@@ -50,7 +52,5 @@ export function RailServerPins() {
             );
           }}
         </For>
-      </div>
-    </Show>
   );
 }

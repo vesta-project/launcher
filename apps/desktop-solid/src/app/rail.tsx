@@ -13,6 +13,7 @@ import { transitionTo } from './transition';
 import { mainNav, serversNav, settingsNav, type NavItem } from './routes';
 import { setting, updateSetting } from '../features/settings/config';
 import { RailServerPins } from '../pages/servers/rail-pins';
+import { pinnedServers } from '../features/servers/store';
 import { t } from '../localization';
 import './rail.css';
 
@@ -109,7 +110,7 @@ export function Rail() {
           </Show>
         </nav>
 
-        <Show when={pinnedInstances().length > 0}>
+        <Show when={pinnedInstances().length > 0 || pinnedServers().length > 0}>
           <div data-vesta="rail-divider" />
           <div data-vesta="rail-pinned">
             <For each={pinnedInstances()} keyed={(entry) => entry.instance.id}>
@@ -172,9 +173,9 @@ export function Rail() {
                 </ContextMenu>
               )}
             </For>
+            <RailServerPins />
           </div>
         </Show>
-        <RailServerPins />
       </div>
 
       <div data-vesta="rail-bottom">

@@ -1,7 +1,9 @@
 /*
- * Console: toolbar, a terminal surface that runs edge to edge, and a status bar.
+ * Log view (instance and server consoles): toolbar, a terminal surface that runs edge
+ * to edge, and a status bar.
  * Hooks: [data-vesta=console] -toolbar -levels -level -level-dot -level-count -log -status
  *        -empty; [data-vesta=log-line] (data-level) log-level log-thread log-text
+ *        log-truncated; [data-vesta=log-gap] log-gap-detail
  * States: console: data-metadata; log: data-wrap; level: aria-pressed, data-level
  * Knobs: --console-bg, --console-fg, --level-color
  *
@@ -201,6 +203,38 @@
 
   :where([data-vesta="log-line"][data-level="DEBUG"] [data-vesta="log-text"]) {
     color: var(--vesta-color-text-muted);
+  }
+
+  /* A line the source cut short ends in a muted marker. */
+  :where([data-vesta="log-truncated"]) {
+    margin-inline-start: 1ch;
+    color: var(--vesta-color-text-subtle);
+  }
+
+  /* Skipped output: a dashed rule and a note, one row tall, never a log line. */
+  :where([data-vesta="log-gap"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    block-size: 20px;
+    overflow: hidden;
+    padding-inline: var(--instance-gutter);
+    color: var(--vesta-color-warning-text);
+    font-family: var(--vesta-font-sans);
+    font-size: var(--vesta-text-xs);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="log-gap"])::before {
+    content: "";
+    flex: 0 0 24px;
+    border-block-start: 1px dashed currentColor;
+  }
+
+  :where([data-vesta="log-gap-detail"]) {
+    overflow: hidden;
+    color: var(--vesta-color-text-subtle);
+    text-overflow: ellipsis;
   }
 
   :where([data-vesta="console-empty"]) {

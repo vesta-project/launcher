@@ -21,103 +21,12 @@
   :where([data-vesta="server-dot"][data-dot="problem"]) { --dot: oklch(0.72 0.17 60); }
   :where([data-vesta="server-dot"][data-dot="offline"]) { --dot: oklch(0.6 0.02 260 / 0.6); }
 
-  /* Rail pins: initials tile with a status dot in the corner. */
-  :where([data-vesta="rail-server-pin"]) {
-    position: relative;
-    display: grid;
-    place-items: center;
-    inline-size: 40px;
-    block-size: 40px;
-    border-radius: var(--vesta-radius-md);
-    background: var(--vesta-color-surface-raised);
-    color: var(--vesta-color-text);
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-semibold);
-    text-decoration: none;
-    cursor: default;
-  }
-  :where([data-vesta="rail-server-pin"]:hover) { background: var(--vesta-color-fill, var(--vesta-color-surface-raised)); }
-  :where([data-vesta="rail-server-pin"][aria-current="page"]) { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
-  :where([data-vesta="rail-server-pin"]) [data-vesta="server-dot"] { position: absolute; inset-block-end: 2px; inset-inline-end: 2px; }
-
-  /* List page */
-  :where([data-vesta="servers-list-page"]) {
-    --servers-grid-min: 300px;
-
-    display: flex;
-    flex-direction: column;
-    gap: var(--vesta-space-4);
-    padding: var(--vesta-space-6);
-  }
-  :where([data-vesta="servers-list-header"]) {
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: var(--vesta-space-4);
-  }
-  :where([data-vesta="servers-list-header"]) h1 { margin: 0; font-size: var(--vesta-text-xl); }
-  :where([data-vesta="servers-list-header"]) p { margin: var(--vesta-space-1) 0 0; color: var(--vesta-color-text-muted); }
   :where([data-vesta="servers-preview-note"]) {
     margin: 0;
+    padding: var(--vesta-space-3) var(--library-grid-padding, 40px) 0;
     color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-xs);
   }
-  :where([data-vesta="servers-grid"]) {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--servers-grid-min), 1fr));
-    gap: var(--vesta-space-3);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  :where([data-vesta="server-card"]) {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: var(--vesta-space-3);
-    padding: var(--vesta-space-4);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-lg);
-    background: var(--vesta-color-surface);
-  }
-  :where([data-vesta="server-card"]:hover) { border-color: var(--vesta-color-border-strong); }
-  :where([data-vesta="server-card-link"]) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    min-inline-size: 0;
-    color: inherit;
-    text-decoration: none;
-    cursor: default;
-  }
-  :where([data-vesta="server-card-icon"], [data-vesta="server-header-icon"]) {
-    position: relative;
-    display: grid;
-    flex: none;
-    place-items: center;
-    inline-size: 44px;
-    block-size: 44px;
-    border-radius: var(--vesta-radius-md);
-    background: var(--vesta-color-surface-sunken);
-    color: var(--vesta-color-text-muted);
-  }
-  :where([data-vesta="server-card-icon"], [data-vesta="server-header-icon"]) [data-vesta="server-dot"] {
-    position: absolute;
-    inset-block-end: 3px;
-    inset-inline-end: 3px;
-  }
-  :where([data-vesta="server-card-title"]) { display: flex; flex-direction: column; min-inline-size: 0; }
-  :where([data-vesta="server-card-title"]) strong { overflow: hidden; font-size: var(--vesta-text-md); text-overflow: ellipsis; white-space: nowrap; }
-  :where([data-vesta="server-card-title"]) span { overflow: hidden; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); text-overflow: ellipsis; white-space: nowrap; }
-  :where([data-vesta="server-card-facts"]) { display: flex; flex-wrap: wrap; grid-column: 1 / -1; gap: var(--vesta-space-1-5); }
-  :where([data-vesta="server-card-meta"]) {
-    display: flex;
-    flex-wrap: wrap;
-    grid-column: 1 / -1;
-    gap: var(--vesta-space-1) var(--vesta-space-3);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-  }
-
   /* Connect flow */
   :where([data-vesta="server-add"]) {
     display: flex;
@@ -229,19 +138,6 @@
   :where([data-vesta="server-muted"], [data-vesta="server-freshness"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
   :where([data-vesta="server-freshness"]) { color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
 
-  /* Workspace header */
-  :where([data-vesta="server-header"]) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-4);
-    padding: var(--vesta-space-4) var(--instance-gutter);
-    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
-    background: var(--vesta-color-surface);
-  }
-  :where([data-vesta="server-header-text"]) { flex: 1; min-inline-size: 0; }
-  :where([data-vesta="server-header-text"]) h1 { margin: 0 0 var(--vesta-space-1-5); overflow: hidden; font-size: var(--vesta-text-xl); text-overflow: ellipsis; white-space: nowrap; }
-  :where([data-vesta="server-header-facts"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-1-5); }
-  :where([data-vesta="server-header-endpoint"]) { color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-lifecycle"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-2); }
   :where([data-vesta="server-lifecycle-note"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
   @container app (max-width: 720px) {
@@ -273,8 +169,8 @@
     gap: var(--vesta-space-2);
     padding: var(--vesta-space-4);
     border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-lg);
-    background: var(--vesta-color-surface);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
   }
   :where([data-vesta="server-stat"]) h2,
   :where([data-vesta="server-recent"]) h2 {
@@ -297,68 +193,12 @@
   :where([data-vesta="server-stat-value"]) { margin: 0; font-size: var(--vesta-text-lg); font-weight: var(--vesta-weight-semibold); }
   :where([data-vesta="server-sparkline"]) { inline-size: 100%; block-size: 34px; overflow: visible; }
   :where([data-vesta="server-sparkline"]) path { fill: none; stroke: var(--vesta-color-accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-  :where([data-vesta="server-recent"]) ul,
-  :where([data-vesta="server-operations"]) {
-    display: flex;
-    flex-direction: column;
-    margin: var(--vesta-space-2) 0 0;
-    padding: 0;
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-lg);
-    list-style: none;
-  }
-  :where([data-vesta="server-recent"]) li,
-  :where([data-vesta="server-operations"]) li {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    padding: var(--vesta-space-2-5, 10px) var(--vesta-space-3);
-    font-size: var(--vesta-text-sm);
-  }
-  :where([data-vesta="server-recent"]) li + li,
-  :where([data-vesta="server-operations"]) li + li { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
-  :where([data-vesta="server-recent"]) li span:first-child,
-  :where([data-vesta="server-operation-title"]) { flex: 1; }
-  :where([data-vesta="server-recent"]) li span:last-child,
-  :where([data-vesta="server-operation-state"]) { color: var(--vesta-color-text-muted); }
-  :where([data-vesta="server-recent"], [data-vesta="server-operations"]) li[data-state="failed"] span:nth-child(2),
-  :where([data-vesta="server-recent"], [data-vesta="server-operations"]) li[data-state="recovery_required"] span:nth-child(2) { color: oklch(0.72 0.18 25); }
-  :where([data-vesta="server-operation-time"]) { color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
 
   /* Console */
   :where([data-vesta="server-console"]) { display: flex; flex-direction: column; block-size: 100%; min-block-size: 0; }
-  :where([data-vesta="server-console-count"]) { flex: 1; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); text-align: end; }
-  .server-console-notice { margin: var(--vesta-space-2) var(--instance-gutter) 0; }
-  :where([data-vesta="server-console-output"]) {
-    flex: 1;
-    min-block-size: 0;
-    overflow: auto;
-    padding: var(--vesta-space-2) var(--instance-gutter);
-    background: var(--vesta-color-surface-sunken);
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-    font-size: 12.5px;
-  }
-  :where([data-vesta="server-console-line"]) { overflow: hidden; line-height: 20px; text-overflow: ellipsis; white-space: pre; }
-  :where([data-vesta="server-console-line"][data-truncated])::after { content: " …"; color: var(--vesta-color-text-subtle); }
-  :where([data-vesta="server-console-gap"]) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    block-size: 20px;
-    color: oklch(0.8 0.13 75);
-    font-family: var(--vesta-font-sans, inherit);
-    font-size: var(--vesta-text-xs);
-  }
-  :where([data-vesta="server-console-gap"])::before { content: ""; flex: 0 0 24px; border-block-start: 1px dashed currentColor; }
-  :where([data-vesta="server-console-gap"]) button {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--vesta-color-accent-text);
-    font: inherit;
-    text-decoration: underline;
-    cursor: default;
-  }
+  /* The shared log view fills the room above the command row. */
+  [data-vesta="server-console"] > :where([data-vesta="console"]) { flex: 1; block-size: auto; }
+  .server-console-notice { margin: var(--vesta-space-2) var(--instance-gutter); }
   :where([data-vesta="server-console-input"]) {
     display: flex;
     align-items: center;
@@ -420,4 +260,119 @@
   :where([data-vesta="server-blocking"]) h2 { margin: 0; font-size: var(--vesta-text-lg); }
   :where([data-vesta="server-blocking"]) h3 { margin: var(--vesta-space-2) 0 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
   :where([data-vesta="server-blocking"]) p { margin: 0; color: var(--vesta-color-text-muted); line-height: 1.5; }
+
+  /* Privacy mode: blurred until clicked; re-hides after a few seconds. */
+  :where([data-vesta="sensitive"][data-hidden]) {
+    border-radius: var(--vesta-radius-sm);
+    filter: blur(5px);
+    user-select: none;
+    cursor: default;
+    transition: filter var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+  :where([data-vesta="sensitive"][data-hidden]:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+
+  /* Add tile at the end of the grid, sized like a card. */
+  :where([data-vesta="server-add-tile"]) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-2);
+    inline-size: 100%;
+    max-inline-size: 200px;
+    aspect-ratio: 1;
+    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-container);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-weight: var(--vesta-weight-semibold);
+    cursor: default;
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard), color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+  :where([data-vesta="server-add-tile"]:hover) { background: var(--vesta-color-fill); color: var(--vesta-color-text); }
+  :where([data-vesta="server-add-tile"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: var(--vesta-focus-offset); }
+
+  /* Header: Minecraft state leads the meta row. */
+  :where([data-vesta="server-header-state"]) { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--vesta-weight-semibold); }
+  :where([data-server-header]) [data-vesta="server-lifecycle"] { gap: var(--vesta-space-2); }
+  :where([data-server-header]) [data-vesta="server-lifecycle-note"] { color: oklch(1 0 0 / 0.75); }
+
+  /* Connection settings */
+  :where([data-server-connection]) { block-size: 100%; }
+  :where([data-vesta="server-setting-value"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); overflow-wrap: anywhere; }
+  :where([data-vesta="server-setting-block"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-4);
+  }
+  :where([data-vesta="server-setting-block"]) [data-vesta="setting-row-copy"] { display: flex; flex-direction: column; gap: 2px; }
+
+  /* Flush tab bodies under a pane toolbar */
+  :where([data-vesta="server-activity"]) { display: flex; flex-direction: column; block-size: 100%; min-block-size: 0; }
+  :where([data-vesta="server-pane-body"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: var(--instance-pane-padding-block) var(--instance-gutter);
+  }
+  :where([data-vesta="server-toolbar-spacer"]) { flex: 1; }
+
+  /* Activity: who did what, exactly */
+  :where([data-vesta="server-activity-list"]) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    list-style: none;
+    overflow: hidden;
+  }
+  :where([data-vesta="server-activity-row"]) {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: start;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+  }
+  :where([data-vesta="server-activity-row"] + [data-vesta="server-activity-row"]) { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="server-activity-row"][data-compact]) { padding-block: var(--vesta-space-2); }
+  :where([data-vesta="server-activity-avatar"]) {
+    display: grid;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--vesta-color-accent) 22%, var(--vesta-color-fill));
+    color: var(--vesta-color-accent-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-bold);
+  }
+  :where([data-vesta="server-activity-avatar"][data-automated]) { background: var(--vesta-color-fill); color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-activity-body"]) { display: flex; flex-direction: column; gap: 4px; min-inline-size: 0; }
+  :where([data-vesta="server-activity-line"]) { margin: 0; font-size: var(--vesta-text-sm); line-height: 1.4; }
+  :where([data-vesta="server-activity-command"]) {
+    align-self: start;
+    max-inline-size: 100%;
+    padding: 3px 8px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-surface-sunken);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  :where([data-vesta="server-activity-command"])::before { content: "/"; color: var(--vesta-color-text-subtle); }
+  :where([data-vesta="server-activity-detail"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-style: italic; }
+  :where([data-vesta="server-activity-meta"]) { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-activity-meta"]) span + span::before { content: "·"; margin-inline-end: 12px; }
 }

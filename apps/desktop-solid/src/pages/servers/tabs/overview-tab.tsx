@@ -2,10 +2,10 @@ import { For, Show } from 'solid-js';
 import { t } from '../../../localization';
 import { gate } from '../../../features/servers/capabilities';
 import { formatUptime, minecraftFact, playersFact, readinessReasonMessage, supervisorWarnings } from '../../../features/servers/model';
-import { isTerminal, operationStateMessage, operationTitle } from '../../../features/servers/operations-model';
+import { ActivityRow } from './activity-tab';
 import { latestMetrics, serverMetrics, serverOperations, useServerTopic, useServersClock } from '../../../features/servers/store';
 import type { MetricsSample, ServerSnapshot } from '../../../features/servers/native';
-import { FactBadge, Freshness } from '../parts';
+import { FactBadge, Freshness, Sensitive } from '../parts';
 
 const bytes = (value: string | null | undefined) => {
   if (!value || !/^\d+$/.test(value)) return null;
@@ -97,14 +97,9 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
       <Show when={recent().length > 0}>
         <section data-vesta="server-recent">
           <h2>{t('servers.overview.recent')}</h2>
-          <ul>
+          <ul data-vesta="server-activity-list">
             <For each={recent()} keyed={(operation) => operation.operationId}>
-              {(operation) => (
-                <li data-terminal={isTerminal(operation()) ? '' : undefined} data-state={operation().state}>
-                  <span>{t(operationTitle(operation()))}</span>
-                  <span>{t(operationStateMessage(operation()))}</span>
-                </li>
-              )}
+              {(operation) => <ActivityRow operation={operation()} now={now()} compact />}
             </For>
           </ul>
         </section>
@@ -112,7 +107,7 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
 
       <dl data-vesta="server-about">
         <dt>{t('servers.overview.agent')}</dt><dd>{props.snapshot.info?.agentVersion ?? t('servers.unknown')}</dd>
-        <dt>{t('servers.server-id')}</dt><dd><code>{props.snapshot.connection.serverId}</code></dd>
+        <dt>{t('servers.server-id')}</dt><dd><code><Sensitive label={t('servers.server-id')}>{props.snapshot.connection.serverId}</Sensitive></code></dd>
       </dl>
     </div>
   );
