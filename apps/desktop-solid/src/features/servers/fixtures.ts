@@ -81,8 +81,12 @@ function seed(): FixtureServer[] {
     },
     online: ['Alex', 'RedstoneRae', 'Kai_builds'],
     operations: [
-      { operationId: 'op-1', intent: 'lifecycle.restart', state: 'succeeded', progressPercent: 100, createdAtMs: now - 3_600_000, updatedAtMs: now - 3_540_000, finishedAtMs: now - 3_540_000, reconciling: false },
-      { operationId: 'op-2', intent: 'console.command', state: 'succeeded', progressPercent: 100, createdAtMs: now - 1_200_000, updatedAtMs: now - 1_199_000, finishedAtMs: now - 1_199_000, reconciling: false },
+      { operationId: 'op-1', intent: 'lifecycle.restart', kind: 'lifecycle.restart', state: 'succeeded', progressPercent: 100, createdAtMs: now - 3_600_000, updatedAtMs: now - 3_540_000, finishedAtMs: now - 3_540_000, reconciling: false,
+        actor: { kind: 'workflow', name: 'Nightly restart' }, summary: { kind: 'lifecycle', action: 'restart', targetGeneration: hex(32), resultGeneration: hex(32) }, outcome: null },
+      { operationId: 'op-2', intent: 'console.command', kind: 'console.command', state: 'succeeded', progressPercent: 100, createdAtMs: now - 1_200_000, updatedAtMs: now - 1_199_000, finishedAtMs: now - 1_199_000, reconciling: false,
+        actor: { kind: 'principal', principalId: 'p-rae', displayName: 'RedstoneRae', deviceName: "Rae's laptop", self: false }, summary: { kind: 'console.command', command: 'time set day' }, outcome: 'stdin_written' },
+      { operationId: 'op-3', intent: 'players.moderate', kind: 'players.moderate', state: 'succeeded', progressPercent: 100, createdAtMs: now - 900_000, updatedAtMs: now - 899_000, finishedAtMs: now - 899_000, reconciling: false,
+        actor: { kind: 'principal', principalId: 'p-rae', displayName: 'RedstoneRae', deviceName: "Rae's laptop", self: false }, summary: { kind: 'players.moderate', action: 'ban', player: 'griefer_99', reason: 'Griefing spawn', durationSeconds: 86_400 * 3 }, outcome: 'stdin_written' },
     ],
     console: [],
     cursor: 0,
@@ -153,9 +157,12 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       fail('forbidden');
     }
   };
-  const record = (target: FixtureServer, intent: string): ServerOperation => {
+  const record = (target: FixtureServer, intent: string, summary: ServerOperation['summary'] = null): ServerOperation => {
     const now = Date.now();
-    const operation: ServerOperation = { operationId: `op-${hex(10)}`, intent, state: 'queued', progressPercent: 0, createdAtMs: now, updatedAtMs: now, finishedAtMs: null, reconciling: false };
+    const operation: ServerOperation = {
+      operationId: `op-${hex(10)}`, intent, kind: intent, state: 'queued', progressPercent: 0, createdAtMs: now, updatedAtMs: now, finishedAtMs: null, reconciling: false,
+      actor: { kind: 'principal', principalId: 'p-self', displayName: 'PlayerOne', deviceName: 'This computer', self: true }, summary, outcome: null,
+    };
     target.operations.unshift(operation);
     emit(target.snapshot.connection.id, 'operations', { kind: 'operation', operation: clone(operation) });
     return operation;
@@ -176,6 +183,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     if (state === 'running') operation.progressPercent = 50;
     if (['succeeded', 'failed', 'cancelled', 'recovery_required'].includes(state)) {
       operation.finishedAtMs = operation.updatedAtMs;
+      if (state === 'succeeded') operation.outcome = operation.kind === 'console.command' || operation.kind === 'players.moderate' ? 'stdin_written' : operation.kind === 'lifecycle.stop' || operation.kind === 'lifecycle.kill' ? 'process_exited' : null;
       operation.progressPercent = 100;
     }
     emit(target.snapshot.connection.id, 'operations', { kind: 'operation', operation: clone(operation) });
@@ -350,7 +358,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const current = target.snapshot.status;
       if (action === 'start' && current?.state !== 'stopped') fail('stale_target');
       if (action !== 'start' && (current?.state !== 'running' || current.generation !== expectedGeneration)) fail('stale_target');
-      const operation = record(target, `lifecycle.${action}`);
+      const operation = record(target, `lifecycle.${action}`, { kind: 'lifecycle', action, targetGeneration: expectedGeneration, resultGeneration: null });
       remember(target, intentId, { action, expectedGeneration }, operation);
       setTimeout(() => advance(target, operation, 'running'), 300);
       if (action === 'start' || action === 'restart') {
@@ -408,7 +416,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
         fail('stale_target');
       }
       target.pending.delete(intentId);
-      const operation = record(target, 'lifecycle.kill');
+      const operation = record(target, 'lifecycle.kill', { kind: 'lifecycle', action: 'kill', targetGeneration: pending.generation, resultGeneration: null });
       remember(target, intentId, { kill: true }, operation);
       setTimeout(() => {
         setState(target, 'stopped', null);
@@ -447,7 +455,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const replayed = replay(target, intentId, { text, expectedGeneration });
       if (replayed) return replayed;
       if (target.snapshot.status?.state !== 'running' || target.snapshot.status.generation !== expectedGeneration) fail('stale_target');
-      const operation = record(target, 'console.command');
+      const operation = record(target, 'console.command', { kind: 'console.command', command: text });
       remember(target, intentId, { text, expectedGeneration }, operation);
       setTimeout(() => {
         line(target, `[Server thread/INFO]: [Rcon: ${text}]`);
@@ -510,7 +518,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {
-    const operation = record(target, 'players.moderate');
+    const operation = record(target, 'players.moderate', { kind: 'players.moderate', action: request.action, player: request.player, reason: 'reason' in request ? request.reason ?? null : null, durationSeconds: request.action === 'ban' ? request.durationSeconds ?? null : null });
     const { player } = request;
     switch (request.action) {
       case 'kick': target.online = target.online.filter((name) => name !== player); line(target, `[Server thread/INFO]: Kicked ${player}: ${request.reason ?? 'Kicked by an operator'}`); break;

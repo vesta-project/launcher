@@ -1,4 +1,4 @@
-import { Button, Dialog, Tab, TabList, TabPanel, Tabs, Badge, toast } from '@vesta/ui';
+import { Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, Tab, TabList, TabPanel, Tabs, Badge, toast } from '@vesta/ui';
 import { For, Show, createSignal, onCleanup, onSettled, untrack, type Component } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { Board } from '../../components/board';
@@ -10,17 +10,20 @@ import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { anyVisible } from '../../features/servers/capabilities';
 import { errorMessage } from '../../features/servers/errors';
-import { IntentMemo, accessFact, connectionFact, lifecycleControls, minecraftFactNow, newIntentId, statusDot, type LifecycleAction } from '../../features/servers/model';
+import { IntentMemo, connectionFact, lifecycleControls, minecraftFactNow, newIntentId, playersFact, readinessReasonMessage, statusDot, supervisorWarnings, type LifecycleAction } from '../../features/servers/model';
+import { initials, serverArt } from '../../features/servers/art';
+import { RemoveServerDialog } from './remove-dialog';
 import { Dynamic } from '@solidjs/web';
 import { busyIntent } from '../../features/servers/operations-model';
-import { loadOperations, putOperations, putSnapshot, removeServer, serverCommand, serverOperations, serverSnapshot, serversLoaded, useServerTopic, useServersClock } from '../../features/servers/store';
+import { loadOperations, putOperations, putSnapshot, removeServer, serverCommand, serverOperations, serverSnapshot, serversLoaded, updateServer, useServerTopic, useServersClock } from '../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
 import { ActivityTab } from './tabs/activity-tab';
 import { ConnectionTab } from './tabs/connection-tab';
 import { ConsoleTab } from './tabs/console-tab';
 import { OverviewTab } from './tabs/overview-tab';
 import { PlayersTab } from './tabs/players-tab';
-import { FactBadge, FingerprintView, ServerErrorNote, StatusDot } from './parts';
+import { FingerprintView, Sensitive, ServerErrorNote, StatusDot } from './parts';
+import '../library/instance/instance-header.css';
 import '../library/instance/instance-page.css';
 
 interface TabDef {
@@ -37,8 +40,8 @@ const tabs: TabDef[] = [
   { id: 'overview', label: 'servers.tab.overview', icon: 'icons/navigation/home', needs: [], view: OverviewTab },
   { id: 'console', label: 'servers.tab.console', icon: 'icons/content/terminal', needs: ['console.read'], flush: true, view: ConsoleTab },
   { id: 'players', label: 'servers.tab.players', icon: 'icons/content/chat', needs: ['players.view'], view: PlayersTab },
-  { id: 'activity', label: 'servers.tab.activity', icon: 'icons/content/history', needs: ['tasks.view'], view: ActivityTab },
-  { id: 'connection', label: 'servers.tab.connection', icon: 'icons/security/network', needs: [], view: ConnectionTab },
+  { id: 'activity', label: 'servers.tab.activity', icon: 'icons/content/history', needs: ['tasks.view'], flush: true, view: ActivityTab },
+  { id: 'connection', label: 'servers.tab.connection', icon: 'icons/security/network', needs: [], flush: true, view: ConnectionTab },
 ];
 
 const sideNavQuery = '(min-width: 960px)';
@@ -129,23 +132,88 @@ function ServerContent(props: { id: string }) {
   );
 }
 
+/** The instance header's layout: art banner, icon tile, title and meta, then actions. */
 function ServerHeader(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
+  const [removing, setRemoving] = createSignal(false, { name: 'server-header:removing' });
+  const art = () => serverArt(props.snapshot.connection.serverId || props.snapshot.connection.id);
+  const minecraft = () => minecraftFactNow(props.snapshot, now());
+  const connection = () => connectionFact(props.snapshot, now());
+  const notice = () => headerNotice(props.snapshot, now());
+  const id = () => props.snapshot.connection.id;
   return (
-    <header data-vesta="server-header">
-      <span data-vesta="server-header-icon"><Icon name="icons/rail/servers" size={26} /><StatusDot dot={statusDot(props.snapshot)} /></span>
-      <div data-vesta="server-header-text">
-        <h1>{props.snapshot.connection.name}</h1>
-        <div data-vesta="server-header-facts">
-          <FactBadge fact={minecraftFactNow(props.snapshot, now())} />
-          <FactBadge fact={connectionFact(props.snapshot, now())} />
-          <FactBadge fact={accessFact(props.snapshot)} />
-          <span data-vesta="server-header-endpoint">{props.snapshot.connection.endpoint}</span>
+    <header data-vesta="instance-header" data-server-header style={{ '--header-image': `url("${art()}")` } as never}>
+      <div data-vesta="instance-header-art" aria-hidden="true" />
+      <div data-vesta="instance-header-main">
+        <img data-vesta="instance-header-icon" src={serverArt(props.snapshot.connection.serverId || id(), initials(props.snapshot.connection.name))} alt="" draggable="false" />
+        <div data-vesta="instance-header-copy">
+          <h1 data-vesta="instance-header-title">{props.snapshot.connection.name}</h1>
+          <p data-vesta="instance-header-meta">
+            <span data-vesta="server-header-state" data-tone={minecraft().tone}>
+              <StatusDot dot={statusDot(props.snapshot)} />
+              {t(minecraft().message, minecraft().args)}
+              <Show when={minecraft().seen}>{(seen) => <> · {t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</>}</Show>
+            </span>
+            <Show when={props.snapshot.info?.minecraftVersion}>{(version) => <span>{version()}</span>}</Show>
+            <Show when={props.snapshot.status?.state === 'running'}>
+              <span>{t(playersFact(props.snapshot.status, now()).message, playersFact(props.snapshot.status, now()).args)}</span>
+            </Show>
+            <span><Sensitive>{props.snapshot.connection.endpoint}</Sensitive></span>
+            <Show when={props.snapshot.state.phase !== 'online'}>
+              <span>{t(connection().message, connection().args)}</span>
+            </Show>
+          </p>
+        </div>
+        <div data-vesta="instance-header-actions">
+          <IconButton
+            variant="ghost"
+            label={t('servers.tab.connection')}
+            icon={<Icon name="icons/content/gear" />}
+            onClick={() => transitionTo(`/servers/${id()}/connection`)}
+          />
+          <Menu
+            placement="bottom-end"
+            trigger={(menuProps) => (
+              <IconButton {...menuProps} variant="ghost" label={t('servers.actions')} tooltip={false} icon={<Icon name="icons/content/ellipsis-v" />} />
+            )}
+          >
+            <MenuItem onSelect={() => transitionTo(`/servers/${id()}/console`)}>{t('servers.tab.console')}</MenuItem>
+            <MenuItem onSelect={() => void navigator.clipboard?.writeText(props.snapshot.connection.endpoint)}>{t('servers.copy-address')}</MenuItem>
+            <MenuItem onSelect={() => void updateServer(id(), { pinned: !props.snapshot.connection.pinned })}>
+              {props.snapshot.connection.pinned ? t('common.unpin') : t('servers.pin')}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</MenuItem>
+          </Menu>
+          <LifecycleBar snapshot={props.snapshot} />
         </div>
       </div>
-      <LifecycleBar snapshot={props.snapshot} />
+      <Show when={notice()}>
+        {(current) => (
+          <div data-vesta="instance-notice" data-tone={current().tone} role={current().tone === 'danger' ? 'alert' : 'status'}>
+            <Icon name={current().tone === 'danger' ? 'icons/status/error' : 'icons/controls/warning'} size={14} />
+            <p><strong>{current().title}</strong><Show when={current().text}><span>{current().text}</span></Show></p>
+          </div>
+        )}
+      </Show>
+      <RemoveServerDialog snapshot={props.snapshot} open={removing()} onOpenChange={setRemoving} />
     </header>
   );
+}
+
+/** One strip under the header for the most important problem, like the instance crash notice. */
+function headerNotice(snapshot: ServerSnapshot, now: number): { tone: 'danger' | 'warning'; title: string; text?: string } | null {
+  const status = snapshot.status;
+  if (status?.lifecycle === 'crash_loop' || status?.supervisor?.crashLoop) return { tone: 'danger', title: t('servers.minecraft.crash-loop'), text: t('servers.notice.crash-loop') };
+  if (status?.lifecycle === 'recovery_required') return { tone: 'danger', title: t('servers.minecraft.recovery-required'), text: t('servers.notice.recovery') };
+  if (snapshot.state.phase === 'unreachable' || snapshot.state.phase === 'backoff') {
+    const connection = connectionFact(snapshot, now);
+    return { tone: 'warning', title: t(connection.message, connection.args), text: t('servers.notice.last-known') };
+  }
+  const warnings = supervisorWarnings(status ?? null);
+  if (status?.readinessReason) return { tone: 'warning', title: t('servers.minecraft.degraded'), text: t(readinessReasonMessage[status.readinessReason]) };
+  if (warnings.length) return { tone: 'warning', title: t('servers.notice.limited-control'), text: t(warnings[0]!) };
+  return null;
 }
 
 const actionLabels: Record<LifecycleAction, MessageId> = {

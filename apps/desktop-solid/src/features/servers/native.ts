@@ -182,7 +182,29 @@ export interface ServerOperation {
   finishedAtMs: number | null;
   /** True while native code is reconciling an uncertain submission. */
   reconciling: boolean;
+  /** What was requested, from the agent's operation `kind`; absent on agents without detail projection. */
+  kind?: string | null;
+  /** Who requested it. */
+  actor?: OperationActor | null;
+  /** Exactly what was requested, as far as the caller may see. */
+  summary?: OperationSummary | null;
+  /** Fixed, safe outcome code once terminal, e.g. `stdin_written`, `stale_generation`, `timeout`. */
+  outcome?: string | null;
 }
+
+export type OperationActor =
+  | { kind: 'principal'; principalId: string; displayName: string; deviceName: string | null; self: boolean }
+  | { kind: 'system' | 'workflow'; name: string };
+
+export type OperationSummary =
+  /** `command` is null when the caller lacks `console.read` (the agent redacts it). */
+  | { kind: 'console.command'; command: string | null }
+  | { kind: 'players.moderate'; action: string; player: string; reason?: string | null; durationSeconds?: number | null }
+  | { kind: 'lifecycle'; action: 'start' | 'stop' | 'restart' | 'kill'; targetGeneration: string | null; resultGeneration: string | null }
+  | { kind: 'backup'; action: string; profile: string; snapshot?: string | null }
+  | { kind: 'file'; action: string; path: string; to?: string | null }
+  /** The canonical input was purged under the agent's retention policy. */
+  | { kind: 'purged' };
 
 export interface Page<T> {
   items: T[];
