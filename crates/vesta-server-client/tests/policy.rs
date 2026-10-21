@@ -227,6 +227,13 @@ fn replacing_a_transport_does_not_reset_its_origin_request_budget() {
     }
     assert_eq!(b.admit(false).err().unwrap().code, ErrorCode::RateLimited);
     assert!(b.admit(true).is_ok());
+    drop(a);
+    drop(b);
+    let replacement = Scheduler::for_origin("https://budget-test.invalid:8443/").unwrap();
+    assert_eq!(
+        replacement.admit(false).err().unwrap().code,
+        ErrorCode::RateLimited
+    );
 }
 
 #[test]

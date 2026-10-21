@@ -1,7 +1,7 @@
 use crate::{Error, ErrorCode, Result};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, OnceLock, Weak},
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -65,20 +65,28 @@ impl Default for Scheduler {
 }
 impl Scheduler {
     pub fn for_origin(origin: &str) -> Result<Arc<Self>> {
-        static OWNERS: OnceLock<Mutex<HashMap<String, Weak<Scheduler>>>> = OnceLock::new();
+        static OWNERS: OnceLock<Mutex<HashMap<String, Arc<Scheduler>>>> = OnceLock::new();
         let mut owners = OWNERS
             .get_or_init(Default::default)
             .lock()
             .map_err(|_| Error::new(ErrorCode::Internal))?;
-        owners.retain(|_, s| s.strong_count() > 0);
-        if let Some(scheduler) = owners.get(origin).and_then(Weak::upgrade) {
-            return Ok(scheduler);
+        // Keep an idle origin through its refill window even when every pool is
+        // retired. Repeated failed enrollment must not refill a fresh bucket.
+        owners.retain(|_, s| {
+            Arc::strong_count(s) > 1
+                || s.bucket.lock().is_ok_and(|b| {
+                    b.updated.elapsed() < Duration::from_secs(120)
+                        || b.paused_until > Instant::now()
+                })
+        });
+        if let Some(scheduler) = owners.get(origin) {
+            return Ok(scheduler.clone());
         }
         if owners.len() >= 128 {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
         let scheduler = Arc::new(Self::default());
-        owners.insert(origin.into(), Arc::downgrade(&scheduler));
+        owners.insert(origin.into(), scheduler.clone());
         Ok(scheduler)
     }
     pub fn paused_for(&self) -> Duration {
