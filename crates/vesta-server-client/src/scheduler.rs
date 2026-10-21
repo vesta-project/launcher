@@ -47,6 +47,7 @@ pub struct Scheduler {
     bucket: Mutex<TokenBucket>,
     local: Arc<Semaphore>,
     background: Arc<Semaphore>,
+    bulk: Arc<Semaphore>,
 }
 pub struct Admission {
     _global: OwnedSemaphorePermit,
@@ -60,10 +61,30 @@ impl Default for Scheduler {
             bucket: Mutex::new(TokenBucket::new(Instant::now())),
             local: Arc::new(Semaphore::new(3)),
             background: Arc::new(Semaphore::new(2)),
+            bulk: Arc::new(Semaphore::new(1)),
         }
     }
 }
 impl Scheduler {
+    /// Transfers have independent concurrency and do not consume the control
+    /// token bucket. Keep both permits until the response body has been drained.
+    pub fn admit_bulk(&self) -> Result<(OwnedSemaphorePermit, OwnedSemaphorePermit)> {
+        static GLOBAL: OnceLock<Arc<Semaphore>> = OnceLock::new();
+        let busy = || Error::new(ErrorCode::ServerBusy);
+        if !self.paused_for().is_zero() {
+            return Err(Error {
+                code: ErrorCode::RateLimited,
+                retry_after_ms: Some(self.paused_for().as_millis() as u64),
+            });
+        }
+        let local = self.bulk.clone().try_acquire_owned().map_err(|_| busy())?;
+        let global = GLOBAL
+            .get_or_init(|| Arc::new(Semaphore::new(2)))
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| busy())?;
+        Ok((local, global))
+    }
     pub fn for_origin(origin: &str) -> Result<Arc<Self>> {
         static OWNERS: OnceLock<Mutex<HashMap<String, Arc<Scheduler>>>> = OnceLock::new();
         let mut owners = OWNERS

@@ -18,10 +18,10 @@ use tokio_tungstenite::{
 pub type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 type SharedRead = Shared<BoxFuture<'static, Result<Value>>>;
 pub struct Transport {
-    endpoint: Endpoint,
-    http: reqwest::Client,
+    pub(crate) endpoint: Endpoint,
+    pub(crate) http: reqwest::Client,
     tls: Arc<rustls::ClientConfig>,
-    expected: Option<String>,
+    pub(crate) expected: Option<String>,
     observed: Arc<Mutex<Option<String>>>,
     pub scheduler: Arc<Scheduler>,
     reads: tokio::sync::Mutex<HashMap<String, (Instant, SharedRead)>>,
@@ -58,7 +58,7 @@ impl Transport {
     pub fn observed(&self) -> Option<String> {
         self.observed.lock().ok().and_then(|v| v.clone())
     }
-    fn network_error(&self, error: reqwest::Error) -> Error {
+    pub(crate) fn network_error(&self, error: reqwest::Error) -> Error {
         if self
             .expected
             .as_ref()

@@ -2,6 +2,8 @@
 pub mod auth;
 mod client;
 pub mod endpoint;
+mod file_transport;
+pub mod files;
 pub mod model;
 pub mod operations;
 mod role_defaults;

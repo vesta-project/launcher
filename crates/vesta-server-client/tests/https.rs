@@ -26,9 +26,12 @@ use vesta_server_client::{
 // Fixtures share the production process-wide request budget. Serialize scenarios
 // while preserving the concurrency exercised inside each scenario.
 static TEST_OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+#[path = "support/files.rs"]
+mod file_tests;
 
 #[derive(Default)]
 struct State {
+    files: file_tests::Files,
     key: Mutex<Option<[u8; 32]>>,
     pairs: AtomicUsize,
     sessions: AtomicUsize,
@@ -182,6 +185,9 @@ async fn route(
     }
     let bytes = hyper::body::to_bytes(req.body_mut()).await.unwrap();
     let body: Value = serde_json::from_slice(&bytes).unwrap_or(json!({}));
+    if file_tests::handles(&path) {
+        return Ok(file_tests::route(&req, &bytes, &body, &state.files));
+    }
     let response = match path.as_str() {
         "/api/v3/status" => {
             plain(json!({"api_version":"3","server_id":"server-1","state":"offline","motd":{}}))

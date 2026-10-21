@@ -44,6 +44,7 @@ impl Error {
     pub fn wire(status: u16, code: &str, retry_after_ms: Option<u64>) -> Self {
         use ErrorCode::*;
         let code = match code {
+            "recovery_required" if status == 409 => OutcomeUnknown,
             "management_pair_invalid" | "pair_invalid" => PairCodeInvalid,
             "confirmation_invalid" | "confirmation_expired" | "confirmation_required" => {
                 ConfirmationExpired
