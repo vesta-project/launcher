@@ -262,10 +262,7 @@ impl ServerManager {
                                 .unwrap_or(snapshot.clone());
                             snapshot.status = Some(status);
                             snapshot.status_observed_at_ms = Some(vesta_server_client::now_ms());
-                            snapshot.state = ConnectionState {
-                                phase: "online".into(),
-                                ..Default::default()
-                            };
+                            snapshot.state = online_state(client.transport.scheduler.paused_for());
                             let _ = self.publish_observation(&app, snapshot).await;
                             last_stream_status = Some(Instant::now());
                             last_status = Instant::now();
@@ -297,16 +294,12 @@ impl ServerManager {
                     }
                 }
             }
-            // Older agents never send status on the metrics socket. A quiet new
-            // stream also gets a bounded observation at least every 30 seconds.
-            let status_interval = if last_stream_status.is_some() && telemetry.is_some() {
-                30
-            } else {
-                10
-            };
+            // Once a live socket proves status support, it owns observation.
+            // Older agents and disconnected sockets retain bounded polling.
             if want_status
                 && !status_blocked
-                && last_status.elapsed() >= Duration::from_secs(status_interval)
+                && !(last_stream_status.is_some() && telemetry.is_some())
+                && last_status.elapsed() >= Duration::from_secs(10)
             {
                 last_status = Instant::now();
                 if let Err(e) = self.refresh(&app, &id, false).await {

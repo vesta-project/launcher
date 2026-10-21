@@ -2,6 +2,8 @@ mod credentials;
 mod store;
 mod subscriptions;
 mod tasks;
+#[cfg(test)]
+mod tests;
 mod worker;
 
 use credentials::Credentials;
@@ -52,6 +54,7 @@ pub struct ServerManager {
     enrollment_gate: Mutex<()>,
     subscriptions: StdMutex<Subscriptions>,
     streaming: Arc<Semaphore>,
+    change_pending: Arc<std::sync::atomic::AtomicBool>,
     trackers: StdMutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
 }
 fn internal() -> Error {
@@ -60,9 +63,39 @@ fn internal() -> Error {
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
+fn online_state(paused_for: Duration) -> ConnectionState {
+    let until = (!paused_for.is_zero())
+        .then(|| vesta_server_client::now_ms() + paused_for.as_millis() as i64);
+    ConnectionState {
+        phase: if until.is_some() { "backoff" } else { "online" }.into(),
+        retry_at_ms: until,
+        rate_limited_until_ms: until,
+        last_error: until.map(|_| ErrorCode::RateLimited),
+        ..Default::default()
+    }
+}
+fn coarse_state(
+    snapshot: &ServerSnapshot,
+) -> (&str, &str, Option<(&str, Option<&str>, Option<&str>, &str)>) {
+    (
+        &snapshot.state.phase,
+        &snapshot.state.access,
+        snapshot.status.as_ref().map(|s| {
+            (
+                s.state.as_str(),
+                s.lifecycle.as_deref(),
+                s.generation.as_deref(),
+                s.readiness.as_str(),
+            )
+        }),
+    )
+}
 impl ServerManager {
     pub fn new() -> Result<Arc<Self>> {
         let root = crate::utils::db_manager::get_app_config_dir().map_err(|_| internal())?;
+        Self::at_root(root)
+    }
+    fn at_root(root: PathBuf) -> Result<Arc<Self>> {
         let (store, initialization_error) = match Store::load(&root) {
             Ok(s) => (s, None),
             Err(e) => {
@@ -81,6 +114,7 @@ impl ServerManager {
             enrollment_gate: Default::default(),
             subscriptions: Default::default(),
             streaming: Arc::new(Semaphore::new(4)),
+            change_pending: Default::default(),
             trackers: Default::default(),
         }))
     }
@@ -129,7 +163,17 @@ impl ServerManager {
         Ok(result)
     }
     fn changed(&self, app: &AppHandle) {
-        let _ = app.emit("core://servers-changed", ());
+        use std::sync::atomic::Ordering;
+        if self.change_pending.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let pending = self.change_pending.clone();
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            let _ = app.emit("core://servers-changed", ());
+            pending.store(false, Ordering::Release);
+        });
     }
     async fn publish(&self, app: &AppHandle, snapshot: ServerSnapshot) -> Result<()> {
         let id = snapshot.connection.id.clone();
@@ -161,24 +205,27 @@ impl ServerManager {
         mut snapshot: ServerSnapshot,
     ) -> Result<()> {
         let id = snapshot.connection.id.clone();
-        self.edit_store(|s| {
-            let record = s
-                .connections
-                .iter_mut()
-                .find(|r| r.snapshot.connection.id == id)
-                .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
-            let connected = snapshot.connection.last_connected_at_ms;
-            let reported_name = snapshot.connection.name.clone();
-            snapshot.connection = record.snapshot.connection.clone();
-            snapshot.connection.last_connected_at_ms =
-                connected.or(snapshot.connection.last_connected_at_ms);
-            if snapshot.connection.name == snapshot.connection.endpoint {
-                snapshot.connection.name = reported_name;
-            }
-            record.snapshot = snapshot.clone();
-            Ok(())
-        })
-        .await?;
+        let changed = self
+            .edit_store(|s| {
+                let record = s
+                    .connections
+                    .iter_mut()
+                    .find(|r| r.snapshot.connection.id == id)
+                    .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
+                let connected = snapshot.connection.last_connected_at_ms;
+                let reported_name = snapshot.connection.name.clone();
+                snapshot.connection = record.snapshot.connection.clone();
+                snapshot.connection.last_connected_at_ms =
+                    connected.or(snapshot.connection.last_connected_at_ms);
+                if snapshot.connection.name == snapshot.connection.endpoint {
+                    snapshot.connection.name = reported_name;
+                }
+                let changed = coarse_state(&record.snapshot) != coarse_state(&snapshot)
+                    || record.snapshot.connection.name != snapshot.connection.name;
+                record.snapshot = snapshot.clone();
+                Ok(changed)
+            })
+            .await?;
         self.deliver(
             &id,
             ServerTopic::Status,
@@ -186,7 +233,9 @@ impl ServerManager {
                 snapshot: Box::new(snapshot),
             },
         );
-        self.changed(app);
+        if changed {
+            self.changed(app);
+        }
         Ok(())
     }
     async fn synchronize_failure(&self, app: &AppHandle, id: &str, error: &Error) {
@@ -254,6 +303,15 @@ impl ServerManager {
             r.device_id,
             signer,
         );
+        client.restore_legacy_intents(
+            self.store
+                .lock()
+                .await
+                .intents
+                .iter()
+                .filter(|i| i.connection_id == id && i.key_version < 2)
+                .map(|i| i.key.clone()),
+        )?;
         *live = Some(client.clone());
         Ok(client)
     }
@@ -326,6 +384,12 @@ impl ServerManager {
             expected_fingerprint: parsed.fingerprint,
             link_code: parsed.code,
             existing_connection_id: existing,
+            secure_storage_available: {
+                let credentials = self.credentials.clone();
+                tokio::task::spawn_blocking(move || credentials.available())
+                    .await
+                    .map_err(|_| internal())?
+            },
         };
         // Retire capture-mode pool now. Enrollment can only use the observed pin.
         let pinned = Transport::new(parsed.endpoint, Some(discovery.fingerprint.clone()))?;
@@ -344,6 +408,7 @@ impl ServerManager {
     async fn enrollment(
         &self,
         discovery_id: &str,
+        memory: bool,
     ) -> Result<(
         Discovery,
         Arc<Transport>,
@@ -372,7 +437,6 @@ impl ServerManager {
                 return Err(Error::new(ErrorCode::ServerBusy));
             }
         }
-        let memory = std::env::var("VESTA_SERVER_MEMORY_ONLY").as_deref() == Ok("1");
         let reference = new_id();
         let r = reference.clone();
         let credentials = self.credentials.clone();
@@ -471,12 +535,13 @@ impl ServerManager {
         app: &AppHandle,
         discovery_id: &str,
         code: &str,
+        memory_only: bool,
     ) -> Result<ServerSnapshot> {
         let _gate = self
             .enrollment_gate
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let (d, t, r, s, m) = self.enrollment(discovery_id).await?;
+        let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
         let contact = self.contacts.lock().await.remove(discovery_id);
         let e = match Client::pair(&t, &d.server_id, code, s.as_ref()).await {
             Ok(e) => e,
@@ -523,11 +588,21 @@ impl ServerManager {
         app: &AppHandle,
         discovery_id: &str,
         account_uuid: &str,
+        memory_only: bool,
     ) -> Result<ServerSnapshot> {
         let _gate = self
             .enrollment_gate
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
+        if !memory_only {
+            let credentials = self.credentials.clone();
+            if !tokio::task::spawn_blocking(move || credentials.available())
+                .await
+                .map_err(|_| internal())?
+            {
+                return Err(Error::new(ErrorCode::CredentialsUnavailable));
+            }
+        }
         let account = crate::auth::ensure_account_tokens_valid(app.clone(), account_uuid.into())
             .await
             .map_err(|_| Error::new(ErrorCode::CredentialsRejected))?;
@@ -571,7 +646,7 @@ impl ServerManager {
         if !join.status().is_success() {
             return Err(Error::new(ErrorCode::CredentialsRejected));
         }
-        let (d, t, r, s, m) = self.enrollment(discovery_id).await?;
+        let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
         self.contacts.lock().await.remove(discovery_id);
         let complete = t.request(reqwest::Method::POST,"/api/v3/auth/minecraft/complete",None,Some(json!({"challenge":challenge_id,"device_name":"Vesta Launcher","public_key":s.public_key()})),None,true).await.map_err(|e| if matches!(e.code,ErrorCode::Timeout|ErrorCode::OutcomeUnknown|ErrorCode::Unreachable) { Error::new(ErrorCode::PairOutcomeUnknown) } else {e})?;
         let device = complete["device_id"]
@@ -599,9 +674,11 @@ impl ServerManager {
         let _gate = slot.refresh.lock().await;
         let mut snapshot = self.record(id).await?.snapshot;
         // Followers of one refresh consume its last observation, no extra HTTP.
-        if snapshot.status_observed_at_ms.is_some_and(|at| {
-            at >= vesta_server_client::now_ms() - started.elapsed().as_millis() as i64 - 250
-        }) {
+        if slot.client.lock().await.is_some()
+            && snapshot.status_observed_at_ms.is_some_and(|at| {
+                at >= vesta_server_client::now_ms() - started.elapsed().as_millis() as i64 - 250
+            })
+        {
             return Ok(());
         }
         let result = async {
@@ -640,15 +717,14 @@ impl ServerManager {
             Ok::<(), Error>(())
         }
         .await;
+        let mut paused_for = Duration::ZERO;
         if let Some(client) = slot.client.lock().await.as_ref() {
             snapshot.capabilities.refused = client.refused().await;
+            paused_for = client.transport.scheduler.paused_for();
         }
         match &result {
             Ok(()) => {
-                snapshot.state = ConnectionState {
-                    phase: "online".into(),
-                    ..Default::default()
-                };
+                snapshot.state = online_state(paused_for);
                 snapshot.connection.last_connected_at_ms = Some(vesta_server_client::now_ms());
             }
             Err(e) => {
@@ -831,8 +907,8 @@ impl ServerManager {
         }
     }
 
-    /// Journal before network submission. Unknown outcomes remain blocked across
-    /// application restarts. No command/reason/player text is persisted.
+    /// Journal before network submission. Explicit identical retries replay the
+    /// same server key across application restarts. No command/reason/player text is persisted.
     pub async fn mutate<T>(
         &self,
         app: &AppHandle,
@@ -855,13 +931,11 @@ impl ServerManager {
                 .iter()
                 .find(|i| i.connection_id == id && i.key == key)
             {
-                return Err(Error::new(
-                    if old.action == action && old.payload_hash == digest {
-                        ErrorCode::OutcomeUnknown
-                    } else {
-                        ErrorCode::Conflict
-                    },
-                ));
+                if old.action != action || old.payload_hash != digest {
+                    return Err(Error::new(ErrorCode::Conflict));
+                }
+                // The same explicit intent may replay the agent's durable receipt.
+                return Ok(());
             }
             if s.intents.len() >= 4096 {
                 return Err(Error::new(ErrorCode::ServerBusy));
@@ -869,6 +943,7 @@ impl ServerManager {
             s.intents.push(PendingIntent {
                 connection_id: id.into(),
                 key: key.clone(),
+                key_version: 2,
                 action: action.into(),
                 payload_hash: digest,
                 operation_id: operation_id.map(str::to_owned),
@@ -890,6 +965,7 @@ impl ServerManager {
                     | ErrorCode::Timeout
                     | ErrorCode::Unreachable
                     | ErrorCode::PairOutcomeUnknown
+                    | ErrorCode::Internal
             )
         }) {
             self.edit_store(|s| {

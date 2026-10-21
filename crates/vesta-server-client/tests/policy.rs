@@ -244,3 +244,22 @@ fn unknown_operation_states_do_not_imply_acceptance_or_success() {
         ErrorCode::Unsupported
     );
 }
+
+#[test]
+fn device_intents_survive_reconstruction_and_are_connection_scoped() {
+    use vesta_server_client::operations::device_intent_key;
+    let key = device_intent_key("server-a", "device-a", "retry").unwrap();
+    assert_eq!(
+        key,
+        device_intent_key("server-a", "device-a", "retry").unwrap()
+    );
+    assert_ne!(
+        key,
+        device_intent_key("server-b", "device-a", "retry").unwrap()
+    );
+    assert_ne!(
+        key,
+        device_intent_key("server-a", "device-b", "retry").unwrap()
+    );
+    assert!(device_intent_key("server-a", "device-a", "").is_err());
+}

@@ -25,3 +25,14 @@ rcgen = "0.13"
 hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
 tokio-rustls = "0.24"
 tokio = { version = "1.49", features = ["full", "test-util"] }
+
+tempfile = "3.27"
+rand = "0.10.1"
+uuid = { version = "1.23.2", features = ["v4"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+keyring = { version = "3.6", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
