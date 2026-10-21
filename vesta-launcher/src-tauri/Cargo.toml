@@ -20,6 +20,9 @@ lightningcss = { version = "=1.0.0-alpha.72", default-features = false }
 cssparser = "0.37"
 piston-lib = { path = "../../crates/piston-lib" }
 vesta-sandbox = { path = "../../crates/vesta-sandbox" }
+vesta-server-client = { path = "../../crates/vesta-server-client" }
+keyring = { version = "3.6", default-features = false }
+zeroize = "1"
 
 # Database - Diesel ORM
 diesel = { version = "2.3.9", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }
@@ -105,18 +108,23 @@ tauri-plugin-devtools = { version = "2.1.0", optional = true }
 devtools = ["dep:tauri-plugin-devtools"]
 
 [target."cfg(target_os = \"macos\")".dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
 cocoa = "0.26.1"
 block2 = "0.6"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 
 [target."cfg(target_os = \"windows\")".dependencies]
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
 winver = "1.0.0"
 windows-sys = { version = "0.61", features = [
     "Win32_Graphics_Dwm",
     "Win32_Storage_FileSystem",
     "Win32_UI_Controls",
 ] }
+
+[target."cfg(target_os = \"linux\")".dependencies]
+keyring = { version = "3.6", default-features = false, features = ["sync-secret-service"] }
 
 [target."cfg(any(target_os = \"macos\", target_os = \"windows\", target_os = \"linux\"))".dependencies]
 tauri-plugin-single-instance = { version = "2.4", features = ["deep-link"] }
