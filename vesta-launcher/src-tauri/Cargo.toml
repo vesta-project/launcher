@@ -124,7 +124,7 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [target."cfg(target_os = \"linux\")".dependencies]
-keyring = { version = "3.6", default-features = false, features = ["sync-secret-service"] }
+keyring = { version = "3.6", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 
 [target."cfg(any(target_os = \"macos\", target_os = \"windows\", target_os = \"linux\"))".dependencies]
 tauri-plugin-single-instance = { version = "2.4", features = ["deep-link"] }
