@@ -445,10 +445,11 @@ impl Client {
                 }
             }
         }
-        if {
+        let full = {
             let intents = self.intents.lock().await;
             intents.len() >= 4096 && !intents.contains_key(&key)
-        } {
+        };
+        if full {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
         // Record before I/O; cancellation/drop of the future is also uncertain.

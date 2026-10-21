@@ -1,4 +1,4 @@
-//! OS vault adapter. Memory-only enrollment is explicit (environment opt-in),
+//! OS vault adapter. Memory-only enrollment is explicit (per sign-in opt-in),
 //! never an automatic fallback from a failing credential service.
 use std::sync::Arc;
 use vesta_server_client::{
@@ -10,6 +10,8 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub struct Credentials {
     service: String,
+    #[cfg(test)]
+    denied: std::sync::atomic::AtomicBool,
 }
 
 #[cfg(test)]
@@ -35,18 +37,36 @@ impl Credentials {
             .canonicalize()
             .unwrap_or_else(|_| profile.to_owned());
         Self {
+            #[cfg(test)]
+            denied: Default::default(),
             service: format!(
                 "Vesta.ServerDevice.{}",
                 leaf_fingerprint(canonical.to_string_lossy().as_bytes())
             ),
         }
     }
+    #[cfg(test)]
+    pub fn deny_storage(&self) {
+        self.denied
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     fn entry(&self, reference: &str) -> Result<keyring::Entry> {
+        #[cfg(test)]
+        if self.denied.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(Error::new(ErrorCode::CredentialsUnavailable));
+        }
         if reference.len() != 36 || uuid::Uuid::parse_str(reference).is_err() {
             return Err(Error::new(ErrorCode::CredentialsUnavailable));
         }
         keyring::Entry::new(&self.service, reference)
             .map_err(|_| Error::new(ErrorCode::CredentialsUnavailable))
+    }
+    /// Test actual write/read/delete access, rather than merely constructing an entry.
+    pub fn available(&self) -> bool {
+        let reference = uuid::Uuid::new_v4().to_string();
+        let result = self.create(&reference, false);
+        let deleted = self.delete(&reference);
+        result.is_ok() && deleted.is_ok()
     }
     pub fn create(&self, reference: &str, memory_only: bool) -> Result<Arc<dyn DeviceSigner>> {
         let mut seed = rand::random::<[u8; 32]>();
@@ -54,9 +74,20 @@ impl Credentials {
         if !memory_only {
             let result = self.entry(reference).and_then(|e| {
                 e.set_secret(&seed)
-                    .map_err(|_| Error::new(ErrorCode::CredentialsUnavailable))
+                    .map_err(|_| Error::new(ErrorCode::CredentialsUnavailable))?;
+                let stored = Zeroizing::new(
+                    e.get_secret()
+                        .map_err(|_| Error::new(ErrorCode::CredentialsUnavailable))?,
+                );
+                if stored.as_slice() != seed {
+                    return Err(Error::new(ErrorCode::CredentialsUnavailable));
+                }
+                Ok(())
             });
             seed.zeroize();
+            if result.is_err() {
+                let _ = self.delete(reference);
+            }
             result?;
         } else {
             seed.zeroize();
