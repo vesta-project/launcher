@@ -19,8 +19,9 @@ pub async fn server_pair(
     manager: Manager<'_>,
     discovery_id: String,
     code: String,
+    memory_only: bool,
 ) -> Result<ServerSnapshot> {
-    manager.pair(&app, &discovery_id, &code).await
+    manager.pair(&app, &discovery_id, &code, memory_only).await
 }
 #[tauri::command]
 pub async fn server_sign_in_minecraft(
@@ -28,8 +29,11 @@ pub async fn server_sign_in_minecraft(
     manager: Manager<'_>,
     discovery_id: String,
     account_uuid: String,
+    memory_only: bool,
 ) -> Result<ServerSnapshot> {
-    manager.minecraft(&app, &discovery_id, &account_uuid).await
+    manager
+        .minecraft(&app, &discovery_id, &account_uuid, memory_only)
+        .await
 }
 #[tauri::command]
 pub async fn server_trust_approve(

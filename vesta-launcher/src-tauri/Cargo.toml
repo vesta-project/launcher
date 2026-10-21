@@ -133,3 +133,5 @@ tauri-plugin-window-state = "2.4"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+rcgen = "0.13"

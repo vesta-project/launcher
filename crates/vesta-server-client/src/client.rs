@@ -2,13 +2,16 @@ use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
     model::*,
-    operations::{generation, intent_key},
+    operations::{device_intent_key, generation, intent_key},
     transport::{Socket, Transport},
     Error, ErrorCode, Result,
 };
 use reqwest::Method;
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex as StdMutex},
+};
 use tokio::sync::Mutex;
 
 struct SessionState {
@@ -33,6 +36,7 @@ pub struct Client {
     prepared: Mutex<HashMap<String, Prepared>>,
     mutations: Mutex<()>,
     intents: Mutex<HashMap<String, Intent>>,
+    legacy_intents: StdMutex<HashSet<String>>,
 }
 #[derive(Clone)]
 enum Intent {
@@ -59,15 +63,47 @@ impl Submission {
     }
 }
 impl Client {
+    /// Preserve pre-followup journal keys so upgrading cannot submit an uncertain
+    /// old intent under a new key. Only hashes are restored, never payloads.
+    pub fn restore_legacy_intents(&self, keys: impl IntoIterator<Item = String>) -> Result<()> {
+        let mut legacy = self
+            .legacy_intents
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?;
+        for key in keys {
+            if legacy.len() >= 4096 {
+                return Err(Error::new(ErrorCode::ServerBusy));
+            }
+            legacy.insert(key);
+        }
+        Ok(())
+    }
+    fn intent_key(&self, intent: &str) -> Result<String> {
+        let old = intent_key(intent)?;
+        if self
+            .legacy_intents
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?
+            .contains(&old)
+        {
+            return Ok(old);
+        }
+        device_intent_key(&self.server_id, &self.device_id, intent)
+    }
+
     /// A trust approval retires every old pool/session, including memory-only
     /// connections, without moving the key through IPC or plaintext storage.
     pub fn repin(&self, transport: Arc<Transport>) -> Arc<Self> {
-        Self::new(
+        let client = Self::new(
             transport,
             self.server_id.clone(),
             self.device_id.clone(),
             self.signer.clone(),
-        )
+        );
+        if let Ok(legacy) = self.legacy_intents.lock() {
+            let _ = client.restore_legacy_intents(legacy.iter().cloned());
+        }
+        client
     }
     pub async fn renewal_delay(&self) -> std::time::Duration {
         let state = self.session.lock().await;
@@ -98,6 +134,7 @@ impl Client {
             prepared: Default::default(),
             mutations: Default::default(),
             intents: Default::default(),
+            legacy_intents: Default::default(),
         })
     }
     pub async fn pair(
@@ -365,7 +402,7 @@ impl Client {
             .mutations
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let key = intent_key(intent)?;
+        let key = self.intent_key(intent)?;
         let digest = crate::trust::leaf_fingerprint(
             serde_json::to_string(&body)
                 .map_err(|_| Error::new(ErrorCode::Internal))?
@@ -400,15 +437,19 @@ impl Client {
                             }));
                         }
                     }
-                    return Err(Error::new(if old != path || d != digest {
-                        ErrorCode::Conflict
-                    } else {
-                        ErrorCode::OutcomeUnknown
-                    }));
+                    if old != path || d != digest {
+                        return Err(Error::new(ErrorCode::Conflict));
+                    }
+                    // An explicit identical retry reuses the durable key. The
+                    // agent replays its receipt if the first request committed.
                 }
             }
         }
-        if self.intents.lock().await.len() >= 4096 {
+        let full = {
+            let intents = self.intents.lock().await;
+            intents.len() >= 4096 && !intents.contains_key(&key)
+        };
+        if full {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
         // Record before I/O; cancellation/drop of the future is also uncertain.
@@ -438,6 +479,7 @@ impl Client {
                         | ErrorCode::Unreachable
                         | ErrorCode::OutcomeUnknown
                         | ErrorCode::Unsupported
+                        | ErrorCode::Internal
                 ) =>
             {
                 return Err(Error::new(ErrorCode::OutcomeUnknown))
@@ -511,7 +553,7 @@ impl Client {
     ) -> Result<KillPreparation> {
         let prepared = self.prepared.lock().await;
         let p = prepared
-            .get(&intent_key(intent)?)
+            .get(&self.intent_key(intent)?)
             .filter(|p| p.path == path && p.expires > crate::now_ms())
             .ok_or_else(|| Error::new(ErrorCode::ConfirmationExpired))?;
         Ok(KillPreparation {
@@ -524,7 +566,7 @@ impl Client {
             .mutations
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let key = intent_key(intent)?;
+        let key = self.intent_key(intent)?;
         let mut all = self.prepared.lock().await;
         let p = all
             .remove(&key)

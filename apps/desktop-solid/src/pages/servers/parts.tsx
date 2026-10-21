@@ -1,6 +1,8 @@
 import './servers.css';
 import { Badge, Button } from '@vesta/ui';
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal, onCleanup } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { setting } from '../../features/settings/config';
 import { t } from '../../localization';
 import { errorPresentation, toServerError } from '../../features/servers/errors';
 import { groupFingerprint } from '../../features/servers/fingerprint';
@@ -24,11 +26,13 @@ export function StatusDot(props: { dot: Dot; label?: string }) {
 /** Fingerprint in four-character groups; `highlight` marks groups that differ. */
 export function FingerprintView(props: { value: string; highlight?: number[] }) {
   return (
+    <Sensitive label={t('servers.fingerprint')}>
     <code data-vesta="server-fingerprint" aria-label={t('servers.fingerprint')}>
       <For each={groupFingerprint(props.value)}>
         {(group, index) => <span data-differs={props.highlight?.includes(index()) ? '' : undefined}>{group}</span>}
       </For>
     </code>
+    </Sensitive>
   );
 }
 
@@ -67,5 +71,37 @@ export function ServerErrorNote(props: {
         );
       }}
     </Show>
+  );
+}
+
+/**
+ * Wraps addresses, IPs, server IDs and fingerprints. With privacy mode on they are
+ * blurred until clicked, and re-hide after a few seconds, so they stay safe on a stream.
+ */
+export function Sensitive(props: { children: JSX.Element; label?: string }) {
+  const [revealed, setRevealed] = createSignal(false, { name: 'servers:sensitive-revealed' });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(timer));
+  const hidden = () => setting('servers_privacy_mode') && !revealed();
+  const reveal = (event: Event) => {
+    if (!setting('servers_privacy_mode')) return;
+    event.stopPropagation();
+    setRevealed(true);
+    clearTimeout(timer);
+    timer = setTimeout(() => setRevealed(false), 8000);
+  };
+  return (
+    <span
+      data-vesta="sensitive"
+      data-hidden={hidden() ? '' : undefined}
+      tabindex={hidden() ? 0 : undefined}
+      role={hidden() ? 'button' : undefined}
+      aria-label={hidden() ? t('servers.privacy.hidden', { name: props.label ?? t('servers.address.label') }) : undefined}
+      title={hidden() ? t('servers.privacy.reveal') : undefined}
+      onClick={reveal}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); reveal(event); } }}
+    >
+      <span aria-hidden={hidden() ? 'true' : undefined}>{props.children}</span>
+    </span>
   );
 }

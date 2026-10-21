@@ -87,6 +87,7 @@ export const settingIndex: { section: SectionId; label: MessageId }[] = [
   { section: 'general', label: 'prefs.general.language' },
   { section: 'general', label: 'prefs.general.reduced-motion' },
   { section: 'general', label: 'prefs.general.servers-in-rail' },
+  { section: 'general', label: 'prefs.general.servers-privacy' },
   { section: 'general', label: 'prefs.general.autostart' },
   { section: 'general', label: 'prefs.general.tray' },
   { section: 'general', label: 'prefs.general.close-to-tray' },

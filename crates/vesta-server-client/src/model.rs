@@ -132,7 +132,7 @@ dto!(ServerSnapshot {
 dto!(Discovery {
     discovery_id: String, endpoint: String, server_id: String, fingerprint: String,
     public_lifecycle: Option<String>, expected_fingerprint: Option<String>,
-    link_code: Option<String>, existing_connection_id: Option<String>,
+    link_code: Option<String>, existing_connection_id: Option<String>, secure_storage_available: bool,
 });
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
