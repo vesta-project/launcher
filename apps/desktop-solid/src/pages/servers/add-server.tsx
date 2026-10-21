@@ -10,6 +10,7 @@ import { differingGroups, sameFingerprint } from '../../features/servers/fingerp
 import { putSnapshot, serverCommand } from '../../features/servers/store';
 import type { Discovery, ServerCommandError, ServerSnapshot } from '../../features/servers/native';
 import type { MessageId } from '../../localization/messages';
+import { roleLabel } from '../../features/servers/model';
 import { FingerprintView, ServerErrorNote } from './parts';
 
 type Step = 'address' | 'verify' | 'sign-in' | 'done';
@@ -122,7 +123,7 @@ export function AddServer() {
               <ServerErrorNote error={error()} onRetry={discover} />
               <footer>
                 <Button variant="ghost" onClick={back}>{t('common.cancel')}</Button>
-                <Button type="submit" disabled={busy() || !address().trim()}>{busy() ? t('servers.address.checking') : t('servers.continue')}</Button>
+                <Button type="submit" tone="accent" disabled={busy() || !address().trim()}>{busy() ? t('servers.address.checking') : t('servers.continue')}</Button>
               </footer>
             </form>
           </Match>
@@ -156,7 +157,7 @@ export function AddServer() {
                 </Show>
                 <footer>
                   <Button variant="ghost" onClick={back}>{t('common.back')}</Button>
-                  <Button
+                  <Button tone="accent"
                     disabled={linkMismatch() || (!linkMatches() && !compared())}
                     onClick={() => { setError(null); setStep('sign-in'); }}
                   >{t('servers.verify.trust')}</Button>
@@ -206,7 +207,7 @@ export function AddServer() {
               <ServerErrorNote error={error()} />
               <footer>
                 <Button variant="ghost" onClick={back}>{t('common.back')}</Button>
-                <Button
+                <Button tone="accent"
                   type="submit"
                   disabled={busy() || (method() === 'code' ? !isPairingCode(code()) : usableAccounts().length === 0)}
                 >{busy() ? t('servers.sign-in.working') : t('servers.sign-in.submit')}</Button>
@@ -223,12 +224,12 @@ export function AddServer() {
                   {snapshot().state.access === 'no_management_access'
                     ? t('servers.done.no-management')
                     : snapshot().connection.role
-                      ? t('servers.done.paired-as', { name: snapshot().connection.role! })
+                      ? t('servers.done.paired-as', { name: roleLabel(snapshot().connection.role!) })
                       : t('servers.access.signed-in')}
                 </p>
                 <footer>
                   <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('servers.done.all-servers')}</Button>
-                  <Button onClick={() => transitionTo(`/servers/${snapshot().connection.id}`)}>{t('servers.open')}</Button>
+                  <Button tone="accent" onClick={() => transitionTo(`/servers/${snapshot().connection.id}`)}>{t('servers.open')}</Button>
                 </footer>
               </div>
             )}

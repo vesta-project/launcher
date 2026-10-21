@@ -42,7 +42,7 @@ function ServerList() {
             <p>{t('servers.subtitle')}</p>
           </div>
           <Show when={serverSnapshots().length > 0}>
-            <Button icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/add')}>{t('servers.add')}</Button>
+            <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/add')}>{t('servers.add')}</Button>
           </Show>
         </header>
         <Show when={usingFixtures}>
@@ -54,7 +54,7 @@ function ServerList() {
           fallback={
             <Show when={serversLoaded()}>
               <EmptyState icon="icons/rail/servers" title={t('servers.empty-title')} description={t('servers.empty-description')}>
-                <Button icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/add')}>{t('servers.add')}</Button>
+                <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/add')}>{t('servers.add')}</Button>
               </EmptyState>
             </Show>
           }

@@ -46,6 +46,10 @@ function RailLink(props: { item: NavItem }) {
       <Show when={props.item.id === 'library'}>
         <ContextMenuItem onSelect={() => transitionTo('/create')}>{t('nav.create')}</ContextMenuItem>
         <ContextMenuItem onSelect={() => { transitionTo('/library'); beginLibraryArrange(instances().map((entry) => entry.instance.id)); }}>{t('library.arrange')}</ContextMenuItem>
+        <Show when={!setting('servers_in_rail')}>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => transitionTo('/servers')}>{t('nav.servers')}</ContextMenuItem>
+        </Show>
       </Show>
       <Show when={props.item.id === 'create'}>
         <ContextMenuItem onSelect={() => requestCreateAction('new')}>{t('create-menu.new')}</ContextMenuItem>

@@ -1,7 +1,7 @@
 # Remote Vesta server management.
 nav-servers = Servers
 prefs-general-servers-in-rail = Show Servers in the sidebar
-prefs-general-servers-in-rail-description = Adds a sidebar shortcut to the servers you manage. Servers stay available from this setting when hidden.
+prefs-general-servers-in-rail-description = Adds a sidebar shortcut to the servers you manage. When hidden, open Servers from the Library button's right-click menu; pinned servers stay in the sidebar.
 
 servers-title = Servers
 servers-subtitle = Manage Minecraft servers that run Vesta, on this computer or elsewhere.
@@ -69,7 +69,7 @@ servers-address-problem-host = This isn't a valid host name or IP address.
 servers-address-problem-port = The port must be a number from 1 to 65535.
 servers-address-problem-link = This pairing link is incomplete or damaged. Copy it again from the server.
 servers-verify-title = Check that this is your server
-servers-verify-compare = Compare this fingerprint with the one shown on the server, for example in the output of `vesta-agent pair` or `vesta-agent owner link`. If any group differs, stop: you may be talking to a different machine.
+servers-verify-compare = Compare this fingerprint with the one shown on the server, for example in the output of vesta-agent pair or vesta-agent owner link. If any group differs, stop: you may be talking to a different machine.
 servers-verify-confirm = The fingerprint matches what the server shows
 servers-verify-link-matches = Matches the fingerprint in your pairing link.
 servers-verify-link-mismatch = This doesn't match the fingerprint in your pairing link. Don't continue; the connection may be intercepted.
@@ -79,7 +79,7 @@ servers-sign-in-title = Sign in to the server
 servers-sign-in-method = Sign-in method
 servers-sign-in-code = Pairing code
 servers-sign-in-minecraft = Minecraft account
-servers-sign-in-code-help = Paste the one-time code from `vesta-agent pair` on the server, or from an invitation. Codes expire after a few minutes and can be used once.
+servers-sign-in-code-help = Paste the one-time code from vesta-agent pair on the server, or from an invitation. Codes expire after a few minutes and can be used once.
 servers-sign-in-code-label = Pairing code
 servers-sign-in-code-format = Pairing codes are 43 letters, digits, dashes or underscores.
 servers-sign-in-minecraft-help = Your account proves who you are. The server decides what you can do. Your Microsoft sign-in is never sent to the server.
