@@ -2,6 +2,8 @@ mod credentials;
 mod store;
 mod subscriptions;
 mod tasks;
+#[cfg(test)]
+mod tests;
 mod worker;
 
 use credentials::Credentials;

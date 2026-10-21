@@ -31,6 +31,22 @@ impl Agent {
             .tempdir_in(parent)
             .unwrap()
             .keep();
+        // Pin this run's binaries: other work in the agent checkout may rebuild
+        // its target directory while our CLI requests are in progress.
+        let pinned_binary = root.join("vesta-agent.exe");
+        fs::copy(&binary, &pinned_binary).unwrap();
+        let binary = pinned_binary;
+        let agent_sha256 =
+            vesta_server_client::trust::leaf_fingerprint(&fs::read(&binary).unwrap());
+        let inert_sha256 = vesta_server_client::trust::leaf_fingerprint(&fs::read(&inert).unwrap());
+        fs::write(
+            root.join("fixture-binaries.json"),
+            serde_json::to_vec_pretty(
+                &serde_json::json!({"agent_sha256":agent_sha256,"inert_sha256":inert_sha256}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let id = format!("srv_{}", uuid::Uuid::new_v4().simple());
         let instance = root.join("instances").join(&id);
         for path in ["game/config", "bin", "private", "profile"] {

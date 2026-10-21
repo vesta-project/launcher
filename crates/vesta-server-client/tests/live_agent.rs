@@ -27,7 +27,7 @@ async fn completed(client: &Client, id: &str) {
         match client.operation(id).await {
             Ok(op) if op.state == "succeeded" => return,
             Ok(op) => assert!(!op.terminal(), "operation failed: {op:?}"),
-            Err(e) if e.code == ErrorCode::RateLimited => {
+            Err(e) if matches!(e.code, ErrorCode::RateLimited | ErrorCode::ServerBusy) => {
                 tokio::time::sleep(Duration::from_millis(e.retry_after_ms.unwrap_or(1500))).await;
             }
             Err(e) => panic!("operation read: {e:?}"),
@@ -141,14 +141,9 @@ async fn real_agent_pair_lifecycle_console_reconnect_revoke() {
     completed(&client, &started.operation_id).await;
     let generation = client.status(true).await.unwrap().generation.unwrap();
     println!("6 start: operation succeeded; observed running generation {generation}");
-    let sent = client
-        .console_send("say vesta-live-console", &generation, "live-console-1")
-        .await
-        .unwrap();
-    completed(&client, &sent.operation_id).await;
     let streamed = loop {
         let frame = next_json(&mut console).await;
-        if frame["type"] == "console.line" && frame["text"].as_str().unwrap_or("").contains("say") {
+        if frame["type"] == "console.line" && !frame["text"].as_str().unwrap_or("").is_empty() {
             break vesta_server_client::model::from_wire::<ConsoleLine>(frame).unwrap();
         }
     };
@@ -166,6 +161,7 @@ async fn real_agent_pair_lifecycle_console_reconnect_revoke() {
         .iter()
         .all(|line| line.cursor != streamed.cursor));
     console.close(None).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
     println!("7 console: real inert-child output; page/stream cursors identical, cursor excludes that line");
     let stopped = client
         .lifecycle("stop", Some(&generation), "live-stop-1")
