@@ -15,6 +15,7 @@ mod notifications;
 pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod sentry_init;
+mod servers;
 mod settings_sync;
 mod setup;
 mod startup;
@@ -115,6 +116,7 @@ pub fn run(context: tauri::Context) {
             }
             logging::register_log_plugin(app, log_level)?;
             setup::init(app)?;
+            app.manage(servers::ServerManager::new()?);
             resources::manual_drop::register_notification_actions(app.handle());
             Ok(())
         })
@@ -141,6 +143,28 @@ pub fn run(context: tauri::Context) {
             }
         }))
         .invoke_handler(tauri::generate_handler![
+            commands::servers::server_connections_list,
+            commands::servers::server_discover,
+            commands::servers::server_pair,
+            commands::servers::server_sign_in_minecraft,
+            commands::servers::server_trust_approve,
+            commands::servers::server_connection_update,
+            commands::servers::server_connection_remove,
+            commands::servers::server_snapshot,
+            commands::servers::server_subscribe,
+            commands::servers::server_unsubscribe,
+            commands::servers::server_lifecycle,
+            commands::servers::server_kill_prepare,
+            commands::servers::server_kill_confirm,
+            commands::servers::server_operations,
+            commands::servers::server_console_page,
+            commands::servers::server_console_send,
+            commands::servers::server_players,
+            commands::servers::server_players_whitelist,
+            commands::servers::server_players_ops,
+            commands::servers::server_players_bans,
+            commands::servers::server_moderate,
+            commands::servers::server_moderate_confirm,
             commands::game_options::get_game_options_catalog,
             commands::game_options::get_instance_game_options,
             commands::game_options::save_instance_game_options,
@@ -384,11 +408,13 @@ pub fn run(context: tauri::Context) {
         ])
         .on_page_load(|webview, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                if let Some(manager) = webview.app_handle().try_state::<std::sync::Arc<servers::ServerManager>>() { manager.window_closed(webview.label()); }
                 commands::author_themes::abort_window_preview(webview.app_handle(), webview.label());
             }
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. }) {
+                if let Some(manager) = window.app_handle().try_state::<std::sync::Arc<servers::ServerManager>>() { manager.window_closed(window.label()); }
                 commands::author_themes::abort_window_preview(window.app_handle(), window.label());
             }
             match event {
