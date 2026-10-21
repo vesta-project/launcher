@@ -1,4 +1,5 @@
 import { Button, Dialog, NumberField, Select, Skeleton, Switch, TextField, toast } from '@vesta/ui';
+import { MotdPreview } from '../motd-preview';
 import type { JSX } from '@solidjs/web';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { Icon } from '../../../components/icon';
@@ -165,14 +166,11 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
                       </SettingRow>
                       <Show when={def.key === 'motd'}>
                         <div data-vesta="settings-reveal">
-                          <div data-vesta="server-motd-preview" aria-label={t('server-settings.motd-preview')}>
-                            <span data-vesta="server-motd-icon"><Icon name="icons/rail/servers" size={22} /></span>
-                            <span data-vesta="server-motd-copy">
-                              <strong>{props.snapshot.connection.name}</strong>
-                              <span>{(value(def) as string) || ' '}</span>
-                            </span>
-                            <span data-vesta="server-motd-players">{`${props.snapshot.status?.playerCount ?? 0}/${value(propertyDef('max-players')!)}`}</span>
-                          </div>
+                          <MotdPreview
+                            name={props.snapshot.connection.name}
+                            template={(value(def) as string) || ''}
+                            players={`${props.snapshot.status?.playerCount ?? 0}/${value(propertyDef('max-players')!)}`}
+                          />
                         </div>
                       </Show>
                     </>

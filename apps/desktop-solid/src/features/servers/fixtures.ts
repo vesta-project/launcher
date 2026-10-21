@@ -10,6 +10,7 @@ import type {
 import type { ServersApi, Unsubscribe } from './service';
 import { createFileFixtures } from './fixtures-files';
 import { createManageFixtures, type ManageHost } from './fixtures-manage';
+import { createPresenceFixtures } from './fixtures-presence';
 
 const fail = (code: ServerCommandError['code'], retryAfterMs?: number): never => {
   throw { code, retryAfterMs: retryAfterMs ?? null } satisfies ServerCommandError;
@@ -524,6 +525,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     ...createFileFixtures({ wait, server, requireOnline, requireCapability, publish }),
 
     // Backups, access and pack.
+    ...createPresenceFixtures({ server, requireCapability, wait } as never),
     ...createManageFixtures({ server, requireOnline, requireCapability, record, publish, wait } as unknown as ManageHost),
   };
 

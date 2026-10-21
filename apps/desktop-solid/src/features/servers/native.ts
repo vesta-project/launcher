@@ -16,6 +16,7 @@
 //   an automatic retry.
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import { serversManageNative } from './native-manage';
+import { serversPresenceNative } from './native-presence';
 
 export const nativeServers = typeof window !== 'undefined' && isTauri();
 
@@ -378,6 +379,8 @@ export const serversNative = {
 
   // Backups, access and pack: see native-manage.ts.
   ...serversManageNative,
+  // Sleep and server-list presentation: see native-presence.ts.
+  ...serversPresenceNative,
 };
 
 export type ServersNative = typeof serversNative;
