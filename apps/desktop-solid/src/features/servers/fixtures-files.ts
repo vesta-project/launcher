@@ -61,7 +61,7 @@ const nodeHash = (path: string, node: FileNode) => sha256(node.binary ? `binary:
 
 const DAY = 86_400_000;
 
-function logText(day: string, count: number, offset = 0): string {
+function logText(count: number, offset = 0): string {
   const events = [
     '[Server thread/INFO]: Starting minecraft server version 1.21.4',
     '[Server thread/INFO]: Loading properties',
@@ -78,12 +78,13 @@ function logText(day: string, count: number, offset = 0): string {
     '[Server thread/INFO]: Saving the game (this may take a moment!)',
     '[Server thread/INFO]: Saved the game',
     '[Server thread/INFO]: Kai_builds left the game',
+    "[Server thread/ERROR]: Couldn't load chunk [12, -4]: region file is truncated, regenerating",
   ];
   const lines: string[] = [];
   for (let index = 0; index < count; index++) {
     const seconds = 8 * 3600 + (index + offset) * 37;
     const time = [Math.floor(seconds / 3600) % 24, Math.floor(seconds / 60) % 60, seconds % 60].map((part) => String(part).padStart(2, '0')).join(':');
-    lines.push(`[${day} ${time}] ${events[(index + offset) % events.length]}`);
+    lines.push(`[${time}] ${events[(index + offset) % events.length]}`);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -165,10 +166,10 @@ function seedRoot(): Root {
   text('config/c2me.toml', 'version = 3\nclientSideConfig = false\n\n[ioSystem]\ngcFreeChunkSerializer = true\n\n[noTickViewDistance]\nmaxViewDistance = 12\n', 9 * DAY);
   text('config/chunky/config.json', '{\n  "version": 2,\n  "language": "en",\n  "continueOnRestart": false,\n  "forceLoadExistingChunks": false,\n  "silent": false,\n  "updateInterval": 1\n}\n', 9 * DAY);
   text('crash-reports/crash-2026-10-12_18.22.05-server.txt', '---- Minecraft Crash Report ----\n// Shall we play a game?\n\nTime: 2026-10-12 18:22:05\nDescription: Exception ticking world\n\njava.lang.NullPointerException: Cannot invoke "net.minecraft.class_2338.method_10263()" because "pos" is null\n\tat net.minecraft.server.world.ServerWorld.tick(ServerWorld.java:412)\n', 10 * DAY);
-  text('logs/latest.log', logText('18Oct2026', 420), 40_000);
-  const archived = logText('17Oct2026', 300, 3);
+  text('logs/latest.log', logText(420), 40_000);
+  const archived = logText(300, 3);
   nodes.set('logs/2026-10-17-1.log.gz', { kind: 'file', content: 'gz:2026-10-17-1', binary: true, size: Math.round(bytes(archived) / 9), modifiedAtMs: now - DAY, gzText: archived });
-  const older = logText('16Oct2026', 180, 7);
+  const older = logText(180, 7);
   nodes.set('logs/2026-10-16-1.log.gz', { kind: 'file', content: 'gz:2026-10-16-1', binary: true, size: Math.round(bytes(older) / 9), modifiedAtMs: now - 2 * DAY, gzText: older });
   binary('world/level.dat', 4_812, 60_000);
   binary('world/level.dat_old', 4_806, 120_000);
@@ -367,7 +368,7 @@ export function createFileFixtures<T extends { snapshot: ServerSnapshot }>(ctx: 
       const { target, root } = open(connectionId);
       ctx.requireCapability(target, 'files.read');
       const start = cursor ? Number(cursor) : 0;
-      const items = root.trash.filter((entry) => entry.expiresAtMs > Date.now()).slice(start, start + 50).map(({ node: _, ...entry }) => entry);
+      const items = root.trash.filter((entry) => entry.expiresAtMs > Date.now()).slice(start, start + 50).map((entry): TrashEntry => ({ id: entry.id, path: entry.path, sha256: entry.sha256, size: entry.size, trashedAtMs: entry.trashedAtMs, expiresAtMs: entry.expiresAtMs }));
       return { items, nextCursor: start + 50 < root.trash.length ? String(start + 50) : null };
     },
 

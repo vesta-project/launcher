@@ -1,0 +1,306 @@
+/*
+ * Server Files and Settings tabs.
+ * Hooks: [data-vesta=server-files] -file-list -file-head -file-row -file-open -file-icon
+ *        -file-name -file-meta -file-bar -file-compare -upload-list -upload-row -upload-copy
+ *        -motd-preview -weakening-list
+ * States: file-row: data-protected; file-icon: data-kind; file-meta: data-tone
+ *
+ * Rows follow the Worlds/Resources list: hairline-separated, icon tile, muted metadata.
+ */
+@layer launcher {
+  :where([data-vesta="server-files"]) {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  :where(.server-files-crumbs) {
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  :where([data-vesta="server-files-root"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+  }
+
+  :where(.server-files-body) {
+    gap: 0;
+    padding-block-start: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="server-file-list"]) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :where([data-vesta="server-file-head"], [data-vesta="server-file-row"]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 88px 168px 32px;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="server-file-list"][data-trash]) > :where([data-vesta="server-file-row"]) {
+    grid-template-columns: minmax(0, 1fr) 88px 168px max-content;
+  }
+
+  :where([data-vesta="server-file-head"]) {
+    padding: 0 var(--vesta-space-1) var(--vesta-space-1-5);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta="server-file-row"]) {
+    min-block-size: 44px;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="server-file-open"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2-5, 10px);
+    min-inline-size: 0;
+    padding: var(--vesta-space-1);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+
+  :where(button[data-vesta="server-file-open"]:hover) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta="server-file-icon"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: 6px;
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="server-file-icon"][data-kind="directory"]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta="server-file-icon"][data-kind="jar"]) {
+    background: oklch(0.65 0.13 145 / 0.16);
+    color: oklch(0.78 0.12 145);
+  }
+
+  :where([data-vesta="server-file-icon"]:is([data-kind="log"], [data-kind="archived-log"])) {
+    background: oklch(0.7 0.12 240 / 0.16);
+    color: oklch(0.78 0.1 240);
+  }
+
+  :where([data-vesta="server-file-icon"][data-kind="config"]) {
+    background: oklch(0.72 0.13 75 / 0.16);
+    color: oklch(0.8 0.12 75);
+  }
+
+  :where([data-vesta="server-file-name"]) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta="server-file-row"][data-protected]) :where([data-vesta="server-file-name"]) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="server-file-open"]) > :where([data-vesta="icon"]:last-child) {
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta="server-file-meta"]) {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="server-file-meta"][data-tone="danger"]) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where(.server-files-body) > :where([data-vesta="button"]) {
+    align-self: center;
+    margin-block-start: var(--vesta-space-2);
+  }
+
+  /* ---- Editor ---- */
+  /* Flush panes are not flex containers: fill the pane so the inner scroller and save bar stay in view. */
+  :where(.server-file-editor, .server-properties) {
+    block-size: 100%;
+  }
+
+  :where([data-vesta="server-file-bar"]) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-1-5) var(--instance-gutter) var(--vesta-space-1-5) calc(var(--instance-gutter) - var(--vesta-space-2));
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta="server-file-bar"]) > :where([data-vesta="server-file-name"]) {
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where(.server-file-editor-body) {
+    padding-block-end: var(--instance-pane-padding-block);
+  }
+
+  :where(.server-file-editor[data-dirty]) :where(.server-file-editor-body) {
+    padding-block-end: 76px;
+  }
+
+  :where(.server-file-textarea) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 240px;
+  }
+
+  :where(.server-file-textarea, .server-file-compare-pane) :where([data-vesta="field-control"]) {
+    flex: 1;
+  }
+
+  :where(.server-file-textarea, .server-file-compare-pane) :where(textarea) {
+    block-size: 100%;
+    font-family: var(--vesta-font-mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    tab-size: 4;
+    resize: none;
+    white-space: pre;
+  }
+
+  :where([data-vesta="server-file-compare"]) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--vesta-space-3);
+    margin-block-start: var(--vesta-space-2);
+  }
+
+  /* ---- Log viewer ---- */
+  :where(.server-log-file) {
+    flex: 1;
+  }
+
+  /* ---- Upload dialog ---- */
+  :where([data-vesta="server-upload-list"]) {
+    display: flex;
+    flex-direction: column;
+    margin: 0 0 var(--vesta-space-2);
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta="server-upload-row"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding-block: var(--vesta-space-2);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="server-upload-copy"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  /* ---- Settings: MOTD preview and weakening list ---- */
+  :where([data-vesta="server-motd-preview"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-sm);
+    background: oklch(0.2 0.01 260);
+    color: oklch(0.92 0 0);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="server-motd-icon"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 40px;
+    block-size: 40px;
+    border-radius: 4px;
+    background: oklch(0.32 0.02 260);
+  }
+
+  :where([data-vesta="server-motd-copy"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="server-motd-copy"]) > :where(span) {
+    overflow: hidden;
+    color: oklch(0.72 0 0);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="server-motd-players"]) {
+    color: oklch(0.72 0 0);
+  }
+
+  :where([data-vesta="server-weakening-list"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta="server-weakening-list"] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-warning-text);
+  }
+
+  :where([data-vesta="server-weakening-list"] li code) {
+    margin-inline-start: auto;
+    color: var(--vesta-color-text);
+  }
+
+  @container pane (max-width: 560px) {
+    :where([data-vesta="server-file-head"], [data-vesta="server-file-row"]) {
+      grid-template-columns: minmax(0, 1fr) 72px 32px;
+    }
+
+    :where([data-vesta="server-file-head"], [data-vesta="server-file-row"]) > :nth-child(3) {
+      display: none;
+    }
+  }
+}
