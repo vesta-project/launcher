@@ -46,6 +46,18 @@ enum Intent {
         digest: String,
     },
 }
+enum Submission {
+    Operation(ServerOperation),
+    Prepared(KillPreparation),
+}
+impl Submission {
+    fn operation(self) -> Result<ServerOperation> {
+        match self {
+            Self::Operation(o) => Ok(o),
+            Self::Prepared(_) => Err(Error::new(ErrorCode::Conflict)),
+        }
+    }
+}
 impl Client {
     /// A trust approval retires every old pool/session, including memory-only
     /// connections, without moving the key through IPC or plaintext storage.
@@ -132,7 +144,14 @@ impl Client {
             let c: Challenge = serde_json::from_value(challenge)
                 .map_err(|_| Error::new(ErrorCode::Unsupported))?;
             auth::check_identity(&self.server_id, &c.server_id)?;
-            if c.purpose != auth::SESSION_PURPOSE || c.nonce.len() > 256 {
+            if c.purpose != auth::SESSION_PURPOSE
+                || c.nonce.is_empty()
+                || c.nonce.len() > 256
+                || !c
+                    .nonce
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+            {
                 return Err(Error::new(ErrorCode::Unsupported));
             }
             let signature = self
@@ -164,6 +183,7 @@ impl Client {
                 let token = s.token.clone();
                 state.session = Some(s);
                 state.failure = None;
+                self.refused.lock().await.clear();
                 Ok(token)
             }
             Err(e) => {
@@ -285,13 +305,28 @@ impl Client {
             _ => return Err(Error::new(ErrorCode::Unsupported)),
         };
         let token = self.token(None).await?;
-        match self.transport.socket(path, &token).await {
+        let result = match self.transport.socket(path, &token).await {
             Err(e) if e.code == ErrorCode::CredentialsRejected => {
                 let fresh = self.token(Some(&token)).await?;
                 self.transport.socket(path, &fresh).await
             }
             other => other,
+        };
+        if result
+            .as_ref()
+            .is_err_and(|e| e.code == ErrorCode::Forbidden)
+        {
+            let capability = if topic == ServerTopic::Console {
+                "console.read"
+            } else {
+                "metrics.view"
+            };
+            let mut refused = self.refused.lock().await;
+            if !refused.iter().any(|c| c == capability) {
+                refused.push(capability.into());
+            }
         }
+        result
     }
     pub async fn lifecycle(
         &self,
@@ -315,15 +350,16 @@ impl Client {
             intent,
             &format!("lifecycle.{action}"),
         )
-        .await
+        .await?
+        .operation()
     }
-    pub async fn submit(
+    async fn submit(
         &self,
         path: &str,
         body: Value,
         intent: &str,
         capability: &str,
-    ) -> Result<ServerOperation> {
+    ) -> Result<Submission> {
         // One submission owner; repeated UI calls never issue concurrent mutations.
         let _owner = self
             .mutations
@@ -345,12 +381,25 @@ impl Client {
                     if old != path || d != digest {
                         return Err(Error::new(ErrorCode::Conflict));
                     }
-                    return self.operation(&operation.operation_id).await;
+                    let mut observed = self.operation(&operation.operation_id).await?;
+                    observed.intent = operation.intent;
+                    return Ok(Submission::Operation(observed));
                 }
                 Intent::Uncertain {
                     path: old,
                     digest: d,
                 } => {
+                    if old == path && d == digest {
+                        if let Some(p) = self.prepared.lock().await.get(&key) {
+                            if p.expires <= crate::now_ms() {
+                                return Err(Error::new(ErrorCode::ConfirmationExpired));
+                            }
+                            return Ok(Submission::Prepared(KillPreparation {
+                                operation_id: p.operation_id.clone(),
+                                expires_at_ms: p.expires,
+                            }));
+                        }
+                    }
                     return Err(Error::new(if old != path || d != digest {
                         ErrorCode::Conflict
                     } else {
@@ -359,7 +408,7 @@ impl Client {
                 }
             }
         }
-        if self.intents.lock().await.len() >= 256 {
+        if self.intents.lock().await.len() >= 4096 {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
         // Record before I/O; cancellation/drop of the future is also uncertain.
@@ -422,9 +471,13 @@ impl Client {
             if prepared.len() >= 32 {
                 return Err(Error::new(ErrorCode::ServerBusy));
             }
+            let receipt = KillPreparation {
+                operation_id: p.operation_id.clone(),
+                expires_at_ms: p.expires,
+            };
             prepared.insert(key, p);
             // Confirmation receipts do not carry a complete operation projection.
-            return Err(Error::new(ErrorCode::ConfirmationExpired));
+            return Ok(Submission::Prepared(receipt));
         }
         let mut operation: ServerOperation =
             from_wire(value).map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
@@ -437,37 +490,34 @@ impl Client {
                 operation: operation.clone(),
             },
         );
-        Ok(operation)
+        Ok(Submission::Operation(operation))
     }
     pub async fn kill_prepare(&self, expected: &str, intent: &str) -> Result<KillPreparation> {
         generation(expected)?;
-        let key = intent_key(intent)?;
-        if let Some(p) = self.prepared.lock().await.get(&key) {
-            if p.expires > crate::now_ms() {
-                return Ok(KillPreparation {
-                    operation_id: p.operation_id.clone(),
-                    expires_at_ms: p.expires,
-                });
-            }
-        }
         let body = json!({"expected_generation":expected,"acknowledgement":format!("kill game:generation:{expected}")});
         match self
             .submit("lifecycle/kill", body, intent, "lifecycle.force_kill")
             .await
         {
-            Err(e) if e.code == ErrorCode::ConfirmationExpired => {
-                let p = self.prepared.lock().await;
-                let p = p
-                    .get(&key)
-                    .ok_or_else(|| Error::new(ErrorCode::ConfirmationExpired))?;
-                Ok(KillPreparation {
-                    operation_id: p.operation_id.clone(),
-                    expires_at_ms: p.expires,
-                })
-            }
+            Ok(Submission::Prepared(receipt)) => Ok(receipt),
             Err(e) => Err(e),
             Ok(_) => Err(Error::new(ErrorCode::Conflict)),
         }
+    }
+    pub async fn confirmation_operation(
+        &self,
+        intent: &str,
+        path: &str,
+    ) -> Result<KillPreparation> {
+        let prepared = self.prepared.lock().await;
+        let p = prepared
+            .get(&intent_key(intent)?)
+            .filter(|p| p.path == path && p.expires > crate::now_ms())
+            .ok_or_else(|| Error::new(ErrorCode::ConfirmationExpired))?;
+        Ok(KillPreparation {
+            operation_id: p.operation_id.clone(),
+            expires_at_ms: p.expires,
+        })
     }
     pub async fn confirm(&self, intent: &str, expected_path: &str) -> Result<ServerOperation> {
         let _owner = self
@@ -483,6 +533,11 @@ impl Client {
         if p.expires <= crate::now_ms() || p.path != expected_path {
             return Err(Error::new(ErrorCode::ConfirmationExpired));
         }
+        let digest = crate::trust::leaf_fingerprint(
+            serde_json::to_string(&p.body)
+                .map_err(|_| Error::new(ErrorCode::Internal))?
+                .as_bytes(),
+        );
         let mut body = p.body;
         body[if p.path == "lifecycle/kill" {
             "confirmation_token"
@@ -504,7 +559,7 @@ impl Client {
             )
             .await;
         // Whether response was lost or received, reconcile this exact operation ID.
-        match result {
+        let observed = match result {
             Ok(value) => from_wire(value),
             Err(e)
                 if matches!(
@@ -512,13 +567,27 @@ impl Client {
                     ErrorCode::Timeout | ErrorCode::Unreachable | ErrorCode::OutcomeUnknown
                 ) =>
             {
-                self.operation(&p.operation_id).await.map(|mut o| {
-                    o.reconciling = !o.terminal();
-                    o
-                })
+                self.operation(&p.operation_id)
+                    .await
+                    .map(|mut o| {
+                        o.reconciling = !o.terminal();
+                        o
+                    })
+                    .map_err(|_| Error::new(ErrorCode::OutcomeUnknown))
             }
             Err(e) => Err(e),
+        };
+        if let Ok(operation) = &observed {
+            self.intents.lock().await.insert(
+                key,
+                Intent::Accepted {
+                    path: p.path,
+                    digest,
+                    operation: operation.clone(),
+                },
+            );
         }
+        observed
     }
     pub async fn operation(&self, id: &str) -> Result<ServerOperation> {
         if id.is_empty()
@@ -535,18 +604,41 @@ impl Client {
         )
     }
     pub async fn operations(&self, cursor: Option<&str>) -> Result<Page<ServerOperation>> {
+        self.operations_with_priority(cursor, true).await
+    }
+    pub async fn operations_with_priority(
+        &self,
+        cursor: Option<&str>,
+        interactive: bool,
+    ) -> Result<Page<ServerOperation>> {
         from_wire(
-            self.get(&page_route("operations", cursor, 100)?, true, "tasks.view")
-                .await?,
+            self.get(
+                &page_route("operations", cursor, 100)?,
+                interactive,
+                "tasks.view",
+            )
+            .await?,
         )
     }
     pub async fn console_page(&self, cursor: Option<&str>, limit: u16) -> Result<ConsolePage> {
+        self.console_page_with_priority(cursor, limit, true).await
+    }
+    pub async fn console_page_with_priority(
+        &self,
+        cursor: Option<&str>,
+        limit: u16,
+        interactive: bool,
+    ) -> Result<ConsolePage> {
         if !(1..=200).contains(&limit) {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
         from_wire(
-            self.get(&page_route("console", cursor, limit)?, true, "console.read")
-                .await?,
+            self.get(
+                &page_route("console", cursor, limit)?,
+                interactive,
+                "console.read",
+            )
+            .await?,
         )
     }
     pub async fn console_send(
@@ -570,7 +662,8 @@ impl Client {
             intent,
             "console.write",
         )
-        .await
+        .await?
+        .operation()
     }
     pub async fn players(&self) -> Result<PlayersView> {
         let v = self.get("players", true, "players.view").await?;
@@ -661,16 +754,10 @@ impl Client {
             .submit("players/moderate", value, intent, capability)
             .await
         {
-            Ok(operation) => Ok(ModerationResult::Operation { operation }),
-            Err(e) if e.code == ErrorCode::ConfirmationExpired => {
-                let p = self.prepared.lock().await;
-                let p = p
-                    .get(&intent_key(intent)?)
-                    .ok_or_else(|| Error::new(ErrorCode::ConfirmationExpired))?;
-                Ok(ModerationResult::AwaitingConfirmation {
-                    expires_at_ms: p.expires,
-                })
-            }
+            Ok(Submission::Operation(operation)) => Ok(ModerationResult::Operation { operation }),
+            Ok(Submission::Prepared(p)) => Ok(ModerationResult::AwaitingConfirmation {
+                expires_at_ms: p.expires_at_ms,
+            }),
             Err(e) => Err(e),
         }
     }

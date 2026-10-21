@@ -216,3 +216,24 @@ fn console_ring_bounds_lines_bytes_and_reports_visible_gaps() {
     assert!(ring.lines().back().unwrap().truncated);
     assert!(ring.take_gap());
 }
+
+#[test]
+fn replacing_a_transport_does_not_reset_its_origin_request_budget() {
+    let a = Scheduler::for_origin("https://budget-test.invalid:8443/").unwrap();
+    let b = Scheduler::for_origin("https://budget-test.invalid:8443/").unwrap();
+    assert!(Arc::ptr_eq(&a, &b));
+    for _ in 0..30 {
+        drop(a.admit(false).unwrap());
+    }
+    assert_eq!(b.admit(false).err().unwrap().code, ErrorCode::RateLimited);
+    assert!(b.admit(true).is_ok());
+}
+
+#[test]
+fn unknown_operation_states_do_not_imply_acceptance_or_success() {
+    let wire = serde_json::json!({"operation_id":"id","state":"new_state","progress_percent":null,"created_at_ms":1,"updated_at_ms":2,"finished_at_ms":null});
+    assert_eq!(
+        from_wire::<ServerOperation>(wire).unwrap_err().code,
+        ErrorCode::Unsupported
+    );
+}

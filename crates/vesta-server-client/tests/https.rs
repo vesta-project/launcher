@@ -34,6 +34,13 @@ struct State {
     uncertain: AtomicBool,
     lost_confirmation: AtomicBool,
     modern: AtomicBool,
+    lost_pair: AtomicBool,
+    rate_limit: AtomicBool,
+    forbidden: AtomicBool,
+    wrong_identity: AtomicBool,
+    expired_confirmation: AtomicBool,
+    slow_status: AtomicBool,
+    near_expiry_first: AtomicBool,
 }
 struct Agent {
     endpoint: Endpoint,
@@ -166,12 +173,20 @@ async fn route(
                 .decode(body["public_key"].as_str().unwrap())
                 .unwrap();
             *state.key.lock().unwrap() = Some(key.as_slice().try_into().unwrap());
+            if state.lost_pair.load(Ordering::SeqCst) {
+                return Ok(error(StatusCode::GATEWAY_TIMEOUT, "gateway_timeout"));
+            }
             plain(
                 json!({"server_id":"server-1","principal_id":"principal-1","device_id":"device-1","role":"owner"}),
             )
         }
         "/api/v3/auth/session/challenge" => {
             assert_eq!(body["device_id"], "device-1");
+            if state.wrong_identity.load(Ordering::SeqCst) {
+                return Ok(plain(
+                    json!({"server_id":"other-server","nonce":"nonce","purpose":"vesta.management.session.v1"}),
+                ));
+            }
             plain(
                 json!({"server_id":"server-1","nonce":"nonce","purpose":"vesta.management.session.v1","expires_in_seconds":60}),
             )
@@ -189,8 +204,13 @@ async fn route(
                 )
                 .unwrap();
             let n = state.sessions.fetch_add(1, Ordering::SeqCst) + 1;
+            let lifetime = if n == 1 && state.near_expiry_first.load(Ordering::SeqCst) {
+                30_000
+            } else {
+                900_000
+            };
             plain(
-                json!({"server_id":"server-1","token":format!("token-{n}"),"expires_at_ms":vesta_server_client::now_ms()+900_000}),
+                json!({"server_id":"server-1","token":format!("token-{n}"),"expires_at_ms":vesta_server_client::now_ms()+lifetime}),
             )
         }
         "/api/v3/manage/session" => {
@@ -204,6 +224,17 @@ async fn route(
         }
         "/api/v3/manage/server/status" => {
             state.status_reads.fetch_add(1, Ordering::SeqCst);
+            if state.slow_status.load(Ordering::SeqCst) {
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            }
+            if state.forbidden.load(Ordering::SeqCst) {
+                return Ok(error(StatusCode::FORBIDDEN, "management_forbidden"));
+            }
+            if state.rate_limit.load(Ordering::SeqCst) {
+                let mut r = error(StatusCode::TOO_MANY_REQUESTS, "rate_limited");
+                r.headers_mut().insert("retry-after", "7".parse().unwrap());
+                return Ok(r);
+            }
             if state.reject_old.load(Ordering::SeqCst)
                 && req.headers()["authorization"] == "Bearer token-1"
             {
@@ -235,6 +266,11 @@ async fn route(
                 "kill game:generation:00000000000000000000000000000000"
             );
             if body.get("confirmation_token").is_none() {
+                if state.expired_confirmation.load(Ordering::SeqCst) {
+                    return Ok(envelope(
+                        json!({"operation_id":"operation-1","state":"awaiting_confirmation","confirmation_token":"native-only-secret","expires_at_ms":vesta_server_client::now_ms()-1}),
+                    ));
+                }
                 envelope(
                     json!({"operation_id":"operation-1","state":"awaiting_confirmation","confirmation_token":"native-only-secret","expires_at_ms":vesta_server_client::now_ms()+120_000}),
                 )
@@ -253,6 +289,15 @@ async fn route(
             json!({"known":true,"generation":"00000000000000000000000000000000","player_count":1,"items":[{"name":"Alex"}]}),
         ),
         "/api/v3/manage/players/moderate" => {
+            if body["action"] == "op" {
+                if body.get("confirmation").is_none() {
+                    return Ok(envelope(
+                        json!({"operation_id":"operation-1","state":"awaiting_confirmation","confirmation_token":"native-only-op-secret","expires_at_ms":vesta_server_client::now_ms()+120_000}),
+                    ));
+                }
+                assert_eq!(body["confirmation"], "native-only-op-secret");
+                return Ok(envelope(operation("queued")));
+            }
             assert_eq!(body["action"], "ban");
             assert_eq!(body["duration_seconds"], 60);
             assert!(body.get("durationSeconds").is_none());
@@ -414,4 +459,156 @@ async fn typed_moderation_uses_snake_case_wire_and_no_console_authority() {
         result,
         vesta_server_client::model::ModerationResult::Operation { .. }
     ));
+}
+
+#[tokio::test]
+async fn unverified_capture_transport_cannot_send_credentials_or_redeem_a_code() {
+    let agent = Agent::start().await;
+    let transport = Transport::new(agent.endpoint.clone(), None).unwrap();
+    let signer = Ed25519Signer::from_seed([5; 32]);
+    assert_eq!(
+        Client::pair(&transport, "server-1", "code", &signer)
+            .await
+            .err()
+            .unwrap()
+            .code,
+        ErrorCode::TlsFailed
+    );
+    assert_eq!(agent.state.pairs.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn lost_pairing_reply_is_unknown_and_never_automatically_redeemed_again() {
+    let agent = Agent::start().await;
+    agent.state.lost_pair.store(true, Ordering::SeqCst);
+    let transport =
+        Transport::new(agent.endpoint.clone(), Some(agent.fingerprint.clone())).unwrap();
+    let signer = Ed25519Signer::from_seed([5; 32]);
+    assert_eq!(
+        Client::pair(&transport, "server-1", "code", &signer)
+            .await
+            .err()
+            .unwrap()
+            .code,
+        ErrorCode::PairOutcomeUnknown
+    );
+    assert_eq!(agent.state.pairs.load(Ordering::SeqCst), 1);
+}
+#[tokio::test]
+async fn rate_limit_guidance_pauses_background_work_without_a_retry_loop() {
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    agent.state.rate_limit.store(true, Ordering::SeqCst);
+    let error = client.status(false).await.unwrap_err();
+    assert_eq!(error.code, ErrorCode::RateLimited);
+    assert_eq!(error.retry_after_ms, Some(7000));
+    assert!(client.transport.scheduler.paused_for().as_secs() >= 6);
+    assert!(client
+        .console_page_with_priority(None, 100, false)
+        .await
+        .is_err());
+    assert_eq!(agent.state.status_reads.load(Ordering::SeqCst), 1);
+}
+#[tokio::test]
+async fn permission_refusals_are_learned_and_cross_server_challenges_are_not_signed() {
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    agent.state.forbidden.store(true, Ordering::SeqCst);
+    assert_eq!(
+        client.status(true).await.unwrap_err().code,
+        ErrorCode::Forbidden
+    );
+    assert_eq!(client.refused().await, vec!["status.view"]);
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    agent.state.wrong_identity.store(true, Ordering::SeqCst);
+    assert_eq!(
+        client.status(true).await.unwrap_err().code,
+        ErrorCode::FingerprintMismatch
+    );
+    assert_eq!(agent.state.sessions.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn confirmation_is_bound_to_the_exact_generation_and_op_tokens_stay_native() {
+    use vesta_server_client::model::{ModerationAction, ModerationResult};
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    client
+        .kill_prepare("00000000000000000000000000000000", "kill")
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .kill_prepare("11111111111111111111111111111111", "kill")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Conflict
+    );
+    let result = client
+        .moderate(
+            ModerationAction::Op {
+                player: "Alex".into(),
+            },
+            "00000000000000000000000000000000",
+            "op",
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        result,
+        ModerationResult::AwaitingConfirmation { .. }
+    ));
+    assert!(!serde_json::to_string(&result)
+        .unwrap()
+        .contains("native-only"));
+    client.confirm("op", "players/moderate").await.unwrap();
+    agent
+        .state
+        .expired_confirmation
+        .store(true, Ordering::SeqCst);
+    client
+        .kill_prepare("00000000000000000000000000000000", "expired")
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .confirm("expired", "lifecycle/kill")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::ConfirmationExpired
+    );
+}
+#[tokio::test]
+async fn cancelling_a_read_waiter_does_not_leak_the_transport_or_leave_a_stuck_read() {
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    client.status(true).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(260)).await;
+    agent.state.slow_status.store(true, Ordering::SeqCst);
+    let weak = Arc::downgrade(&client.transport);
+    let caller = client.clone();
+    let task = tokio::spawn(async move { caller.status(true).await });
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    task.abort();
+    drop(client);
+    tokio::time::sleep(std::time::Duration::from_millis(180)).await;
+    assert!(weak.upgrade().is_none());
+}
+
+#[tokio::test]
+async fn proactive_renewal_before_expiry_is_single_flight() {
+    let agent = Agent::start().await;
+    agent.state.near_expiry_first.store(true, Ordering::SeqCst);
+    let client = agent.paired().await;
+    client.status(true).await.unwrap();
+    let mut calls = vec![];
+    for _ in 0..12 {
+        let client = client.clone();
+        calls.push(tokio::spawn(async move { client.status(true).await }));
+    }
+    for call in calls {
+        call.await.unwrap().unwrap();
+    }
+    assert_eq!(agent.state.sessions.load(Ordering::SeqCst), 2);
 }

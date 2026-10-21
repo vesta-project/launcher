@@ -23,12 +23,15 @@ pub struct Transport {
     tls: Arc<rustls::ClientConfig>,
     expected: Option<String>,
     observed: Arc<Mutex<Option<String>>>,
-    pub scheduler: Scheduler,
+    pub scheduler: Arc<Scheduler>,
     reads: tokio::sync::Mutex<HashMap<String, (Instant, SharedRead)>>,
     validators: tokio::sync::Mutex<HashMap<String, (String, Value)>>,
 }
 impl Transport {
     pub fn new(endpoint: Endpoint, expected: Option<String>) -> Result<Arc<Self>> {
+        let expected = expected
+            .map(|v| crate::endpoint::fingerprint(&v))
+            .transpose()?;
         let observed = Arc::new(Mutex::new(None));
         let tls = trust::config(expected.clone(), observed.clone());
         let http = reqwest::Client::builder()
@@ -40,13 +43,14 @@ impl Transport {
             .pool_max_idle_per_host(3)
             .build()
             .map_err(|_| Error::new(ErrorCode::Internal))?;
+        let scheduler = Scheduler::for_origin(endpoint.url().as_str())?;
         Ok(Arc::new(Self {
             endpoint,
             http,
             tls: Arc::new(tls),
             expected,
             observed,
-            scheduler: Scheduler::default(),
+            scheduler,
             reads: Default::default(),
             validators: Default::default(),
         }))
@@ -158,6 +162,11 @@ impl Transport {
         interactive: bool,
     ) -> Result<Value> {
         let _permit = self.scheduler.admit(interactive)?;
+        if self.expected.is_none()
+            && (method != Method::GET || path != "/api/v3/status" || token.is_some())
+        {
+            return Err(Error::new(ErrorCode::TlsFailed));
+        }
         let mutation = method != Method::GET;
         let conditional = method == Method::GET
             && matches!(
@@ -253,6 +262,9 @@ impl Transport {
         Ok(data)
     }
     pub async fn socket(&self, path: &str, token: &str) -> Result<Socket> {
+        if self.expected.is_none() {
+            return Err(Error::new(ErrorCode::TlsFailed));
+        }
         let _admission = self.scheduler.admit(false)?;
         let mut url = self.endpoint.route(path)?;
         url.set_scheme("wss")

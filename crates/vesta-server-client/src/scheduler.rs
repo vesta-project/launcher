@@ -1,6 +1,7 @@
 use crate::{Error, ErrorCode, Result};
 use std::{
-    sync::{Arc, Mutex, OnceLock},
+    collections::HashMap,
+    sync::{Arc, Mutex, OnceLock, Weak},
     time::{Duration, Instant},
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -63,6 +64,29 @@ impl Default for Scheduler {
     }
 }
 impl Scheduler {
+    pub fn for_origin(origin: &str) -> Result<Arc<Self>> {
+        static OWNERS: OnceLock<Mutex<HashMap<String, Weak<Scheduler>>>> = OnceLock::new();
+        let mut owners = OWNERS
+            .get_or_init(Default::default)
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?;
+        owners.retain(|_, s| s.strong_count() > 0);
+        if let Some(scheduler) = owners.get(origin).and_then(Weak::upgrade) {
+            return Ok(scheduler);
+        }
+        if owners.len() >= 128 {
+            return Err(Error::new(ErrorCode::ServerBusy));
+        }
+        let scheduler = Arc::new(Self::default());
+        owners.insert(origin.into(), Arc::downgrade(&scheduler));
+        Ok(scheduler)
+    }
+    pub fn paused_for(&self) -> Duration {
+        self.bucket
+            .lock()
+            .map(|b| b.paused_until.saturating_duration_since(Instant::now()))
+            .unwrap_or_default()
+    }
     /// Fail fast instead of accumulating unbounded request queues. Local admission
     /// precedes global admission; no global permit is held waiting for a server.
     pub fn admit(&self, interactive: bool) -> Result<Admission> {
