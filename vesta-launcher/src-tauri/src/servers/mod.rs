@@ -1,4 +1,5 @@
 mod credentials;
+mod management;
 mod store;
 mod subscriptions;
 mod tasks;
@@ -38,6 +39,7 @@ struct Contact {
 }
 #[derive(Default)]
 struct Live {
+    management: Mutex<()>,
     client: Mutex<Option<Arc<Client>>>,
     refresh: Mutex<()>,
     worker: StdMutex<Option<tauri::async_runtime::JoinHandle<()>>>,

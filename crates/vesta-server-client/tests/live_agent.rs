@@ -10,7 +10,7 @@ use vesta_server_client::{
     transport::Transport,
     Client, ErrorCode,
 };
-#[allow(dead_code)]
+#[allow(dead_code, clippy::items_after_test_module)]
 #[path = "../../../vesta-launcher/src-tauri/src/servers/credentials.rs"]
 mod credentials;
 #[path = "support/live_agent.rs"]
@@ -35,6 +35,156 @@ async fn completed(client: &Client, id: &str) {
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     panic!("operation timed out");
+}
+
+async fn backup_completed(client: &Client, id: &str) -> vesta_server_client::management::BackupJob {
+    for _ in 0..30 {
+        let job = client.backup_job(id).await.unwrap();
+        match job.state.as_str() {
+            "succeeded" => return job,
+            "failed" | "uncertain" | "recovery_required" => panic!("backup failed: {job:?}"),
+            _ => tokio::time::sleep(Duration::from_secs(2)).await,
+        }
+    }
+    panic!("backup job timed out")
+}
+
+#[tokio::test]
+#[ignore = "requires VESTA_LIVE_AGENT=1 and the launcher-compat agent binaries"]
+async fn live_management_access_pack_and_backups() {
+    assert_eq!(std::env::var("VESTA_LIVE_AGENT").as_deref(), Ok("1"));
+    let agent = fixture::Agent::start_with_backups();
+    let issued = agent.pair();
+    let address = Address::parse(issued["pairing_link"].as_str().unwrap()).unwrap();
+    let server = issued["server_id"].as_str().unwrap();
+    let transport = Transport::new(address.endpoint.clone(), address.fingerprint.clone()).unwrap();
+    let signer = Arc::new(vesta_server_client::auth::Ed25519Signer::from_seed(
+        [51; 32],
+    ));
+    let enrollment = Client::pair(
+        &transport,
+        server,
+        address.code.as_deref().unwrap(),
+        signer.as_ref(),
+    )
+    .await
+    .unwrap();
+    let client = Client::new(transport, server.into(), enrollment.device_id, signer);
+    let users = client.users(0).await.unwrap();
+    assert!(!users.users.is_empty());
+    let roles = client.roles().await.unwrap();
+    let role = roles
+        .iter()
+        .filter(|r| r.rank > 0 && r.rank < 100)
+        .min_by_key(|r| r.rank)
+        .unwrap();
+    let invite = client
+        .invitation_create(&role.id, 15, "live-invitation-revoke")
+        .await
+        .unwrap();
+    let invitation_id = invite.id.as_deref().expect("compat agent invitation id");
+    assert!(invite.pairing_link.is_some());
+    assert!(client
+        .invitations()
+        .await
+        .unwrap()
+        .iter()
+        .any(|i| i.id.as_deref() == Some(invitation_id)));
+    client
+        .invitation_revoke(invitation_id, "live-invitation-delete")
+        .await
+        .unwrap();
+    // Let the short read coalescing window expire before checking the post-mutation list.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(!client
+        .invitations()
+        .await
+        .unwrap()
+        .iter()
+        .any(|i| i.id.as_deref() == Some(invitation_id)));
+    let second = client
+        .invitation_create(&role.id, 15, "live-second-device")
+        .await
+        .unwrap();
+    let transport2 = Transport::new(address.endpoint, address.fingerprint).unwrap();
+    let signer2 = vesta_server_client::auth::Ed25519Signer::from_seed([52; 32]);
+    let second = Client::pair(&transport2, server, &second.code, &signer2)
+        .await
+        .unwrap();
+    let devices = client.devices().await.unwrap();
+    assert!(devices.iter().any(|d| d.current));
+    assert!(devices.iter().any(|d| d.id == second.device_id));
+    client
+        .device_revoke(&second.device_id, "live-device-revoke")
+        .await
+        .unwrap();
+    let sources = client.access_sources().await.unwrap();
+    assert!(!sources.version.is_empty());
+    println!("management access: users, roles, invitation create/list/revoke, second device revoke, sources");
+    // Spacing keeps the live scenario within the production 40 requests/minute budget.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let overview = client.backups(None).await.unwrap();
+    assert_eq!(overview.profiles[0].name, "daily");
+    let run = client
+        .backup_submit("run", serde_json::json!({"profile":"daily"}), "live-backup")
+        .await
+        .unwrap();
+    let done = backup_completed(&client, &run.id).await;
+    let snapshots = client.backup_snapshots("daily").await.unwrap();
+    assert!(!snapshots.is_empty());
+    let snapshot = done.snapshot_id.as_deref().unwrap();
+    assert!(snapshots.iter().any(|s| s.id == snapshot && !s.safety));
+    let storage = client.backup_storage().await.unwrap();
+    assert!(storage.repository_bytes > 0);
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let verify = client
+        .backup_submit(
+            "verify",
+            serde_json::json!({"profile":"daily"}),
+            "live-verify",
+        )
+        .await
+        .unwrap();
+    backup_completed(&client, &verify.id).await;
+    let copy = client
+        .backup_submit(
+            "restore",
+            serde_json::json!({"profile":"daily","snapshot":snapshot,"paths":[]}),
+            "live-copy",
+        )
+        .await
+        .unwrap();
+    backup_completed(&client, &copy.id).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let prepared = client.backup_restore_prepare(serde_json::json!({"profile":"daily","snapshot":snapshot,"paths":[],"skip_safety_snapshot":false}),"live-in-place").await.unwrap();
+    assert!(!serde_json::to_string(&prepared)
+        .unwrap()
+        .contains("confirmationToken"));
+    assert_eq!(prepared.job.state, "awaiting_confirmation");
+    client
+        .backup_restore_confirm(&prepared.job.id)
+        .await
+        .unwrap();
+    backup_completed(&client, &prepared.job.id).await;
+    assert!(client
+        .backup_snapshots("daily")
+        .await
+        .unwrap()
+        .iter()
+        .any(|s| s.safety));
+    println!("management backups: configured scratch profile, run, snapshots, storage, verify, copy, prepare/confirm with safety snapshot");
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let published = client.pack_publish("0", "live-publish").await.unwrap();
+    let minimum = client
+        .pack_minimum(
+            &published.hosted_revision,
+            &published.hosted_revision,
+            "live-minimum",
+        )
+        .await
+        .unwrap();
+    assert_eq!(minimum.minimum_revision, published.hosted_revision);
+    println!("management pack: publish and minimum revisions");
 }
 async fn next_json(socket: &mut vesta_server_client::transport::Socket) -> Value {
     loop {

@@ -18,6 +18,56 @@ pub struct Record {
 mod tests {
     use super::*;
     #[test]
+    fn management_prepare_is_not_replayable_after_restart_and_journal_is_payload_free() {
+        let root = tempfile::tempdir().unwrap();
+        let pending = PendingIntent {
+            connection_id: "connection".into(),
+            key: "intent-hash".into(),
+            key_version: 2,
+            action: "backups/restore-in-place".into(),
+            payload_hash: "payload-hash".into(),
+            operation_id: None,
+            created_at_ms: 1,
+            terminal: false,
+            uncertain: true,
+        };
+        let mut store = Store::default();
+        store
+            .reserve_management_intent(pending.clone(), true)
+            .unwrap();
+        store.save(root.path()).unwrap();
+        let mut restarted = Store::load(root.path()).unwrap();
+        assert_eq!(
+            restarted
+                .reserve_management_intent(pending.clone(), true)
+                .unwrap_err()
+                .code,
+            ErrorCode::OutcomeUnknown
+        );
+        let mut changed = pending.clone();
+        changed.payload_hash = "different".into();
+        assert_eq!(
+            restarted
+                .reserve_management_intent(changed, true)
+                .unwrap_err()
+                .code,
+            ErrorCode::Conflict
+        );
+        let mut replayable = pending;
+        replayable.key = "other-intent".into();
+        replayable.action = "pack/publish".into();
+        restarted
+            .reserve_management_intent(replayable.clone(), false)
+            .unwrap();
+        restarted
+            .reserve_management_intent(replayable, false)
+            .unwrap();
+        let bytes = std::fs::read_to_string(root.path().join(FILE)).unwrap();
+        for forbidden in ["confirmation", "token", "snapshot", "paths", "code"] {
+            assert!(!bytes.contains(forbidden));
+        }
+    }
+    #[test]
     fn session_only_connections_and_journals_never_survive_restart() {
         let root = tempfile::tempdir().unwrap();
         let snapshot: ServerSnapshot = serde_json::from_value(serde_json::json!({
@@ -123,6 +173,29 @@ fn failed(_: impl std::fmt::Display) -> Error {
     Error::new(ErrorCode::Internal)
 }
 impl Store {
+    /// Reserve before sending. One-shot routes bypass agent replay caches, so even
+    /// an identical intent must not be submitted again after a launcher restart.
+    pub fn reserve_management_intent(&mut self, pending: PendingIntent, once: bool) -> Result<()> {
+        if let Some(old) = self
+            .intents
+            .iter()
+            .find(|i| i.connection_id == pending.connection_id && i.key == pending.key)
+        {
+            if old.action != pending.action || old.payload_hash != pending.payload_hash {
+                return Err(Error::new(ErrorCode::Conflict));
+            }
+            return if once {
+                Err(Error::new(ErrorCode::OutcomeUnknown))
+            } else {
+                Ok(())
+            };
+        }
+        if self.intents.len() >= 4096 {
+            return Err(Error::new(ErrorCode::ServerBusy));
+        }
+        self.intents.push(pending);
+        Ok(())
+    }
     pub fn load(root: &Path) -> Result<Self> {
         let file = match std::fs::File::open(root.join(FILE)) {
             Ok(f) => f,

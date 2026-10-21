@@ -1,3 +1,5 @@
+#[path = "management.rs"]
+pub mod management;
 use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
@@ -39,6 +41,7 @@ pub struct Client {
     legacy_intents: StdMutex<HashSet<String>>,
     principal_id: StdMutex<Option<String>>,
     principal_lookup: Mutex<bool>,
+    management: management::State,
 }
 #[derive(Clone)]
 enum Intent {
@@ -139,6 +142,7 @@ impl Client {
             legacy_intents: Default::default(),
             principal_id: Default::default(),
             principal_lookup: Default::default(),
+            management: Default::default(),
         })
     }
     pub async fn pair(
