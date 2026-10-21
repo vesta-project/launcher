@@ -8,6 +8,7 @@ import type {
   ServerCommandError, ServerConnection, ServerEvent, ServerOperation, ServerSnapshot, ServerStatus, ServerTopic, WhitelistEntry,
 } from './native';
 import type { ServersApi, Unsubscribe } from './service';
+import { createFileFixtures } from './fixtures-files';
 
 const fail = (code: ServerCommandError['code'], retryAfterMs?: number): never => {
   throw { code, retryAfterMs: retryAfterMs ?? null } satisfies ServerCommandError;
@@ -507,6 +508,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     },
 
     onChanged(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    ...createFileFixtures({ wait, server, requireOnline, requireCapability, publish }),
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {

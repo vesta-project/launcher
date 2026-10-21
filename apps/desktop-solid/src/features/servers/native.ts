@@ -351,6 +351,181 @@ export const serversNative = {
     call<ModerationResult>('server_moderate', { connectionId, request, expectedGeneration, intentId }),
   moderateConfirm: (connectionId: ConnectionId, intentId: string) =>
     call<ServerOperation>('server_moderate_confirm', { connectionId, intentId }),
+  ...serversFilesNative(),
 };
 
 export type ServersNative = typeof serversNative;
+
+// ============================================================================
+// Game-root files, logs and server.properties (stage 4)
+//
+// Kept in one block at the end of the contract so it merges cleanly with other
+// server work; `serversNative` spreads it in (a hoisted function, so the block can
+// live below). Each command names the agent route it maps to, all under
+// `/api/v3/manage` (agent management API contract §2.2, "Rotated gzip logs" and
+// "File download"). Paths are game-root-relative `/`-joined segments, never native
+// or absolute paths; `''` is the root. Sizes and byte offsets are decimal strings;
+// hashes are lowercase hex SHA-256. Mutations take an `intentId` as above.
+//
+// Error mapping onto the closed codes:
+// - 412 `precondition_failed` (stale If-Match, existing create/rename/restore
+//   target, stale upload offset) → `stale_target`. The UI re-reads the file for the
+//   current content and validator rather than relying on `current_sha256`.
+// - 409 `confirmation_invalid` → `confirmation_expired`; 409 `idempotency_conflict`
+//   and `cursor_gap` → `conflict`; 409 `recovery_required` → `outcome_unknown`.
+// - 400 `invalid_request` (protected admission documents, traversal, not a regular
+//   file), 400 `not_compressed`, 413 `request_too_large`, 416 and 422
+//   `archive_corrupt` → `invalid_input`.
+// - 404 → `not_found`; 403 → `forbidden`; 503 `temporarily_unavailable` → `server_busy`.
+// ============================================================================
+
+export interface FileEntry {
+  name: string;
+  kind: 'file' | 'directory';
+  /** Decimal bytes; `'0'` for directories. */
+  size: string;
+  modifiedAtMs: number | null;
+}
+
+/** A whole text file read with its optimistic-concurrency validator. */
+export interface TextFile {
+  /** Decoded UTF-8 text; empty when `binary`. */
+  text: string;
+  /** Content SHA-256, or null when only a preview prefix was read (`truncated`). */
+  sha256: string | null;
+  size: string;
+  /** NUL or invalid UTF-8 was found; the UI offers download only. */
+  binary: boolean;
+  /** The file exceeds the 1 MiB whole-read limit; `text` is a read-only prefix. */
+  truncated: boolean;
+}
+
+/** The agent's `Change` result. */
+export interface FileChange {
+  sha256: string;
+  size: string;
+  /** Trash entry holding an overwritten original, if any. */
+  trashId: string | null;
+}
+
+export interface TrashEntry {
+  id: string;
+  /** Original game-root-relative path. */
+  path: string;
+  sha256: string;
+  size: string;
+  trashedAtMs: number;
+  expiresAtMs: number;
+}
+
+/** A local file chosen in the native picker. Native code keeps its path. */
+export interface UploadCandidate {
+  localId: string;
+  name: string;
+  size: string;
+}
+
+export interface UploadProgress {
+  uploadId: string;
+  /** Bytes staged on the server so far. */
+  offset: string;
+  totalSize: string;
+}
+
+export type DownloadResult = { kind: 'saved'; size: string } | { kind: 'cancelled' };
+
+/** A decoded `TextPage`. Byte offsets refer to the decompressed text when `decompress` was set. */
+export interface LogPage {
+  text: string;
+  binary: boolean;
+  startByte: string;
+  endByte: string;
+  /** Start of the next page forward; null at EOF. */
+  nextByte: string | null;
+  /** Start of this page, for paging backward; null at the beginning of the file. */
+  prevByte: string | null;
+  size: string;
+  etag: string;
+}
+
+/** Known keys are typed; secrets, unknown and malformed values are the string `"[redacted]"`. */
+export type PropertyValue = boolean | number | string;
+
+export interface ServerProperties {
+  values: Record<string, PropertyValue>;
+  sha256: string;
+}
+
+export type PropertiesUpdateResult =
+  | { kind: 'applied'; sha256: string; restartNeeded: boolean }
+  /** 202: repeat the same intent, changes and validator with this token to confirm (120 s). */
+  | { kind: 'awaitingConfirmation'; operationId: string; confirmationToken: string; expiresAtMs: number };
+
+function serversFilesNative() {
+  return {
+    /** GET /files?path&cursor — one directory page; `files.list`. */
+    filesList: (connectionId: ConnectionId, path: string, cursor: string | null) =>
+      call<Page<FileEntry>>('server_files_list', { connectionId, path, cursor }),
+    /** GET /files/content (≤1 MiB, `X-Vesta-Sha256`); larger files read a ranged prefix and set `truncated`. `files.read`. */
+    fileReadText: (connectionId: ConnectionId, path: string) =>
+      call<TextFile>('server_file_read_text', { connectionId, path }),
+    /** PUT /files/content, `If-None-Match: *` when `expectedSha256` is null else `If-Match`; ≤16 MiB. `files.create`/`files.overwrite`. */
+    fileWriteText: (connectionId: ConnectionId, path: string, text: string, expectedSha256: string | null, intentId: string) =>
+      call<FileChange>('server_file_write_text', { connectionId, path, text, expectedSha256, intentId }),
+    /** POST /files/mkdir `{path}` — one new directory; `files.mkdir`. */
+    fileMkdir: (connectionId: ConnectionId, path: string, intentId: string) =>
+      call<void>('server_file_mkdir', { connectionId, path, intentId }),
+    /**
+     * POST /files/rename `{from,to,expected_sha256}` — regular files only, never replaces; `files.rename`.
+     * A null validator makes native code hash the current file once (download stream) first.
+     */
+    fileRename: (connectionId: ConnectionId, from: string, to: string, expectedSha256: string | null, intentId: string) =>
+      call<FileChange>('server_file_rename', { connectionId, from, to, expectedSha256, intentId }),
+    /** DELETE /files?path with `If-Match` — moves a regular file to trash; `files.delete`. Null validator as for rename. */
+    fileDelete: (connectionId: ConnectionId, path: string, expectedSha256: string | null, intentId: string) =>
+      call<{ trashId: string }>('server_file_delete', { connectionId, path, expectedSha256, intentId }),
+    /** GET /trash?cursor — only entries this principal and device created. */
+    trashList: (connectionId: ConnectionId, cursor: string | null) =>
+      call<Page<TrashEntry>>('server_trash_list', { connectionId, cursor }),
+    /** POST /trash/{id}/restore `{}` — back to the original path, never replacing (`stale_target`). */
+    trashRestore: (connectionId: ConnectionId, trashId: string, intentId: string) =>
+      call<FileChange>('server_trash_restore', { connectionId, trashId, intentId }),
+    /** Native open dialog (multi-select); empty when cancelled. No network work. */
+    uploadPick: () => call<UploadCandidate[]>('server_file_upload_pick'),
+    /** POST /files/uploads `{path,total_size,sha256}` with the create/overwrite conditional; native hashes the local file. ≤16 MiB. */
+    uploadBegin: (connectionId: ConnectionId, localId: string, path: string, expectedSha256: string | null, intentId: string) =>
+      call<UploadProgress>('server_file_upload_begin', { connectionId, localId, path, expectedSha256, intentId }),
+    /** PUT /files/uploads/{id}?offset — the next ≤1 MiB chunk from the staged offset (resumable). */
+    uploadChunk: (connectionId: ConnectionId, uploadId: string) =>
+      call<UploadProgress>('server_file_upload_chunk', { connectionId, uploadId }),
+    /** POST /files/uploads/{id}/finish `{}` — verifies size and SHA-256 and rechecks the precondition. */
+    uploadFinish: (connectionId: ConnectionId, uploadId: string) =>
+      call<FileChange>('server_file_upload_finish', { connectionId, uploadId }),
+    /** DELETE /files/uploads/{id} — discards staging only. */
+    uploadAbort: (connectionId: ConnectionId, uploadId: string) =>
+      call<void>('server_file_upload_abort', { connectionId, uploadId }),
+    /**
+     * GET /files/download?path[&decompress=1] — native save dialog, then streams to disk with
+     * progress in the activity panel and `Range`/`If-Range` resume; `cancelled` when the dialog closes.
+     */
+    fileDownload: (connectionId: ConnectionId, path: string, decompress: boolean) =>
+      call<DownloadResult>('server_file_download', { connectionId, path, decompress }),
+    /** GET /files/tail?path&lines[&decompress=1] — the last 1–1000 lines. */
+    logTail: (connectionId: ConnectionId, path: string, lines: number, decompress: boolean) =>
+      call<LogPage>('server_log_tail', { connectionId, path, lines, decompress }),
+    /** GET /files/lines?path&from_byte&limit&direction[&decompress=1] — whole lines from a byte cursor. */
+    logLines: (connectionId: ConnectionId, path: string, fromByte: string | null, limit: number, direction: 'forward' | 'backward', decompress: boolean) =>
+      call<LogPage>('server_log_lines', { connectionId, path, fromByte, limit, direction, decompress }),
+    /** GET /config/server-properties — typed values and the source validator; `config.view` + `files.read`. */
+    propertiesGet: (connectionId: ConnectionId) =>
+      call<ServerProperties>('server_properties_get', { connectionId }),
+    /**
+     * PATCH /config/server-properties `{changes,expected_sha256,confirmation_token?}` — 1–32 known keys;
+     * `config.edit`. A weakening change returns `awaitingConfirmation` (agent 202). Never restarts the game.
+     */
+    propertiesUpdate: (
+      connectionId: ConnectionId, changes: Record<string, PropertyValue>, expectedSha256: string,
+      confirmationToken: string | null, intentId: string,
+    ) => call<PropertiesUpdateResult>('server_properties_update', { connectionId, changes, expectedSha256, confirmationToken, intentId }),
+  };
+}
