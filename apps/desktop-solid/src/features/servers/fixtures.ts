@@ -8,6 +8,7 @@ import type {
   ServerCommandError, ServerConnection, ServerEvent, ServerOperation, ServerSnapshot, ServerStatus, ServerTopic, WhitelistEntry,
 } from './native';
 import type { ServersApi, Unsubscribe } from './service';
+import { createManageFixtures, type ManageHost } from './fixtures-manage';
 
 const fail = (code: ServerCommandError['code'], retryAfterMs?: number): never => {
   throw { code, retryAfterMs: retryAfterMs ?? null } satisfies ServerCommandError;
@@ -63,7 +64,7 @@ function status(state: ServerStatus['state'], generation: string | null, players
 
 function connection(id: string, name: string, endpoint: string, role: string | null, extra: Partial<ServerConnection> = {}): ServerConnection {
   return {
-    id, name, endpoint, serverId: `srv_${hex(12)}`, fingerprint: hex(64), role, signInMethod: role ? 'pairing_code' : 'minecraft',
+    id, name, endpoint, serverId: `srv_${id.replace(/^fixture-/, "")}`, fingerprint: hex(64), role, signInMethod: role ? 'pairing_code' : 'minecraft',
     memoryOnly: false, pinned: false, addedAtMs: Date.now() - 86_400_000 * 12, lastConnectedAtMs: Date.now() - 60_000, ...extra,
   };
 }
@@ -519,6 +520,9 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     },
 
     onChanged(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+
+    // Backups, access and pack.
+    ...createManageFixtures({ server, requireOnline, requireCapability, record, publish, wait } as unknown as ManageHost),
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {

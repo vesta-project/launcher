@@ -344,3 +344,123 @@ servers-task-start = started Minecraft
 servers-task-stop = stopped Minecraft
 servers-task-whitelist-add = added { $name } to the whitelist
 servers-task-whitelist-remove = removed { $name } from the whitelist
+servers-tab-backups = Backups
+servers-tab-access = Access
+servers-loading = Loading…
+servers-save = Save
+servers-done = Done
+servers-copy = Copy
+servers-backups-storage = Storage
+servers-backups-used = Used by backups
+servers-backups-restore-points = Restore points
+servers-backups-free = Free on the server
+servers-backups-of-limit = of { $value } limit
+servers-backups-profiles = Backup profiles
+servers-backups-recent = Recent backup jobs
+servers-backups-no-profiles = No backup profiles are configured on this server.
+servers-backups-no-jobs = No backup jobs yet.
+servers-backups-no-points = No restore points yet.
+servers-backups-mode-online = While running
+servers-backups-mode-stopped = Server stopped
+servers-backups-keep-all = Keeps every backup
+servers-backups-keep-last = { $count ->
+    [one] Keeps the latest
+   *[other] Keeps { $count } latest
+  }
+servers-backups-keep-daily = { $count ->
+    [one] { $count } daily
+   *[other] { $count } daily
+  }
+servers-backups-keep-weekly = { $count ->
+    [one] { $count } weekly
+   *[other] { $count } weekly
+  }
+servers-backups-keep-monthly = { $count ->
+    [one] { $count } monthly
+   *[other] { $count } monthly
+  }
+servers-backups-show-points = Restore points
+servers-backups-hide-points = Hide restore points
+servers-backups-run = Back up now
+servers-backups-verify = Verify
+servers-backups-started = Backup "{ $name }" started
+servers-backups-verify-started = Verifying "{ $name }"
+servers-backups-kind-backup = backed up "{ $name }"
+servers-backups-kind-verify = verified "{ $name }"
+servers-backups-kind-restore-copy = restored a copy from "{ $name }"
+servers-backups-kind-restore = restored the server from "{ $name }"
+servers-backups-failed = Failed
+servers-backups-error-stopped = This profile only backs up while Minecraft is stopped.
+servers-backups-error-disk = Backups paused: the server is low on disk space.
+servers-backups-error-storage = Backups paused: the backup storage limit is reached.
+servers-backups-error-count = Backups paused: the restore point limit is reached.
+servers-backups-added = { $value } added
+servers-backups-files-changed = { $count ->
+    [one] { $count } file changed
+   *[other] { $count } files changed
+  }
+servers-backups-verified = Integrity verified
+servers-backups-safety = Safety snapshot
+servers-backups-restore-copy = Restore a copy
+servers-backups-restore = Restore server…
+servers-backups-copy-started = Restoring a copy into the server's restore folder. Live files aren't touched.
+servers-backups-restore-title = Restore the server from this backup?
+servers-backups-restore-description = The server's files will be replaced with the backup from { $time }. Changes made since then are lost.
+servers-backups-stop-first = Stop Minecraft first. Restoring never stops or starts the server for you.
+servers-backups-safety-first = Take a safety snapshot of the current files first (recommended)
+servers-backups-no-safety-warning = Without a safety snapshot there is no way back to the current files.
+servers-backups-prepare = Prepare restore
+servers-backups-confirm-restore = Restore now ({ $count } s)
+servers-backups-restore-started = Restore started
+servers-backups-recovery = A restore was interrupted, so Minecraft can't start until you decide. Keep the files as they are now, or run a full restore again.
+servers-backups-resolve = Keep current files
+servers-access-people = People
+servers-access-invitations = Invitations
+servers-access-devices = Devices
+servers-access-rules = Join rules
+servers-access-devices-count = { $count ->
+    [one] { $count } device
+   *[other] { $count } devices
+  }
+servers-access-change-role = Change role
+servers-access-role = Role
+servers-access-role-title = Change { $name }'s role
+servers-access-role-help = You can only give roles below your own. Owner and Administrator are granted on the server machine.
+servers-access-local-only = Owner and Administrator roles can only be granted from the server machine (vesta-agent owner link).
+servers-access-invite = Invite someone
+servers-access-invite-help = An invitation is a one-time code for a role you choose. It expires after up to an hour.
+servers-access-create-invite = Create invitation
+servers-access-expiry = Expires
+servers-access-expires-in = { $count ->
+    [one] Expires in { $count } minute
+   *[other] Expires in { $count } minutes
+  }
+servers-access-invite-role-help = They get this role when they redeem the code. You can only invite to roles below your own.
+servers-access-invite-once = Send this to the person you're inviting. It's shown only once and works once.
+servers-access-pairing-link = Pairing link
+servers-access-invitation-for = Invitation for { $name }
+servers-access-created-by = by { $name }
+servers-access-no-invitations = No pending invitations.
+servers-access-invitations-unsupported = This server's Vesta version can't list invitations yet. You can still create them.
+servers-access-revoke = Revoke
+servers-access-revoked = Revoked
+servers-access-this-device = This device
+servers-access-revoke-title = Revoke { $name }?
+servers-access-revoke-description = That device can no longer manage this server. Its person keeps their role and other devices.
+servers-access-rules-help = Roles people get automatically, without an invitation. They can only download the pack and see public status.
+servers-access-rule-whitelist-sync = Use the server whitelist
+servers-access-rule-whitelist-sync-help = Whitelisted Minecraft players get the whitelist role after signing in with their account.
+servers-access-rule-anonymous = Anyone
+servers-access-rule-anonymous-help = Visitors who haven't signed in.
+servers-access-rule-new-user = New accounts
+servers-access-rule-new-user-help = People the first time they sign in.
+servers-access-rule-whitelist = Whitelisted players
+servers-access-rule-whitelist-help = Players on the Minecraft whitelist who aren't banned.
+servers-access-rule-password = Pack password
+servers-access-rule-password-help = Devices that entered the pack password.
+servers-pack-publish = Publish pack
+servers-pack-published = Pack published
+servers-pack-require = Require this version
+servers-pack-require-title = Require pack revision { $version }?
+servers-pack-require-description = Players on older pack revisions will be told to update before joining. This can't be lowered again.
+servers-pack-required = Players now need the latest pack

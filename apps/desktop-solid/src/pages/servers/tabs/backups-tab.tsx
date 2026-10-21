@@ -1,0 +1,329 @@
+import { Badge, Button, Checkbox, Dialog, toast } from '@vesta/ui';
+import type { Tone } from '@vesta/ui';
+import { For, Show, createSignal, onSettled } from 'solid-js';
+import { Icon } from '../../../components/icon';
+import { t } from '../../../localization';
+import type { MessageId } from '../../../localization/messages';
+import { gate } from '../../../features/servers/capabilities';
+import { errorMessage } from '../../../features/servers/errors';
+import { age, newIntentId } from '../../../features/servers/model';
+import { serverCommand, useServersClock } from '../../../features/servers/store';
+import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
+import type { BackupJob, BackupOverview, BackupProfile, BackupSnapshot, BackupStorage } from '../../../features/servers/native-manage';
+import { ServerErrorNote } from '../parts';
+import '../../library/instance/settings-tab.css';
+
+const bytes = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return '—';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let amount = value;
+  let unit = 0;
+  while (amount >= 1000 && unit < units.length - 1) { amount /= 1000; unit++; }
+  return `${amount >= 100 || unit === 0 ? Math.round(amount) : amount.toFixed(1)} ${units[unit]}`;
+};
+
+const jobTone = (job: BackupJob): Tone =>
+  job.state === 'succeeded' ? 'success' : job.state === 'failed' || job.state === 'recovery_required' ? 'danger' : job.state === 'uncertain' ? 'warning' : 'accent';
+
+const jobKind: Record<BackupJob['kind'], MessageId> = {
+  backup: 'servers.backups.kind-backup',
+  verify: 'servers.backups.kind-verify',
+  restore: 'servers.backups.kind-restore-copy',
+  restore_in_place: 'servers.backups.kind-restore',
+};
+
+const jobState: Record<BackupJob['state'], MessageId> = {
+  awaiting_confirmation: 'servers.operation.awaiting-confirmation',
+  queued: 'servers.operation.accepted',
+  running: 'servers.operation.running',
+  succeeded: 'servers.operation.succeeded',
+  failed: 'servers.backups.failed',
+  uncertain: 'servers.operation.checking',
+  recovery_required: 'servers.operation.recovery-required',
+};
+
+const backupErrors: Record<string, MessageId> = {
+  backup_requires_stopped_server: 'servers.backups.error-stopped',
+  backup_disk_space_low: 'servers.backups.error-disk',
+  backup_storage_limit_reached: 'servers.backups.error-storage',
+  backup_snapshot_limit_reached: 'servers.backups.error-count',
+  backup_confirmation_expired: 'servers.error.confirmation-expired',
+};
+
+/** Retention as a short sentence, e.g. "Keeps 7 latest · 7 daily · 4 weekly". */
+function retention(profile: BackupProfile) {
+  const parts = [
+    profile.keepLast && t('servers.backups.keep-last', { count: profile.keepLast }),
+    profile.keepDaily && t('servers.backups.keep-daily', { count: profile.keepDaily }),
+    profile.keepWeekly && t('servers.backups.keep-weekly', { count: profile.keepWeekly }),
+    profile.keepMonthly && t('servers.backups.keep-monthly', { count: profile.keepMonthly }),
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : t('servers.backups.keep-all');
+}
+
+export function BackupsTab(props: { snapshot: ServerSnapshot }) {
+  const now = useServersClock();
+  const id = () => props.snapshot.connection.id;
+  const [overview, setOverview] = createSignal<BackupOverview | null>(null, { name: 'server-backups:overview' });
+  const [storage, setStorage] = createSignal<BackupStorage | null>(null, { name: 'server-backups:storage' });
+  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-backups:error' });
+  const [loading, setLoading] = createSignal(false, { name: 'server-backups:loading' });
+  const [openProfile, setOpenProfile] = createSignal<string | null>(null, { name: 'server-backups:open-profile' });
+  const [restoring, setRestoring] = createSignal<{ profile: string; snapshot: BackupSnapshot } | null>(null, { name: 'server-backups:restoring' });
+  const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
+
+  const refresh = async () => {
+    setLoading(true); setError(null);
+    try {
+      const [next, space] = await Promise.all([
+        serverCommand((client) => client.backups(id(), null)),
+        serverCommand((client) => client.backupStorage(id())).catch(() => null),
+      ]);
+      setOverview(next);
+      setStorage(space);
+    } catch (reason) { setError(reason as ServerCommandError); }
+    finally { setLoading(false); }
+  };
+  onSettled(() => { void refresh(); });
+
+  const start = async (kind: 'run' | 'verify', profile: string) => {
+    try {
+      await serverCommand((client) => (kind === 'run' ? client.backupRun(id(), profile, newIntentId()) : client.backupVerify(id(), profile, newIntentId())));
+      toast.show({ title: t(kind === 'run' ? 'servers.backups.started' : 'servers.backups.verify-started', { name: profile }), tone: 'neutral' });
+      void refresh();
+      setTimeout(() => void refresh(), 3000);
+    } catch (reason) {
+      toast.show({ title: t(errorMessage(reason)), tone: 'danger' });
+    }
+  };
+
+  const resolveRecovery = async () => {
+    const job = overview()?.jobs.find((entry) => entry.state === 'recovery_required');
+    if (!job) return;
+    try { await serverCommand((client) => client.backupResolveRecovery(id(), job.id)); void refresh(); }
+    catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
+  };
+
+  return (
+    <div data-vesta="server-activity">
+      <div data-vesta="pane-toolbar">
+        <span data-vesta="server-toolbar-title">{t('servers.tab.backups')}</span>
+        <span data-vesta="server-toolbar-spacer" />
+        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={loading()} onClick={() => void refresh()}>{t('servers.refresh')}</Button>
+      </div>
+      <div data-vesta="instance-settings-scroll">
+        <ServerErrorNote error={error()} onRetry={() => void refresh()} />
+        <Show when={overview()?.recoveryRequired}>
+          <div data-vesta="server-callout" data-tone="danger" role="alert">
+            <p>{t('servers.backups.recovery')}</p>
+            <Show when={can('backups.restore')}>
+              <Button size="sm" tone="danger" variant="outline" onClick={() => void resolveRecovery()}>{t('servers.backups.resolve')}</Button>
+            </Show>
+          </div>
+        </Show>
+
+        <Show when={storage()}>
+          {(space) => (
+            <section data-vesta="settings-panel">
+              <h3>{t('servers.backups.storage')}</h3>
+              <div data-vesta="server-backup-storage">
+                <div><strong>{bytes(space().repositoryBytes)}</strong><span>{t('servers.backups.used')}</span></div>
+                <div><strong>{space().restorePoints}</strong><span>{t('servers.backups.restore-points')}</span></div>
+                <div><strong>{bytes(space().freeBytes)}</strong><span>{t('servers.backups.free')}</span></div>
+                <Show when={space().limits.maxRepositoryBytes}>
+                  {(limit) => (
+                    <div data-vesta="server-backup-meter" role="meter" aria-valuenow={space().repositoryBytes} aria-valuemax={limit()} aria-label={t('servers.backups.used')}>
+                      <span style={{ 'inline-size': `${Math.min(100, (space().repositoryBytes / limit()) * 100)}%` }} />
+                      <small>{t('servers.backups.of-limit', { value: bytes(limit()) })}</small>
+                    </div>
+                  )}
+                </Show>
+              </div>
+              <Show when={space().stopped}>
+                {(code) => <p data-vesta="server-callout" data-tone="warning">{t(backupErrors[code()] ?? 'servers.backups.failed')}</p>}
+              </Show>
+            </section>
+          )}
+        </Show>
+
+        <section data-vesta="settings-panel">
+          <h3>{t('servers.backups.profiles')}</h3>
+          <div data-vesta="settings-panel-body">
+            <Show when={overview()?.profiles.length} fallback={<p data-vesta="server-muted" class="server-panel-note">{overview() ? t('servers.backups.no-profiles') : t('servers.loading')}</p>}>
+              <For each={overview()?.profiles ?? []}>
+                {(profile) => (
+                  <div data-vesta="server-backup-profile">
+                    <div data-vesta="setting-row">
+                      <div data-vesta="setting-row-copy">
+                        <span data-vesta="setting-row-label">
+                          {profile.name}
+                          <Badge size="sm" variant="soft" tone="neutral">{t(profile.mode === 'online' ? 'servers.backups.mode-online' : 'servers.backups.mode-stopped')}</Badge>
+                        </span>
+                        <span data-vesta="setting-row-description">{retention(profile)}</span>
+                      </div>
+                      <div data-vesta="setting-row-control">
+                        <Button size="sm" variant="ghost" onClick={() => setOpenProfile(openProfile() === profile.name ? null : profile.name)}>
+                          {t(openProfile() === profile.name ? 'servers.backups.hide-points' : 'servers.backups.show-points')}
+                        </Button>
+                        <Show when={can('backups.verify')}>
+                          <Button size="sm" variant="outline" onClick={() => void start('verify', profile.name)}>{t('servers.backups.verify')}</Button>
+                        </Show>
+                        <Show when={can('backups.create')}>
+                          <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start('run', profile.name)}>{t('servers.backups.run')}</Button>
+                        </Show>
+                      </div>
+                    </div>
+                    <Show when={openProfile() === profile.name}>
+                      <RestorePoints snapshot={props.snapshot} profile={profile.name} onRestore={(point) => setRestoring({ profile: profile.name, snapshot: point })} />
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </Show>
+          </div>
+        </section>
+
+        <section data-vesta="settings-panel">
+          <h3>{t('servers.backups.recent')}</h3>
+          <Show when={overview()?.jobs.length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-jobs')}</p>}>
+            <ul data-vesta="server-activity-list" class="server-panel-list">
+              <For each={overview()?.jobs ?? []} keyed={(job) => job.id}>
+                {(job) => {
+                  const when = () => age(job().createdAtMs, now());
+                  return (
+                    <li data-vesta="server-activity-row">
+                      <span data-vesta="server-activity-avatar" data-automated aria-hidden="true">
+                        <Icon name={job().kind === 'verify' ? 'icons/security/shield-check' : job().kind === 'backup' ? 'icons/content/storage' : 'icons/content/history'} size={14} />
+                      </span>
+                      <div data-vesta="server-activity-body">
+                        <p data-vesta="server-activity-line">
+                          <Show when={job().requestedBy}>{(who) => <strong>{who()} </strong>}</Show>
+                          {t(jobKind[job().kind], { name: job().profile })}
+                        </p>
+                        <Show when={job().errorCode}>{(code) => <p data-vesta="server-activity-detail">{t(backupErrors[code()] ?? 'servers.backups.failed')}</p>}</Show>
+                        <p data-vesta="server-activity-meta">
+                          <span>{t('servers.ago', { time: t(when().message, { count: when().count }) })}</span>
+                          <Show when={job().result?.dataAdded !== undefined}><span>{t('servers.backups.added', { value: bytes(job().result?.dataAdded) })}</span></Show>
+                          <Show when={job().result?.filesChanged !== undefined}><span>{t('servers.backups.files-changed', { count: (job().result?.filesChanged ?? 0) + (job().result?.filesNew ?? 0) })}</span></Show>
+                          <Show when={job().result?.verified}><span>{t('servers.backups.verified')}</span></Show>
+                        </p>
+                      </div>
+                      <Badge size="sm" variant="soft" tone={jobTone(job())}>{t(jobState[job().state])}</Badge>
+                    </li>
+                  );
+                }}
+              </For>
+            </ul>
+          </Show>
+        </section>
+      </div>
+      <Show when={restoring()} keyed>
+        {(target) => <RestoreDialog snapshot={props.snapshot} profile={target.profile} point={target.snapshot} onClose={() => setRestoring(null)} onDone={() => void refresh()} />}
+      </Show>
+    </div>
+  );
+}
+
+function RestorePoints(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void }) {
+  const id = () => props.snapshot.connection.id;
+  const [points, setPoints] = createSignal<BackupSnapshot[] | null>(null, { name: 'server-backups:points' });
+  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-backups:points-error' });
+  const canRestore = () => gate(props.snapshot.capabilities, 'backups.restore') !== 'denied';
+  onSettled(() => {
+    void serverCommand((client) => client.backupSnapshots(id(), props.profile)).then(setPoints).catch((reason) => setError(reason as ServerCommandError));
+  });
+  const copy = async (point: BackupSnapshot) => {
+    try {
+      await serverCommand((client) => client.backupRestoreCopy(id(), props.profile, point.id, [], newIntentId()));
+      toast.show({ title: t('servers.backups.copy-started'), tone: 'neutral' });
+    } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
+  };
+  return (
+    <div data-vesta="settings-reveal">
+      <ServerErrorNote error={error()} />
+      <Show when={points()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p>}>
+        {(list) => (
+          <Show when={list().length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-points')}</p>}>
+            <For each={list()}>
+              {(point) => (
+                <div data-vesta="setting-row">
+                  <div data-vesta="setting-row-copy">
+                    <span data-vesta="setting-row-label">{new Date(point.time).toLocaleString()}</span>
+                    <span data-vesta="setting-row-description"><code>{point.id.slice(0, 12)}</code>{point.safety ? ` · ${t('servers.backups.safety')}` : ''}</span>
+                  </div>
+                  <Show when={canRestore()}>
+                    <div data-vesta="setting-row-control">
+                      <Button size="sm" variant="ghost" onClick={() => void copy(point)}>{t('servers.backups.restore-copy')}</Button>
+                      <Button size="sm" variant="outline" tone="danger" onClick={() => props.onRestore(point)}>{t('servers.backups.restore')}</Button>
+                    </div>
+                  </Show>
+                </div>
+              )}
+            </For>
+          </Show>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+/** In-place restore: the game must be stopped, a safety snapshot is on by default, and the server's confirmation expires. */
+function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point: BackupSnapshot; onClose: () => void; onDone: () => void }) {
+  const now = useServersClock();
+  const [safety, setSafety] = createSignal(true, { name: 'server-restore:safety' });
+  const [prepared, setPrepared] = createSignal<{ jobId: string; expiresAtMs: number } | null>(null, { name: 'server-restore:prepared' });
+  const [busy, setBusy] = createSignal(false, { name: 'server-restore:busy' });
+  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-restore:error' });
+  const id = () => props.snapshot.connection.id;
+  const stopped = () => props.snapshot.status?.state === 'stopped';
+  const remaining = () => Math.max(0, Math.ceil(((prepared()?.expiresAtMs ?? 0) - now()) / 1000));
+  const prepare = async () => {
+    setBusy(true); setError(null);
+    try {
+      const result = await serverCommand((client) => client.backupRestorePrepare(id(), props.profile, props.point.id, [], !safety(), newIntentId()));
+      setPrepared({ jobId: result.job.id, expiresAtMs: result.expiresAtMs });
+    } catch (reason) { setError(reason as ServerCommandError); }
+    finally { setBusy(false); }
+  };
+  const confirm = async () => {
+    const current = prepared();
+    if (!current) return;
+    setBusy(true); setError(null);
+    try {
+      await serverCommand((client) => client.backupRestoreConfirm(id(), current.jobId));
+      toast.show({ title: t('servers.backups.restore-started'), tone: 'neutral' });
+      props.onDone();
+      props.onClose();
+    } catch (reason) { setError(reason as ServerCommandError); setPrepared(null); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => { if (!open) props.onClose(); }}
+      title={t('servers.backups.restore-title')}
+      description={t('servers.backups.restore-description', { time: new Date(props.point.time).toLocaleString() })}
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
+          <Show
+            when={prepared() && remaining() > 0}
+            fallback={<Button tone="danger" variant="outline" disabled={busy() || !stopped()} onClick={() => void prepare()}>{t('servers.backups.prepare')}</Button>}
+          >
+            <Button tone="danger" disabled={busy()} onClick={() => void confirm()}>{t('servers.backups.confirm-restore', { count: remaining() })}</Button>
+          </Show>
+        </>
+      }
+    >
+      <Show when={!stopped()}>
+        <p data-vesta="server-callout" data-tone="warning">{t('servers.backups.stop-first')}</p>
+      </Show>
+      <Checkbox checked={safety()} onChange={setSafety} disabled={!!prepared()} label={t('servers.backups.safety-first')} />
+      <Show when={!safety()}>
+        <p data-vesta="server-callout" data-tone="danger">{t('servers.backups.no-safety-warning')}</p>
+      </Show>
+      <ServerErrorNote error={error()} />
+    </Dialog>
+  );
+}
