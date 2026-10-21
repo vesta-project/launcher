@@ -386,7 +386,7 @@ async fn renewal_is_single_flight_after_agent_session_loss_and_reads_are_dedupli
     assert_eq!(agent.state.status_reads.load(Ordering::SeqCst), 3);
 }
 #[tokio::test]
-async fn uncertain_submission_is_not_duplicated_and_known_id_reconciles_by_get() {
+async fn uncertain_submission_explicit_retry_replays_and_known_id_reconciles_by_get() {
     let agent = Agent::start().await;
     let client = agent.paired().await;
     agent.state.uncertain.store(true, Ordering::SeqCst);
@@ -399,7 +399,32 @@ async fn uncertain_submission_is_not_duplicated_and_known_id_reconciles_by_get()
             .code,
         ErrorCode::OutcomeUnknown
     );
-    assert_eq!(agent.state.starts.load(Ordering::SeqCst), 1);
+    assert_eq!(agent.state.starts.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        client
+            .lifecycle(
+                "stop",
+                Some("00000000000000000000000000000000"),
+                "lost-start"
+            )
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Conflict
+    );
+    agent.state.uncertain.store(false, Ordering::SeqCst);
+    assert_eq!(
+        client
+            .lifecycle("start", None, "lost-start")
+            .await
+            .unwrap()
+            .operation_id,
+        "operation-1"
+    );
+    assert_eq!(agent.state.starts.load(Ordering::SeqCst), 3);
+    // After a known receipt, local retries reconcile the exact accepted operation.
+    client.lifecycle("start", None, "lost-start").await.unwrap();
+    assert_eq!(agent.state.starts.load(Ordering::SeqCst), 3);
     let p = client
         .kill_prepare("00000000000000000000000000000000", "kill-1")
         .await

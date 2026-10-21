@@ -2,7 +2,7 @@ use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
     model::*,
-    operations::{generation, intent_key},
+    operations::{device_intent_key, generation},
     transport::{Socket, Transport},
     Error, ErrorCode, Result,
 };
@@ -59,6 +59,10 @@ impl Submission {
     }
 }
 impl Client {
+    fn intent_key(&self, intent: &str) -> Result<String> {
+        device_intent_key(&self.server_id, &self.device_id, intent)
+    }
+
     /// A trust approval retires every old pool/session, including memory-only
     /// connections, without moving the key through IPC or plaintext storage.
     pub fn repin(&self, transport: Arc<Transport>) -> Arc<Self> {
@@ -365,7 +369,7 @@ impl Client {
             .mutations
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let key = intent_key(intent)?;
+        let key = self.intent_key(intent)?;
         let digest = crate::trust::leaf_fingerprint(
             serde_json::to_string(&body)
                 .map_err(|_| Error::new(ErrorCode::Internal))?
@@ -400,15 +404,18 @@ impl Client {
                             }));
                         }
                     }
-                    return Err(Error::new(if old != path || d != digest {
-                        ErrorCode::Conflict
-                    } else {
-                        ErrorCode::OutcomeUnknown
-                    }));
+                    if old != path || d != digest {
+                        return Err(Error::new(ErrorCode::Conflict));
+                    }
+                    // An explicit identical retry reuses the durable key. The
+                    // agent replays its receipt if the first request committed.
                 }
             }
         }
-        if self.intents.lock().await.len() >= 4096 {
+        if {
+            let intents = self.intents.lock().await;
+            intents.len() >= 4096 && !intents.contains_key(&key)
+        } {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
         // Record before I/O; cancellation/drop of the future is also uncertain.
@@ -438,6 +445,7 @@ impl Client {
                         | ErrorCode::Unreachable
                         | ErrorCode::OutcomeUnknown
                         | ErrorCode::Unsupported
+                        | ErrorCode::Internal
                 ) =>
             {
                 return Err(Error::new(ErrorCode::OutcomeUnknown))
@@ -511,7 +519,7 @@ impl Client {
     ) -> Result<KillPreparation> {
         let prepared = self.prepared.lock().await;
         let p = prepared
-            .get(&intent_key(intent)?)
+            .get(&self.intent_key(intent)?)
             .filter(|p| p.path == path && p.expires > crate::now_ms())
             .ok_or_else(|| Error::new(ErrorCode::ConfirmationExpired))?;
         Ok(KillPreparation {
@@ -524,7 +532,7 @@ impl Client {
             .mutations
             .try_lock()
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let key = intent_key(intent)?;
+        let key = self.intent_key(intent)?;
         let mut all = self.prepared.lock().await;
         let p = all
             .remove(&key)
