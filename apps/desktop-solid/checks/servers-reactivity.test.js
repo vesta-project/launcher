@@ -9,6 +9,7 @@ const harness = () => (builtHarness ??= buildHarness());
 
 async function buildHarness() {
   const connectionIdPath = fileURLToPath(new URL('../src/features/servers/connection-id.ts', import.meta.url));
+  const readStatePath = fileURLToPath(new URL('../src/features/servers/read-state.ts', import.meta.url));
   const storePath = fileURLToPath(new URL('../src/features/servers/store.ts', import.meta.url));
   const servicePath = fileURLToPath(new URL('../src/features/servers/service.ts', import.meta.url));
   const built = await Bun.build({
@@ -21,9 +22,11 @@ async function buildHarness() {
       ` }));
       build.onResolve({ filter: /^vesta-server-reactivity-check$/ }, () => ({ path: 'check', namespace: 'server-check' }));
       build.onLoad({ filter: /.*/, namespace: 'server-check' }, () => ({ loader: 'js', resolveDir: fileURLToPath(new URL('..', import.meta.url)), contents: `
-        import { createEffect, createRoot, createSignal, flush } from 'solid-js';
+        import { createEffect, createRoot, createSignal, flush, untrack } from 'solid-js';
         import { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';
         import { stableConnectionId } from ${JSON.stringify(connectionIdPath)};
+        import { createServerRead, readRetryDelay } from ${JSON.stringify(readStatePath)};
+        export { createRoot, createSignal, flush, untrack, createServerRead, readRetryDelay };
         import { useServerTopic } from ${JSON.stringify(storePath)};
         import { counts } from ${JSON.stringify(servicePath)};
         export { captureArtifact, expectNoDiagnostics };
@@ -96,4 +99,77 @@ test('live snapshots do not reconnect subscriptions until server identity change
     });
   }, { scenario: 'server-subscriptions-during-live-status' });
   check.expectNoDiagnostics(artifact);
+});
+
+test('read state keeps the latest response and ignores disposed completions', async () => {
+  const check = await harness();
+  const pending = [];
+  const { artifact } = await check.captureArtifact(async () => {
+    const owner = check.createRoot(dispose => {
+      const [snapshot, setSnapshot] = check.createSignal({ id: 'one', observation: 0 });
+      const read = check.createServerRead({ key: () => snapshot().id, name: 'check-read',
+        read: (key, signal) => new Promise((resolve, reject) => pending.push({ key, signal, resolve, reject })) });
+      return { dispose, setSnapshot, read };
+    });
+    const settle = async () => { await Promise.resolve(); check.flush(); };
+    const state = () => check.untrack(() => ({ value: owner.read.value(), error: owner.read.error() }));
+    try {
+      check.flush();
+      for (let observation = 1; observation <= 60; observation++) {
+        owner.setSnapshot({ id: 'one', observation }); check.flush();
+      }
+      expect(pending.length).toBe(1);
+      owner.setSnapshot({ id: 'two', observation: 61 }); check.flush();
+      expect(pending.map(item => item.key)).toEqual(['one', 'two']);
+      expect(pending[0].signal.aborted).toBe(true);
+      pending[1].resolve('new result'); await settle();
+      pending[0].reject({ code: 'unreachable' }); await settle();
+      expect(state()).toEqual({ value: 'new result', error: null });
+      const refresh = owner.read.refresh();
+      owner.dispose();
+      expect(pending[2].signal.aborted).toBe(true);
+      pending[2].resolve('disposed result'); await refresh; await settle();
+      expect(state()).toEqual({ value: 'new result', error: null });
+    } finally { owner.dispose(); }
+  }, { scenario: 'server-read-out-of-order-and-disposal' });
+  check.expectNoDiagnostics(artifact);
+});
+
+test('read polling recovers from transient failure and honors cooldown without hiding errors', async () => {
+  const check = await harness();
+  const timers = new Map();
+  const pending = [];
+  const originalSet = globalThis.setTimeout;
+  const originalClear = globalThis.clearTimeout;
+  let nextTimer = 0;
+  globalThis.setTimeout = (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; };
+  globalThis.clearTimeout = id => timers.delete(id);
+  try {
+    const { artifact } = await check.captureArtifact(async () => {
+      const owner = check.createRoot(dispose => ({ dispose, read: check.createServerRead({
+        key: () => 'server:history', name: 'check-poll', retry: true,
+        read: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+        pollAfter: value => value === 'running' ? 5000 : null,
+      }) }));
+      const settle = async () => { await Promise.resolve(); check.flush(); };
+      const fire = () => { const [id, timer] = [...timers][0]; timers.delete(id); timer.callback(); };
+      const state = () => check.untrack(() => ({ value: owner.read.value(), error: owner.read.error() }));
+      try {
+        check.flush(); pending[0].resolve('running'); await settle();
+        expect([...timers.values()][0].delay).toBe(5000);
+        fire(); pending[1].reject({ code: 'rate_limited', retryAfterMs: 30_000 }); await settle();
+        expect(state()).toEqual({ value: 'running', error: { code: 'rate_limited', retryAfterMs: 30_000 } });
+        expect(timers.size).toBe(1);
+        expect([...timers.values()][0].delay).toBeGreaterThanOrEqual(30_000);
+        fire(); expect(state().error.code).toBe('rate_limited');
+        pending[2].resolve('done'); await settle();
+        expect(state()).toEqual({ value: 'done', error: null });
+        expect(timers.size).toBe(0);
+        const refresh = owner.read.refresh();
+        pending[3].reject({ code: 'credentials_rejected' }); await refresh;
+        expect(timers.size).toBe(0);
+      } finally { owner.dispose(); }
+    }, { scenario: 'server-read-transient-recovery' });
+    check.expectNoDiagnostics(artifact);
+  } finally { globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear; }
 });

@@ -1,5 +1,5 @@
 import { Badge, Button, toast } from '@vesta/ui';
-import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import { gate } from '../../../features/servers/capabilities';
@@ -9,7 +9,8 @@ import {
   duration, outputFields, runTriggerSentence, runsNewestFirst, stepRows, stepSummary, type StepRow,
 } from '../../../features/servers/automation-model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
-import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
+import { createServerRead } from '../../../features/servers/read-state';
+import type { ServerSnapshot } from '../../../features/servers/native';
 import type { RunDetail, RunSummary } from '../../../features/servers/native-automation';
 import { ServerErrorNote } from '../parts';
 import { collectPages, formatDateTime, outcomeText, runState, stepState } from './automation-shared';
@@ -26,27 +27,27 @@ const elapsed = (seconds: number) => {
  */
 export function RunList(props: { snapshot: ServerSnapshot; workflowId?: string; names: (workflowId: string) => string | null; reload: number }) {
   const id = () => props.snapshot.connection.id;
-  const [runs, setRuns] = createSignal<RunSummary[] | null>(null, { name: 'server-automation-runs:list' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-automation-runs:error' });
   const [open, setOpen] = createSignal<string | null>(null, { name: 'server-automation-runs:open' });
-  let disposed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  onSettled(() => () => { disposed = true; clearTimeout(timer); });
-
-  const load = async () => {
-    clearTimeout(timer);
-    setError(null);
-    try {
-      const workflowId = props.workflowId;
-      const all = await collectPages((after) => serverCommand((client) => (workflowId ? client.automationWorkflowRuns(id(), workflowId, after) : client.automationRuns(id(), after))));
-      if (disposed) return;
-      const sorted = runsNewestFirst(all);
-      setRuns(sorted);
-      // Follow runs that are still moving; suspended runs wait for a person.
-      if (sorted.some((run) => run.state === 'running' || run.state === 'queued')) timer = setTimeout(() => void load(), 2500);
-    } catch (reason) { if (!disposed) setError(reason as ServerCommandError); }
-  };
-  createEffect(() => props.reload, () => { void load(); }, { name: 'server-automation-runs:load' });
+  const history = createServerRead({
+    key: () => JSON.stringify([id(), props.workflowId ?? null, props.reload]),
+    read: async (key, signal) => {
+      const [connection, workflowId] = JSON.parse(key) as [string, string | null, number];
+      let pages = 0;
+      const all = await collectPages((after) => {
+        signal.throwIfAborted();
+        pages++;
+        return serverCommand((client) => workflowId ? client.automationWorkflowRuns(connection, workflowId, after) : client.automationRuns(connection, after));
+      });
+      return { runs: runsNewestFirst(all), pages };
+    },
+    // Larger histories consume more requests; hold list polling to <=12/minute.
+    pollAfter: ({ runs, pages }) => runs.some((run) => run.state === 'running' || run.state === 'queued') ? Math.max(5000, pages * 5000) : null,
+    retry: true,
+    name: 'server-automation-runs',
+  });
+  const runs = () => history.value()?.runs ?? null;
+  const error = history.error;
+  const load = history.refresh;
 
   return (
     <>
@@ -109,22 +110,24 @@ function RunRow(props: { snapshot: ServerSnapshot; run: RunSummary; name: string
 /** The pinned definition joined with each recorded attempt; unreached steps read "Skipped". */
 function RunSteps(props: { snapshot: ServerSnapshot; run: RunSummary; onChanged: () => void }) {
   const id = () => props.snapshot.connection.id;
-  const [detail, setDetail] = createSignal<{ run: RunDetail; rows: StepRow[] } | null>(null, { name: 'server-automation-run:detail' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-automation-run:error' });
   const [busy, setBusy] = createSignal(false, { name: 'server-automation-run:busy' });
   const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') !== 'denied';
-  const load = async () => {
-    setError(null);
-    try {
-      const runId = props.run.id;
+  const read = createServerRead<{ run: RunDetail; rows: StepRow[] }>({
+    key: () => JSON.stringify([id(), props.run.id, props.run.state, props.run.currentStep, props.run.attempt]),
+    read: async (key, signal) => {
+      const [connection, runId] = JSON.parse(key) as string[];
       const [run, attempts] = await Promise.all([
-        serverCommand((client) => client.automationRun(id(), runId)),
-        collectPages((after) => serverCommand((client) => client.automationRunSteps(id(), runId, after))),
+        serverCommand((client) => client.automationRun(connection, runId)),
+        collectPages((after) => { signal.throwIfAborted(); return serverCommand((client) => client.automationRunSteps(connection, runId, after)); }),
       ]);
-      setDetail({ run, rows: stepRows(run, attempts) });
-    } catch (reason) { setError(reason as ServerCommandError); }
-  };
-  createEffect(() => `${props.run.id}:${props.run.state}:${props.run.currentStep}:${props.run.attempt}`, () => { void load(); }, { name: 'server-automation-run:load' });
+      return { run, rows: stepRows(run, attempts) };
+    },
+    retry: true,
+    name: 'server-automation-run',
+  });
+  const detail = read.value;
+  const error = read.error;
+  const load = read.refresh;
   const discard = async () => {
     setBusy(true);
     try {
