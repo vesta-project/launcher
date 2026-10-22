@@ -85,8 +85,15 @@ impl ServerManager {
     pub fn new() -> Result<Arc<Self>> {
         let root = crate::utils::db_manager::get_app_config_dir().map_err(|_| internal())?;
         let manager = Self::at_root(root)?;
-        let cleanup = manager.clone();
-        tauri::async_runtime::spawn(async move { cleanup.cleanup_deleted_credentials().await; });
+        let cleanup = Arc::downgrade(&manager);
+        tauri::async_runtime::spawn(async move {
+            loop {
+                let Some(manager) = cleanup.upgrade() else { break; };
+                manager.cleanup_deleted_credentials().await;
+                drop(manager);
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
+        });
         Ok(manager)
     }
     fn at_root(root: PathBuf) -> Result<Arc<Self>> {
@@ -813,17 +820,10 @@ impl ServerManager {
     }
     async fn cleanup_deleted_credentials(&self) {
         let Ok(_guard) = self.credential_cleanup.try_lock() else { return; };
-        let pending = self.store.lock().await.pending_credential_deletions.clone();
-        for reference in pending {
+        let _ = Store::cleanup_keys(&self.store, &self.root, |key| {
             let credentials = self.credentials.clone();
-            let key = reference.clone();
-            if matches!(tokio::task::spawn_blocking(move || credentials.delete(&key)).await, Ok(Ok(()))) {
-                let _ = self.edit_store(|s| {
-                    s.pending_credential_deletions.retain(|key| key != &reference);
-                    Ok(())
-                }).await;
-            } else { break; }
-        }
+            async move { tokio::task::spawn_blocking(move || credentials.delete(&key)).await.map_err(|_| internal())? }
+        }).await;
     }
     pub fn window_closed(&self, window: &str) {
         if let Ok(mut s) = self.subscriptions.lock() {

@@ -130,8 +130,11 @@ function RunSteps(props: { snapshot: ServerSnapshot; run: RunSummary; onChanged:
   const load = read.refresh;
   const discard = async () => {
     setBusy(true);
+    const connection = id();
+    const runId = props.run.id;
+    const intent = newIntentId();
     try {
-      await serverCommand((client) => client.automationRunDiscard(id(), props.run.id, newIntentId()));
+      await serverCommand((client) => client.automationRunDiscard(connection, runId, intent));
       toast.show({ title: t('server-automation.discarded'), tone: 'neutral' });
       props.onChanged();
     } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }

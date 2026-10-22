@@ -33,6 +33,84 @@ mod tests {
         }
     }
     #[tokio::test]
+    async fn cleanup_drains_concurrent_removals_and_retains_transient_vault_failures() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let root = tempfile::tempdir().unwrap();
+        let shared = Arc::new(Mutex::new(Store::default()));
+        shared
+            .lock()
+            .await
+            .pending_credential_deletions
+            .push("first".into());
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let cleaned = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let task = tokio::spawn({
+            let shared = shared.clone();
+            let root = root.path().to_owned();
+            let started = started.clone();
+            let release = release.clone();
+            let cleaned = cleaned.clone();
+            async move {
+                Store::cleanup_keys(&shared, &root, |key| {
+                    let started = started.clone();
+                    let release = release.clone();
+                    let cleaned = cleaned.clone();
+                    async move {
+                        if key == "first" {
+                            started.notify_one();
+                            release.notified().await;
+                        }
+                        cleaned.lock().unwrap().push(key);
+                        Ok(())
+                    }
+                })
+                .await
+            }
+        });
+        started.notified().await;
+        Store::edit(&shared, root.path(), |s| {
+            s.pending_credential_deletions.push("second".into());
+            Ok(())
+        })
+        .await
+        .unwrap();
+        release.notify_one();
+        task.await.unwrap().unwrap();
+        assert_eq!(*cleaned.lock().unwrap(), ["first", "second"]);
+        assert!(shared.lock().await.pending_credential_deletions.is_empty());
+        Store::edit(&shared, root.path(), |s| {
+            s.pending_credential_deletions.push("retry".into());
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let fail = AtomicBool::new(true);
+        let delete = |_| async {
+            if fail.swap(false, Ordering::SeqCst) {
+                Err(Error::new(ErrorCode::CredentialsUnavailable))
+            } else {
+                Ok(())
+            }
+        };
+        assert!(Store::cleanup_keys(&shared, root.path(), delete)
+            .await
+            .is_err());
+        assert_eq!(
+            Store::load(root.path())
+                .unwrap()
+                .pending_credential_deletions,
+            ["retry"]
+        );
+        Store::cleanup_keys(&shared, root.path(), delete)
+            .await
+            .unwrap();
+        assert!(Store::load(root.path())
+            .unwrap()
+            .pending_credential_deletions
+            .is_empty());
+    }
+    #[tokio::test]
     async fn live_observations_do_not_write_the_profile_or_lose_connection_edits() {
         let root = tempfile::tempdir().unwrap();
         let mut original = Store::default();
@@ -298,6 +376,36 @@ fn failed(_: impl std::fmt::Display) -> Error {
     Error::new(ErrorCode::Internal)
 }
 impl Store {
+    /// Called by a serialized maintenance owner. Re-read after each deletion so
+    /// concurrent removals cannot get stranded behind a stale queue snapshot.
+    pub async fn cleanup_keys<F, Fut>(
+        shared: &Arc<Mutex<Self>>,
+        root: &Path,
+        delete: F,
+    ) -> Result<()>
+    where
+        F: Fn(String) -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
+        loop {
+            let key = shared
+                .lock()
+                .await
+                .pending_credential_deletions
+                .first()
+                .cloned();
+            let Some(key) = key else {
+                return Ok(());
+            };
+            delete(key.clone()).await?;
+            Self::edit(shared, root, |s| {
+                s.pending_credential_deletions
+                    .retain(|pending| pending != &key);
+                Ok(())
+            })
+            .await?;
+        }
+    }
     pub async fn edit<T>(
         shared: &Arc<Mutex<Self>>,
         root: &Path,
@@ -460,9 +568,9 @@ impl Store {
     }
 }
 
-fn coarse_state(
-    snapshot: &ServerSnapshot,
-) -> (&str, &str, Option<(&str, Option<&str>, Option<&str>, &str)>) {
+type CoarseGameState<'a> = (&'a str, Option<&'a str>, Option<&'a str>, &'a str);
+type CoarseConnectionState<'a> = (&'a str, &'a str, Option<CoarseGameState<'a>>);
+fn coarse_state(snapshot: &ServerSnapshot) -> CoarseConnectionState<'_> {
     (
         &snapshot.state.phase,
         &snapshot.state.access,
