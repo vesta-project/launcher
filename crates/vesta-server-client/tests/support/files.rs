@@ -83,20 +83,6 @@ pub(super) fn route(
             let Some(data) = content.get(name) else {
                 return error(StatusCode::NOT_FOUND, "resource_not_found");
             };
-            if state.slow_download.swap(false, Ordering::SeqCst) {
-                let prefix = data[..(600 * 1024).min(data.len())].to_vec();
-                let (mut sender, stream) = Body::channel();
-                tokio::spawn(async move {
-                    let _ = sender.send_data(prefix.into()).await;
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                });
-                let mut reply = binary(Vec::new(), data.len(), "\"download-tag\"", None, false);
-                reply
-                    .headers_mut()
-                    .insert("content-length", data.len().into());
-                *reply.body_mut() = stream;
-                return reply;
-            }
             if let Some(range) = req.headers().get("range") {
                 assert_eq!(range, "bytes=0-1048575");
                 return binary(
@@ -141,6 +127,25 @@ pub(super) fn route(
             let Some(data) = content.get(name) else {
                 return error(StatusCode::NOT_FOUND, "resource_not_found");
             };
+            if state.slow_download.swap(false, Ordering::SeqCst) {
+                let prefix = data[..(600 * 1024).min(data.len())].to_vec();
+                let (mut sender, stream) = Body::channel();
+                tokio::spawn(async move {
+                    for chunk in prefix.chunks(100 * 1024) {
+                        if sender.send_data(chunk.to_vec().into()).await.is_err() {
+                            return;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                });
+                let mut reply = binary(Vec::new(), data.len(), "\"download-tag\"", None, false);
+                reply
+                    .headers_mut()
+                    .insert("content-length", data.len().into());
+                *reply.body_mut() = stream;
+                return reply;
+            }
             if state.invalid_download_etag.load(Ordering::SeqCst) {
                 return binary(data.clone(), data.len(), "W/\"weak\"", None, false);
             }

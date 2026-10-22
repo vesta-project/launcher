@@ -12,6 +12,21 @@ use tokio::{
 };
 const STAGING_BYTES: usize = 64 * 1024 * 1024;
 const STAGING_TTL: Duration = Duration::from_secs(3600);
+/// Progress becomes two Tauri events; byte-only thresholds flood fast links and
+/// leave slow links silent. Bound display cadence, always including completion.
+struct DownloadProgress {
+    at: Instant,
+}
+impl DownloadProgress {
+    fn due(&mut self, at: Instant, finished: bool) -> bool {
+        if finished || at.saturating_duration_since(self.at) >= Duration::from_millis(100) {
+            self.at = at;
+            true
+        } else {
+            false
+        }
+    }
+}
 
 struct Candidate {
     stage: TempPath,
@@ -531,7 +546,7 @@ impl Client {
             total = Some(size);
             etag = Some(new_tag);
             progress(offset, size);
-            let mut reported = offset;
+            let mut reporting = DownloadProgress { at: Instant::now() };
             let mut interrupted = None;
             loop {
                 let bytes = match response.chunk().await {
@@ -550,9 +565,8 @@ impl Client {
                 }
                 output.write_all(&bytes).await.map_err(io_error)?;
                 offset += bytes.len() as u64;
-                if offset - reported >= 512 * 1024 || offset == size {
+                if reporting.due(Instant::now(), offset == size) {
                     progress(offset, size);
-                    reported = offset;
                 }
             }
             drop(response); // release bulk admission before a resume attempt
@@ -606,6 +620,26 @@ fn strong_etag(tag: &str) -> bool {
 #[cfg(test)]
 mod staging_tests {
     use super::*;
+    #[test]
+    fn progress_is_bounded_on_fast_links_and_responsive_on_slow_links() {
+        let start = Instant::now();
+        let mut reporting = DownloadProgress { at: start };
+        let count = (1..=10_000)
+            .filter(|tick| reporting.due(start + Duration::from_micros(tick * 100), false))
+            .count();
+        assert_eq!(
+            count, 10,
+            "ten thousand chunks must not become ten thousand IPC events"
+        );
+        assert!(
+            reporting.due(start + Duration::from_millis(1001), true),
+            "completion cannot be hidden by throttling"
+        );
+        assert!(
+            reporting.due(start + Duration::from_millis(1500), false),
+            "a slow chunk must not wait for 512 KiB"
+        );
+    }
     #[tokio::test]
     async fn abandoned_staging_is_byte_bounded_and_idle_sweeps_release_files() {
         let transfers = FileTransfers::default();
