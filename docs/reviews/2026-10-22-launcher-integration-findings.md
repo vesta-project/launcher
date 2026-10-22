@@ -95,3 +95,17 @@ Clippy pass. The periodic scheduler still needs packaged platform verification.
 - **Regression idea:** Overlap two removals while the first key deletion is blocked, and separately inject one transient keyring failure; verify both pending references are eventually deleted without another user removal.
 
 The `read-state.ts` latest-request and disposal guards appear sound for preventing stale state writes and retained timers. Its `AbortSignal` stops later pagination but cannot cancel an already-issued Tauri command; I found no additional correctness issue in the named automation read paths.
+
+## Parent disposition and consolidated report (2026-10-23)
+
+Findings 1-5 and 7 are addressed by staging reservations/cleanup, guarded reads,
+owner-bound download cancellation, worker retry and durable credential cleanup.
+Finding 6 remains an explicit anti-replay policy decision; age-only compaction is
+unsafe for single-use preparation receipts. Finding 8 is a rejected hypothesis;
+finding 9 is fixed. Download progress is additionally bounded in `83f03c9e`, with
+ten client unit tests and 23 pinned-HTTPS fixtures passing after the final change.
+
+The scoped server repository contains the [consolidated results, measurements,
+remaining decisions and experience roadmap](../../../server-connections-mvp/docs/reviews/2026-10-23-review-results.md).
+Both repositories retain the local tag `review-baseline-2026-10-22`; no live agent
+restart, OS trust-store modification or deployment was performed overnight.
