@@ -16,6 +16,7 @@ import {
 } from '../../../features/servers/files-model';
 import { IntentMemo, age, newIntentId } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import type { FileEntry, ServerCommandError, ServerSnapshot, TrashEntry, UploadCandidate } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 import { FileEditor } from './file-editor';
@@ -473,7 +474,7 @@ function UploadDialog(props: {
 /** This device's trash entries on the server, each restorable to its original path. */
 function TrashView(props: { snapshot: ServerSnapshot; onRestored: () => void }) {
   const now = useServersClock();
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const [items, setItems] = createSignal<TrashEntry[]>([], { name: 'server-trash:items' });
   const [loading, setLoading] = createSignal(true, { name: 'server-trash:loading' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-trash:error' });

@@ -7,6 +7,7 @@ import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import { errorMessage } from '../../../features/servers/errors';
 import { IntentMemo } from '../../../features/servers/model';
 import {
@@ -49,7 +50,7 @@ interface PendingConfirmation {
 
 /** Schema-driven `server.properties` with validator-bound saves and the agent's weakening confirmation. */
 export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const now = useServersClock();
   const [base, setBase] = createSignal<ParsedProperties | null>(null, { name: 'server-properties:base' });
   const [sha, setSha] = createSignal('', { name: 'server-properties:sha' });

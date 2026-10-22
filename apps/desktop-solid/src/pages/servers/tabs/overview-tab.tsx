@@ -2,6 +2,7 @@ import { For, Show, createSignal } from 'solid-js';
 import { Button, Dialog, toast } from '@vesta/ui';
 import type { MessageId } from '../../../localization/messages';
 import { errorMessage } from '../../../features/servers/errors';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import { newIntentId } from '../../../features/servers/model';
 import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
@@ -20,7 +21,7 @@ const bytes = (value: string | null | undefined) => {
 
 export function OverviewTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const metricsAllowed = () => gate(props.snapshot.capabilities, 'metrics.view') !== 'denied';
   // Metrics stream only while the overview is visible and allowed.
   useServerTopic(() => (metricsAllowed() && props.snapshot.state.phase === 'online' ? id() : undefined), 'metrics');

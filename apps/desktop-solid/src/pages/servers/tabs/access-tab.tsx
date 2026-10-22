@@ -5,6 +5,7 @@ import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate, roleKey } from '../../../features/servers/capabilities';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import { errorMessage } from '../../../features/servers/errors';
 import { age, newIntentId, roleLabel } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
@@ -50,12 +51,12 @@ const myRank = (snapshot: ServerSnapshot, roles: RoleSummary[]) => roles.find((r
 
 function useRoles(snapshot: () => ServerSnapshot) {
   const [roles, setRoles] = createSignal<RoleSummary[]>([], { name: 'server-access:roles' });
-  createEffect(() => snapshot().connection.id, (id) => { void serverCommand((client) => client.roles(id)).then(setRoles).catch(() => {}); }, { name: 'server-access:load-roles' });
+  createEffect(stableConnectionId(snapshot), (id) => { void serverCommand((client) => client.roles(id)).then(setRoles).catch(() => {}); }, { name: 'server-access:load-roles' });
   return roles;
 }
 
 function PeopleView(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const roles = useRoles(() => props.snapshot);
   const [users, setUsers] = createSignal<ServerUser[] | null>(null, { name: 'server-access:users' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:users-error' });
@@ -126,7 +127,7 @@ function RoleDialog(props: { snapshot: ServerSnapshot; user: ServerUser; roles: 
 
 function InvitationsView(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const roles = useRoles(() => props.snapshot);
   const [invitations, setInvitations] = createSignal<Invitation[] | null>(null, { name: 'server-access:invitations' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:invitations-error' });
@@ -237,7 +238,7 @@ function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; o
 
 function DevicesView(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const [devices, setDevices] = createSignal<ServerDevice[] | null>(null, { name: 'server-access:devices' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:devices-error' });
   const [revoking, setRevoking] = createSignal<ServerDevice | null>(null, { name: 'server-access:revoking' });
@@ -293,7 +294,7 @@ const sourceRows: { key: 'anonymous' | 'newUser' | 'whitelist' | 'password'; lab
 ];
 
 function RulesView(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const [sources, setSources] = createSignal<AccessSources | null>(null, { name: 'server-access:sources' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:sources-error' });
   const load = () => serverCommand((client) => client.accessSources(id())).then(setSources).catch((reason) => setError(reason as ServerCommandError));

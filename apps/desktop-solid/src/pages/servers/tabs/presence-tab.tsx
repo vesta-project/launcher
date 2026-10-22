@@ -5,6 +5,7 @@ import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import { errorMessage } from '../../../features/servers/errors';
 import { newIntentId } from '../../../features/servers/model';
 import { MOTD_COLORS, MOTD_PLACEHOLDERS, motdProblems, type MotdProblem } from '../../../features/servers/motd-model';
@@ -42,7 +43,7 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
 }
 
 function SleepPanel(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') !== 'denied';
   const [saved, setSaved] = createSignal<{ policy: SleepPolicy; revision: number } | null>(null, { name: 'server-sleep:saved' });
   const [draft, setDraft] = createSignal<SleepPolicy | null>(null, { name: 'server-sleep:draft' });
@@ -125,7 +126,7 @@ function SleepPanel(props: { snapshot: ServerSnapshot }) {
 }
 
 function PresencePanel(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') !== 'denied';
   const [saved, setSaved] = createSignal<{ document: MotdDocument; revision: string | null } | null>(null, { name: 'server-motd:saved' });
   const [draft, setDraft] = createSignal<MotdDocument | null>(null, { name: 'server-motd:draft' });

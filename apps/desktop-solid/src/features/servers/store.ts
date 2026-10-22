@@ -167,7 +167,8 @@ export function useServerSync() {
  * Native code shares the underlying stream across windows and subscribers.
  */
 export function useServerTopic(id: () => ConnectionId | undefined, topic: ServerTopic) {
-  createEffect(id, (connectionId) => {
+  const connection = createMemo(id, { name: `server-topic:${topic}:connection-id` });
+  createEffect(connection, (connectionId) => {
     if (!connectionId) return;
     let unsubscribe: (() => void) | undefined;
     let closed = false;

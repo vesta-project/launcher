@@ -4,6 +4,7 @@ import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
 import { serverArt, initials } from '../../../features/servers/art';
 import { gate } from '../../../features/servers/capabilities';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import { normalizeServerIcon } from '../../../features/servers/icon-image';
 import { IntentMemo } from '../../../features/servers/model';
 import type { ServerBranding } from '../../../features/servers/native-branding';
@@ -16,7 +17,7 @@ const DESCRIPTION_LIMIT = 1024;
 
 /** Server-owned name, description and icon that every connected player sees. */
 export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const [branding, setBranding] = createSignal<ServerBranding | null>(null, { name: 'server-profile:branding' });
   const [name, setName] = createSignal('', { name: 'server-profile:name' });
   const [description, setDescription] = createSignal('', { name: 'server-profile:description' });

@@ -7,6 +7,7 @@ import { t } from '../../../localization';
 import { parseLog } from '../../../features/instances/interaction-utils';
 import { baseName, formatBytes, isArchivedLog, isLogPath } from '../../../features/servers/files-model';
 import { serverCommand } from '../../../features/servers/store';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import type { LogPage, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 
@@ -32,7 +33,7 @@ function rows(page: LogPage): LogEntry[] {
 export function LogFile(props: {
   snapshot: ServerSnapshot; path: string; onClose: () => void; onSwitch: (path: string) => void; onDownload: (path: string) => void;
 }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   const [lines, setLines] = createSignal<LogEntry[]>([], { name: 'server-log:lines' });
   const [earlier, setEarlier] = createSignal<string | null>(null, { name: 'server-log:earlier' });
   const [size, setSize] = createSignal<string | null>(null, { name: 'server-log:size' });

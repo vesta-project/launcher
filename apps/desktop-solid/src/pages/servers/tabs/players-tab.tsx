@@ -1,5 +1,5 @@
 import { Button, Dialog, SegmentedControl, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TextField, toast } from '@vesta/ui';
-import { For, Show, createEffect, createSignal, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
@@ -45,7 +45,11 @@ export function PlayersTab(props: { snapshot: ServerSnapshot }) {
     finally { if (current()) setLoading(false); }
   };
   // Fetch on navigation and on generation change only; no timers.
-  createEffect(() => ({ view: view(), generation: props.snapshot.status?.generation ?? null }), ({ view: target }) => { void load(target); }, { name: 'server-players:load' });
+  const loadKey = createMemo(
+    () => [view(), props.snapshot.status?.generation ?? null] as const,
+    { equals: (a, b) => a[0] === b[0] && a[1] === b[1], name: 'server-players:load-key' },
+  );
+  createEffect(loadKey, ([target]) => { void load(target); }, { name: 'server-players:load' });
 
   const views: { value: View; label: MessageId }[] = [
     { value: 'online', label: 'servers.players.online' },

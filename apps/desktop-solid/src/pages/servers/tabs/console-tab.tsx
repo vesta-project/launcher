@@ -13,11 +13,12 @@ import { busyIntent, operationStateMessage } from '../../../features/servers/ope
 import { consoleBuffer, consoleVersion, loadConsoleTail, putOperations, serverCommand, serverOperations, useServerTopic } from '../../../features/servers/store';
 import type { ConsoleEntry } from '../../../features/servers/console-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 
 const NOTICE_KEY = 'vesta:servers:console-notice-seen';
 
 export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
+  const id = stableConnectionId(() => props.snapshot);
   useServerTopic(id, 'console');
   const view = () => serverConsoleView(id());
   const viewState = () => view()[0]();
