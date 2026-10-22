@@ -61,3 +61,37 @@ Baseline: `24fb0eeb`. Scope: server client, Tauri server integration, and deskto
 - **Impact / confidence:** The UI reports removal failure but leaves a listed server that can no longer authenticate; **high confidence** in ordering, conditional on a persistence failure.
 - **Minimal fix:** Make key deletion and metadata removal recoverable as a two-phase operation, such as persisting a deletion marker/removing the connection first and retrying vault cleanup separately.
 - **Regression idea:** Inject a store-save failure after successful key deletion and verify the record is either recoverably removed or the key remains available; the current partial state should never be observable.
+
+## Strict follow-up — parent changes since `review-baseline-2026-10-22`
+
+The former staged-upload retention issue is addressed by the 64 MiB reservation, release on finish/abort, and idle pruning. The worker reconstruction issue is addressed with bounded retry. Store writes now commit disk and memory under an owned guard, and removal persists a deletion journal before keyring cleanup. The 4,096-intent lifetime cap remains deferred as an explicit idempotency-policy decision; I do not recommend age-based eviction.
+
+### 8. Cancellation wakeup hypothesis — rejected by parent verification
+
+**Status: false positive, no production change required.** Installed Tokio 1.50
+`src/sync/notify.rs:532–534` explicitly guarantees `notify_waiters()` notifications
+from creation of `Notified`, even before it is polled. The implementation creates
+that future *before* reading the atomic state, covering the alleged race. The
+original scanner hypothesis below incorrectly applied `notify_one()` semantics.
+
+- **Trigger:** A cancel call races with the `cancelled()` waiter between its atomic state check and registration with `Notify`.
+- **Evidence:** [`cancellation.rs`](../../crates/vesta-server-client/src/files/cancellation.rs:39) creates a `Notified` future, checks the atomic state, and then awaits it; [`cancel()`](../../crates/vesta-server-client/src/files/cancellation.rs:20) transitions state and calls `notify_waiters()` once. Tokio `Notify::notify_waiters` does not retain a permit for a future that has not registered yet, so a cross-thread cancellation in that gap can be missed. Repeated `cancel()` sees state 1 and returns without notifying again. The outer select in `transfers.rs` then keeps waiting for the request/transfer branch, potentially up to its one-hour bulk deadline.
+- **Impact / confidence:** The visible cancel action or window-close cancellation can fail to stop a slow transfer in a narrow race; **high confidence** from `notify_waiters` semantics and the single-shot notification.
+- **Minimal fix:** Use a cancellation primitive with retained state/wakeup semantics (for example, a watch channel), or explicitly register the `Notified` future before checking the state and make repeated cancellation notify safely.
+- **Regression idea:** Deterministically interleave cancellation after the state check but before waiter registration; verify the cancellation future resolves promptly and the staged file/permits are released.
+
+### 9. Credential cleanup can strand a concurrent removal or a transient vault failure
+
+**Parent remediation:** recurring weak-owner maintenance retries once/minute;
+serialized cleanup re-reads the durable queue after each item. A production-store
+regression overlaps removals and injects a transient vault failure, then verifies
+both draining and retained retry state. Native storage tests and strict client
+Clippy pass. The periodic scheduler still needs packaged platform verification.
+
+- **Trigger:** Two server removals overlap, or keyring deletion is temporarily unavailable during a removal/startup cleanup.
+- **Evidence:** [`cleanup_deleted_credentials`](../../vesta-launcher/src-tauri/src/servers/mod.rs:814) takes a non-waiting `try_lock`, snapshots the pending list once at line 816, and exits after that snapshot. A second removal can append a new key reference while the first cleanup is deleting; its cleanup call returns immediately because the guard is held, and the first loop never sees the new entry. On vault failure the loop breaks, and the only automatic retry is a one-shot startup call (line 89) or a later server removal. The removed server stays gone, but its keyring secret may remain indefinitely during a long-running session.
+- **Impact / confidence:** Removed device keys can remain in the OS vault until another removal or process restart; **high confidence** for the overlap and retry control flow.
+- **Minimal fix:** Drain pending entries until the queue is empty while holding the cleanup guard, and schedule bounded retry after transient vault failures rather than relying on a future removal/restart.
+- **Regression idea:** Overlap two removals while the first key deletion is blocked, and separately inject one transient keyring failure; verify both pending references are eventually deleted without another user removal.
+
+The `read-state.ts` latest-request and disposal guards appear sound for preventing stale state writes and retained timers. Its `AbortSignal` stops later pagination but cannot cancel an already-issued Tauri command; I found no additional correctness issue in the named automation read paths.
