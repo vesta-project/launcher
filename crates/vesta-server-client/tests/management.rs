@@ -46,14 +46,18 @@ impl Agent {
         let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let der = certificate.cert.der().to_vec();
         let fingerprint = leaf_fingerprint(&der);
-        let tls = rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_no_client_auth()
-            .with_single_cert(
-                vec![rustls::Certificate(der)],
-                rustls::PrivateKey(certificate.key_pair.serialize_der()),
-            )
-            .unwrap();
+        let tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(
+            vec![rustls::pki_types::CertificateDer::from(der)],
+            rustls::pki_types::PrivatePkcs8KeyDer::from(certificate.key_pair.serialize_der())
+                .into(),
+        )
+        .unwrap();
         let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(tls));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint =
@@ -669,7 +673,11 @@ async fn pack_routes_and_fixed_error_mapping() {
         (409, "backup_busy", ErrorCode::ServerBusy),
         (404, "backup_profile_unknown", ErrorCode::NotFound),
         (404, "backup_job_unknown", ErrorCode::NotFound),
-        (404, "backups_not_configured", ErrorCode::BackupsNotConfigured),
+        (
+            404,
+            "backups_not_configured",
+            ErrorCode::BackupsNotConfigured,
+        ),
         (
             409,
             "backup_confirmation_invalid",

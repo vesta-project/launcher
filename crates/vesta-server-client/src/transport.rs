@@ -83,6 +83,11 @@ impl Transport {
         if error.is_timeout() {
             return Error::new(ErrorCode::Timeout);
         }
+        // TLS record EOF during an established response is a truncated body,
+        // not a trust failure. Downloads may resume only with a strong validator.
+        if error.is_body() || error.is_decode() {
+            return Error::new(ErrorCode::OutcomeUnknown);
+        }
         // Error strings are classified here only; never logged (may contain URLs).
         let message = format!("{error:?}").to_ascii_lowercase();
         Error::new(

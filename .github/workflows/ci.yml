@@ -42,6 +42,9 @@ jobs:
         working-directory: vesta-launcher
         run: bun run test -- --run
 
+      - name: Check application TLS lockfiles
+        run: bun test scripts/tls-trust.test.mjs
+
       - name: Build frontend
         working-directory: vesta-launcher
         run: bun run build

@@ -31,7 +31,9 @@ shlex = "1.3"
 image = { version = "0.25", features = ["png"] }
 
 # OAuth2 and Microsoft authentication
-oauth2 = "4.4"
+# These legacy reqwest clients already select native TLS. Avoid OAuth's default
+# feature pulling an unsupported, unused rustls 0.21 / bundled-root stack back in.
+oauth2 = { version = "4.4", default-features = false, features = ["reqwest", "native-tls"] }
 minecraft-msa-auth = "0.4"
 
 # reqwest 0.12 for minecraft-msa-auth compatibility

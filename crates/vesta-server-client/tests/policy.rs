@@ -1,7 +1,7 @@
-use rustls::client::ServerCertVerifier;
+use rustls::client::danger::ServerCertVerifier;
 use std::{
     sync::{Arc, Mutex},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 use vesta_server_client::{
     auth::{signing_bytes, DeviceSigner, Ed25519Signer},
@@ -51,17 +51,16 @@ fn addresses_and_pairing_links_are_origin_scoped() {
 }
 #[test]
 fn fingerprint_verifier_captures_and_pins_exact_leaf_der() {
-    let cert = rustls::Certificate(vec![1, 2, 3]);
-    let fp = leaf_fingerprint(&cert.0);
+    let cert = rustls::pki_types::CertificateDer::from(vec![1, 2, 3]);
+    let fp = leaf_fingerprint(cert.as_ref());
     let observed = Arc::new(Mutex::new(None));
     let verify = |expected| {
         PinVerifier::new(expected, observed.clone()).verify_server_cert(
             &cert,
             &[],
-            &rustls::ServerName::try_from("localhost").unwrap(),
-            &mut std::iter::empty(),
+            &rustls::pki_types::ServerName::try_from("localhost").unwrap(),
             &[],
-            SystemTime::now(),
+            rustls::pki_types::UnixTime::now(),
         )
     };
     assert!(verify(None).is_ok());

@@ -99,14 +99,18 @@ impl Agent {
         let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let der = certificate.cert.der().to_vec();
         let fingerprint = leaf_fingerprint(&der);
-        let config = rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_no_client_auth()
-            .with_single_cert(
-                vec![rustls::Certificate(der)],
-                rustls::PrivateKey(certificate.key_pair.serialize_der()),
-            )
-            .unwrap();
+        let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(
+            vec![rustls::pki_types::CertificateDer::from(der)],
+            rustls::pki_types::PrivatePkcs8KeyDer::from(certificate.key_pair.serialize_der())
+                .into(),
+        )
+        .unwrap();
         let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -251,8 +255,15 @@ async fn route(
         }
         "/api/v3/manage/server/status" => {
             state.status_reads.fetch_add(1, Ordering::SeqCst);
-            if state.busy_status.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1)).is_ok() {
-                return Ok(error(StatusCode::SERVICE_UNAVAILABLE, "temporarily_unavailable"));
+            if state
+                .busy_status
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                .is_ok()
+            {
+                return Ok(error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "temporarily_unavailable",
+                ));
             }
             if state.slow_status.load(Ordering::SeqCst) {
                 tokio::time::sleep(std::time::Duration::from_millis(150)).await;
@@ -281,7 +292,10 @@ async fn route(
         "/api/v3/manage/lifecycle/start" => {
             state.starts.fetch_add(1, Ordering::SeqCst);
             if state.busy_start.load(Ordering::SeqCst) {
-                return Ok(error(StatusCode::SERVICE_UNAVAILABLE, "temporarily_unavailable"));
+                return Ok(error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "temporarily_unavailable",
+                ));
             }
             state.start_keys.lock().unwrap().push(
                 req.headers()["idempotency-key"]
@@ -522,7 +536,8 @@ async fn concurrent_settings_style_control_and_properties_reads_wait_for_infligh
     };
     // The profile uses ordinary JSON transport; properties use file transport.
     // Both need bounded admission rather than a spurious immediate busy error.
-    let (status, properties, ()) = tokio::join!(client.status(true), client.properties_get(), release);
+    let (status, properties, ()) =
+        tokio::join!(client.status(true), client.properties_get(), release);
     assert_eq!(status.unwrap().state, "stopped");
     assert!(!properties.unwrap().values.is_empty());
 }
@@ -535,15 +550,29 @@ async fn transient_busy_get_recovers_once_without_replaying_mutations() {
     agent.state.busy_status.store(1, Ordering::SeqCst);
     assert_eq!(client.status(true).await.unwrap().state, "stopped");
     assert_eq!(agent.state.status_reads.load(Ordering::SeqCst), 2);
-    agent.state.files.busy_properties.store(true, Ordering::SeqCst);
+    agent
+        .state
+        .files
+        .busy_properties
+        .store(true, Ordering::SeqCst);
     assert!(!client.properties_get().await.unwrap().values.is_empty());
     agent.state.busy_start.store(true, Ordering::SeqCst);
-    assert_eq!(client.lifecycle("start", None, "busy-no-replay").await.unwrap_err().code, ErrorCode::ServerBusy);
+    assert_eq!(
+        client
+            .lifecycle("start", None, "busy-no-replay")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::ServerBusy
+    );
     assert_eq!(agent.state.starts.load(Ordering::SeqCst), 1);
 
     tokio::time::sleep(std::time::Duration::from_millis(260)).await;
     agent.state.busy_status.store(2, Ordering::SeqCst);
-    assert_eq!(client.status(true).await.unwrap_err().code, ErrorCode::ServerBusy);
+    assert_eq!(
+        client.status(true).await.unwrap_err().code,
+        ErrorCode::ServerBusy
+    );
     assert_eq!(agent.state.status_reads.load(Ordering::SeqCst), 4);
 }
 #[tokio::test]

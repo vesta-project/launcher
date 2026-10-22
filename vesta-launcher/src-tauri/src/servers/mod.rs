@@ -350,7 +350,7 @@ impl ServerManager {
         let transport = Transport::new(parsed.endpoint.clone(), None)?;
         let status = transport
             .request(
-                reqwest::Method::GET,
+                vesta_server_client::Method::GET,
                 "/api/v3/status",
                 None,
                 None,
@@ -628,7 +628,7 @@ impl ServerManager {
         };
         let challenge = t
             .request(
-                reqwest::Method::POST,
+                vesta_server_client::Method::POST,
                 "/api/v3/auth/minecraft/challenge",
                 None,
                 Some(json!({"uuid":account.uuid,"name":account.username})),
@@ -650,14 +650,14 @@ impl ServerManager {
                 .ok_or_else(|| Error::new(ErrorCode::CredentialsRejected))?,
         );
         // This fixed Mojang origin is the only recipient of the launcher token.
-        let join = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(15)).build().map_err(|_| internal())?
+        let join = reqwest12::Client::builder().use_rustls_tls().redirect(reqwest12::redirect::Policy::none()).connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(15)).build().map_err(|_| internal())?
             .post("https://sessionserver.mojang.com/session/minecraft/join").json(&json!({"accessToken":token.as_str(),"selectedProfile":account.uuid,"serverId":server_hash})).send().await.map_err(|_| Error::new(ErrorCode::Unreachable))?;
         if !join.status().is_success() {
             return Err(Error::new(ErrorCode::CredentialsRejected));
         }
         let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
         self.contacts.lock().await.remove(discovery_id);
-        let complete = t.request(reqwest::Method::POST,"/api/v3/auth/minecraft/complete",None,Some(json!({"challenge":challenge_id,"device_name":"Vesta Launcher","public_key":s.public_key()})),None,true).await.map_err(|e| if matches!(e.code,ErrorCode::Timeout|ErrorCode::OutcomeUnknown|ErrorCode::Unreachable) { Error::new(ErrorCode::PairOutcomeUnknown) } else {e})?;
+        let complete = t.request(vesta_server_client::Method::POST,"/api/v3/auth/minecraft/complete",None,Some(json!({"challenge":challenge_id,"device_name":"Vesta Launcher","public_key":s.public_key()})),None,true).await.map_err(|e| if matches!(e.code,ErrorCode::Timeout|ErrorCode::OutcomeUnknown|ErrorCode::Unreachable) { Error::new(ErrorCode::PairOutcomeUnknown) } else {e})?;
         let device = complete["device_id"]
             .as_str()
             .ok_or_else(|| Error::new(ErrorCode::PairOutcomeUnknown))?

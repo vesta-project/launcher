@@ -13,6 +13,8 @@ pub mod transport;
 pub mod trust;
 pub use client::{automation, branding, management, presence, Client};
 pub use model::{Error, ErrorCode, Result};
+// Keep callers independent of the HTTP major version selected by this crate.
+pub use reqwest::Method;
 
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()
