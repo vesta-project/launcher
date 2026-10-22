@@ -32,7 +32,9 @@ export type PresenceState = (typeof PRESENCE_STATES)[number];
 export interface StatePresentation {
   /** Up to two lines with `§` colour/style codes and `{placeholder}`s. */
   template: string;
+  /** Null is sent as the agent's default label, "Vesta"; saves return the concrete value. */
   versionName: string | null;
+  /** Null is sent as the agent's default cap, 0; saves return the concrete value. */
   maximumPlayers: number | null;
   /** Base64 64×64 PNG, or null for the generated fallback. */
   iconPng: string | null;

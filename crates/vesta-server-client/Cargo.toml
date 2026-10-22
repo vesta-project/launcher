@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 async-trait = "0.1"
 base64 = "0.22"
+bytes = "1"
 chrono = "0.4"
 ed25519-dalek = { version = "2.2", features = ["zeroize"] }
 futures-util = { version = "0.3", features = ["sink"] }
@@ -16,7 +17,10 @@ rustls = { version = "0.21.12", features = ["dangerous_configuration"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10.9"
-tokio = { version = "1.49", features = ["sync", "time", "net", "rt", "macros"] }
+tempfile = "3.27"
+fs2 = "0.4"
+uuid = { version = "1.23.2", features = ["v4"] }
+tokio = { version = "1.49", features = ["sync", "time", "net", "rt", "macros", "fs", "io-util"] }
 tokio-tungstenite = { version = "0.20.1", features = ["rustls-tls-webpki-roots"] }
 url = "2.5"
 zeroize = { version = "1", features = ["serde"] }

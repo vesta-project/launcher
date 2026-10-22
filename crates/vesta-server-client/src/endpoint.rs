@@ -65,7 +65,10 @@ impl Endpoint {
         )
     }
     pub(crate) fn route(&self, path: &str) -> Result<Url> {
-        if !path.starts_with("/api/v3/") || path.contains('#') || path.contains("..") {
+        if !path.starts_with("/api/v3/")
+            || path.contains('#')
+            || path.split('?').next().unwrap_or(path).contains("..")
+        {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
         self.url

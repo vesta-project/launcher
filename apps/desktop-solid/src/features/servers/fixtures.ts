@@ -11,6 +11,7 @@ import type { ServersApi, Unsubscribe } from './service';
 import { createFileFixtures } from './fixtures-files';
 import { createManageFixtures, type ManageHost } from './fixtures-manage';
 import { createPresenceFixtures } from './fixtures-presence';
+import { createBrandingFixtures } from './fixtures-branding';
 
 const fail = (code: ServerCommandError['code'], retryAfterMs?: number): never => {
   throw { code, retryAfterMs: retryAfterMs ?? null } satisfies ServerCommandError;
@@ -229,6 +230,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     if (!active && target.ticker) { clearInterval(target.ticker); target.ticker = undefined; }
   };
 
+  const manage = createManageFixtures({ server, requireOnline, requireCapability, record, publish, wait } as unknown as ManageHost);
   const api: ServersApi = {
     async list() { await wait(60); return [...servers.values()].map((entry) => clone(entry.snapshot)); },
 
@@ -526,7 +528,8 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
 
     // Backups, access and pack.
     ...createPresenceFixtures({ server, requireCapability, wait } as never),
-    ...createManageFixtures({ server, requireOnline, requireCapability, record, publish, wait } as unknown as ManageHost),
+    ...manage,
+    ...createBrandingFixtures({ server, requireCapability, wait, devices: manage.devices } as never),
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {

@@ -51,6 +51,137 @@ async fn backup_completed(client: &Client, id: &str) -> vesta_server_client::man
 
 #[tokio::test]
 #[ignore = "requires VESTA_LIVE_AGENT=1 and the launcher-compat agent binaries"]
+async fn live_presence_branding_and_icons() {
+    use vesta_server_client::branding::BrandingPatch;
+    assert_eq!(std::env::var("VESTA_LIVE_AGENT").as_deref(), Ok("1"));
+    let agent = fixture::Agent::start();
+    let issued = agent.pair();
+    let address = Address::parse(issued["pairing_link"].as_str().unwrap()).unwrap();
+    let server = issued["server_id"].as_str().unwrap();
+    let transport = Transport::new(address.endpoint, address.fingerprint).unwrap();
+    let signer = Arc::new(vesta_server_client::auth::Ed25519Signer::from_seed(
+        [73; 32],
+    ));
+    let enrollment = Client::pair(
+        &transport,
+        server,
+        address.code.as_deref().unwrap(),
+        signer.as_ref(),
+    )
+    .await
+    .unwrap();
+    let device_id = enrollment.device_id.clone();
+    let client = Client::new(transport, server.into(), enrollment.device_id, signer);
+    let sleep = client.sleep_policy().await.unwrap();
+    let mut policy = sleep.policy;
+    policy.idle_seconds += 1;
+    let saved = client
+        .sleep_policy_update(policy.clone(), sleep.revision, "live-sleep")
+        .await
+        .unwrap();
+    assert_eq!(saved.revision, sleep.revision + 1);
+    assert_eq!(
+        client
+            .sleep_policy_update(policy, sleep.revision, "live-sleep-stale")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::StaleTarget
+    );
+    let mut motd = client.motd_policy().await.unwrap();
+    motd.document.states.get_mut("sleeping").unwrap().template =
+        "§b§l{server_name}\n§7Join to wake".into();
+    let preview = client
+        .motd_preview("sleeping", motd.document.clone())
+        .await
+        .unwrap();
+    assert_eq!(preview.lines[1], "Join to wake");
+    assert_eq!(preview.segments[0].color.as_deref(), Some("#55FFFF"));
+    assert!(preview.segments[0].bold);
+    let png = preview.icon_png.unwrap();
+    let saved = client
+        .motd_policy_update(motd.document.clone(), motd.revision.as_deref(), "live-motd")
+        .await
+        .unwrap();
+    assert!(saved.revision.is_some());
+    assert_eq!(
+        client
+            .motd_policy_update(
+                motd.document.clone(),
+                motd.revision.as_deref(),
+                "live-motd-stale"
+            )
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::StaleTarget
+    );
+    motd.document.states.get_mut("sleeping").unwrap().template = "{unknown_placeholder}".into();
+    assert_eq!(
+        client
+            .motd_preview("sleeping", motd.document)
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    let branding = client.branding().await.unwrap();
+    let saved = client
+        .branding_update(
+            BrandingPatch {
+                name: Some("Live branding".into()),
+                description: Some("A scratch server".into()),
+            },
+            &branding.revision,
+            "live-branding",
+        )
+        .await
+        .unwrap();
+    assert_eq!(saved.name, "Live branding");
+    assert_eq!(saved.description.as_deref(), Some("A scratch server"));
+    assert_eq!(
+        client
+            .branding_update(
+                BrandingPatch {
+                    name: Some("Stale".into()),
+                    description: None
+                },
+                &branding.revision,
+                "live-branding-stale"
+            )
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::StaleTarget
+    );
+    assert!(client.icon().await.unwrap().is_none());
+    client.icon_set(&png, "live-icon-create").await.unwrap();
+    assert!(client.icon().await.unwrap().is_some());
+    client.icon_set(&png, "live-icon-replace").await.unwrap();
+    client.icon_clear("live-icon-delete").await.unwrap();
+    assert!(client.icon().await.unwrap().is_none());
+    client.icon_clear("live-icon-empty").await.unwrap();
+    let renamed = client
+        .device_rename(&device_id, "Live desktop", "live-device-rename")
+        .await
+        .unwrap();
+    assert_eq!(renamed.name, "Live desktop");
+    assert_eq!(
+        client
+            .devices()
+            .await
+            .unwrap()
+            .iter()
+            .find(|d| d.id == device_id)
+            .unwrap()
+            .name,
+        "Live desktop"
+    );
+    eprintln!("Live sleep, MOTD preview/policy, branding, icon create/replace/delete and own-device rename passed: {}",agent.root.display());
+}
+
+#[tokio::test]
+#[ignore = "requires VESTA_LIVE_AGENT=1 and the launcher-compat agent binaries"]
 async fn live_management_access_pack_and_backups() {
     assert_eq!(std::env::var("VESTA_LIVE_AGENT").as_deref(), Ok("1"));
     let agent = fixture::Agent::start_with_backups();

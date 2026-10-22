@@ -1,5 +1,9 @@
 #[path = "management.rs"]
 pub mod management;
+#[path = "presence.rs"]
+pub mod presence;
+#[path = "branding.rs"]
+pub mod branding;
 use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
@@ -41,6 +45,7 @@ pub struct Client {
     legacy_intents: StdMutex<HashSet<String>>,
     principal_id: StdMutex<Option<String>>,
     principal_lookup: Mutex<bool>,
+    pub(crate) file_validators: Mutex<HashMap<String, (String, String)>>,
     management: management::State,
 }
 #[derive(Clone)]
@@ -142,6 +147,7 @@ impl Client {
             legacy_intents: Default::default(),
             principal_id: Default::default(),
             principal_lookup: Default::default(),
+            file_validators: Default::default(),
             management: Default::default(),
         })
     }
@@ -162,7 +168,7 @@ impl Client {
         auth::check_identity(server_id, &enrollment.server_id)?;
         Ok(enrollment)
     }
-    async fn token(&self, rejected: Option<&str>) -> Result<zeroize::Zeroizing<String>> {
+    pub(crate) async fn token(&self, rejected: Option<&str>) -> Result<zeroize::Zeroizing<String>> {
         let mut state = self.session.lock().await;
         if let Some(s) = &state.session {
             if s.expires_at_ms > crate::now_ms() + 120_000 && rejected != Some(s.token.as_str()) {

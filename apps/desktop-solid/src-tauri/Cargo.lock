@@ -2277,6 +2277,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "fsevent-sys"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8525,8 +8535,10 @@ version = "0.1.0-alpha.31"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "bytes",
  "chrono",
  "ed25519-dalek",
+ "fs2",
  "futures-util",
  "hex",
  "reqwest 0.11.27",
@@ -8534,9 +8546,11 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tempfile",
  "tokio",
  "tokio-tungstenite",
  "url",
+ "uuid 1.28.0",
  "zeroize",
 ]
 

@@ -64,11 +64,12 @@ impl Error {
     pub fn wire(status: u16, code: &str, retry_after_ms: Option<u64>) -> Self {
         use ErrorCode::*;
         let code = match code {
+            "recovery_required" if status == 409 => OutcomeUnknown,
             "backup_busy" => ServerBusy,
             "backups_not_configured" => Unsupported,
             "backup_profile_unknown" | "backup_job_unknown" | "backup_snapshot_unknown" => NotFound,
             "backup_confirmation_invalid" | "backup_confirmation_expired" => ConfirmationExpired,
-            "backup_policy_revision_conflict" => StaleTarget,
+            "backup_policy_revision_conflict" | "sleep_policy_conflict" | "motd_policy_conflict" => StaleTarget,
             "backup_idempotency_conflict" => Conflict,
             "management_pair_invalid" | "pair_invalid" => PairCodeInvalid,
             "confirmation_invalid" | "confirmation_expired" | "confirmation_required" => {
