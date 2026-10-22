@@ -115,14 +115,8 @@
   :where([data-vesta="server-automation-run-step-body"]) { display: flex; flex-direction: column; gap: 3px; min-inline-size: 0; }
   :where([data-vesta="server-automation-run-step-body"]) > p:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--vesta-space-2); margin: 0; font-size: var(--vesta-text-sm); }
   :where([data-vesta="server-automation-step-id"]) { color: var(--vesta-color-text-subtle); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 11px; }
-  :where([data-vesta="server-automation-output"]) {
-    align-self: start;
-    max-inline-size: 100%;
-    padding: 2px 6px;
-    border-radius: var(--vesta-radius-sm);
-    background: var(--vesta-color-fill);
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-    font-size: 11px;
-    overflow-wrap: anywhere;
-  }
+  :where([data-vesta="server-automation-output"]) { display: flex; flex-wrap: wrap; gap: var(--vesta-space-1) var(--vesta-space-3); margin: 0; font-size: 11px; }
+  :where([data-vesta="server-automation-output"]) > div { display: flex; gap: var(--vesta-space-1); min-inline-size: 0; }
+  :where([data-vesta="server-automation-output"]) dt { color: var(--vesta-color-text-subtle); }
+  :where([data-vesta="server-automation-output"]) dd { margin: 0; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; }
 }

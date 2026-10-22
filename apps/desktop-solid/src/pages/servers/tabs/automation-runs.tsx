@@ -6,7 +6,7 @@ import { gate } from '../../../features/servers/capabilities';
 import { errorMessage } from '../../../features/servers/errors';
 import { age, newIntentId } from '../../../features/servers/model';
 import {
-  duration, outputPreview, runTriggerSentence, runsNewestFirst, stepRows, stepSummary, type StepRow,
+  duration, outputFields, runTriggerSentence, runsNewestFirst, stepRows, stepSummary, type StepRow,
 } from '../../../features/servers/automation-model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
@@ -168,7 +168,20 @@ function RunSteps(props: { snapshot: ServerSnapshot; run: RunSummary; onChanged:
                         <Show when={row.latest?.errorCode}>{(code) => <span data-vesta="server-automation-error">{outcomeText(code())}</span>}</Show>
                         <Show when={row.latest?.operationReference}>{(reference) => <span>{t('server-automation.operation', { name: reference() })}</span>}</Show>
                       </p>
-                      <Show when={outputPreview(row.latest?.output)}>{(preview) => <code data-vesta="server-automation-output">{preview()}</code>}</Show>
+                      <Show when={outputFields(row.latest?.output)}>
+                        {(fields) => (
+                          <dl data-vesta="server-automation-output">
+                            <For each={fields()}>
+                              {(field) => (
+                                <div>
+                                  <Show when={field.label}><dt>{field.label}</dt></Show>
+                                  <dd>{typeof field.value === "boolean" ? t(field.value ? "server-automation.output-yes" : "server-automation.output-no") : field.value}</dd>
+                                </div>
+                              )}
+                            </For>
+                          </dl>
+                        )}
+                      </Show>
                     </div>
                     <Badge size="sm" variant="soft" tone={tone().tone}>{t(tone().message)}</Badge>
                   </li>

@@ -281,3 +281,5 @@ server-automation-outcome-forbidden = Not allowed for the person it runs as
 server-automation-suspended-note = This run is paused because the person it runs as can no longer do this step. Discarding ends the run; it doesn't cancel anything already started on the server.
 server-automation-discard-run = Discard run
 server-automation-discarded = Run discarded
+server-automation-output-yes = Yes
+server-automation-output-no = No

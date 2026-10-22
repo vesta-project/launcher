@@ -601,3 +601,21 @@ export function outputPreview(output: unknown, max = 160): string | null {
   const text = typeof output === 'string' ? output : JSON.stringify(output);
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
+
+export interface OutputField { label: string; value: string | boolean }
+
+/** Flat step output as readable label/value pairs; null when there is nothing worth showing.
+ * Nested values keep a compact JSON preview so nothing the agent reported is hidden. */
+export function outputFields(output: unknown, max = 6): OutputField[] | null {
+  if (output === null || output === undefined) return null;
+  if (typeof output !== 'object' || Array.isArray(output)) {
+    const preview = outputPreview(output);
+    return preview ? [{ label: '', value: preview }] : null;
+  }
+  const entries = Object.entries(output as Record<string, unknown>).filter(([, value]) => value !== null && value !== undefined);
+  if (!entries.length) return null;
+  return entries.slice(0, max).map(([key, value]) => ({
+    label: key.replace(/[_-]+/g, ' ').replace(/^./, (first) => first.toUpperCase()),
+    value: typeof value === 'boolean' ? value : typeof value === 'string' || typeof value === 'number' ? String(value) : outputPreview(value, 60) ?? '',
+  }));
+}

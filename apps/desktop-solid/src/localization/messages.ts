@@ -2075,6 +2075,8 @@ export const messageIds = [
   "servers.presence.live-motd-note",
   "servers.presence.sample-reason",
   "servers.tab.automation",
+  "server-automation.output-yes",
+  "server-automation.output-no",
   "server-automation.view",
   "server-automation.workflows",
   "server-automation.recent-runs",

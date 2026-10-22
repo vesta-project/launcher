@@ -289,3 +289,16 @@ describe('[fixtures] workflows behave like the agent', () => {
     expect(await api.automationSelf('srv')).toEqual({ principalId: 'p-admin', rank: 90 });
   });
 });
+
+test("step output renders as readable fields", async () => {
+  const { outputFields } = await import("../src/features/servers/automation-model.ts");
+  expect(outputFields(null)).toBeNull();
+  expect(outputFields({})).toBeNull();
+  expect(outputFields({ stdin_written: true })).toEqual([{ label: "Stdin written", value: true }]);
+  expect(outputFields({ snapshot: "77ad", files_changed: 208, extra: { a: 1 } })).toEqual([
+    { label: "Snapshot", value: "77ad" },
+    { label: "Files changed", value: "208" },
+    { label: "Extra", value: '{"a":1}' },
+  ]);
+  expect(outputFields("done")).toEqual([{ label: "", value: "done" }]);
+});
