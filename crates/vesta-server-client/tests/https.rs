@@ -496,6 +496,28 @@ async fn uncertain_submission_explicit_retry_replays_and_known_id_reconciles_by_
         "succeeded"
     );
 }
+
+#[tokio::test]
+async fn concurrent_settings_style_control_and_properties_reads_wait_for_inflight_work() {
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    // Establish the session before deliberately occupying all origin slots.
+    client.status(true).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(260)).await;
+    let held: Vec<_> = (0..3)
+        .map(|_| client.transport.scheduler.admit(true).unwrap())
+        .collect();
+    let release = async move {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        drop(held);
+    };
+    // The profile uses ordinary JSON transport; properties use file transport.
+    // Both need bounded admission rather than a spurious immediate busy error.
+    let (status, properties, ()) = tokio::join!(client.status(true), client.properties_get(), release);
+    assert_eq!(status.unwrap().state, "stopped");
+    assert!(!properties.unwrap().values.is_empty());
+}
 #[tokio::test]
 async fn additive_self_projection_and_status_stream_are_supported() {
     let _owner = TEST_OWNER.lock().await;

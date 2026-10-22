@@ -164,7 +164,7 @@ impl Transport {
         key: Option<&str>,
         interactive: bool,
     ) -> Result<Value> {
-        let _permit = self.scheduler.admit(interactive)?;
+        let _permit = self.scheduler.admit_request(interactive).await?;
         if self.expected.is_none()
             && (method != Method::GET || path != "/api/v3/status" || token.is_some())
         {

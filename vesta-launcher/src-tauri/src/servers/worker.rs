@@ -13,7 +13,7 @@ impl Drop for SocketTask {
 }
 enum StreamMessage {
     Console(Value),
-    Ended(ServerTopic, Option<ErrorCode>),
+    Ended(ServerTopic, Option<Error>),
 }
 fn blocked(code: ErrorCode) -> bool {
     matches!(
@@ -154,9 +154,10 @@ impl ServerManager {
                     Err(_) => break,
                 };
                 match message {
-                    StreamMessage::Ended(topic, code) => {
-                        if let Some(code) = code {
-                            self.synchronize_failure(&app, &id, &Error::new(code)).await;
+                    StreamMessage::Ended(topic, error) => {
+                        let code = error.as_ref().map(|e| e.code);
+                        if let Some(error) = error.as_ref() {
+                            self.synchronize_failure(&app, &id, error).await;
                         }
                         let failures = if topic == ServerTopic::Console {
                             &mut console_failures
@@ -425,7 +426,7 @@ fn spawn_socket(
                 }
             },
             Err(e) => {
-                code = Some(e.code);
+                code = Some(e);
             }
         }
         let _ = sender.send(StreamMessage::Ended(topic, code)).await;

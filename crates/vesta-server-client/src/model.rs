@@ -33,6 +33,10 @@ pub struct Error {
     pub code: ErrorCode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_after_ms: Option<u64>,
+    /// Native-only provenance: no request reached the agent. Local scheduling
+    /// pressure must not change our last observed connection state.
+    #[serde(skip)]
+    pub local_pressure: bool,
 }
 impl Error {
     pub fn wire_for_route(status: u16, code: &str, retry: Option<u64>, path: &str) -> Self {
@@ -59,7 +63,12 @@ impl Error {
         Self {
             code,
             retry_after_ms: None,
+            local_pressure: false,
         }
+    }
+    pub fn local_pressure(mut self) -> Self {
+        self.local_pressure = true;
+        self
     }
     pub fn wire(status: u16, code: &str, retry_after_ms: Option<u64>) -> Self {
         use ErrorCode::*;
@@ -69,7 +78,9 @@ impl Error {
             "backups_not_configured" => Unsupported,
             "backup_profile_unknown" | "backup_job_unknown" | "backup_snapshot_unknown" => NotFound,
             "backup_confirmation_invalid" | "backup_confirmation_expired" => ConfirmationExpired,
-            "backup_policy_revision_conflict" | "sleep_policy_conflict" | "motd_policy_conflict" => StaleTarget,
+            "backup_policy_revision_conflict"
+            | "sleep_policy_conflict"
+            | "motd_policy_conflict" => StaleTarget,
             "backup_idempotency_conflict" => Conflict,
             "management_pair_invalid" | "pair_invalid" => PairCodeInvalid,
             "confirmation_invalid" | "confirmation_expired" | "confirmation_required" => {
@@ -94,6 +105,7 @@ impl Error {
         Self {
             code,
             retry_after_ms,
+            local_pressure: false,
         }
     }
 }

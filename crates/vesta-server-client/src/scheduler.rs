@@ -1,10 +1,15 @@
 use crate::{Error, ErrorCode, Result};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex, OnceLock,
+    },
     time::{Duration, Instant},
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+
+static GLOBAL_REQUESTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 pub struct TokenBucket {
     tokens: f64,
@@ -33,6 +38,7 @@ impl TokenBucket {
             };
             return Err(Error {
                 code: ErrorCode::RateLimited,
+                local_pressure: true,
                 retry_after_ms: Some(wait.as_millis().max(1) as u64),
             });
         }
@@ -48,6 +54,7 @@ pub struct Scheduler {
     local: Arc<Semaphore>,
     background: Arc<Semaphore>,
     bulk: Arc<Semaphore>,
+    interactive_waiters: AtomicUsize,
 }
 pub struct Admission {
     _global: OwnedSemaphorePermit,
@@ -62,7 +69,14 @@ impl Default for Scheduler {
             local: Arc::new(Semaphore::new(3)),
             background: Arc::new(Semaphore::new(2)),
             bulk: Arc::new(Semaphore::new(1)),
+            interactive_waiters: AtomicUsize::new(0),
         }
+    }
+}
+struct InteractiveWaiter<'a>(&'a AtomicUsize);
+impl Drop for InteractiveWaiter<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Release);
     }
 }
 impl Scheduler {
@@ -70,10 +84,11 @@ impl Scheduler {
     /// token bucket. Keep both permits until the response body has been drained.
     pub fn admit_bulk(&self) -> Result<(OwnedSemaphorePermit, OwnedSemaphorePermit)> {
         static GLOBAL: OnceLock<Arc<Semaphore>> = OnceLock::new();
-        let busy = || Error::new(ErrorCode::ServerBusy);
+        let busy = || Error::new(ErrorCode::ServerBusy).local_pressure();
         if !self.paused_for().is_zero() {
             return Err(Error {
                 code: ErrorCode::RateLimited,
+                local_pressure: true,
                 retry_after_ms: Some(self.paused_for().as_millis() as u64),
             });
         }
@@ -104,7 +119,7 @@ impl Scheduler {
             return Ok(scheduler.clone());
         }
         if owners.len() >= 128 {
-            return Err(Error::new(ErrorCode::ServerBusy));
+            return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
         }
         let scheduler = Arc::new(Self::default());
         owners.insert(origin.into(), scheduler.clone());
@@ -119,9 +134,8 @@ impl Scheduler {
     /// Fail fast instead of accumulating unbounded request queues. Local admission
     /// precedes global admission; no global permit is held waiting for a server.
     pub fn admit(&self, interactive: bool) -> Result<Admission> {
-        static GLOBAL: OnceLock<Arc<Semaphore>> = OnceLock::new();
         static BACKGROUND: OnceLock<Arc<Semaphore>> = OnceLock::new();
-        let busy = || Error::new(ErrorCode::ServerBusy);
+        let busy = || Error::new(ErrorCode::ServerBusy).local_pressure();
         let background = if interactive {
             None
         } else {
@@ -144,7 +158,7 @@ impl Scheduler {
                     .map_err(|_| busy())?,
             )
         };
-        let global = GLOBAL
+        let global = GLOBAL_REQUESTS
             .get_or_init(|| Arc::new(Semaphore::new(12)))
             .clone()
             .try_acquire_owned()
@@ -159,6 +173,83 @@ impl Scheduler {
             _background: background,
             _global_background: global_background,
         })
+    }
+    /// Interactive reads may briefly wait for in-flight requests to release a
+    /// permit. Background work keeps the existing fail-fast policy so it cannot
+    /// build a queue behind a busy server.
+    pub async fn admit_request(&self, interactive: bool) -> Result<Admission> {
+        const MAX_WAITERS: usize = 8;
+        const WAIT: Duration = Duration::from_secs(2);
+        const RETRY: Duration = Duration::from_millis(20);
+        if !interactive {
+            return self.admit(false);
+        }
+
+        let mut count = self.interactive_waiters.load(Ordering::Relaxed);
+        loop {
+            if count >= MAX_WAITERS {
+                return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
+            }
+            match self.interactive_waiters.compare_exchange_weak(
+                count,
+                count + 1,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(next) => count = next,
+            }
+        }
+        let _waiter = InteractiveWaiter(&self.interactive_waiters);
+        let deadline = Instant::now() + WAIT;
+
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
+            }
+            let local =
+                match tokio::time::timeout(remaining, self.local.clone().acquire_owned()).await {
+                    Ok(Ok(permit)) => permit,
+                    Ok(Err(_)) | Err(_) => {
+                        return Err(Error::new(ErrorCode::ServerBusy).local_pressure())
+                    }
+                };
+
+            // Never hold a global permit while waiting for origin capacity. If
+            // global capacity is full, release local capacity before retrying.
+            let global = GLOBAL_REQUESTS
+                .get_or_init(|| Arc::new(Semaphore::new(12)))
+                .clone()
+                .try_acquire_owned();
+            let global = match global {
+                Ok(permit) => permit,
+                Err(_) => {
+                    drop(local);
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
+                    }
+                    tokio::time::sleep(RETRY.min(remaining)).await;
+                    continue;
+                }
+            };
+
+            if let Err(error) = self
+                .bucket
+                .lock()
+                .map_err(|_| Error::new(ErrorCode::ServerBusy).local_pressure())?
+                .admit(true, Instant::now())
+            {
+                return Err(error);
+            }
+            return Ok(Admission {
+                _global: global,
+                _local: local,
+                _background: None,
+                _global_background: None,
+            });
+        }
     }
     pub fn pause(&self, ms: u64) {
         if let Ok(mut b) = self.bucket.lock() {

@@ -65,7 +65,7 @@ impl Transport {
         let control = if input.bulk {
             None
         } else {
-            Some(self.scheduler.admit(true)?)
+            Some(self.scheduler.admit_request(true).await?)
         };
         let bulk = if input.bulk {
             Some(self.scheduler.admit_bulk()?)

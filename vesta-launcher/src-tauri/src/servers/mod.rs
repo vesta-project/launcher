@@ -245,6 +245,9 @@ impl ServerManager {
         Ok(())
     }
     async fn synchronize_failure(&self, app: &AppHandle, id: &str, error: &Error) {
+        if error.local_pressure {
+            return;
+        }
         let Ok(mut snapshot) = self.record(id).await.map(|r| r.snapshot) else {
             return;
         };
@@ -733,6 +736,9 @@ impl ServerManager {
                 snapshot.state = online_state(paused_for);
                 snapshot.connection.last_connected_at_ms = Some(vesta_server_client::now_ms());
             }
+            // Keep any metadata fetched earlier in this refresh without changing
+            // connectivity based on a request that never reached the host.
+            Err(e) if e.local_pressure => {}
             Err(e) => {
                 snapshot.state.last_error = Some(e.code);
                 snapshot.state.phase = match e.code {
