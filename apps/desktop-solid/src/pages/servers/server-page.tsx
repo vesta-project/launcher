@@ -20,6 +20,7 @@ import type { ServerCommandError, ServerSnapshot } from '../../features/servers/
 import { ActivityTab } from './tabs/activity-tab';
 import { AccessTab } from './tabs/access-tab';
 import { BackupsTab } from './tabs/backups-tab';
+import { AutomationTab } from './tabs/automation-tab';
 import { PresenceTab } from './tabs/presence-tab';
 import { ConnectionTab } from './tabs/connection-tab';
 import { ConsoleTab } from './tabs/console-tab';
@@ -49,6 +50,7 @@ const tabs: TabDef[] = [
   { id: 'settings', label: 'server-settings.tab', icon: 'icons/content/gear', needs: ['config.view'], flush: true, view: PropertiesTab },
   { id: 'presence', label: 'servers.tab.presence', icon: 'icons/status/live', needs: ['config.view'], flush: true, view: PresenceTab },
   { id: 'backups', label: 'servers.tab.backups', icon: 'icons/content/storage', needs: ['backups.view'], flush: true, view: BackupsTab },
+  { id: 'automation', label: 'servers.tab.automation', icon: 'icons/content/timer', needs: ['automation.view'], flush: true, view: AutomationTab },
   { id: 'access', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ['principals.view', 'invitations.create', 'devices.revoke', 'access-sources.manage'], flush: true, view: AccessTab },
   { id: 'activity', label: 'servers.tab.activity', icon: 'icons/content/history', needs: ['tasks.view'], flush: true, view: ActivityTab },
   { id: 'connection', label: 'servers.tab.connection', icon: 'icons/security/network', needs: [], flush: true, view: ConnectionTab },
