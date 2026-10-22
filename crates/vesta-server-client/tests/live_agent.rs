@@ -51,6 +51,41 @@ async fn backup_completed(client: &Client, id: &str) -> vesta_server_client::man
 
 #[tokio::test]
 #[ignore = "requires VESTA_LIVE_AGENT=1 and the launcher-compat agent binaries"]
+async fn live_authenticated_management_reads_remain_available() {
+    assert_eq!(std::env::var("VESTA_LIVE_AGENT").as_deref(), Ok("1"));
+    let agent = fixture::Agent::start();
+    std::fs::write(
+        agent.instance.join("game/server.properties"),
+        "online-mode=true\nmax-players=20\nmotd=Live\n",
+    )
+    .unwrap();
+    let issued = agent.pair();
+    let address = Address::parse(issued["pairing_link"].as_str().unwrap()).unwrap();
+    let transport = Transport::new(address.endpoint, address.fingerprint).unwrap();
+    let signer = Arc::new(vesta_server_client::auth::Ed25519Signer::from_seed(
+        [71; 32],
+    ));
+    let server = issued["server_id"].as_str().unwrap();
+    let enrolled = Client::pair(
+        &transport,
+        server,
+        address.code.as_deref().unwrap(),
+        signer.as_ref(),
+    )
+    .await
+    .unwrap();
+    let client = Client::new(transport, server.into(), enrolled.device_id, signer);
+    for _ in 0..3 {
+        let (status, branding) = tokio::join!(client.status(true), client.branding());
+        assert_eq!(status.unwrap().state, "stopped");
+        assert!(!branding.unwrap().name.is_empty());
+        assert!(!client.properties_get().await.unwrap().values.is_empty());
+        tokio::time::sleep(Duration::from_millis(260)).await;
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires VESTA_LIVE_AGENT=1 and the launcher-compat agent binaries"]
 async fn live_presence_branding_and_icons() {
     use vesta_server_client::branding::BrandingPatch;
     assert_eq!(std::env::var("VESTA_LIVE_AGENT").as_deref(), Ok("1"));

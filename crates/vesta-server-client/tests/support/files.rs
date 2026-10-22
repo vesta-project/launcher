@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use vesta_server_client::files::{FileTransfers, PropertiesUpdateResult, CHUNK_BYTES};
 #[derive(Default)]
 pub(super) struct Files {
+    pub(super) busy_properties: AtomicBool,
     begins: AtomicUsize,
     begin_ids: Mutex<HashMap<String, String>>,
     lost_begin: AtomicBool,
@@ -279,9 +280,12 @@ pub(super) fn route(
                 json!({"bytes_base64":base64::engine::general_purpose::STANDARD.encode(text.as_bytes()),"encoding":"utf-8","start_byte":"0","cursor":text.len().to_string(),"next_byte":null,"prev_byte":null,"size":text.len().to_string(),"etag":"\"gz-view\""}),
             )
         }
-        ("GET", "/api/v3/manage/config/server-properties") => envelope(
-            json!({"values":{"online-mode":true,"max-players":20,"motd":"Hello","custom_key":"[redacted]","rcon.password":"[redacted]"},"sha256":"ab".repeat(32)}),
-        ),
+        ("GET", "/api/v3/manage/config/server-properties") => {
+            if state.busy_properties.swap(false, Ordering::SeqCst) {
+                return error(StatusCode::SERVICE_UNAVAILABLE, "temporarily_unavailable");
+            }
+            envelope(json!({"values":{"online-mode":true,"max-players":20,"motd":"Hello","custom_key":"[redacted]","rcon.password":"[redacted]"},"sha256":"ab".repeat(32)}))
+        },
         ("PATCH", "/api/v3/manage/config/server-properties") => {
             assert!(!req.headers().contains_key("if-match"));
             assert_eq!(

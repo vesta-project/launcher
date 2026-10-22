@@ -10,6 +10,17 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+
+pub(crate) fn server_busy_retry_delay(error: &Error) -> Option<Duration> {
+    if error.code != ErrorCode::ServerBusy || error.local_pressure {
+        return None;
+    }
+    let delay = error
+        .retry_after_ms
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::from_millis(150));
+    (delay <= Duration::from_secs(2)).then_some(delay)
+}
 use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, protocol::WebSocketConfig},
     Connector, MaybeTlsStream, WebSocketStream,
@@ -156,6 +167,32 @@ impl Transport {
         future.await
     }
     async fn execute(
+        &self,
+        method: Method,
+        path: &str,
+        token: Option<&str>,
+        body: Option<Value>,
+        key: Option<&str>,
+        interactive: bool,
+    ) -> Result<Value> {
+        let retryable = method == Method::GET && interactive;
+        let result = self
+            .execute_once(method.clone(), path, token, body.clone(), key, interactive)
+            .await;
+        if retryable {
+            if let Err(error) = &result {
+                if let Some(delay) = server_busy_retry_delay(error) {
+                    tokio::time::sleep(delay).await;
+                    return self
+                        .execute_once(method, path, token, body, key, interactive)
+                        .await;
+                }
+            }
+        }
+        result
+    }
+
+    async fn execute_once(
         &self,
         method: Method,
         path: &str,

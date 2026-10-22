@@ -1,5 +1,9 @@
 //! Binary file responses retain their admission through the final body frame.
-use crate::{scheduler::Admission, transport::Transport, Client, Error, ErrorCode, Result};
+use crate::{
+    scheduler::Admission,
+    transport::{server_busy_retry_delay, Transport},
+    Client, Error, ErrorCode, Result,
+};
 use reqwest::{header::HeaderMap, Method, StatusCode};
 use serde_json::Value;
 use std::{sync::Arc, time::Duration};
@@ -59,6 +63,20 @@ impl Response {
 }
 impl Transport {
     async fn file_request(self: &Arc<Self>, input: &Request, token: &str) -> Result<Response> {
+        let retryable = input.method == Method::GET && !input.bulk;
+        let result = self.file_request_once(input, token).await;
+        if retryable {
+            if let Err(error) = &result {
+                if let Some(delay) = server_busy_retry_delay(error) {
+                    tokio::time::sleep(delay).await;
+                    return self.file_request_once(input, token).await;
+                }
+            }
+        }
+        result
+    }
+
+    async fn file_request_once(self: &Arc<Self>, input: &Request, token: &str) -> Result<Response> {
         if self.expected.is_none() {
             return Err(Error::new(ErrorCode::TlsFailed));
         }

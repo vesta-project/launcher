@@ -48,6 +48,8 @@ struct State {
     wrong_identity: AtomicBool,
     expired_confirmation: AtomicBool,
     slow_status: AtomicBool,
+    busy_status: AtomicUsize,
+    busy_start: AtomicBool,
     near_expiry_first: AtomicBool,
     operation_details: Mutex<Option<Value>>,
     operation_reads: AtomicUsize,
@@ -249,6 +251,9 @@ async fn route(
         }
         "/api/v3/manage/server/status" => {
             state.status_reads.fetch_add(1, Ordering::SeqCst);
+            if state.busy_status.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1)).is_ok() {
+                return Ok(error(StatusCode::SERVICE_UNAVAILABLE, "temporarily_unavailable"));
+            }
             if state.slow_status.load(Ordering::SeqCst) {
                 tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             }
@@ -275,6 +280,9 @@ async fn route(
         }
         "/api/v3/manage/lifecycle/start" => {
             state.starts.fetch_add(1, Ordering::SeqCst);
+            if state.busy_start.load(Ordering::SeqCst) {
+                return Ok(error(StatusCode::SERVICE_UNAVAILABLE, "temporarily_unavailable"));
+            }
             state.start_keys.lock().unwrap().push(
                 req.headers()["idempotency-key"]
                     .to_str()
@@ -517,6 +525,26 @@ async fn concurrent_settings_style_control_and_properties_reads_wait_for_infligh
     let (status, properties, ()) = tokio::join!(client.status(true), client.properties_get(), release);
     assert_eq!(status.unwrap().state, "stopped");
     assert!(!properties.unwrap().values.is_empty());
+}
+
+#[tokio::test]
+async fn transient_busy_get_recovers_once_without_replaying_mutations() {
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    agent.state.busy_status.store(1, Ordering::SeqCst);
+    assert_eq!(client.status(true).await.unwrap().state, "stopped");
+    assert_eq!(agent.state.status_reads.load(Ordering::SeqCst), 2);
+    agent.state.files.busy_properties.store(true, Ordering::SeqCst);
+    assert!(!client.properties_get().await.unwrap().values.is_empty());
+    agent.state.busy_start.store(true, Ordering::SeqCst);
+    assert_eq!(client.lifecycle("start", None, "busy-no-replay").await.unwrap_err().code, ErrorCode::ServerBusy);
+    assert_eq!(agent.state.starts.load(Ordering::SeqCst), 1);
+
+    tokio::time::sleep(std::time::Duration::from_millis(260)).await;
+    agent.state.busy_status.store(2, Ordering::SeqCst);
+    assert_eq!(client.status(true).await.unwrap_err().code, ErrorCode::ServerBusy);
+    assert_eq!(agent.state.status_reads.load(Ordering::SeqCst), 4);
 }
 #[tokio::test]
 async fn additive_self_projection_and_status_stream_are_supported() {
