@@ -35,6 +35,26 @@ pub struct Error {
     pub retry_after_ms: Option<u64>,
 }
 impl Error {
+    pub fn wire_for_route(status: u16, code: &str, retry: Option<u64>, path: &str) -> Self {
+        let mut error = Self::wire(status, code, retry);
+        // Pre-inventory permission adapters recognized these paths but rejected
+        // their fixed, valid GET queries as invalid_request rather than 501.
+        if status == 400
+            && code == "invalid_request"
+            && (path.starts_with("/api/v3/manage/invitations?")
+                || path.starts_with("/api/v3/manage/devices?"))
+        {
+            error.code = ErrorCode::Unsupported;
+        }
+        if status == 409
+            && code != "idempotency_conflict"
+            && (path == "/api/v3/manage/access-sources"
+                || (path.starts_with("/api/v3/manage/users/") && path.ends_with("/roles")))
+        {
+            error.code = ErrorCode::StaleTarget;
+        }
+        error
+    }
     pub fn new(code: ErrorCode) -> Self {
         Self {
             code,
@@ -45,6 +65,12 @@ impl Error {
         use ErrorCode::*;
         let code = match code {
             "recovery_required" if status == 409 => OutcomeUnknown,
+            "backup_busy" => ServerBusy,
+            "backups_not_configured" => Unsupported,
+            "backup_profile_unknown" | "backup_job_unknown" | "backup_snapshot_unknown" => NotFound,
+            "backup_confirmation_invalid" | "backup_confirmation_expired" => ConfirmationExpired,
+            "backup_policy_revision_conflict" => StaleTarget,
+            "backup_idempotency_conflict" => Conflict,
             "management_pair_invalid" | "pair_invalid" => PairCodeInvalid,
             "confirmation_invalid" | "confirmation_expired" | "confirmation_required" => {
                 ConfirmationExpired

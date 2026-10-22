@@ -17,6 +17,13 @@ pub struct Agent {
 }
 impl Agent {
     pub fn start() -> Self {
+        Self::start_inner(false)
+    }
+    #[allow(dead_code)] // The launcher fixture imports the same process helper.
+    pub fn start_with_backups() -> Self {
+        Self::start_inner(true)
+    }
+    fn start_inner(backups: bool) -> Self {
         let binary = PathBuf::from(std::env::var_os("VESTA_AGENT_BIN").expect("VESTA_AGENT_BIN"));
         let inert = PathBuf::from(
             std::env::var_os("VESTA_AGENT_INERT_BIN")
@@ -79,7 +86,25 @@ impl Agent {
         drop(listener);
         let endpoint = format!("https://127.0.0.1:{port}");
         let config = format!("schema-version = 1\n[paths]\nstate = 'private-state'\ngame = 'game'\nscan-roots = ['game/config']\nlaunch-definition = 'private/launch.toml'\n[pack]\nname = 'Live Launcher Test'\nversion = '1.0.0'\nrevision = 1\nminimum-revision = 1\nminecraft-version = '1.21.1'\nunresolved-disposition = 'embed-public'\n[pack-access]\nmode = 'minecraft'\n[listener]\nmode = 'tls'\nbind = '127.0.0.1'\nport = {port}\ncertificate = 'private/cert.pem'\nprivate-key = 'private/key.pem'\npublic-endpoint = '{endpoint}'\nmax-connections = 16\nmax-request-bytes = 65536\nrequest-timeout-seconds = 10\npeer-requests-per-minute = 120\nsession-requests-per-minute = 300\n");
+        let config = if backups {
+            format!("{config}\n[backups]\nrepository = 'backup-repository'\nrestore-root = 'inspection-restores'\n[[backups.profile]]\nname = 'daily'\nmode = 'stopped'\nkeep-last = 3\n")
+        } else {
+            config
+        };
         fs::write(instance.join("host.toml"), config).unwrap();
+        if backups {
+            let initialized = Command::new(&binary)
+                .args(["backup-init", "owned", "--install-root"])
+                .arg(&root)
+                .current_dir(&instance)
+                .output()
+                .unwrap();
+            assert!(
+                initialized.status.success(),
+                "backup-init failed: {}",
+                String::from_utf8_lossy(&initialized.stderr)
+            );
+        }
         let child = Command::new(&binary)
             .args(["serve"])
             .arg(instance.join("host.toml"))

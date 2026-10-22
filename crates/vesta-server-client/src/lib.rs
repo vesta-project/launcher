@@ -11,7 +11,7 @@ pub mod scheduler;
 pub mod streams;
 pub mod transport;
 pub mod trust;
-pub use client::Client;
+pub use client::{management, Client};
 pub use model::{Error, ErrorCode, Result};
 
 pub fn now_ms() -> i64 {

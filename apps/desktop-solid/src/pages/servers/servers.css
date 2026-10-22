@@ -435,4 +435,67 @@
 
   /* Overview pack actions */
   :where([data-vesta="server-stat-actions"]) { display: flex; flex-wrap: wrap; gap: var(--vesta-space-2); margin-block-start: auto; }
+
+  /* Multiplayer-list entry preview, drawn like Minecraft's server list */
+  :where([data-vesta="server-motd-entry"]) {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 10px;
+    align-items: center;
+    max-inline-size: 560px;
+    padding: 6px;
+    border: 1px solid oklch(1 0 0 / 0.12);
+    border-radius: var(--vesta-radius-sm);
+    background: #1f1f1f;
+    color: #aaaaaa;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 13px;
+    line-height: 18px;
+  }
+  :where([data-vesta="server-motd-entry-icon"]) {
+    display: grid;
+    place-items: center;
+    inline-size: 64px;
+    block-size: 64px;
+    background: #2c2c2c;
+    color: #8a8a8a;
+    image-rendering: pixelated;
+  }
+  :where([data-vesta="server-motd-entry-icon"]) img { inline-size: 64px; block-size: 64px; }
+  :where([data-vesta="server-motd-entry-body"]) { display: flex; flex-direction: column; min-inline-size: 0; }
+  :where([data-vesta="server-motd-entry-title"]) { display: flex; justify-content: space-between; gap: var(--vesta-space-3); color: #ffffff; }
+  :where([data-vesta="server-motd-entry-players"]) { display: inline-flex; gap: 8px; color: #aaaaaa; white-space: nowrap; }
+  :where([data-vesta="server-motd-entry-version"]) { color: #ff5555; }
+  :where([data-vesta="server-motd-entry-line"]) { min-block-size: 18px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
+
+  /* Presentation editor */
+  :where([data-vesta="server-motd-editor"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-3); }
+  :where([data-vesta="server-motd-toolbar"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-motd-colors"]) { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+  :where([data-vesta="server-motd-swatch"]) {
+    inline-size: 16px;
+    block-size: 16px;
+    padding: 0;
+    border: 1px solid oklch(1 0 0 / 0.25);
+    border-radius: 3px;
+    cursor: default;
+  }
+  :where([data-vesta="server-motd-swatch"]:focus-visible),
+  :where([data-vesta="server-motd-style"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: 1px; }
+  :where([data-vesta="server-motd-style"]) {
+    min-inline-size: 22px;
+    block-size: 22px;
+    padding: 0 6px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-xs);
+    cursor: default;
+  }
+  :where([data-vesta="server-motd-editor"]) textarea { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  :where([data-vesta="server-motd-fields"]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--vesta-space-3); }
+  :where([data-vesta="server-motd-editor"]) [data-vesta="server-panel-actions"] { padding: 0; }
+  :where([data-vesta="server-panel-actions"]) > div { display: flex; gap: var(--vesta-space-2); }
 }

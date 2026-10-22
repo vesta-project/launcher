@@ -1,3 +1,5 @@
+#[path = "management.rs"]
+pub mod management;
 use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
@@ -40,6 +42,7 @@ pub struct Client {
     principal_id: StdMutex<Option<String>>,
     principal_lookup: Mutex<bool>,
     pub(crate) file_validators: Mutex<HashMap<String, (String, String)>>,
+    management: management::State,
 }
 #[derive(Clone)]
 enum Intent {
@@ -141,6 +144,7 @@ impl Client {
             principal_id: Default::default(),
             principal_lookup: Default::default(),
             file_validators: Default::default(),
+            management: Default::default(),
         })
     }
     pub async fn pair(
