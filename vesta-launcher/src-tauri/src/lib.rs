@@ -130,6 +130,7 @@ pub fn run(context: tauri::Context) {
         })
         .manage(utils::dialog_manager::DialogManager::new())
         .manage(std::sync::Arc::new(vesta_server_client::files::FileTransfers::default()))
+        .manage(vesta_server_client::files::DownloadTransfers::default())
         .manage(utils::windows::MiniWindowRegistry::default())
         .manage(utils::launch_intents::PendingLaunchIntents::new())
         .manage(resources::manual_drop::ManualDropManager::default())
@@ -233,6 +234,7 @@ pub fn run(context: tauri::Context) {
             commands::server_files::server_file_upload_finish,
             commands::server_files::server_file_upload_abort,
             commands::server_files::server_file_download,
+            commands::server_files::server_file_download_cancel,
             commands::server_files::server_log_tail,
             commands::server_files::server_log_lines,
             commands::server_files::server_properties_get,
@@ -485,6 +487,9 @@ pub fn run(context: tauri::Context) {
             }
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(downloads) = window.app_handle().try_state::<vesta_server_client::files::DownloadTransfers>() { downloads.window_closed(window.label()); }
+            }
             if matches!(event, tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. }) {
                 if let Some(manager) = window.app_handle().try_state::<std::sync::Arc<servers::ServerManager>>() { manager.window_closed(window.label()); }
                 commands::author_themes::abort_window_preview(window.app_handle(), window.label());

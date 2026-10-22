@@ -15,6 +15,7 @@ pub(super) struct Files {
     chunks: Mutex<Vec<(usize, String)>>,
     lost_chunk: AtomicBool,
     slow_chunk: AtomicBool,
+    slow_download: AtomicBool,
     aborts: AtomicUsize,
     failures: AtomicUsize,
     resumes: AtomicUsize,
@@ -82,6 +83,20 @@ pub(super) fn route(
             let Some(data) = content.get(name) else {
                 return error(StatusCode::NOT_FOUND, "resource_not_found");
             };
+            if state.slow_download.swap(false, Ordering::SeqCst) {
+                let prefix = data[..(600 * 1024).min(data.len())].to_vec();
+                let (mut sender, stream) = Body::channel();
+                tokio::spawn(async move {
+                    let _ = sender.send_data(prefix.into()).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                });
+                let mut reply = binary(Vec::new(), data.len(), "\"download-tag\"", None, false);
+                reply
+                    .headers_mut()
+                    .insert("content-length", data.len().into());
+                *reply.body_mut() = stream;
+                return reply;
+            }
             if let Some(range) = req.headers().get("range") {
                 assert_eq!(range, "bytes=0-1048575");
                 return binary(
@@ -787,4 +802,96 @@ async fn downloads_resume_atomic_publication_gzip_and_failure_cleanup() {
         .unwrap();
     assert_eq!(std::fs::read(&destination).unwrap(), data);
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[tokio::test]
+async fn cancelling_a_download_releases_bulk_and_temp_bytes_without_replacing_destination() {
+    use vesta_server_client::files::{DownloadCancellation, DownloadTransfers};
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    let bytes = vec![b'x'; 2 * CHUNK_BYTES];
+    agent
+        .state
+        .files
+        .content
+        .lock()
+        .unwrap()
+        .insert("logs/cancel.log".into(), bytes.clone());
+    agent
+        .state
+        .files
+        .slow_download
+        .store(true, Ordering::SeqCst);
+    let root = tempfile::tempdir().unwrap();
+    let destination = root.path().join("existing.log");
+    std::fs::write(&destination, b"preserved").unwrap();
+    let transfers = DownloadTransfers::default();
+    let registration = transfers
+        .register("window", "connection", "download")
+        .unwrap();
+    let received = AtomicBool::new(false);
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        client.file_download_cancellable(
+            "logs/cancel.log",
+            false,
+            &destination,
+            &registration.cancellation,
+            |offset, total| {
+                if offset > 0 && offset < total {
+                    received.store(true, Ordering::SeqCst);
+                    assert!(registration.cancellation.cancel());
+                }
+            },
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(received.load(Ordering::SeqCst));
+    assert_eq!(result, None);
+    assert_eq!(std::fs::read(&destination).unwrap(), b"preserved");
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    drop(
+        client
+            .transport
+            .scheduler
+            .admit_bulk()
+            .expect("cancelled response retained bulk admission"),
+    );
+    let cancelled = DownloadCancellation::default();
+    cancelled.cancel();
+    assert_eq!(
+        client
+            .file_download_cancellable(
+                "logs/cancel.log",
+                false,
+                &destination,
+                &cancelled,
+                |_, _| {}
+            )
+            .await
+            .unwrap(),
+        None
+    );
+    let publication = DownloadCancellation::default();
+    assert_eq!(
+        client
+            .file_download_cancellable(
+                "logs/cancel.log",
+                false,
+                &destination,
+                &publication,
+                |_, _| {}
+            )
+            .await
+            .unwrap(),
+        Some(bytes.len().to_string())
+    );
+    assert!(
+        !publication.cancel(),
+        "completed publication cannot be reported cancelled"
+    );
+    assert_eq!(std::fs::read(&destination).unwrap(), bytes);
 }

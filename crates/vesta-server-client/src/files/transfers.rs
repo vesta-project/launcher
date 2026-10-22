@@ -429,6 +429,40 @@ impl Client {
         destination: &Path,
         progress: impl Fn(u64, u64) + Send + Sync,
     ) -> Result<String> {
+        self.download_inner(
+            path,
+            decompress,
+            destination,
+            &DownloadCancellation::default(),
+            progress,
+        )
+        .await?
+        .ok_or_else(|| Error::new(ErrorCode::Internal))
+    }
+    /// `None` means cancellation won before publication. Once publication owns
+    /// the destination, cancellation is refused and the actual result is awaited.
+    pub async fn file_download_cancellable(
+        &self,
+        path: &str,
+        decompress: bool,
+        destination: &Path,
+        cancellation: &DownloadCancellation,
+        progress: impl Fn(u64, u64) + Send + Sync,
+    ) -> Result<Option<String>> {
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Ok(None),
+            result = self.download_inner(path, decompress, destination, cancellation, progress) => result,
+        }
+    }
+    async fn download_inner(
+        &self,
+        path: &str,
+        decompress: bool,
+        destination: &Path,
+        cancellation: &DownloadCancellation,
+        progress: impl Fn(u64, u64) + Send + Sync,
+    ) -> Result<Option<String>> {
         validate_path(path, false)?;
         let parent = destination
             .parent()
@@ -543,6 +577,13 @@ impl Client {
         }
         output.sync_all().await.map_err(io_error)?;
         drop(output);
+        if !cancellation.begin_commit() {
+            return if cancellation.is_cancelled() {
+                Ok(None)
+            } else {
+                Err(Error::new(ErrorCode::Conflict))
+            };
+        }
         let destination = destination.to_owned();
         tokio::task::spawn_blocking(move || {
             stage
@@ -551,7 +592,7 @@ impl Client {
         })
         .await
         .map_err(|_| Error::new(ErrorCode::Internal))??;
-        Ok(offset.to_string())
+        Ok(Some(offset.to_string()))
     }
 }
 fn strong_etag(tag: &str) -> bool {

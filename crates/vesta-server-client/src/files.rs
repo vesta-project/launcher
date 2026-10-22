@@ -1,5 +1,7 @@
 //! Game-root files, logs and structured properties. No native paths in IPC DTOs.
 mod transfers;
+mod cancellation;
+pub use cancellation::{DownloadCancellation, DownloadTransfers};
 use crate::{
     file_transport::{Request, Response},
     model::Page,

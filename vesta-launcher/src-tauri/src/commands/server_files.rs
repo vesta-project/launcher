@@ -266,6 +266,8 @@ pub async fn server_file_upload_abort(
 #[tauri::command]
 pub async fn server_file_download(
     app: AppHandle,
+    window: WebviewWindow,
+    downloads: State<'_, DownloadTransfers>,
     manager: Manager<'_>,
     connection_id: String,
     path: String,
@@ -292,35 +294,59 @@ pub async fn server_file_download(
     let destination = file.into_path().map_err(|_| internal())?;
     let client = manager.files_client(&connection_id).await?;
     let transfer = uuid::Uuid::new_v4().to_string();
-    transfer_activity(
+    let registration = downloads.register(window.label(), &connection_id, &transfer)?;
+    transfer_activity_with_cancel(
         &app,
         &connection_id,
         &transfer,
         "Download server file",
         "running",
         None,
+        true,
     );
     let result = client
-        .file_download_with_progress(&path, decompress, &destination, |offset, total| {
-            transfer_activity(
-                &app,
-                &connection_id,
-                &transfer,
-                "Download server file",
-                "running",
-                Some((&offset.to_string(), &total.to_string())),
-            );
-        })
+        .file_download_cancellable(
+            &path,
+            decompress,
+            &destination,
+            &registration.cancellation,
+            |offset, total| {
+                transfer_activity_with_cancel(
+                    &app,
+                    &connection_id,
+                    &transfer,
+                    "Download server file",
+                    "running",
+                    Some((&offset.to_string(), &total.to_string())),
+                    true,
+                );
+            },
+        )
         .await;
     transfer_activity(
         &app,
         &connection_id,
         &transfer,
         "Download server file",
-        if result.is_ok() { "done" } else { "failed" },
+        match &result {
+            Ok(Some(_)) => "done",
+            Ok(None) => "cancelled",
+            Err(_) => "failed",
+        },
         None,
     );
-    Ok(DownloadResult::Saved { size: result? })
+    Ok(match result? {
+        Some(size) => DownloadResult::Saved { size },
+        None => DownloadResult::Cancelled,
+    })
+}
+#[tauri::command]
+pub fn server_file_download_cancel(
+    window: WebviewWindow,
+    downloads: State<'_, DownloadTransfers>,
+    activity_id: String,
+) -> Result<()> {
+    downloads.cancel(window.label(), &activity_id)
 }
 #[tauri::command]
 pub async fn server_log_tail(
@@ -392,6 +418,17 @@ fn transfer_activity(
     state: &str,
     bytes: Option<(&str, &str)>,
 ) {
+    transfer_activity_with_cancel(app, connection, transfer, name, state, bytes, false);
+}
+fn transfer_activity_with_cancel(
+    app: &AppHandle,
+    connection: &str,
+    transfer: &str,
+    name: &str,
+    state: &str,
+    bytes: Option<(&str, &str)>,
+    cancellable: bool,
+) {
     let progress = bytes
         .and_then(|(offset, total)| Some((offset.parse::<u64>().ok()?, total.parse::<u64>().ok()?)))
         .map(|(offset, total)| {
@@ -405,6 +442,6 @@ fn transfer_activity(
     crate::tasks::activity::publish(
         app,
         "core://task-state",
-        serde_json::json!({"id":format!("server-file:{connection}:{transfer}"),"attempt":transfer,"state":state,"kind":"task","name":name,"source":"server","visibility":"foreground","progress":progress,"cancellable":false,"pausable":false,"subject":{"id":connection,"name":"Vesta server","instanceId":null,"iconUrl":null}}),
+        serde_json::json!({"id":format!("server-file:{connection}:{transfer}"),"attempt":transfer,"state":state,"kind":"task","title":name,"name":name,"source":"server","visibility":"foreground","progress":progress,"cancellable":cancellable,"pausable":false,"subject":{"id":connection,"name":"Vesta server","instanceId":null,"iconUrl":null}}),
     );
 }

@@ -84,7 +84,9 @@ export function startActivitySync(): () => void {
         if (disposed) stop(); else stops.push(stop);
       } catch (error) { if (!disposed) reportActivityError(error); }
     };
-    configureActivityCancellation((id) => invoke('cancel_task', { clientKey: id }));
+    configureActivityCancellation((id) => id.startsWith('server-file:')
+      ? invoke('server_file_download_cancel', { activityId: id })
+      : invoke('cancel_task', { clientKey: id }));
     const focus = () => { void refreshActivities(); };
     release = () => {
       disposed = true;
