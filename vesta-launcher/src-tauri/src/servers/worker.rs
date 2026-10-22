@@ -72,10 +72,19 @@ impl ServerManager {
         let mut last_stream_status: Option<Instant> = None;
         let mut idle_since = None;
         let mut status_blocked = false;
-        let mut tick = tokio::time::interval(Duration::from_millis(100));
-        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut client_failures = 0u32;
+        let mut client_retry = Instant::now();
         loop {
-            tick.tick().await;
+            // Console delivery stays responsive; status-only views do not wake
+            // ten times per second just to check for one-second observations.
+            tokio::time::sleep(if self.demanded(&id, ServerTopic::Console) {
+                Duration::from_millis(100)
+            } else if self.demanded(&id, ServerTopic::Metrics) {
+                Duration::from_millis(250)
+            } else {
+                Duration::from_secs(1)
+            })
+            .await;
             if let Ok(mut subs) = self.subscriptions.lock() {
                 subs.flush(&id);
             }
@@ -97,11 +106,25 @@ impl ServerManager {
             if !want_status && !want_metrics {
                 telemetry = None;
             }
+            if Instant::now() < client_retry {
+                continue;
+            }
             let client = match self.client(&id).await {
-                Ok(c) => c,
-                Err(_) => {
-                    let _ = self.refresh(&app, &id, false).await;
-                    break;
+                Ok(c) => {
+                    client_failures = 0;
+                    c
+                }
+                Err(error) => {
+                    self.synchronize_failure(&app, &id, &error).await;
+                    client_failures = client_failures.saturating_add(1);
+                    let Some(delay) = vesta_server_client::retry::client_reconstruction_delay(
+                        error.code,
+                        client_failures,
+                    ) else {
+                        break;
+                    };
+                    client_retry = Instant::now() + delay;
+                    continue;
                 }
             };
             let snapshot = match self.record(&id).await {

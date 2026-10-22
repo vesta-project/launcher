@@ -6,6 +6,7 @@ mod file_transport;
 pub mod files;
 pub mod model;
 pub mod operations;
+pub mod retry;
 mod role_defaults;
 pub mod scheduler;
 pub mod streams;
