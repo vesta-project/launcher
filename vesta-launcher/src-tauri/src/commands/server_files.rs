@@ -5,7 +5,7 @@ use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use vesta_server_client::{files::*, model::Page, Error, ErrorCode, Result};
 type Manager<'a> = State<'a, Arc<ServerManager>>;
-type Transfers<'a> = State<'a, FileTransfers>;
+type Transfers<'a> = State<'a, Arc<FileTransfers>>;
 fn internal() -> Error {
     Error::new(ErrorCode::Internal)
 }

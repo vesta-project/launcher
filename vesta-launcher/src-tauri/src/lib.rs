@@ -117,11 +117,19 @@ pub fn run(context: tauri::Context) {
             logging::register_log_plugin(app, log_level)?;
             setup::init(app)?;
             app.manage(servers::ServerManager::new()?);
+            let transfers = std::sync::Arc::downgrade(app.state::<std::sync::Arc<vesta_server_client::files::FileTransfers>>().inner());
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    let Some(transfers) = transfers.upgrade() else { break; };
+                    transfers.prune_expired().await;
+                }
+            });
             resources::manual_drop::register_notification_actions(app.handle());
             Ok(())
         })
         .manage(utils::dialog_manager::DialogManager::new())
-        .manage(vesta_server_client::files::FileTransfers::default())
+        .manage(std::sync::Arc::new(vesta_server_client::files::FileTransfers::default()))
         .manage(utils::windows::MiniWindowRegistry::default())
         .manage(utils::launch_intents::PendingLaunchIntents::new())
         .manage(resources::manual_drop::ManualDropManager::default())

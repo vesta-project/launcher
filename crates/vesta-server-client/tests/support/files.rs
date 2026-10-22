@@ -284,8 +284,10 @@ pub(super) fn route(
             if state.busy_properties.swap(false, Ordering::SeqCst) {
                 return error(StatusCode::SERVICE_UNAVAILABLE, "temporarily_unavailable");
             }
-            envelope(json!({"values":{"online-mode":true,"max-players":20,"motd":"Hello","custom_key":"[redacted]","rcon.password":"[redacted]"},"sha256":"ab".repeat(32)}))
-        },
+            envelope(
+                json!({"values":{"online-mode":true,"max-players":20,"motd":"Hello","custom_key":"[redacted]","rcon.password":"[redacted]"},"sha256":"ab".repeat(32)}),
+            )
+        }
         ("PATCH", "/api/v3/manage/config/server-properties") => {
             assert!(!req.headers().contains_key("if-match"));
             assert_eq!(
@@ -578,6 +580,20 @@ async fn uploads_snapshot_chunk_resume_abort_and_window_binding() {
         .unwrap();
     assert_eq!(change.sha256, leaf_fingerprint(&data));
     assert_eq!(*agent.state.files.upload.lock().unwrap(), data);
+    assert_eq!(
+        transfers
+            .finish(&client, "window", "conn", &start.upload_id)
+            .await
+            .unwrap()
+            .sha256,
+        change.sha256
+    );
+    // A consumed picker handle cannot stage a second upload. The terminal
+    // receipt remains retryable without keeping a copy of the selected bytes.
+    let candidate = transfers
+        .pick("window", source.reopen().unwrap(), "again.bin".into())
+        .await
+        .unwrap();
     let second = transfers
         .begin(
             &client,

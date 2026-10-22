@@ -8,8 +8,10 @@ use std::{
 use tempfile::{NamedTempFile, TempPath};
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-    sync::Mutex,
+    sync::{Mutex, OwnedSemaphorePermit, Semaphore},
 };
+const STAGING_BYTES: usize = 64 * 1024 * 1024;
+const STAGING_TTL: Duration = Duration::from_secs(3600);
 
 struct Candidate {
     stage: TempPath,
@@ -18,25 +20,65 @@ struct Candidate {
     hash: String,
     owner: String,
     created: Instant,
+    _reservation: OwnedSemaphorePermit,
 }
 struct Upload {
     owner: String,
     connection: String,
     binding: String,
-    candidate: Arc<Candidate>,
+    candidate: Option<Arc<Candidate>>,
+    size: u64,
+    hash: String,
+    finished: Option<FileChange>,
     id: Option<String>,
     offset: u64,
     intent: String,
     created: Instant,
     aborted: bool,
 }
-#[derive(Default)]
 pub struct FileTransfers {
     candidates: Mutex<HashMap<String, Arc<Candidate>>>,
     uploads: Mutex<HashMap<String, Arc<Mutex<Upload>>>>,
     by_id: Mutex<HashMap<String, Arc<Mutex<Upload>>>>,
+    staging: Arc<Semaphore>,
+}
+impl Default for FileTransfers {
+    fn default() -> Self {
+        Self {
+            candidates: Default::default(),
+            uploads: Default::default(),
+            by_id: Default::default(),
+            staging: Arc::new(Semaphore::new(STAGING_BYTES)),
+        }
+    }
 }
 impl FileTransfers {
+    /// Idle cleanup must not require another picker action. Busy transfers retain
+    /// their ownership until their bounded request finishes; the next sweep reaps them.
+    pub async fn prune_expired(&self) {
+        self.uploads.lock().await.retain(|_, state| {
+            state
+                .try_lock()
+                .map_or(true, |s| s.created.elapsed() < STAGING_TTL)
+        });
+        self.by_id.lock().await.retain(|_, state| {
+            state
+                .try_lock()
+                .map_or(true, |s| s.created.elapsed() < STAGING_TTL)
+        });
+        self.candidates
+            .lock()
+            .await
+            .retain(|_, candidate| candidate.created.elapsed() < STAGING_TTL);
+    }
+    async fn release_candidate(&self, upload: &mut Upload) {
+        if let Some(candidate) = upload.candidate.take() {
+            self.candidates
+                .lock()
+                .await
+                .retain(|_, staged| !Arc::ptr_eq(staged, &candidate));
+        }
+    }
     /// Called only after a native picker. Snapshot to an owner-only temporary
     /// file so later local edits cannot change bytes under an upload's hash/key.
     /// The UI receives only name/size and a random, window-bound handle.
@@ -50,6 +92,12 @@ impl FileTransfers {
         if !meta.is_file() || meta.len() > MAX_WRITE_BYTES {
             return Err(invalid());
         }
+        self.prune_expired().await;
+        let mut reservation = self
+            .staging
+            .clone()
+            .try_acquire_many_owned(meta.len() as u32)
+            .map_err(|_| Error::new(ErrorCode::ServerBusy).local_pressure())?;
         let mut source = tokio::fs::File::from_std(file);
         let (file, stage) = NamedTempFile::new().map_err(io_error)?.into_parts();
         let mut output = tokio::fs::File::from_std(file);
@@ -65,6 +113,14 @@ impl FileTransfers {
             if size > MAX_WRITE_BYTES {
                 return Err(invalid());
             }
+            if size > reservation.num_permits() as u64 {
+                let extra = self
+                    .staging
+                    .clone()
+                    .try_acquire_many_owned((size - reservation.num_permits() as u64) as u32)
+                    .map_err(|_| Error::new(ErrorCode::ServerBusy).local_pressure())?;
+                reservation.merge(extra);
+            }
             output.write_all(&buffer[..count]).await.map_err(io_error)?;
             hash.update(&buffer[..count]);
         }
@@ -77,6 +133,7 @@ impl FileTransfers {
             hash: format!("{:x}", hash.finalize()),
             owner: owner.into(),
             created: Instant::now(),
+            _reservation: reservation,
         });
         let id = uuid::Uuid::new_v4().to_string();
         let result = UploadCandidate {
@@ -124,6 +181,20 @@ impl FileTransfers {
                 v.try_lock()
                     .map_or(true, |v| v.created.elapsed() < Duration::from_secs(3600))
             });
+            if uploads.len() >= 64 {
+                // Terminal receipts carry no staged data. Their count is bounded;
+                // active/uncertain uploads are never discarded to make room.
+                uploads.retain(|_, state| {
+                    state
+                        .try_lock()
+                        .map_or(true, |s| !s.aborted && s.finished.is_none())
+                });
+                self.by_id.lock().await.retain(|_, state| {
+                    state
+                        .try_lock()
+                        .map_or(true, |s| !s.aborted && s.finished.is_none())
+                });
+            }
             if let Some(upload) = uploads.get(&key) {
                 upload.clone()
             } else {
@@ -142,7 +213,10 @@ impl FileTransfers {
                     owner: owner.into(),
                     connection: connection.into(),
                     binding: binding.clone(),
-                    candidate,
+                    size: candidate.size,
+                    hash: candidate.hash.clone(),
+                    candidate: Some(candidate),
+                    finished: None,
                     id: None,
                     offset: 0,
                     intent: intent.into(),
@@ -167,13 +241,13 @@ impl FileTransfers {
             conditional(&mut input, expected)?;
             json_body(
                 &mut input,
-                json!({"path":path,"total_size":upload.candidate.size.to_string(),"sha256":upload.candidate.hash}),
+                json!({"path":path,"total_size":upload.size.to_string(),"sha256":upload.hash}),
             )?;
             let value = client.file_request(input).await?.json(CHUNK_BYTES).await?;
             let id = field(&value, "upload_id")?;
             opaque(&id)?;
             let offset = decimal(&field(&value, "offset")?)?;
-            if offset > upload.candidate.size {
+            if offset > upload.size {
                 return Err(unsupported());
             }
             upload.id = Some(id);
@@ -226,16 +300,16 @@ impl FileTransfers {
         if upload.aborted {
             return Err(Error::new(ErrorCode::Conflict));
         }
-        if upload.offset == upload.candidate.size {
+        if upload.offset == upload.size {
             return progress(&upload);
         }
-        let mut file = tokio::fs::File::open(&upload.candidate.stage)
+        let mut file = tokio::fs::File::open(&upload.candidate.as_ref().ok_or_else(invalid)?.stage)
             .await
             .map_err(io_error)?;
         file.seek(std::io::SeekFrom::Start(upload.offset))
             .await
             .map_err(io_error)?;
-        let count = (upload.candidate.size - upload.offset).min(CHUNK_BYTES as u64) as usize;
+        let count = (upload.size - upload.offset).min(CHUNK_BYTES as u64) as usize;
         let mut bytes = vec![0; count];
         file.read_exact(&mut bytes).await.map_err(io_error)?;
         let offset = upload.offset.to_string();
@@ -254,7 +328,7 @@ impl FileTransfers {
         let value = client.file_request(input).await?.json(CHUNK_BYTES).await?;
         let actual = decimal(&field(&value, "offset")?)?;
         // A replay can report more than this chunk: the agent owns staged length.
-        if actual < upload.offset + count as u64 || actual > upload.candidate.size {
+        if actual < upload.offset + count as u64 || actual > upload.size {
             return Err(unsupported());
         }
         upload.offset = actual;
@@ -268,8 +342,11 @@ impl FileTransfers {
         id: &str,
     ) -> Result<FileChange> {
         let state = self.upload(owner, connection, id).await?;
-        let upload = state.lock().await;
-        if upload.aborted || upload.offset != upload.candidate.size {
+        let mut upload = state.lock().await;
+        if let Some(change) = &upload.finished {
+            return Ok(change.clone());
+        }
+        if upload.aborted || upload.offset != upload.size {
             return Err(invalid());
         }
         let mut input = request(
@@ -281,10 +358,11 @@ impl FileTransfers {
         json_body(&mut input, json!({}))?;
         let change: FileChange =
             decode(client.file_request(input).await?.json(CHUNK_BYTES).await?)?;
-        if change.sha256 != upload.candidate.hash || decimal(&change.size)? != upload.candidate.size
-        {
+        if change.sha256 != upload.hash || decimal(&change.size)? != upload.size {
             return Err(unsupported());
         }
+        upload.finished = Some(change.clone());
+        self.release_candidate(&mut upload).await;
         Ok(change)
     }
     pub async fn abort(
@@ -296,6 +374,12 @@ impl FileTransfers {
     ) -> Result<()> {
         let state = self.upload(owner, connection, id).await?;
         let mut upload = state.lock().await;
+        if upload.aborted {
+            return Ok(());
+        }
+        if upload.finished.is_some() {
+            return Err(Error::new(ErrorCode::Conflict));
+        }
         let input = request(
             Method::DELETE,
             route(&format!("files/uploads/{id}"), &[]),
@@ -304,6 +388,7 @@ impl FileTransfers {
         )?;
         client.file_request(input).await?.json(CHUNK_BYTES).await?;
         upload.aborted = true;
+        self.release_candidate(&mut upload).await;
         Ok(())
     }
 }
@@ -311,7 +396,7 @@ fn progress(upload: &Upload) -> Result<UploadProgress> {
     Ok(UploadProgress {
         upload_id: upload.id.clone().ok_or_else(unsupported)?,
         offset: upload.offset.to_string(),
-        total_size: upload.candidate.size.to_string(),
+        total_size: upload.size.to_string(),
     })
 }
 fn upload_key(owner: &str, connection: &str, id: &str) -> Result<String> {
@@ -475,4 +560,88 @@ fn strong_etag(tag: &str) -> bool {
         && tag.starts_with('"')
         && tag.ends_with('"')
         && !tag[1..tag.len() - 1].contains(['"', '\r', '\n'])
+}
+
+#[cfg(test)]
+mod staging_tests {
+    use super::*;
+    #[tokio::test]
+    async fn abandoned_staging_is_byte_bounded_and_idle_sweeps_release_files() {
+        let transfers = FileTransfers::default();
+        let source = NamedTempFile::new().unwrap();
+        source.as_file().set_len(MAX_WRITE_BYTES).unwrap();
+        for index in 0..4 {
+            transfers
+                .pick("window", source.reopen().unwrap(), format!("{index}.bin"))
+                .await
+                .unwrap();
+        }
+        let error = transfers
+            .pick("window", source.reopen().unwrap(), "excess.bin".into())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::ServerBusy);
+        assert!(error.local_pressure);
+        assert_eq!(transfers.staging.available_permits(), 0);
+        let paths: Vec<_> = {
+            let mut candidates = transfers.candidates.lock().await;
+            candidates
+                .values_mut()
+                .map(|candidate| {
+                    let candidate = Arc::get_mut(candidate).unwrap();
+                    candidate.created = Instant::now() - STAGING_TTL;
+                    candidate.stage.to_path_buf()
+                })
+                .collect()
+        };
+        // No further picker or begin call is needed, matching the app's idle sweep.
+        transfers.prune_expired().await;
+        assert!(paths.iter().all(|path| !path.exists()));
+        assert_eq!(transfers.staging.available_permits(), STAGING_BYTES);
+        assert!(transfers.candidates.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn releasing_terminal_upload_keeps_only_receipt_metadata_and_shared_owners() {
+        let transfers = FileTransfers::default();
+        let source = NamedTempFile::new().unwrap();
+        std::fs::write(source.path(), b"staged bytes").unwrap();
+        let selected = transfers
+            .pick("window", source.reopen().unwrap(), "file.bin".into())
+            .await
+            .unwrap();
+        let candidate = transfers
+            .candidates
+            .lock()
+            .await
+            .get(&selected.local_id)
+            .unwrap()
+            .clone();
+        let path = candidate.stage.to_path_buf();
+        let mut upload = Upload {
+            owner: "window".into(),
+            connection: "server".into(),
+            binding: "binding".into(),
+            size: candidate.size,
+            hash: candidate.hash.clone(),
+            candidate: Some(candidate.clone()),
+            finished: None,
+            id: Some("upload".into()),
+            offset: candidate.size,
+            intent: "intent".into(),
+            created: Instant::now(),
+            aborted: true,
+        };
+        transfers.release_candidate(&mut upload).await;
+        assert!(transfers.candidates.lock().await.is_empty());
+        assert!(upload.candidate.is_none());
+        assert!(
+            path.exists(),
+            "a different in-flight owner still needs these bytes"
+        );
+        drop(candidate);
+        assert!(!path.exists());
+        assert_eq!(transfers.staging.available_permits(), STAGING_BYTES);
+        assert_eq!(progress(&upload).unwrap().total_size, "12");
+    }
 }
