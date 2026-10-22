@@ -13,6 +13,8 @@ use vesta_server_client::{
 };
 
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+#[path = "support/automation.rs"]
+mod automation_tests;
 #[path = "support/presence.rs"]
 mod presence_tests;
 #[derive(Clone, Debug)]
