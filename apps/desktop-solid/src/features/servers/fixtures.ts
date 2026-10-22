@@ -11,6 +11,7 @@ import type { ServersApi, Unsubscribe } from './service';
 import { createFileFixtures } from './fixtures-files';
 import { createManageFixtures, type ManageHost } from './fixtures-manage';
 import { createPresenceFixtures } from './fixtures-presence';
+import { createAutomationFixtures } from './fixtures-automation';
 
 const fail = (code: ServerCommandError['code'], retryAfterMs?: number): never => {
   throw { code, retryAfterMs: retryAfterMs ?? null } satisfies ServerCommandError;
@@ -227,6 +228,13 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     const topics = subscribers.get(target.snapshot.connection.id);
     const active = [...(topics?.values() ?? [])].some((set) => set.size > 0);
     if (!active && target.ticker) { clearInterval(target.ticker); target.ticker = undefined; }
+  };
+
+  const manage = createManageFixtures({ server, requireOnline, requireCapability, record, publish, wait } as unknown as ManageHost);
+  /** The fixture caller is always `p-self`; ranks come from the access fixture's users. */
+  const principals = async (id: ConnectionId) => {
+    const { users } = await manage.users(id, 0);
+    return { selfId: 'p-self', ranks: Object.fromEntries(users.map((user) => [user.id, user.rank])) };
   };
 
   const api: ServersApi = {
@@ -526,7 +534,9 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
 
     // Backups, access and pack.
     ...createPresenceFixtures({ server, requireCapability, wait } as never),
-    ...createManageFixtures({ server, requireOnline, requireCapability, record, publish, wait } as unknown as ManageHost),
+    ...manage,
+    // Workflows and run history.
+    ...createAutomationFixtures({ server, requireCapability, wait, principals }),
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {

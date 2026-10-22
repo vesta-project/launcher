@@ -1,0 +1,128 @@
+/*
+ * Server automation: workflow rows, the step-card editor and run step detail. The
+ * frame (pane toolbar, settings panels, save bar, activity rows) is shared with the
+ * other server tabs; these rules only cover what is specific to workflows.
+ */
+@layer launcher {
+  /* Workflow list */
+  :where([data-automation-workflow][data-off]) [data-vesta="setting-row-copy"] { opacity: 0.65; }
+  :where([data-automation-workflow]) [data-vesta="setting-row-control"] { flex-wrap: wrap; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-automation-name"]) {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="server-automation-name"]):hover { text-decoration: underline; text-underline-offset: 3px; }
+  :where([data-vesta="server-automation-name"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; border-radius: 2px; }
+  :where([data-vesta="server-automation-template"]) { display: flex; flex-direction: column; gap: 1px; }
+  :where([data-vesta="server-automation-template"]) small { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+
+  /* Editor */
+  .server-automation-content { flex: 1; }
+  :where([data-vesta-sentence]) { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-text); }
+  .server-automation-panel-callout { margin: 0 var(--vesta-space-4) var(--vesta-space-2); }
+  :where([data-vesta="server-automation-inline"]) { display: flex; flex: 1; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-automation-inline"]) > * { flex: 1; }
+  :where([data-vesta="server-automation-days"]) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  :where([data-vesta="server-automation-days"]) [data-vesta="button"] { min-inline-size: 44px; }
+
+  :where([data-vesta="server-automation-steps"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0 var(--vesta-space-2) var(--vesta-space-2);
+    list-style: none;
+    counter-reset: none;
+  }
+  :where([data-vesta="server-automation-step"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+  }
+  :where([data-vesta="server-automation-step"][data-invalid]) { border-color: var(--vesta-color-danger-border); }
+  :where([data-vesta="server-automation-step-head"]) { display: flex; align-items: center; gap: var(--vesta-space-2); min-inline-size: 0; }
+  :where([data-vesta="server-automation-step-head"]) > [data-vesta="field"] { flex: 0 0 200px; }
+  :where([data-vesta="server-automation-step-summary"]) {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-automation-step-index"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: 50%;
+    background: var(--vesta-color-surface-raised);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--vesta-weight-semibold);
+  }
+  :where([data-vesta="server-automation-step-fields"], [data-vesta="server-automation-step-flow"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--vesta-space-3);
+    align-items: start;
+  }
+  :where([data-vesta="server-automation-step-flow"]) {
+    padding-block-start: var(--vesta-space-3);
+    border-block-start: var(--vesta-border-width) dashed var(--vesta-color-border);
+  }
+  .server-automation-wide { grid-column: 1 / -1; }
+  p.server-automation-wide { margin: 0; }
+  :where([data-vesta="server-automation-label"]) { font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-medium); }
+  :where([data-vesta="server-automation-params"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-automation-param"]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: var(--vesta-space-2); align-items: start; }
+  :where([data-vesta="server-automation-error"]) { margin: 0; color: var(--vesta-color-danger-text); }
+
+  /* Run step detail, inside an activity row */
+  :where([data-automation-run]) [data-vesta="server-activity-body"] > div:not([data-vesta]) { margin-inline-start: calc(-1 * var(--vesta-space-2)); }
+  :where([data-vesta="server-automation-run-detail"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); margin-block-start: var(--vesta-space-1); }
+  :where([data-vesta="server-automation-run-steps"]) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-surface-sunken);
+    list-style: none;
+  }
+  :where([data-vesta="server-automation-run-steps"]) > li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+  }
+  :where([data-vesta="server-automation-run-steps"]) > li + li { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="server-automation-run-steps"]) > li[data-state="skipped"],
+  :where([data-vesta="server-automation-run-steps"]) > li[data-state="pending"] { opacity: 0.6; }
+  :where([data-vesta="server-automation-run-step-body"]) { display: flex; flex-direction: column; gap: 3px; min-inline-size: 0; }
+  :where([data-vesta="server-automation-run-step-body"]) > p:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--vesta-space-2); margin: 0; font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-automation-step-id"]) { color: var(--vesta-color-text-subtle); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 11px; }
+  :where([data-vesta="server-automation-output"]) {
+    align-self: start;
+    max-inline-size: 100%;
+    padding: 2px 6px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+}
