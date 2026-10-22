@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { DEFAULT_PORT, isPairingCode, parseAddressInput, parseHostPort } from '../src/features/servers/address';
 import { anyVisible, capabilitiesForRole, gate, roleKey } from '../src/features/servers/capabilities';
 import { ConsoleBuffer } from '../src/features/servers/console-model';
-import { errorPresentation, toServerError } from '../src/features/servers/errors';
+import { errorPresentation, serverErrorPresentation, toServerError } from '../src/features/servers/errors';
 import { differingGroups, groupFingerprint, normalizeFingerprint, sameFingerprint } from '../src/features/servers/fingerprint';
 import {
   accessFact, age, connectionFact, consoleLineProblem, formatUptime, isPlayerName, lifecycleControls, minecraftFact, playersFact, statusDot,
@@ -83,6 +83,17 @@ describe('[errors] closed client error model', () => {
   test('rejected credentials never claim the device was revoked', () => {
     expect(errorPresentation.credentials_rejected.action).toBe('pair_again');
     expect(errorPresentation.pair_outcome_unknown.action).toBe('new_code');
+  });
+  test('unconfigured backups are distinct from an unsupported server version', () => {
+    expect(toServerError({ code: 'backups_not_configured' })).toEqual({ code: 'backups_not_configured' });
+    expect(errorPresentation.backups_not_configured.message).toBe('servers.error.backups-not-configured');
+    expect(errorPresentation.backups_not_configured.message).not.toBe(errorPresentation.unsupported.message);
+  });
+  test('local pacing does not claim the server is refusing requests', () => {
+    expect(serverErrorPresentation({ code: 'rate_limited', localPressure: true }).message).toBe('servers.error.client-rate-limited');
+    expect(serverErrorPresentation({ code: 'server_busy', localPressure: true }).message).toBe('servers.error.client-busy');
+    expect(serverErrorPresentation({ code: 'rate_limited' }).message).toBe('servers.error.rate-limited');
+    expect(serverErrorPresentation({ code: 'server_busy' }).message).toBe('servers.error.server-busy');
   });
 });
 

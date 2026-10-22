@@ -1,13 +1,14 @@
 import './servers.css';
 import { Badge, Button } from '@vesta/ui';
-import { For, Show, createSignal, onCleanup } from 'solid-js';
+import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { setting } from '../../features/settings/config';
 import { t } from '../../localization';
-import { errorPresentation, toServerError } from '../../features/servers/errors';
+import { serverErrorPresentation } from '../../features/servers/errors';
 import { groupFingerprint } from '../../features/servers/fingerprint';
 import { age, type Dot, type Fact } from '../../features/servers/model';
 import type { ServerCommandError } from '../../features/servers/native';
+import { useServersClock } from '../../features/servers/store';
 
 /** One state fact as a soft badge. */
 export function FactBadge(props: { fact: Fact; now?: number }) {
@@ -53,19 +54,21 @@ export function ServerErrorNote(props: {
   error: ServerCommandError | null | undefined;
   onRetry?: () => void;
 }) {
+  const now = useServersClock();
+  const retryAt = createMemo(() => Date.now() + (props.error?.retryAfterMs ?? 0), { name: 'server-error:retry-at' });
   return (
     <Show when={props.error}>
       {(error) => {
-        const presentation = () => errorPresentation[toServerError(error()).code];
-        const seconds = () => Math.ceil((error().retryAfterMs ?? 0) / 1000);
+        const presentation = () => serverErrorPresentation(error());
+        const seconds = () => Math.ceil(Math.max(0, Math.min(error().retryAfterMs ?? 0, retryAt() - now())) / 1000);
         return (
           <div data-vesta="server-error" role="alert">
             <span>
               {t(presentation().message)}
               <Show when={seconds() > 0}> {t('servers.retry-after', { count: seconds() })}</Show>
             </span>
-            <Show when={props.onRetry && (presentation().action === 'retry' || presentation().action === 'refresh')}>
-              <Button size="sm" variant="ghost" onClick={() => props.onRetry?.()}>{t('common.retry')}</Button>
+            <Show when={props.onRetry && (presentation().action === 'retry' || presentation().action === 'refresh' || presentation().action === 'wait')}>
+              <Button size="sm" variant="ghost" disabled={presentation().action === 'wait' && seconds() > 0} onClick={() => props.onRetry?.()}>{t('common.retry')}</Button>
             </Show>
           </div>
         );

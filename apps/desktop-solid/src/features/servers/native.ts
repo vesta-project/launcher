@@ -44,6 +44,7 @@ export type ServerErrorCode =
   | 'conflict'
   | 'rate_limited'
   | 'server_busy'
+  | 'backups_not_configured'
   | 'unsupported'
   | 'outcome_unknown'
   | 'invalid_input'
@@ -53,6 +54,8 @@ export interface ServerCommandError {
   code: ServerErrorCode;
   /** Present for `rate_limited` and `server_busy` when the server sent guidance. */
   retryAfterMs?: number | null;
+  /** The launcher paced this request locally; it never reached the server. */
+  localPressure?: boolean;
 }
 
 export const isServerCommandError = (value: unknown): value is ServerCommandError =>

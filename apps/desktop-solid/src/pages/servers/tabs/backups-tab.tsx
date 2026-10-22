@@ -149,7 +149,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
         <section data-vesta="settings-panel">
           <h3>{t('servers.backups.profiles')}</h3>
           <div data-vesta="settings-panel-body">
-            <Show when={overview()?.profiles.length} fallback={<p data-vesta="server-muted" class="server-panel-note">{overview() ? t('servers.backups.no-profiles') : t('servers.loading')}</p>}>
+            <Show when={overview()?.profiles.length} fallback={<p data-vesta="server-muted" class="server-panel-note">{loading() ? t('servers.loading') : overview() ? t('servers.backups.no-profiles') : t('servers.backups.not-loaded')}</p>}>
               <For each={overview()?.profiles ?? []}>
                 {(profile) => (
                   <div data-vesta="server-backup-profile">

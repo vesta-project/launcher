@@ -669,7 +669,7 @@ async fn pack_routes_and_fixed_error_mapping() {
         (409, "backup_busy", ErrorCode::ServerBusy),
         (404, "backup_profile_unknown", ErrorCode::NotFound),
         (404, "backup_job_unknown", ErrorCode::NotFound),
-        (404, "backups_not_configured", ErrorCode::Unsupported),
+        (404, "backups_not_configured", ErrorCode::BackupsNotConfigured),
         (
             409,
             "backup_confirmation_invalid",

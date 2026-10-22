@@ -107,6 +107,7 @@ fn management_error_mapping_is_closed_and_covers_wire_codes() {
         (400, "confirmation_required", ConfirmationExpired),
         (404, "resource_not_found", NotFound),
         (404, "endpoint_not_found", NotFound),
+        (404, "backups_not_configured", BackupsNotConfigured),
         (409, "idempotency_conflict", Conflict),
         (409, "operation_conflict", Conflict),
         (409, "permission_conflict", Conflict),

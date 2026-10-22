@@ -22,6 +22,7 @@ export const errorPresentation: Record<ServerErrorCode, { message: MessageId; ac
   conflict: { message: 'servers.error.conflict', action: 'refresh' },
   rate_limited: { message: 'servers.error.rate-limited', action: 'wait' },
   server_busy: { message: 'servers.error.server-busy', action: 'wait' },
+  backups_not_configured: { message: 'servers.error.backups-not-configured', action: 'none' },
   unsupported: { message: 'servers.error.unsupported', action: 'none' },
   outcome_unknown: { message: 'servers.error.outcome-unknown', action: 'refresh' },
   invalid_input: { message: 'servers.error.invalid-input', action: 'fix_input' },
@@ -34,4 +35,13 @@ export function toServerError(reason: unknown): ServerCommandError {
   return { code: 'internal' };
 }
 
-export const errorMessage = (reason: unknown): MessageId => errorPresentation[toServerError(reason).code].message;
+export function serverErrorPresentation(reason: unknown) {
+  const error = toServerError(reason);
+  if (error.localPressure && error.code === 'rate_limited')
+    return { message: 'servers.error.client-rate-limited' as MessageId, action: 'wait' as const };
+  if (error.localPressure && error.code === 'server_busy')
+    return { message: 'servers.error.client-busy' as MessageId, action: 'wait' as const };
+  return errorPresentation[error.code];
+}
+
+export const errorMessage = (reason: unknown): MessageId => serverErrorPresentation(reason).message;

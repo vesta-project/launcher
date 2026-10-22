@@ -22,6 +22,7 @@ pub enum ErrorCode {
     Conflict,
     RateLimited,
     ServerBusy,
+    BackupsNotConfigured,
     Unsupported,
     OutcomeUnknown,
     InvalidInput,
@@ -33,9 +34,9 @@ pub struct Error {
     pub code: ErrorCode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_after_ms: Option<u64>,
-    /// Native-only provenance: no request reached the agent. Local scheduling
-    /// pressure must not change our last observed connection state.
-    #[serde(skip)]
+    /// No request reached the agent. Preserve provenance over IPC so the UI
+    /// does not blame the server for the launcher's own request pacing.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub local_pressure: bool,
 }
 impl Error {
@@ -75,7 +76,7 @@ impl Error {
         let code = match code {
             "recovery_required" if status == 409 => OutcomeUnknown,
             "backup_busy" => ServerBusy,
-            "backups_not_configured" => Unsupported,
+            "backups_not_configured" => BackupsNotConfigured,
             "backup_profile_unknown" | "backup_job_unknown" | "backup_snapshot_unknown" => NotFound,
             "backup_confirmation_invalid" | "backup_confirmation_expired" => ConfirmationExpired,
             "backup_policy_revision_conflict"

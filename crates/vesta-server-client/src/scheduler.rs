@@ -175,11 +175,12 @@ impl Scheduler {
         })
     }
     /// Interactive reads may briefly wait for in-flight requests to release a
-    /// permit. Background work keeps the existing fail-fast policy so it cannot
-    /// build a queue behind a busy server.
+    /// permit or for a local token to refill, with a five-second total bound.
+    /// Background work keeps the existing fail-fast policy so it cannot build
+    /// a queue behind a busy server.
     pub async fn admit_request(&self, interactive: bool) -> Result<Admission> {
         const MAX_WAITERS: usize = 8;
-        const WAIT: Duration = Duration::from_secs(2);
+        const WAIT: Duration = Duration::from_secs(5);
         const RETRY: Duration = Duration::from_millis(20);
         if !interactive {
             return self.admit(false);
@@ -235,20 +236,33 @@ impl Scheduler {
                 }
             };
 
-            if let Err(error) = self
+            let bucket_result = self
                 .bucket
                 .lock()
                 .map_err(|_| Error::new(ErrorCode::ServerBusy).local_pressure())?
-                .admit(true, Instant::now())
-            {
-                return Err(error);
+                .admit(true, Instant::now());
+            match bucket_result {
+                Ok(()) => {
+                    return Ok(Admission {
+                        _global: global,
+                        _local: local,
+                        _background: None,
+                        _global_background: None,
+                    });
+                }
+                Err(error) if error.code == ErrorCode::RateLimited && error.local_pressure => {
+                    let delay = Duration::from_millis(error.retry_after_ms.unwrap_or(1));
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if delay > remaining {
+                        return Err(error);
+                    }
+                    // Token waiting must not reserve scarce request capacity.
+                    drop(global);
+                    drop(local);
+                    tokio::time::sleep(delay).await;
+                }
+                Err(error) => return Err(error),
             }
-            return Ok(Admission {
-                _global: global,
-                _local: local,
-                _background: None,
-                _global_background: None,
-            });
         }
     }
     pub fn pause(&self, ms: u64) {

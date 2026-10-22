@@ -65,7 +65,7 @@ async fn prolonged_capacity_pressure_settles_within_a_bounded_deadline() {
     let _owner = OWNER.lock().await;
     let scheduler = Scheduler::default();
     let _held: Vec<_> = (0..3).map(|_| scheduler.admit(true).unwrap()).collect();
-    let error = tokio::time::timeout(Duration::from_secs(3), scheduler.admit_request(true))
+    let error = tokio::time::timeout(Duration::from_secs(6), scheduler.admit_request(true))
         .await
         .unwrap()
         .err()
@@ -75,12 +75,24 @@ async fn prolonged_capacity_pressure_settles_within_a_bounded_deadline() {
 }
 
 #[test]
-fn local_pressure_is_native_only_and_remote_busy_remains_distinguishable() {
+fn local_pressure_provenance_survives_ipc_without_mislabeling_remote_busy() {
     let local = Error::new(ErrorCode::ServerBusy).local_pressure();
     let remote = Error::wire(503, "temporarily_unavailable", None);
     assert!(!remote.local_pressure);
-    assert_eq!(
-        serde_json::to_value(local).unwrap(),
-        serde_json::to_value(remote).unwrap()
-    );
+    assert_eq!(serde_json::to_value(local).unwrap()["localPressure"], true);
+    assert!(serde_json::to_value(remote).unwrap().get("localPressure").is_none());
+}
+
+#[tokio::test]
+async fn two_panel_reads_wait_for_local_refill_without_increasing_the_budget() {
+    let _owner = OWNER.lock().await;
+    let scheduler = Scheduler::default();
+    for _ in 0..40 { drop(scheduler.admit(true).unwrap()); }
+    assert_eq!(scheduler.admit(false).err().unwrap().code, ErrorCode::RateLimited);
+    let started = std::time::Instant::now();
+    let (sleep, motd) = tokio::join!(scheduler.admit_request(true), scheduler.admit_request(true));
+    drop((sleep.unwrap(), motd.unwrap()));
+    assert!(started.elapsed() >= Duration::from_millis(2900));
+    assert!(started.elapsed() < Duration::from_secs(5));
+    assert_eq!(scheduler.admit(true).err().unwrap().code, ErrorCode::RateLimited);
 }

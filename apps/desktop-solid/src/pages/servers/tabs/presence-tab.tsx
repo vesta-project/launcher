@@ -49,6 +49,7 @@ function SleepPanel(props: { snapshot: ServerSnapshot }) {
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-sleep:error' });
   const [busy, setBusy] = createSignal(false, { name: 'server-sleep:busy' });
   const load = async () => {
+    setError(null);
     try { const value = await serverCommand((client) => client.sleepPolicy(id())); setSaved(value); setDraft(value.policy); }
     catch (reason) { setError(reason as ServerCommandError); }
   };
@@ -134,6 +135,7 @@ function PresencePanel(props: { snapshot: ServerSnapshot }) {
   const [busy, setBusy] = createSignal(false, { name: 'server-motd:busy' });
   let editor: HTMLTextAreaElement | undefined;
   const load = async () => {
+    setError(null);
     try { const value = await serverCommand((client) => client.motdPolicy(id())); setSaved(value); setDraft(value.document); }
     catch (reason) { setError(reason as ServerCommandError); }
   };
