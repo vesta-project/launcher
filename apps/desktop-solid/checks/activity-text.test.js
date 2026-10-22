@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createFluentBundle, formatLocalizedMessage } from '../src/localization/catalog';
 import { formatActivityText, formatActivityBytes } from '../src/features/activity/activity-text';
 import { ActivityLedger, selectPill } from '../src/features/activity/activity-model';
+import { hueOf, initialsOf } from '../src/app/status/activity-icon-model';
 
 const bundle = createFluentBundle('en', [readFileSync(new URL('../src/localization/locales/en/activity.ftl', import.meta.url), 'utf8')]);
 const t = (id, args) => formatLocalizedMessage(bundle, bundle, id, args).replace(/[\u2068\u2069]/g, '');
@@ -28,6 +29,23 @@ for (const [kind, title] of Object.entries(titles)) {
 test('unknown and legacy kinds preserve legacy text', () => {
   for (const kind of ['future_task', 'task', 'background', 'constructor', '__proto__'])
     expect(format({ kind, subtitle: 'Legacy subtitle' })).toEqual({ title: 'Legacy title', subtitle: 'Legacy subtitle', step: '/private/raw-file.jar', stageLabel: undefined, counter: undefined, doneTitle: undefined });
+});
+
+test('legacy server operation names survive partial updates and missing icon titles', () => {
+  const formatted = format({ kind: 'task', title: undefined, name: 'Remote server operation' });
+  expect(formatted.title).toBe('Remote server operation');
+  const ledger = new ActivityLedger();
+  ledger.upsert({ id: 'server:connection:operation', state: 'queued', ...formatted }, 0);
+  ledger.upsert({ id: 'server:connection:operation', state: 'running', title: undefined }, 1);
+  expect(ledger.rows[0].title).toBe('Remote server operation');
+  expect(initialsOf(ledger.rows[0])).toBe('RS');
+  ledger.upsert({ id: 'server:connection:operation', state: 'done', title: undefined }, 2);
+  expect(selectPill(ledger.rows, 3).activity.title).toBe('Remote server operation');
+  expect(initialsOf({ title: undefined })).toBe('?');
+  expect(initialsOf({ title: null })).toBe('?');
+  expect(hueOf(undefined)).toBe(0);
+  expect(hueOf(null)).toBe(0);
+  expect(format({ kind: 'task', title: undefined, name: undefined }).title).toBe(t('activity.working'));
 });
 test('separates byte progress from item counts and supports unknown totals', () => {
   expect(format({ items: { done: 47, total: 112 } }).step).toBe('Downloading libraries · 47/112');

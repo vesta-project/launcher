@@ -130,6 +130,8 @@ export class ActivityLedger {
       || (terminal(old) && (patch.state === 'queued' || patch.state === 'running')));
     const base = !old || restarting ? { kind: 'task' as const, state: 'queued' as const, title: '', startedAt: now, cancellable: false } : old;
     const next: Activity = { ...base, ...patch };
+    // Partial or legacy native events must not erase an established display label.
+    next.title = typeof patch.title === 'string' ? patch.title : base.title;
     if (next.progress !== undefined) next.progress = Number.isFinite(next.progress) ? Math.max(0, Math.min(1, next.progress)) : undefined;
     if (next.overallProgress !== undefined) {
       next.overallProgress = Number.isFinite(next.overallProgress) ? Math.max(0, Math.min(1, next.overallProgress)) : undefined;

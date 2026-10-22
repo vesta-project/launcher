@@ -2,11 +2,12 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { formatActivityText } from '../src/features/activity/activity-text';
 
 async function storeHarness() {
   const built = await Bun.build({
-    entrypoints: [new URL('../src/features/activity/activity-store.ts', import.meta.url).pathname],
+    entrypoints: [fileURLToPath(new URL('../src/features/activity/activity-store.ts', import.meta.url))],
     target: 'bun', conditions: ['browser', 'development'],
     plugins: [{ name: 'activity-clock', setup(build) {
       build.onLoad({ filter: /activity-store\.ts$/ }, async ({ path }) => ({ loader: 'ts', contents: `
@@ -82,5 +83,28 @@ test('reactive store coalesces deltas, preserves terminal transitions and wakes 
     store.stopActivityTimers();
     expect(store.timerCount()).toBe(0);
   }, { scenario: 'activity-progress-and-timer-boundaries' });
+  store.expectNoDiagnostics(artifact);
+});
+
+test('server operations without canonical titles do not halt reactive activity updates', async () => {
+  const store = await storeHarness();
+  const { artifact } = await store.captureArtifact(() => {
+    const formatted = formatActivityText({ kind: 'task', name: 'Remote server operation' }, (key) => key, 'en');
+    store.receiveActivity({ id: 'server:console', state: 'queued', ...formatted });
+    store.advance(0);
+    expect(store.snapshot().pill.state).toBe('running');
+    store.receiveActivity({ id: 'server:console', state: 'running', title: undefined });
+    store.advance(0);
+    expect(store.snapshot().rows[0].title).toBe('Remote server operation');
+    store.receiveActivity({ id: 'server:console', state: 'done' });
+    store.advance(0);
+    expect(store.snapshot().pill.state).toBe('success');
+    // Later unrelated work still updates after the remote operation finishes.
+    store.receiveActivity({ id: 'next', title: 'Next activity', state: 'running' });
+    store.advance(0);
+    expect(store.snapshot().pill.state).toBe('running');
+    expect(store.snapshot().rows[0].title).toBe('Next activity');
+    store.stopActivityTimers();
+  }, { scenario: 'server-operation-title-compatibility' });
   store.expectNoDiagnostics(artifact);
 });

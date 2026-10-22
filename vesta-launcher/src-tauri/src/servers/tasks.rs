@@ -8,7 +8,7 @@ fn activity(app: &AppHandle, id: &str, operation: &ServerOperation, initial: boo
         crate::tasks::activity::publish(
             app,
             "core://task-state",
-            json!({"id":activity_id,"attempt":operation.operation_id,"state":"queued","kind":"task","name":"Remote server operation","source":"server","visibility":"foreground","cancellable":false,"pausable":false,"subject":{"id":id,"name":"Vesta server","instanceId":null,"iconUrl":null}}),
+            json!({"id":activity_id,"attempt":operation.operation_id,"state":"queued","kind":"task","title":"Remote server operation","name":"Remote server operation","source":"server","visibility":"foreground","cancellable":false,"pausable":false,"subject":{"id":id,"name":"Vesta server","instanceId":null,"iconUrl":null}}),
         );
     }
     let state = match operation.state.as_str() {

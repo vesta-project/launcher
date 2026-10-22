@@ -15,7 +15,9 @@ export interface StructuredActivity {
   overall?: number;
   visibility?: 'foreground' | 'background';
   fileName?: string | null;
-  title: string;
+  title?: string;
+  /** Legacy native task producers used name instead of title. */
+  name?: string;
   subtitle?: string;
   step?: string;
 }
@@ -101,7 +103,11 @@ export function formatActivityBytes(value: number, locale: string): string {
 /** Pure formatter: the caller supplies its active Fluent translator and locale. */
 export function formatActivityText(activity: StructuredActivity, t: Translate, locale: string) {
   const titleId = Object.hasOwn(titles, activity.kind) ? titles[activity.kind] : undefined;
-  if (!titleId) return { title: activity.title, subtitle: activity.subtitle, step: activity.step, stageLabel: undefined, counter: undefined, doneTitle: undefined };
+  if (!titleId) {
+    const title = typeof activity.title === 'string' && activity.title.trim() ? activity.title
+      : typeof activity.name === 'string' && activity.name.trim() ? activity.name : t('activity.working');
+    return { title, subtitle: activity.subtitle, step: activity.step, stageLabel: undefined, counter: undefined, doneTitle: undefined };
+  }
   const fallback = activity.kind === 'world_transfer' ? 'activity.subject-world'
     : activity.kind === 'resource_install' ? 'activity.subject-resource'
     : activity.kind === 'java_download' ? 'activity.subject-java' : 'activity.subject-instance';

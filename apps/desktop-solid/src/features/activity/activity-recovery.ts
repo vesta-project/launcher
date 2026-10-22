@@ -5,7 +5,7 @@ export interface NativeActivity extends StructuredActivity {
   attempt?: string;
   kind: string;
   state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
-  title: string;
+  title?: string;
   progress?: number | null;
   overallProgress?: number | null;
   currentStep?: number | null;
