@@ -45,6 +45,7 @@ dto!(BackupSnapshot {
     time: String,
     safety: bool
 });
+dto!(BackupSnapshotDetail { id: String, time: String, size_bytes: Option<u64>, added_bytes: Option<u64>, file_count: Option<u64>, tags: Vec<String> });
 dto!(BackupOverview { profiles: Vec<BackupProfile>, jobs: Vec<BackupJob>, next_before: Option<String>, recovery_required: bool });
 dto!(BackupLimits { max_snapshots: Option<u64>, max_repository_bytes: Option<u64>, min_free_bytes: u64 });
 dto!(BackupStorage { repository_bytes: u64, restore_points: u64, safety_snapshots: u64,
@@ -142,7 +143,7 @@ fn field(value: &Value, key: &str) -> Result<String> {
         .map(str::to_owned)
         .ok_or_else(|| Error::new(ErrorCode::Unsupported))
 }
-fn segment(text: &str) -> Result<&str> {
+pub(super) fn segment(text: &str) -> Result<&str> {
     if text.is_empty()
         || text.len() > 256
         || !text
@@ -307,6 +308,7 @@ impl Client {
     }
     pub async fn backup_snapshots(&self, profile: &str) -> Result<Vec<BackupSnapshot>> {
         let mut snapshots = Vec::new();
+        let mut pages = 0;
         for (route, safety) in [
             ("backups/snapshots", false),
             ("backups/safety-snapshots", true),
@@ -314,7 +316,11 @@ impl Client {
             let base = query(route, "profile", profile)?;
             let mut next = None;
             let mut cursors = HashSet::new();
-            for page in 0..20 {
+            for page in 0..4 {
+                if pages >= 4 {
+                    return Err(Error::new(ErrorCode::ServerBusy));
+                }
+                pages += 1;
                 let route = match next.as_deref() {
                     Some(cursor) => format!(
                         "{base}&{}",
@@ -324,6 +330,7 @@ impl Client {
                     ),
                     None => base.clone(),
                 };
+                let route = format!("{route}&limit=100");
                 let value = self.get(&route, true, "backups.view").await?;
                 let rows = value["snapshots"]
                     .as_array()
@@ -343,7 +350,7 @@ impl Client {
                 match &next {
                     None => break, // Older agents return the entire listing without a cursor.
                     Some(cursor)
-                        if cursor.len() <= 512 && cursors.insert(cursor.clone()) && page < 19 => {}
+                        if cursor.len() <= 512 && cursors.insert(cursor.clone()) && page < 3 => {}
                     Some(_) => return Err(Error::new(ErrorCode::ServerBusy)),
                 }
             }
@@ -355,6 +362,21 @@ impl Client {
                 .then_with(|| a.id.cmp(&b.id))
         });
         Ok(snapshots)
+    }
+    pub async fn backup_snapshot(&self, profile: &str, id: &str) -> Result<BackupSnapshotDetail> {
+        if id.len() != 32
+            || !id
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(Error::new(ErrorCode::InvalidInput));
+        }
+        let route = query(&format!("backups/snapshots/{id}"), "profile", profile)?;
+        let value = self.get(&route, true, "backups.view").await?;
+        if value.is_null() {
+            return Err(Error::new(ErrorCode::NotFound));
+        }
+        decode(value["snapshot"].clone())
     }
     pub async fn backup_storage(&self) -> Result<BackupStorage> {
         let mut value = self.get("backups/storage", true, "backups.view").await?;
@@ -534,7 +556,7 @@ impl Client {
     async fn device_pages(&self) -> Result<Vec<ServerDevice>> {
         let mut result = Vec::new();
         let mut offset = 0;
-        for _ in 0..10 {
+        for _ in 0..4 {
             let value = self
                 .get(
                     &format!("devices?offset={offset}&limit=100"),
@@ -559,8 +581,8 @@ impl Client {
         let mut result = Vec::new();
         let mut offset = 0;
         let mut count = 0;
-        // At most 10 user pages and 100 per-user requests. Never truncate silently.
-        for _ in 0..10 {
+        // Bounded compatibility fallback. Never truncate silently.
+        for _ in 0..4 {
             let page = self.users(offset).await?;
             for user in page.users {
                 count += 1;
@@ -611,7 +633,7 @@ impl Client {
     pub async fn invitations(&self) -> Result<Vec<Invitation>> {
         let mut result = Vec::new();
         let mut offset = 0;
-        for _ in 0..10 {
+        for _ in 0..4 {
             let value = self
                 .get(
                     &format!("invitations?offset={offset}&limit=100"),

@@ -1,5 +1,9 @@
 #[path = "management.rs"]
 pub mod management;
+#[path = "presence.rs"]
+pub mod presence;
+#[path = "branding.rs"]
+pub mod branding;
 use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},

@@ -13,6 +13,8 @@ use vesta_server_client::{
 };
 
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+#[path = "support/presence.rs"]
+mod presence_tests;
 #[derive(Clone, Debug)]
 struct Call {
     method: String,
@@ -24,6 +26,8 @@ struct Call {
 struct State {
     routes: HashMap<(String, String), (u16, Value)>,
     calls: Vec<Call>,
+    icon: Option<Vec<u8>>,
+    icon_conflict: bool,
 }
 struct Agent {
     client: Arc<Client>,
@@ -123,6 +127,54 @@ async fn route(
         body,
         key,
     });
+    if path == "/api/v3/manage/server/icon" {
+        assert_eq!(req.headers()["authorization"], "Bearer session");
+        let etag = state
+            .icon
+            .as_ref()
+            .map(|b| format!("\"{}\"", leaf_fingerprint(b)));
+        if method == "GET" {
+            return Ok(match (&state.icon, &etag) {
+                (Some(bytes), Some(tag)) => Response::builder()
+                    .header("content-type", "image/png")
+                    .header("etag", tag)
+                    .body(Body::from(bytes.clone()))
+                    .unwrap(),
+                _ => Response::builder()
+                    .status(404)
+                    .body(Body::from(
+                        json!({"api_version":"3","error":{"code":"resource_not_found"}})
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            });
+        }
+        assert!(req.headers().contains_key("idempotency-key"));
+        if state.icon_conflict {
+            state.icon_conflict = false;
+            return Ok(Response::builder()
+                .status(412)
+                .body(Body::from(
+                    json!({"api_version":"3","error":{"code":"precondition_failed"}}).to_string(),
+                ))
+                .unwrap());
+        }
+        match &etag {
+            Some(tag) => assert_eq!(req.headers()["if-match"], tag.as_str()),
+            None => assert_eq!(req.headers()["if-none-match"], "*"),
+        }
+        if method == "PUT" {
+            assert_eq!(req.headers()["content-type"], "image/png");
+            assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+            state.icon = Some(bytes.to_vec());
+        } else {
+            assert_eq!(method, "DELETE");
+            state.icon = None;
+        }
+        return Ok(Response::new(Body::from(
+            json!({"api_version":"3","data":{"ok":true}}).to_string(),
+        )));
+    }
     let (status, value) = if path == "/api/v3/auth/session/challenge" {
         (
             200,
@@ -192,15 +244,15 @@ async fn backup_reads_receipts_storage_snapshot_merge_and_name_cache() {
     assert!(dto["recoveryRequired"].as_bool().unwrap());
     assert!(!dto.to_string().contains("DO-NOT-EXPOSE"));
     assert!(!dto.to_string().contains("private/path"));
-    a.set("GET", "/api/v3/manage/backups/snapshots?profile=daily", json!({"snapshots":[{"id":"normal","time":"2026-10-22T10:00:00+10:00"}],"next_before":"cursor"}));
+    a.set("GET", "/api/v3/manage/backups/snapshots?profile=daily&limit=100", json!({"snapshots":[{"id":"normal","time":"2026-10-22T10:00:00+10:00"}],"next_before":"cursor"}));
     a.set(
         "GET",
-        "/api/v3/manage/backups/snapshots?profile=daily&before=cursor",
+        "/api/v3/manage/backups/snapshots?profile=daily&before=cursor&limit=100",
         json!({"snapshots":[{"id":"old","time":"2026-10-21T23:59:59Z"}],"next_before":null}),
     );
     a.set(
         "GET",
-        "/api/v3/manage/backups/safety-snapshots?profile=daily",
+        "/api/v3/manage/backups/safety-snapshots?profile=daily&limit=100",
         json!({"snapshots":[{"id":"safety","time":"2026-10-22T00:00:00.001Z"}]}),
     );
     let snapshots = a.client.backup_snapshots("daily").await.unwrap();
