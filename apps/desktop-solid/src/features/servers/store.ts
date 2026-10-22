@@ -72,6 +72,8 @@ function forget(id: ConnectionId) {
   metrics.delete(id);
   consoleVersions.delete(id);
   consoles.delete(id);
+  icons.delete(id);
+  iconRequests.delete(id);
 }
 
 export function putOperations(id: ConnectionId, incoming: readonly ServerOperation[]) {
@@ -113,6 +115,28 @@ export async function refreshServers() {
 export async function removeServer(id: ConnectionId) {
   await serverCommand((client) => client.remove(id));
   forget(id);
+}
+
+/** Custom server icons as PNG data URLs: undefined until loaded, null when unset or unreadable. */
+const icons = keyed<string | null | undefined>('serverIcon', () => undefined);
+const iconRequests = new Set<ConnectionId>();
+const ICON_RETRY_MS = 60_000;
+
+/** The server-owned icon, fetched once per connection; callers fall back to generated art. */
+export function serverIcon(id: ConnectionId): string | null {
+  const value = icons.get(id);
+  if (value === undefined && !iconRequests.has(id)) {
+    iconRequests.add(id);
+    serverCommand((client) => client.icon(id)).then(
+      (png) => setServerIcon(id, png),
+      () => { setServerIcon(id, null); setTimeout(() => iconRequests.delete(id), ICON_RETRY_MS); },
+    );
+  }
+  return value ?? null;
+}
+
+export function setServerIcon(id: ConnectionId, pngBase64: string | null) {
+  icons.update(id, () => (pngBase64 ? `data:image/png;base64,${pngBase64}` : null));
 }
 
 export async function updateServer(id: ConnectionId, patch: { name?: string; pinned?: boolean }) {

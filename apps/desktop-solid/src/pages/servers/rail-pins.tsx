@@ -5,7 +5,7 @@ import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
 import { minecraftFact, statusDot } from '../../features/servers/model';
-import { pinnedServers, updateServer } from '../../features/servers/store';
+import { pinnedServers, serverIcon, updateServer } from '../../features/servers/store';
 
 /** Status for the shared pin dot: green while ready, red when it needs attention. */
 const pinStatus = (dot: ReturnType<typeof statusDot>) => (dot === 'online' ? 'running' : dot === 'problem' ? 'crashed' : undefined);
@@ -35,7 +35,7 @@ export function RailServerPins() {
                       >
                         <img
                           data-vesta="rail-pin-image"
-                          src={serverArt(snapshot().connection.serverId || snapshot().connection.id, initials(snapshot().connection.name))}
+                          src={serverIcon(snapshot().connection.id) ?? serverArt(snapshot().connection.serverId || snapshot().connection.id, initials(snapshot().connection.name))}
                           alt=""
                           draggable="false"
                         />

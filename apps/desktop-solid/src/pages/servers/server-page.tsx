@@ -15,7 +15,7 @@ import { initials, serverArt } from '../../features/servers/art';
 import { RemoveServerDialog } from './remove-dialog';
 import { Dynamic } from '@solidjs/web';
 import { busyIntent } from '../../features/servers/operations-model';
-import { loadOperations, putOperations, putSnapshot, removeServer, serverCommand, serverOperations, serverSnapshot, serversLoaded, updateServer, useServerTopic, useServersClock } from '../../features/servers/store';
+import { loadOperations, putOperations, putSnapshot, removeServer, serverCommand, serverIcon, serverOperations, serverSnapshot, serversLoaded, updateServer, useServerTopic, useServersClock } from '../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
 import { ActivityTab } from './tabs/activity-tab';
 import { AccessTab } from './tabs/access-tab';
@@ -155,7 +155,7 @@ function ServerHeader(props: { snapshot: ServerSnapshot }) {
     <header data-vesta="instance-header" data-server-header style={{ '--header-image': `url("${art()}")` } as never}>
       <div data-vesta="instance-header-art" aria-hidden="true" />
       <div data-vesta="instance-header-main">
-        <img data-vesta="instance-header-icon" src={serverArt(props.snapshot.connection.serverId || id(), initials(props.snapshot.connection.name))} alt="" draggable="false" />
+        <img data-vesta="instance-header-icon" src={serverIcon(id()) ?? serverArt(props.snapshot.connection.serverId || id(), initials(props.snapshot.connection.name))} alt="" draggable="false" />
         <div data-vesta="instance-header-copy">
           <h1 data-vesta="instance-header-title">{props.snapshot.connection.name}</h1>
           <p data-vesta="instance-header-meta">
