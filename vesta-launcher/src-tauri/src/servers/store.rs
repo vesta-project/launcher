@@ -2,8 +2,10 @@
 use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use vesta_server_client::{model::ServerSnapshot, Error, ErrorCode, Result};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -17,6 +19,125 @@ pub struct Record {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn persistent_record() -> Record {
+        let snapshot: ServerSnapshot = serde_json::from_value(serde_json::json!({
+            "connection":{"id":"one","name":"Server","endpoint":"localhost:8443","serverId":"server","fingerprint":"ab".repeat(32),"role":null,"signInMethod":"pairing_code","memoryOnly":false,"pinned":false,"addedAtMs":0,"lastConnectedAtMs":null},
+            "state":{"phase":"online","access":"paired","retryAtMs":null,"rateLimitedUntilMs":null,"lastError":null},
+            "info":null,"status":null,"statusObservedAtMs":null,"pack":null,
+            "capabilities":{"source":"unknown","granted":[],"refused":[]},"restartRequired":false
+        })).unwrap();
+        Record {
+            snapshot,
+            device_id: "device".into(),
+            key_reference: uuid::Uuid::new_v4().to_string(),
+        }
+    }
+    #[tokio::test]
+    async fn live_observations_do_not_write_the_profile_or_lose_connection_edits() {
+        let root = tempfile::tempdir().unwrap();
+        let mut original = Store::default();
+        original.connections.push(persistent_record());
+        original.save(root.path()).unwrap();
+        let before = std::fs::read(root.path().join(FILE)).unwrap();
+        let shared = Arc::new(Mutex::new(original));
+        for observation in 1..=60 {
+            let mut snapshot = shared.lock().await.connections[0].snapshot.clone();
+            snapshot.status_observed_at_ms = Some(observation);
+            snapshot.connection.name = "stale remote name".into();
+            let (snapshot, changed) = Store::observe(&shared, root.path(), snapshot)
+                .await
+                .unwrap();
+            assert!(!changed);
+            assert_eq!(snapshot.connection.name, "Server");
+        }
+        assert_eq!(std::fs::read(root.path().join(FILE)).unwrap(), before);
+        assert_eq!(
+            shared.lock().await.connections[0]
+                .snapshot
+                .status_observed_at_ms,
+            Some(60)
+        );
+        let mut snapshot = shared.lock().await.connections[0].snapshot.clone();
+        snapshot.state.phase = "disconnected".into();
+        assert!(
+            Store::observe(&shared, root.path(), snapshot)
+                .await
+                .unwrap()
+                .1
+        );
+        assert_ne!(std::fs::read(root.path().join(FILE)).unwrap(), before);
+    }
+    #[tokio::test]
+    async fn failed_removal_preserves_connection_and_success_journals_vault_cleanup() {
+        let root = tempfile::tempdir().unwrap();
+        let blocked = root.path().join("file-not-directory");
+        std::fs::write(&blocked, b"fixture").unwrap();
+        let mut store = Store::default();
+        store.connections.push(persistent_record());
+        let key = store.connections[0].key_reference.clone();
+        let shared = Arc::new(Mutex::new(store));
+        assert!(
+            Store::edit(&shared, &blocked, |s| s.remove_connection("one"))
+                .await
+                .is_err()
+        );
+        assert_eq!(shared.lock().await.connections[0].key_reference, key);
+        assert!(shared.lock().await.pending_credential_deletions.is_empty());
+        Store::edit(&shared, root.path(), |s| s.remove_connection("one"))
+            .await
+            .unwrap();
+        let restarted = Store::load(root.path()).unwrap();
+        assert!(restarted.connections.is_empty());
+        assert_eq!(restarted.pending_credential_deletions, [key]);
+    }
+    #[test]
+    fn cancelled_save_waiter_cannot_split_disk_and_memory_or_let_a_writer_overtake() {
+        use std::{
+            future::{poll_fn, Future},
+            task::Poll,
+            time::Duration,
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let root = tempfile::tempdir().unwrap();
+            let shared = Arc::new(Mutex::new(Store::default()));
+            let (started, waiting) = std::sync::mpsc::channel();
+            let (release, blocked) = std::sync::mpsc::channel();
+            let blocker = tokio::task::spawn_blocking(move || {
+                started.send(()).unwrap();
+                blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+            });
+            waiting.recv_timeout(Duration::from_secs(2)).unwrap();
+            let mut edit = Box::pin(Store::edit(&shared, root.path(), |s| {
+                s.pending_enrollment_keys.push("first".into());
+                Ok(())
+            }));
+            poll_fn(|cx| {
+                assert!(edit.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            drop(edit); // Disk work is queued, but its owned transaction remains alive.
+            assert!(shared.try_lock().is_err());
+            release.send(()).unwrap();
+            blocker.await.unwrap();
+            Store::edit(&shared, root.path(), |s| {
+                assert_eq!(s.pending_enrollment_keys, ["first"]);
+                s.pending_enrollment_keys.push("second".into());
+                Ok(())
+            })
+            .await
+            .unwrap();
+            assert_eq!(
+                Store::load(root.path()).unwrap().pending_enrollment_keys,
+                ["first", "second"]
+            );
+        });
+    }
     #[test]
     fn management_prepare_is_not_replayable_after_restart_and_journal_is_payload_free() {
         let root = tempfile::tempdir().unwrap();
@@ -166,6 +287,10 @@ pub struct Store {
     // Retain keys for enrollment with an uncertain response. No pairing code.
     #[serde(default)]
     pub pending_enrollment_keys: Vec<String>,
+    /// Connection removal is committed before vault deletion. Failed cleanup
+    /// survives restart and never leaves a listed connection without its key.
+    #[serde(default)]
+    pub pending_credential_deletions: Vec<String>,
 }
 const FILE: &str = "server-connections-v1.json";
 const MAX_BYTES: u64 = 4 * 1024 * 1024;
@@ -173,6 +298,82 @@ fn failed(_: impl std::fmt::Display) -> Error {
     Error::new(ErrorCode::Internal)
 }
 impl Store {
+    pub async fn edit<T>(
+        shared: &Arc<Mutex<Self>>,
+        root: &Path,
+        edit: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let current = shared.clone().lock_owned().await;
+        let mut next = current.clone();
+        let result = edit(&mut next)?;
+        Self::commit(current, next, root.to_owned()).await?;
+        Ok(result)
+    }
+    async fn commit(mut current: OwnedMutexGuard<Self>, next: Self, root: PathBuf) -> Result<()> {
+        // The blocking owner commits both disk and memory even if the command
+        // future is dropped. Other writers cannot overtake an abandoned save.
+        tokio::task::spawn_blocking(move || {
+            next.save(&root)?;
+            *current = next;
+            Ok(())
+        })
+        .await
+        .map_err(failed)?
+    }
+    pub async fn observe(
+        shared: &Arc<Mutex<Self>>,
+        root: &Path,
+        mut snapshot: ServerSnapshot,
+    ) -> Result<(ServerSnapshot, bool)> {
+        let mut current = shared.clone().lock_owned().await;
+        let record = current
+            .connections
+            .iter_mut()
+            .find(|r| r.snapshot.connection.id == snapshot.connection.id)
+            .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
+        let connected = snapshot.connection.last_connected_at_ms;
+        let reported_name = snapshot.connection.name.clone();
+        snapshot.connection = record.snapshot.connection.clone();
+        snapshot.connection.last_connected_at_ms =
+            connected.or(snapshot.connection.last_connected_at_ms);
+        if snapshot.connection.name == snapshot.connection.endpoint {
+            snapshot.connection.name = reported_name;
+        }
+        let changed = coarse_state(&record.snapshot) != coarse_state(&snapshot)
+            || record.snapshot.connection.name != snapshot.connection.name;
+        if changed {
+            let mut next = current.clone();
+            let record = next
+                .connections
+                .iter_mut()
+                .find(|r| r.snapshot.connection.id == snapshot.connection.id)
+                .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
+            record.snapshot = snapshot.clone();
+            Self::commit(current, next, root.to_owned()).await?;
+        } else {
+            // High-frequency telemetry is volatile. No profile clone, JSON
+            // serialization, file replacement or fsync for an ordinary sample.
+            record.snapshot = snapshot.clone();
+        }
+        Ok((snapshot, changed))
+    }
+    pub fn remove_connection(&mut self, id: &str) -> Result<()> {
+        let record = self
+            .connections
+            .iter()
+            .find(|r| r.snapshot.connection.id == id)
+            .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
+        if !record.snapshot.connection.memory_only {
+            if self.pending_credential_deletions.len() >= 256 {
+                return Err(Error::new(ErrorCode::ServerBusy));
+            }
+            self.pending_credential_deletions
+                .push(record.key_reference.clone());
+        }
+        self.connections.retain(|r| r.snapshot.connection.id != id);
+        self.intents.retain(|i| i.connection_id != id);
+        Ok(())
+    }
     /// Reserve before sending. One-shot routes bypass agent replay caches, so even
     /// an identical intent must not be submitted again after a launcher restart.
     pub fn reserve_management_intent(&mut self, pending: PendingIntent, once: bool) -> Result<()> {
@@ -213,6 +414,7 @@ impl Store {
         if store.connections.len() > 100
             || store.intents.len() > 4096
             || store.pending_enrollment_keys.len() > 32
+            || store.pending_credential_deletions.len() > 256
         {
             return Err(Error::new(ErrorCode::Internal));
         }
@@ -256,4 +458,21 @@ impl Store {
         file.persist(root.join(FILE)).map_err(failed)?;
         Ok(())
     }
+}
+
+fn coarse_state(
+    snapshot: &ServerSnapshot,
+) -> (&str, &str, Option<(&str, Option<&str>, Option<&str>, &str)>) {
+    (
+        &snapshot.state.phase,
+        &snapshot.state.access,
+        snapshot.status.as_ref().map(|s| {
+            (
+                s.state.as_str(),
+                s.lifecycle.as_deref(),
+                s.generation.as_deref(),
+                s.readiness.as_str(),
+            )
+        }),
+    )
 }

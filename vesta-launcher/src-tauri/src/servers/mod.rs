@@ -49,7 +49,8 @@ struct Live {
 pub struct ServerManager {
     root: PathBuf,
     credentials: Arc<Credentials>,
-    store: Mutex<Store>,
+    store: Arc<Mutex<Store>>,
+    credential_cleanup: Mutex<()>,
     initialization_error: Option<Error>,
     live: StdMutex<HashMap<String, Arc<Live>>>,
     contacts: Mutex<HashMap<String, Contact>>,
@@ -77,29 +78,16 @@ fn online_state(paused_for: Duration) -> ConnectionState {
         ..Default::default()
     }
 }
-fn coarse_state(
-    snapshot: &ServerSnapshot,
-) -> (&str, &str, Option<(&str, Option<&str>, Option<&str>, &str)>) {
-    (
-        &snapshot.state.phase,
-        &snapshot.state.access,
-        snapshot.status.as_ref().map(|s| {
-            (
-                s.state.as_str(),
-                s.lifecycle.as_deref(),
-                s.generation.as_deref(),
-                s.readiness.as_str(),
-            )
-        }),
-    )
-}
 impl ServerManager {
     pub(crate) async fn files_client(&self, id: &str) -> Result<Arc<Client>> {
         self.client(id).await
     }
     pub fn new() -> Result<Arc<Self>> {
         let root = crate::utils::db_manager::get_app_config_dir().map_err(|_| internal())?;
-        Self::at_root(root)
+        let manager = Self::at_root(root)?;
+        let cleanup = manager.clone();
+        tauri::async_runtime::spawn(async move { cleanup.cleanup_deleted_credentials().await; });
+        Ok(manager)
     }
     fn at_root(root: PathBuf) -> Result<Arc<Self>> {
         let (store, initialization_error) = match Store::load(&root) {
@@ -112,7 +100,8 @@ impl ServerManager {
         Ok(Arc::new(Self {
             credentials: Arc::new(Credentials::new(&root)),
             root,
-            store: Mutex::new(store),
+            store: Arc::new(Mutex::new(store)),
+            credential_cleanup: Mutex::new(()),
             initialization_error,
             live: Default::default(),
             contacts: Default::default(),
@@ -161,12 +150,7 @@ impl ServerManager {
         if let Some(e) = &self.initialization_error {
             return Err(e.clone());
         }
-        let mut current = self.store.lock().await;
-        let mut next = current.clone();
-        let result = edit(&mut next)?;
-        next.save(&self.root)?;
-        *current = next;
-        Ok(result)
+        Store::edit(&self.store, &self.root, edit).await
     }
     fn changed(&self, app: &AppHandle) {
         use std::sync::atomic::Ordering;
@@ -208,30 +192,11 @@ impl ServerManager {
     async fn publish_observation(
         &self,
         app: &AppHandle,
-        mut snapshot: ServerSnapshot,
+        snapshot: ServerSnapshot,
     ) -> Result<()> {
         let id = snapshot.connection.id.clone();
-        let changed = self
-            .edit_store(|s| {
-                let record = s
-                    .connections
-                    .iter_mut()
-                    .find(|r| r.snapshot.connection.id == id)
-                    .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
-                let connected = snapshot.connection.last_connected_at_ms;
-                let reported_name = snapshot.connection.name.clone();
-                snapshot.connection = record.snapshot.connection.clone();
-                snapshot.connection.last_connected_at_ms =
-                    connected.or(snapshot.connection.last_connected_at_ms);
-                if snapshot.connection.name == snapshot.connection.endpoint {
-                    snapshot.connection.name = reported_name;
-                }
-                let changed = coarse_state(&record.snapshot) != coarse_state(&snapshot)
-                    || record.snapshot.connection.name != snapshot.connection.name;
-                record.snapshot = snapshot.clone();
-                Ok(changed)
-            })
-            .await?;
+        if let Some(e) = &self.initialization_error { return Err(e.clone()); }
+        let (snapshot, changed) = Store::observe(&self.store, &self.root, snapshot).await?;
         self.deliver(
             &id,
             ServerTopic::Status,
@@ -832,20 +797,7 @@ impl ServerManager {
         self.snapshot(app, id, true).await
     }
     pub async fn remove(&self, app: &AppHandle, id: &str) -> Result<()> {
-        let record = self.record(id).await?;
-        if !record.snapshot.connection.memory_only {
-            let credentials = self.credentials.clone();
-            let reference = record.key_reference;
-            tokio::task::spawn_blocking(move || credentials.delete(&reference))
-                .await
-                .map_err(|_| internal())??;
-        }
-        self.edit_store(|s| {
-            s.connections.retain(|r| r.snapshot.connection.id != id);
-            s.intents.retain(|i| i.connection_id != id);
-            Ok(())
-        })
-        .await?;
+        self.edit_store(|s| s.remove_connection(id)).await?;
         self.subscriptions
             .lock()
             .map_err(|_| internal())?
@@ -856,7 +808,22 @@ impl ServerManager {
             }
         }
         self.changed(app);
+        self.cleanup_deleted_credentials().await;
         Ok(())
+    }
+    async fn cleanup_deleted_credentials(&self) {
+        let Ok(_guard) = self.credential_cleanup.try_lock() else { return; };
+        let pending = self.store.lock().await.pending_credential_deletions.clone();
+        for reference in pending {
+            let credentials = self.credentials.clone();
+            let key = reference.clone();
+            if matches!(tokio::task::spawn_blocking(move || credentials.delete(&key)).await, Ok(Ok(()))) {
+                let _ = self.edit_store(|s| {
+                    s.pending_credential_deletions.retain(|key| key != &reference);
+                    Ok(())
+                }).await;
+            } else { break; }
+        }
     }
     pub fn window_closed(&self, window: &str) {
         if let Ok(mut s) = self.subscriptions.lock() {
