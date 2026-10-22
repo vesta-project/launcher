@@ -1,3 +1,5 @@
+#[path = "automation.rs"]
+pub mod automation;
 #[path = "management.rs"]
 pub mod management;
 #[path = "presence.rs"]

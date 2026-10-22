@@ -551,3 +551,167 @@ async fn real_agent_pair_lifecycle_console_reconnect_revoke() {
     );
     vault.delete(&reference).unwrap();
 }
+#[tokio::test]
+#[ignore = "requires VESTA_LIVE_AGENT=1 and the launcher-compat agent binaries"]
+async fn live_automation_workflow_lifecycle() {
+    use serde_json::json;
+    use vesta_server_client::automation::*;
+    assert_eq!(std::env::var("VESTA_LIVE_AGENT").as_deref(), Ok("1"));
+    let agent = fixture::Agent::start();
+    let issued = agent.pair();
+    let address = Address::parse(issued["pairing_link"].as_str().unwrap()).unwrap();
+    let server = issued["server_id"].as_str().unwrap();
+    let transport = Transport::new(address.endpoint, address.fingerprint).unwrap();
+    let signer = Arc::new(vesta_server_client::auth::Ed25519Signer::from_seed(
+        [89; 32],
+    ));
+    let enrolled = Client::pair(
+        &transport,
+        server,
+        address.code.as_deref().unwrap(),
+        signer.as_ref(),
+    )
+    .await
+    .unwrap();
+    let client = Client::new(transport, server.into(), enrolled.device_id, signer);
+    let caller = client.automation_self().await.unwrap();
+    assert!(caller.rank > 0);
+    let draft = WorkflowDraft {
+        name: "Native automation smoke".into(), execution_principal_id: caller.principal_id,
+        definition: serde_json::from_value(json!({"trigger":{"kind":"manual"},"missedPolicy":{"kind":"skip_and_notify"},"steps":[{
+            "id":"notice","action":{"kind":"notify","severity":"info","title":"Automation smoke","body":"Completed"},
+            "timeoutSecs":60,"retries":{"maxRetries":0,"backoffSecs":0},"onSuccess":{"kind":"end"},"onFailure":{"kind":"fail"}}]})).unwrap(),
+    };
+    let created = client
+        .automation_workflow_create(draft.clone(), true, "automation-create")
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .automation_workflow_create(draft.clone(), true, "automation-create")
+            .await
+            .unwrap()
+            .workflow_id,
+        created.workflow_id
+    );
+    let id = &created.workflow_id;
+    assert!(client
+        .automation_workflows(None)
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .any(|w| w.id == *id));
+    assert_eq!(
+        client
+            .automation_workflow(id)
+            .await
+            .unwrap()
+            .summary
+            .revision,
+        created.revision
+    );
+    let updated = client
+        .automation_workflow_update(id, created.revision, draft.clone(), "automation-update")
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .automation_workflow_update(id, created.revision, draft, "automation-stale")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::StaleTarget
+    );
+    let disabled = client
+        .automation_workflow_enabled(id, updated.revision, false, "automation-disable")
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .automation_workflow_run(id, "automation-disabled-run")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Conflict
+    );
+    let enabled = client
+        .automation_workflow_enabled(id, disabled.revision, true, "automation-enable")
+        .await
+        .unwrap();
+    let admitted = client
+        .automation_workflow_run(id, "automation-run")
+        .await
+        .unwrap();
+    assert!(!admitted.skipped);
+    let run_id = admitted.run_id.unwrap();
+    assert_eq!(
+        client
+            .automation_workflow_run(id, "automation-run")
+            .await
+            .unwrap()
+            .run_id
+            .as_deref(),
+        Some(run_id.as_str())
+    );
+    assert!(client
+        .automation_workflow_runs(id, None)
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .any(|r| r.id == run_id));
+    assert!(client
+        .automation_runs(None)
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .any(|r| r.id == run_id));
+    let mut finished = false;
+    for _ in 0..20 {
+        let run = client.automation_run(&run_id).await.unwrap();
+        if run.summary.state == "succeeded" {
+            finished = true;
+            break;
+        }
+        assert_ne!(run.summary.state, "failed");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    assert!(finished, "workflow did not complete");
+    let steps = client.automation_run_steps(&run_id, None).await.unwrap();
+    assert_eq!(steps.items[0].state, "succeeded");
+    assert!(steps.items[0].cursor.parse::<u16>().is_ok());
+    assert_eq!(
+        client
+            .automation_run_discard(&run_id, "automation-discard-complete")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Conflict
+    );
+    client
+        .automation_workflow_delete(id, enabled.revision, "automation-delete")
+        .await
+        .unwrap();
+    assert_eq!(
+        client.automation_workflow(id).await.unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        client
+            .automation_run(&run_id)
+            .await
+            .unwrap()
+            .summary
+            .workflow_id,
+        *id
+    );
+    assert!(client
+        .automation_workflows(None)
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .all(|w| w.id != *id));
+}
