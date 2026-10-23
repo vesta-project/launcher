@@ -3,6 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{mpsc, watch};
 use vesta_server_client::model::from_wire;
 
+#[path = "worker_console.rs"]
+mod worker_console;
+
 struct SocketTask {
     task: tauri::async_runtime::JoinHandle<()>,
 }
@@ -11,8 +14,13 @@ impl Drop for SocketTask {
         self.task.abort();
     }
 }
+#[derive(Debug)]
 enum StreamMessage {
     Console(Value),
+    History {
+        page: ConsolePage,
+        discontinuity: bool,
+    },
     Ended(ServerTopic, Option<Error>),
 }
 fn blocked(code: ErrorCode) -> bool {
@@ -27,40 +35,33 @@ fn blocked(code: ErrorCode) -> bool {
 }
 
 impl ServerManager {
-    fn deliver_console_page(&self, id: &str, lines: Vec<ConsoleLine>, history: bool) {
-        let mut batch = Vec::new();
-        let mut bytes = 0;
-        for line in lines {
-            let size = serde_json::to_vec(&line).map_or(64 * 1024, |v| v.len() + 1);
-            if bytes + size > 48 * 1024 && !batch.is_empty() {
-                let lines = std::mem::take(&mut batch);
-                self.deliver(
-                    id,
-                    ServerTopic::Console,
-                    if history {
-                        ServerEvent::ConsoleHistory { lines }
-                    } else {
-                        ServerEvent::Console { lines }
-                    },
-                );
-                bytes = 0;
-            }
-            bytes += size;
-            batch.push(line);
-        }
-        if !batch.is_empty() {
-            self.deliver(
-                id,
-                ServerTopic::Console,
-                if history {
-                    ServerEvent::ConsoleHistory { lines: batch }
-                } else {
-                    ServerEvent::Console { lines: batch }
-                },
-            );
-        }
-    }
     pub(super) async fn run_worker(self: Arc<Self>, app: AppHandle, id: String) {
+        let observe = self.clone().observe_worker(app, id.clone());
+        let idle = async {
+            let mut idle_since = None;
+            loop {
+                if [
+                    ServerTopic::Status,
+                    ServerTopic::Console,
+                    ServerTopic::Metrics,
+                    ServerTopic::Operations,
+                ]
+                .iter()
+                .any(|topic| self.demanded(&id, *topic))
+                {
+                    idle_since = None;
+                } else if idle_since.get_or_insert_with(Instant::now).elapsed()
+                    >= Duration::from_secs(2)
+                {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        };
+        // Also cancel a hung observation when its last subscriber goes away.
+        tokio::select! { _ = observe => {}, _ = idle => {} }
+    }
+    async fn observe_worker(self: Arc<Self>, app: AppHandle, id: String) {
         // Four streaming servers; waiting owners do no background work and can
         // be cancelled as soon as their last subscriber leaves.
         let permit = loop {
@@ -81,31 +82,31 @@ impl ServerManager {
             }
         };
         let _permit = permit;
+        // Abort-on-drop ownership includes the console controller and sockets.
+        let manager = self.clone();
+        let console_app = app.clone();
+        let console_id = id.clone();
+        let _console = SocketTask {
+            task: tauri::async_runtime::spawn(async move {
+                worker_console::run(manager, console_app, console_id).await;
+            }),
+        };
         let _ = self.refresh(&app, &id, false).await;
         self.resume_operations(&app, &id).await;
-        let (send, mut recv) = mpsc::channel(1024);
+        let (send, mut recv) = mpsc::channel(8);
         let (latest, mut metrics) = watch::channel::<Option<Value>>(None);
         let (latest_status, mut status_stream) = watch::channel::<Option<Value>>(None);
         let overflow = Arc::new(AtomicBool::new(false));
-        let mut console: Option<SocketTask> = None;
         let mut telemetry: Option<SocketTask> = None;
-        let mut console_retry = Instant::now();
         let mut metrics_retry = Instant::now();
-        let mut console_stopped = false;
         let mut metrics_stopped = false;
-        let mut console_stream_disabled = false;
         let mut metrics_stream_disabled = false;
-        let mut console_failures = 0_u32;
         let mut metrics_failures = 0_u32;
-        let mut ring = ConsoleRing::default();
         let mut players_generation: Option<String> = None;
         let mut players_count: Option<u32> = None;
         let mut players_revision: Option<String> = None;
         let mut players_retry = Instant::now();
-        let mut console_recovery: Option<String> = None;
-        let mut console_recovery_failures = 0_u32;
         let mut last_status = Instant::now() - Duration::from_secs(60);
-        let mut last_console_page = Instant::now() - Duration::from_secs(60);
         let mut last_metrics_poll = Instant::now() - Duration::from_secs(60);
         let mut last_operation_poll = Instant::now() - Duration::from_secs(60);
         let mut last_stream_status: Option<Instant> = None;
@@ -114,11 +115,8 @@ impl ServerManager {
         let mut client_failures = 0u32;
         let mut client_retry = Instant::now();
         loop {
-            // Console delivery stays responsive; status-only views do not wake
-            // ten times per second just to check for one-second observations.
-            tokio::time::sleep(if self.demanded(&id, ServerTopic::Console) {
-                Duration::from_millis(100)
-            } else if self.demanded(&id, ServerTopic::Metrics) {
+            // Slow observations cannot hold up the independent console drain.
+            tokio::time::sleep(if self.demanded(&id, ServerTopic::Metrics) {
                 Duration::from_millis(250)
             } else {
                 Duration::from_secs(1)
@@ -139,9 +137,6 @@ impl ServerManager {
                 continue;
             }
             idle_since = None;
-            if !want_console {
-                console = None;
-            }
             if !want_status && !want_metrics {
                 telemetry = None;
             }
@@ -177,21 +172,6 @@ impl ServerManager {
             {
                 continue;
             }
-            if want_console
-                && console.is_none()
-                && !console_stopped
-                && !console_stream_disabled
-                && Instant::now() >= console_retry
-            {
-                console = Some(spawn_socket(
-                    client.clone(),
-                    ServerTopic::Console,
-                    send.clone(),
-                    latest.clone(),
-                    latest_status.clone(),
-                    overflow.clone(),
-                ));
-            }
             if (want_status || want_metrics)
                 && telemetry.is_none()
                 && !metrics_stopped
@@ -207,140 +187,25 @@ impl ServerManager {
                     overflow.clone(),
                 ));
             }
-            let recovery_floor = ring.lines().back().map(|l| l.cursor.clone());
-            let mut lines = Vec::new();
-            let mut estimated = 0;
-            // Max 64 messages and 48 KiB payload per batch, leaving JSON overhead.
-            for _ in 0..64 {
-                let message = match recv.try_recv() {
-                    Ok(v) => v,
-                    Err(_) => break,
-                };
-                match message {
-                    StreamMessage::Ended(topic, error) => {
-                        let code = error.as_ref().map(|e| e.code);
-                        if let Some(error) = error.as_ref() {
-                            self.synchronize_failure(&app, &id, error).await;
-                        }
-                        let failures = if topic == ServerTopic::Console {
-                            &mut console_failures
-                        } else {
-                            &mut metrics_failures
-                        };
-                        *failures = failures.saturating_add(1);
-                        let delay = (2_u64.saturating_pow((*failures).min(5)) * 2).min(60);
-                        let delay = (delay + u64::from(rand::random::<u8>() % 5)).min(60);
-                        let unavailable = code.is_some_and(|c| {
-                            matches!(c, ErrorCode::Unsupported | ErrorCode::NotFound)
-                        });
-                        if topic == ServerTopic::Console {
-                            console_recovery = console_recovery.or_else(|| recovery_floor.clone());
-                            console = None;
-                            console_retry = Instant::now() + Duration::from_secs(delay);
-                            console_stopped = code.is_some_and(blocked);
-                            console_stream_disabled = unavailable;
-                        } else {
-                            telemetry = None;
-                            last_stream_status = None;
-                            metrics_retry = Instant::now() + Duration::from_secs(delay);
-                            metrics_stopped = code.is_some_and(blocked);
-                            metrics_stream_disabled = unavailable;
-                        }
-                        self.deliver(&id, topic, ServerEvent::Resync { topic });
+            while let Ok(message) = recv.try_recv() {
+                if let StreamMessage::Ended(topic, error) = message {
+                    let code = error.as_ref().map(|e| e.code);
+                    if let Some(error) = error.as_ref() {
+                        self.synchronize_failure(&app, &id, error).await;
                     }
-                    StreamMessage::Console(v) => match v["type"].as_str() {
-                        Some("console.line") => {
-                            if let Ok(line) = from_wire::<ConsoleLine>(v) {
-                                console_failures = 0;
-                                let bytes = line.text.len() + line.cursor.len() + 128;
-                                if estimated + bytes > 48 * 1024 {
-                                    self.deliver(
-                                        &id,
-                                        ServerTopic::Console,
-                                        ServerEvent::Console {
-                                            lines: std::mem::take(&mut lines),
-                                        },
-                                    );
-                                    estimated = 0;
-                                }
-                                estimated += bytes;
-                                ring.push(line.clone());
-                                lines.push(line);
-                            }
-                        }
-                        Some("console.gap") => {
-                            self.deliver(
-                                &id,
-                                ServerTopic::Console,
-                                ServerEvent::ConsoleGap {
-                                    cursor: v["cursor"].as_str().unwrap_or("").into(),
-                                },
-                            );
-                            console_recovery = console_recovery.or_else(|| recovery_floor.clone());
-                        }
-                        Some("console.available" | "heartbeat") => {}
-                        _ => self.deliver(
-                            &id,
-                            ServerTopic::Console,
-                            ServerEvent::Resync {
-                                topic: ServerTopic::Console,
-                            },
-                        ),
-                    },
-                }
-            }
-            if !lines.is_empty() {
-                self.deliver(&id, ServerTopic::Console, ServerEvent::Console { lines });
-            }
-            // Evicting already-delivered history is normal retention, not data loss.
-            let _ = ring.take_gap();
-            if overflow.swap(false, Ordering::Relaxed) {
-                console_recovery = console_recovery.or_else(|| recovery_floor.clone());
-                self.deliver(
-                    &id,
-                    ServerTopic::Console,
-                    ServerEvent::Resync {
-                        topic: ServerTopic::Console,
-                    },
-                );
-            }
-            if let Some(cursor) = console_recovery.clone() {
-                if last_console_page.elapsed() >= Duration::from_secs(1) {
-                    last_console_page = Instant::now();
-                    let recovered = match client
-                        .console_page_with_priority(Some(&cursor), 200, false)
-                        .await
-                    {
-                        Err(error)
-                            if matches!(
-                                error.code,
-                                ErrorCode::Conflict | ErrorCode::InvalidInput
-                            ) =>
-                        {
-                            client.console_page_with_priority(None, 200, false).await
-                        }
-                        result => result,
-                    };
-                    if let Ok(page) = &recovered {
-                        console_recovery_failures = 0;
-                        console_recovery = page
-                            .next_cursor
-                            .clone()
-                            .filter(|next| next != &page.latest_cursor && next != &cursor);
-                        if !page.items.is_empty() {
-                            self.deliver_console_page(&id, page.items.clone(), true);
-                        }
-                    } else if let Err(error) = recovered {
-                        if blocked(error.code) {
-                            console_recovery = None;
-                        } else {
-                            console_recovery_failures = console_recovery_failures.saturating_add(1);
-                            let backoff = (2_u64.pow(console_recovery_failures.min(5)) * 1000)
-                                .max(error.retry_after_ms.unwrap_or(0));
-                            last_console_page =
-                                Instant::now() + Duration::from_millis(backoff.min(3_600_000));
-                        }
-                    }
+                    metrics_failures = metrics_failures.saturating_add(1);
+                    let delay = (2_u64.saturating_pow(metrics_failures.min(5)) * 2).min(60);
+                    let delay = (delay + u64::from(rand::random::<u8>() % 5)).min(60);
+                    telemetry = None;
+                    last_stream_status = None;
+                    metrics_retry = Instant::now()
+                        + Duration::from_secs(delay).max(Duration::from_millis(
+                            error.as_ref().and_then(|e| e.retry_after_ms).unwrap_or(0),
+                        ));
+                    metrics_stopped = code.is_some_and(blocked);
+                    metrics_stream_disabled = code
+                        .is_some_and(|c| matches!(c, ErrorCode::Unsupported | ErrorCode::NotFound));
+                    self.deliver(&id, topic, ServerEvent::Resync { topic });
                 }
             }
             if status_stream.has_changed().unwrap_or(false) {
@@ -412,7 +277,33 @@ impl ServerManager {
                                 || players_revision != status.player_roster_revision)
                         {
                             players_retry = Instant::now() + Duration::from_secs(30);
-                            if let Ok(players) = self.players(&id).await {
+                            if let Ok(players) = client.players().await {
+                                let Ok(current_record) = self.record(&id).await else {
+                                    break;
+                                };
+                                let current_status = current_record.snapshot.status.as_ref();
+                                // A slow roster read must not restore an older
+                                // generation/revision or cross a trust replacement.
+                                if !self.demanded(&id, ServerTopic::Status)
+                                    || current_record.snapshot.connection.fingerprint
+                                        != record.snapshot.connection.fingerprint
+                                    || current_status.is_none_or(|current| {
+                                        current.generation != status.generation
+                                            || current.player_roster_revision
+                                                != status.player_roster_revision
+                                            || current.state != "running"
+                                            || current.readiness != "ready"
+                                    })
+                                    || matches!(&players, PlayersView::Known { generation, .. }
+                                        if Some(generation) != status.generation.as_ref())
+                                {
+                                    continue;
+                                }
+                                if let Ok(slot) = self.slot(&id) {
+                                    if let Ok(mut cache) = slot.players.lock() {
+                                        *cache = Some(players.clone());
+                                    }
+                                }
                                 if let PlayersView::Known {
                                     generation,
                                     player_count,
@@ -423,7 +314,7 @@ impl ServerManager {
                                     players_count = Some(*player_count);
                                     players_revision = status.player_roster_revision.clone();
                                     players_retry = Instant::now() + Duration::from_secs(1);
-                                    let mut updated = record.snapshot.clone();
+                                    let mut updated = current_record.snapshot;
                                     if let Some(current) = updated.status.as_mut() {
                                         current.player_count = Some(*player_count);
                                         current.player_count_known = true;
@@ -468,28 +359,6 @@ impl ServerManager {
                     status_blocked = blocked(e.code);
                 }
             }
-            if want_console
-                && console.is_none()
-                && !console_stopped
-                && last_console_page.elapsed() >= Duration::from_secs(10)
-            {
-                last_console_page = Instant::now();
-                let cursor = ring.lines().back().map(|l| l.cursor.clone());
-                match client
-                    .console_page_with_priority(cursor.as_deref(), 100, false)
-                    .await
-                {
-                    Ok(page) => {
-                        for line in &page.items {
-                            ring.push(line.clone());
-                        }
-                        self.deliver_console_page(&id, page.items, true);
-                    }
-                    Err(e) => {
-                        console_stopped = blocked(e.code);
-                    }
-                }
-            }
             if want_metrics
                 && telemetry.is_none()
                 && !metrics_stopped
@@ -511,7 +380,10 @@ impl ServerManager {
                     }
                 }
             }
-            if want_ops && last_operation_poll.elapsed() >= Duration::from_secs(10) {
+            if want_ops
+                && !self.tracks_operations(&id)
+                && last_operation_poll.elapsed() >= Duration::from_secs(10)
+            {
                 last_operation_poll = Instant::now();
                 // List once per visible observation interval, never per window.
                 if let Ok(page) = client.operations_with_priority(None, false).await {
@@ -539,49 +411,56 @@ fn spawn_socket(
     let task = tauri::async_runtime::spawn(async move {
         let mut code = None;
         match client.socket(topic).await {
-            Ok(mut socket) => loop {
-                let renewal = client.renewal_delay().await;
-                let next = tokio::select! {
-                    _=tokio::time::sleep(renewal)=>break,
-                    next=tokio::time::timeout(Duration::from_secs(35),socket.next())=>next,
+            Ok(mut socket) => {
+                // Session renewal may hold the client mutex across slow I/O.
+                // Resolve its deadline concurrently with reads, once per socket.
+                let renewal = async {
+                    tokio::time::sleep(client.renewal_delay().await).await;
                 };
-                match next {
-                    Ok(Some(Ok(message))) => {
-                        // Avoid a version dependency on tungstenite in the host.
-                        if message.is_ping() || message.is_pong() {
-                            if tokio::time::timeout(Duration::from_secs(2), socket.flush())
-                                .await
-                                .is_err()
-                            {
+                tokio::pin!(renewal);
+                loop {
+                    let next = tokio::select! {
+                        _=&mut renewal=>break,
+                        next=tokio::time::timeout(Duration::from_secs(35),socket.next())=>next,
+                    };
+                    match next {
+                        Ok(Some(Ok(message))) => {
+                            // Avoid a version dependency on tungstenite in the host.
+                            if message.is_ping() || message.is_pong() {
+                                if tokio::time::timeout(Duration::from_secs(2), socket.flush())
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                                continue;
+                            }
+                            if message.is_close() {
                                 break;
                             }
-                            continue;
-                        }
-                        if message.is_close() {
-                            break;
-                        }
-                        if let Ok(text) = message.to_text() {
-                            if let Ok(value) = serde_json::from_str::<Value>(text) {
-                                if topic == ServerTopic::Console {
-                                    if sender.try_send(StreamMessage::Console(value)).is_err() {
-                                        overflow.store(true, Ordering::Relaxed);
+                            if let Ok(text) = message.to_text() {
+                                if let Ok(value) = serde_json::from_str::<Value>(text) {
+                                    if topic == ServerTopic::Console {
+                                        if sender.try_send(StreamMessage::Console(value)).is_err() {
+                                            overflow.store(true, Ordering::Relaxed);
+                                        }
+                                    } else if matches!(
+                                        value["type"].as_str(),
+                                        Some("status" | "server.status")
+                                    ) {
+                                        latest_status.send_replace(Some(value));
+                                    } else {
+                                        latest.send_replace(Some(value));
                                     }
-                                } else if matches!(
-                                    value["type"].as_str(),
-                                    Some("status" | "server.status")
-                                ) {
-                                    latest_status.send_replace(Some(value));
                                 } else {
-                                    latest.send_replace(Some(value));
+                                    overflow.store(true, Ordering::Relaxed);
                                 }
-                            } else {
-                                overflow.store(true, Ordering::Relaxed);
                             }
                         }
+                        _ => break,
                     }
-                    _ => break,
                 }
-            },
+            }
             Err(e) => {
                 code = Some(e);
             }

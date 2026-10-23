@@ -283,6 +283,7 @@ export type ServerTopic = 'status' | 'console' | 'metrics' | 'operations';
 
 /** Batched delivery on a subscription channel. */
 export type ServerEvent =
+  | { kind: 'playerListsChanged' }
   | { kind: 'snapshot'; snapshot: ServerSnapshot }
   | { kind: 'console'; lines: ConsoleLine[] }
   | { kind: 'consoleHistory'; lines: ConsoleLine[] }
@@ -383,6 +384,11 @@ export const serversNative = {
 
   players: (connectionId: ConnectionId) => call<PlayersView>('server_players', { connectionId }),
   whitelist: (connectionId: ConnectionId) => call<WhitelistEntry[]>('server_players_whitelist', { connectionId }),
+  offlineWhitelist: (connectionId: ConnectionId) => call<{ items: WhitelistEntry[]; sha256: string | null }>('server_offline_whitelist', { connectionId }),
+  offlineWhitelistUpdate: (connectionId: ConnectionId, player: string, add: boolean, expectedSha256: string | null, intentId: string) =>
+    call<string>('server_offline_whitelist_update', { connectionId, player, add, expectedSha256, intentId }),
+  startupWhitelistUpdate: (connectionId: ConnectionId, player: string, add: boolean, expectedGeneration: string, intentId: string) =>
+    call<string>('server_startup_whitelist_update', { connectionId, player, add, expectedGeneration, intentId }),
   operators: (connectionId: ConnectionId) => call<OperatorEntry[]>('server_players_ops', { connectionId }),
   bans: (connectionId: ConnectionId) => call<BanEntry[]>('server_players_bans', { connectionId }),
   /** Player names are Java Edition `[A-Za-z0-9_]{1,16}`. Requires the running generation. */

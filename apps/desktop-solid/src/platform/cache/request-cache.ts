@@ -32,6 +32,8 @@ export class RequestCache<T> {
     staleTimeMs: number;
     retentionMs: number;
     now?: () => number;
+    onEvict?: (key: string) => void;
+    onSettled?: (key: string, snapshot: CacheSnapshot<T>) => void;
   }) {
     if (!Number.isInteger(policy.maxEntries) || policy.maxEntries < 1
       || !Number.isFinite(policy.staleTimeMs) || policy.staleTimeMs < 0
@@ -46,8 +48,9 @@ export class RequestCache<T> {
     const now = this.now();
     // Opportunistic GC: no polling or per-entry timers in idle windows.
     for (const [id, entry] of this.entries) {
-      if (!entry.pending && !entry.listeners.size && now - entry.touchedAt >= this.policy.retentionMs) {
+      if (id !== key && !entry.pending && !entry.listeners.size && now - entry.touchedAt >= this.policy.retentionMs) {
         this.entries.delete(id);
+        this.policy.onEvict?.(id);
         this.metrics.evictions++;
       }
     }
@@ -58,6 +61,7 @@ export class RequestCache<T> {
           .sort((a, b) => a[1].touchedAt - b[1].touchedAt)[0];
         if (!candidate) throw new Error('Request cache active-entry budget exceeded');
         this.entries.delete(candidate[0]);
+        this.policy.onEvict?.(candidate[0]);
         this.metrics.evictions++;
       }
       entry = { data: undefined, hasData: false, updatedAt: undefined, refreshing: false, error: undefined,
@@ -128,6 +132,15 @@ export class RequestCache<T> {
     for (const key of this.entries.keys()) this.invalidate(key, forget);
   }
 
+  /** Retire work and release all cache ownership at a removal boundary. */
+  delete(key: string) {
+    const entry = this.entries.get(key);
+    if (!entry) return;
+    this.invalidate(key, true);
+    this.entries.delete(key);
+    this.policy.onEvict?.(key);
+  }
+
   read(key: string, loader: () => Promise<T>): Promise<T> {
     const entry = this.entry(key);
     if (entry.hasData && this.now() < entry.freshUntil) {
@@ -176,6 +189,7 @@ export class RequestCache<T> {
       entry.pending = undefined;
       entry.refreshing = false;
       entry.touchedAt = this.now();
+      if (generation === entry.generation) this.policy.onSettled?.(key, this.snapshot(entry));
       this.publish(entry);
     });
     entry.pending = pending;

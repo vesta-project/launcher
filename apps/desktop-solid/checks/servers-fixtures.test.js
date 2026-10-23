@@ -39,6 +39,28 @@ describe('[pairing] connect flow', () => {
 });
 
 describe('[lifecycle] generation-bound operations', () => {
+  test('desired whitelist membership changes immediately and an old add receipt never resurrects a removal', async () => {
+    const servers = api(); const id = 'fixture-survival'; const generation = (await servers.snapshot(id)).status.generation;
+    const receipt = await servers.startupWhitelistUpdate(id, 'NewFriend', true, generation, 'desired-add');
+    expect((await servers.whitelist(id)).some((entry) => entry.name === 'NewFriend')).toBe(true);
+    await servers.startupWhitelistUpdate(id, 'NewFriend', false, generation, 'desired-remove');
+    expect((await servers.whitelist(id)).some((entry) => entry.name === 'NewFriend')).toBe(false);
+    expect(await servers.startupWhitelistUpdate(id, 'NewFriend', true, generation, 'desired-add')).toBe(receipt);
+    expect((await servers.whitelist(id)).some((entry) => entry.name === 'NewFriend')).toBe(false);
+    await expect(servers.startupWhitelistUpdate(id, 'NewFriend', true, 'stale', 'desired-stale')).rejects.toMatchObject({ code: 'stale_target' });
+  });
+  test('offline whitelist saves require stopped state and an explicit revision; replay does not edit twice', async () => {
+    const servers = api();
+    const found = await servers.discover('idle.example');
+    const snapshot = await servers.pair(found.discoveryId, CODE);
+    const id = snapshot.connection.id;
+    const before = await servers.offlineWhitelist(id);
+    const hash = await servers.offlineWhitelistUpdate(id, 'Alex', true, before.sha256, 'offline-add');
+    expect(await servers.offlineWhitelistUpdate(id, 'Alex', true, before.sha256, 'offline-add')).toBe(hash);
+    expect((await servers.whitelist(id)).filter((entry) => entry.name === 'Alex')).toHaveLength(1);
+    await expect(servers.offlineWhitelistUpdate(id, 'Alex', false, before.sha256, 'stale-remove')).rejects.toMatchObject({ code: 'conflict' });
+    await expect(servers.offlineWhitelistUpdate('fixture-survival', 'Alex', true, null, 'running-add')).rejects.toMatchObject({ code: 'stale_target' });
+  });
   test('stop with a stale generation is refused; a viewer is forbidden and the refusal is remembered', async () => {
     const servers = api();
     await expect(servers.lifecycle('fixture-survival', 'stop', 'stale', 'i1')).rejects.toMatchObject({ code: 'stale_target' });

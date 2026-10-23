@@ -13,6 +13,204 @@ use vesta_server_client::{
 };
 
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+#[tokio::test]
+async fn desired_whitelist_receipts_validate_generation_identity_and_uncertainty() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let path = "/api/v3/manage/players/whitelist/startup";
+    let id = "123e4567-e89b-42d3-a456-426614174000".to_string();
+    let generation = "11".repeat(16);
+    a.set("POST", path, json!({"outcome":"accepted","intent_id":id}));
+    assert_eq!(
+        a.client
+            .startup_whitelist_update("Alex", true, &generation, "desired-1")
+            .await
+            .unwrap(),
+        id
+    );
+    assert_eq!(a.calls(path)[0].body["expected_generation"], generation);
+    let get = format!("{path}?ids={id}");
+    a.set(
+        "GET",
+        &get,
+        json!({"items":[{"id":id,"status":"queued","player":"Alex"}]}),
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_receipts(std::slice::from_ref(&id))
+            .await
+            .unwrap()[0]
+            .status,
+        "queued"
+    );
+    a.set(
+        "POST",
+        path,
+        json!({"outcome":"accepted","intent_id":"bad"}),
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_update("Alex", true, &generation, "desired-bad-receipt")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::OutcomeUnknown
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_update("Alex", true, "bad", "desired-bad-generation")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    a.set(
+        "GET",
+        &get,
+        json!({"items":[{"id":"other","status":"applied","player":"Alex"}]}),
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_receipts(std::slice::from_ref(&id))
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Unsupported
+    );
+    assert_eq!(
+        serde_json::to_value(vesta_server_client::model::ServerEvent::PlayerListsChanged).unwrap()
+            ["kind"],
+        "playerListsChanged"
+    );
+}
+
+#[tokio::test]
+async fn offline_whitelist_uses_explicit_revision_and_retires_list_cache() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let route = "/api/v3/manage/players/whitelist/offline";
+    let list = "/api/v3/manage/players/whitelist";
+    a.set("GET", route, json!({"items":[],"sha256":null}));
+    assert!(a.client.offline_whitelist().await.unwrap().sha256.is_none());
+    a.set("GET", list, json!({"items":[]}));
+    let _: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    a.set("GET", list, json!({"items":[{"name":"Alex","uuid":"id"}]}));
+    let hash = "a".repeat(64);
+    a.set("POST", route, json!({"outcome":"succeeded","sha256":hash}));
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("Alex", true, None, "offline-create")
+            .await
+            .unwrap(),
+        hash
+    );
+    let calls = a.calls(route);
+    let posted = calls.iter().find(|c| c.method == "POST").unwrap();
+    assert_eq!(posted.body["expected_sha256"], Value::Null);
+    let items: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(items[0]["name"], "Alex");
+    a.set("POST", route, json!({"outcome":"succeeded","sha256":"bad"}));
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("Alex", false, Some(&hash), "lost-receipt")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::OutcomeUnknown
+    );
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("@a", true, None, "bad-name")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("Alex", false, Some("bad"), "bad-revision")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+}
+
+#[tokio::test]
+async fn selected_active_operations_use_one_read_and_refuse_unrequested_results() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let ids = (0..32).map(|n| format!("active-{n}")).collect::<Vec<_>>();
+    let route = format!("/api/v3/manage/operations?ids={}", ids.join(","));
+    let rows = ids
+        .iter()
+        .map(|id| json!({"operation_id":id,"state":"running","created_at_ms":1,"updated_at_ms":2}))
+        .collect::<Vec<_>>();
+    a.set("GET", &route, json!({"items":rows,"selected":true}));
+    assert_eq!(
+        a.client
+            .operations_selected(&ids)
+            .await
+            .unwrap()
+            .items
+            .len(),
+        32
+    );
+    assert_eq!(a.calls(&route).len(), 1);
+    assert!(a.calls("/api/v3/manage/operations?limit=100").is_empty());
+    assert_eq!(
+        a.client
+            .operations_selected(&vec!["duplicate".into(); 33])
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    let route = "/api/v3/manage/operations?ids=known";
+    a.set("GET", route, json!({"items":[{"operation_id":"other","state":"running","created_at_ms":1,"updated_at_ms":2}],"selected":true}));
+    assert_eq!(
+        a.client
+            .operations_selected(&["known".into()])
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Unsupported
+    );
+}
+
+#[tokio::test]
+async fn asynchronous_operation_completion_retires_native_list_cache_once() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let route = "/api/v3/manage/players/whitelist";
+    a.set(
+        "GET",
+        route,
+        json!({"items":[{"name":"Alex","uuid":"old"}]}),
+    );
+    let before: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(before[0]["name"], "Alex");
+    a.set(
+        "GET",
+        route,
+        json!({"items":[{"name":"Steve","uuid":"new"}]}),
+    );
+    let cached: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(cached[0]["name"], "Alex");
+    a.set("GET", "/api/v3/manage/operations/mod1", json!({"operation_id":"mod1","kind":"players.moderate","state":"succeeded","progress_percent":100,"created_at_ms":1,"updated_at_ms":2,"finished_at_ms":2}));
+    assert!(a.client.operation("mod1").await.unwrap().terminal());
+    let after: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(after[0]["name"], "Steve");
+    let reads = a.calls(route).len();
+    a.client.operation("mod1").await.unwrap();
+    let _: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(
+        a.calls(route).len(),
+        reads,
+        "repeated completion cannot force new list reads"
+    );
+}
 #[path = "support/automation.rs"]
 mod automation_tests;
 #[path = "support/presence.rs"]
@@ -272,6 +470,18 @@ async fn backup_reads_receipts_storage_snapshot_merge_and_name_cache() {
     let storage = serde_json::to_value(a.client.backup_storage().await.unwrap()).unwrap();
     assert_eq!(storage["repositoryBytes"], 123);
     assert_eq!(storage["stopped"], "backup_snapshot_limit_reached");
+    // Asynchronous jobs can finish after a storage read without another mutation.
+    // A projection refresh must retire the native transport's ten-second cache.
+    a.set("GET", "/api/v3/manage/backups/storage", json!({"repository_bytes":456,"restore_points":3,"safety_snapshots":1,"free_bytes":null,"limits":{"max_snapshots":4,"max_repository_bytes":null,"min_free_bytes":0},"backups_stopped":null}));
+    assert_eq!(
+        a.client.backup_storage().await.unwrap().repository_bytes,
+        123
+    );
+    a.client.transport.invalidate_reads();
+    assert_eq!(
+        a.client.backup_storage().await.unwrap().repository_bytes,
+        456
+    );
     a.set(
         "GET",
         "/api/v3/manage/backups/jobs/job-1",

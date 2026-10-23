@@ -384,6 +384,7 @@ pub enum ServerEvent {
     ConsoleGap { cursor: String },
     Metrics { sample: MetricsSample },
     Operation { operation: ServerOperation },
+    PlayerListsChanged,
     Resync { topic: ServerTopic },
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]

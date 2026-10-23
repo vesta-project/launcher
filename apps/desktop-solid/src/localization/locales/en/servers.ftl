@@ -286,6 +286,7 @@ servers-players-names-withheld = { $count ->
    *[other] { $count } players online. Their names can't be shown.
   }
 servers-moderate-accepted = Accepted by server
+servers-players-offline-saved = Whitelist saved for the next start
 servers-moderate-confirm-target = Confirm making { $name } an operator. To choose someone else, close this and start again.
 servers-sign-in-storage-unavailable = This computer's secure credential store isn't available, so the launcher can't save this device's key.
 servers-sign-in-memory-only = Use for this session only (you'll need to pair again after restarting the launcher)
