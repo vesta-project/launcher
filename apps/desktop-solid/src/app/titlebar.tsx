@@ -15,6 +15,7 @@ import { canGoBack, route } from './router';
 import { goBack, transitionTo } from './transition';
 import { isSection, sectionLabels } from '../pages/settings/sections';
 import { serverSnapshot } from '../features/servers/store';
+import { mainTabs, resolveServerLocation, settingsSections, visibleSections } from '../features/servers/shell-model';
 import { t } from '../localization';
 import type { MessageId } from '../localization/messages';
 import './titlebar.css';
@@ -150,6 +151,25 @@ function location(): {
       }
       const server = serverSnapshot(current.section);
       if (server) {
+        // Overview is the server's home; tabs sit one level below it, settings sections two.
+        const home = `#/servers/${current.section}`;
+        const where = current.detail ? resolveServerLocation(current.detail, current.item) : undefined;
+        if (where?.mode === 'settings') {
+          const section = settingsSections.find((entry) => entry.id === where.section)!;
+          return {
+            label: t(section.label),
+            trail: [root, { label: server.connection.name, href: home }, { label: t('servers.settings.title'), href: `${home}/settings/${visibleSections(server)[0]?.id ?? 'connection'}` }, { label: t(section.label) }],
+            back: { to: `/servers/${current.section}`, label: t('common.back') },
+          };
+        }
+        const tab = where?.mode === 'main' && where.tab !== 'overview' ? mainTabs.find((entry) => entry.id === where.tab) : undefined;
+        if (tab) {
+          return {
+            label: t(tab.label),
+            trail: [root, { label: server.connection.name, href: home }, { label: t(tab.label) }],
+            back: { to: `/servers/${current.section}`, label: t('common.back') },
+          };
+        }
         return {
           label: server.connection.name,
           icon: 'icons/rail/servers',

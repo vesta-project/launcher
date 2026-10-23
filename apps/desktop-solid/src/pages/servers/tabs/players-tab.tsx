@@ -1,58 +1,120 @@
 import { Button, Dialog, SegmentedControl, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TextField, toast } from '@vesta/ui';
-import { For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
-import { t } from '../../../localization';
+import { For, Show, createSignal, untrack } from 'solid-js';
+import { Icon } from '../../../components/icon';
+import { formatNumber, t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import { IntentMemo, isPlayerName } from '../../../features/servers/model';
+import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
+import { bansResource, onlinePlayersResource, operatorsResource, whitelistResource } from '../../../features/servers/server-resources';
+import { agentReachable } from '../../../features/servers/shell-model';
 import { putOperations, serverCommand, useServersClock } from '../../../features/servers/store';
-import type { BanEntry, ModerationAction, OperatorEntry, PlayersView, ServerCommandError, ServerSnapshot, WhitelistEntry } from '../../../features/servers/native';
+import type { ModerationAction, PlayersView, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 
-type View = 'online' | 'whitelist' | 'ops' | 'bans';
+type ListView = 'whitelist' | 'ops' | 'bans';
+type Request = { action: ModerationAction['action']; player: string };
 
-export function PlayersTab(props: { snapshot: ServerSnapshot }) {
-  const id = () => props.snapshot.connection.id;
-  const [view, setView] = createSignal<View>('online');
-  const [online, setOnline] = createSignal<PlayersView | null>(null);
-  const [whitelist, setWhitelist] = createSignal<WhitelistEntry[]>([]);
-  const [ops, setOps] = createSignal<OperatorEntry[]>([]);
-  const [bans, setBans] = createSignal<BanEntry[]>([]);
-  const [error, setError] = createSignal<ServerCommandError | null>(null);
-  const [loading, setLoading] = createSignal(false);
-  const [dialog, setDialog] = createSignal<{ action: ModerationAction['action']; player: string } | null>(null);
+/** Moderation changes any of the player lists; shown lists revalidate, keeping their rows meanwhile. */
+const PLAYER_RESOURCES = ['players', 'whitelist', 'operators', 'bans'];
+
+const running = (snapshot: ServerSnapshot) => snapshot.status?.state === 'running' && !!snapshot.status.generation;
+
+/**
+ * Who is online right now, for the Overview. Names come from the agent for the current run;
+ * a list from another run, or a count the server can't observe, reads as unknown.
+ */
+export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
+  const id = stableConnectionId(() => props.snapshot);
+  const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-online:dialog' });
+  const generation = () => props.snapshot.status?.generation ?? null;
+  const reachable = () => agentReachable(props.snapshot);
+  const live = () => reachable() && running(props.snapshot);
+  const players = useServerResource(id, onlinePlayersResource, {
+    args: generation,
+    enabled: live,
+    // The status topic reports joins and leaves as a count; names follow it.
+    version: () => props.snapshot.status?.playerCount,
+  });
+  const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
+  /** The list for the run on screen, or null when it can't be trusted. */
+  const known = () => {
+    const value: PlayersView | undefined = players.value();
+    if (!value?.known || value.generation !== generation()) return null;
+    return value;
+  };
+  const count = () => (live() ? known()?.playerCount ?? null : null);
+
+  return (
+    <section data-vesta="server-recent" data-server-online>
+      <h2>
+        {t('servers.overview.online-players')}
+        <Show when={count() !== null}><span data-vesta="instance-tab-count">{formatNumber(count()!)}</span></Show>
+      </h2>
+      <ServerErrorNote error={players.error()} onRetry={() => void players.refresh()} />
+      <Show
+        when={live() ? known() : null}
+        fallback={
+          <p data-vesta="server-muted" data-server-online-note>
+            {!reachable()
+              ? t('servers.players.unknown-offline')
+              : !running(props.snapshot)
+                ? t('servers.players.not-running')
+                : players.loading() ? t('servers.loading') : t('servers.players.unknown')}
+          </p>
+        }
+      >
+        {(list) => (
+          <Show
+            when={list().names.length > 0}
+            fallback={
+              <p data-vesta="server-muted" data-server-online-note>
+                {/* The agent withholds names it can't safely display; the count stays authoritative. */}
+                {list().playerCount > 0 ? t('servers.players.names-withheld', { count: list().playerCount }) : t('servers.players.nobody')}
+              </p>
+            }
+          >
+            <ul data-vesta="server-activity-list" data-server-players>
+              <For each={list().names}>
+                {(name) => (
+                  <li data-vesta="server-activity-row" data-compact>
+                    <span data-vesta="server-activity-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+                    <p data-vesta="server-activity-line"><strong>{name}</strong></p>
+                    <Show when={moderate()}>
+                      <div data-vesta="server-row-actions">
+                        <Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'kick', player: name })}>{t('servers.moderate.kick')}</Button>
+                        <Button size="sm" variant="ghost" tone="danger" onClick={() => setDialog({ action: 'ban', player: name })}>{t('servers.moderate.ban')}</Button>
+                      </div>
+                    </Show>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
+        )}
+      </Show>
+      <Show when={dialog()} keyed>
+        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_RESOURCES)} />}
+      </Show>
+    </section>
+  );
+}
+
+/** Whitelist, operators and bans, in the Players settings section. */
+export function PlayerListsSection(props: { snapshot: ServerSnapshot }) {
+  const id = stableConnectionId(() => props.snapshot);
+  const [view, setView] = createSignal<ListView>('whitelist', { name: 'server-players:view' });
+  const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-players:dialog' });
+  const whitelist = useServerResource(id, whitelistResource, { enabled: () => view() === 'whitelist' });
+  const ops = useServerResource(id, operatorsResource, { enabled: () => view() === 'ops' });
+  const bans = useServerResource(id, bansResource, { enabled: () => view() === 'bans' });
+  const current = () => (view() === 'whitelist' ? whitelist : view() === 'ops' ? ops : bans);
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
   const operator = () => gate(props.snapshot.capabilities, 'players.operator') !== 'denied';
-  const running = () => props.snapshot.status?.state === 'running' && !!props.snapshot.status.generation;
+  const live = () => running(props.snapshot);
 
-  // Only the newest request applies, so a slow reply can't overwrite a newer observation.
-  let sequence = 0;
-  const load = async (target: View) => {
-    const request = ++sequence;
-    const current = () => request === sequence;
-    setLoading(true);
-    setError(null);
-    try {
-      if (target === 'online') {
-        const result = await serverCommand((client) => client.players(id()));
-        // A list from a run other than the one now shown is stale.
-        const generation = props.snapshot.status?.generation ?? null;
-        if (current()) setOnline(result.known && result.generation !== generation ? { known: false } : result);
-      }
-      if (target === 'whitelist') { const result = await serverCommand((client) => client.whitelist(id())); if (current()) setWhitelist(result); }
-      if (target === 'ops') { const result = await serverCommand((client) => client.operators(id())); if (current()) setOps(result); }
-      if (target === 'bans') { const result = await serverCommand((client) => client.bans(id())); if (current()) setBans(result); }
-    } catch (reason) { if (current()) setError(reason as ServerCommandError); }
-    finally { if (current()) setLoading(false); }
-  };
-  // Fetch on navigation and on generation change only; no timers.
-  const loadKey = createMemo(
-    () => [view(), props.snapshot.status?.generation ?? null] as const,
-    { equals: (a, b) => a[0] === b[0] && a[1] === b[1], name: 'server-players:load-key' },
-  );
-  createEffect(loadKey, ([target]) => { void load(target); }, { name: 'server-players:load' });
-
-  const views: { value: View; label: MessageId }[] = [
-    { value: 'online', label: 'servers.players.online' },
+  const views: { value: ListView; label: MessageId }[] = [
     { value: 'whitelist', label: 'servers.players.whitelist' },
     { value: 'ops', label: 'servers.players.operators' },
     { value: 'bans', label: 'servers.players.bans' },
@@ -61,63 +123,44 @@ export function PlayersTab(props: { snapshot: ServerSnapshot }) {
   return (
     <div data-vesta="server-players">
       <div data-vesta="server-players-bar">
-        <SegmentedControl aria-label={t('servers.tab.players')} value={view()} onChange={(value) => setView(value as View)} options={views.map((entry) => ({ value: entry.value, label: t(entry.label) }))} />
-        <Show when={moderate() && running() && view() !== 'online' && view() !== 'ops'}>
+        <SegmentedControl aria-label={t('servers.tab.players')} value={view()} onChange={(value) => setView(value as ListView)} options={views.map((entry) => ({ value: entry.value, label: t(entry.label) }))} />
+        <Show when={moderate() && live() && view() !== 'ops'}>
           <Button size="sm" variant="outline" onClick={() => setDialog({ action: view() === 'bans' ? 'ban' : 'whitelist_add', player: '' })}>
             {t(view() === 'bans' ? 'servers.players.ban-player' : 'servers.players.add-whitelist')}
           </Button>
         </Show>
-        <Show when={operator() && running() && view() === 'ops'}>
+        <Show when={operator() && live() && view() === 'ops'}>
           <Button size="sm" variant="outline" onClick={() => setDialog({ action: 'op', player: '' })}>{t('servers.players.make-operator')}</Button>
         </Show>
-        <Button size="sm" variant="ghost" disabled={loading()} onClick={() => void load(view())}>{t('common.retry')}</Button>
+        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={current().refreshing()} onClick={() => void current().refresh()}>{t('servers.refresh')}</Button>
       </div>
-      <ServerErrorNote error={error()} onRetry={() => void load(view())} />
+      <ServerErrorNote error={current().error()} onRetry={() => void current().refresh()} />
 
-      <Show when={view() === 'online'}>
-        <Show when={online()}>
-          {(players) => (
-            <Show when={players().known ? players() as Extract<PlayersView, { known: true }> : undefined} fallback={<p data-vesta="server-muted">{running() ? t('servers.players.unknown') : t('servers.players.none-running')}</p>}>
-              {(known) => (
-                <Show
-                  when={known().names.length > 0}
-                  fallback={
-                    <p data-vesta="server-muted">
-                      {/* The agent withholds names it can't safely display; the count stays authoritative. */}
-                      {known().playerCount > 0 ? t('servers.players.names-withheld', { count: known().playerCount }) : t('servers.players.nobody')}
-                    </p>
-                  }
-                >
-                  <PlayerTable rows={known().names.map((name) => ({ name }))} actions={(name) => (
-                    <Show when={moderate() && running()}>
-                      <Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'kick', player: name })}>{t('servers.moderate.kick')}</Button>
-                      <Button size="sm" variant="ghost" tone="danger" onClick={() => setDialog({ action: 'ban', player: name })}>{t('servers.moderate.ban')}</Button>
-                    </Show>
-                  )} />
-                </Show>
-              )}
-            </Show>
-          )}
-        </Show>
+      <Show when={current().loading()}><p data-vesta="server-muted">{t('servers.loading')}</p></Show>
+      <Show when={view() === 'whitelist' ? whitelist.value() : undefined}>
+        {(rows) => (
+          <PlayerTable rows={rows()} empty="servers.players.whitelist-empty" actions={(name) => (
+            <Show when={moderate() && live()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'whitelist_remove', player: name })}>{t('common.remove')}</Button></Show>
+          )} />
+        )}
       </Show>
-      <Show when={view() === 'whitelist'}>
-        <PlayerTable rows={whitelist()} empty="servers.players.whitelist-empty" actions={(name) => (
-          <Show when={moderate() && running()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'whitelist_remove', player: name })}>{t('common.remove')}</Button></Show>
-        )} />
+      <Show when={view() === 'ops' ? ops.value() : undefined}>
+        {(rows) => (
+          <PlayerTable rows={rows().map((entry) => ({ name: entry.name, detail: t('servers.players.level', { count: entry.level }) }))} empty="servers.players.ops-empty" actions={(name) => (
+            <Show when={operator() && live()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'deop', player: name })}>{t('servers.moderate.deop')}</Button></Show>
+          )} />
+        )}
       </Show>
-      <Show when={view() === 'ops'}>
-        <PlayerTable rows={ops().map((entry) => ({ name: entry.name, detail: t('servers.players.level', { count: entry.level }) }))} empty="servers.players.ops-empty" actions={(name) => (
-          <Show when={operator() && running()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'deop', player: name })}>{t('servers.moderate.deop')}</Button></Show>
-        )} />
-      </Show>
-      <Show when={view() === 'bans'}>
-        <PlayerTable rows={bans().map((entry) => ({ name: entry.name, detail: entry.reason }))} empty="servers.players.bans-empty" actions={(name) => (
-          <Show when={moderate() && running()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'pardon', player: name })}>{t('servers.moderate.pardon')}</Button></Show>
-        )} />
+      <Show when={view() === 'bans' ? bans.value() : undefined}>
+        {(rows) => (
+          <PlayerTable rows={rows().map((entry) => ({ name: entry.name, detail: entry.reason }))} empty="servers.players.bans-empty" actions={(name) => (
+            <Show when={moderate() && live()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'pardon', player: name })}>{t('servers.moderate.pardon')}</Button></Show>
+          )} />
+        )}
       </Show>
 
       <Show when={dialog()} keyed>
-        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => void load(view())} />}
+        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_RESOURCES)} />}
       </Show>
     </div>
   );

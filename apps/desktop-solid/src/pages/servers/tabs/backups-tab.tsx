@@ -8,8 +8,11 @@ import { gate } from '../../../features/servers/capabilities';
 import { errorMessage } from '../../../features/servers/errors';
 import { age, newIntentId } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
+import { stableConnectionId } from '../../../features/servers/connection-id';
+import { useServerResource } from '../../../features/servers/resources';
+import { backupStorageResource, backupsResource } from '../../../features/servers/server-resources';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import type { BackupJob, BackupOverview, BackupProfile, BackupSnapshot, BackupStorage } from '../../../features/servers/native-manage';
+import type { BackupJob, BackupProfile, BackupSnapshot } from '../../../features/servers/native-manage';
 import { ServerErrorNote } from '../parts';
 import '../../library/instance/settings-tab.css';
 
@@ -64,27 +67,19 @@ function retention(profile: BackupProfile) {
 export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = () => props.snapshot.connection.id;
-  const [overview, setOverview] = createSignal<BackupOverview | null>(null, { name: 'server-backups:overview' });
-  const [storage, setStorage] = createSignal<BackupStorage | null>(null, { name: 'server-backups:storage' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-backups:error' });
-  const [loading, setLoading] = createSignal(false, { name: 'server-backups:loading' });
+  const connection = stableConnectionId(() => props.snapshot);
+  // Shared with the workspace, which reads the overview to decide whether this tab exists.
+  const backups = useServerResource(connection, backupsResource);
+  const space = useServerResource(connection, backupStorageResource);
+  const overview = () => backups.value() ?? null;
+  const storage = () => space.value() ?? null;
+  const error = backups.error;
+  const loading = () => backups.loading() || backups.refreshing();
   const [openProfile, setOpenProfile] = createSignal<string | null>(null, { name: 'server-backups:open-profile' });
   const [restoring, setRestoring] = createSignal<{ profile: string; snapshot: BackupSnapshot } | null>(null, { name: 'server-backups:restoring' });
   const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
 
-  const refresh = async () => {
-    setLoading(true); setError(null);
-    try {
-      const [next, space] = await Promise.all([
-        serverCommand((client) => client.backups(id(), null)),
-        serverCommand((client) => client.backupStorage(id())).catch(() => null),
-      ]);
-      setOverview(next);
-      setStorage(space);
-    } catch (reason) { setError(reason as ServerCommandError); }
-    finally { setLoading(false); }
-  };
-  onSettled(() => { void refresh(); });
+  const refresh = async () => { await Promise.all([backups.refresh(), space.refresh()]); };
 
   const start = async (kind: 'run' | 'verify', profile: string) => {
     try {

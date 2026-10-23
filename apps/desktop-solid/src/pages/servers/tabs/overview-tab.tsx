@@ -6,8 +6,12 @@ import { stableConnectionId } from '../../../features/servers/connection-id';
 import { newIntentId } from '../../../features/servers/model';
 import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
-import { gate } from '../../../features/servers/capabilities';
-import { formatUptime, minecraftFact, playersFact, readinessReasonMessage, supervisorWarnings } from '../../../features/servers/model';
+import { anyVisible, gate } from '../../../features/servers/capabilities';
+import { formatUptime, minecraftFact } from '../../../features/servers/model';
+import { serverPressure, useServerResource } from '../../../features/servers/resources';
+import { operationsResource } from '../../../features/servers/server-resources';
+import { agentReachable, extraWarnings, headerNotice } from '../../../features/servers/shell-model';
+import { OnlinePlayersPanel } from './players-tab';
 import { ActivityRow } from './activity-tab';
 import { latestMetrics, serverMetrics, serverOperations, useServerTopic, useServersClock } from '../../../features/servers/store';
 import type { MetricsSample, ServerSnapshot } from '../../../features/servers/native';
@@ -27,20 +31,23 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
   useServerTopic(() => (metricsAllowed() && props.snapshot.state.phase === 'online' ? id() : undefined), 'metrics');
   const status = () => props.snapshot.status;
   const recent = () => serverOperations(id()).slice(0, 4);
+  // Recent tasks: one cached read per connection; the operations topic keeps it current.
+  useServerResource(id, operationsResource, { enabled: () => agentReachable(props.snapshot) && anyVisible(props.snapshot.capabilities, ['tasks.view']) });
+  /** Warnings beyond the one the header strip already shows. */
+  const warnings = () => extraWarnings(props.snapshot, headerNotice(props.snapshot, now(), serverPressure(id())));
 
   return (
     <div data-vesta="server-overview">
-      <Show when={supervisorWarnings(status()).length > 0 || status()?.readinessReason}>
+      <Show when={warnings().length > 0}>
         <div data-vesta="server-callout" data-tone="warning" role="status">
-          <Show when={status()?.readinessReason}>{(reason) => <p>{t(readinessReasonMessage[reason()])}</p>}</Show>
-          <For each={supervisorWarnings(status())}>{(message) => <p>{t(message)}</p>}</For>
+          <For each={warnings()}>{(message) => <p>{t(message)}</p>}</For>
         </div>
       </Show>
 
       <section data-vesta="server-cards">
         <article data-vesta="server-stat">
           <h2>{t('servers.overview.minecraft')}</h2>
-          <FactBadge fact={minecraftFact(status())} />
+          <FactBadge fact={agentReachable(props.snapshot) ? minecraftFact(status()) : { ...minecraftFact(status()), tone: 'neutral' }} />
           <dl>
             <dt>{t('servers.overview.version')}</dt><dd>{props.snapshot.info?.minecraftVersion || t('servers.unknown')}</dd>
             <dt>{t('servers.overview.uptime')}</dt><dd>{formatUptime(status()?.uptimeSeconds ?? null) ?? '—'}</dd>
@@ -48,28 +55,10 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
           <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} />
         </article>
 
-        <article data-vesta="server-stat">
-          <h2>{t('servers.overview.players')}</h2>
-          {(() => {
-            const fact = () => playersFact(status(), now());
-            return (
-              <>
-                <p data-vesta="server-stat-value">{t(fact().message, fact().args)}</p>
-                <Show when={fact().seen}>
-                  {(seen) => <span data-vesta="server-freshness">{t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</span>}
-                </Show>
-              </>
-            );
-          })()}
-          <Show when={latestMetrics(id())?.playersOnline != null && status()?.state === 'running'}>
-            <Sparkline samples={serverMetrics(id())} pick={(sample) => sample.playersOnline} />
-          </Show>
-        </article>
-
         <Show when={metricsAllowed()}>
           <article data-vesta="server-stat">
             <h2>{t('servers.overview.performance')}</h2>
-            <Show when={latestMetrics(id())} fallback={<p data-vesta="server-muted">{status()?.state === 'running' ? t('servers.overview.waiting-metrics') : t('servers.overview.no-metrics')}</p>}>
+            <Show when={latestMetrics(id())} fallback={<p data-vesta="server-muted">{status()?.state === 'running' && agentReachable(props.snapshot) ? t('servers.overview.waiting-metrics') : t('servers.overview.no-metrics')}</p>}>
               {(sample) => (
                 <>
                   <dl>
@@ -100,6 +89,10 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
           )}
         </Show>
       </section>
+
+      <Show when={anyVisible(props.snapshot.capabilities, ['players.view'])}>
+        <OnlinePlayersPanel snapshot={props.snapshot} />
+      </Show>
 
       <Show when={recent().length > 0}>
         <section data-vesta="server-recent">

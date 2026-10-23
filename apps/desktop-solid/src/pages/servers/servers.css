@@ -140,20 +140,6 @@
 
   :where([data-vesta="server-lifecycle"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-2); }
   :where([data-vesta="server-lifecycle-note"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
-  @container app (max-width: 720px) {
-    :where([data-vesta="server-header"]) { flex-wrap: wrap; }
-    :where([data-vesta="server-lifecycle"]) { inline-size: 100%; justify-content: end; }
-  }
-  :where([data-vesta="server-pending"]) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    padding: var(--vesta-space-2) var(--instance-gutter);
-    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
-    background: oklch(0.78 0.15 75 / 0.12);
-    color: var(--vesta-color-text);
-    font-size: var(--vesta-text-sm);
-  }
 
   /* Overview */
   :where([data-vesta="server-overview"]) { display: flex; flex-direction: column; gap: var(--vesta-space-5); }
@@ -190,7 +176,6 @@
   }
   :where([data-vesta="server-stat"]) dt { color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-stat"]) dd { margin: 0; font-variant-numeric: tabular-nums; }
-  :where([data-vesta="server-stat-value"]) { margin: 0; font-size: var(--vesta-text-lg); font-weight: var(--vesta-weight-semibold); }
   :where([data-vesta="server-sparkline"]) { inline-size: 100%; block-size: 34px; overflow: visible; }
   :where([data-vesta="server-sparkline"]) path { fill: none; stroke: var(--vesta-color-accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 
@@ -223,8 +208,8 @@
   :where([data-vesta="server-console-feedback"]) { margin: 0; padding: 0 var(--instance-gutter) var(--vesta-space-2); background: var(--instance-bar-bg); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-console-feedback"][data-problem]) { color: oklch(0.72 0.18 25); }
 
-  /* Players, activity, connection */
-  :where([data-vesta="server-players"], [data-vesta="server-activity"], [data-vesta="server-connection"]) {
+  /* Players, activity */
+  :where([data-vesta="server-players"], [data-vesta="server-activity"]) {
     display: flex;
     flex-direction: column;
     gap: var(--vesta-space-4);
@@ -232,16 +217,6 @@
   :where([data-vesta="server-players-bar"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-2); }
   :where([data-vesta="server-players-bar"]) > :first-child { margin-inline-end: auto; }
   :where([data-vesta="server-row-actions"]) { display: flex; justify-content: end; gap: var(--vesta-space-1); }
-  :where([data-vesta="server-connection"]) h3 { margin: 0; font-size: var(--vesta-text-sm); }
-  :where([data-vesta="server-danger-zone"]) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--vesta-space-4);
-    padding: var(--vesta-space-4);
-    border: var(--vesta-border-width) solid oklch(0.65 0.2 25 / 0.35);
-    border-radius: var(--vesta-radius-lg);
-  }
 
   /* Trust changed / credentials rejected */
   :where([data-vesta="server-blocking"]) {
@@ -515,4 +490,50 @@
     gap: var(--vesta-space-2);
     padding-top: 4px;
   }
+}
+
+/*
+ * Workspace shell: header notice tones, the settings-mode section list, the offline
+ * placeholder and Overview's online players. Everything else is the instance frame.
+ */
+@layer launcher {
+  /* Neutral notices (connecting, slow down, restart to apply) sit on the art without alarm colors. */
+  :where([data-server-header] [data-vesta="instance-notice"][data-tone="neutral"]) {
+    background: oklch(0 0 0 / 0.55);
+  }
+  :where([data-server-header] [data-vesta="instance-notice"][data-tone="neutral"]) > :where([data-vesta="icon"]) {
+    color: oklch(0.92 0 0 / 0.75);
+  }
+  :where([data-server-header] [data-vesta="instance-notice"]) > :where([data-vesta="button"]) {
+    flex: none;
+  }
+
+  :where([data-vesta="server-header-address"]) { display: inline-flex; align-items: center; gap: 2px; }
+  :where([data-vesta="server-header-address"]) :where([data-vesta="button"]) { color: inherit; }
+
+  /* Tabs that need the agent stay in place while it is unreachable, dimmed. */
+  .instance-tabs [data-vesta="tab"].server-tab-offline:not([data-selected]) { opacity: 0.55; }
+
+  /* Settings mode: grouped sections under Back, like the launcher settings list. */
+  :where([data-server-settings] [data-vesta="instance-settings-nav"]) { gap: var(--vesta-space-4); }
+  :where([data-server-settings] [data-vesta="instance-settings-nav"]) > :where([data-vesta="button"]) { margin-block-end: 0; }
+  :where([data-server-settings] [data-vesta="prefs-nav-item"][data-offline]:not([aria-current])) { opacity: 0.55; }
+  :where([data-server-settings] [data-vesta="settings-content"]) > :where(.instance-pane) { flex: 1; }
+  :where([data-server-settings-narrow]) { display: none; }
+  @container app (max-width: 959px) {
+    :where([data-server-settings-narrow]) { display: flex; }
+  }
+
+  /* One calm placeholder in a pane while the agent can't be reached. */
+  :where([data-vesta="server-offline-pane"]) {
+    display: grid;
+    place-items: center;
+    min-block-size: 100%;
+    padding: var(--instance-gutter);
+  }
+
+  /* Overview: who is online, one compact row each. */
+  :where([data-vesta="server-recent"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-recent"]) h2 { display: flex; align-items: baseline; gap: var(--vesta-space-2); }
+  :where([data-server-players] [data-vesta="server-activity-row"]) { align-items: center; }
 }
