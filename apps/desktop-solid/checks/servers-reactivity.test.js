@@ -7,6 +7,43 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 let builtHarness;
 const harness = () => (builtHarness ??= buildHarness());
 
+test('manual server refresh coalesces across views and never resurrects a removed connection', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    const id = 'manual-refresh';
+    const snapshot = { connection: { id }, state: { phase: 'unreachable' } };
+    check.putSnapshot(snapshot);
+    check.flush();
+    const first = check.refreshServer(id);
+    expect(check.refreshServer(id)).toBe(first);
+    check.flush();
+    expect(check.untrack(() => check.serverRefreshing(id))).toBe(true);
+    await Promise.resolve(); await Promise.resolve();
+    expect(check.refreshCalls).toEqual([{ id, refresh: true }]);
+    check.replies.shift().resolve({ ...snapshot, state: { phase: 'online' } });
+    await first;
+    check.flush();
+    expect(check.untrack(() => check.serverSnapshot(id)).state.phase).toBe('online');
+    expect(check.untrack(() => check.serverRefreshing(id))).toBe(false);
+    const second = check.refreshServer(id);
+    const outcome = second.then(() => null, (reason) => reason);
+    await Promise.resolve(); await Promise.resolve();
+    check.replies.shift().reject({ code: 'unreachable' });
+    expect(await outcome).toMatchObject({ code: 'unreachable' });
+    check.flush();
+    expect(check.untrack(() => check.serverRefreshing(id))).toBe(false);
+    const third = check.refreshServer(id);
+    await Promise.resolve(); await Promise.resolve();
+    await check.removeServer(id);
+    check.flush();
+    check.replies.shift().resolve(snapshot);
+    await third;
+    check.flush();
+    expect(check.untrack(() => check.serverSnapshot(id))).toBeUndefined();
+  }, { scenario: 'explicit-server-refresh-single-flight' });
+  check.expectNoDiagnostics(artifact);
+});
+
 async function buildHarness() {
   const connectionIdPath = fileURLToPath(new URL('../src/features/servers/connection-id.ts', import.meta.url));
   const readStatePath = fileURLToPath(new URL('../src/features/servers/read-state.ts', import.meta.url));
@@ -17,7 +54,9 @@ async function buildHarness() {
     plugins: [{ name: 'server-reactivity-check', setup(build) {
       build.onLoad({ filter: /features[\\/]servers[\\/]service\.ts$/ }, () => ({ loader: 'js', contents: `
         export const counts = { opened: 0, closed: 0 };
-        const api = { subscribe: async () => { counts.opened++; return () => counts.closed++; } };
+        export const replies = [];
+        export const refreshCalls = [];
+        const api = { subscribe: async () => { counts.opened++; return () => counts.closed++; }, snapshot: (id, refresh) => { refreshCalls.push({ id, refresh }); return new Promise((resolve, reject) => replies.push({ resolve, reject })); }, remove: async () => {} };
         export const serversApi = async () => api;
       ` }));
       build.onResolve({ filter: /^vesta-server-reactivity-check$/ }, () => ({ path: 'check', namespace: 'server-check' }));
@@ -28,7 +67,9 @@ async function buildHarness() {
         import { createServerRead, readRetryDelay } from ${JSON.stringify(readStatePath)};
         export { createRoot, createSignal, flush, untrack, createServerRead, readRetryDelay };
         import { useServerTopic } from ${JSON.stringify(storePath)};
+        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer } from ${JSON.stringify(storePath)};
         import { counts } from ${JSON.stringify(servicePath)};
+        export { counts, replies, refreshCalls } from ${JSON.stringify(servicePath)};
         export { captureArtifact, expectNoDiagnostics };
         export function scenario(assert) {
           const owner = createRoot(dispose => {

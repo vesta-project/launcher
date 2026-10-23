@@ -11,7 +11,8 @@ import type { MessageId } from '../../localization/messages';
 import { serverArt } from '../../features/servers/art';
 import { errorMessage } from '../../features/servers/errors';
 import { IntentMemo, lifecycleControls, minecraftFact, playersFact, statusDot } from '../../features/servers/model';
-import { putOperations, serverCommand, updateServer } from '../../features/servers/store';
+import { putOperations, serverCommand, serverRefreshing, updateServer } from '../../features/servers/store';
+import { refreshServerWithFeedback } from './refresh-button';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
 import { RemoveServerDialog } from './remove-dialog';
 import '../../features/instances/instance-card.css';
@@ -121,6 +122,7 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
     <>
       <ContextMenu trigger={card}>
         <ContextMenuItem onSelect={open}>{t('servers.open')}</ContextMenuItem>
+        <ContextMenuItem disabled={serverRefreshing(id())} onSelect={() => void refreshServerWithFeedback(id())}>{t('servers.refresh')}</ContextMenuItem>
         <Show when={quick()}>
           {(action) => <ContextMenuItem disabled={busy()} onSelect={() => void runQuick()}>{t(action() === 'start' ? 'servers.lifecycle.start' : 'servers.lifecycle.stop')}</ContextMenuItem>}
         </Show>

@@ -13,6 +13,7 @@ import { errorMessage } from '../../features/servers/errors';
 import { IntentMemo, connectionFact, lifecycleControls, minecraftFactNow, newIntentId, playersFact, readinessReasonMessage, statusDot, supervisorWarnings, type LifecycleAction } from '../../features/servers/model';
 import { initials, serverArt } from '../../features/servers/art';
 import { RemoveServerDialog } from './remove-dialog';
+import { ServerRefreshButton } from './refresh-button';
 import { Dynamic } from '@solidjs/web';
 import { busyIntent } from '../../features/servers/operations-model';
 import { loadOperations, putOperations, putSnapshot, removeServer, serverCommand, serverIcon, serverOperations, serverSnapshot, serversLoaded, updateServer, useServerTopic, useServersClock } from '../../features/servers/store';
@@ -177,6 +178,7 @@ function ServerHeader(props: { snapshot: ServerSnapshot }) {
           </p>
         </div>
         <div data-vesta="instance-header-actions">
+          <ServerRefreshButton id={id()} />
           <IconButton
             variant="ghost"
             label={t('servers.tab.connection')}

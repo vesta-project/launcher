@@ -9,6 +9,7 @@ import { updateServer, useServersClock } from '../../../features/servers/store';
 import type { ServerSnapshot } from '../../../features/servers/native';
 import { FingerprintView, Sensitive } from '../parts';
 import { RemoveServerDialog } from '../remove-dialog';
+import { ServerRefreshButton } from '../refresh-button';
 import '../../library/instance/settings-tab.css';
 
 /** A settings panel with the instance Settings tab's look. */
@@ -61,6 +62,7 @@ export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
         </SettingRow>
         <SettingRow label={t('servers.connection.status')}>
           <span data-vesta="server-setting-value">{t(connectionFact(props.snapshot, now()).message, connectionFact(props.snapshot, now()).args)}</span>
+          <ServerRefreshButton id={id()} />
         </SettingRow>
       </Panel>
 

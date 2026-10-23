@@ -509,7 +509,7 @@ impl ServerManager {
         // Enrollment succeeded even if a follow-up read fails. Return an honest
         // classified connection snapshot rather than encouraging code redemption again.
         let _ = self.refresh(app, &id, true).await;
-        self.snapshot(app, &id, false).await
+        Ok(self.record(&id).await?.snapshot)
     }
     pub async fn pair(
         &self,
@@ -638,13 +638,16 @@ impl ServerManager {
             .await
     }
     pub async fn snapshot(
-        &self,
+        self: &Arc<Self>,
         app: &AppHandle,
         id: &str,
         refresh: bool,
     ) -> Result<ServerSnapshot> {
         if refresh {
             self.refresh(app, id, true).await?;
+            // A prior permanent/local construction error may have ended the
+            // worker. A successful explicit recovery restores existing demand.
+            self.ensure_worker(app, id)?;
         }
         Ok(self.record(id).await?.snapshot)
     }

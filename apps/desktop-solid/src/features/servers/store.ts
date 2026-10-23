@@ -36,6 +36,21 @@ const [loaded, setLoaded] = createSignal(false, { name: 'serversLoaded' });
 const [listError, setListError] = createSignal<ServerCommandError | null>(null, { name: 'serversListError' });
 
 const consoles = new Map<ConnectionId, ConsoleBuffer>();
+const refreshing = keyed<boolean>('serverRefreshing', () => false);
+const refreshes = new Map<ConnectionId, Promise<void>>();
+export const serverRefreshing = (id: ConnectionId) => refreshing.get(id);
+
+/** One explicit observation per server, even when several views request it. */
+export function refreshServer(id: ConnectionId): Promise<void> {
+  const pending = refreshes.get(id);
+  if (pending) return pending;
+  const request = serverCommand((client) => client.snapshot(id, true))
+    .then((snapshot) => { if (untrack(() => snapshots.get(id))) putSnapshot(snapshot); })
+    .finally(() => { refreshes.delete(id); refreshing.update(id, () => false); });
+  refreshes.set(id, request);
+  refreshing.update(id, () => true);
+  return request;
+}
 const METRIC_HISTORY = 90;
 
 export const serversLoaded = loaded;
