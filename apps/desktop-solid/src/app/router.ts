@@ -15,8 +15,32 @@ const [historyDepth, setHistoryDepth] = createSignal(depth(), {
   name: 'historyDepth',
 });
 
+/**
+ * One view at a time may hold unsaved work. Its guard sees every attempt to leave the
+ * current path and returns false to stay; it then owns asking the user, and navigates
+ * to `to` itself if they choose to leave.
+ */
+type LeaveGuard = (to: string) => boolean;
+let leaveGuard: LeaveGuard | undefined;
+
+/** Installs a leave guard; returns the function that removes it. */
+export function setLeaveGuard(guard: LeaveGuard) {
+  leaveGuard = guard;
+  return () => {
+    if (leaveGuard === guard) leaveGuard = undefined;
+  };
+}
+
+const mayLeave = (to: string) => !leaveGuard || leaveGuard(to);
+
 const sync = () => {
-  setPath(read());
+  const next = read();
+  // Back/forward and hand-edited hashes have already moved the URL: put it back and ask.
+  if (next !== path() && !mayLeave(next)) {
+    history.replaceState(history.state, '', `#${path()}`);
+    return;
+  }
+  setPath(next);
   setHistoryDepth(depth());
 };
 // popstate covers back/forward over entries we pushed; hashchange covers a hand-edited hash.
@@ -66,6 +90,7 @@ export const route = (): Route => parseRoute(path());
  */
 export function navigate(to: string, options?: { replace?: boolean }) {
   if (!hasWindow || read() === to) return;
+  if (!mayLeave(to)) return;
   // The History API writes the entry and its depth in one step. Assigning location.hash and
   // then stamping it races WebKit's own entry bookkeeping, which left back with a dead step.
   if (options?.replace) history.replaceState({ ...history.state, vesta: historyDepth() }, '', `#${to}`);

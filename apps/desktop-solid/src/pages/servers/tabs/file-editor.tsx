@@ -1,5 +1,6 @@
 import { Badge, Button, Dialog, IconButton, Skeleton, TextArea, toast } from '@vesta/ui';
-import { Show, createEffect, createSignal } from 'solid-js';
+import { Show, createEffect, createSignal, onCleanup } from 'solid-js';
+import { navigate, setLeaveGuard } from '../../../app/router';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import { baseName, changedLineCount, fileActions, fileIcon, fileKind, formatBytes, saveTextFile } from '../../../features/servers/files-model';
@@ -28,6 +29,9 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
     return !!current && !current.binary && !current.truncated && fileActions(props.snapshot.capabilities, props.path, { kind: 'file', size: current.size }).edit;
   };
   const dirty = () => !!file() && draft() !== file()!.text;
+  /** Where the user tried to go with unsaved edits: a route, or `close` for the Back button. */
+  const [leaving, setLeaving] = createSignal<string | null>(null, { name: 'server-file-editor:leaving' });
+  const saveKeys = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 
   const load = async () => {
     setError(null);
@@ -38,8 +42,8 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   };
   createEffect(() => props.path, () => { void load(); }, { name: 'server-file-editor:load' });
 
-  /** Saves `text` against `expected`; a stale validator opens the compare dialog. */
-  const save = async (text: string, expected: string | null) => {
+  /** Saves `text` against `expected`; a stale validator opens the compare dialog. True once saved. */
+  const save = async (text: string, expected: string | null): Promise<boolean> => {
     setSaving(true); setError(null);
     const intentId = intents.idFor({ path: props.path, text, expected });
     try {
@@ -49,13 +53,46 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
         setFile({ text, sha256: outcome.sha256, size: outcome.size, binary: false, truncated: false });
         setValidator(outcome.sha256); setConflict(null); setGone(false);
         toast.show({ title: t('server-files.saved', { name: baseName(props.path) }), tone: 'success' });
+        return true;
       } else if (outcome.kind === 'conflict') setConflict(outcome.server);
       else { setGone(true); setValidator(null); }
     } catch (reason) {
       intents.settle(reason as ServerCommandError);
       setError(reason as ServerCommandError);
     } finally { setSaving(false); }
+    return false;
   };
+  const canSave = () => dirty() && editable() && !saving();
+  const saveNow = () => (canSave() ? save(draft(), validator()) : Promise.resolve(false));
+  const discard = () => { if (file()) setDraft(file()!.text); };
+
+  // Unsaved edits hold every way out: other routes, the Back button, and closing the window.
+  // `proceed` drops the guard synchronously: the effect that would drop it runs after the navigation.
+  let releaseGuard: (() => void) | undefined;
+  createEffect(dirty, (isDirty) => {
+    if (!isDirty) return;
+    const release = setLeaveGuard((to) => { setLeaving(to); return false; });
+    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener('beforeunload', unload);
+    releaseGuard = () => { release(); window.removeEventListener('beforeunload', unload); };
+    return () => { releaseGuard?.(); releaseGuard = undefined; };
+  }, { name: 'server-file-editor:leave-guard' });
+  const close = () => { if (dirty()) setLeaving('close'); else props.onClose(); };
+  /** Leaves for wherever the user was headed, once the edits are saved or dropped. */
+  const proceed = (to: string) => {
+    releaseGuard?.();
+    setLeaving(null);
+    if (to === 'close') props.onClose(); else navigate(to);
+  };
+  const leaveDiscarding = () => { const to = leaving(); discard(); if (to) proceed(to); };
+  const leaveSaving = async () => { const to = leaving(); if (to && await saveNow()) proceed(to); else setLeaving(null); };
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 's') return;
+    event.preventDefault();
+    void saveNow();
+  };
+  onCleanup(() => setLeaving(null));
   const discardMine = () => {
     const server = conflict();
     if (!server) return;
@@ -63,14 +100,26 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   };
 
   return (
-    <div data-vesta="settings-content" class="server-file-editor" data-dirty={dirty() ? '' : undefined}>
+    <div data-vesta="settings-content" class="server-file-editor" onKeyDown={onKeyDown}>
       <div data-vesta="server-file-bar">
-        <IconButton size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-back" />} label={t('server-files.back-to-files')} onClick={props.onClose} />
+        <IconButton size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-back" />} label={t('server-files.back-to-files')} onClick={close} />
         <span data-vesta="server-file-icon" data-kind={fileKind(props.path)}><Icon name={fileIcon[fileKind(props.path)]} /></span>
         <span data-vesta="server-file-name">{props.path}</span>
         <Show when={file()}>{(current) => <span data-vesta="server-file-meta">{formatBytes(current().size)}</span>}</Show>
         <Show when={file() && !editable()}><Badge size="sm" variant="soft">{t('server-files.read-only')}</Badge></Show>
         <span data-vesta="server-toolbar-spacer" />
+        {/* Save lives in the bar, always in the same place, so editing never moves the page. */}
+        <Show when={dirty()}>
+          <span data-vesta="server-file-dirty" role="status">
+            <span data-vesta="server-file-dirty-dot" aria-hidden="true" />
+            {t('server-files.unsaved')}
+          </span>
+          <Button size="sm" variant="ghost" disabled={saving()} onClick={discard}>{t('server-files.discard')}</Button>
+        </Show>
+        <Show when={editable()}>
+          <Button size="sm" tone="accent" disabled={!canSave()} data-tip={t('server-files.save-shortcut', { value: saveKeys })}
+            onClick={() => void saveNow()}>{t('server-files.save')}</Button>
+        </Show>
         <IconButton size="sm" variant="ghost" icon={<Icon name="icons/actions/download" />} label={t('server-files.download')} onClick={props.onDownload} />
       </div>
       <div data-vesta="server-pane-body" class="server-file-editor-body">
@@ -84,14 +133,16 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
           </Show>
         </Show>
       </div>
-      <Show when={dirty()}>
-        <div data-vesta="settings-savebar" role="region" aria-label={t('server-files.unsaved')}>
-          <span data-vesta="settings-savebar-dot" />
-          <span>{t('server-files.unsaved')}</span>
-          <Button size="sm" variant="ghost" disabled={saving()} onClick={() => setDraft(file()!.text)}>{t('server-files.discard')}</Button>
-          <Button size="sm" tone="accent" disabled={saving() || !editable()} onClick={() => void save(draft(), validator())}>{t('server-files.save')}</Button>
-        </div>
-      </Show>
+      <Dialog open={!!leaving() && !conflict()} onOpenChange={(open) => { if (!open) setLeaving(null); }} closeLabel={t('nav.close')}
+        title={t('server-files.leave-title', { name: baseName(props.path) })}
+        description={t('server-files.leave-description')}
+        footer={<>
+          <Button variant="ghost" onClick={leaveDiscarding}>{t('server-files.leave-discard')}</Button>
+          <span data-vesta="server-toolbar-spacer" />
+          <Button variant="outline" onClick={() => setLeaving(null)}>{t('server-files.keep-editing')}</Button>
+          <Button tone="accent" disabled={!canSave()} onClick={() => void leaveSaving()}>{t('server-files.save')}</Button>
+        </>}
+      />
       <Dialog open={!!conflict()} onOpenChange={(open) => { if (!open) setConflict(null); }} closeLabel={t('nav.close')} size="lg"
         title={t('server-files.conflict-title')}
         description={t('server-files.conflict-description', { name: baseName(props.path) })}
