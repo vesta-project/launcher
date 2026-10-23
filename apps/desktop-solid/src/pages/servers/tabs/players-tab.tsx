@@ -145,10 +145,6 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
           <SectionLink section="game">{t('servers.people.whitelist-change')}</SectionLink>
         </div>
       </Show>
-      <Show when={!live()}>
-        <p data-vesta="server-callout" data-tone="neutral" role="status">{t('servers.people.not-running')}</p>
-      </Show>
-
       <div data-vesta="server-settings-bar">
         <SegmentedControl
           size="md"
@@ -372,9 +368,8 @@ function ModerationDialog(props: {
         }
         putOperations(id, [{ ...result.operation, intent: result.operation.intent ?? 'players.moderate' }]);
       }
-      const offline = current.route === 'offline';
       setAttempt(null);
-      toast.show({ title: t(offline ? 'servers.players.offline-saved' : 'servers.moderate.accepted'), tone: 'neutral' });
+      toast.show({ title: t('servers.moderate.accepted'), tone: 'neutral' });
       props.onDone();
       props.onClose();
     } catch (reason) {

@@ -286,7 +286,6 @@ servers-players-names-withheld = { $count ->
    *[other] { $count } players online. Their names can't be shown.
   }
 servers-moderate-accepted = Accepted by server
-servers-players-offline-saved = Whitelist saved for the next start
 servers-moderate-confirm-target = Confirm making { $name } an operator. To choose someone else, close this and start again.
 servers-sign-in-storage-unavailable = This computer's secure credential store isn't available, so the launcher can't save this device's key.
 servers-sign-in-memory-only = Use for this session only (you'll need to pair again after restarting the launcher)
@@ -596,7 +595,6 @@ servers-people-filter-empty = Nobody here yet.
 servers-people-no-match = No players match your search.
 servers-people-empty-title = No players yet
 servers-people-empty-description = Players appear here when they join, or when you add them to the whitelist, make them an operator or ban them.
-servers-people-not-running = Minecraft isn't running. Whitelist changes are saved for the next start; kicks, bans and operator changes need the server running.
 servers-people-whitelist-on = The whitelist is on: only listed players can join.
 servers-people-whitelist-off = The whitelist is off: anyone can join.
 servers-people-whitelist-change = Change in Game settings
