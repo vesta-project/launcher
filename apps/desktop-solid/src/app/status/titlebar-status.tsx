@@ -122,7 +122,7 @@ export function UpdateControl() {
               )}
               onClick={() => void restartToUpdate().catch(() => undefined)}
             >
-              <Icon name="icons/actions/refresh" size={12} />
+              <Icon name="icons/actions/reload" size={12} />
               <span data-vesta="titlebar-restart-label">{t('activity.update-restart')}</span>
             </button>
           </span>

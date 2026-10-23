@@ -256,7 +256,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
           <div data-vesta="import-header-actions">
             <IconButton
               variant="outline"
-              icon={<Icon name="icons/actions/reload" />}
+              icon={<Icon name="icons/actions/refresh" />}
               label={t("import.reload")}
               onClick={() => void detectPaths()}
               disabled={busy() || !nativeInstances}
