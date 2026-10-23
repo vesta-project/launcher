@@ -188,6 +188,10 @@ fn concurrency_reservation_and_fail_fast_queue_are_bounded() {
     let _a = s.admit(false).unwrap();
     let _b = s.admit(false).unwrap();
     assert_eq!(s.admit(false).err().unwrap().code, ErrorCode::ServerBusy);
+    // Foreground reads share the two ordinary slots; the third slot is
+    // reserved for explicitly classified urgent controls, not all UI work.
+    assert!(s.admit(true).is_err());
+    drop(_b);
     let _interactive = s.admit(true).unwrap();
     assert!(s.admit(true).is_err());
 }
