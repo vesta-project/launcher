@@ -33,7 +33,7 @@ export function AccessTab(props: { snapshot: ServerSnapshot }) {
   return (
     <div data-vesta="server-activity">
       <div data-vesta="pane-toolbar">
-        <SegmentedControl size="sm" aria-label={t('servers.tab.access')} value={view()} onChange={(value) => setView(value as View)}
+        <SegmentedControl size="md" aria-label={t('servers.tab.access')} value={view()} onChange={(value) => setView(value as View)}
           options={views().map((entry) => ({ value: entry.value, label: t(entry.label) }))} />
       </div>
       <div data-vesta="instance-settings-scroll">

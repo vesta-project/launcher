@@ -5,6 +5,7 @@ import { open as openFolder } from "@tauri-apps/plugin-shell";
 import { For, Show, createEffect, createSignal, createUniqueId, onCleanup, onSettled, untrack } from "solid-js";
 import { Board } from "../../components/board";
 import { SettingsSection } from "../../components/setting-row";
+import { EmptyState } from "../../components/empty-state";
 import { Icon } from "../../components/icon";
 import { navigate } from "../../app/router";
 import { t, formatNumber } from "../../localization";
@@ -255,7 +256,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
           <div data-vesta="import-header-actions">
             <IconButton
               variant="outline"
-              icon={<Icon name="icons/actions/reload" />}
+              icon={<Icon name="icons/actions/refresh" />}
               label={t("import.reload")}
               onClick={() => void detectPaths()}
               disabled={busy() || !nativeInstances}
@@ -437,14 +438,12 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
               <Show
                 when={current() && !dirty() ? current() : undefined}
                 fallback={
-                  <div data-vesta="import-preview-empty">
-                    <Icon
-                      name={loading() ? "icons/content/search" : "icons/content/cube"}
-                      size={28}
-                    />
-                    <h2>{t(loading() ? "import.scanning" : "import.preview-empty")}</h2>
-                    <p>{t(dirty() ? "import.path-changed" : "import.preview-description")}</p>
-                  </div>
+                  <EmptyState
+                    variant="inline"
+                    icon={loading() ? "icons/content/search" : "icons/content/cube"}
+                    title={t(loading() ? "import.scanning" : "import.preview-empty")}
+                    description={t(dirty() ? "import.path-changed" : "import.preview-description")}
+                  />
                 }
               >
                 {(item) => (

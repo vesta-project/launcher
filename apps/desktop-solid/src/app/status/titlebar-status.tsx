@@ -9,6 +9,7 @@ import {
   type HostNotification,
 } from '../../features/activity';
 import { formatRelative } from '../../features/browse/browse-model';
+import { EmptyLine } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import { locale, t } from '../../localization';
 import { percentText } from './format';
@@ -121,7 +122,7 @@ export function UpdateControl() {
               )}
               onClick={() => void restartToUpdate().catch(() => undefined)}
             >
-              <Icon name="icons/actions/refresh" size={12} />
+              <Icon name="icons/actions/reload" size={12} />
               <span data-vesta="titlebar-restart-label">{t('activity.update-restart')}</span>
             </button>
           </span>
@@ -271,7 +272,7 @@ export function InboxControl() {
             </Show>
             <Show
               when={notifications.list().length}
-              fallback={<p data-vesta="inbox-empty">{t('activity.inbox-empty')}</p>}
+              fallback={<EmptyLine>{t('activity.inbox-empty')}</EmptyLine>}
             >
               <ul data-vesta="inbox-rows">
                 <For each={notifications.list()} keyed={(row) => notificationKey(row)}>

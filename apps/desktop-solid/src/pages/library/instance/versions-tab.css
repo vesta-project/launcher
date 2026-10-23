@@ -2,7 +2,7 @@
  * Versions tab: the engine editor (unlinked instances) and the linked-pack view.
  *
  * Hooks: [data-vesta=versions] -version-core -version-field -version-actions -version-warning
- *        -version-muted -version-empty -version-comparison
+ *        -version-muted -version-comparison
  *        pack view: -pack-view -pack-head -pack-icon -pack-title -pack-name -pack-meta
  *        -pack-status -pack-current -source-tag -pack-releases -pack-releases-head
  *        -pack-releases-count -release-list -release -release-row -release-toggle
@@ -34,14 +34,6 @@
     margin: 0;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
-  }
-
-  :where([data-vesta='version-empty']) {
-    margin: 0;
-    padding: var(--vesta-space-4);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    text-align: center;
   }
 
   /* ---- Engine editor (unlinked) ---- */

@@ -1,5 +1,6 @@
 import { Button, IconButton, Popover, type Placement } from '@vesta/ui';
 import { For, Show, createSignal, createUniqueId, onCleanup } from 'solid-js';
+import { EmptyLine } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import {
   ACCOUNT_TYPE_GUEST,
@@ -124,7 +125,7 @@ export function AccountMenu(props: AccountMenuProps) {
         <IconButton variant="ghost" size="sm" class="account-close" tooltip={false} label={t('account.close')} icon={<Icon name="icons/actions/close" size={12} />} onClick={() => changeOpen(false)} />
       </div>
       <Show when={activeAccount()} fallback={
-        <p data-vesta="account-empty" role="status">{t(accountsLoaded() ? 'account.empty-description' : 'account.loading')}</p>
+        <EmptyLine role="status">{t(accountsLoaded() ? 'account.empty-description' : 'account.loading')}</EmptyLine>
       }>
         {(account) => <>
           <button type="button" data-vesta="account-uuid" data-tip={t(copied() ? 'account.uuid-copied' : 'account.copy-uuid')} aria-label={t('account.copy-uuid')} disabled={busy()} onClick={() => void copyUuid()}>

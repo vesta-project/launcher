@@ -181,6 +181,19 @@
     background: var(--instance-bar-bg);
   }
 
+  /*
+   * Empty states replace a pane's rows, so they start at the pane gutter. Server pane
+   * bodies already pad by the gutter, so an empty state there adds none of its own.
+   */
+  :where(.instance-board [data-vesta="empty-state"]) {
+    --empty-state-inset: var(--instance-gutter);
+  }
+
+  :where([data-vesta="server-pane-body"] > [data-vesta="empty-state"]) {
+    --empty-state-inset: 0;
+    --empty-state-block: var(--vesta-space-2);
+  }
+
   /* Game-mode tags, shared by every tab that lists worlds. */
   :where([data-vesta="mode-tag"]) {
     --mode-hue: 145;

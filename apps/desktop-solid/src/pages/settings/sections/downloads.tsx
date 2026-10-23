@@ -151,7 +151,7 @@ export function DownloadsSettings() {
               <Callout tone="danger">{t("prefs.downloads.proxy-failed")}</Callout>
             </Show>
           </Reveal>
-          <Callout icon="icons/actions/refresh">{t("prefs.downloads.proxy-restart")}</Callout>
+          <Callout icon="icons/actions/reload">{t("prefs.downloads.proxy-restart")}</Callout>
         </Show>
       </Card>
     </>

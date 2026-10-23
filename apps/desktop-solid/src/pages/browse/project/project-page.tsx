@@ -61,14 +61,8 @@ function ProjectScreen(props: { source: SourceId; id: string }) {
         <Show when={data.error()} fallback={<Loading />}>
           {(message) => (
             <EmptyState icon="icons/status/error" title={t('browse.project-failed')} description={message()}>
-              <div data-vesta="project-state-actions">
-                <Button size="sm" onClick={() => data.retry()}>
-                  {t('browse.retry')}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => goBack('/browse')}>
-                  {t('common.back')}
-                </Button>
-              </div>
+              <Button onClick={() => data.retry()}>{t('browse.retry')}</Button>
+              <Button variant="ghost" onClick={() => goBack('/browse')}>{t('common.back')}</Button>
             </EmptyState>
           )}
         </Show>

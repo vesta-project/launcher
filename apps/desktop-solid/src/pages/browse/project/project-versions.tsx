@@ -300,10 +300,10 @@ export function ProjectVersions(props: { data: ProjectData; project: ResourcePro
             </div>
           </Match>
           <Match when={!all().length}>
-            <EmptyState icon="icons/content/layers" title={t('browse.versions-none')} />
+            <EmptyState variant="inline" icon="icons/content/layers" title={t('browse.versions-none')} />
           </Match>
           <Match when={!shown().length}>
-            <EmptyState icon="icons/content/filter" title={t('browse.versions-no-match')}>
+            <EmptyState variant="inline" icon="icons/content/filter" title={t('browse.versions-no-match')}>
               <Button size="sm" onClick={() => resetVersionFilter(key)}>
                 {t('browse.reset-filters')}
               </Button>

@@ -146,7 +146,7 @@
   }
 
   /* ---- Editor ---- */
-  /* Flush panes are not flex containers: fill the pane so the inner scroller and save bar stay in view. */
+  /* Flush panes are not flex containers: fill the pane so the inner scroller stays in view. */
   :where(.server-file-editor, .server-properties) {
     block-size: 100%;
   }
@@ -170,8 +170,21 @@
     padding-block-end: var(--instance-pane-padding-block);
   }
 
-  :where(.server-file-editor[data-dirty]) :where(.server-file-editor-body) {
-    padding-block-end: 76px;
+  /* Unsaved marker, beside Save in the file bar. */
+  :where([data-vesta="server-file-dirty"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="server-file-dirty-dot"]) {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--vesta-color-warning);
   }
 
   :where(.server-file-textarea) {

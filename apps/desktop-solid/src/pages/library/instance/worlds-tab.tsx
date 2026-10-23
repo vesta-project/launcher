@@ -147,6 +147,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
               when={worlds().length}
               fallback={
                 <EmptyState
+                  variant="inline"
                   icon="icons/content/globe"
                   title={t(query() ? "worlds.no-matches" : "worlds.no-worlds")}
                   description={
@@ -154,7 +155,13 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                       ? t("worlds.try-search")
                       : t("worlds.create-or-import")
                   }
-                />
+                >
+                  <Show when={query()}>
+                    <Button size="sm" variant="outline" onClick={() => setQuery("")}>
+                      {t("common.clear-search")}
+                    </Button>
+                  </Show>
+                </EmptyState>
               }
             >
               <ul data-vesta="world-list">

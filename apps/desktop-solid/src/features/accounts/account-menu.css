@@ -178,12 +178,6 @@
     text-transform: none;
   }
 
-  :where([data-vesta="account-empty"]) {
-    padding: var(--vesta-space-2);
-    color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-sm);
-  }
-
   :where([data-vesta="account-expired"]) {
     padding: 2px var(--vesta-space-1-5);
     border-radius: var(--vesta-radius-sm);

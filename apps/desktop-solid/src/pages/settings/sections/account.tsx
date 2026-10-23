@@ -1,5 +1,6 @@
 import { Button, Dialog, IconButton, SegmentedControl } from '@vesta/ui';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
+import { EmptyLine } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { SkinViewer } from '../../../components/skin-viewer';
 import {
@@ -355,7 +356,7 @@ export function AccountSettings() {
           </Button>
         }
       >
-        <Show when={others().length} fallback={<p data-vesta="prefs-empty-line">{t('prefs.account.only-one')}</p>}>
+        <Show when={others().length} fallback={<EmptyLine>{t('prefs.account.only-one')}</EmptyLine>}>
           <ul data-vesta="prefs-accounts">
             <For each={others()}>
               {(account) => (

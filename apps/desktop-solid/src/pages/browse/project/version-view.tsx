@@ -425,7 +425,7 @@ export function VersionView(props: { data: ProjectData; project: ResourceProject
             }
           >
             <EmptyState icon="icons/content/layers" title={t('browse.version-missing')} description={error()}>
-              <Button size="sm" variant="outline" onClick={() => transitionTo(listPath())}>
+              <Button variant="outline" onClick={() => transitionTo(listPath())}>
                 {t('browse.all-versions')}
               </Button>
             </EmptyState>

@@ -134,13 +134,6 @@
     overscroll-behavior: contain;
   }
 
-  :where([data-vesta="inbox-empty"]) {
-    margin: 0;
-    padding: 8px 12px 14px;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-  }
-
   :where([data-vesta="inbox-rows"]) {
     margin: 0;
     padding: 0;

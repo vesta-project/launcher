@@ -1,5 +1,6 @@
 import { Button, Dialog, TextField } from '@vesta/ui';
 import { createEffect, createMemo, createSignal, For, Show, untrack } from 'solid-js';
+import { EmptyLine } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import { fetchInstalled, type InstalledRow } from '../../features/browse/browse-api';
 import {
@@ -210,7 +211,7 @@ export function InstancePickerDialog() {
           </For>
         </ul>
         <Show when={!list().length}>
-          <p data-vesta="browse-picker-empty">{t('browse.picker-empty')}</p>
+          <EmptyLine>{t('browse.picker-empty')}</EmptyLine>
         </Show>
       </div>
     </Dialog>

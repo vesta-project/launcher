@@ -503,6 +503,7 @@ function ResourceList(props: {
           when={visible().length}
           fallback={
             <EmptyState
+              variant="inline"
               icon="icons/content/layers"
               title={t(
                 query() ? "resources.no-matches" : "resources.none-installed",
@@ -512,7 +513,13 @@ function ResourceList(props: {
                   ? t("resources.try-another-search")
                   : t("resources.add-resources-hint")
               }
-            />
+            >
+              <Show when={query()}>
+                <Button size="sm" variant="outline" onClick={() => setQuery("")}>
+                  {t("common.clear-search")}
+                </Button>
+              </Show>
+            </EmptyState>
           }
         >
           <div data-vesta="table-scroll" class="resource-table">

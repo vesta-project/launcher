@@ -60,7 +60,10 @@
     --segmented-icon-size: var(--vesta-size-icon-lg);
   }
 
+  /* md sits beside md buttons (12px padding); 10px items keep the labels from crowding
+   * each other while the group still reads as one control. */
   :where([data-vesta='segmented-field'][data-size='md']) {
+    --segmented-item-padding-x: calc(var(--vesta-space-unit) * 2.5);
     --segmented-font-size: var(--vesta-text-md);
   }
 

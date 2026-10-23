@@ -616,11 +616,6 @@
     overflow-wrap: anywhere;
   }
 
-  :where([data-vesta='project-state-actions']) {
-    display: flex;
-    gap: var(--vesta-space-2);
-  }
-
   :where([data-vesta='project-inline-state']) {
     display: flex;
     align-items: center;

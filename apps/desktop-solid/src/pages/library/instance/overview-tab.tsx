@@ -1,6 +1,7 @@
 import { Button, Dialog, IconButton, ImageViewer } from "@vesta/ui";
 import { For, Show, createSignal } from "solid-js";
 import { navigate } from "../../../app/router";
+import { EmptyState } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
 import {
   formatPlaytime,
@@ -62,14 +63,16 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
         when={latest()}
         fallback={
           <section data-vesta="overview-panel" class="overview-empty">
-            <Icon name="icons/content/globe" size={20} />
-            <div>
-            <strong>{t("overview.no-worlds")}</strong>
-              <p>{t("overview.create-or-import-world")}</p>
-            </div>
-            <Button size="sm" variant="outline" onClick={() => goto("worlds")}>
-              {t("overview.go-to-worlds")}
-            </Button>
+            <EmptyState
+              variant="inline"
+              icon="icons/content/globe"
+              title={t("overview.no-worlds")}
+              description={t("overview.create-or-import-world")}
+            >
+              <Button size="sm" variant="outline" onClick={() => goto("worlds")}>
+                {t("overview.go-to-worlds")}
+              </Button>
+            </EmptyState>
           </section>
         }
       >

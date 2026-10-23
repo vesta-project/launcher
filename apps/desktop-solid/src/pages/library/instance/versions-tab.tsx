@@ -35,6 +35,7 @@ import {
 import type { InstanceEntry } from "../../../features/instances/catalog";
 import { loadMetadata } from "../../../features/instances/metadata";
 import { instancePending } from "../../../features/instances/native-service";
+import { EmptyLine } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
 import { t } from "../../../localization";
 import { navigate } from "../../../app/router";
@@ -379,7 +380,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                   <For
                     each={releases()}
                     keyed={(item) => item.id}
-                    fallback={<li data-vesta="version-empty">{t("versions.no-matching-versions")}</li>}
+                    fallback={<li><EmptyLine>{t("versions.no-matching-versions")}</EmptyLine></li>}
                   >
                     {(item) => (
                       <ReleaseRow
