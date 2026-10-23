@@ -24,7 +24,11 @@ export const backupsResource = serverResource('backups', async (id): Promise<Bac
 
 /** Repository usage; optional, so a failure reads as unknown rather than an error. */
 export const backupStorageResource = serverResource('backup-storage', (id): Promise<BackupStorage | null> =>
-  serverCommand((client) => client.backupStorage(id)).catch(() => null));
+  serverCommand((client) => client.backupStorage(id, true)).catch(() => null));
+
+/** Expanded restore points share the normal refresh and invalidation lifecycle. */
+export const backupSnapshotsResource = serverResource('backup-snapshots', (id, profile: string) =>
+  serverCommand((client) => client.backupSnapshots(id, profile)));
 
 /** Every player list; moderation operations change them, so they revalidate together when one settles. */
 export const PLAYER_LIST_RESOURCES = ['whitelist', 'operators', 'bans'] as const;

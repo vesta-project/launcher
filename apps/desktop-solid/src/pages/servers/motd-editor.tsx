@@ -200,7 +200,7 @@ export function MotdEditor(props: {
           rows={props.formatting ? 2 : 1}
           wrap="soft"
           spellcheck={false}
-          readOnly={props.readOnly}
+          readonly={props.readOnly}
           placeholder={props.placeholder}
           value={props.value}
           onInput={(event) => { props.onChange(event.currentTarget.value); remember(); }}

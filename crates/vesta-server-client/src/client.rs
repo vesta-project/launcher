@@ -17,7 +17,7 @@ use crate::{
 use reqwest::Method;
 use serde_json::{json, Value};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex as StdMutex},
 };
 use tokio::sync::Mutex;
@@ -47,6 +47,7 @@ pub struct Client {
     legacy_intents: StdMutex<HashSet<String>>,
     principal_id: StdMutex<Option<String>>,
     principal_lookup: Mutex<bool>,
+    completed_reads: StdMutex<VecDeque<String>>,
     pub(crate) file_validators: Mutex<HashMap<String, (String, String)>>,
     management: management::State,
 }
@@ -149,6 +150,7 @@ impl Client {
             legacy_intents: Default::default(),
             principal_id: Default::default(),
             principal_lookup: Default::default(),
+            completed_reads: Default::default(),
             file_validators: Default::default(),
             management: Default::default(),
         })
@@ -688,6 +690,54 @@ impl Client {
     pub async fn operations(&self, cursor: Option<&str>) -> Result<Page<ServerOperation>> {
         self.operations_with_priority(cursor, true).await
     }
+    /// One bounded observation of admitted IDs, independent of history ordering.
+    pub async fn operations_selected(&self, ids: &[String]) -> Result<Page<ServerOperation>> {
+        if ids.is_empty()
+            || ids.len() > 32
+            || ids.iter().any(|id| {
+                id.is_empty()
+                    || id.len() > 256
+                    || !id
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+            })
+            || ids.iter().collect::<std::collections::BTreeSet<_>>().len() != ids.len()
+        {
+            return Err(Error::new(ErrorCode::InvalidInput));
+        }
+        let value = self
+            .get(
+                &format!("operations?ids={}", ids.join(",")),
+                false,
+                "tasks.view",
+            )
+            .await?;
+        if value["selected"] != true {
+            return Err(Error::new(ErrorCode::Unsupported));
+        }
+        let values = value["items"]
+            .as_array()
+            .ok_or_else(|| Error::new(ErrorCode::Unsupported))?;
+        if values.len() > ids.len() {
+            return Err(Error::new(ErrorCode::Unsupported));
+        }
+        let mut items = Vec::with_capacity(values.len());
+        for value in values {
+            let operation = self.decode_operation(value.clone()).await?;
+            if !ids.contains(&operation.operation_id)
+                || items
+                    .iter()
+                    .any(|item: &ServerOperation| item.operation_id == operation.operation_id)
+            {
+                return Err(Error::new(ErrorCode::Unsupported));
+            }
+            items.push(operation);
+        }
+        Ok(Page {
+            items,
+            next_cursor: None,
+        })
+    }
     pub async fn operations_with_priority(
         &self,
         cursor: Option<&str>,
@@ -741,7 +791,25 @@ impl Client {
             .principal_id
             .lock()
             .map_err(|_| Error::new(ErrorCode::Internal))?;
-        crate::operations::decode(value, principal.as_deref())
+        let operation = crate::operations::decode(value, principal.as_deref())?;
+        drop(principal);
+        if operation.terminal() && !operation.reconciling {
+            let mut completed = self
+                .completed_reads
+                .lock()
+                .map_err(|_| Error::new(ErrorCode::Internal))?;
+            if !completed.contains(&operation.operation_id) {
+                // Submission acceptance can precede the actual effect by minutes.
+                // Retire native read caches before delivering the completion to UI.
+                // Bound bookkeeping and ignore repeated history/poll observations.
+                if completed.len() == 256 {
+                    completed.pop_front();
+                }
+                completed.push_back(operation.operation_id.clone());
+                self.transport.invalidate_reads();
+            }
+        }
+        Ok(operation)
     }
 
     async fn enrich_accepted(

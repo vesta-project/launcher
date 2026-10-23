@@ -85,6 +85,29 @@ mod tests {
         assert!(!subs.demand("server", ServerTopic::Console));
     }
     #[test]
+    fn whitelist_changes_coalesce_without_overflowing_the_status_channel() {
+        let mut subs = Subscriptions::default();
+        let output = Arc::new(Mutex::new(vec![]));
+        let id = subs
+            .add(
+                "server".into(),
+                ServerTopic::Status,
+                "window".into(),
+                channel(output.clone()),
+            )
+            .unwrap();
+        for _ in 0..100 {
+            subs.send(
+                "server",
+                ServerTopic::Status,
+                ServerEvent::PlayerListsChanged,
+            );
+        }
+        assert_eq!(subs.entries[&id].pending.len(), 1);
+        subs.flush("server");
+        assert_eq!(output.lock().unwrap()[0]["kind"], "playerListsChanged");
+    }
+    #[test]
     fn oversized_events_become_resync_and_metrics_are_latest_only() {
         let mut subs = Subscriptions::default();
         let out = Arc::new(Mutex::new(vec![]));
@@ -202,6 +225,7 @@ impl Subscriptions {
             // the same ID supersede older updates still waiting in this queue.
             s.pending.retain(|(old,n)| {
                 let replace = matches!((&bounded,old),(ServerEvent::Players {..},ServerEvent::Players {..})|(ServerEvent::Snapshot {..},ServerEvent::Snapshot {..})|(ServerEvent::Metrics {..},ServerEvent::Metrics {..}))
+                    || matches!((&bounded,old),(ServerEvent::PlayerListsChanged,ServerEvent::PlayerListsChanged))
                     || matches!((&bounded,old),(ServerEvent::Operation {operation:a},ServerEvent::Operation {operation:b}) if a.operation_id == b.operation_id);
                 if replace { s.bytes = s.bytes.saturating_sub(*n); } !replace
             });

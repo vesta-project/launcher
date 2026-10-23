@@ -173,3 +173,24 @@ server-settings-key-rcon-port = RCON port
 server-settings-key-rcon-password = RCON password
 server-settings-key-enable-query = Query protocol
 server-settings-key-query-port = Query port
+
+# Game settings page.
+server-settings-group-essentials = Essentials
+server-settings-malformed-short = Invalid value in the file
+server-settings-motd-title = Server list message (MOTD)
+server-settings-motd-help = What players see under the server name while Minecraft is running.
+server-settings-motd-plain = Plain text only: server.properties doesn't keep colours reliably. For colours, use a server list message in Sleep and status.
+server-settings-motd-preview-aria = Server list preview for { $name }: { $value }
+server-settings-search = Search settings
+server-settings-no-results = No settings match your search.
+server-settings-show-keys = Show property names
+server-settings-summary-count = { $count ->
+    [one] { $count } setting
+   *[other] { $count } settings
+  }
+server-settings-summary-customized = { $count } changed from default
+server-settings-summary-edited = { $count ->
+    [one] { $count } unsaved change
+   *[other] { $count } unsaved changes
+  }
+server-settings-unreported = The agent didn't report: { $name }. They keep their current values.

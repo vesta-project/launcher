@@ -5,6 +5,7 @@ import { createEffect, createMemo, createSignal, onCleanup, untrack, type Access
 import { ConsoleBuffer } from './console-model';
 import { toServerError } from './errors';
 import { isTerminal, mergeOperations } from './operations-model';
+import { invalidateServerResources, releaseServerResources } from './resources';
 import { serversApi, type ServersApi } from './service';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
@@ -38,37 +39,30 @@ const [listError, setListError] = createSignal<ServerCommandError | null>(null, 
 const players = keyed<import('./native').PlayersView>('serverPlayers', () => ({ known: false }));
 export const serverPlayers = (id: ConnectionId) => players.get(id);
 
-/** The roster revision last read per server, so each revision is read at most once. */
-const rosterReads = new Map<ConnectionId, string>();
-
-/** What identifies the roster on screen: the run plus its revision (or count, on agents without revisions). */
-export function rosterKey(snapshot: ServerSnapshot): string | null {
-  const status = snapshot.status;
-  if (snapshot.state.phase !== 'online' || snapshot.state.access !== 'paired' || status?.state !== 'running' || !status.generation) return null;
-  return `${status.generation}:${status.playerRosterRevision ?? `count:${status.playerCount ?? ''}`}`;
-}
-
-/**
- * Brings the shared roster up to the server's current revision. Join and leave events keep
- * it current; this read only fills it when a revision arrives that events didn't deliver
- * (first view of a run, a missed event, a resync).
- */
-function syncRoster(id: ConnectionId, key: string) {
-  if (rosterReads.get(id) === key) return;
-  rosterReads.set(id, key);
-  void serverCommand((client) => client.players(id)).then((view) => {
-    const status = untrack(() => snapshots.get(id)?.status);
-    if (view.known && status?.state === 'running' && status.generation === view.generation) players.update(id, () => view);
-  }, () => { if (rosterReads.get(id) === key) rosterReads.delete(id); });
-}
-
-/** Keeps the shared roster for a mounted view; reads only when the roster revision changes. */
+/** Observe the native worker's single roster owner; views never issue competing list reads. */
 export function useServerRoster(snapshot: () => ServerSnapshot) {
-  createEffect(
-    () => { const current = snapshot(); const key = rosterKey(current); return key ? `${current.connection.id}|${key}` : null; },
-    (value) => { if (value) { const at = value.indexOf('|'); syncRoster(value.slice(0, at), value.slice(at + 1)); } },
-    { name: 'server-roster:sync' },
-  );
+  // The workspace owns status demand. Subscribing again here would duplicate
+  // channels/snapshot delivery just because the same roster is shown twice.
+  return {
+    value: () => {
+      const current = snapshot();
+      const roster = serverPlayers(current.connection.id);
+      return current.state.phase === 'online' && current.state.access === 'paired'
+        && current.status?.state === 'running' && roster.known && roster.generation === current.status.generation
+        ? roster : { known: false } as const;
+    },
+    error: () => null,
+    // Missing observation is unknown, not an indefinitely loading request owned by this view.
+    loading: () => false,
+    refresh: () => refreshServer(untrack(snapshot).connection.id),
+  };
+}
+
+export function putPlayers(id: ConnectionId, view: import('./native').PlayersView) {
+  const snapshot = untrack(() => snapshots.get(id));
+  const status = snapshot?.status;
+  players.update(id, () => view.known && (snapshot?.state.phase !== 'online' || snapshot.state.access !== 'paired'
+    || status?.state !== 'running' || status.generation !== view.generation) ? { known: false } : view);
 }
 
 const consoles = new Map<ConnectionId, ConsoleBuffer>();
@@ -91,12 +85,13 @@ const METRIC_HISTORY = 90;
 
 export const serversLoaded = loaded;
 export const serversListError = listError;
+const sameSnapshots = (a: readonly ServerSnapshot[], b: readonly ServerSnapshot[]) => a.length === b.length && a.every((snapshot, index) => snapshot === b[index]);
 export const serverSnapshots = createMemo(
   () => order().map((id) => snapshots.get(id)).filter((snapshot): snapshot is ServerSnapshot => !!snapshot),
-  { name: 'serverList' },
+  { name: 'serverList', equals: sameSnapshots },
 );
 export const serverSnapshot = (id: ConnectionId | undefined) => (id ? snapshots.get(id) : undefined);
-export const pinnedServers = createMemo(() => serverSnapshots().filter((snapshot) => snapshot.connection.pinned), { name: 'pinnedServers' });
+export const pinnedServers = createMemo(() => serverSnapshots().filter((snapshot) => snapshot.connection.pinned), { name: 'pinnedServers', equals: sameSnapshots });
 export const serverOperations = (id: ConnectionId) => operations.get(id);
 export const serverMetrics = (id: ConnectionId) => metrics.get(id);
 export const latestMetrics = (id: ConnectionId) => serverMetrics(id).at(-1);
@@ -114,7 +109,8 @@ export function putSnapshot(snapshot: ServerSnapshot) {
   const id = snapshot.connection.id;
   snapshots.update(id, () => snapshot);
   const roster = untrack(() => players.get(id));
-  if (roster.known && (snapshot.status?.state !== 'running' || snapshot.status.generation !== roster.generation)) {
+  if (roster.known && (snapshot.state.phase !== 'online' || snapshot.state.access !== 'paired'
+    || snapshot.status?.state !== 'running' || snapshot.status.generation !== roster.generation)) {
     players.update(id, () => ({ known: false }));
   }
   if (!untrack(order).includes(id)) setOrder((current) => [...current, id]);
@@ -122,38 +118,30 @@ export function putSnapshot(snapshot: ServerSnapshot) {
 
 function forget(id: ConnectionId) {
   setOrder((current) => current.filter((entry) => entry !== id));
+  releaseServerResources(id);
   snapshots.delete(id);
   operations.delete(id);
   metrics.delete(id);
   consoleVersions.delete(id);
   consoles.delete(id);
   players.delete(id);
-  rosterReads.delete(id);
   icons.delete(id);
   iconRequests.delete(id);
 }
 
 export function putOperations(id: ConnectionId, incoming: readonly ServerOperation[]) {
-  operations.update(id, (current) => mergeOperations(current, incoming));
-  for (const operation of incoming) {
-    if (!isTerminal(operation)) continue;
-    const key = `${id}:${operation.operationId}`;
-    const waiting = settleWatchers.get(key);
-    if (waiting) { settleWatchers.delete(key); for (const run of waiting) run(operation); }
-  }
-}
-
-const settleWatchers = new Map<string, ((operation: ServerOperation) => void)[]>();
-
-/**
- * Runs `run` once the operation reaches a terminal state (from the operations topic or a
- * later read), or now if it already has. Use it to reread what the operation changed.
- */
-export function whenOperationSettles(id: ConnectionId, operationId: string, run: (operation: ServerOperation) => void) {
-  const known = untrack(() => operations.get(id)).find((operation) => operation.operationId === operationId);
-  if (known && isTerminal(known)) { run(known); return; }
-  const key = `${id}:${operationId}`;
-  settleWatchers.set(key, [...(settleWatchers.get(key) ?? []), run]);
+  const current = untrack(() => operations.get(id));
+  const next = mergeOperations(current, incoming);
+  const completed = next.some((operation) => {
+    if (operation.kind !== 'players.moderate' && operation.intent !== 'players.moderate') return false;
+    if (!isTerminal(operation) || operation.reconciling) return false;
+    const previous = current.find((entry) => entry.operationId === operation.operationId);
+    return !previous || !isTerminal(previous) || previous.reconciling;
+  });
+  operations.update(id, () => next);
+  // Failed/recovery operations can have partial effects too. Duplicate or older
+  // observations do not repeatedly invalidate the resource and create read bursts.
+  if (completed) invalidateServerResources(id, ['players', 'whitelist', 'operators', 'bans']);
 }
 
 let api: ServersApi | undefined;
@@ -177,7 +165,7 @@ export async function refreshServers() {
     for (const snapshot of list) {
       // Unchanged snapshots keep their identity so readers don't rerun.
       const current = untrack(() => snapshots.get(snapshot.connection.id));
-      if (!current || JSON.stringify(current) !== JSON.stringify(snapshot)) snapshots.update(snapshot.connection.id, () => snapshot);
+      if (!current || JSON.stringify(current) !== JSON.stringify(snapshot)) putSnapshot(snapshot);
     }
     setOrder(ids);
     setListError(null);
@@ -252,19 +240,16 @@ export function useServerTopic(id: () => ConnectionId | undefined, topic: Server
       if (closed) return;
       switch (event.kind) {
         case 'snapshot': putSnapshot(event.snapshot); break;
-        case 'players': {
-          const status = untrack(() => snapshots.get(connectionId)?.status);
-          players.update(connectionId, () => event.players.known && (status?.state !== 'running' || status.generation !== event.players.generation) ? { known: false } : event.players);
-          break;
-        }
+        case 'players': putPlayers(connectionId, event.players); break;
         case 'console': consoleBuffer(connectionId).append(event.lines); bumpConsole(connectionId); break;
         case 'consoleHistory': consoleBuffer(connectionId).merge(event.lines); bumpConsole(connectionId); break;
         case 'consoleGap': consoleBuffer(connectionId).gap(event.cursor); bumpConsole(connectionId); void recoverConsoleTail(connectionId); break;
         case 'metrics': metrics.update(connectionId, (current) => [...current, event.sample].slice(-METRIC_HISTORY)); break;
         case 'operation': putOperations(connectionId, [event.operation]); break;
+        case 'playerListsChanged': invalidateServerResources(connectionId, ['whitelist']); break;
         case 'resync':
           if (event.topic === 'status') void serverCommand((client) => client.snapshot(connectionId, true)).then(putSnapshot).catch(() => {});
-          if (event.topic === 'operations') void loadOperations(connectionId).catch(() => {});
+          if (event.topic === 'operations') { invalidateServerResources(connectionId, ['whitelist']); void loadOperations(connectionId).catch(() => {}); }
           if (event.topic === 'console') { consoleBuffer(connectionId).gap(`resync:${Date.now()}`); bumpConsole(connectionId); void recoverConsoleTail(connectionId); }
           break;
       }

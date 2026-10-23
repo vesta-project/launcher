@@ -10,6 +10,25 @@ use std::{
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 static GLOBAL_REQUESTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static GLOBAL_ORDINARY: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static GLOBAL_URGENT: OnceLock<Arc<Semaphore>> = OnceLock::new();
+
+/// Capacity priority grants no authentication or rate-limit exemption.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RequestPriority {
+    Background,
+    Foreground,
+    Urgent,
+}
+impl RequestPriority {
+    fn from_interactive(interactive: bool) -> Self {
+        if interactive {
+            Self::Foreground
+        } else {
+            Self::Background
+        }
+    }
+}
 
 pub struct TokenBucket {
     capacity: f64,
@@ -58,13 +77,18 @@ pub struct Scheduler {
     bucket: Mutex<TokenBucket>,
     authenticated_bucket: Mutex<TokenBucket>,
     local: Arc<Semaphore>,
+    ordinary: Arc<Semaphore>,
+    urgent: Arc<Semaphore>,
     background: Arc<Semaphore>,
     bulk: Arc<Semaphore>,
     interactive_waiters: AtomicUsize,
+    urgent_waiters: AtomicUsize,
 }
 pub struct Admission {
     _global: OwnedSemaphorePermit,
     _local: OwnedSemaphorePermit,
+    _lane: OwnedSemaphorePermit,
+    _global_lane: OwnedSemaphorePermit,
     _background: Option<OwnedSemaphorePermit>,
     _global_background: Option<OwnedSemaphorePermit>,
 }
@@ -74,9 +98,13 @@ impl Default for Scheduler {
             bucket: Mutex::new(TokenBucket::new(Instant::now())),
             authenticated_bucket: Mutex::new(TokenBucket::with_capacity(Instant::now(), 240.)),
             local: Arc::new(Semaphore::new(3)),
+            // In-flight reads cannot be preempted safely; never lend the last slot.
+            ordinary: Arc::new(Semaphore::new(2)),
+            urgent: Arc::new(Semaphore::new(1)),
             background: Arc::new(Semaphore::new(2)),
             bulk: Arc::new(Semaphore::new(1)),
             interactive_waiters: AtomicUsize::new(0),
+            urgent_waiters: AtomicUsize::new(0),
         }
     }
 }
@@ -163,6 +191,30 @@ impl Scheduler {
         self.admit_for(interactive, false)
     }
     fn admit_for(&self, interactive: bool, authenticated: bool) -> Result<Admission> {
+        self.admit_priority(
+            RequestPriority::from_interactive(interactive),
+            authenticated,
+        )
+    }
+    fn lane(&self, priority: RequestPriority) -> (&Arc<Semaphore>, Arc<Semaphore>) {
+        if priority == RequestPriority::Urgent {
+            (
+                &self.urgent,
+                GLOBAL_URGENT
+                    .get_or_init(|| Arc::new(Semaphore::new(2)))
+                    .clone(),
+            )
+        } else {
+            (
+                &self.ordinary,
+                GLOBAL_ORDINARY
+                    .get_or_init(|| Arc::new(Semaphore::new(10)))
+                    .clone(),
+            )
+        }
+    }
+    fn admit_priority(&self, priority: RequestPriority, authenticated: bool) -> Result<Admission> {
+        let interactive = priority != RequestPriority::Background;
         static BACKGROUND: OnceLock<Arc<Semaphore>> = OnceLock::new();
         let busy = || Error::new(ErrorCode::ServerBusy).local_pressure();
         let background = if interactive {
@@ -175,6 +227,9 @@ impl Scheduler {
                     .map_err(|_| busy())?,
             )
         };
+        let (lane, global_lane) = self.lane(priority);
+        let lane = lane.clone().try_acquire_owned().map_err(|_| busy())?;
+        let global_lane = global_lane.try_acquire_owned().map_err(|_| busy())?;
         let local = self.local.clone().try_acquire_owned().map_err(|_| busy())?;
         let global_background = if interactive {
             None
@@ -199,6 +254,8 @@ impl Scheduler {
         Ok(Admission {
             _global: global,
             _local: local,
+            _lane: lane,
+            _global_lane: global_lane,
             _background: background,
             _global_background: global_background,
         })
@@ -211,19 +268,37 @@ impl Scheduler {
         self.admit_request_for(interactive, false).await
     }
     async fn admit_request_for(&self, interactive: bool, authenticated: bool) -> Result<Admission> {
-        const MAX_WAITERS: usize = 8;
+        self.admit_priority_request(
+            RequestPriority::from_interactive(interactive),
+            authenticated,
+        )
+        .await
+    }
+    /// Separate bounded FIFO lanes reserve control capacity while keeping ordinary
+    /// traffic independent of an urgent flood. This method never spawns work.
+    pub async fn admit_priority_request(
+        &self,
+        priority: RequestPriority,
+        authenticated: bool,
+    ) -> Result<Admission> {
+        let interactive = priority != RequestPriority::Background;
+        let (waiters, max_waiters) = if priority == RequestPriority::Urgent {
+            (&self.urgent_waiters, 2)
+        } else {
+            (&self.interactive_waiters, 8)
+        };
         const WAIT: Duration = Duration::from_secs(5);
-        const RETRY: Duration = Duration::from_millis(20);
+        let mut retry = Duration::from_millis(20);
         if !interactive {
-            return self.admit_for(false, authenticated);
+            return self.admit_priority(priority, authenticated);
         }
 
-        let mut count = self.interactive_waiters.load(Ordering::Relaxed);
+        let mut count = waiters.load(Ordering::Relaxed);
         loop {
-            if count >= MAX_WAITERS {
+            if count >= max_waiters {
                 return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
             }
-            match self.interactive_waiters.compare_exchange_weak(
+            match waiters.compare_exchange_weak(
                 count,
                 count + 1,
                 Ordering::AcqRel,
@@ -233,7 +308,7 @@ impl Scheduler {
                 Err(next) => count = next,
             }
         }
-        let _waiter = InteractiveWaiter(&self.interactive_waiters);
+        let _waiter = InteractiveWaiter(waiters);
         let deadline = Instant::now() + WAIT;
 
         loop {
@@ -241,29 +316,40 @@ impl Scheduler {
             if remaining.is_zero() {
                 return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
             }
-            let local =
-                match tokio::time::timeout(remaining, self.local.clone().acquire_owned()).await {
-                    Ok(Ok(permit)) => permit,
-                    Ok(Err(_)) | Err(_) => {
-                        return Err(Error::new(ErrorCode::ServerBusy).local_pressure())
-                    }
-                };
+            let (lane, global_lane) = self.lane(priority);
+            let lane = match tokio::time::timeout(remaining, lane.clone().acquire_owned()).await {
+                Ok(Ok(permit)) => permit,
+                Ok(Err(_)) | Err(_) => {
+                    return Err(Error::new(ErrorCode::ServerBusy).local_pressure())
+                }
+            };
+            let local = self
+                .local
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| Error::new(ErrorCode::ServerBusy).local_pressure())?;
 
             // Never hold a global permit while waiting for origin capacity. If
             // global capacity is full, release local capacity before retrying.
-            let global = GLOBAL_REQUESTS
-                .get_or_init(|| Arc::new(Semaphore::new(12)))
-                .clone()
-                .try_acquire_owned();
-            let global = match global {
+            let global = global_lane.try_acquire_owned().and_then(|global_lane| {
+                GLOBAL_REQUESTS
+                    .get_or_init(|| Arc::new(Semaphore::new(12)))
+                    .clone()
+                    .try_acquire_owned()
+                    .map(|global| (global_lane, global))
+            });
+            let (global_lane, global) = match global {
                 Ok(permit) => permit,
                 Err(_) => {
                     drop(local);
+                    drop(lane);
                     let remaining = deadline.saturating_duration_since(Instant::now());
                     if remaining.is_zero() {
                         return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
                     }
-                    tokio::time::sleep(RETRY.min(remaining)).await;
+                    // Back off only under contention, with no higher concurrency.
+                    tokio::time::sleep(retry.min(remaining)).await;
+                    retry = (retry * 2).min(Duration::from_millis(100));
                     continue;
                 }
             };
@@ -278,6 +364,8 @@ impl Scheduler {
                     return Ok(Admission {
                         _global: global,
                         _local: local,
+                        _lane: lane,
+                        _global_lane: global_lane,
                         _background: None,
                         _global_background: None,
                     });
@@ -291,6 +379,8 @@ impl Scheduler {
                     // Token waiting must not reserve scarce request capacity.
                     drop(global);
                     drop(local);
+                    drop(lane);
+                    drop(global_lane);
                     tokio::time::sleep(delay).await;
                 }
                 Err(error) => return Err(error),

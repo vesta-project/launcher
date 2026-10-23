@@ -1,10 +1,16 @@
 import { createSignal } from 'solid-js';
+import { normalizeServerPath } from './routes';
 
 // Hash routing: no server rewrites needed in the packaged app, and the browser's
 // own history gives back/forward for free. Guarded so the static prerender can import it.
 const hasWindow = typeof window !== 'undefined';
 
-const read = () => (hasWindow ? location.hash.replace(/^#/, '') : '') || '/library';
+const read = () => {
+  const raw = (hasWindow ? location.hash.replace(/^#/, '') : '') || '/library';
+  const canonical = normalizeServerPath(raw);
+  if (hasWindow && canonical !== raw) history.replaceState(history.state, '', `#${canonical}`);
+  return canonical;
+};
 
 const [path, setPath] = createSignal(read(), { name: 'route' });
 
@@ -89,11 +95,14 @@ export const route = (): Route => parseRoute(path());
  * (settings sections) that back should skip over.
  */
 export function navigate(to: string, options?: { replace?: boolean }) {
+  const canonical = normalizeServerPath(to);
+  const replace = options?.replace || canonical !== to;
+  to = canonical;
   if (!hasWindow || read() === to) return;
   if (!mayLeave(to)) return;
   // The History API writes the entry and its depth in one step. Assigning location.hash and
   // then stamping it races WebKit's own entry bookkeeping, which left back with a dead step.
-  if (options?.replace) history.replaceState({ ...history.state, vesta: historyDepth() }, '', `#${to}`);
+  if (replace) history.replaceState({ ...history.state, vesta: historyDepth() }, '', `#${to}`);
   else {
     const next = historyDepth() + 1;
     history.pushState({ vesta: next, from: read() }, '', `#${to}`);

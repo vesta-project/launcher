@@ -1,5 +1,14 @@
 import type { PageId } from './router';
 import type { MessageId } from '../localization/messages';
+import { resolveServerLocation } from '../features/servers/shell-model';
+
+/** Canonicalize legacy server tabs before publishing them to reactive route readers. */
+export function normalizeServerPath(path: string): string {
+  const [page, id, detail, item] = path.split('/').filter(Boolean);
+  if (page !== 'servers' || !id) return path;
+  const location = resolveServerLocation(detail, item);
+  return location.redirect ? `/servers/${id}/${location.redirect}` : path;
+}
 
 export interface NavItem {
   id: PageId;

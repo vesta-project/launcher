@@ -183,3 +183,235 @@ describe('[shell] resource cache', () => {
     expect(peekServerResource('k3', other)).toBeUndefined();
   });
 });
+
+// Use the browser Solid runtime so these checks exercise mounted reader ownership.
+async function resourceHarness(run, initialPath = '/library') {
+  const { mkdtemp, rm, readFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { fileURLToPath, pathToFileURL } = await import('node:url');
+  const directory = await mkdtemp(join(tmpdir(), 'vesta-shell-'));
+  const token = `shell${crypto.randomUUID().replaceAll('-', '')}`;
+  const timers = new Map();
+  const listeners = {};
+  let sequence = 0;
+  const c = {
+    now: 1000, timers,
+    setTimeout: (callback, delay) => { const id = ++sequence; timers.set(id, { callback, at: c.now + delay }); return id; },
+    clearTimeout: (id) => timers.delete(id),
+    location: { hash: `#${initialPath}` },
+    window: { addEventListener: (event, callback) => { listeners[event] = callback; } },
+    history: {
+      state: { vesta: 2, from: '/servers' }, replacements: [], pushes: [],
+      replaceState(state, _, url) { this.state = state; c.location.hash = url; this.replacements.push(url); },
+      pushState(state, _, url) { this.state = state; c.location.hash = url; this.pushes.push(url); },
+    },
+    listeners,
+  };
+  globalThis[token] = c;
+  try {
+    const built = await Bun.build({
+      entrypoints: ['shell-check'], target: 'bun', conditions: ['browser', 'development'],
+      plugins: [{ name: 'shell-check', setup(build) {
+        build.onResolve({ filter: /^shell-check$/ }, () => ({ path: 'check', namespace: 'shell' }));
+        build.onLoad({ filter: /.*/, namespace: 'shell' }, () => ({ loader: 'js', resolveDir: fileURLToPath(new URL('..', import.meta.url)), contents: `
+          export * from './src/features/servers/resources';
+          export * from './src/features/servers/backup-jobs';
+          export { removeServer, putSnapshot } from './src/features/servers/store';
+          export { route, navigate, canGoBack, previousPath } from './src/app/router';
+          export { createRoot, createSignal, flush, untrack } from 'solid-js';
+          export { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';
+        ` }));
+        build.onLoad({ filter: /features[\\/]servers[\\/](resources|backup-jobs)\.ts$/ }, async ({ path }) => ({ loader: 'ts', contents: `
+          const control = globalThis[${JSON.stringify(token)}];
+          const Date = { now: () => control.now };
+          const setTimeout = control.setTimeout, clearTimeout = control.clearTimeout;
+          ${await readFile(path, 'utf8')}
+        ` }));
+        build.onLoad({ filter: /app[\\/]router\.ts$/ }, async ({ path }) => ({ loader: 'ts', contents: `
+          const { window, location, history } = globalThis[${JSON.stringify(token)}];
+          ${await readFile(path, 'utf8')}
+        ` }));
+        build.onLoad({ filter: /features[\\/]servers[\\/]service\.ts$/ }, () => ({ loader: 'js', contents: 'export const serversApi = async () => ({ remove: async () => {} });' }));
+      } }],
+    });
+    if (!built.success) throw new AggregateError(built.logs, 'Shell harness failed');
+    const path = join(directory, 'check.mjs');
+    await Bun.write(path, built.outputs[0]);
+    const api = await import(pathToFileURL(path).href);
+    c.settle = async () => { for (let i = 0; i < 30; i++) { await Promise.resolve(); api.flush(); } };
+    c.advance = async (ms) => {
+      const end = c.now + ms;
+      for (let i = 0; i < 100; i++) {
+        const next = [...timers].filter(([, timer]) => timer.at <= end).sort((a, b) => a[1].at - b[1].at)[0];
+        if (!next) break;
+        c.now = next[1].at; timers.delete(next[0]); next[1].callback(); await c.settle();
+      }
+      c.now = end; await c.settle();
+    };
+    await run(api, c);
+  } finally {
+    delete globalThis[token];
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+test('[shell] readers, prefetch, remounts and versions share one exponential retry owner', () => resourceHarness(async (api, c) => {
+  let loads = 0;
+  let succeed = false;
+  const def = api.serverResource('shared-retry', async () => { loads++; if (!succeed) throw { code: 'server_busy' }; return 'ready'; });
+  const mount = () => api.createRoot(dispose => {
+    const [version, setVersion] = api.createSignal(0);
+    return { dispose, setVersion, read: api.useServerResource(() => 'shared', def, { version }) };
+  });
+  const { artifact } = await api.captureArtifact(async () => {
+    const one = mount(), two = mount();
+    await c.settle();
+    expect(loads).toBe(1);
+    expect(c.timers.size).toBe(1);
+    expect(api.untrack(one.read.error)).toMatchObject({ code: 'server_busy' });
+    const firstDeadline = api.untrack(() => api.serverPressure('shared')).untilMs;
+    api.prefetchServerResource('shared', def);
+    one.setVersion(1); two.setVersion(2);
+    api.invalidateServerResources('shared');
+    await Promise.all([one.read.refresh(), two.read.refresh()]);
+    await c.settle();
+    expect(loads).toBe(1);
+    expect(c.timers.size).toBe(1);
+    one.dispose(); two.dispose(); api.flush();
+    expect(c.timers.size).toBe(0);
+    const remounted = mount(); await c.settle();
+    expect(loads).toBe(1);
+    await c.advance(firstDeadline - c.now);
+    expect(loads).toBe(2);
+    const secondDeadline = api.untrack(() => api.serverPressure('shared')).untilMs;
+    expect(secondDeadline - firstDeadline).toBeGreaterThanOrEqual(5000);
+    expect(c.timers.size).toBe(1);
+    succeed = true;
+    await c.advance(secondDeadline - c.now);
+    expect(loads).toBe(3);
+    expect(api.untrack(remounted.read.value)).toBe('ready');
+    expect(api.untrack(remounted.read.error)).toBeNull();
+    expect(api.untrack(() => api.serverPressure('shared'))).toBeNull();
+    remounted.dispose();
+  }, { scenario: 'server-shared-retry' });
+  api.expectNoDiagnostics(artifact);
+}));
+
+test('[shell] prefetch Retry-After is respected by later readers and explicit refresh', () => resourceHarness(async (api, c) => {
+  let loads = 0;
+  const def = api.serverResource('retry-after', async () => { if (++loads === 1) throw { code: 'rate_limited', retryAfterMs: 20000 }; return 'recovered'; });
+  api.prefetchServerResource('guidance', def); await c.settle();
+  expect(loads).toBe(1);
+  expect(c.timers.size).toBe(0);
+  const owner = api.createRoot(dispose => ({ dispose, read: api.useServerResource(() => 'guidance', def) }));
+  await c.settle(); await owner.read.refresh();
+  await c.advance(19999);
+  expect(loads).toBe(1);
+  await expect(api.readServerResource('guidance', def)).rejects.toMatchObject({ retryAfterMs: 20000 });
+  await c.advance(1);
+  expect(loads).toBe(2);
+  expect(api.untrack(owner.read.value)).toBe('recovered');
+  owner.dispose();
+}));
+
+test('[shell] invalidating an in-flight failure retains its shared retry deadline', () => resourceHarness(async (api, c) => {
+  let reject;
+  let loads = 0;
+  const def = api.serverResource('in-flight', () => { loads++; return new Promise((_, fail) => { reject = fail; }); });
+  const owner = api.createRoot(dispose => ({ dispose, read: api.useServerResource(() => 'retired', def) }));
+  await c.settle();
+  api.invalidateServerResources('retired'); api.flush();
+  reject({ code: 'server_busy', retryAfterMs: 20000 }); await c.settle();
+  expect(loads).toBe(1);
+  expect(c.timers.size).toBe(1);
+  expect(api.untrack(() => api.serverPressure('retired')).untilMs).toBe(21000);
+  owner.dispose();
+}));
+
+test('[shell] pressure survives unrelated success and each resource recovers independently', () => resourceHarness(async (api, c) => {
+  let busy = true;
+  const one = api.serverResource('one', async () => { if (busy) throw { code: 'server_busy', retryAfterMs: 10000 }; return 1; });
+  const two = api.serverResource('two', async () => { throw { code: 'rate_limited', retryAfterMs: 20000 }; });
+  const okay = api.serverResource('okay', async () => 3);
+  await Promise.allSettled([api.readServerResource('pressure', one), api.readServerResource('pressure', two)]);
+  await api.readServerResource('pressure', okay);
+  expect(api.untrack(() => api.serverPressure('pressure'))).toEqual({ code: 'rate_limited', untilMs: 21000 });
+  busy = false; await c.advance(10000); await api.readServerResource('pressure', one);
+  expect(api.untrack(() => api.serverPressure('pressure'))).toEqual({ code: 'rate_limited', untilMs: 21000 });
+  await c.advance(10000);
+  expect(api.untrack(() => api.serverPressure('pressure'))).toBeNull();
+}));
+
+test('[shell] eviction bounds metadata and removing a connection releases resources', () => resourceHarness(async (api, c) => {
+  const def = api.serverResource('bounded', async () => 'value');
+  for (let i = 0; i < 600; i++) {
+    api.seedServerResource(`bounded-${i}`, def, i);
+    api.invalidateServerResources(`signal-${i}`);
+    api.untrack(() => api.serverPressure(`pressure-${i}`));
+  }
+  expect(api.serverResourceMetadata().keys).toBe(256);
+  expect(api.serverResourceMetadata().versions).toBeLessThanOrEqual(256);
+  expect(api.serverResourceMetadata().pressures).toBeLessThanOrEqual(256);
+  expect(api.peekServerResource('bounded-0', def)).toBeUndefined();
+  let complete;
+  const pending = api.serverResource('pending', () => new Promise(resolve => { complete = resolve; }));
+  const result = api.readServerResource('removed', pending).catch(() => undefined);
+  await c.settle();
+  api.putSnapshot({ connection: { id: 'removed' }, status: null });
+  await api.removeServer('removed');
+  complete('late'); await result;
+  expect(api.peekServerResource('removed', pending)).toBeUndefined();
+  expect(c.timers.size).toBe(0);
+}));
+
+test('[shell] legacy URLs normalize at initial load, hashchange and navigate using replace', () => resourceHarness(async (api, c) => {
+  expect(api.untrack(api.route)).toMatchObject({ page: 'servers', section: 'c1', detail: 'settings', item: 'players' });
+  expect(c.location.hash).toBe('#/servers/c1/settings/players');
+  expect(c.history.state).toEqual({ vesta: 2, from: '/servers' });
+  for (const [old, section] of Object.entries(legacyTabs)) {
+    c.location.hash = `#/servers/c1/${old}`;
+    c.listeners.hashchange(); api.flush();
+    expect(api.untrack(api.route)).toMatchObject({ detail: 'settings', item: section });
+    expect(c.location.hash).toBe(`#/servers/c1/settings/${section}`);
+    api.navigate(`/servers/c2/${old}`); api.flush();
+    expect(api.untrack(api.route)).toMatchObject({ section: 'c2', detail: 'settings', item: section });
+  }
+  expect(c.history.pushes).toHaveLength(0);
+  expect(api.untrack(api.canGoBack)).toBe(true);
+  expect(api.previousPath()).toBe('/servers');
+  api.navigate('/servers/c1/files'); api.flush();
+  expect(c.history.pushes).toEqual(['#/servers/c1/files']);
+}, '/servers/c1/players'));
+
+test('[shell] backup polling follows long jobs through terminal, refreshes projections and disposes timers', () => resourceHarness(async (api, c) => {
+  let polls = 0, projections = 0;
+  const job = (state) => ({ id: 'long-job', state });
+  const follower = api.createBackupJobFollower({
+    read: async () => [job(++polls < 4 ? 'running' : 'succeeded')],
+    onTerminal: async () => { projections++; },
+  });
+  follower.observe([job('queued')]);
+  await c.advance(9000);
+  expect(polls).toBe(3); expect(projections).toBe(0); expect(c.timers.size).toBe(1);
+  await c.advance(3000);
+  expect(polls).toBe(4); expect(projections).toBe(1); expect(c.timers.size).toBe(0);
+  follower.observe([{ id: 'second', state: 'queued' }]);
+  expect(c.timers.size).toBe(1);
+  follower.dispose();
+  expect(c.timers.size).toBe(0);
+  await c.advance(30000); expect(polls).toBe(4);
+  const bounded = api.createBackupJobFollower({ read: async () => [job('running')], onTerminal: async () => {}, maxPolls: 2 });
+  bounded.observe([job('queued')]); await c.advance(6000);
+  expect(c.timers.size).toBe(0);
+  bounded.dispose();
+  let finish;
+  const cancelled = api.createBackupJobFollower({
+    read: () => new Promise(resolve => { finish = resolve; }),
+    onTerminal: async () => { projections++; },
+  });
+  cancelled.observe([job('queued')]); await c.advance(3000);
+  cancelled.dispose(); finish([job('succeeded')]); await c.settle();
+  expect(projections).toBe(1);
+  expect(c.timers.size).toBe(0);
+}));

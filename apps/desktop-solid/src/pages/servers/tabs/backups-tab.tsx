@@ -1,6 +1,6 @@
 import { Badge, Button, Checkbox, Dialog, toast } from '@vesta/ui';
 import type { Tone } from '@vesta/ui';
-import { For, Show, createSignal, onSettled } from 'solid-js';
+import { For, Show, createEffect, createSignal, onCleanup } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
@@ -9,8 +9,9 @@ import { errorMessage } from '../../../features/servers/errors';
 import { age, newIntentId } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { stableConnectionId } from '../../../features/servers/connection-id';
-import { useServerResource } from '../../../features/servers/resources';
-import { backupStorageResource, backupsResource } from '../../../features/servers/server-resources';
+import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
+import { createBackupJobFollower } from '../../../features/servers/backup-jobs';
+import { backupSnapshotsResource, backupStorageResource, backupsResource } from '../../../features/servers/server-resources';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { BackupJob, BackupProfile, BackupSnapshot } from '../../../features/servers/native-manage';
 import { ServerErrorNote } from '../parts';
@@ -77,16 +78,38 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const loading = () => backups.loading() || backups.refreshing();
   const [openProfile, setOpenProfile] = createSignal<string | null>(null, { name: 'server-backups:open-profile' });
   const [restoring, setRestoring] = createSignal<{ profile: string; snapshot: BackupSnapshot } | null>(null, { name: 'server-backups:restoring' });
+  const [started, setStarted] = createSignal<BackupJob | null>(null, { name: 'server-backups:started' });
   const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
 
-  const refresh = async () => { await Promise.all([backups.refresh(), space.refresh()]); };
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
+  const refreshProjections = async () => {
+    const requestedId = id();
+    // Storage refresh retires the native read cache before snapshots are re-read.
+    await space.refresh();
+    if (!disposed && requestedId === id()) invalidateServerResources(requestedId, ['backup-snapshots']);
+  };
+  const refresh = async () => { await Promise.all([backups.refresh(), refreshProjections()]); };
+  // Scope polling to the connection as well as the pane's lifetime.
+  createEffect(connection, () => {
+    const follower = createBackupJobFollower({
+      read: async () => { await backups.refresh(); return overview()?.jobs ?? []; },
+      onTerminal: refreshProjections,
+    });
+    createEffect(() => ({ jobs: overview()?.jobs ?? [], started: started() }), ({ jobs, started }) => {
+      if (started) follower.observe([started]);
+      follower.observe(jobs);
+    }, { name: 'server-backups:jobs' });
+    return follower.dispose;
+  }, { name: 'server-backups:follow' });
 
   const start = async (kind: 'run' | 'verify', profile: string) => {
     try {
-      await serverCommand((client) => (kind === 'run' ? client.backupRun(id(), profile, newIntentId()) : client.backupVerify(id(), profile, newIntentId())));
+      const job = await serverCommand((client) => (kind === 'run' ? client.backupRun(id(), profile, newIntentId()) : client.backupVerify(id(), profile, newIntentId())));
+      if (disposed) return;
+      setStarted(job);
       toast.show({ title: t(kind === 'run' ? 'servers.backups.started' : 'servers.backups.verify-started', { name: profile }), tone: 'neutral' });
       void refresh();
-      setTimeout(() => void refresh(), 3000);
     } catch (reason) {
       toast.show({ title: t(errorMessage(reason)), tone: 'danger' });
     }
@@ -169,7 +192,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                       </div>
                     </div>
                     <Show when={openProfile() === profile.name}>
-                      <RestorePoints snapshot={props.snapshot} profile={profile.name} onRestore={(point) => setRestoring({ profile: profile.name, snapshot: point })} />
+                      <RestorePoints snapshot={props.snapshot} profile={profile.name} onRestore={(point) => setRestoring({ profile: profile.name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
                     </Show>
                   </div>
                 )}
@@ -213,30 +236,27 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
         </section>
       </div>
       <Show when={restoring()} keyed>
-        {(target) => <RestoreDialog snapshot={props.snapshot} profile={target.profile} point={target.snapshot} onClose={() => setRestoring(null)} onDone={() => void refresh()} />}
+        {(target) => <RestoreDialog snapshot={props.snapshot} profile={target.profile} point={target.snapshot} onClose={() => setRestoring(null)} onDone={(job) => { setStarted(job); void refresh(); }} />}
       </Show>
     </div>
   );
 }
 
-function RestorePoints(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void }) {
+function RestorePoints(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void; onStarted: (job: BackupJob) => void }) {
   const id = () => props.snapshot.connection.id;
-  const [points, setPoints] = createSignal<BackupSnapshot[] | null>(null, { name: 'server-backups:points' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-backups:points-error' });
+  const points = useServerResource(stableConnectionId(() => props.snapshot), backupSnapshotsResource, { args: () => props.profile });
   const canRestore = () => gate(props.snapshot.capabilities, 'backups.restore') !== 'denied';
-  onSettled(() => {
-    void serverCommand((client) => client.backupSnapshots(id(), props.profile)).then(setPoints).catch((reason) => setError(reason as ServerCommandError));
-  });
   const copy = async (point: BackupSnapshot) => {
     try {
-      await serverCommand((client) => client.backupRestoreCopy(id(), props.profile, point.id, [], newIntentId()));
+      const job = await serverCommand((client) => client.backupRestoreCopy(id(), props.profile, point.id, [], newIntentId()));
       toast.show({ title: t('servers.backups.copy-started'), tone: 'neutral' });
+      props.onStarted(job);
     } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
   };
   return (
     <div data-vesta="settings-reveal">
-      <ServerErrorNote error={error()} />
-      <Show when={points()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p>}>
+      <ServerErrorNote error={points.error()} onRetry={() => void points.refresh()} />
+      <Show when={points.value()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p>}>
         {(list) => (
           <Show when={list().length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-points')}</p>}>
             <For each={list()}>
@@ -263,7 +283,7 @@ function RestorePoints(props: { snapshot: ServerSnapshot; profile: string; onRes
 }
 
 /** In-place restore: the game must be stopped, a safety snapshot is on by default, and the server's confirmation expires. */
-function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point: BackupSnapshot; onClose: () => void; onDone: () => void }) {
+function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point: BackupSnapshot; onClose: () => void; onDone: (job: BackupJob) => void }) {
   const now = useServersClock();
   const [safety, setSafety] = createSignal(true, { name: 'server-restore:safety' });
   const [prepared, setPrepared] = createSignal<{ jobId: string; expiresAtMs: number } | null>(null, { name: 'server-restore:prepared' });
@@ -285,9 +305,9 @@ function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point
     if (!current) return;
     setBusy(true); setError(null);
     try {
-      await serverCommand((client) => client.backupRestoreConfirm(id(), current.jobId));
+      const job = await serverCommand((client) => client.backupRestoreConfirm(id(), current.jobId));
       toast.show({ title: t('servers.backups.restore-started'), tone: 'neutral' });
-      props.onDone();
+      props.onDone(job);
       props.onClose();
     } catch (reason) { setError(reason as ServerCommandError); setPrepared(null); }
     finally { setBusy(false); }

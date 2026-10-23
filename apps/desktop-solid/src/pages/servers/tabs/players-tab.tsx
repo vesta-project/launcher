@@ -15,8 +15,8 @@ import { effectiveValue, parseProperties, propertyDef } from '../../../features/
 import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
 import { PLAYER_LIST_RESOURCES, bansResource, operatorsResource, propertiesResource, whitelistResource } from '../../../features/servers/server-resources';
 import { agentReachable } from '../../../features/servers/shell-model';
-import { putOperations, serverCommand, serverPlayers, useServerRoster, useServersClock, whenOperationSettles } from '../../../features/servers/store';
-import type { ConnectionId, ModerationAction, ServerCommandError, ServerOperation, ServerSnapshot } from '../../../features/servers/native';
+import { putOperations, serverCommand, serverPlayers, useServersClock } from '../../../features/servers/store';
+import type { ModerationAction, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { Sensitive, ServerErrorNote } from '../parts';
 import { CopyValue, SectionLink, SettingsPage, SettingsSearch } from '../settings-parts';
 
@@ -24,14 +24,7 @@ type Action = ModerationAction['action'];
 type Request = { action: Action; player: string; choices?: Action[] };
 
 const running = (snapshot: ServerSnapshot) => snapshot.status?.state === 'running' && !!snapshot.status.generation;
-
-/**
- * Lists change when a moderation operation finishes, not when it is accepted: reread them
- * once it settles, so the reread can't cache the list from before the change.
- */
-function refreshListsWhenDone(id: ConnectionId, operation: ServerOperation) {
-  whenOperationSettles(id, operation.operationId, () => invalidateServerResources(id, PLAYER_LIST_RESOURCES));
-}
+const isWhitelist = (action: Action) => action === 'whitelist_add' || action === 'whitelist_remove';
 
 /**
  * Who is online right now, for the Overview, from the shared live roster. Join and leave
@@ -41,7 +34,6 @@ function refreshListsWhenDone(id: ConnectionId, operation: ServerOperation) {
 export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-online:dialog' });
-  useServerRoster(() => props.snapshot);
   const reachable = () => agentReachable(props.snapshot);
   const live = () => reachable() && running(props.snapshot);
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
@@ -95,7 +87,7 @@ export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
         )}
       </Show>
       <Show when={dialog()} keyed>
-        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} />}
+        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>
     </section>
   );
@@ -116,7 +108,6 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const [query, setQuery] = createSignal('', { name: 'server-players:query' });
   const [expanded, setExpanded] = createSignal<string | null>(null, { name: 'server-players:expanded' });
   const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-players:dialog' });
-  useServerRoster(() => props.snapshot);
   const whitelist = useServerResource(id, whitelistResource);
   const ops = useServerResource(id, operatorsResource);
   const bans = useServerResource(id, bansResource);
@@ -125,7 +116,10 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
   const operator = () => gate(props.snapshot.capabilities, 'players.operator') !== 'denied';
   const live = () => running(props.snapshot);
-  const canAct = (action: Action) => live() && (action === 'op' || action === 'deop' ? operator() : moderate());
+  /** Whitelist edits also work while stopped: the agent saves them for the next start. */
+  const canWhitelist = () => agentReachable(props.snapshot) && (live() || props.snapshot.status?.state === 'stopped');
+  const canAct = (action: Action) =>
+    isWhitelist(action) ? moderate() && canWhitelist() : live() && (action === 'op' || action === 'deop' ? operator() : moderate());
 
   const players = createMemo(() => mergePlayers({ whitelist: whitelist.value(), ops: ops.value(), bans: bans.value(), roster: serverPlayers(id()) }), { name: 'server-players:merged' });
   const counts = createMemo(() => filterCounts(players()), { name: 'server-players:counts' });
@@ -165,7 +159,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
         />
         <SettingsSearch value={query()} onChange={setQuery} placeholder={t('servers.people.search')} />
         <Show when={moderate() || operator()}>
-          <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={!live()} onClick={() => ask({ action: 'whitelist_add', player: '', choices: addChoices() })}>
+          <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
             {t('servers.people.add')}
           </Button>
         </Show>
@@ -200,13 +194,13 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
       </Show>
 
       <Show when={dialog()} keyed>
-        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} />}
+        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>
     </SettingsPage>
   );
 
   function addChoices(): Action[] {
-    return [...(moderate() ? ['whitelist_add' as const] : []), ...(operator() ? ['op' as const] : []), ...(moderate() ? ['ban' as const] : [])];
+    return (['whitelist_add', 'op', 'ban'] as const).filter((action) => canAct(action));
   }
 }
 
@@ -306,8 +300,6 @@ const actionTitles: Record<Action, MessageId> = {
 const choiceLabels: Partial<Record<Action, MessageId>> = {
   whitelist_add: 'servers.people.add-whitelist-choice', op: 'servers.people.add-operator-choice', ban: 'servers.people.add-ban-choice',
 };
-/** Changes to these lists are reread when the operation settles. */
-const LIST_ACTIONS: ReadonlySet<Action> = new Set(['ban', 'pardon', 'whitelist_add', 'whitelist_remove', 'op', 'deop']);
 
 /** Every moderation change, with the server's confirmation step for operators. */
 function ModerationDialog(props: {
@@ -315,6 +307,8 @@ function ModerationDialog(props: {
   /** Each request mounts a fresh dialog, so its fields start from the request. */
   request: Request;
   onClose: () => void;
+  /** After an accepted change: reread the lists it touches. */
+  onDone: () => void;
 }) {
   const now = useServersClock();
   const [action, setAction] = createSignal<Action>(untrack(() => props.request.action), { name: 'server-moderate:action' });
@@ -329,24 +323,41 @@ function ModerationDialog(props: {
   const takesReason = () => action() === 'kick' || action() === 'ban';
   const remaining = () => Math.max(0, Math.ceil(((awaiting()?.expiresAtMs ?? 0) - now()) / 1000));
   /** Once prepared, the confirmation is bound to that exact player; the field locks. */
-  const locked = () => !!props.request.player || (!!awaiting() && remaining() > 0);
+  const locked = () => !!props.request.player || uncertain() || (!!awaiting() && remaining() > 0);
   const adding = () => !props.request.player && (props.request.choices?.length ?? 0) > 1;
-
-  const settled = (id: ConnectionId, operation: ServerOperation, kind: Action) => {
-    putOperations(id, [{ ...operation, intent: operation.intent ?? 'players.moderate' }]);
-    if (LIST_ACTIONS.has(kind)) refreshListsWhenDone(id, operation);
-  };
+  let offlineRevision: { sha256: string | null } | null = null;
+  let desiredGeneration: string | null = null;
 
   const submit = async () => {
     const kind = action();
     const generation = props.snapshot.status?.generation;
-    if (!generation || !isPlayerName(player())) return;
+    // Whitelist edits go to the agent's file edit while stopped, or its desired-membership
+    // queue once a run exists; everything else needs the running server.
+    const whitelist = isWhitelist(kind);
+    const offlineWhitelist = whitelist && ((!desiredGeneration && props.snapshot.status?.state === 'stopped' && !generation) || (intents.uncertain && offlineRevision !== null));
+    const desiredWhitelist = whitelist && !offlineWhitelist && !!(generation || desiredGeneration);
+    if ((!generation && !offlineWhitelist && !desiredWhitelist) || !isPlayerName(player())) return;
     setBusy(true); setError(null);
     const id = props.snapshot.connection.id;
     try {
       const pending = awaiting();
-      if (pending && remaining() > 0) {
-        settled(id, await serverCommand((client) => client.moderateConfirm(id, pending.intentId)), kind);
+      if (offlineWhitelist) {
+        offlineRevision ??= await serverCommand((client) => client.offlineWhitelist(id));
+        const expected = offlineRevision.sha256;
+        const name = player();
+        const add = kind === 'whitelist_add';
+        const intentId = intents.idFor({ offlineWhitelist: true, name, add, expected });
+        await serverCommand((client) => client.offlineWhitelistUpdate(id, name, add, expected, intentId));
+        intents.settle();
+      } else if (desiredWhitelist) {
+        desiredGeneration ??= generation!;
+        const name = player(); const add = kind === 'whitelist_add'; const expected = desiredGeneration;
+        const intentId = intents.idFor({ whitelist: true, name, add, generation: expected });
+        await serverCommand((client) => client.startupWhitelistUpdate(id, name, add, expected, intentId));
+        intents.settle();
+      } else if (pending && remaining() > 0) {
+        const operation = await serverCommand((client) => client.moderateConfirm(id, pending.intentId));
+        putOperations(id, [{ ...operation, intent: operation.intent ?? 'players.moderate' }]);
       } else {
         const seconds = duration() === 'permanent' ? null : Number(duration());
         const request = {
@@ -356,17 +367,19 @@ function ModerationDialog(props: {
         } as ModerationAction;
         // Identical retries after an uncertain outcome keep the same intent.
         const intentId = intents.idFor({ request, generation });
-        const result = await serverCommand((client) => client.moderate(id, request, generation, intentId));
+        const result = await serverCommand((client) => client.moderate(id, request, generation!, intentId));
         intents.settle();
         if (result.kind === 'awaitingConfirmation') { setAwaiting({ intentId, expiresAtMs: result.expiresAtMs, player: request.player }); return; }
-        settled(id, result.operation, kind);
+        putOperations(id, [{ ...result.operation, intent: result.operation.intent ?? 'players.moderate' }]);
       }
-      toast.show({ title: t('servers.moderate.accepted'), tone: 'neutral' });
+      toast.show({ title: t(offlineWhitelist ? 'servers.players.offline-saved' : 'servers.moderate.accepted'), tone: 'neutral' });
+      props.onDone();
       props.onClose();
     } catch (reason) {
       const failure = reason as ServerCommandError;
       if (!awaiting()) intents.settle(failure);
       setUncertain(intents.uncertain);
+      if (!intents.uncertain) { offlineRevision = null; desiredGeneration = null; }
       setError(failure);
       if (failure.code === 'confirmation_expired') setAwaiting(null);
     } finally { setBusy(false); }
@@ -388,7 +401,7 @@ function ModerationDialog(props: {
       }
     >
       <Show when={adding()}>
-        <SegmentedControl size="md" fill aria-label={t('servers.people.add-as')} value={action()} disabled={!!awaiting()}
+        <SegmentedControl size="md" fill aria-label={t('servers.people.add-as')} value={action()} disabled={!!awaiting() || uncertain()}
           onChange={(value) => setAction(value as Action)}
           options={(props.request.choices ?? []).map((choice) => ({ value: choice, label: t(choiceLabels[choice] ?? actionTitles[choice]) }))} />
       </Show>
