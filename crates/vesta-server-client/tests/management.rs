@@ -15,6 +15,123 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn conflicting_mutations_retire_cached_projections_before_the_next_read() {
+    let _owner = OWNER.lock().await;
+    for (route, status, code, expected) in [
+        (
+            "access-sources",
+            409,
+            "version_conflict",
+            ErrorCode::StaleTarget,
+        ),
+        (
+            "users/fixture/roles",
+            409,
+            "version_conflict",
+            ErrorCode::StaleTarget,
+        ),
+        (
+            "players/whitelist/offline",
+            412,
+            "precondition_failed",
+            ErrorCode::StaleTarget,
+        ),
+        (
+            "backups/policy",
+            400,
+            "backup_policy_revision_conflict",
+            ErrorCode::StaleTarget,
+        ),
+        (
+            "server",
+            409,
+            "future_revision_conflict",
+            ErrorCode::Conflict,
+        ),
+    ] {
+        let a = Agent::start().await;
+        // The users projection is a parent/page rather than the mutation route.
+        let read = if route.starts_with("users/") {
+            "users?offset=0&limit=100"
+        } else {
+            route
+        };
+        let read_path = format!("/api/v3/manage/{read}");
+        let write_path = format!("/api/v3/manage/{route}");
+        a.set("GET", &read_path, json!({"version":"1"}));
+        let started = std::time::Instant::now();
+        assert_eq!(a.client.get(read, true, "").await.unwrap()["version"], "1");
+        a.set("GET", &read_path, json!({"version":"2"}));
+        assert_eq!(
+            a.client.get(read, true, "").await.unwrap()["version"],
+            "1",
+            "fixture must still be within the native cache window"
+        );
+        assert_eq!(a.calls(&read_path).len(), 1);
+        a.reply("PATCH", &write_path, status, json!({"code":code}));
+        assert_eq!(
+            a.client
+                .management_mutate(
+                    reqwest::Method::PATCH,
+                    route,
+                    Some(json!({"version":"1"})),
+                    "conflicting-intent",
+                    ""
+                )
+                .await
+                .unwrap_err()
+                .code,
+            expected
+        );
+        assert_eq!(a.client.get(read, true, "").await.unwrap()["version"], "2");
+        assert_eq!(
+            a.calls(&read_path)
+                .iter()
+                .filter(|call| call.method == "GET")
+                .count(),
+            2
+        );
+        assert_eq!(
+            a.calls(&write_path)
+                .iter()
+                .filter(|call| call.method == "PATCH")
+                .count(),
+            1,
+            "conflict must not retry the mutation"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+}
+
+#[tokio::test]
+async fn explicit_native_read_retirement_forces_a_reread_without_a_mutation() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let route = "/api/v3/manage/access-sources";
+    a.set("GET", route, json!({"version":"1"}));
+    assert_eq!(
+        a.client.get("access-sources", true, "").await.unwrap()["version"],
+        "1"
+    );
+    a.set("GET", route, json!({"version":"2"}));
+    assert_eq!(
+        a.client.get("access-sources", true, "").await.unwrap()["version"],
+        "1"
+    );
+    a.client.transport.invalidate_reads();
+    assert_eq!(
+        a.calls(route).len(),
+        1,
+        "retirement itself performs no network work"
+    );
+    assert_eq!(
+        a.client.get("access-sources", true, "").await.unwrap()["version"],
+        "2"
+    );
+    assert_eq!(a.calls(route).len(), 2);
+}
+
+#[tokio::test]
 async fn desired_whitelist_receipts_validate_generation_identity_and_uncertainty() {
     let _owner = OWNER.lock().await;
     let a = Agent::start().await;

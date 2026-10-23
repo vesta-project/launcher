@@ -206,6 +206,7 @@ pub fn run(context: tauri::Context) {
             commands::servers::server_connection_update,
             commands::servers::server_connection_remove,
             commands::servers::server_snapshot,
+            commands::servers::server_retire_reads,
             commands::servers::server_subscribe,
             commands::servers::server_unsubscribe,
             commands::servers::server_lifecycle,

@@ -14,6 +14,12 @@ async fn lifecycle_deadline<T>(run: impl std::future::Future<Output = Result<T>>
             ))
         })
 }
+/// Local cache retirement only; the subsequent read still uses normal auth,
+/// scheduler bounds and remote current-authority checks.
+#[tauri::command]
+pub async fn server_retire_reads(manager: Manager<'_>, connection_id: String) -> Result<()> {
+    manager.retire_reads(&connection_id).await
+}
 #[tauri::command]
 pub async fn server_connections_list(manager: Manager<'_>) -> Result<Vec<ServerSnapshot>> {
     manager.list().await

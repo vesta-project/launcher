@@ -3,6 +3,17 @@ use super::*;
 use serde::Serialize;
 
 impl ServerManager {
+    /// Explicit refresh must retire native GETs as well as the frontend cache.
+    /// With no client there are no projections to retire; never construct a
+    /// session or issue a request just to discard local cached observations.
+    pub async fn retire_reads(&self, id: &str) -> Result<()> {
+        self.record(id).await?;
+        let slot = self.slot(id)?;
+        if let Some(client) = slot.client.lock().await.as_ref() {
+            client.transport.invalidate_reads();
+        }
+        Ok(())
+    }
     pub async fn management_read<T, F, Fut>(&self, app: &AppHandle, id: &str, read: F) -> Result<T>
     where
         F: FnOnce(Arc<Client>) -> Fut,

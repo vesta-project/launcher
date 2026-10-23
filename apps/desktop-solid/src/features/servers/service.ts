@@ -1,7 +1,7 @@
 // One API for the server UI: the native manager in Tauri, the fixture server in a browser preview.
 import { Channel } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { nativeServers, serversNative, SERVERS_CHANGED_EVENT, type ConnectionId, type ServerEvent, type ServerTopic, type ServersNative } from './native';
+import { nativeServers, retireNativeServerReads, serversNative, SERVERS_CHANGED_EVENT, type ConnectionId, type ServerEvent, type ServerTopic, type ServersNative } from './native';
 
 export type Unsubscribe = () => void;
 
@@ -48,3 +48,7 @@ const native = nativeServers ? nativeApi() : undefined;
 /** Resolves the API for this environment. Fixtures are loaded only in browser previews. */
 export const serversApi = (): Promise<ServersApi> => (native ? Promise.resolve(native) : fixtures());
 export const usingFixtures = !nativeServers;
+
+/** Browser fixtures have no native projection cache. Await this before a forced reread. */
+export const retireServerReads = (connectionId: ConnectionId): Promise<void> =>
+  nativeServers ? retireNativeServerReads(connectionId) : Promise.resolve();

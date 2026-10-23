@@ -320,6 +320,14 @@ impl Transport {
         }
         let mut response = request.send().await.map_err(|e| self.network_error(e))?;
         let status = response.status();
+        // A rejected revision means the cached observation used to construct the
+        // mutation may already be stale. Retire before returning the error, even
+        // if its body is truncated. Conservatively include generic 409 conflicts:
+        // routes use several version-conflict wire codes, not just HTTP 412.
+        let conflict = mutation && matches!(status.as_u16(), 409 | 412);
+        if conflict {
+            self.invalidate_reads();
+        }
         if mutation && matches!(status.as_u16(), 502 | 504) {
             return Err(Error::new(ErrorCode::OutcomeUnknown));
         }
@@ -361,7 +369,7 @@ impl Transport {
             }
         })?;
         if !status.is_success() {
-            return Err(Error::wire_for_route(
+            let error = Error::wire_for_route(
                 status.as_u16(),
                 value
                     .pointer("/error/code")
@@ -370,7 +378,16 @@ impl Transport {
                     .unwrap_or(""),
                 retry,
                 path,
-            ));
+            );
+            // Some policy adapters signal revision conflicts by wire code with
+            // another status. Apply the same rule after closed-code decoding.
+            if mutation
+                && !conflict
+                && matches!(error.code, ErrorCode::StaleTarget | ErrorCode::Conflict)
+            {
+                self.invalidate_reads();
+            }
+            return Err(error);
         }
         // Implemented auth routes predate the v3 management envelope and return
         // plain objects. Never extend this exception to operational routes.

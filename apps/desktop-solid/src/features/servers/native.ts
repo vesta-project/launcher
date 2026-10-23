@@ -335,6 +335,9 @@ export interface SignInOptions {
 
 const call = <T>(command: string, args?: Record<string, unknown>) => invoke<T>(command, args);
 
+/** Retire native GET projections before an explicit frontend force-refresh. No network IO. */
+export const retireNativeServerReads = (connectionId: ConnectionId) => call<void>('server_retire_reads', { connectionId });
+
 export const serversNative = {
   /** Saved connections with their last-known snapshot. No network work. */
   list: () => call<ServerSnapshot[]>('server_connections_list'),
