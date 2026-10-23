@@ -7,8 +7,6 @@ import type { BackupOverview, BackupStorage } from './native-manage';
 /** Recent tasks; the operations topic keeps the store current after the first read. */
 export const operationsResource = serverResource('operations', (id) => loadOperations(id));
 
-/** Online players for one Minecraft run (the generation is the argument). */
-export const onlinePlayersResource = serverResource('players', (id, _generation: string | null) => serverCommand((client) => client.players(id)));
 export const whitelistResource = serverResource('whitelist', (id) => serverCommand((client) => client.whitelist(id)));
 export const operatorsResource = serverResource('operators', (id) => serverCommand((client) => client.operators(id)));
 export const bansResource = serverResource('bans', (id) => serverCommand((client) => client.bans(id)));
@@ -28,5 +26,17 @@ export const backupsResource = serverResource('backups', async (id): Promise<Bac
 export const backupStorageResource = serverResource('backup-storage', (id): Promise<BackupStorage | null> =>
   serverCommand((client) => client.backupStorage(id)).catch(() => null));
 
-/** Player list resources, by the Players settings view that shows them. */
-export const playerListResources = { whitelist: whitelistResource, ops: operatorsResource, bans: bansResource } as const;
+/** Every player list; moderation operations change them, so they revalidate together when one settles. */
+export const PLAYER_LIST_RESOURCES = ['whitelist', 'operators', 'bans'] as const;
+
+// Settings sections. Each is read once per connection and reused while fresh; saves seed
+// the cache with the server's reply so the next visit shows it without a read.
+export const brandingResource = serverResource('branding', (id) => serverCommand((client) => client.branding(id)));
+export const propertiesResource = serverResource('properties', (id) => serverCommand((client) => client.propertiesGet(id)));
+export const sleepPolicyResource = serverResource('sleep-policy', (id) => serverCommand((client) => client.sleepPolicy(id)));
+export const motdPolicyResource = serverResource('motd-policy', (id) => serverCommand((client) => client.motdPolicy(id)));
+export const usersResource = serverResource('users', async (id) => (await serverCommand((client) => client.users(id, 0))).users);
+export const rolesResource = serverResource('roles', (id) => serverCommand((client) => client.roles(id)));
+export const invitationsResource = serverResource('invitations', (id) => serverCommand((client) => client.invitations(id)));
+export const devicesResource = serverResource('devices', (id) => serverCommand((client) => client.devices(id)));
+export const accessSourcesResource = serverResource('access-sources', (id) => serverCommand((client) => client.accessSources(id)));

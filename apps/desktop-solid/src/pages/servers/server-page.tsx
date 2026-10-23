@@ -142,7 +142,7 @@ function ServerContent(props: { id: string }) {
   const blocked = () => snapshot().state.access === 'fingerprint_changed' || snapshot().state.access === 'credentials_rejected';
 
   return (
-    <ServerShellContext value={{ snapshot }}>
+    <ServerShellContext value={{ snapshot, openSection }}>
       <Board fixed class="instance-board servers-workspace">
         <div data-vesta="instance-layout" ref={(element) => { layout = element; }}>
           <ServerHeader snapshot={snapshot()} compact={settings()} onOpenSettings={openSettings} />

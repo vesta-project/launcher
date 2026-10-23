@@ -4,7 +4,10 @@
 import { onSettled } from 'solid-js';
 import { anyVisible } from '../../features/servers/capabilities';
 import { prefetchServerResource } from '../../features/servers/resources';
-import { backupStorageResource, backupsResource, onlinePlayersResource, operationsResource, whitelistResource } from '../../features/servers/server-resources';
+import {
+  accessSourcesResource, backupStorageResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
+  motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, usersResource, whitelistResource,
+} from '../../features/servers/server-resources';
 import { agentReachable } from '../../features/servers/shell-model';
 import type { ServerSnapshot } from '../../features/servers/native';
 
@@ -25,14 +28,30 @@ const can = (snapshot: ServerSnapshot, capability: string) => anyVisible(snapsho
 registerServerPrefetch('overview', (snapshot) => {
   const id = snapshot.connection.id;
   if (can(snapshot, 'tasks.view')) prefetchServerResource(id, operationsResource);
-  if (can(snapshot, 'players.view') && snapshot.status?.state === 'running') prefetchServerResource(id, onlinePlayersResource, snapshot.status.generation);
 });
 registerServerPrefetch('activity', (snapshot) => prefetchServerResource(snapshot.connection.id, operationsResource));
 registerServerPrefetch('backups', (snapshot) => {
   prefetchServerResource(snapshot.connection.id, backupsResource);
   prefetchServerResource(snapshot.connection.id, backupStorageResource);
 });
-registerServerPrefetch('players', (snapshot) => prefetchServerResource(snapshot.connection.id, whitelistResource));
+registerServerPrefetch('general', (snapshot) => prefetchServerResource(snapshot.connection.id, brandingResource));
+registerServerPrefetch('game', (snapshot) => prefetchServerResource(snapshot.connection.id, propertiesResource));
+registerServerPrefetch('presence', (snapshot) => {
+  prefetchServerResource(snapshot.connection.id, sleepPolicyResource);
+  prefetchServerResource(snapshot.connection.id, motdPolicyResource);
+});
+registerServerPrefetch('players', (snapshot) => {
+  const id = snapshot.connection.id;
+  for (const list of [whitelistResource, operatorsResource, bansResource]) prefetchServerResource(id, list);
+  if (can(snapshot, 'config.view')) prefetchServerResource(id, propertiesResource);
+});
+registerServerPrefetch('access', (snapshot) => {
+  const id = snapshot.connection.id;
+  if (can(snapshot, 'principals.view')) { prefetchServerResource(id, usersResource); prefetchServerResource(id, rolesResource); }
+  if (can(snapshot, 'invitations.create')) prefetchServerResource(id, invitationsResource);
+  if (can(snapshot, 'devices.revoke')) prefetchServerResource(id, devicesResource);
+  if (can(snapshot, 'access-sources.manage')) prefetchServerResource(id, accessSourcesResource);
+});
 
 const HOVER_DELAY_MS = 120;
 const ATTRIBUTE = 'data-server-prefetch';

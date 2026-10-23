@@ -9,16 +9,24 @@ export const REDACTED = '[redacted]';
 /** The agent accepts 1–32 changed keys per PATCH. */
 export const MAX_CHANGES = 32;
 
-export type PropertyGroup = 'gameplay' | 'world' | 'players' | 'network' | 'advanced';
+/**
+ * Display groups. Essentials are what most owners change and stay open; the rest are
+ * collapsed until opened or searched.
+ */
+export type PropertyGroup = 'essentials' | 'world' | 'network' | 'advanced';
 
 export type PropertyDef = {
   key: string;
   group: PropertyGroup;
   label: MessageId;
+  /** One plain-language line about what the setting does. */
+  help: MessageId;
   /** Not accepted by the agent's PATCH; shown read-only when the agent reports a typed value. */
   readOnly?: boolean;
   /** Write-only: always reported as redacted; an empty draft leaves it unchanged. */
   secret?: boolean;
+  /** Only meaningful while this boolean key is on; shown inset under it. */
+  parent?: string;
 } & (
   | { type: 'boolean'; default: boolean }
   | { type: 'integer'; min: number; max: number; default: number }
@@ -26,56 +34,64 @@ export type PropertyDef = {
   | { type: 'string'; maxBytes: number; minBytes?: number; default: string }
 );
 
-const bool = (key: string, group: PropertyGroup, label: MessageId, fallback: boolean): PropertyDef => ({ key, group, label, type: 'boolean', default: fallback });
-const int = (key: string, group: PropertyGroup, label: MessageId, min: number, max: number, fallback: number): PropertyDef => ({ key, group, label, type: 'integer', min, max, default: fallback });
+const slug = (key: string) => key.replace(/\./g, '-');
+const label = (key: string) => `server-settings.key.${slug(key)}` as MessageId;
+const help = (key: string) => `server-settings.help.${slug(key)}` as MessageId;
+const bool = (key: string, group: PropertyGroup, fallback: boolean, extra: Partial<PropertyDef> = {}): PropertyDef =>
+  ({ key, group, label: label(key), help: help(key), type: 'boolean', default: fallback, ...extra }) as PropertyDef;
+const int = (key: string, group: PropertyGroup, min: number, max: number, fallback: number, extra: Partial<PropertyDef> = {}): PropertyDef =>
+  ({ key, group, label: label(key), help: help(key), type: 'integer', min, max, default: fallback, ...extra }) as PropertyDef;
+const choice = (key: string, group: PropertyGroup, options: readonly string[], fallback: string, extra: Partial<PropertyDef> = {}): PropertyDef =>
+  ({ key, group, label: label(key), help: help(key), type: 'enum', options, default: fallback, ...extra }) as PropertyDef;
+
+/** `motd` is edited in its own panel; the rest render as rows in schema order. */
+export const MOTD_KEY = 'motd';
 
 export const propertySchema: readonly PropertyDef[] = [
-  { key: 'difficulty', group: 'gameplay', label: 'server-settings.key.difficulty', type: 'enum', options: ['peaceful', 'easy', 'normal', 'hard'], default: 'easy' },
-  { key: 'gamemode', group: 'gameplay', label: 'server-settings.key.gamemode', type: 'enum', options: ['survival', 'creative', 'adventure', 'spectator'], default: 'survival' },
-  bool('force-gamemode', 'gameplay', 'server-settings.key.force-gamemode', false),
-  bool('hardcore', 'gameplay', 'server-settings.key.hardcore', false),
-  bool('pvp', 'gameplay', 'server-settings.key.pvp', true),
-  bool('allow-flight', 'gameplay', 'server-settings.key.allow-flight', false),
-  bool('spawn-monsters', 'gameplay', 'server-settings.key.spawn-monsters', true),
-  bool('spawn-animals', 'gameplay', 'server-settings.key.spawn-animals', true),
-  bool('spawn-npcs', 'gameplay', 'server-settings.key.spawn-npcs', true),
-  bool('enable-command-block', 'gameplay', 'server-settings.key.enable-command-block', false),
+  choice('difficulty', 'essentials', ['peaceful', 'easy', 'normal', 'hard'], 'easy'),
+  choice('gamemode', 'essentials', ['survival', 'creative', 'adventure', 'spectator'], 'survival'),
+  bool('pvp', 'essentials', true),
+  int('max-players', 'essentials', 1, 1000, 20),
+  bool('white-list', 'essentials', false),
+  bool('enforce-whitelist', 'essentials', false, { parent: 'white-list' }),
+  int('view-distance', 'essentials', 2, 32, 10),
+  int('spawn-protection', 'essentials', 0, 1024, 16),
 
-  { key: 'level-type', group: 'world', label: 'server-settings.key.level-type', type: 'enum', options: ['minecraft:normal', 'minecraft:flat', 'minecraft:large_biomes', 'minecraft:amplified', 'minecraft:single_biome_surface'], default: 'minecraft:normal', readOnly: true },
-  bool('allow-nether', 'world', 'server-settings.key.allow-nether', true),
-  int('view-distance', 'world', 'server-settings.key.view-distance', 2, 32, 10),
-  int('simulation-distance', 'world', 'server-settings.key.simulation-distance', 2, 32, 10),
-  int('spawn-protection', 'world', 'server-settings.key.spawn-protection', 0, 1024, 16),
+  bool('hardcore', 'world', false),
+  bool('force-gamemode', 'world', false),
+  bool('allow-flight', 'world', false),
+  bool('allow-nether', 'world', true),
+  bool('spawn-monsters', 'world', true),
+  bool('spawn-animals', 'world', true),
+  bool('spawn-npcs', 'world', true),
+  int('simulation-distance', 'world', 2, 32, 10),
+  choice('level-type', 'world', ['minecraft:normal', 'minecraft:flat', 'minecraft:large_biomes', 'minecraft:amplified', 'minecraft:single_biome_surface'], 'minecraft:normal', { readOnly: true }),
 
-  int('max-players', 'players', 'server-settings.key.max-players', 1, 1000, 20),
-  bool('white-list', 'players', 'server-settings.key.white-list', false),
-  bool('enforce-whitelist', 'players', 'server-settings.key.enforce-whitelist', false),
-  int('op-permission-level', 'players', 'server-settings.key.op-permission-level', 1, 4, 4),
-  int('function-permission-level', 'players', 'server-settings.key.function-permission-level', 1, 4, 2),
-  int('player-idle-timeout', 'players', 'server-settings.key.player-idle-timeout', 0, 10080, 0),
-  bool('hide-online-players', 'players', 'server-settings.key.hide-online-players', false),
+  { key: MOTD_KEY, group: 'network', label: label(MOTD_KEY), help: help(MOTD_KEY), type: 'string', maxBytes: 256, default: 'A Minecraft Server' },
+  int('server-port', 'network', 1, 65535, 25565),
+  bool('online-mode', 'network', true),
+  bool('enforce-secure-profile', 'network', true),
+  bool('prevent-proxy-connections', 'network', false),
+  bool('enable-status', 'network', true),
+  bool('hide-online-players', 'network', false),
+  bool('log-ips', 'network', true),
+  int('player-idle-timeout', 'network', 0, 10080, 0),
 
-  { key: 'motd', group: 'network', label: 'server-settings.key.motd', type: 'string', maxBytes: 256, default: 'A Minecraft Server' },
-  int('server-port', 'network', 'server-settings.key.server-port', 1, 65535, 25565),
-  bool('online-mode', 'network', 'server-settings.key.online-mode', true),
-  bool('enforce-secure-profile', 'network', 'server-settings.key.enforce-secure-profile', true),
-  bool('prevent-proxy-connections', 'network', 'server-settings.key.prevent-proxy-connections', false),
-  bool('enable-status', 'network', 'server-settings.key.enable-status', true),
-  bool('log-ips', 'network', 'server-settings.key.log-ips', true),
-
-  bool('enable-rcon', 'advanced', 'server-settings.key.enable-rcon', false),
-  int('rcon.port', 'advanced', 'server-settings.key.rcon-port', 1, 65535, 25575),
-  { key: 'rcon.password', group: 'advanced', label: 'server-settings.key.rcon-password', type: 'string', minBytes: 1, maxBytes: 128, default: '', secret: true },
-  bool('enable-query', 'advanced', 'server-settings.key.enable-query', false),
-  int('query.port', 'advanced', 'server-settings.key.query-port', 1, 65535, 25565),
+  bool('enable-command-block', 'advanced', false),
+  int('op-permission-level', 'advanced', 1, 4, 4),
+  int('function-permission-level', 'advanced', 1, 4, 2),
+  bool('enable-rcon', 'advanced', false),
+  int('rcon.port', 'advanced', 1, 65535, 25575, { parent: 'enable-rcon' }),
+  { key: 'rcon.password', group: 'advanced', label: label('rcon.password'), help: help('rcon.password'), type: 'string', minBytes: 1, maxBytes: 128, default: '', secret: true, parent: 'enable-rcon' },
+  bool('enable-query', 'advanced', false),
+  int('query.port', 'advanced', 1, 65535, 25565, { parent: 'enable-query' }),
 ];
 
-export const propertyGroups: readonly { id: PropertyGroup; label: MessageId; icon: string }[] = [
-  { id: 'gameplay', label: 'server-settings.group.gameplay', icon: 'icons/actions/play' },
-  { id: 'world', label: 'server-settings.group.world', icon: 'icons/content/globe' },
-  { id: 'players', label: 'server-settings.group.players', icon: 'icons/content/chat' },
-  { id: 'network', label: 'server-settings.group.network', icon: 'icons/security/network' },
-  { id: 'advanced', label: 'server-settings.group.advanced', icon: 'icons/content/code' },
+export const propertyGroups: readonly { id: PropertyGroup; label: MessageId; collapsible: boolean }[] = [
+  { id: 'essentials', label: 'server-settings.group.essentials', collapsible: false },
+  { id: 'world', label: 'server-settings.group.world', collapsible: true },
+  { id: 'network', label: 'server-settings.group.network', collapsible: true },
+  { id: 'advanced', label: 'server-settings.group.advanced', collapsible: true },
 ];
 
 const byKey = new Map(propertySchema.map((def) => [def.key, def]));
@@ -201,3 +217,40 @@ export function weakeningKeys(base: Record<string, PropertyValue>, changes: Reco
   }
   return keys;
 }
+
+/**
+ * Rows a group shows: everything but the MOTD (its own panel) and read-only keys the
+ * server didn't report (those are listed once, quietly, instead of as dead rows).
+ */
+export function groupRows(group: PropertyGroup, parsed: Pick<ParsedProperties, 'typed'>): PropertyDef[] {
+  return propertySchema.filter((def) => def.group === group && def.key !== MOTD_KEY && !(def.readOnly && !(def.key in parsed.typed)));
+}
+
+/** Read-only keys the server didn't report, so the page can say so once. */
+export const unreportedKeys = (parsed: Pick<ParsedProperties, 'typed'>) =>
+  propertySchema.filter((def) => def.readOnly && !(def.key in parsed.typed)).map((def) => def.key);
+
+/** What a collapsed group's header summarises: rows, unsaved edits, and values away from the default. */
+export function groupSummary(defs: readonly PropertyDef[], typed: Record<string, PropertyValue>, changes: Record<string, PropertyValue>) {
+  let edited = 0;
+  let customized = 0;
+  for (const def of defs) {
+    if (def.key in changes) edited++;
+    else if (!def.secret && def.key in typed && typed[def.key] !== def.default) customized++;
+  }
+  return { count: defs.length, edited, customized };
+}
+
+/** Lowercased text a search matches: label, help and the file key (also with separators as spaces). */
+export const propertySearchText = (def: PropertyDef, label: string, help: string) =>
+  `${label} ${help} ${def.key} ${def.key.replace(/[.-]/g, ' ')}`.toLowerCase();
+
+/** Every query word must appear somewhere in the text. */
+export function matchesSearch(text: string, query: string) {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return words.every((word) => text.toLowerCase().includes(word));
+}
+
+/** True when the query matched only through the raw key, so the row should show it. */
+export const matchedByKey = (def: PropertyDef, label: string, help: string, query: string) =>
+  !!query.trim() && !matchesSearch(`${label} ${help}`, query) && matchesSearch(propertySearchText(def, '', ''), query);

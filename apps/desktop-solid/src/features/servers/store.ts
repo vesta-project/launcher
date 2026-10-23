@@ -4,7 +4,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 import { ConsoleBuffer } from './console-model';
 import { toServerError } from './errors';
-import { mergeOperations } from './operations-model';
+import { isTerminal, mergeOperations } from './operations-model';
 import { serversApi, type ServersApi } from './service';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
@@ -37,6 +37,39 @@ const [listError, setListError] = createSignal<ServerCommandError | null>(null, 
 
 const players = keyed<import('./native').PlayersView>('serverPlayers', () => ({ known: false }));
 export const serverPlayers = (id: ConnectionId) => players.get(id);
+
+/** The roster revision last read per server, so each revision is read at most once. */
+const rosterReads = new Map<ConnectionId, string>();
+
+/** What identifies the roster on screen: the run plus its revision (or count, on agents without revisions). */
+export function rosterKey(snapshot: ServerSnapshot): string | null {
+  const status = snapshot.status;
+  if (snapshot.state.phase !== 'online' || snapshot.state.access !== 'paired' || status?.state !== 'running' || !status.generation) return null;
+  return `${status.generation}:${status.playerRosterRevision ?? `count:${status.playerCount ?? ''}`}`;
+}
+
+/**
+ * Brings the shared roster up to the server's current revision. Join and leave events keep
+ * it current; this read only fills it when a revision arrives that events didn't deliver
+ * (first view of a run, a missed event, a resync).
+ */
+function syncRoster(id: ConnectionId, key: string) {
+  if (rosterReads.get(id) === key) return;
+  rosterReads.set(id, key);
+  void serverCommand((client) => client.players(id)).then((view) => {
+    const status = untrack(() => snapshots.get(id)?.status);
+    if (view.known && status?.state === 'running' && status.generation === view.generation) players.update(id, () => view);
+  }, () => { if (rosterReads.get(id) === key) rosterReads.delete(id); });
+}
+
+/** Keeps the shared roster for a mounted view; reads only when the roster revision changes. */
+export function useServerRoster(snapshot: () => ServerSnapshot) {
+  createEffect(
+    () => { const current = snapshot(); const key = rosterKey(current); return key ? `${current.connection.id}|${key}` : null; },
+    (value) => { if (value) { const at = value.indexOf('|'); syncRoster(value.slice(0, at), value.slice(at + 1)); } },
+    { name: 'server-roster:sync' },
+  );
+}
 
 const consoles = new Map<ConnectionId, ConsoleBuffer>();
 const refreshing = keyed<boolean>('serverRefreshing', () => false);
@@ -95,12 +128,32 @@ function forget(id: ConnectionId) {
   consoleVersions.delete(id);
   consoles.delete(id);
   players.delete(id);
+  rosterReads.delete(id);
   icons.delete(id);
   iconRequests.delete(id);
 }
 
 export function putOperations(id: ConnectionId, incoming: readonly ServerOperation[]) {
   operations.update(id, (current) => mergeOperations(current, incoming));
+  for (const operation of incoming) {
+    if (!isTerminal(operation)) continue;
+    const key = `${id}:${operation.operationId}`;
+    const waiting = settleWatchers.get(key);
+    if (waiting) { settleWatchers.delete(key); for (const run of waiting) run(operation); }
+  }
+}
+
+const settleWatchers = new Map<string, ((operation: ServerOperation) => void)[]>();
+
+/**
+ * Runs `run` once the operation reaches a terminal state (from the operations topic or a
+ * later read), or now if it already has. Use it to reread what the operation changed.
+ */
+export function whenOperationSettles(id: ConnectionId, operationId: string, run: (operation: ServerOperation) => void) {
+  const known = untrack(() => operations.get(id)).find((operation) => operation.operationId === operationId);
+  if (known && isTerminal(known)) { run(known); return; }
+  const key = `${id}:${operationId}`;
+  settleWatchers.set(key, [...(settleWatchers.get(key) ?? []), run]);
 }
 
 let api: ServersApi | undefined;

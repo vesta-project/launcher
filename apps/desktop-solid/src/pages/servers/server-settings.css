@@ -1,0 +1,326 @@
+/*
+ * Server settings sections: panels with a header, collapsible groups, search, the MOTD
+ * editor and the player manager. Built on the instance settings panel (settings-tab.css).
+ * Hooks: [data-server-settings-page] [data-vesta=server-panel-head|server-group-toggle|
+ *        server-settings-search|server-copy-value|server-motd*|server-player*]
+ */
+@layer launcher {
+  /* ---- Page: fills the pane; room for the save bar is always reserved ---- */
+  :where([data-server-settings-page]) { block-size: 100%; }
+  :where([data-server-settings-page]) > :where([data-vesta="instance-settings-scroll"]) { padding-block-end: 76px; }
+
+  /* ---- Panel header: uppercase title, optional help, action on the right ---- */
+  :where([data-vesta="server-panel-head"]) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-1);
+  }
+  :where([data-vesta="server-panel-head"]) > div:first-child { flex: 1; min-inline-size: 0; }
+  :where([data-vesta="server-panel-head"] h3),
+  :where([data-vesta="server-group-toggle"] h3) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="server-panel-head"] p) {
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: 1.45;
+  }
+  :where([data-vesta="server-panel-head-action"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-2); margin-block: -4px; }
+  :where([data-vesta="server-panel-foot"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-3);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-panel-foot"]) > :where([data-vesta="button"]) { margin-inline-start: auto; }
+
+  /* ---- Collapsible groups ---- */
+  :where([data-vesta="server-group-toggle"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    inline-size: 100%;
+    min-block-size: 44px;
+    padding: 0 var(--vesta-space-4);
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="server-group-toggle"]:hover) { background: var(--vesta-color-fill); }
+  :where([data-vesta="server-group-toggle"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: -2px; }
+  :where([data-vesta="server-group-toggle"]) > :where([data-vesta="icon"]) { transition: transform var(--vesta-duration-fast) var(--vesta-ease-standard); }
+  :where([data-server-group][data-open]) > :where([data-vesta="server-group-toggle"]) > :where([data-vesta="icon"]) { transform: rotate(90deg); }
+  :where([data-server-group][data-open]) > :where([data-vesta="server-group-toggle"]) { border-end-start-radius: 0; border-end-end-radius: 0; }
+  :where([data-vesta="server-group-summary"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin-inline-start: auto;
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Search and the toolbar above a section's panels ---- */
+  :where([data-vesta="server-settings-bar"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+  }
+  :where([data-vesta="server-settings-search"]) { position: relative; display: flex; flex: 1 1 220px; align-items: center; max-inline-size: 420px; }
+  :where([data-vesta="server-settings-search"]) > :where([data-vesta="field"]) { flex: 1; }
+  :where([data-vesta="server-settings-search"]) > :where([data-vesta="icon-button"], [data-vesta="button"]) { position: absolute; inset-inline-end: 4px; }
+  :where([data-vesta="server-settings-bar"]) > :where(label) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin-inline-start: auto;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-settings-footnote"]) { margin: 0; padding-inline: var(--vesta-space-1); color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
+
+  /* ---- Property rows: unsaved mark and the file key ---- */
+  :where([data-vesta="setting-row"][data-edited]) :where([data-vesta="setting-row-label"])::after {
+    content: "";
+    display: inline-block;
+    inline-size: 6px;
+    block-size: 6px;
+    margin-inline-start: var(--vesta-space-2);
+    border-radius: 50%;
+    background: var(--vesta-color-warning);
+    vertical-align: middle;
+  }
+  :where([data-vesta="server-setting-key"]) {
+    align-self: flex-start;
+    margin-block-start: 2px;
+    padding: 0 5px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-subtle);
+    font-family: var(--vesta-font-mono);
+    font-size: 11px;
+  }
+  :where([data-vesta="setting-row-copy"]) { display: flex; flex-direction: column; }
+
+  /* ---- Weakening confirmation: what gets less safe, and to what ---- */
+  :where([data-vesta="server-weakening-list"]) { display: flex; flex-direction: column; gap: var(--vesta-space-1-5); margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="server-weakening-list"] li) { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-warning-text); }
+  :where([data-vesta="server-weakening-list"] li code) { margin-inline-start: auto; color: var(--vesta-color-text); }
+
+  /* ---- Copyable monospace value ---- */
+  :where([data-vesta="server-copy-value"]) { display: inline-flex; align-items: center; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="server-copy-value"]) code {
+    padding: 2px 6px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-surface-sunken);
+    font-family: var(--vesta-font-mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---- Minecraft server-list entry, drawn like the multiplayer screen ---- */
+  :where([data-vesta="server-motd"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-4); }
+  :where([data-vesta="server-motd-entry"]) {
+    --mc-gray: #aaaaaa;
+
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid oklch(1 0 0 / 0.1);
+    border-radius: var(--vesta-radius-md);
+    background: linear-gradient(oklch(0.2 0 0 / 0.92), oklch(0.16 0 0 / 0.92)), #262626;
+    color: var(--mc-gray);
+    font-family: var(--vesta-font-mono);
+    font-size: 13px;
+    line-height: 18px;
+    text-shadow: 1px 1px 0 oklch(0 0 0 / 0.45);
+  }
+  :where([data-vesta="server-motd-entry"]) > img {
+    inline-size: 64px;
+    block-size: 64px;
+    border-radius: 3px;
+    object-fit: cover;
+    image-rendering: pixelated;
+  }
+  :where([data-vesta="server-motd-entry-body"]) { display: flex; flex-direction: column; min-inline-size: 0; }
+  :where([data-vesta="server-motd-entry-title"]) { display: flex; align-items: center; gap: var(--vesta-space-3); color: #ffffff; }
+  :where([data-vesta="server-motd-entry-title"]) > span:first-child { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :where([data-vesta="server-motd-entry-players"]) { display: inline-flex; align-items: center; gap: 8px; color: var(--mc-gray); white-space: nowrap; }
+  :where([data-vesta="server-motd-entry-version"]) { color: #ff5555; }
+  :where([data-vesta="server-motd-entry-line"]) { min-block-size: 18px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
+  /* Signal bars, like the list's ping indicator. */
+  :where([data-vesta="server-motd-ping"]) { display: inline-flex; align-items: flex-end; gap: 1px; block-size: 10px; }
+  :where([data-vesta="server-motd-ping"]) > i { inline-size: 2px; background: #55ff55; box-shadow: 1px 1px 0 oklch(0 0 0 / 0.45); }
+  :where([data-vesta="server-motd-ping"]) > i:nth-child(1) { block-size: 2px; }
+  :where([data-vesta="server-motd-ping"]) > i:nth-child(2) { block-size: 4px; }
+  :where([data-vesta="server-motd-ping"]) > i:nth-child(3) { block-size: 6px; }
+  :where([data-vesta="server-motd-ping"]) > i:nth-child(4) { block-size: 8px; }
+  :where([data-vesta="server-motd-ping"]) > i:nth-child(5) { block-size: 10px; }
+
+  /* ---- MOTD editor: toolbar over a coloured input ---- */
+  :where([data-vesta="server-motd-toolbar"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-1); }
+  :where([data-vesta="server-motd-toolbar"]) > :where([data-vesta="separator"], hr) { block-size: 18px; margin-inline: var(--vesta-space-1); }
+  :where([data-vesta="server-motd-toolbar"]) :where(.server-motd-format) { min-inline-size: 28px; padding-inline: 6px; font-family: var(--vesta-font-mono); }
+  :where([data-vesta="server-motd-toolbar"]) > :where([data-vesta="server-motd-hint"]) { margin-inline-start: auto; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-motd-current"]) {
+    inline-size: 12px;
+    block-size: 12px;
+    border: 1px solid oklch(1 0 0 / 0.3);
+    border-radius: 3px;
+    background: var(--swatch, #aaaaaa);
+  }
+  :where([data-vesta="server-motd-swatches"]) { display: grid; grid-template-columns: repeat(8, 24px); gap: 6px; }
+  :where([data-vesta="server-motd-swatch"]) {
+    inline-size: 24px;
+    block-size: 24px;
+    padding: 0;
+    border: 1px solid oklch(1 0 0 / 0.25);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--swatch);
+    cursor: default;
+  }
+  :where([data-vesta="server-motd-swatch"]:hover) { outline: 2px solid var(--vesta-color-border-strong); outline-offset: 1px; }
+  :where([data-vesta="server-motd-swatch"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: 1px; }
+
+  /* The textarea's own text is invisible; the mirror under it draws the same characters in colour. */
+  :where([data-vesta="server-motd-field"]) {
+    position: relative;
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-md);
+    background: #1c1c1c;
+    font-family: var(--vesta-font-mono);
+    font-size: 13px;
+    line-height: 20px;
+  }
+  :where([data-vesta="server-motd-field"]:focus-within) { border-color: var(--vesta-color-focus); box-shadow: 0 0 0 1px var(--vesta-color-focus); }
+  :where([data-vesta="server-motd-field"][data-invalid]) { border-color: var(--vesta-color-danger); }
+  :where([data-vesta="server-motd-field"]) > :where(textarea, [data-vesta="server-motd-mirror"]) {
+    box-sizing: border-box;
+    inline-size: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    border: 0;
+    font: inherit;
+    letter-spacing: normal;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 4;
+  }
+  :where([data-vesta="server-motd-mirror"]) {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    color: #aaaaaa;
+    pointer-events: none;
+    text-shadow: 1px 1px 0 oklch(0 0 0 / 0.45);
+  }
+  :where([data-vesta="server-motd-field"]) > textarea {
+    position: relative;
+    display: block;
+    resize: none;
+    overflow: hidden;
+    background: transparent;
+    color: transparent;
+    caret-color: #ffffff;
+    outline: none;
+  }
+  :where([data-vesta="server-motd-field"]) > textarea::selection { background: oklch(0.6 0.12 250 / 0.45); color: transparent; }
+  :where([data-vesta="server-motd-field"]) > textarea::placeholder { color: oklch(1 0 0 / 0.35); }
+  :where([data-vesta="server-motd-mirror"]) [data-code] { color: oklch(1 0 0 / 0.28); text-shadow: none; font-weight: 400; font-style: normal; text-decoration: none; }
+  :where([data-vesta="server-motd-mirror"]) [data-placeholder] { border-radius: 3px; background: oklch(1 0 0 / 0.1); }
+  :where([data-vesta="server-motd-meta"]) { display: flex; justify-content: space-between; gap: var(--vesta-space-3); margin-block-start: calc(-1 * var(--vesta-space-2)); color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-motd-meta"][data-tone="danger"]) { color: var(--vesta-color-danger-text); }
+  :where([data-vesta="server-motd-fields"]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--vesta-space-3); }
+
+  /* ---- Player manager ---- */
+  :where([data-vesta="server-player-list"]) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    list-style: none;
+    overflow: hidden;
+  }
+  :where([data-vesta="server-player"] + [data-vesta="server-player"]) { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="server-player-row"]) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    min-block-size: 52px;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border: 0;
+    background: none;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="server-player-row"]:hover) { background: var(--vesta-color-fill); }
+  :where([data-vesta="server-player-row"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: -2px; }
+  :where([data-vesta="server-player-row"]) > :where([data-vesta="icon"]) { color: var(--vesta-color-text-subtle); transition: transform var(--vesta-duration-fast) var(--vesta-ease-standard); }
+  :where([data-vesta="server-player"][data-open]) > :where([data-vesta="server-player-row"]) { background: var(--vesta-color-fill); }
+  :where([data-vesta="server-player"][data-open]) > :where([data-vesta="server-player-row"]) > :where([data-vesta="icon"]) { transform: rotate(90deg); }
+  :where([data-vesta="server-player-name"]) { display: flex; flex-direction: column; gap: 1px; min-inline-size: 0; }
+  :where([data-vesta="server-player-name"]) > strong { overflow: hidden; font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
+  :where([data-vesta="server-player-name"]) > small { color: var(--vesta-color-text-subtle); font-family: var(--vesta-font-mono); font-size: 11px; }
+  :where([data-vesta="server-player-chips"]) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--vesta-space-1); }
+  :where([data-vesta="server-activity-avatar"][data-online]) { box-shadow: 0 0 0 2px var(--vesta-color-surface-raised), 0 0 0 3.5px var(--vesta-color-success); }
+
+  :where([data-vesta="server-player-detail"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-4) calc(var(--vesta-space-4) + 28px + var(--vesta-space-3));
+    background: var(--vesta-color-fill);
+    animation: settings-reveal 160ms var(--vesta-ease-out) both;
+  }
+  :where([data-vesta="server-player-uuid"]) { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-player-facts"]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--vesta-space-2); }
+  :where([data-vesta="server-player-fact"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-raised);
+  }
+  :where([data-vesta="server-player-fact"]) > span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); font-weight: var(--vesta-weight-semibold); letter-spacing: 0.04em; text-transform: uppercase; }
+  :where([data-vesta="server-player-fact"]) > p { flex: 1; margin: 0; font-size: var(--vesta-text-sm); line-height: 1.45; }
+  :where([data-vesta="server-player-fact"]) > p > small { display: block; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-player-fact"]) > :where([data-vesta="button"]) { align-self: flex-start; margin-block-start: var(--vesta-space-1); }
+  :where([data-vesta="server-player-fact"][data-tone="danger"]) { border-color: color-mix(in oklab, var(--vesta-color-danger) 40%, transparent); }
+
+  /* ---- Access: people rows ---- */
+  :where([data-vesta="server-person"]) { display: flex; flex: 1; align-items: center; gap: var(--vesta-space-3); min-inline-size: 0; }
+  :where([data-vesta="setting-row"][data-revoked]) { opacity: 0.6; }
+  :where([data-vesta="setting-row-label"]) :where([data-vesta="badge"]) { margin-inline-start: var(--vesta-space-2); }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="server-player-detail"]) { animation: none; }
+  }
+}
