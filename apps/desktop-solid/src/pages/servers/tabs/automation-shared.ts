@@ -1,70 +1,67 @@
-// Shared state and labels for the Automation tab: who can run workflows, backup profiles,
-// paging, and the hand-off of a template or duplicate into the editor.
-import { createSignal, type Accessor } from 'solid-js';
+// Shared state and labels for the Automation tab: who workflows run as, backup profiles,
+// icons per step kind, and drafts handed to (or kept by) the editor.
+import { createMemo, type Accessor } from 'solid-js';
 import type { Tone } from '@vesta/ui';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
-import type { EditorDraft } from '../../../features/servers/automation-model';
-import { serverCommand } from '../../../features/servers/store';
-import type { ConnectionId } from '../../../features/servers/native';
-import type { ActionKind, Paged, TriggerKind } from '../../../features/servers/native-automation';
+import { localOffsetMinutes, stepSummary, templateDraft, triggerSentence, type EditorDraft, type TemplateId } from '../../../features/servers/automation-model';
+import { gate } from '../../../features/servers/capabilities';
+import { readServerResource, useServerResource } from '../../../features/servers/resources';
+import { backupsResource } from '../../../features/servers/server-resources';
+import type { ConnectionId, ServerSnapshot } from '../../../features/servers/native';
+import type { ActionKind, TriggerKind, WorkflowTrigger } from '../../../features/servers/native-automation';
 import type { ServerUser } from '../../../features/servers/native-manage';
+import { automationSelfResource, automationUsersResource } from '../automation/resources';
 
-/** Reads every page of an ascending, cursor-paged list (bounded). */
-export async function collectPages<T>(fetch: (after: string | null) => Promise<Paged<T>>, maxPages = 25): Promise<T[]> {
-  const items: T[] = [];
-  let after: string | null = null;
-  for (let index = 0; index < maxPages; index++) {
-    const page: Paged<T> = await fetch(after);
-    items.push(...page.items);
-    if (!page.nextAfter) break;
-    after = page.nextAfter;
-  }
-  return items;
-}
-
-export interface AutomationRefs {
+export interface AutomationPeople {
   /** The caller, when the agent reports it. */
-  self: Accessor<{ principalId: string; rank: number } | null>;
+  self: Accessor<{ principalId: string; rank: number } | undefined>;
   users: Accessor<ServerUser[]>;
   profiles: Accessor<string[]>;
-  /** Resolves once the reads above have settled (each may have failed quietly). */
-  ready: Promise<void>;
 }
 
-/** One read of the principals and backup profiles the editor offers. Failures leave the lists empty. */
-export function createAutomationRefs(id: ConnectionId): AutomationRefs {
-  const [self, setSelf] = createSignal<{ principalId: string; rank: number } | null>(null, { name: 'server-automation:self' });
-  const [users, setUsers] = createSignal<ServerUser[]>([], { name: 'server-automation:users' });
-  const [profiles, setProfiles] = createSignal<string[]>([], { name: 'server-automation:profiles' });
-  const loadUsers = async () => {
-    const all: ServerUser[] = [];
-    let offset: number | null = 0;
-    for (let index = 0; offset !== null && index < 10; index++) {
-      const page: { users: ServerUser[]; nextOffset: number | null } = await serverCommand((client) => client.users(id, offset!));
-      all.push(...page.users);
-      offset = page.nextOffset;
-    }
-    return all;
-  };
-  const ready = Promise.allSettled([
-    serverCommand((client) => client.automationSelf(id)).then(setSelf),
-    loadUsers().then(setUsers),
-    serverCommand((client) => client.backups(id, null)).then((overview) => setProfiles(overview.profiles.map((profile) => profile.name))),
-  ]).then(() => undefined);
-  return { self, users, profiles, ready };
+/**
+ * Cached reads of the caller, the people a workflow can run as and the backup profiles.
+ * `users` and `profiles` are only read while `needs` asks for them; `needs.users` gets your principal id.
+ */
+export function useAutomationPeople(id: Accessor<ConnectionId>, snapshot: Accessor<ServerSnapshot>, needs: { users: (selfId: string | undefined) => boolean; profiles: Accessor<boolean> }): AutomationPeople {
+  const self = useServerResource(id, automationSelfResource);
+  const users = useServerResource(id, automationUsersResource, { enabled: () => needs.users(self.value()?.principalId) && gate(snapshot().capabilities, 'principals.view') !== 'denied' });
+  const backups = useServerResource(id, backupsResource, { enabled: () => needs.profiles() && gate(snapshot().capabilities, 'backups.view') !== 'denied' });
+  const profiles = createMemo(() => backups.value()?.profiles.map((profile) => profile.name) ?? [], { name: 'server-automation:profiles' });
+  return { self: self.value, users: () => users.value() ?? [], profiles };
 }
 
 /** A principal's display name; yourself reads "You". */
-export function principalName(refs: AutomationRefs, principalId: string) {
-  if (refs.self()?.principalId === principalId) return t('server-automation.you');
-  return refs.users().find((user) => user.id === principalId)?.displayName ?? t('server-automation.someone-else');
+export function principalName(people: AutomationPeople, principalId: string) {
+  if (people.self()?.principalId === principalId) return t('server-automation.you');
+  return people.users().find((user) => user.id === principalId)?.displayName ?? t('server-automation.someone-else');
+}
+
+/** A template as a draft for this server: you run it, at this computer's offset, with the first backup profile. */
+export async function draftFromTemplate(id: ConnectionId, template: TemplateId, name: string): Promise<EditorDraft> {
+  const [self, backups] = await Promise.all([
+    readServerResource(id, automationSelfResource).catch(() => null),
+    readServerResource(id, backupsResource).catch(() => null),
+  ]);
+  return templateDraft(template, { name, principalId: self?.principalId ?? '', offsetMinutes: localOffsetMinutes(), profile: backups?.profiles[0]?.name });
 }
 
 // A template or duplicate handed to the `new` editor route. Read once by the editor.
 let pending: EditorDraft | null = null;
 export const handOffDraft = (draft: EditorDraft) => { pending = draft; };
 export const takeHandOff = () => { const draft = pending; pending = null; return draft; };
+
+/**
+ * Unsaved edits kept when the editor is left some other way than its own Back button (another
+ * tab, the rail), so coming back restores them. Keyed by connection and workflow (`new` too).
+ */
+export interface KeptDraft { draft: EditorDraft; revision: number | null }
+const kept = new Map<string, KeptDraft>();
+const keptKey = (id: ConnectionId, workflowId: string) => `${id}:${workflowId}`;
+export const keepDraft = (id: ConnectionId, workflowId: string, value: KeptDraft) => kept.set(keptKey(id, workflowId), value);
+export const keptDraft = (id: ConnectionId, workflowId: string) => kept.get(keptKey(id, workflowId)) ?? null;
+export const dropKeptDraft = (id: ConnectionId, workflowId: string) => kept.delete(keptKey(id, workflowId));
 
 export const encodeItem = (value: string) => encodeURIComponent(value);
 export function decodeItem(value: string) {
@@ -86,6 +83,20 @@ export const triggerLabels: Record<TriggerKind, MessageId> = {
   backup_failed: 'server-automation.trigger-backup-failed',
 };
 
+/** Icon for what starts a workflow. */
+export function triggerIcon(trigger: WorkflowTrigger | null | undefined) {
+  switch (trigger?.kind) {
+    case 'cron': case 'interval': return 'icons/content/timer';
+    case 'manual': return 'icons/actions/play';
+    case 'backup_completed': case 'backup_failed': return 'icons/content/storage';
+    case 'first_player_joined': case 'player_count_zero': return 'icons/content/chat';
+    case undefined: return 'icons/content/timer';
+    default: return 'icons/status/live';
+  }
+}
+
+export const ACTION_ORDER: ActionKind[] = ['console_command', 'notify', 'delay', 'backup', 'verify_backup', 'restart', 'start', 'stop', 'clean_trash', 'script_preset'];
+
 export const actionLabels: Record<ActionKind, MessageId> = {
   console_command: 'server-automation.action-console',
   notify: 'server-automation.action-notify',
@@ -97,6 +108,20 @@ export const actionLabels: Record<ActionKind, MessageId> = {
   stop: 'server-automation.action-stop',
   clean_trash: 'server-automation.action-clean-trash',
   script_preset: 'server-automation.action-script',
+};
+
+/** One icon per step kind, used on step cards, run results and template previews. */
+export const actionIcons: Record<ActionKind, string> = {
+  console_command: 'icons/content/terminal',
+  notify: 'icons/status/bell',
+  delay: 'icons/content/timer',
+  backup: 'icons/content/storage',
+  verify_backup: 'icons/security/shield-check',
+  restart: 'icons/actions/reload',
+  start: 'icons/actions/play',
+  stop: 'icons/actions/stop',
+  clean_trash: 'icons/actions/delete',
+  script_preset: 'icons/content/code',
 };
 
 const runStates: Record<string, { message: MessageId; tone: Tone }> = {
@@ -141,3 +166,15 @@ const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', tim
 export const weekdayName = (day: number) => weekdayFormat.format(Date.UTC(2024, 0, 7 + day));
 
 export const formatDateTime = (ms: number) => new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+/** A step's one-line summary, e.g. `Wait 1 minute`. */
+export function stepText(action: Parameters<typeof stepSummary>[0]) {
+  const summary = stepSummary(action);
+  return t(summary.message, { ...summary.args, ...(summary.duration ? { time: t(summary.duration.message, { count: summary.duration.count }) } : {}) });
+}
+
+/** A trigger as words, e.g. `Every day at 04:00 (UTC+10:00)`. */
+export function triggerText(trigger: WorkflowTrigger) {
+  const sentence = triggerSentence(trigger, weekdayName);
+  return t(sentence.message, sentence.args);
+}

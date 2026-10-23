@@ -8,6 +8,7 @@ import {
   accessSourcesResource, backupStorageResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
   motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, usersResource, whitelistResource,
 } from '../../features/servers/server-resources';
+import { workflowsResource } from './automation/resources';
 import { agentReachable } from '../../features/servers/shell-model';
 import type { ServerSnapshot } from '../../features/servers/native';
 
@@ -51,6 +52,10 @@ registerServerPrefetch('access', (snapshot) => {
   if (can(snapshot, 'invitations.create')) prefetchServerResource(id, invitationsResource);
   if (can(snapshot, 'devices.revoke')) prefetchServerResource(id, devicesResource);
   if (can(snapshot, 'access-sources.manage')) prefetchServerResource(id, accessSourcesResource);
+});
+// Workflow summaries only; definitions and run history wait until they are shown.
+registerServerPrefetch('automation', (snapshot) => {
+  if (can(snapshot, 'automation.view')) prefetchServerResource(snapshot.connection.id, workflowsResource);
 });
 
 const HOVER_DELAY_MS = 120;

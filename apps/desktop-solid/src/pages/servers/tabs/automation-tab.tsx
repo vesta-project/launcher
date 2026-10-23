@@ -1,165 +1,154 @@
 import { Badge, Button, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Switch, Tooltip, toast } from '@vesta/ui';
-import { For, Show, createMemo, createSignal, onSettled, untrack } from 'solid-js';
-import { EmptyState } from '../../../components/empty-state';
+import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { route } from '../../../app/router';
 import { transitionTo } from '../../../app/transition';
 import { t } from '../../../localization';
-import type { MessageId } from '../../../localization/messages';
+import { lastRunByWorkflow, toEditorDraft, type TemplateId } from '../../../features/servers/automation-model';
 import { gate } from '../../../features/servers/capabilities';
+import { stableConnectionId } from '../../../features/servers/connection-id';
 import { errorMessage } from '../../../features/servers/errors';
 import { age, newIntentId } from '../../../features/servers/model';
-import { TEMPLATES, lastRunByWorkflow, localOffsetMinutes, templateDraft, toEditorDraft, triggerSentence, type TemplateId } from '../../../features/servers/automation-model';
+import { invalidateServerResources, readServerResource, seedServerResource, useServerResource } from '../../../features/servers/resources';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import type { RunSummary, WorkflowDetail } from '../../../features/servers/native-automation';
+import type { RunSummary, WorkflowSummary } from '../../../features/servers/native-automation';
 import { ServerErrorNote } from '../parts';
+import { invalidateAutomation, runPageResource, workflowResource, workflowsResource } from '../automation/resources';
+import { AutomationEmpty, TemplateMenuItems, templateLabels } from '../automation/templates';
 import { DeleteWorkflowDialog, WorkflowEditor } from './automation-editor';
-import { RunList } from './automation-runs';
+import { RunList, useRunPolling } from './automation-runs';
 import {
-  collectPages, createAutomationRefs, decodeItem, encodeItem, handOffDraft, principalName, runState, weekdayName, type AutomationRefs,
+  decodeItem, draftFromTemplate, dropKeptDraft, encodeItem, handOffDraft, keptDraft, principalName, runState, triggerIcon, triggerText,
+  useAutomationPeople, type AutomationPeople,
 } from './automation-shared';
 import '../../library/instance/settings-tab.css';
 import './automation-tab.css';
 
-const templateLabels: Record<TemplateId, { name: MessageId; description: MessageId; icon: string }> = {
-  'nightly-backup': { name: 'server-automation.template-nightly', description: 'server-automation.template-nightly-help', icon: 'icons/content/storage' },
-  'restart-every': { name: 'server-automation.template-restart', description: 'server-automation.template-restart-help', icon: 'icons/actions/reload' },
-  'announce-join': { name: 'server-automation.template-announce', description: 'server-automation.template-announce-help', icon: 'icons/content/chat' },
-  blank: { name: 'server-automation.template-blank', description: 'server-automation.template-blank-help', icon: 'icons/actions/add' },
-};
-
 /** Scheduled and event-driven workflows (`#/servers/<id>/automation[/<workflowId|new>]`). */
 export function AutomationTab(props: { snapshot: ServerSnapshot }) {
-  const refs = createAutomationRefs(untrack(() => props.snapshot.connection.id));
   const item = () => {
     const current = route();
     return current.detail === 'automation' && current.item ? decodeItem(current.item) : null;
   };
   return (
-    <Show when={item()} keyed fallback={<AutomationHome snapshot={props.snapshot} refs={refs} />}>
-      {(workflowId) => <WorkflowEditor snapshot={props.snapshot} workflowId={workflowId} refs={refs} />}
+    <Show when={item()} keyed fallback={<AutomationHome snapshot={props.snapshot} />}>
+      {(workflowId) => <WorkflowEditor snapshot={props.snapshot} workflowId={workflowId} />}
     </Show>
   );
 }
 
-function AutomationHome(props: { snapshot: ServerSnapshot; refs: AutomationRefs }) {
-  const now = useServersClock();
-  const id = () => props.snapshot.connection.id;
-  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') !== 'denied';
-  const [view, setView] = createSignal<'workflows' | 'runs'>('workflows', { name: 'server-automation:view' });
-  const [workflows, setWorkflows] = createSignal<WorkflowDetail[] | null>(null, { name: 'server-automation:workflows' });
-  const [runs, setRuns] = createSignal<RunSummary[]>([], { name: 'server-automation:runs' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-automation:error' });
-  const [loading, setLoading] = createSignal(false, { name: 'server-automation:loading' });
-  const [busy, setBusy] = createSignal<string | null>(null, { name: 'server-automation:busy' });
-  const [deleting, setDeleting] = createSignal<WorkflowDetail | null>(null, { name: 'server-automation:deleting' });
-  const [reloadRuns, setReloadRuns] = createSignal(0, { name: 'server-automation:reload-runs' });
+/** The last view per connection, so returning from the editor lands where you were. */
+const lastView = new Map<string, 'workflows' | 'runs'>();
+const ALL_RUNS = { workflowId: null, after: null };
 
-  const refresh = async () => {
-    setLoading(true); setError(null);
-    try {
-      // Summaries carry no trigger, so each workflow's detail is read for its sentence.
-      const summaries = await collectPages((after) => serverCommand((client) => client.automationWorkflows(id(), after)));
-      const [details, history] = await Promise.all([
-        Promise.all(summaries.map((summary) => serverCommand((client) => client.automationWorkflow(id(), summary.id)))),
-        collectPages((after) => serverCommand((client) => client.automationRuns(id(), after))).catch(() => [] as RunSummary[]),
-      ]);
-      setWorkflows(details);
-      setRuns(history);
-    } catch (reason) { setError(reason as ServerCommandError); }
-    finally { setLoading(false); }
-  };
-  onSettled(() => { void refresh(); });
-  const lastRuns = createMemo(() => lastRunByWorkflow(runs()), { name: 'server-automation:last-runs' });
-  const nameOf = (workflowId: string) => workflows()?.find((entry) => entry.id === workflowId)?.name ?? null;
+function AutomationHome(props: { snapshot: ServerSnapshot }) {
+  const now = useServersClock();
+  const id = stableConnectionId(() => props.snapshot);
+  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') !== 'denied';
+  const [view, setView] = createSignal<'workflows' | 'runs'>(lastView.get(untrack(id)) ?? 'workflows', { name: 'server-automation:view' });
+  const choose = (next: 'workflows' | 'runs') => { lastView.set(id(), next); setView(next); };
+  // Summaries carry the trigger, and one newest-first page of runs gives each its last run.
+  const workflows = useServerResource(id, workflowsResource);
+  const runs = useServerResource(id, runPageResource, { args: () => ALL_RUNS });
+  useRunPolling(id, runs, () => view() === 'workflows');
+  const people = useAutomationPeople(id, () => props.snapshot, {
+    users: (self) => !!self && (workflows.value() ?? []).some((workflow) => workflow.executionPrincipalId !== self),
+    profiles: () => false,
+  });
+  const [busy, setBusy] = createSignal<string | null>(null, { name: 'server-automation:busy' });
+  const [deleting, setDeleting] = createSignal<WorkflowSummary | null>(null, { name: 'server-automation:deleting' });
+  const [keptNew, setKeptNew] = createSignal(!!keptDraft(untrack(id), 'new'), { name: 'server-automation:kept-new' });
+  const lastRuns = createMemo(() => lastRunByWorkflow(runs.value()?.items ?? []), { name: 'server-automation:last-runs' });
+  const nameOf = (workflowId: string) => workflows.value()?.find((entry) => entry.id === workflowId)?.name ?? null;
 
   const start = async (template: TemplateId) => {
-    await props.refs.ready;
-    handOffDraft(templateDraft(template, {
-      name: template === 'blank' ? '' : t(templateLabels[template].name),
-      principalId: props.refs.self()?.principalId ?? '',
-      offsetMinutes: localOffsetMinutes(),
-      profile: props.refs.profiles()[0],
-    }));
-    transitionTo(`/servers/${id()}/automation/new`);
+    setBusy('new');
+    try {
+      dropKeptDraft(id(), 'new');
+      handOffDraft(await draftFromTemplate(id(), template, template === 'blank' ? '' : t(templateLabels[template].name)));
+      transitionTo(`/servers/${id()}/automation/new`);
+    } finally { setBusy(null); }
   };
-  const edit = (workflow: WorkflowDetail) => transitionTo(`/servers/${id()}/automation/${encodeItem(workflow.id)}`);
-  const duplicate = (workflow: WorkflowDetail) => {
-    handOffDraft({ ...toEditorDraft(workflow, false), name: t('server-automation.copy-name', { name: workflow.name }) });
-    transitionTo(`/servers/${id()}/automation/new`);
-  };
-  const setEnabled = async (workflow: WorkflowDetail, enabled: boolean) => {
+  const edit = (workflow: WorkflowSummary) => transitionTo(`/servers/${id()}/automation/${encodeItem(workflow.id)}`);
+  const duplicate = async (workflow: WorkflowSummary) => {
     setBusy(workflow.id);
     try {
-      await serverCommand((client) => client.automationWorkflowSetEnabled(id(), workflow.id, workflow.revision, enabled, newIntentId()));
+      // The only time the list reads a definition: a copy needs the steps.
+      const detail = await readServerResource(id(), workflowResource, workflow.id);
+      dropKeptDraft(id(), 'new');
+      handOffDraft({ ...toEditorDraft(detail, false), name: t('server-automation.copy-name', { name: workflow.name }) });
+      transitionTo(`/servers/${id()}/automation/new`);
+    } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
+    finally { setBusy(null); }
+  };
+  const setEnabled = async (workflow: WorkflowSummary, enabled: boolean) => {
+    setBusy(workflow.id);
+    try {
+      const result = await serverCommand((client) => client.automationWorkflowSetEnabled(id(), workflow.id, workflow.revision, enabled, newIntentId()));
+      // The answer is known: update the list in place and let an open definition revalidate.
+      const list = workflows.value() ?? [];
+      seedServerResource(id(), workflowsResource, list.map((entry) => (entry.id === workflow.id ? { ...entry, enabled, revision: result.revision } : entry)));
+      invalidateServerResources(id(), [workflowResource.name]);
       toast.show({ title: t(enabled ? 'server-automation.turned-on' : 'server-automation.turned-off', { name: workflow.name }), tone: 'neutral' });
     } catch (reason) {
       toast.show({ title: t(errorMessage(reason)), tone: (reason as ServerCommandError).code === 'stale_target' ? 'warning' : 'danger' });
-    } finally {
-      setBusy(null);
-      void refresh();
-    }
+      invalidateAutomation(id());
+    } finally { setBusy(null); }
   };
-  const runNow = async (workflow: WorkflowDetail) => {
+  const runNow = async (workflow: WorkflowSummary) => {
     setBusy(workflow.id);
     try {
       const result = await serverCommand((client) => client.automationWorkflowRun(id(), workflow.id, newIntentId()));
       toast.show({ title: t(result.skipped ? 'server-automation.run-skipped' : 'server-automation.run-started', { name: workflow.name }), tone: result.skipped ? 'warning' : 'neutral' });
-      setTimeout(() => void refresh(), 1500);
+      invalidateServerResources(id(), [runPageResource.name]);
     } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
     finally { setBusy(null); }
   };
+  const deleted = (workflow: WorkflowSummary) => {
+    dropKeptDraft(id(), workflow.id);
+    seedServerResource(id(), workflowsResource, (workflows.value() ?? []).filter((entry) => entry.id !== workflow.id));
+    invalidateServerResources(id(), [workflowResource.name], true);
+  };
+  const empty = () => workflows.value()?.length === 0;
+  const refresh = () => { void workflows.refresh(); void runs.refresh(); };
 
   return (
     <div data-vesta="server-activity">
       <div data-vesta="pane-toolbar">
-        <SegmentedControl size="sm" aria-label={t('server-automation.view')} value={view()} onChange={(value) => setView(value as 'workflows' | 'runs')}
+        <SegmentedControl aria-label={t('server-automation.view')} value={view()} onChange={(value) => choose(value as 'workflows' | 'runs')}
           options={[{ value: 'workflows', label: t('server-automation.workflows') }, { value: 'runs', label: t('server-automation.recent-runs') }]} />
         <span data-vesta="server-toolbar-spacer" />
-        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={loading()}
-          onClick={() => { void refresh(); setReloadRuns((value) => value + 1); }}>{t('servers.refresh')}</Button>
-        <Show when={canManage()}>
-          <Menu placement="bottom-end" trigger={(menu) => <Button {...menu} size="sm" tone="accent" icon={<Icon name="icons/actions/add" />}>{t('server-automation.new')}</Button>}>
-            <For each={TEMPLATES}>
-              {(template) => (
-                <>
-                  <Show when={template === 'blank'}><MenuSeparator /></Show>
-                  <MenuItem icon={<Icon name={templateLabels[template].icon} />} onSelect={() => void start(template)}>
-                    <span data-vesta="server-automation-template">
-                      <span>{t(templateLabels[template].name)}</span>
-                      <small>{t(templateLabels[template].description)}</small>
-                    </span>
-                  </MenuItem>
-                </>
-              )}
-            </For>
+        <Button variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={workflows.refreshing() || runs.refreshing()} onClick={refresh}>{t('servers.refresh')}</Button>
+        <Show when={canManage() && !empty()}>
+          <Menu placement="bottom-end" trigger={(menu) => <Button {...menu} tone="accent" icon={<Icon name="icons/actions/add" />} disabled={busy() === 'new'}>{t('server-automation.new')}</Button>}>
+            <TemplateMenuItems onPick={(template) => void start(template)} />
           </Menu>
         </Show>
       </div>
       <div data-vesta="instance-settings-scroll">
-        <Show when={view() === 'workflows'} fallback={<RunList snapshot={props.snapshot} names={nameOf} reload={reloadRuns()} />}>
-          <ServerErrorNote error={error()} onRetry={() => void refresh()} />
-          <Show when={workflows()} fallback={<Show when={!error()}><p data-vesta="server-muted">{t('servers.loading')}</p></Show>}>
+        <Show when={keptNew() && canManage()}>
+          <div data-vesta="server-callout" data-tone="neutral" role="status">
+            <span data-vesta="server-automation-callout-text">{t('server-automation.kept-new')}</span>
+            <Button size="sm" variant="ghost" onClick={() => { dropKeptDraft(id(), 'new'); setKeptNew(false); }}>{t('server-files.discard')}</Button>
+            <Button size="sm" variant="outline" onClick={() => transitionTo(`/servers/${id()}/automation/new`)}>{t('server-automation.keep-editing')}</Button>
+          </div>
+        </Show>
+        <Show when={view() === 'workflows'} fallback={<RunList snapshot={props.snapshot} names={nameOf} />}>
+          <ServerErrorNote error={workflows.error()} onRetry={() => void workflows.refresh()} />
+          <Show when={workflows.value()} fallback={<Show when={!workflows.error()}><p data-vesta="server-muted">{t('servers.loading')}</p></Show>}>
             {(list) => (
-              <Show when={list().length} fallback={
-                <EmptyState icon="icons/content/timer" title={t('server-automation.empty-title')} description={t('server-automation.empty-description')}>
-                  <Show when={canManage()}><Button tone="accent" onClick={() => void start('nightly-backup')}>{t('server-automation.template-nightly')}</Button></Show>
-                </EmptyState>
-              }>
-                <section data-vesta="settings-panel">
-                  <h3>{t('server-automation.workflows')}</h3>
-                  <div data-vesta="settings-panel-body">
-                    <For each={list()} keyed={(workflow) => workflow.id}>
-                      {(workflow) => (
-                        <WorkflowRow workflow={workflow()} last={lastRuns().get(workflow().id) ?? null} now={now()} refs={props.refs}
-                          canManage={canManage()} busy={busy() === workflow().id}
-                          onEdit={() => edit(workflow())} onDuplicate={() => duplicate(workflow())} onDelete={() => setDeleting(workflow())}
-                          onEnabled={(value) => void setEnabled(workflow(), value)} onRun={() => void runNow(workflow())} />
-                      )}
-                    </For>
-                  </div>
-                </section>
+              <Show when={list().length} fallback={<AutomationEmpty canManage={canManage()} busy={busy() === 'new'} onPick={(template) => void start(template)} />}>
+                <ul data-vesta="server-automation-list" aria-label={t('server-automation.workflows')}>
+                  <For each={list()} keyed={(workflow) => workflow.id}>
+                    {(workflow) => (
+                      <WorkflowRow workflow={workflow()} last={lastRuns().get(workflow().id) ?? null} now={now()} people={people}
+                        canManage={canManage()} busy={busy() === workflow().id} unsaved={!!keptDraft(id(), workflow().id)}
+                        onEdit={() => edit(workflow())} onDuplicate={() => void duplicate(workflow())} onDelete={() => setDeleting(workflow())}
+                        onEnabled={(value) => void setEnabled(workflow(), value)} onRun={() => void runNow(workflow())} />
+                    )}
+                  </For>
+                </ul>
                 <p data-vesta="server-muted">{t('server-automation.footnote')}</p>
               </Show>
             )}
@@ -167,57 +156,64 @@ function AutomationHome(props: { snapshot: ServerSnapshot; refs: AutomationRefs 
         </Show>
       </div>
       <Show when={deleting()}>
-        {(target) => <DeleteWorkflowDialog snapshot={props.snapshot} workflow={target()} onClose={() => setDeleting(null)} onDeleted={() => void refresh()} />}
+        {(target) => <DeleteWorkflowDialog snapshot={props.snapshot} workflow={target()} onClose={() => setDeleting(null)} onDeleted={() => deleted(target())} />}
       </Show>
     </div>
   );
 }
 
 function WorkflowRow(props: {
-  workflow: WorkflowDetail; last: RunSummary | null; now: number; refs: AutomationRefs; canManage: boolean; busy: boolean;
+  workflow: WorkflowSummary; last: RunSummary | null; now: number; people: AutomationPeople; canManage: boolean; busy: boolean; unsaved: boolean;
   onEdit: () => void; onDuplicate: () => void; onDelete: () => void; onEnabled: (enabled: boolean) => void; onRun: () => void;
 }) {
-  const sentence = () => triggerSentence(props.workflow.definition.trigger, weekdayName);
-  const manual = () => props.workflow.definition.trigger.kind === 'manual';
+  const manual = () => props.workflow.trigger?.kind === 'manual';
   const lastState = () => (props.last ? runState(props.last.state) : null);
   const lastAge = () => (props.last ? age(props.last.startedAtMs, props.now) : null);
   return (
-    <div data-vesta="setting-row" data-automation-workflow data-off={props.workflow.enabled ? undefined : ''}>
-      <div data-vesta="setting-row-copy">
-        <span data-vesta="setting-row-label">
+    <li data-vesta="server-automation-row" data-off={props.workflow.enabled ? undefined : ''}>
+      <span data-vesta="server-automation-tile" aria-hidden="true"><Icon name={triggerIcon(props.workflow.trigger)} /></span>
+      <div data-vesta="server-automation-row-copy">
+        <span data-vesta="server-automation-row-title">
           <button type="button" data-vesta="server-automation-name" onClick={() => props.onEdit()}>{props.workflow.name}</button>
-          <Show when={lastState()}>{(state) => <Badge size="sm" variant="soft" tone={state().tone}>{t(state().message)}</Badge>}</Show>
+          <Show when={props.unsaved}><Badge size="sm" variant="soft" tone="warning">{t('server-automation.unsaved')}</Badge></Show>
+          <Show when={!props.workflow.enabled}><Badge size="sm" variant="soft">{t('server-automation.off')}</Badge></Show>
         </span>
-        <span data-vesta="setting-row-description">
-          {t(sentence().message, sentence().args)}
-          {' · '}{t('server-automation.step-count-short', { count: props.workflow.definition.steps.length })}
-          <Show when={lastAge()} fallback={<>{' · '}{t('server-automation.never-ran')}</>}>
-            {(when) => <>{' · '}{t('server-automation.last-run', { time: t(when().message, { count: when().count }) })}</>}
-          </Show>
-          <Show when={props.refs.self()?.principalId !== props.workflow.executionPrincipalId}>
-            {' · '}{t('server-automation.runs-as', { name: principalName(props.refs, props.workflow.executionPrincipalId) })}
+        <span data-vesta="server-automation-row-meta">
+          <Show when={props.workflow.trigger}>{(trigger) => <span>{triggerText(trigger())}</span>}</Show>
+          <Show when={props.people.self() && props.people.self()!.principalId !== props.workflow.executionPrincipalId}>
+            <span>{t('server-automation.runs-as', { name: principalName(props.people, props.workflow.executionPrincipalId) })}</span>
           </Show>
         </span>
       </div>
-      <div data-vesta="setting-row-control">
+      <div data-vesta="server-automation-row-last">
+        <Show when={lastState()} fallback={<span data-vesta="server-automation-row-never">{t('server-automation.never-ran')}</span>}>
+          {(state) => (
+            <>
+              <Badge size="sm" variant="soft" tone={state().tone}>{t(state().message)}</Badge>
+              <Show when={lastAge()}>{(when) => <span>{t('servers.ago', { time: t(when().message, { count: when().count }) })}</span>}</Show>
+            </>
+          )}
+        </Show>
+      </div>
+      <div data-vesta="server-automation-row-actions">
         <Show when={manual() && props.canManage}>
           <Tooltip content={t('server-automation.run-needs-enabled')} disabled={props.workflow.enabled} trigger={(tooltip) => (
             <span {...tooltip}>
-              <Button size="sm" variant="outline" icon={<Icon name="icons/actions/play" />} disabled={!props.workflow.enabled || props.busy} onClick={() => props.onRun()}>{t('server-automation.run-now')}</Button>
+              <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/play" />} disabled={!props.workflow.enabled || props.busy} onClick={() => props.onRun()}>{t('server-automation.run-now')}</Button>
             </span>
           )} />
         </Show>
-        <Switch size="sm" aria-label={t('server-automation.enabled', { name: props.workflow.name })} checked={props.workflow.enabled} disabled={!props.canManage || props.busy}
+        <Switch aria-label={t('server-automation.enabled', { name: props.workflow.name })} checked={props.workflow.enabled} disabled={!props.canManage || props.busy}
           onChange={(value: boolean) => props.onEnabled(value)} />
         <Menu placement="bottom-end" trigger={(menu) => <IconButton {...menu} size="sm" variant="ghost" label={t('servers.actions')} tooltip={false} icon={<Icon name="icons/content/ellipsis-v" />} />}>
           <MenuItem icon={<Icon name="icons/actions/edit" />} onSelect={() => props.onEdit()}>{t(props.canManage ? 'server-automation.edit' : 'server-automation.view-details')}</MenuItem>
           <Show when={props.canManage}>
-            <MenuItem icon={<Icon name="icons/actions/duplicate" />} onSelect={() => props.onDuplicate()}>{t('server-automation.duplicate')}</MenuItem>
+            <MenuItem icon={<Icon name="icons/actions/duplicate" />} disabled={props.busy} onSelect={() => props.onDuplicate()}>{t('server-automation.duplicate')}</MenuItem>
             <MenuSeparator />
             <MenuItem tone="danger" icon={<Icon name="icons/actions/delete" />} onSelect={() => props.onDelete()}>{t('server-automation.delete')}</MenuItem>
           </Show>
         </Menu>
       </div>
-    </div>
+    </li>
   );
 }
