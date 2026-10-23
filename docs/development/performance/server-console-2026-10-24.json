@@ -1,0 +1,120 @@
+{
+    "schemaVersion":  1,
+    "beforeSource":  "c8fb59ae",
+    "afterSource":  "console recovery and batched eviction change accompanying this record",
+    "affinityMask":  1,
+    "before":  {
+                   "timestamp":  "2026-10-23T13:34:13.651Z",
+                   "runtime":  "v26.3.0",
+                   "bun":  "1.4.3",
+                   "platform":  "win32",
+                   "osRelease":  "10.0.26100",
+                   "cpu":  "AMD Ryzen 7 6800H with Radeon Graphics         ",
+                   "logicalCpus":  16,
+                   "batchSize":  64,
+                   "batches":  512,
+                   "repeats":  5,
+                   "lineLimit":  5000,
+                   "scope":  "Synchronous buffer/projection cost; excludes WebView, IPC, TLS, disk and rendering. No memory limit imposed.",
+                   "memoryAtEnd":  {
+                                       "rss":  187916288,
+                                       "heapTotal":  73547776,
+                                       "heapUsed":  18097222,
+                                       "external":  3076598,
+                                       "arrayBuffers":  0
+                                   },
+                   "results":  [
+                                   {
+                                       "kind":  "append",
+                                       "samples":  2560,
+                                       "totalMs":  85.951,
+                                       "p50Ms":  0.036,
+                                       "p95Ms":  0.056,
+                                       "maxMs":  1.283,
+                                       "linesPerSecond":  1906209,
+                                       "retained":  5000,
+                                       "last":  "fixture.console.37767",
+                                       "consumed":  0
+                                   },
+                                   {
+                                       "kind":  "projection",
+                                       "samples":  2560,
+                                       "totalMs":  1520.77,
+                                       "p50Ms":  0.528,
+                                       "p95Ms":  0.651,
+                                       "maxMs":  45.194,
+                                       "retained":  5000,
+                                       "last":  "fixture.console.37767",
+                                       "consumed":  25600000
+                                   },
+                                   {
+                                       "kind":  "recovery",
+                                       "samples":  2560,
+                                       "totalMs":  6008.266,
+                                       "p50Ms":  2.093,
+                                       "p95Ms":  4.001,
+                                       "maxMs":  15.646,
+                                       "retained":  5000,
+                                       "last":  "fixture.console.4999",
+                                       "consumed":  0
+                                   }
+                               ]
+               },
+    "after":  {
+                  "timestamp":  "2026-10-23T16:13:06.762Z",
+                  "runtime":  "v26.3.0",
+                  "bun":  "1.4.3",
+                  "platform":  "win32",
+                  "osRelease":  "10.0.26100",
+                  "cpu":  "AMD Ryzen 7 6800H with Radeon Graphics         ",
+                  "logicalCpus":  16,
+                  "batchSize":  64,
+                  "batches":  512,
+                  "repeats":  5,
+                  "lineLimit":  5000,
+                  "scope":  "Synchronous buffer/projection cost; excludes WebView, IPC, TLS, disk and rendering. No memory limit imposed.",
+                  "memoryAtEnd":  {
+                                      "rss":  182779904,
+                                      "heapTotal":  54427648,
+                                      "heapUsed":  16653760,
+                                      "external":  3541456,
+                                      "arrayBuffers":  0
+                                  },
+                  "results":  [
+                                  {
+                                      "kind":  "append",
+                                      "samples":  2560,
+                                      "totalMs":  37.431,
+                                      "p50Ms":  0.011,
+                                      "p95Ms":  0.015,
+                                      "maxMs":  2.968,
+                                      "linesPerSecond":  4377179,
+                                      "retained":  5000,
+                                      "last":  "fixture.console.37767",
+                                      "consumed":  0
+                                  },
+                                  {
+                                      "kind":  "projection",
+                                      "samples":  2560,
+                                      "totalMs":  1607.719,
+                                      "p50Ms":  0.537,
+                                      "p95Ms":  0.724,
+                                      "maxMs":  61.057,
+                                      "retained":  5000,
+                                      "last":  "fixture.console.37767",
+                                      "consumed":  25600000
+                                  },
+                                  {
+                                      "kind":  "recovery",
+                                      "samples":  2560,
+                                      "totalMs":  164.041,
+                                      "p50Ms":  0.051,
+                                      "p95Ms":  0.072,
+                                      "maxMs":  7.3,
+                                      "retained":  5000,
+                                      "last":  "fixture.console.4999",
+                                      "consumed":  0
+                                  }
+                              ]
+              }
+}

@@ -118,11 +118,13 @@ async function buildHarness() {
       ` }));
       build.onResolve({ filter: /^vesta-server-reactivity-check$/ }, () => ({ path: 'check', namespace: 'server-check' }));
       build.onLoad({ filter: /.*/, namespace: 'server-check' }, () => ({ loader: 'js', resolveDir: fileURLToPath(new URL('..', import.meta.url)), contents: `
-        import { createEffect, createRoot, createSignal, flush, untrack } from 'solid-js';
+        import { createEffect, createMemo, createRoot, createSignal, flush, untrack } from 'solid-js';
         import { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';
         import { stableConnectionId } from ${JSON.stringify(connectionIdPath)};
         import { createServerRead, readRetryDelay } from ${JSON.stringify(readStatePath)};
-        export { createRoot, createSignal, flush, untrack, createServerRead, readRetryDelay };
+        export { createRoot, createMemo, createSignal, flush, untrack, createServerRead, readRetryDelay };
+        export { ConsoleBuffer, clearConsoleDisplay, consoleDisplayBoundary } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-model.ts', import.meta.url)))};
+        export { serverConsoleView, toLogEntries } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-view.ts', import.meta.url)))};
         import { useServerTopic } from ${JSON.stringify(storePath)};
         export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations } from ${JSON.stringify(storePath)};
         export { serverResource, readServerResource } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/resources.ts', import.meta.url)))};
@@ -186,6 +188,51 @@ test('live status updates preserve sleep drafts and errors without refetching po
         : { loads: 2, draft: false, error: null });
     });
   }, { scenario: 'server-settings-draft-during-live-status' });
+  check.expectNoDiagnostics(artifact);
+});
+
+test('console batches publish once and clear survives reactive history recovery', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(() => {
+    let runs = 0;
+    const owner = check.createRoot(dispose => {
+      const buffer = new check.ConsoleBuffer(5000);
+      const [version, setVersion] = check.createSignal(0, { name: 'console-check:version' });
+      const [state, patch] = check.serverConsoleView('console-diagnostics');
+      const parsed = new WeakMap();
+      const rows = check.createMemo(() => {
+        version(); runs++;
+        return check.toLogEntries(buffer.entries, { label: 'gap' }, parsed);
+      }, { name: 'console-check:rows' });
+      const visible = check.createMemo(() => {
+        const values = rows();
+        const boundary = check.consoleDisplayBoundary(buffer.entries, state());
+        return { values, boundary };
+      }, { name: 'console-check:visible' });
+      return { dispose, buffer, patch, visible, setVersion };
+    });
+    const lines = (start, count) => Array.from({ length: count }, (_, i) => ({
+      cursor: `fixture.console.${start + i}`, text: `line ${start + i}`, truncated: false,
+    }));
+    const publish = () => { owner.setVersion(n => n + 1); check.flush(); };
+    const visible = () => {
+      const { values, boundary } = check.untrack(owner.visible);
+      return values.filter(row => row.id >= boundary);
+    };
+    try {
+      check.flush(); visible();
+      for (let batch = 0; batch < 64; batch++) {
+        owner.buffer.append(lines(1000 + batch * 64, 64)); publish(); visible();
+      }
+      expect(runs).toBe(65);
+      owner.patch(check.clearConsoleDisplay(owner.buffer.entries)); check.flush();
+      expect(visible()).toEqual([]);
+      owner.buffer.merge(lines(998, 10)); publish();
+      expect(visible()).toEqual([]);
+      owner.buffer.append(lines(5096, 2)); publish();
+      expect(visible().map(row => row.raw)).toEqual(['line 5096', 'line 5097']);
+    } finally { owner.dispose(); }
+  }, { scenario: 'console-batch-recovery-and-clear-display' });
   check.expectNoDiagnostics(artifact);
 });
 

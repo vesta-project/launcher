@@ -12,6 +12,7 @@ import { IntentMemo, consoleLineProblem } from '../../../features/servers/model'
 import { busyIntent, operationStateMessage } from '../../../features/servers/operations-model';
 import { consoleBuffer, consoleVersion, loadConsoleTail, putOperations, serverCommand, serverOperations, useServerTopic } from '../../../features/servers/store';
 import type { ConsoleEntry } from '../../../features/servers/console-model';
+import { clearConsoleDisplay, consoleDisplayBoundary } from '../../../features/servers/console-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 
@@ -88,10 +89,10 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
         lines={entries}
         state={viewState}
         patch={patch}
-        hidden={() => viewState().hiddenUntil ?? -Infinity}
+        hidden={() => { entries(); return consoleDisplayBoundary(consoleBuffer(id()).entries, viewState()); }}
         canRestore={() => viewState().hiddenUntil !== null}
-        onClearDisplay={() => patch({ hiddenUntil: (untrack(entries).at(-1)?.id ?? -1) + 1 })}
-        onRestoreDisplay={() => patch({ hiddenUntil: null })}
+        onClearDisplay={() => patch(untrack(() => clearConsoleDisplay(consoleBuffer(id()).entries)))}
+        onRestoreDisplay={() => patch({ hiddenUntil: null, hiddenAfterCursor: null })}
         live={() => true}
         sourceKey={id}
         ariaLabel={() => t('console.log-output', { name: t('console.live-output') })}

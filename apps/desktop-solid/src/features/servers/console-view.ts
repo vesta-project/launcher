@@ -3,7 +3,7 @@
 import { createSignal, type Accessor } from 'solid-js';
 import { parseLog } from '../instances/interaction-utils';
 import { LOG_LEVELS, type LogEntry, type LogViewState } from '../../components/log-view/log-model';
-import type { ConsoleEntry } from './console-model';
+import type { ConsoleDisplayBoundary, ConsoleEntry } from './console-model';
 import type { ConnectionId } from './native';
 
 export interface GapCopy { label: string; detail?: string }
@@ -24,10 +24,7 @@ export function toLogEntries(entries: readonly ConsoleEntry[], gap: GapCopy, cac
   });
 }
 
-export interface ServerConsoleViewState extends LogViewState {
-  /** Entries before this id are hidden by "Clear display"; null shows everything. */
-  hiddenUntil: number | null;
-}
+export interface ServerConsoleViewState extends LogViewState, ConsoleDisplayBoundary {}
 
 const views = new Map<ConnectionId, [Accessor<ServerConsoleViewState>, (next: Partial<ServerConsoleViewState>) => void]>();
 
@@ -36,7 +33,7 @@ export function serverConsoleView(id: ConnectionId) {
   let view = views.get(id);
   if (!view) {
     const [state, setState] = createSignal<ServerConsoleViewState>(
-      { query: '', levels: [...LOG_LEVELS], follow: true, wrap: true, hiddenUntil: null },
+      { query: '', levels: [...LOG_LEVELS], follow: true, wrap: true, hiddenUntil: null, hiddenAfterCursor: null },
       { name: `server-console-view:${id}` },
     );
     view = [state, (next) => setState((current) => ({ ...current, ...next }))];
