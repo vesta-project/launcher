@@ -1,7 +1,6 @@
 //! Game-root files, logs and structured properties. No native paths in IPC DTOs.
-mod transfers;
 mod cancellation;
-pub use cancellation::{DownloadCancellation, DownloadTransfers};
+mod transfers;
 use crate::{
     file_transport::{Request, Response},
     model::Page,
@@ -9,6 +8,7 @@ use crate::{
     Client, Error, ErrorCode, Result,
 };
 use base64::Engine;
+pub use cancellation::{DownloadCancellation, DownloadTransfers};
 use reqwest::{
     header::{HeaderMap, HeaderValue},
     Method,
@@ -18,6 +18,12 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 pub use transfers::FileTransfers;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct OfflineWhitelistSnapshot {
+    pub items: Vec<crate::model::WhitelistEntry>,
+    pub sha256: Option<String>,
+}
 
 pub const CHUNK_BYTES: usize = 1024 * 1024;
 pub const MAX_WRITE_BYTES: u64 = 16 * CHUNK_BYTES as u64;
@@ -584,6 +590,58 @@ impl Client {
             .json(CHUNK_BYTES)
             .await?,
         )
+    }
+    pub async fn offline_whitelist(&self) -> Result<OfflineWhitelistSnapshot> {
+        decode(
+            self.file_request(request(
+                Method::GET,
+                route("players/whitelist/offline", &[]),
+                None,
+                false,
+            )?)
+            .await?
+            .json(CHUNK_BYTES)
+            .await?,
+        )
+    }
+    pub async fn offline_whitelist_update(
+        &self,
+        player: &str,
+        add: bool,
+        expected: Option<&str>,
+        intent: &str,
+    ) -> Result<String> {
+        if player.is_empty()
+            || player.len() > 16
+            || !player
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        {
+            return Err(invalid());
+        }
+        if let Some(hash) = expected {
+            validate_sha256(hash)?;
+        }
+        let mut input = request(
+            Method::POST,
+            route("players/whitelist/offline", &[]),
+            Some(intent),
+            false,
+        )?;
+        json_body(
+            &mut input,
+            json!({"player":player,"add":add,"expected_sha256":expected}),
+        )?;
+        let response = self.file_request(input).await?;
+        self.transport.invalidate_reads();
+        let unknown = || Error::new(ErrorCode::OutcomeUnknown);
+        let value = response.json(CHUNK_BYTES).await.map_err(|_| unknown())?;
+        if value["outcome"] != "succeeded" {
+            return Err(Error::new(ErrorCode::OutcomeUnknown));
+        }
+        let hash = field(&value, "sha256").map_err(|_| unknown())?;
+        validate_sha256(&hash).map_err(|_| unknown())?;
+        Ok(hash)
     }
     pub async fn properties_update(
         &self,

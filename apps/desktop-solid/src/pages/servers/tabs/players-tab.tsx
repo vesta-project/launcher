@@ -108,6 +108,7 @@ export function PlayerListsSection(props: { snapshot: ServerSnapshot }) {
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
   const operator = () => gate(props.snapshot.capabilities, 'players.operator') !== 'denied';
   const live = () => running(props.snapshot);
+  const canWhitelist = () => agentReachable(props.snapshot) && (live() || props.snapshot.status?.state === 'stopped');
 
   const views: { value: ListView; label: MessageId }[] = [
     { value: 'whitelist', label: 'servers.players.whitelist' },
@@ -119,7 +120,7 @@ export function PlayerListsSection(props: { snapshot: ServerSnapshot }) {
     <div data-vesta="server-players">
       <div data-vesta="server-players-bar">
         <SegmentedControl aria-label={t('servers.tab.players')} value={view()} onChange={(value) => setView(value as ListView)} options={views.map((entry) => ({ value: entry.value, label: t(entry.label) }))} />
-        <Show when={moderate() && live() && view() !== 'ops'}>
+        <Show when={moderate() && (view() === 'whitelist' ? canWhitelist() : live()) && view() !== 'ops'}>
           <Button size="sm" variant="outline" onClick={() => setDialog({ action: view() === 'bans' ? 'ban' : 'whitelist_add', player: '' })}>
             {t(view() === 'bans' ? 'servers.players.ban-player' : 'servers.players.add-whitelist')}
           </Button>
@@ -135,7 +136,7 @@ export function PlayerListsSection(props: { snapshot: ServerSnapshot }) {
       <Show when={view() === 'whitelist' ? whitelist.value() : undefined}>
         {(rows) => (
           <PlayerTable rows={rows()} empty="servers.players.whitelist-empty" actions={(name) => (
-            <Show when={moderate() && live()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'whitelist_remove', player: name })}>{t('common.remove')}</Button></Show>
+            <Show when={moderate() && canWhitelist()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'whitelist_remove', player: name })}>{t('common.remove')}</Button></Show>
           )} />
         )}
       </Show>
@@ -209,35 +210,46 @@ function ModerationDialog(props: {
   const takesReason = () => action() === 'kick' || action() === 'ban';
   const remaining = () => Math.max(0, Math.ceil(((awaiting()?.expiresAtMs ?? 0) - now()) / 1000));
   /** Once prepared, the confirmation is bound to that exact player; the field locks. */
-  const locked = () => !!props.request.player || (!!awaiting() && remaining() > 0);
+  const locked = () => !!props.request.player || uncertain() || (!!awaiting() && remaining() > 0);
+  let offlineRevision: { sha256: string | null } | null = null;
 
   const submit = async () => {
     const kind = action();
     const generation = props.snapshot.status?.generation;
-    if (!kind || !generation || !isPlayerName(player())) return;
+    const offlineWhitelist = (kind === 'whitelist_add' || kind === 'whitelist_remove') && ((props.snapshot.status?.state === 'stopped' && !generation) || (intents.uncertain && offlineRevision !== null));
+    if (!kind || (!generation && !offlineWhitelist) || !isPlayerName(player())) return;
     setBusy(true); setError(null);
     const id = props.snapshot.connection.id;
     try {
       const pending = awaiting();
-      if (pending && remaining() > 0) {
+      if (offlineWhitelist) {
+        offlineRevision ??= await serverCommand((client) => client.offlineWhitelist(id));
+        const expected = offlineRevision.sha256;
+        const name = player();
+        const add = kind === 'whitelist_add';
+        const intentId = intents.idFor({ offlineWhitelist: true, name, add, expected });
+        await serverCommand((client) => client.offlineWhitelistUpdate(id, name, add, expected, intentId));
+        intents.settle();
+      } else if (pending && remaining() > 0) {
         const operation = await serverCommand((client) => client.moderateConfirm(id, pending.intentId));
         putOperations(id, [{ ...operation, intent: operation.intent ?? 'players.moderate' }]);
       } else {
         const request = { action: kind, player: player(), ...(takesReason() && reason().trim() ? { reason: reason().trim() } : {}) } as ModerationAction;
         // Identical retries after an uncertain outcome keep the same intent.
         const intentId = intents.idFor({ request, generation });
-        const result = await serverCommand((client) => client.moderate(id, request, generation, intentId));
+        const result = await serverCommand((client) => client.moderate(id, request, generation!, intentId));
         intents.settle();
         if (result.kind === 'awaitingConfirmation') { setAwaiting({ intentId, expiresAtMs: result.expiresAtMs, player: request.player }); return; }
         putOperations(id, [{ ...result.operation, intent: result.operation.intent ?? 'players.moderate' }]);
       }
-      toast.show({ title: t('servers.moderate.accepted'), tone: 'neutral' });
+      toast.show({ title: t(offlineWhitelist ? 'servers.players.offline-saved' : 'servers.moderate.accepted'), tone: 'neutral' });
       props.onDone();
       props.onClose();
     } catch (reason) {
       const failure = reason as ServerCommandError;
       if (!awaiting()) intents.settle(failure);
       setUncertain(intents.uncertain);
+      if (!intents.uncertain) offlineRevision = null;
       setError(failure);
       if (failure.code === 'confirmation_expired') setAwaiting(null);
     } finally { setBusy(false); }

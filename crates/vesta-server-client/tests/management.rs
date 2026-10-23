@@ -15,6 +15,58 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn offline_whitelist_uses_explicit_revision_and_retires_list_cache() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let route = "/api/v3/manage/players/whitelist/offline";
+    let list = "/api/v3/manage/players/whitelist";
+    a.set("GET", route, json!({"items":[],"sha256":null}));
+    assert!(a.client.offline_whitelist().await.unwrap().sha256.is_none());
+    a.set("GET", list, json!({"items":[]}));
+    let _: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    a.set("GET", list, json!({"items":[{"name":"Alex","uuid":"id"}]}));
+    let hash = "a".repeat(64);
+    a.set("POST", route, json!({"outcome":"succeeded","sha256":hash}));
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("Alex", true, None, "offline-create")
+            .await
+            .unwrap(),
+        hash
+    );
+    let calls = a.calls(route);
+    let posted = calls.iter().find(|c| c.method == "POST").unwrap();
+    assert_eq!(posted.body["expected_sha256"], Value::Null);
+    let items: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(items[0]["name"], "Alex");
+    a.set("POST", route, json!({"outcome":"succeeded","sha256":"bad"}));
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("Alex", false, Some(&hash), "lost-receipt")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::OutcomeUnknown
+    );
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("@a", true, None, "bad-name")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    assert_eq!(
+        a.client
+            .offline_whitelist_update("Alex", false, Some("bad"), "bad-revision")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+}
+
+#[tokio::test]
 async fn selected_active_operations_use_one_read_and_refuse_unrequested_results() {
     let _owner = OWNER.lock().await;
     let a = Agent::start().await;

@@ -1116,6 +1116,48 @@ impl ServerManager {
     pub async fn whitelist(&self, id: &str) -> Result<Vec<WhitelistEntry>> {
         self.client(id).await?.player_list("whitelist").await
     }
+    pub async fn offline_whitelist(
+        &self,
+        id: &str,
+    ) -> Result<vesta_server_client::files::OfflineWhitelistSnapshot> {
+        self.client(id).await?.offline_whitelist().await
+    }
+    pub async fn offline_whitelist_update(
+        &self,
+        app: &AppHandle,
+        id: &str,
+        player: &str,
+        add: bool,
+        expected: Option<&str>,
+        intent: &str,
+    ) -> Result<String> {
+        let client = self.client(id).await?;
+        let result = self
+            .mutate(
+                app,
+                id,
+                intent,
+                "players.whitelist.offline",
+                &json!({"player":player,"add":add,"expected":expected}),
+                None,
+                client.offline_whitelist_update(player, add, expected, intent),
+            )
+            .await?;
+        let key = intent_key(intent)?;
+        self.edit_store(|s| {
+            if let Some(i) = s
+                .intents
+                .iter_mut()
+                .find(|i| i.connection_id == id && i.key == key)
+            {
+                i.terminal = true;
+                i.uncertain = false;
+            }
+            Ok(())
+        })
+        .await?;
+        Ok(result)
+    }
     pub async fn operators(&self, id: &str) -> Result<Vec<OperatorEntry>> {
         self.client(id).await?.player_list("ops").await
     }

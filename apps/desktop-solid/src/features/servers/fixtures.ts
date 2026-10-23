@@ -141,6 +141,8 @@ function seed(): FixtureServer[] {
 export function createFixtureServers(options: { seeded?: boolean; latencyMs?: number } = {}): ServersApi {
   const servers = new Map<ConnectionId, FixtureServer>((options.seeded ?? true ? seed() : []).map((server) => [server.snapshot.connection.id, server]));
   const discoveries = new Map<string, Discovery & { address: string }>();
+  const offlineReceipts = new Map<string, { payload: string; sha256: string }>();
+  const whitelistHash = async (target: FixtureServer) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(target.whitelist)))), (b) => b.toString(16).padStart(2, '0')).join('');
   const listeners = new Set<() => void>();
   const subscribers = new Map<ConnectionId, Map<ServerTopic, Set<(event: ServerEvent) => void>>>();
   const latency = options.latencyMs ?? 180;
@@ -506,6 +508,19 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       return rosterOf(target);
     },
     async whitelist(connectionId) { await wait(); const target = server(connectionId); requireCapability(target, 'players.view'); return clone(target.whitelist); },
+    async offlineWhitelist(connectionId) { await wait(); const target = server(connectionId); requireOnline(target); requireCapability(target, 'players.view'); return { items: clone(target.whitelist), sha256: await whitelistHash(target) }; },
+    async offlineWhitelistUpdate(connectionId, player, add, expected, intentId): Promise<string> {
+      await wait(); const target = server(connectionId); requireOnline(target); requireCapability(target, 'players.moderate');
+      const payload = JSON.stringify({ player, add, expected });
+      const key = `${connectionId}:${intentId}`;
+      const receipt = offlineReceipts.get(key);
+      if (receipt) { if (receipt.payload !== payload) return fail('conflict'); return receipt.sha256; }
+      if (target.snapshot.status?.state !== 'stopped' || target.snapshot.status.generation) return fail('stale_target');
+      if (expected !== await whitelistHash(target)) return fail('conflict');
+      if (add && !target.whitelist.some((entry) => entry.name.toLowerCase() === player.toLowerCase())) target.whitelist.push({ name: player, uuid: crypto.randomUUID() });
+      if (!add) target.whitelist = target.whitelist.filter((entry) => entry.name.toLowerCase() !== player.toLowerCase());
+      const sha256 = await whitelistHash(target); offlineReceipts.set(key, { payload, sha256 }); return sha256;
+    },
     async operators(connectionId) { await wait(); const target = server(connectionId); requireCapability(target, 'players.view'); return clone(target.ops); },
     async bans(connectionId) { await wait(); const target = server(connectionId); requireCapability(target, 'players.view'); return clone(target.bans); },
 
