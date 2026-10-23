@@ -90,18 +90,22 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
     if (!disposed && requestedId === id()) invalidateServerResources(requestedId, ['backup-snapshots']);
   };
   const refresh = async () => { await Promise.all([backups.refresh(), refreshProjections()]); };
-  // Scope polling to the connection as well as the pane's lifetime.
+  // Scope polling to the connection as well as the pane's lifetime. The jobs effect is a
+  // sibling, not nested: Solid 2 halts all reactivity if an effect callback creates one.
+  let follower: ReturnType<typeof createBackupJobFollower> | undefined;
   createEffect(connection, () => {
-    const follower = createBackupJobFollower({
+    const current = createBackupJobFollower({
       read: async () => { await backups.refresh(); return overview()?.jobs ?? []; },
       onTerminal: refreshProjections,
     });
-    createEffect(() => ({ jobs: overview()?.jobs ?? [], started: started() }), ({ jobs, started }) => {
-      if (started) follower.observe([started]);
-      follower.observe(jobs);
-    }, { name: 'server-backups:jobs' });
-    return follower.dispose;
+    follower = current;
+    return () => { current.dispose(); if (follower === current) follower = undefined; };
   }, { name: 'server-backups:follow' });
+  // Tracks the connection too, so a new follower sees the jobs already shown.
+  createEffect(() => ({ connection: connection(), jobs: overview()?.jobs ?? [], started: started() }), ({ jobs, started }) => {
+    if (started) follower?.observe([started]);
+    follower?.observe(jobs);
+  }, { name: 'server-backups:jobs' });
 
   const start = async (kind: 'run' | 'verify', profile: string) => {
     try {
