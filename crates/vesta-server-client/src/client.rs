@@ -1,11 +1,11 @@
 #[path = "automation.rs"]
 pub mod automation;
+#[path = "branding.rs"]
+pub mod branding;
 #[path = "management.rs"]
 pub mod management;
 #[path = "presence.rs"]
 pub mod presence;
-#[path = "branding.rs"]
-pub mod branding;
 use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
@@ -753,7 +753,12 @@ impl Client {
             // Receipts predate the detail projection. One bounded authorized GET
             // also handles terminal receipts, which will not be polled later.
             // A denied/busy/unreachable read cannot undo remote acceptance.
-            if let Ok(mut detail) = self.operation(&operation.operation_id).await {
+            if let Ok(Ok(mut detail)) = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                self.operation(&operation.operation_id),
+            )
+            .await
+            {
                 detail.intent = operation.intent;
                 detail.reconciling = operation.reconciling;
                 return detail;

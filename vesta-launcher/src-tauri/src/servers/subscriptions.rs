@@ -201,14 +201,20 @@ impl Subscriptions {
             // Status and telemetry are latest-only. Operation state updates for
             // the same ID supersede older updates still waiting in this queue.
             s.pending.retain(|(old,n)| {
-                let replace = matches!((&bounded,old),(ServerEvent::Snapshot {..},ServerEvent::Snapshot {..})|(ServerEvent::Metrics {..},ServerEvent::Metrics {..}))
+                let replace = matches!((&bounded,old),(ServerEvent::Players {..},ServerEvent::Players {..})|(ServerEvent::Snapshot {..},ServerEvent::Snapshot {..})|(ServerEvent::Metrics {..},ServerEvent::Metrics {..}))
                     || matches!((&bounded,old),(ServerEvent::Operation {operation:a},ServerEvent::Operation {operation:b}) if a.operation_id == b.operation_id);
                 if replace { s.bytes = s.bytes.saturating_sub(*n); } !replace
             });
             let bytes = serde_json::to_vec(&bounded)
                 .map(|v| v.len())
                 .unwrap_or(usize::MAX);
-            if s.pending.len() >= 32 || s.bytes.saturating_add(bytes) > 64 * 1024 {
+            // A short console burst/history page may span several IPC batches.
+            let byte_limit = if topic == ServerTopic::Console {
+                512 * 1024
+            } else {
+                64 * 1024
+            };
+            if s.pending.len() >= 32 || s.bytes.saturating_add(bytes) > byte_limit {
                 s.pending.clear();
                 s.bytes = 0;
                 let marker = ServerEvent::Resync { topic };

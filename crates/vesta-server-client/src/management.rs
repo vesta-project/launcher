@@ -586,8 +586,8 @@ impl Client {
             let page = self.users(offset).await?;
             for user in page.users {
                 count += 1;
-                if count > 100 {
-                    return Err(Error::new(ErrorCode::ServerBusy));
+                if count > 24 {
+                    return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
                 }
                 let value = match self
                     .get(

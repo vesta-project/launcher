@@ -27,6 +27,39 @@ fn blocked(code: ErrorCode) -> bool {
 }
 
 impl ServerManager {
+    fn deliver_console_page(&self, id: &str, lines: Vec<ConsoleLine>, history: bool) {
+        let mut batch = Vec::new();
+        let mut bytes = 0;
+        for line in lines {
+            let size = serde_json::to_vec(&line).map_or(64 * 1024, |v| v.len() + 1);
+            if bytes + size > 48 * 1024 && !batch.is_empty() {
+                let lines = std::mem::take(&mut batch);
+                self.deliver(
+                    id,
+                    ServerTopic::Console,
+                    if history {
+                        ServerEvent::ConsoleHistory { lines }
+                    } else {
+                        ServerEvent::Console { lines }
+                    },
+                );
+                bytes = 0;
+            }
+            bytes += size;
+            batch.push(line);
+        }
+        if !batch.is_empty() {
+            self.deliver(
+                id,
+                ServerTopic::Console,
+                if history {
+                    ServerEvent::ConsoleHistory { lines: batch }
+                } else {
+                    ServerEvent::Console { lines: batch }
+                },
+            );
+        }
+    }
     pub(super) async fn run_worker(self: Arc<Self>, app: AppHandle, id: String) {
         // Four streaming servers; waiting owners do no background work and can
         // be cancelled as soon as their last subscriber leaves.
@@ -50,7 +83,7 @@ impl ServerManager {
         let _permit = permit;
         let _ = self.refresh(&app, &id, false).await;
         self.resume_operations(&app, &id).await;
-        let (send, mut recv) = mpsc::channel(64);
+        let (send, mut recv) = mpsc::channel(1024);
         let (latest, mut metrics) = watch::channel::<Option<Value>>(None);
         let (latest_status, mut status_stream) = watch::channel::<Option<Value>>(None);
         let overflow = Arc::new(AtomicBool::new(false));
@@ -65,6 +98,12 @@ impl ServerManager {
         let mut console_failures = 0_u32;
         let mut metrics_failures = 0_u32;
         let mut ring = ConsoleRing::default();
+        let mut players_generation: Option<String> = None;
+        let mut players_count: Option<u32> = None;
+        let mut players_revision: Option<String> = None;
+        let mut players_retry = Instant::now();
+        let mut console_recovery: Option<String> = None;
+        let mut console_recovery_failures = 0_u32;
         let mut last_status = Instant::now() - Duration::from_secs(60);
         let mut last_console_page = Instant::now() - Duration::from_secs(60);
         let mut last_metrics_poll = Instant::now() - Duration::from_secs(60);
@@ -168,6 +207,7 @@ impl ServerManager {
                     overflow.clone(),
                 ));
             }
+            let recovery_floor = ring.lines().back().map(|l| l.cursor.clone());
             let mut lines = Vec::new();
             let mut estimated = 0;
             // Max 64 messages and 48 KiB payload per batch, leaving JSON overhead.
@@ -194,6 +234,7 @@ impl ServerManager {
                             matches!(c, ErrorCode::Unsupported | ErrorCode::NotFound)
                         });
                         if topic == ServerTopic::Console {
+                            console_recovery = console_recovery.or_else(|| recovery_floor.clone());
                             console = None;
                             console_retry = Instant::now() + Duration::from_secs(delay);
                             console_stopped = code.is_some_and(blocked);
@@ -213,8 +254,14 @@ impl ServerManager {
                                 console_failures = 0;
                                 let bytes = line.text.len() + line.cursor.len() + 128;
                                 if estimated + bytes > 48 * 1024 {
-                                    overflow.store(true, Ordering::Relaxed);
-                                    continue;
+                                    self.deliver(
+                                        &id,
+                                        ServerTopic::Console,
+                                        ServerEvent::Console {
+                                            lines: std::mem::take(&mut lines),
+                                        },
+                                    );
+                                    estimated = 0;
                                 }
                                 estimated += bytes;
                                 ring.push(line.clone());
@@ -229,18 +276,7 @@ impl ServerManager {
                                     cursor: v["cursor"].as_str().unwrap_or("").into(),
                                 },
                             );
-                            if last_console_page.elapsed() >= Duration::from_secs(10) {
-                                last_console_page = Instant::now();
-                                // Exactly one bounded recovery page; never chase a noisy stream.
-                                if let Ok(page) =
-                                    client.console_page_with_priority(None, 100, false).await
-                                {
-                                    for line in page.items {
-                                        ring.push(line.clone());
-                                        lines.push(line);
-                                    }
-                                }
-                            }
+                            console_recovery = console_recovery.or_else(|| recovery_floor.clone());
                         }
                         Some("console.available" | "heartbeat") => {}
                         _ => self.deliver(
@@ -256,7 +292,10 @@ impl ServerManager {
             if !lines.is_empty() {
                 self.deliver(&id, ServerTopic::Console, ServerEvent::Console { lines });
             }
-            if overflow.swap(false, Ordering::Relaxed) || ring.take_gap() {
+            // Evicting already-delivered history is normal retention, not data loss.
+            let _ = ring.take_gap();
+            if overflow.swap(false, Ordering::Relaxed) {
+                console_recovery = console_recovery.or_else(|| recovery_floor.clone());
                 self.deliver(
                     &id,
                     ServerTopic::Console,
@@ -264,6 +303,45 @@ impl ServerManager {
                         topic: ServerTopic::Console,
                     },
                 );
+            }
+            if let Some(cursor) = console_recovery.clone() {
+                if last_console_page.elapsed() >= Duration::from_secs(1) {
+                    last_console_page = Instant::now();
+                    let recovered = match client
+                        .console_page_with_priority(Some(&cursor), 200, false)
+                        .await
+                    {
+                        Err(error)
+                            if matches!(
+                                error.code,
+                                ErrorCode::Conflict | ErrorCode::InvalidInput
+                            ) =>
+                        {
+                            client.console_page_with_priority(None, 200, false).await
+                        }
+                        result => result,
+                    };
+                    if let Ok(page) = &recovered {
+                        console_recovery_failures = 0;
+                        console_recovery = page
+                            .next_cursor
+                            .clone()
+                            .filter(|next| next != &page.latest_cursor && next != &cursor);
+                        if !page.items.is_empty() {
+                            self.deliver_console_page(&id, page.items.clone(), true);
+                        }
+                    } else if let Err(error) = recovered {
+                        if blocked(error.code) {
+                            console_recovery = None;
+                        } else {
+                            console_recovery_failures = console_recovery_failures.saturating_add(1);
+                            let backoff = (2_u64.pow(console_recovery_failures.min(5)) * 1000)
+                                .max(error.retry_after_ms.unwrap_or(0));
+                            last_console_page =
+                                Instant::now() + Duration::from_millis(backoff.min(3_600_000));
+                        }
+                    }
+                }
             }
             if status_stream.has_changed().unwrap_or(false) {
                 let event = status_stream.borrow_and_update().clone();
@@ -318,6 +396,66 @@ impl ServerManager {
                     }
                 }
             }
+            if want_status && Instant::now() >= players_retry {
+                if let Ok(record) = self.record(&id).await {
+                    if let Some(status) = record.snapshot.status.as_ref() {
+                        if status.state == "running"
+                            && status.readiness == "ready"
+                            && record
+                                .snapshot
+                                .capabilities
+                                .granted
+                                .iter()
+                                .any(|c| c == "players.view")
+                            && (players_generation != status.generation
+                                || players_count != status.player_count
+                                || players_revision != status.player_roster_revision)
+                        {
+                            players_retry = Instant::now() + Duration::from_secs(30);
+                            if let Ok(players) = self.players(&id).await {
+                                if let PlayersView::Known {
+                                    generation,
+                                    player_count,
+                                    ..
+                                } = &players
+                                {
+                                    players_generation = Some(generation.clone());
+                                    players_count = Some(*player_count);
+                                    players_revision = status.player_roster_revision.clone();
+                                    players_retry = Instant::now() + Duration::from_secs(1);
+                                    let mut updated = record.snapshot.clone();
+                                    if let Some(current) = updated.status.as_mut() {
+                                        current.player_count = Some(*player_count);
+                                        current.player_count_known = true;
+                                        current.player_count_observed_at_ms =
+                                            Some(vesta_server_client::now_ms());
+                                    }
+                                    let _ = self.publish_observation(&app, updated).await;
+                                }
+                                self.deliver(
+                                    &id,
+                                    ServerTopic::Status,
+                                    ServerEvent::Players { players },
+                                );
+                            }
+                        } else if status.state == "stopped" && players_generation.take().is_some() {
+                            players_count = None;
+                            if let Ok(slot) = self.slot(&id) {
+                                if let Ok(mut players) = slot.players.lock() {
+                                    *players = Some(PlayersView::Unknown { known: false });
+                                }
+                            }
+                            self.deliver(
+                                &id,
+                                ServerTopic::Status,
+                                ServerEvent::Players {
+                                    players: PlayersView::Unknown { known: false },
+                                },
+                            );
+                        }
+                    }
+                }
+            }
             // Once a live socket proves status support, it owns observation.
             // Older agents and disconnected sockets retain bounded polling.
             if want_status
@@ -345,11 +483,7 @@ impl ServerManager {
                         for line in &page.items {
                             ring.push(line.clone());
                         }
-                        self.deliver(
-                            &id,
-                            ServerTopic::Console,
-                            ServerEvent::Console { lines: page.items },
-                        );
+                        self.deliver_console_page(&id, page.items, true);
                     }
                     Err(e) => {
                         console_stopped = blocked(e.code);

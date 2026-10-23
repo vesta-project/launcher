@@ -11,6 +11,37 @@ use std::{
     time::{Duration, Instant},
 };
 
+fn read_ttl(path: &str) -> Duration {
+    if path.starts_with("/api/v3/manage/automation/")
+        || path.ends_with("/policy")
+        || path.starts_with("/api/v3/manage/backups/")
+        || path == "/api/v3/manage/server"
+        || path == "/api/v3/manage/session"
+        || [
+            "users",
+            "roles",
+            "devices",
+            "invitations",
+            "access-sources",
+            "players/whitelist",
+            "players/ops",
+            "players/bans",
+        ]
+        .iter()
+        .any(|route| {
+            path.strip_prefix("/api/v3/manage/").is_some_and(|p| {
+                p == *route
+                    || p.starts_with(&format!("{route}?"))
+                    || p.starts_with(&format!("{route}/"))
+            })
+        })
+    {
+        Duration::from_secs(10)
+    } else {
+        Duration::from_millis(250)
+    }
+}
+
 pub(crate) fn server_busy_retry_delay(error: &Error) -> Option<Duration> {
     if error.code != ErrorCode::ServerBusy || error.local_pressure {
         return None;
@@ -52,7 +83,9 @@ impl Transport {
             .no_proxy()
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(15))
-            .pool_max_idle_per_host(3)
+            .pool_max_idle_per_host(2)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_keepalive(Duration::from_secs(30))
             .build()
             .map_err(|_| Error::new(ErrorCode::Internal))?;
         let scheduler = Scheduler::for_origin(endpoint.url().as_str())?;
@@ -123,13 +156,25 @@ impl Transport {
         let future = {
             let mut reads = self.reads.lock().await;
             reads.retain(|_, (at, future)| {
-                future.peek().is_none() || at.elapsed() < Duration::from_millis(250)
+                future.peek().is_none() || at.elapsed() < Duration::from_secs(10)
             });
+            if reads.get(&cache_key).is_some_and(|(at, future)| {
+                future.peek().is_some_and(|result| {
+                    at.elapsed()
+                        >= if result.is_ok() {
+                            read_ttl(path)
+                        } else {
+                            Duration::from_millis(250)
+                        }
+                })
+            }) {
+                reads.remove(&cache_key);
+            }
             if let Some((_, f)) = reads.get(&cache_key) {
                 f.clone()
             } else {
-                if reads.len() >= 32 {
-                    return Err(Error::new(ErrorCode::ServerBusy));
+                if reads.len() >= 128 {
+                    return Err(Error::new(ErrorCode::ServerBusy).local_pressure());
                 }
                 let owner = self.clone();
                 let path = path.to_owned();
@@ -206,7 +251,13 @@ impl Transport {
         key: Option<&str>,
         interactive: bool,
     ) -> Result<Value> {
-        let _permit = self.scheduler.admit_request(interactive).await?;
+        let _permit = if token.is_some() {
+            self.scheduler
+                .admit_authenticated_request(interactive)
+                .await?
+        } else {
+            self.scheduler.admit_request(interactive).await?
+        };
         if self.expected.is_none()
             && (method != Method::GET || path != "/api/v3/status" || token.is_some())
         {
@@ -317,7 +368,7 @@ impl Transport {
         if self.expected.is_none() {
             return Err(Error::new(ErrorCode::TlsFailed));
         }
-        let _admission = self.scheduler.admit(false)?;
+        let _admission = self.scheduler.admit_authenticated(false)?;
         let mut url = self.endpoint.route(path)?;
         url.set_scheme("wss")
             .map_err(|_| Error::new(ErrorCode::Internal))?;

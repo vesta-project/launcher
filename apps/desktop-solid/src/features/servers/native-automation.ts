@@ -91,6 +91,7 @@ export interface WorkflowDefinition {
 // ---------------------------------------------------------------- observations
 
 export interface WorkflowSummary {
+  trigger?: WorkflowTrigger | null;
   id: string;
   /** Nonblank, control-free, ≤128 bytes. */
   name: string;
@@ -206,12 +207,12 @@ export const serversAutomationNative = {
   /** POST automation/workflows/{id}/run `{}` — only an enabled workflow with the manual trigger (else `conflict`). */
   automationWorkflowRun: (connectionId: ConnectionId, workflowId: string, intentId: string) =>
     call<ManualRunResult>('server_automation_workflow_run', { connectionId, workflowId, intentId }),
-  /** GET automation/workflows/{id}/runs?after&limit=100 — ascending by run id. */
-  automationWorkflowRuns: (connectionId: ConnectionId, workflowId: string, after: string | null) =>
-    call<Paged<RunSummary>>('server_automation_workflow_runs', { connectionId, workflowId, after }),
-  /** GET automation/runs?after&limit=100 — every workflow's runs, including deleted workflows'. */
-  automationRuns: (connectionId: ConnectionId, after: string | null) =>
-    call<Paged<RunSummary>>('server_automation_runs', { connectionId, after }),
+  /** GET automation/workflows/{id}/runs?after&limit=100 — ascending by run id; `newest` requests descending start time. */
+  automationWorkflowRuns: (connectionId: ConnectionId, workflowId: string, after: string | null, newest = false) =>
+    call<Paged<RunSummary>>('server_automation_workflow_runs', { connectionId, workflowId, after, newest }),
+  /** GET automation/runs?after&limit=100 — every workflow's runs; `newest` requests descending start time. */
+  automationRuns: (connectionId: ConnectionId, after: string | null, newest = false) =>
+    call<Paged<RunSummary>>('server_automation_runs', { connectionId, after, newest }),
   /** GET automation/runs/{id} — with the pinned definition. */
   automationRun: (connectionId: ConnectionId, runId: string) =>
     call<RunDetail>('server_automation_run', { connectionId, runId }),

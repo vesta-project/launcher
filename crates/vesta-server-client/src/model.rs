@@ -152,6 +152,7 @@ dto!(SupervisorStatus {
 dto!(ServerStatus {
     state: String, lifecycle: Option<String>, generation: Option<String>,
     player_count: Option<u32>, player_count_known: bool, player_count_observed_at_ms: Option<i64>,
+    player_roster_revision: Option<String>,
     uptime_seconds: Option<String>, readiness: String, readiness_reason: Option<String>,
     readiness_evidence: String, supervision: String, supervisor: Option<SupervisorStatus>,
 });
@@ -160,7 +161,8 @@ dto!(ServerInfo {
     name: String,
     agent_version: String,
     minecraft_version: String,
-    pack_version: String
+    pack_version: String,
+    game_port: Option<u16>, backups_configured: Option<bool>, join_address: Option<String>
 });
 dto!(PackStatus { hosted_revision: Option<String>, minimum_revision: Option<String>, status: String });
 dto!(CapabilityView { source: String, granted: Vec<String>, refused: Vec<String> });
@@ -168,6 +170,7 @@ dto!(ServerSnapshot {
     connection: ServerConnection, state: ConnectionState, info: Option<ServerInfo>,
     status: Option<ServerStatus>, status_observed_at_ms: Option<i64>, pack: Option<PackStatus>,
     capabilities: CapabilityView, restart_required: bool,
+    join_address: Option<String>, backups_configured: Option<bool>,
 });
 dto!(Discovery {
     discovery_id: String, endpoint: String, server_id: String, fingerprint: String,
@@ -376,6 +379,8 @@ pub enum ServerTopic {
 pub enum ServerEvent {
     Snapshot { snapshot: Box<ServerSnapshot> },
     Console { lines: Vec<ConsoleLine> },
+    ConsoleHistory { lines: Vec<ConsoleLine> },
+    Players { players: PlayersView },
     ConsoleGap { cursor: String },
     Metrics { sample: MetricsSample },
     Operation { operation: ServerOperation },

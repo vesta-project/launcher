@@ -35,6 +35,9 @@ const [order, setOrder] = createSignal<ConnectionId[]>([], { name: 'serverOrder'
 const [loaded, setLoaded] = createSignal(false, { name: 'serversLoaded' });
 const [listError, setListError] = createSignal<ServerCommandError | null>(null, { name: 'serversListError' });
 
+const players = keyed<import('./native').PlayersView>('serverPlayers', () => ({ known: false }));
+export const serverPlayers = (id: ConnectionId) => players.get(id);
+
 const consoles = new Map<ConnectionId, ConsoleBuffer>();
 const refreshing = keyed<boolean>('serverRefreshing', () => false);
 const refreshes = new Map<ConnectionId, Promise<void>>();
@@ -77,6 +80,10 @@ const bumpConsole = (id: ConnectionId) => consoleVersions.update(id, (current) =
 export function putSnapshot(snapshot: ServerSnapshot) {
   const id = snapshot.connection.id;
   snapshots.update(id, () => snapshot);
+  const roster = untrack(() => players.get(id));
+  if (roster.known && (snapshot.status?.state !== 'running' || snapshot.status.generation !== roster.generation)) {
+    players.update(id, () => ({ known: false }));
+  }
   if (!untrack(order).includes(id)) setOrder((current) => [...current, id]);
 }
 
@@ -87,6 +94,7 @@ function forget(id: ConnectionId) {
   metrics.delete(id);
   consoleVersions.delete(id);
   consoles.delete(id);
+  players.delete(id);
   icons.delete(id);
   iconRequests.delete(id);
 }
@@ -191,14 +199,20 @@ export function useServerTopic(id: () => ConnectionId | undefined, topic: Server
       if (closed) return;
       switch (event.kind) {
         case 'snapshot': putSnapshot(event.snapshot); break;
+        case 'players': {
+          const status = untrack(() => snapshots.get(connectionId)?.status);
+          players.update(connectionId, () => event.players.known && (status?.state !== 'running' || status.generation !== event.players.generation) ? { known: false } : event.players);
+          break;
+        }
         case 'console': consoleBuffer(connectionId).append(event.lines); bumpConsole(connectionId); break;
-        case 'consoleGap': consoleBuffer(connectionId).gap(event.cursor); bumpConsole(connectionId); break;
+        case 'consoleHistory': consoleBuffer(connectionId).merge(event.lines); bumpConsole(connectionId); break;
+        case 'consoleGap': consoleBuffer(connectionId).gap(event.cursor); bumpConsole(connectionId); void recoverConsoleTail(connectionId); break;
         case 'metrics': metrics.update(connectionId, (current) => [...current, event.sample].slice(-METRIC_HISTORY)); break;
         case 'operation': putOperations(connectionId, [event.operation]); break;
         case 'resync':
           if (event.topic === 'status') void serverCommand((client) => client.snapshot(connectionId, true)).then(putSnapshot).catch(() => {});
           if (event.topic === 'operations') void loadOperations(connectionId).catch(() => {});
-          if (event.topic === 'console') { consoleBuffer(connectionId).gap(`resync:${Date.now()}`); bumpConsole(connectionId); }
+          if (event.topic === 'console') { consoleBuffer(connectionId).gap(`resync:${Date.now()}`); bumpConsole(connectionId); void recoverConsoleTail(connectionId); }
           break;
       }
     })).then((close) => {
@@ -219,7 +233,21 @@ export async function loadOperations(id: ConnectionId) {
  * One bounded read of the server's retained console tail (the agent pages forward only,
  * and lines evicted at a gap are gone). Lines already shown are merged by cursor.
  */
-export async function loadConsoleTail(id: ConnectionId) {
+const consoleRecoveryAt = new Map<ConnectionId, number>();
+async function recoverConsoleTail(id: ConnectionId) {
+  if (Date.now() - (consoleRecoveryAt.get(id) ?? 0) < 10_000) return;
+  consoleRecoveryAt.set(id, Date.now());
+  await loadConsoleTail(id).catch(() => {});
+}
+const consoleLoads = new Map<ConnectionId, Promise<number>>();
+export function loadConsoleTail(id: ConnectionId): Promise<number> {
+  const pending = consoleLoads.get(id);
+  if (pending) return pending;
+  const request = readConsoleTail(id).finally(() => consoleLoads.delete(id));
+  consoleLoads.set(id, request);
+  return request;
+}
+async function readConsoleTail(id: ConnectionId) {
   const page = await serverCommand((client) => client.consolePage(id, null, 200));
   const added = consoleBuffer(id).merge(page.items);
   bumpConsole(id);

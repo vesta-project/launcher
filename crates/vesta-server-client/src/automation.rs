@@ -55,6 +55,9 @@ pub struct RetryPolicy {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowSummary {
+    /// Missing only on older agents.
+    #[serde(default)]
+    pub trigger: Option<WorkflowTrigger>,
     pub id: String,
     pub name: String,
     pub enabled: bool,
@@ -591,6 +594,26 @@ impl Client {
         page(
             self.get(
                 &page_route("automation/runs", after, false, 100)?,
+                true,
+                "automation.view",
+            )
+            .await?,
+            "runs",
+            false,
+        )
+    }
+    pub async fn automation_runs_newest(
+        &self,
+        workflow_id: Option<&str>,
+        after: Option<&str>,
+    ) -> Result<Paged<RunSummary>> {
+        let route = match workflow_id {
+            Some(workflow) => format!("automation/workflows/{}/runs", id(workflow)?),
+            None => "automation/runs".to_owned(),
+        };
+        page(
+            self.get(
+                &format!("{}&order=newest", page_route(&route, after, false, 100)?),
                 true,
                 "automation.view",
             )

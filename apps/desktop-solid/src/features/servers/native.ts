@@ -129,6 +129,7 @@ export interface ServerStatus {
   playerCount: number | null;
   playerCountKnown: boolean;
   playerCountObservedAtMs: number | null;
+  playerRosterRevision?: string | null;
   uptimeSeconds: string | null;
   readiness: Readiness;
   readinessReason: ReadinessReason | null;
@@ -143,6 +144,9 @@ export interface ServerInfo {
   agentVersion: string;
   minecraftVersion: string;
   packVersion: string;
+  gamePort?: number | null;
+  joinAddress?: string | null;
+  backupsConfigured?: boolean | null;
 }
 
 export interface PackStatus {
@@ -170,6 +174,10 @@ export interface ServerSnapshot {
   capabilities: CapabilityView;
   /** True after a settings change reported `restart_needed` until the next start. */
   restartRequired: boolean;
+  /** null/undefined on older agents; inferred from endpoint host + game port. */
+  joinAddress?: string | null;
+  /** null/undefined means the agent has not reported configuration. */
+  backupsConfigured?: boolean | null;
 }
 
 // ----------------------------------------------------------------- operations
@@ -277,6 +285,8 @@ export type ServerTopic = 'status' | 'console' | 'metrics' | 'operations';
 export type ServerEvent =
   | { kind: 'snapshot'; snapshot: ServerSnapshot }
   | { kind: 'console'; lines: ConsoleLine[] }
+  | { kind: 'consoleHistory'; lines: ConsoleLine[] }
+  | { kind: 'players'; players: PlayersView }
   | { kind: 'consoleGap'; cursor: string }
   | { kind: 'metrics'; sample: MetricsSample }
   | { kind: 'operation'; operation: ServerOperation }

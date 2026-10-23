@@ -146,6 +146,50 @@ mod tests {
         assert_ne!(std::fs::read(root.path().join(FILE)).unwrap(), before);
     }
     #[tokio::test]
+    async fn restart_notice_survives_stop_and_clears_on_the_next_generation() {
+        let root = tempfile::tempdir().unwrap();
+        let mut record = persistent_record();
+        let status = |generation: Option<&str>, state: &str| {
+            serde_json::from_value(serde_json::json!({
+                "state":state,"generation":generation,"lifecycle":null,"playerCount":null,
+                "playerCountKnown":false,"playerCountObservedAtMs":null,"uptimeSeconds":null,
+                "readiness":"ready","readinessReason":null,"readinessEvidence":"log_only",
+                "supervision":"in_process","supervisor":null
+            }))
+            .unwrap()
+        };
+        record.snapshot.status = Some(status(Some("first"), "running"));
+        record.snapshot.restart_required = true;
+        let mut store = Store::default();
+        store.connections.push(record);
+        let shared = Arc::new(Mutex::new(store));
+        let mut incoming = shared.lock().await.connections[0].snapshot.clone();
+        incoming.restart_required = false;
+        assert!(
+            Store::observe(&shared, root.path(), incoming.clone())
+                .await
+                .unwrap()
+                .0
+                .restart_required
+        );
+        incoming.status = Some(status(None, "stopped"));
+        assert!(
+            Store::observe(&shared, root.path(), incoming.clone())
+                .await
+                .unwrap()
+                .0
+                .restart_required
+        );
+        incoming.status = Some(status(Some("second"), "running"));
+        assert!(
+            !Store::observe(&shared, root.path(), incoming)
+                .await
+                .unwrap()
+                .0
+                .restart_required
+        );
+    }
+    #[tokio::test]
     async fn failed_removal_preserves_connection_and_success_journals_vault_cleanup() {
         let root = tempfile::tempdir().unwrap();
         let blocked = root.path().join("file-not-directory");
@@ -439,6 +483,16 @@ impl Store {
             .iter_mut()
             .find(|r| r.snapshot.connection.id == snapshot.connection.id)
             .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
+        // HTTP, stream and failure observations all pass through this merge.
+        // Keep pending settings through stop; clear only on observing a new run.
+        let old = record
+            .snapshot
+            .status
+            .as_ref()
+            .and_then(|s| s.generation.as_ref());
+        let new = snapshot.status.as_ref().and_then(|s| s.generation.as_ref());
+        snapshot.restart_required =
+            record.snapshot.restart_required && !(new.is_some() && new != old);
         let connected = snapshot.connection.last_connected_at_ms;
         let reported_name = snapshot.connection.name.clone();
         snapshot.connection = record.snapshot.connection.clone();

@@ -45,6 +45,8 @@ struct Live {
     refresh: Mutex<()>,
     worker: StdMutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     capabilities_loaded: std::sync::atomic::AtomicBool,
+    info_loaded: std::sync::atomic::AtomicBool,
+    players: StdMutex<Option<PlayersView>>,
 }
 pub struct ServerManager {
     root: PathBuf,
@@ -88,7 +90,9 @@ impl ServerManager {
         let cleanup = Arc::downgrade(&manager);
         tauri::async_runtime::spawn(async move {
             loop {
-                let Some(manager) = cleanup.upgrade() else { break; };
+                let Some(manager) = cleanup.upgrade() else {
+                    break;
+                };
                 manager.cleanup_deleted_credentials().await;
                 drop(manager);
                 tokio::time::sleep(Duration::from_secs(60)).await;
@@ -196,13 +200,11 @@ impl ServerManager {
         self.changed(app);
         Ok(())
     }
-    async fn publish_observation(
-        &self,
-        app: &AppHandle,
-        snapshot: ServerSnapshot,
-    ) -> Result<()> {
+    async fn publish_observation(&self, app: &AppHandle, snapshot: ServerSnapshot) -> Result<()> {
         let id = snapshot.connection.id.clone();
-        if let Some(e) = &self.initialization_error { return Err(e.clone()); }
+        if let Some(e) = &self.initialization_error {
+            return Err(e.clone());
+        }
         let (snapshot, changed) = Store::observe(&self.store, &self.root, snapshot).await?;
         self.deliver(
             &id,
@@ -244,7 +246,7 @@ impl ServerManager {
                 snapshot.state.access = "credentials_unavailable".into()
             }
             ErrorCode::NoManagementAccess => snapshot.state.access = "no_management_access".into(),
-            ErrorCode::RateLimited | ErrorCode::ServerBusy => {
+            ErrorCode::RateLimited => {
                 snapshot.state.phase = "backoff".into();
                 snapshot.state.retry_at_ms = Some(snapshot.state.rate_limited_until_ms.unwrap_or(
                     vesta_server_client::now_ms() + error.retry_after_ms.unwrap_or(10_000) as i64,
@@ -491,6 +493,8 @@ impl ServerManager {
                 refused: vec![],
             },
             restart_required: false,
+            join_address: None,
+            backups_configured: None,
         };
         let client = Client::new(transport, discovery.server_id, device.clone(), signer);
         self.edit_store(|s| {
@@ -667,12 +671,21 @@ impl ServerManager {
         }
         let result = async {
             let client = self.client(id).await?;
-            if snapshot.info.is_none() {
+            if !slot.info_loaded.load(std::sync::atomic::Ordering::Relaxed) {
                 let info = client.info().await?;
                 if snapshot.connection.name == snapshot.connection.endpoint {
                     snapshot.connection.name = info.name.clone();
                 }
+                snapshot.backups_configured = info.backups_configured;
+                snapshot.join_address = info.join_address.clone().or_else(|| {
+                    info.game_port.and_then(|port| {
+                        let endpoint = Endpoint::parse(&snapshot.connection.endpoint).ok()?;
+                        Some(format!("{}:{port}", endpoint.url().host()?))
+                    })
+                });
                 snapshot.info = Some(info);
+                slot.info_loaded
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
             }
             if !slot
                 .capabilities_loaded
@@ -690,11 +703,6 @@ impl ServerManager {
                 )?);
             }
             let status = client.status(interactive).await?;
-            if snapshot.status.as_ref().and_then(|s| s.generation.as_ref())
-                != status.generation.as_ref()
-            {
-                snapshot.restart_required = false;
-            }
             snapshot.status = Some(status);
             snapshot.status_observed_at_ms = Some(vesta_server_client::now_ms());
             snapshot.capabilities.refused = client.refused().await;
@@ -796,6 +804,8 @@ impl ServerManager {
                 *current = Some(client.repin(transport));
             }
         }
+        slot.info_loaded
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         slot.capabilities_loaded
             .store(false, std::sync::atomic::Ordering::Relaxed);
         self.publish(app, snapshot).await?;
@@ -822,11 +832,18 @@ impl ServerManager {
         Ok(())
     }
     async fn cleanup_deleted_credentials(&self) {
-        let Ok(_guard) = self.credential_cleanup.try_lock() else { return; };
+        let Ok(_guard) = self.credential_cleanup.try_lock() else {
+            return;
+        };
         let _ = Store::cleanup_keys(&self.store, &self.root, |key| {
             let credentials = self.credentials.clone();
-            async move { tokio::task::spawn_blocking(move || credentials.delete(&key)).await.map_err(|_| internal())? }
-        }).await;
+            async move {
+                tokio::task::spawn_blocking(move || credentials.delete(&key))
+                    .await
+                    .map_err(|_| internal())?
+            }
+        })
+        .await;
     }
     pub fn window_closed(&self, window: &str) {
         if let Ok(mut s) = self.subscriptions.lock() {
@@ -863,6 +880,15 @@ impl ServerManager {
                     snapshot: Box::new(snapshot),
                 },
             );
+            if let Some(players) = self
+                .slot(id)?
+                .players
+                .lock()
+                .map_err(|_| internal())?
+                .clone()
+            {
+                self.deliver(id, topic, ServerEvent::Players { players });
+            }
         }
         self.ensure_worker(app, id)?;
         Ok(handle)
@@ -1083,7 +1109,9 @@ impl ServerManager {
         Ok(operation)
     }
     pub async fn players(&self, id: &str) -> Result<PlayersView> {
-        self.client(id).await?.players().await
+        let players = self.client(id).await?.players().await?;
+        *self.slot(id)?.players.lock().map_err(|_| internal())? = Some(players.clone());
+        Ok(players)
     }
     pub async fn whitelist(&self, id: &str) -> Result<Vec<WhitelistEntry>> {
         self.client(id).await?.player_list("whitelist").await

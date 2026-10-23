@@ -5,6 +5,15 @@ use tauri::{ipc::Channel, AppHandle, State, WebviewWindow};
 use vesta_server_client::{model::*, Result};
 type Manager<'a> = State<'a, Arc<ServerManager>>;
 
+async fn lifecycle_deadline<T>(run: impl std::future::Future<Output = Result<T>>) -> Result<T> {
+    tokio::time::timeout(std::time::Duration::from_secs(30), run)
+        .await
+        .unwrap_or_else(|_| {
+            Err(vesta_server_client::Error::new(
+                vesta_server_client::ErrorCode::OutcomeUnknown,
+            ))
+        })
+}
 #[tauri::command]
 pub async fn server_connections_list(manager: Manager<'_>) -> Result<Vec<ServerSnapshot>> {
     manager.list().await
@@ -101,16 +110,19 @@ pub async fn server_lifecycle(
     expected_generation: Option<String>,
     intent_id: String,
 ) -> Result<ServerOperation> {
-    manager
-        .inner()
-        .lifecycle(
-            &app,
-            &connection_id,
-            &action,
-            expected_generation.as_deref(),
-            &intent_id,
-        )
-        .await
+    lifecycle_deadline(async {
+        manager
+            .inner()
+            .lifecycle(
+                &app,
+                &connection_id,
+                &action,
+                expected_generation.as_deref(),
+                &intent_id,
+            )
+            .await
+    })
+    .await
 }
 #[tauri::command]
 pub async fn server_kill_prepare(
@@ -119,9 +131,12 @@ pub async fn server_kill_prepare(
     expected_generation: String,
     intent_id: String,
 ) -> Result<KillPreparation> {
-    manager
-        .kill_prepare(&connection_id, &expected_generation, &intent_id)
-        .await
+    lifecycle_deadline(async {
+        manager
+            .kill_prepare(&connection_id, &expected_generation, &intent_id)
+            .await
+    })
+    .await
 }
 #[tauri::command]
 pub async fn server_kill_confirm(
@@ -130,10 +145,13 @@ pub async fn server_kill_confirm(
     connection_id: String,
     intent_id: String,
 ) -> Result<ServerOperation> {
-    manager
-        .inner()
-        .confirm(&app, &connection_id, &intent_id, "lifecycle/kill")
-        .await
+    lifecycle_deadline(async {
+        manager
+            .inner()
+            .confirm(&app, &connection_id, &intent_id, "lifecycle/kill")
+            .await
+    })
+    .await
 }
 #[tauri::command]
 pub async fn server_operations(

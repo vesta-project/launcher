@@ -80,19 +80,52 @@ fn local_pressure_provenance_survives_ipc_without_mislabeling_remote_busy() {
     let remote = Error::wire(503, "temporarily_unavailable", None);
     assert!(!remote.local_pressure);
     assert_eq!(serde_json::to_value(local).unwrap()["localPressure"], true);
-    assert!(serde_json::to_value(remote).unwrap().get("localPressure").is_none());
+    assert!(serde_json::to_value(remote)
+        .unwrap()
+        .get("localPressure")
+        .is_none());
 }
 
 #[tokio::test]
 async fn two_panel_reads_wait_for_local_refill_without_increasing_the_budget() {
     let _owner = OWNER.lock().await;
     let scheduler = Scheduler::default();
-    for _ in 0..40 { drop(scheduler.admit(true).unwrap()); }
-    assert_eq!(scheduler.admit(false).err().unwrap().code, ErrorCode::RateLimited);
+    for _ in 0..40 {
+        drop(scheduler.admit(true).unwrap());
+    }
+    assert_eq!(
+        scheduler.admit(false).err().unwrap().code,
+        ErrorCode::RateLimited
+    );
     let started = std::time::Instant::now();
     let (sleep, motd) = tokio::join!(scheduler.admit_request(true), scheduler.admit_request(true));
     drop((sleep.unwrap(), motd.unwrap()));
     assert!(started.elapsed() >= Duration::from_millis(2900));
     assert!(started.elapsed() < Duration::from_secs(5));
-    assert_eq!(scheduler.admit(true).err().unwrap().code, ErrorCode::RateLimited);
+    assert_eq!(
+        scheduler.admit(true).err().unwrap().code,
+        ErrorCode::RateLimited
+    );
+}
+
+#[tokio::test]
+async fn authenticated_panels_have_a_session_budget_and_respect_server_backoff() {
+    let _owner = OWNER.lock().await;
+    let scheduler = Scheduler::default();
+    for _ in 0..100 {
+        drop(scheduler.admit_authenticated_request(true).await.unwrap());
+    }
+    // Anonymous traffic has its own smaller cap.
+    for _ in 0..40 {
+        drop(scheduler.admit(true).unwrap());
+    }
+    assert!(scheduler.admit(true).is_err());
+    scheduler.pause(60_000);
+    let error = scheduler
+        .admit_authenticated_request(true)
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(error.code, ErrorCode::RateLimited);
+    assert!(error.retry_after_ms.unwrap() > 50_000);
 }

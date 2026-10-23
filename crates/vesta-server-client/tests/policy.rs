@@ -180,7 +180,7 @@ fn token_bucket_reserves_ten_tokens_for_interactive_work() {
     let mut bucket = TokenBucket::new(now);
     bucket.pause(Duration::from_secs(60));
     assert!(bucket.admit(false, now).is_err());
-    assert!(bucket.admit(true, now).is_ok());
+    assert!(bucket.admit(true, now).is_err());
 }
 #[test]
 fn concurrency_reservation_and_fail_fast_queue_are_bounded() {

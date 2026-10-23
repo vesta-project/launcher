@@ -54,11 +54,17 @@ pub async fn server_automation_workflow_runs(
     connection_id: String,
     workflow_id: String,
     after: Option<String>,
+    newest: Option<bool>,
 ) -> Result<Paged<RunSummary>> {
     manager
         .management_read(&app, &connection_id, |c| async move {
-            c.automation_workflow_runs(&workflow_id, after.as_deref())
-                .await
+            if newest.unwrap_or(false) {
+                c.automation_runs_newest(Some(&workflow_id), after.as_deref())
+                    .await
+            } else {
+                c.automation_workflow_runs(&workflow_id, after.as_deref())
+                    .await
+            }
         })
         .await
 }
@@ -69,10 +75,15 @@ pub async fn server_automation_runs(
     manager: Manager<'_>,
     connection_id: String,
     after: Option<String>,
+    newest: Option<bool>,
 ) -> Result<Paged<RunSummary>> {
     manager
         .management_read(&app, &connection_id, |c| async move {
-            c.automation_runs(after.as_deref()).await
+            if newest.unwrap_or(false) {
+                c.automation_runs_newest(None, after.as_deref()).await
+            } else {
+                c.automation_runs(after.as_deref()).await
+            }
         })
         .await
 }

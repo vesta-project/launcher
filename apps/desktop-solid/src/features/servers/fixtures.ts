@@ -85,6 +85,7 @@ function seed(): FixtureServer[] {
       pack: { hostedRevision: '14', minimumRevision: '12', status: 'published' },
       capabilities: { source: 'session', granted: capabilitiesForRole('owner') ?? [], refused: [] },
       restartRequired: true,
+      joinAddress: 'play.riverside.example:25565', backupsConfigured: true,
     },
     online: ['Alex', 'RedstoneRae', 'Kai_builds'],
     operations: [
@@ -110,6 +111,7 @@ function seed(): FixtureServer[] {
   const creative: FixtureServer = {
     snapshot: {
       connection: connection('fixture-creative', 'Build team', '192.168.1.40:8443', 'viewer'),
+      joinAddress: '192.168.1.40:25565', backupsConfigured: false,
       state: { phase: 'online', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
       info: { serverId: 'srv_build', name: 'Build team', agentVersion: '0.9.0', minecraftVersion: '1.20.1', packVersion: '1.0' },
       status: status('stopped', null, null),

@@ -56,6 +56,31 @@ export class ConsoleBuffer {
    * gap marker between them rather than inventing continuity.
    */
   merge(lines: readonly ConsoleLine[]): number {
+    const position = (cursor: string) => {
+      const match = /^(.*\.console\.)([0-9]+)$/.exec(cursor);
+      return match ? { scope: match[1], value: BigInt(match[2]) } : null;
+    };
+    const scope = lines.length ? position(lines[0].cursor)?.scope : undefined;
+    if (scope && lines.every((line) => position(line.cursor)?.scope === scope)
+      && this.entries.every((entry) => entry.kind === 'gap' || position(entry.cursor)?.scope === scope)) {
+      const added = this.append(lines);
+      const ordered = this.entries.filter((entry) => entry.kind === 'line').sort((a, b) => {
+        const left = position(a.cursor)!.value, right = position(b.cursor)!.value;
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+      // Keep a visible marker only where retained cursors still prove missing output.
+      this.entries.length = 0;
+      let previous: bigint | null = null;
+      for (const entry of ordered) {
+        const cursor = position(entry.cursor)!.value;
+        if (previous !== null && cursor > previous + 1n) this.gap(entry.cursor);
+        entry.id = this.nextId++;
+        this.entries.push(entry);
+        previous = cursor;
+      }
+      this.trim();
+      return added;
+    }
     const fresh = lines.filter((line) => !this.seen.has(line.cursor));
     if (!fresh.length) return 0;
     if (!this.entries.length) return this.append(lines);

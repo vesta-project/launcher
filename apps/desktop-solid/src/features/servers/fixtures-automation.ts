@@ -36,6 +36,14 @@ function page<T>(items: readonly T[], cursorOf: (item: T) => string, after: stri
   return { items: clone(slice), nextAfter: slice.length === PAGE ? cursorOf(slice.at(-1)!) : null };
 }
 
+function runPage(items: readonly RunDetail[], after: string | null, newest: boolean): Paged<RunDetail> {
+  if (!newest) return page(items, (run) => run.id, after);
+  const sorted = [...items].sort((a, b) => b.startedAtMs - a.startedAtMs || b.id.localeCompare(a.id));
+  const start = after === null ? 0 : sorted.findIndex((run) => run.id === after) + 1;
+  const slice = sorted.slice(start, start + PAGE);
+  return { items: clone(slice), nextAfter: slice.length === PAGE ? slice.at(-1)!.id : null };
+}
+
 const stepDefaults = (step: Partial<WorkflowStep> & Pick<WorkflowStep, 'id' | 'action'>): WorkflowStep => ({
   timeoutSecs: 300, retries: { maxRetries: 0, backoffSecs: 0 }, onSuccess: { kind: 'next' }, onFailure: { kind: 'fail' }, ...step,
 });
@@ -186,7 +194,7 @@ export function createAutomationFixtures(host: AutomationHost) {
     return result;
   };
   const validate = (draft: WorkflowDraft) => { if (draftProblems(draft).length) fail('invalid_input'); };
-  const summary = ({ definition: _definition, ...rest }: WorkflowDetail): WorkflowSummary => clone(rest);
+  const summary = ({ definition, ...rest }: WorkflowDetail): WorkflowSummary => ({ ...clone(rest), trigger: clone(definition.trigger) });
   const runSummary = ({ definition: _definition, ...rest }: RunDetail): RunSummary => clone(rest);
 
   /** Plays a manual run forward: each step succeeds a moment later, following its branches. */
@@ -296,15 +304,15 @@ export function createAutomationFixtures(host: AutomationHost) {
         return { workflowId, runId: run.id, skipped: false };
       });
     },
-    async automationWorkflowRuns(connectionId: ConnectionId, workflowId: string, after: string | null): Promise<Paged<RunSummary>> {
+    async automationWorkflowRuns(connectionId: ConnectionId, workflowId: string, after: string | null, newest = false): Promise<Paged<RunSummary>> {
       await host.wait();
       const current = view(connectionId);
-      const listed = page(current.runs.filter((run) => run.workflowId === workflowId), (run) => run.id, after);
+      const listed = runPage(current.runs.filter((run) => run.workflowId === workflowId), after, newest);
       return { items: listed.items.map(runSummary), nextAfter: listed.nextAfter };
     },
-    async automationRuns(connectionId: ConnectionId, after: string | null): Promise<Paged<RunSummary>> {
+    async automationRuns(connectionId: ConnectionId, after: string | null, newest = false): Promise<Paged<RunSummary>> {
       await host.wait();
-      const listed = page(view(connectionId).runs, (run) => run.id, after);
+      const listed = runPage(view(connectionId).runs, after, newest);
       return { items: listed.items.map(runSummary), nextAfter: listed.nextAfter };
     },
     async automationRun(connectionId: ConnectionId, runId: string): Promise<RunDetail> {
