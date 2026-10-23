@@ -1,5 +1,6 @@
 import { Dialog, Skeleton } from '@vesta/ui';
 import { For, Match, Switch } from 'solid-js';
+import { EmptyLine } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import { closeWorldChoice, installIntoWorld, worldChoice } from './install-actions';
@@ -22,7 +23,7 @@ export function WorldPickerDialog() {
       <div data-vesta="browse-picker">
         <Switch>
           <Match when={worldChoice()?.error}>
-            {(message) => <p data-vesta="browse-picker-empty">{message()}</p>}
+            {(message) => <EmptyLine role="alert">{message()}</EmptyLine>}
           </Match>
           <Match when={!worldChoice()?.worlds}>
             <ul data-vesta="browse-picker-list" aria-busy="true">
@@ -36,7 +37,7 @@ export function WorldPickerDialog() {
             </ul>
           </Match>
           <Match when={!worldChoice()?.worlds?.length}>
-            <p data-vesta="browse-picker-empty">{t('browse.world-empty')}</p>
+            <EmptyLine>{t('browse.world-empty')}</EmptyLine>
           </Match>
           <Match when={worldChoice()?.worlds}>
             {(worlds) => (

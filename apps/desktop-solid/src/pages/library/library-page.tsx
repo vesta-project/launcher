@@ -20,6 +20,8 @@ import { watchFileDragOverGroups } from '../../features/instances/library-file-d
 import { getDropController } from '../../features/file-drop/native-bridge';
 import { route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
+import { setType } from '../../features/browse/browse-store';
+import { requestCreateAction } from '../create/install-navigation';
 import { InstancePage } from './instance/instance-page';
 import './library-page.css';
 import { useNativeDropZone } from '../../features/file-drop/zone';
@@ -397,6 +399,25 @@ function LibraryGrid() {
   );
 }
 
+/** First run: no instances yet, so offer every way one can arrive. */
+function LibraryEmpty() {
+  return (
+    <EmptyState
+      icon="icons/rail/library"
+      title={t('management.empty')}
+      description={t('management.empty-description')}
+      suggestionsLabel={t('management.start-label')}
+      suggestions={[
+        { icon: 'icons/actions/add', label: t('management.start-new'), description: t('management.start-new-help'), onSelect: () => requestCreateAction('new') },
+        { icon: 'icons/content/modpack', label: t('management.start-modpack'), description: t('management.start-modpack-help'), onSelect: () => { setType('modpack'); transitionTo('/browse'); } },
+        { icon: 'icons/actions/move', label: t('management.start-launcher'), description: t('management.start-launcher-help'), onSelect: () => requestCreateAction('launchers') },
+        // Opening a file needs the native picker; the browser preview has none.
+        ...(nativeInstances ? [{ icon: 'icons/content/file', label: t('management.start-file'), description: t('management.start-file-help'), onSelect: () => requestCreateAction('file') }] : []),
+      ]}
+    />
+  );
+}
+
 /** Library: the instance grid, or one instance when the route names it. */
 export function LibraryPage() {
   return (
@@ -404,10 +425,7 @@ export function LibraryPage() {
       <Show when={route().section} keyed fallback={
         <Board>
           <Show when={!nativeInstances || instancesLoaded()} fallback={<p role="status">{t('management.loading')}</p>}>
-          <Show when={instances().length > 0} fallback={<>
-            <EmptyState icon="icons/rail/library" title={t('management.empty')} description={t('management.empty-description')} />
-            <Button tone="accent" onClick={() => transitionTo('/create')}>{t('management.create')}</Button>
-          </>}>
+          <Show when={instances().length > 0} fallback={<LibraryEmpty />}>
             <LibraryGrid />
           </Show></Show>
         </Board>

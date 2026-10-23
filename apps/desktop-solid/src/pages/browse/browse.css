@@ -215,6 +215,11 @@
     min-block-size: 0;
   }
 
+  /* No results: the message starts where the first card would. */
+  :where([data-vesta='browse-pane'] > [data-vesta='empty-state']) {
+    --empty-state-inset: 0;
+  }
+
   :where([data-vesta='browse-page-size']) {
     display: flex;
     align-items: center;
@@ -873,11 +878,4 @@
     color: var(--vesta-color-danger-text);
   }
 
-  :where([data-vesta='browse-picker-empty']) {
-    margin: 0;
-    padding: var(--vesta-space-4);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    text-align: center;
-  }
 }

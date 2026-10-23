@@ -1,6 +1,7 @@
 import { IconTile } from '../../../components/icon-tile';
 import { Button, IconButton, Switch, TextField } from '@vesta/ui';
 import { For, Show, createSignal } from 'solid-js';
+import { EmptyLine } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { setting, updateSetting } from '../../../features/settings/config';
 import {
@@ -105,22 +106,18 @@ export function NotificationsSettings() {
         }
       >
         <Show when={!resource.ready() && !resource.error()}>
-          <p data-vesta="prefs-empty-line" role="status">
-            {t('prefs.notifications.loading')}
-          </p>
+          <EmptyLine role="status">{t('prefs.notifications.loading')}</EmptyLine>
         </Show>
         <Show when={resource.error() && !entries().length}>
           <div data-vesta="prefs-add-feed">
-            <p data-vesta="prefs-empty-line" role="alert">
-              {t('prefs.notifications.load-failed')}
-            </p>
+            <EmptyLine role="alert">{t('prefs.notifications.load-failed')}</EmptyLine>
             <Button size="sm" variant="outline" onClick={() => void resource.refresh(true)}>
               {t('prefs.notifications.retry')}
             </Button>
           </div>
         </Show>
         <Show when={resource.ready() && !resource.error() && !entries().length}>
-          <p data-vesta="prefs-empty-line">{t('prefs.notifications.none')}</p>
+          <EmptyLine>{t('prefs.notifications.none')}</EmptyLine>
         </Show>
         <Show when={checkedAt()}>
           {(time) => (

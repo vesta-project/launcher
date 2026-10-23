@@ -1,4 +1,4 @@
-import { Badge, Tab, TabList, TabPanel, Tabs } from "@vesta/ui";
+import { Badge, Button, Tab, TabList, TabPanel, Tabs } from "@vesta/ui";
 import {
   For,
   Show,
@@ -98,7 +98,11 @@ export function InstancePage(props: { id: string }) {
             <EmptyState
               icon="icons/rail/library"
               title={t("instance.not-found")}
-            />
+            >
+              <Button variant="outline" icon={<Icon name="icons/navigation/arrow-back" />} onClick={() => transitionTo("/library")}>
+                {t("nav.back-to-library")}
+              </Button>
+            </EmptyState>
           </Show>
         </Board>
       }

@@ -275,11 +275,9 @@
     font-size: var(--vesta-text-sm);
   }
 
-  :where([data-vesta='prefs-empty-line']) {
-    margin: 0;
-    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-4);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
+  /* Empty lines in a card start at the card's row inset. */
+  :where([data-vesta='prefs-card']) {
+    --empty-line-inset: var(--vesta-space-4);
   }
 
   :where([data-vesta='prefs-note-line']) {

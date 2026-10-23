@@ -1,35 +1,198 @@
-/* Hooks: [data-vesta=empty-state] -icon -title -description */
+/*
+ * Empty states. They replace the content of the surface they sit in, so they start
+ * where that content would start (the page gutter, or the row inset of a list)
+ * instead of floating in the middle of the void.
+ *
+ * Hooks:  [data-vesta=empty-state][data-variant=page|inline] -icon -body -title
+ *         -description -actions -suggestions -suggestions-label -suggestion
+ *         -suggestion-icon -suggestion-text -suggestion-label -suggestion-description
+ *         [data-vesta=empty-line]
+ * Knobs:  --empty-state-inset (inline padding; match the surface's gutter),
+ *         --empty-state-block (block padding), --empty-line-inset
+ */
 @layer launcher {
   :where([data-vesta='empty-state']) {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--vesta-space-2);
-    min-block-size: 240px;
-    padding: var(--vesta-space-8);
-    text-align: center;
+    --_empty-state-inset: var(--vesta-space-10);
+    --_empty-state-block: var(--vesta-space-8);
+
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: var(--vesta-space-3);
+    padding: var(--empty-state-block, var(--_empty-state-block)) var(--empty-state-inset, var(--_empty-state-inset));
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='empty-state'][data-variant='inline']) {
+    --_empty-state-inset: var(--vesta-space-4);
+    --_empty-state-block: var(--vesta-space-5);
+
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--vesta-space-3);
   }
 
   :where([data-vesta='empty-state-icon']) {
+    display: inline-flex;
+    color: var(--vesta-color-text-subtle);
+  }
+
+  /* Inline: the glyph sits beside the title, centred on its first line. */
+  :where([data-vesta='empty-state'][data-variant='inline'] [data-vesta='empty-state-icon']) {
+    align-items: center;
+    block-size: calc(var(--vesta-text-md) * 1.4);
+  }
+
+  :where([data-vesta='empty-state-body']) {
+    display: grid;
+    justify-items: start;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+    max-inline-size: 60ch;
+  }
+
+  :where([data-vesta='empty-state-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 1.35;
+  }
+
+  :where([data-vesta='empty-state'][data-variant='inline'] [data-vesta='empty-state-title']) {
+    font-size: var(--vesta-text-md);
+    line-height: 1.4;
+  }
+
+  :where([data-vesta='empty-state-description']) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-md);
+    line-height: var(--vesta-leading-normal);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='empty-state'][data-variant='inline'] [data-vesta='empty-state-description']) {
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='empty-state-actions']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin-block-start: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='empty-state'][data-variant='inline'] [data-vesta='empty-state-actions']) {
+    margin-block-start: var(--vesta-space-2);
+  }
+
+  /* ---- Suggestions: a short list of ways to start ---- */
+  :where([data-vesta='empty-state-suggestions']) {
+    display: grid;
+    gap: var(--vesta-space-2);
+    inline-size: min(100%, 480px);
+    margin-block-start: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='empty-state-suggestions-label']) {
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta='empty-state-suggestions'] > ul) {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    list-style: none;
+  }
+
+  :where([data-vesta='empty-state-suggestions'] li + li) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='empty-state-suggestion']) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    min-block-size: 48px;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: 0;
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='empty-state-suggestion']:not(:disabled)):hover {
+    background: var(--vesta-color-fill-hover);
+  }
+
+  :where([data-vesta='empty-state-suggestion']:not(:disabled)):active {
+    background: var(--vesta-color-fill-active);
+  }
+
+  :where([data-vesta='empty-state-suggestion']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='empty-state-suggestion']):disabled {
+    opacity: 0.5;
+  }
+
+  /* No icon: the text takes the first column. */
+  :where([data-vesta='empty-state-suggestion']:not(:has([data-vesta='empty-state-suggestion-icon']))) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  :where([data-vesta='empty-state-suggestion-icon']) {
     display: grid;
     place-items: center;
-    inline-size: 44px;
-    block-size: 44px;
-    margin-block-end: var(--vesta-space-1);
-    border-radius: var(--vesta-radius-container);
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: var(--vesta-radius-control);
     background: var(--vesta-color-fill);
     color: var(--vesta-color-text-muted);
   }
 
-  :where([data-vesta='empty-state-title']) {
-    font-size: var(--vesta-text-lg);
-    font-weight: var(--vesta-weight-semibold);
+  :where([data-vesta='empty-state-suggestion-text']) {
+    display: grid;
+    gap: 1px;
+    min-inline-size: 0;
   }
 
-  :where([data-vesta='empty-state-description']) {
-    max-inline-size: 42ch;
+  :where([data-vesta='empty-state-suggestion-label']) {
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='empty-state-suggestion-description']) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
+  }
+
+  :where(.empty-state-suggestion-chevron) {
+    color: var(--vesta-color-text-subtle);
+  }
+
+  /* ---- One-liner, for menus, popovers, pickers and small lists ---- */
+  :where([data-vesta='empty-line']) {
+
+
+    margin: 0;
+    padding: var(--vesta-space-2) var(--empty-line-inset, var(--vesta-space-3)) var(--vesta-space-3);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
   }
 }

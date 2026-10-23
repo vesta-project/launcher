@@ -7,6 +7,7 @@ common-edit = Edit
 common-delete = Delete
 common-remove = Remove
 common-search = Search
+common-clear-search = Clear search
 common-actions-for = Actions for { $name }
 common-enable = Enable
 common-disable = Disable

@@ -13,6 +13,7 @@ import {
 import { active, activityProgress, awaitingPlay, isForeground, terminal } from '../../features/activity/activity-model';
 import { formatRelative } from '../../features/browse/browse-model';
 import { findInstance, playInstance } from '../../features/instances/catalog';
+import { EmptyLine } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import { locale, t } from '../../localization';
 import { transitionTo } from '../transition';
@@ -284,7 +285,7 @@ export function ActivityPanel(props: { onNavigate: () => void }) {
         <p data-vesta="activity-panel-error" role="alert">{activityError()}</p>
       </Show>
 
-      <Show when={!empty()} fallback={<p data-vesta="activity-panel-empty">{t('activity.empty')}</p>}>
+      <Show when={!empty()} fallback={<EmptyLine>{t('activity.empty')}</EmptyLine>}>
         <Show when={live().length || failed().length}>
           <ul data-vesta="activity-rows">
             <For each={failed()} keyed={(row) => row.id}>

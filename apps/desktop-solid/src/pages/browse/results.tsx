@@ -180,6 +180,7 @@ export function Results() {
           </Match>
           <Match when={results() && !hits().length}>
             <EmptyState
+              variant="inline"
               icon="icons/content/search"
               title={t('browse.empty-title')}
               description={t('browse.empty-description')}

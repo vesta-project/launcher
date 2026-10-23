@@ -55,13 +55,6 @@
     overflow-wrap: anywhere;
   }
 
-  :where([data-vesta='activity-panel-empty']) {
-    margin: 0;
-    padding: 8px 12px 14px;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-  }
-
   :where([data-vesta='activity-rows'], [data-vesta='activity-background-rows']) {
     margin: 0;
     padding: 0;

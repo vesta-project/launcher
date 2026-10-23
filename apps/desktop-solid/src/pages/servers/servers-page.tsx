@@ -44,8 +44,9 @@ function ServerList() {
         when={serverSnapshots().length > 0}
         fallback={
           <Show when={serversLoaded()}>
-            <EmptyState icon="icons/rail/servers" title={t('servers.empty-title')} description={t('servers.empty-description')} />
-            <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/add')}>{t('servers.add')}</Button>
+            <EmptyState icon="icons/rail/servers" title={t('servers.empty-title')} description={t('servers.empty-description')}>
+              <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/add')}>{t('servers.add')}</Button>
+            </EmptyState>
           </Show>
         }
       >

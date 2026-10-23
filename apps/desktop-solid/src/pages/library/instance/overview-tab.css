@@ -194,25 +194,14 @@
     font-size: var(--vesta-text-sm);
   }
 
+  /* The panel already pads; the empty state inside adds no inset of its own. */
   .overview-empty {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-3);
     padding: var(--vesta-space-4);
-    color: var(--vesta-color-text-muted);
   }
 
-  .overview-empty > div {
-    flex: 1;
-  }
-
-  .overview-empty strong {
-    color: var(--vesta-color-text);
-  }
-
-  .overview-empty p {
-    margin: var(--vesta-space-1) 0 0;
-    font-size: var(--vesta-text-sm);
+  .overview-empty > [data-vesta="empty-state"] {
+    --empty-state-inset: 0;
+    --empty-state-block: 0;
   }
 
   /* Screenshots: one even row of thumbnails. */

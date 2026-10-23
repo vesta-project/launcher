@@ -184,7 +184,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
             <ServerErrorNote error={error()} onRetry={refresh} />
             <Show when={!loading() || entries().length} fallback={<FileSkeleton />}>
               <Show when={sorted().length || error()} fallback={
-                <EmptyState icon="icons/content/folder" title={t('server-files.empty-title')} description={t('server-files.empty-description')} />
+                <EmptyState variant="inline" icon="icons/content/folder" title={t('server-files.empty-title')} description={t('server-files.empty-description')} />
               }>
                 <div data-vesta="server-file-list" role="table" aria-label={t('server-files.location')}>
                   <div data-vesta="server-file-head" role="row">
@@ -506,7 +506,7 @@ function TrashView(props: { snapshot: ServerSnapshot; onRestored: () => void }) 
       <p data-vesta="server-muted">{t('server-files.trash-description')}</p>
       <ServerErrorNote error={error()} onRetry={() => void load()} />
       <Show when={!loading() || items().length} fallback={<FileSkeleton />}>
-        <Show when={items().length} fallback={<EmptyState icon="icons/actions/delete" title={t('server-files.trash-empty')} />}>
+        <Show when={items().length} fallback={<EmptyState variant="inline" icon="icons/actions/delete" title={t('server-files.trash-empty')} />}>
           <div data-vesta="server-file-list" data-trash role="table" aria-label={t('server-files.trash')}>
             <For each={items()}>
               {(entry) => (
