@@ -1,12 +1,12 @@
 // One list of the players a server knows about: the union of the whitelist, operators,
-// bans and who is online now, keyed by name (Minecraft names are case-insensitive).
+// bans and who is online now, keyed by UUID (names change; see mergePlayers).
 // Pure, so filtering and status chips can be checked without a server.
 import type { MessageId } from '../../localization/messages';
 import type { Tone } from '@vesta/ui';
 import type { BanEntry, OperatorEntry, PlayersView, WhitelistEntry } from './native';
 
 export interface KnownPlayer {
-  /** Lowercased name. */
+  /** `uuid:<uuid>`, or `name:<lowercased name>` for a player known only by name. */
   key: string;
   name: string;
   /** From the first list that reported one; the online roster only has names. */
@@ -24,18 +24,41 @@ export interface PlayerSources {
   roster?: PlayersView;
 }
 
-/** Merges every source. Online players sort first, then by name. */
+/**
+ * Merges every source. The UUID is the identity: two entries with the same name but
+ * different UUIDs (a renamed account, an offline-mode profile) stay separate. Entries with
+ * only a name (the online roster) join the one listed player with that name, and stay
+ * separate when the name is ambiguous. Online players sort first, then by name.
+ */
 export function mergePlayers(sources: PlayerSources): KnownPlayer[] {
   const players = new Map<string, KnownPlayer>();
-  const entry = (name: string, uuid?: string | null) => {
-    const key = name.toLowerCase();
-    let player = players.get(key);
-    if (!player) {
-      player = { key, name, uuid: null, online: false, whitelisted: false, operator: null, ban: null };
-      players.set(key, player);
-    }
-    if (!player.uuid && uuid) player.uuid = uuid;
+  const byName = new Map<string, KnownPlayer[]>();
+  const create = (key: string, name: string, uuid: string | null) => {
+    const player: KnownPlayer = { key, name, uuid, online: false, whitelisted: false, operator: null, ban: null };
+    players.set(key, player);
+    const lower = name.toLowerCase();
+    byName.set(lower, [...(byName.get(lower) ?? []), player]);
     return player;
+  };
+  const entry = (name: string, uuid?: string | null) => {
+    if (uuid) {
+      const key = `uuid:${uuid.toLowerCase()}`;
+      const known = players.get(key);
+      if (known) return known;
+      // A name-only entry from an earlier list is this player once a UUID turns up.
+      const nameOnly = players.get(`name:${name.toLowerCase()}`);
+      if (nameOnly) {
+        players.delete(nameOnly.key);
+        Object.assign(nameOnly, { key, uuid });
+        players.set(key, nameOnly);
+        return nameOnly;
+      }
+      return create(key, name, uuid);
+    }
+    const named = byName.get(name.toLowerCase()) ?? [];
+    if (named.length === 1) return named[0]!;
+    const key = `name:${name.toLowerCase()}`;
+    return players.get(key) ?? create(key, name, null);
   };
   for (const item of sources.whitelist ?? []) entry(item.name, item.uuid).whitelisted = true;
   for (const item of sources.ops ?? []) entry(item.name, item.uuid).operator = { level: item.level, bypassesPlayerLimit: item.bypassesPlayerLimit };
@@ -60,7 +83,7 @@ const inFilter = (player: KnownPlayer, filter: PlayerFilter) => {
 /** Players in the filter whose name or UUID contains the query. */
 export function filterPlayers(players: readonly KnownPlayer[], filter: PlayerFilter, query = ''): KnownPlayer[] {
   const needle = query.trim().toLowerCase();
-  return players.filter((player) => inFilter(player, filter) && (!needle || player.key.includes(needle) || !!player.uuid?.toLowerCase().includes(needle)));
+  return players.filter((player) => inFilter(player, filter) && (!needle || player.name.toLowerCase().includes(needle) || !!player.uuid?.toLowerCase().includes(needle)));
 }
 
 export function filterCounts(players: readonly KnownPlayer[]): Record<PlayerFilter, number> {

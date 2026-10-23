@@ -194,3 +194,39 @@ server-settings-summary-edited = { $count ->
    *[other] { $count } unsaved changes
   }
 server-settings-unreported = The agent didn't report: { $name }. They keep their current values.
+
+# Game setting explanations.
+server-settings-help-motd = The message under the server name in the multiplayer list.
+server-settings-help-difficulty = How dangerous mobs are and how fast hunger drains.
+server-settings-help-gamemode = The mode new players start in.
+server-settings-help-pvp = Lets players hurt each other.
+server-settings-help-max-players = How many players can be online at once.
+server-settings-help-white-list = Only players on the whitelist can join.
+server-settings-help-enforce-whitelist = Kicks online players who aren't on the whitelist when it's reloaded.
+server-settings-help-view-distance = How many chunks around each player the server sends. Higher costs more memory and CPU.
+server-settings-help-spawn-protection = Radius around spawn that only operators can build in. 0 turns it off.
+server-settings-help-hardcore = Players are put in spectator mode when they die. Difficulty is locked to hard.
+server-settings-help-force-gamemode = Puts players back in the default mode every time they join.
+server-settings-help-allow-flight = Stops the server kicking players it thinks are flying, for example with jetpack mods.
+server-settings-help-allow-nether = Lets players travel to the Nether.
+server-settings-help-spawn-monsters = Hostile mobs spawn.
+server-settings-help-spawn-animals = Animals spawn.
+server-settings-help-spawn-npcs = Villagers spawn.
+server-settings-help-simulation-distance = How far from players mobs move and crops grow. Lower helps a busy server.
+server-settings-help-level-type = The terrain used when a new world is generated. Existing worlds keep theirs.
+server-settings-help-server-port = The port players connect to. Changing it changes the address you share.
+server-settings-help-online-mode = Checks every player with Microsoft. Turn off only behind a proxy that checks them instead.
+server-settings-help-enforce-secure-profile = Requires players to have a Mojang-signed chat key.
+server-settings-help-prevent-proxy-connections = Kicks players whose connection comes from a different address than Microsoft saw.
+server-settings-help-enable-status = Answers the server list. Off makes the server look offline in the list.
+server-settings-help-hide-online-players = Leaves player names out of the server list.
+server-settings-help-log-ips = Writes player IP addresses to the server log.
+server-settings-help-player-idle-timeout = Minutes before idle players are kicked. 0 never kicks them.
+server-settings-help-enable-command-block = Lets command blocks run commands.
+server-settings-help-op-permission-level = The level new operators get. Level 4 can use every command.
+server-settings-help-function-permission-level = The permission level datapack functions run with.
+server-settings-help-enable-rcon = Allows remote console connections. Vesta doesn't need this.
+server-settings-help-rcon-port = The port remote console listens on.
+server-settings-help-rcon-password = The password remote console clients must send.
+server-settings-help-enable-query = Answers the query protocol used by some server lists.
+server-settings-help-query-port = The port the query protocol listens on.

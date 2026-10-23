@@ -111,12 +111,34 @@ describe('[players] one manager over whitelist, operators, bans and the live ros
     roster: { known: true, generation: 'g1', playerCount: 2, names: ['Steve', 'Visitor'] },
   };
 
-  test('names merge case-insensitively and online players sort first', () => {
+  test('entries merge by UUID, the roster joins by name, and online players sort first', () => {
     const players = mergePlayers(sources);
     expect(players.map((player) => player.name)).toEqual(['Steve', 'Visitor', 'Alex', 'griefer_99', 'Temp']);
-    const alex = players.find((player) => player.key === 'alex');
+    const alex = players.find((player) => player.key === 'uuid:853c80ef-3c37-49fd-aa49-938b674adae6');
     expect(alex).toMatchObject({ whitelisted: true, operator: { level: 4 }, online: false, uuid: '853c80ef-3c37-49fd-aa49-938b674adae6' });
     expect(players.find((player) => player.name === 'Visitor')).toMatchObject({ online: true, uuid: null, whitelisted: false });
+  });
+
+  test('a shared name never merges different UUIDs, and an ambiguous roster name stays separate', () => {
+    const players = mergePlayers({
+      whitelist: [{ name: 'Sam', uuid: '11111111-0000-0000-0000-000000000000' }],
+      bans: [{ name: 'sam', uuid: '22222222-0000-0000-0000-000000000000', reason: '', created: '', expires: 'forever', source: 'Server' }],
+      roster: { known: true, generation: 'g1', playerCount: 1, names: ['Sam'] },
+    });
+    expect(players.map((player) => [player.key, player.whitelisted, !!player.ban, player.online])).toEqual([
+      ['name:sam', false, false, true],
+      ['uuid:11111111-0000-0000-0000-000000000000', true, false, false],
+      ['uuid:22222222-0000-0000-0000-000000000000', false, true, false],
+    ]);
+  });
+
+  test('a name-only entry becomes the UUID entry once a list reports the UUID', () => {
+    const players = mergePlayers({
+      whitelist: [{ name: 'Nova', uuid: null }],
+      ops: [{ name: 'nova', uuid: '33333333-0000-0000-0000-000000000000', level: 2, bypassesPlayerLimit: false }],
+    });
+    expect(players).toHaveLength(1);
+    expect(players[0]).toMatchObject({ key: 'uuid:33333333-0000-0000-0000-000000000000', whitelisted: true, operator: { level: 2 } });
   });
 
   test('an unknown roster adds nobody online', () => {

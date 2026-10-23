@@ -1,5 +1,5 @@
 import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, Switch as Toggle, toast } from '@vesta/ui';
-import { For, Show, createEffect, createSignal, untrack } from 'solid-js';
+import { For, Show, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
@@ -8,11 +8,13 @@ import { gate, roleKey } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { errorMessage } from '../../../features/servers/errors';
 import { age, newIntentId, roleLabel } from '../../../features/servers/model';
+import { invalidateServerResources, seedServerResource, useServerResource } from '../../../features/servers/resources';
+import { accessSourcesResource, devicesResource, invitationsResource, rolesResource, usersResource } from '../../../features/servers/server-resources';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { AccessSources, Invitation, IssuedInvitation, RoleSummary, ServerDevice, ServerUser } from '../../../features/servers/native-manage';
 import { Sensitive, ServerErrorNote } from '../parts';
-import '../../library/instance/settings-tab.css';
+import { SettingsPage, SettingsPanel } from '../settings-parts';
 
 type View = 'people' | 'invitations' | 'devices' | 'rules';
 
@@ -31,44 +33,41 @@ export function AccessTab(props: { snapshot: ServerSnapshot }) {
   ];
   const [view, setView] = createSignal<View>(untrack(() => views()[0]?.value ?? 'people'), { name: 'server-access:view' });
   return (
-    <div data-vesta="server-activity">
-      <div data-vesta="pane-toolbar">
-        <SegmentedControl size="md" aria-label={t('servers.tab.access')} value={view()} onChange={(value) => setView(value as View)}
-          options={views().map((entry) => ({ value: entry.value, label: t(entry.label) }))} />
-      </div>
-      <div data-vesta="instance-settings-scroll">
-        <Show when={view() === 'people'}><PeopleView snapshot={props.snapshot} /></Show>
-        <Show when={view() === 'invitations'}><InvitationsView snapshot={props.snapshot} /></Show>
-        <Show when={view() === 'devices'}><DevicesView snapshot={props.snapshot} /></Show>
-        <Show when={view() === 'rules'}><RulesView snapshot={props.snapshot} /></Show>
-      </div>
-    </div>
+    <SettingsPage>
+      <Show when={views().length > 1}>
+        <div data-vesta="server-settings-bar">
+          <SegmentedControl size="md" aria-label={t('servers.tab.access')} value={view()} onChange={(value) => setView(value as View)}
+            options={views().map((entry) => ({ value: entry.value, label: t(entry.label) }))} />
+        </div>
+      </Show>
+      <Show when={view() === 'people'}><PeopleView snapshot={props.snapshot} /></Show>
+      <Show when={view() === 'invitations'}><InvitationsView snapshot={props.snapshot} /></Show>
+      <Show when={view() === 'devices'}><DevicesView snapshot={props.snapshot} /></Show>
+      <Show when={view() === 'rules'}><RulesView snapshot={props.snapshot} /></Show>
+    </SettingsPage>
   );
 }
 
 /** Rank of this device's role, used to offer only roles the server would accept. */
 const myRank = (snapshot: ServerSnapshot, roles: RoleSummary[]) => roles.find((role) => role.id === roleKey(snapshot.connection.role))?.rank ?? 0;
 
+/** Roles from the shared cache; an unavailable list offers nothing rather than guessing. */
 function useRoles(snapshot: () => ServerSnapshot) {
-  const [roles, setRoles] = createSignal<RoleSummary[]>([], { name: 'server-access:roles' });
-  createEffect(stableConnectionId(snapshot), (id) => { void serverCommand((client) => client.roles(id)).then(setRoles).catch(() => {}); }, { name: 'server-access:load-roles' });
-  return roles;
+  const roles = useServerResource(stableConnectionId(snapshot), rolesResource);
+  return () => roles.value() ?? [];
 }
 
 function PeopleView(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const roles = useRoles(() => props.snapshot);
-  const [users, setUsers] = createSignal<ServerUser[] | null>(null, { name: 'server-access:users' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:users-error' });
+  const users = useServerResource(id, usersResource);
   const [editing, setEditing] = createSignal<ServerUser | null>(null, { name: 'server-access:editing' });
-  const load = () => serverCommand((client) => client.users(id(), 0)).then((page) => setUsers(page.users)).catch((reason) => setError(reason as ServerCommandError));
-  createEffect(id, () => { void load(); }, { name: 'server-access:load-users' });
   const canManage = () => gate(props.snapshot.capabilities, 'principals.manage') !== 'denied';
+  const saved = (next: ServerUser) => seedServerResource(id(), usersResource, (users.value() ?? []).map((entry) => (entry.id === next.id ? next : entry)));
   return (
-    <section data-vesta="settings-panel">
-      <h3>{t('servers.access.people')}</h3>
-      <ServerErrorNote error={error()} onRetry={() => void load()} />
-      <Show when={users()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p>}>
+    <SettingsPanel title={t('servers.access.people')} description={t('servers.access.local-only')} name="access-people">
+      <ServerErrorNote error={users.error()} onRetry={() => void users.refresh()} />
+      <Show when={users.value()} fallback={<Show when={!users.error()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p></Show>}>
         {(list) => (
           <div data-vesta="settings-panel-body">
             <For each={list()}>
@@ -77,27 +76,28 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
                   <div data-vesta="server-person">
                     <span data-vesta="server-activity-avatar" aria-hidden="true">{user.displayName.slice(0, 1).toUpperCase()}</span>
                     <div data-vesta="setting-row-copy">
-                      <span data-vesta="setting-row-label">{user.displayName}</span>
+                      <span data-vesta="setting-row-label">
+                        {user.displayName}
+                        <For each={user.roles}>{(entry) => <Badge size="sm" variant="soft" tone={entry.role.rank >= 90 ? 'accent' : 'neutral'}>{entry.role.name}</Badge>}</For>
+                      </span>
                       <span data-vesta="setting-row-description">{t('servers.access.devices-count', { count: user.deviceCount })}</span>
                     </div>
                   </div>
-                  <div data-vesta="setting-row-control">
-                    <For each={user.roles}>{(entry) => <Badge size="sm" variant="soft" tone={entry.role.rank >= 90 ? 'accent' : 'neutral'}>{entry.role.name}</Badge>}</For>
-                    <Show when={canManage() && user.rank < myRank(props.snapshot, roles())}>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(user)}>{t('servers.access.change-role')}</Button>
-                    </Show>
-                  </div>
+                  <Show when={canManage() && user.rank < myRank(props.snapshot, roles())}>
+                    <div data-vesta="setting-row-control">
+                      <Button size="sm" variant="outline" onClick={() => setEditing(user)}>{t('servers.access.change-role')}</Button>
+                    </div>
+                  </Show>
                 </div>
               )}
             </For>
           </div>
         )}
       </Show>
-      <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.local-only')}</p>
       <Show when={editing()} keyed>
-        {(user) => <RoleDialog snapshot={props.snapshot} user={user} roles={roles()} onClose={() => setEditing(null)} onSaved={(next) => setUsers((current) => current?.map((entry) => (entry.id === next.id ? next : entry)) ?? null)} />}
+        {(user) => <RoleDialog snapshot={props.snapshot} user={user} roles={roles()} onClose={() => setEditing(null)} onSaved={saved} />}
       </Show>
-    </section>
+    </SettingsPanel>
   );
 }
 
@@ -129,27 +129,26 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = stableConnectionId(() => props.snapshot);
   const roles = useRoles(() => props.snapshot);
-  const [invitations, setInvitations] = createSignal<Invitation[] | null>(null, { name: 'server-access:invitations' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:invitations-error' });
+  const invitations = useServerResource(id, invitationsResource);
   const [creating, setCreating] = createSignal(false, { name: 'server-access:creating' });
-  const load = () => serverCommand((client) => client.invitations(id())).then(setInvitations).catch((reason) => setError(reason as ServerCommandError));
-  createEffect(id, () => { void load(); }, { name: 'server-access:load-invitations' });
+  const reload = () => invalidateServerResources(id(), [invitationsResource.name]);
   const revoke = async (invitation: Invitation) => {
     if (!invitation.id) return;
-    try { await serverCommand((client) => client.revokeInvitation(id(), invitation.id!, newIntentId())); void load(); }
+    try { await serverCommand((client) => client.revokeInvitation(id(), invitation.id!, newIntentId())); reload(); }
     catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
   };
+  const unsupported = () => invitations.error()?.code === 'unsupported';
   return (
-    <section data-vesta="settings-panel">
-      <h3>{t('servers.access.invitations')}</h3>
-      <div data-vesta="server-panel-actions">
-        <p data-vesta="server-muted">{t('servers.access.invite-help')}</p>
-        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => setCreating(true)}>{t('servers.access.invite')}</Button>
-      </div>
-      <Show when={error()?.code !== 'unsupported'} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.access.invitations-unsupported')}</p>}>
-        <ServerErrorNote error={error()} onRetry={() => void load()} />
+    <SettingsPanel
+      title={t('servers.access.invitations')}
+      description={t('servers.access.invite-help')}
+      name="access-invitations"
+      action={<Show when={!unsupported()}><Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => setCreating(true)}>{t('servers.access.invite')}</Button></Show>}
+    >
+      <Show when={!unsupported()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.access.invitations-unsupported')}</p>}>
+        <ServerErrorNote error={invitations.error()} onRetry={() => void invitations.refresh()} />
         <div data-vesta="settings-panel-body">
-          <For each={invitations() ?? []} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-invitations')}</p>}>
+          <For each={invitations.value() ?? []} fallback={<Show when={invitations.value()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-invitations')}</p></Show>}>
             {(invitation) => {
               const left = () => Math.max(0, Math.ceil((invitation.expiresAtMs - now()) / 60_000));
               return (
@@ -162,7 +161,7 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
                     </span>
                   </div>
                   <div data-vesta="setting-row-control">
-                    <Button size="sm" variant="ghost" tone="danger" disabled={!invitation.id} onClick={() => void revoke(invitation)}>{t('servers.access.revoke')}</Button>
+                    <Button size="sm" variant="outline" tone="danger" disabled={!invitation.id} onClick={() => void revoke(invitation)}>{t('servers.access.revoke')}</Button>
                   </div>
                 </div>
               );
@@ -171,9 +170,9 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
         </div>
       </Show>
       <Show when={creating()}>
-        <InviteDialog snapshot={props.snapshot} roles={roles()} onClose={() => { setCreating(false); void load(); }} />
+        <InviteDialog snapshot={props.snapshot} roles={roles()} onClose={() => { setCreating(false); reload(); }} />
       </Show>
-    </section>
+    </SettingsPanel>
   );
 }
 
@@ -239,23 +238,23 @@ function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; o
 function DevicesView(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = stableConnectionId(() => props.snapshot);
-  const [devices, setDevices] = createSignal<ServerDevice[] | null>(null, { name: 'server-access:devices' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:devices-error' });
+  const devices = useServerResource(id, devicesResource);
   const [revoking, setRevoking] = createSignal<ServerDevice | null>(null, { name: 'server-access:revoking' });
-  const load = () => serverCommand((client) => client.devices(id())).then(setDevices).catch((reason) => setError(reason as ServerCommandError));
-  createEffect(id, () => { void load(); }, { name: 'server-access:load-devices' });
   const revoke = async () => {
     const target = revoking();
     if (!target) return;
-    try { await serverCommand((client) => client.revokeDevice(id(), target.id, newIntentId())); setRevoking(null); void load(); }
-    catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
+    try {
+      await serverCommand((client) => client.revokeDevice(id(), target.id, newIntentId()));
+      setRevoking(null);
+      // A revoked device also changes its owner's device count.
+      invalidateServerResources(id(), [devicesResource.name, usersResource.name]);
+    } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
   };
   return (
-    <section data-vesta="settings-panel">
-      <h3>{t('servers.access.devices')}</h3>
-      <ServerErrorNote error={error()} onRetry={() => void load()} />
+    <SettingsPanel title={t('servers.access.devices')} description={t('servers.access.devices-help')} name="access-devices">
+      <ServerErrorNote error={devices.error()} onRetry={() => void devices.refresh()} />
       <div data-vesta="settings-panel-body">
-        <For each={devices() ?? []}>
+        <For each={devices.value() ?? []}>
           {(device) => (
             <div data-vesta="setting-row" data-revoked={device.revoked ? '' : undefined}>
               <div data-vesta="setting-row-copy">
@@ -271,7 +270,7 @@ function DevicesView(props: { snapshot: ServerSnapshot }) {
               </div>
               <Show when={!device.current && !device.revoked}>
                 <div data-vesta="setting-row-control">
-                  <Button size="sm" variant="ghost" tone="danger" onClick={() => setRevoking(device)}>{t('servers.access.revoke')}</Button>
+                  <Button size="sm" variant="outline" tone="danger" onClick={() => setRevoking(device)}>{t('servers.access.revoke')}</Button>
                 </div>
               </Show>
             </div>
@@ -282,7 +281,7 @@ function DevicesView(props: { snapshot: ServerSnapshot }) {
         description={t('servers.access.revoke-description')} size="sm"
         footer={<><Button variant="ghost" onClick={() => setRevoking(null)}>{t('common.cancel')}</Button><Button tone="danger" onClick={() => void revoke()}>{t('servers.access.revoke')}</Button></>}
       />
-    </section>
+    </SettingsPanel>
   );
 }
 
@@ -295,34 +294,31 @@ const sourceRows: { key: 'anonymous' | 'newUser' | 'whitelist' | 'password'; lab
 
 function RulesView(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
-  const [sources, setSources] = createSignal<AccessSources | null>(null, { name: 'server-access:sources' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-access:sources-error' });
-  const load = () => serverCommand((client) => client.accessSources(id())).then(setSources).catch((reason) => setError(reason as ServerCommandError));
-  createEffect(id, () => { void load(); }, { name: 'server-access:load-sources' });
+  const sources = useServerResource(id, accessSourcesResource);
+  const [busy, setBusy] = createSignal(false, { name: 'server-access:sources-busy' });
   const update = async (patch: Partial<Omit<AccessSources, 'version'>>) => {
-    const current = sources();
-    if (!current) return;
-    try { setSources(await serverCommand((client) => client.updateAccessSources(id(), patch, current.version, newIntentId()))); }
+    const current = sources.value();
+    if (!current || busy()) return;
+    setBusy(true);
+    try { seedServerResource(id(), accessSourcesResource, await serverCommand((client) => client.updateAccessSources(id(), patch, current.version, newIntentId()))); }
     catch (reason) {
       toast.show({ title: t(errorMessage(reason)), tone: 'danger' });
-      if ((reason as ServerCommandError).code === 'stale_target') void load();
-    }
+      if ((reason as ServerCommandError).code === 'stale_target') void sources.refresh();
+    } finally { setBusy(false); }
   };
   return (
-    <section data-vesta="settings-panel">
-      <h3>{t('servers.access.rules')}</h3>
-      <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.rules-help')}</p>
-      <ServerErrorNote error={error()} onRetry={() => void load()} />
-      <Show when={sources()}>
+    <SettingsPanel title={t('servers.access.rules')} description={t('servers.access.rules-help')} name="access-rules">
+      <ServerErrorNote error={sources.error()} onRetry={() => void sources.refresh()} />
+      <Show when={sources.value()}>
         {(current) => (
           <div data-vesta="settings-panel-body">
             <SettingRow label={t('servers.access.rule-whitelist-sync')} description={t('servers.access.rule-whitelist-sync-help')}>
-              <Toggle size="sm" aria-label={t('servers.access.rule-whitelist-sync')} checked={current().whitelistEnabled} onChange={(value: boolean) => void update({ whitelistEnabled: value })} />
+              <Toggle size="sm" aria-label={t('servers.access.rule-whitelist-sync')} disabled={busy()} checked={current().whitelistEnabled} onChange={(value: boolean) => void update({ whitelistEnabled: value })} />
             </SettingRow>
             <For each={sourceRows}>
               {(row) => (
                 <SettingRow label={t(row.label)} description={t(row.help)}>
-                  <Select aria-label={t(row.label)} value={current()[row.key]} onChange={(value) => void update({ [row.key]: value })}
+                  <Select size="sm" aria-label={t(row.label)} disabled={busy()} value={current()[row.key]} onChange={(value) => void update({ [row.key]: value })}
                     options={SAFE_SOURCE_ROLES.map((role) => ({ value: role, label: roleLabel(role) }))} />
                 </SettingRow>
               )}
@@ -330,6 +326,6 @@ function RulesView(props: { snapshot: ServerSnapshot }) {
           </div>
         )}
       </Show>
-    </section>
+    </SettingsPanel>
   );
 }

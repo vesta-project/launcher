@@ -170,7 +170,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
         <Show
           when={players().length > 0}
           fallback={
-            <EmptyState variant="inline" icon="icons/content/chat" title={t('servers.people.empty-title')} description={t('servers.people.empty-description')} />
+            <EmptyState variant="inline" icon="icons/content/people" title={t('servers.people.empty-title')} description={t('servers.people.empty-description')} />
           }
         >
           <Show when={shown().length > 0} fallback={<EmptyLine role="status">{query().trim() ? t('servers.people.no-match') : t('servers.people.filter-empty')}</EmptyLine>}>

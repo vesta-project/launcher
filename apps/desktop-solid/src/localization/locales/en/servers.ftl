@@ -441,6 +441,7 @@ servers-backups-resolve = Keep current files
 servers-access-people = People
 servers-access-invitations = Invitations
 servers-access-devices = Devices
+servers-access-devices-help = Every launcher signed in to this server. Revoking one signs it out for good.
 servers-access-rules = Join rules
 servers-access-devices-count = { $count ->
     [one] { $count } device
@@ -626,7 +627,7 @@ servers-motd-color-yellow = Yellow
 servers-motd-color-white = White
 
 # Presence and profile help.
-servers-presence-when-state = While { $name }
+servers-presence-when-state = { $name } message
 servers-presence-wake-needs = Turn on "Answer the server list while asleep" first. Vesta has to answer on the game port to notice a join.
 servers-presence-version-help = Shown instead of the Minecraft version in the server list.
 servers-presence-max-players-help = The maximum shown in the server list. It doesn't limit who can join.
