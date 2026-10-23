@@ -81,7 +81,7 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
     <div data-vesta="server-activity">
       <div data-vesta="pane-toolbar">
         <SegmentedControl
-          size="sm"
+          size="md"
           aria-label={t('servers.activity.filter')}
           value={filter()}
           onChange={(value) => setFilter(value as 'all' | 'mine' | 'running')}

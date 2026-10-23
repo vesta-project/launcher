@@ -19,6 +19,11 @@ export interface SegmentedControlProps {
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
+  /**
+   * Match the controls in the same row. A view switcher in a page or pane toolbar is
+   * `md` (the toolbar's buttons are md, and it is that surface's navigation); `sm` is for
+   * dense rows only: list headers, cards, compact filter strips whose other controls are sm.
+   */
   size?: ControlSize;
   /** Show only the icons; labels stay as the accessible names. */
   iconOnly?: boolean;

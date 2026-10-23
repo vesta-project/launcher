@@ -50,6 +50,34 @@ const Sizes: Story = {
   ),
 };
 
+const InToolbar: Story = {
+  name: 'In a toolbar',
+  description: 'A view switcher takes the size of the buttons beside it: md in pane toolbars, sm only in dense rows.',
+  render: () => (
+    <Stack>
+      <For each={['md', 'sm'] as const}>
+        {(size) => (
+          <Row label={size}>
+            <SegmentedControl
+              size={size}
+              aria-label="Access"
+              defaultValue="people"
+              options={[
+                { value: 'people', label: 'People' },
+                { value: 'invitations', label: 'Invitations' },
+                { value: 'devices', label: 'Devices' },
+                { value: 'rules', label: 'Join rules' },
+              ]}
+            />
+            <Button size={size} variant="outline">Invite</Button>
+            <Button size={size} tone="accent">Add player</Button>
+          </Row>
+        )}
+      </For>
+    </Stack>
+  ),
+};
+
 const IconOnly: Story = {
   description: 'Labels stay in the DOM as accessible names.',
   render: () => (
@@ -110,5 +138,5 @@ const WithLabel: Story = {
 export default {
   title: 'Controls/Segmented control',
   description: 'Choose one value among two to five options. Use tabs to switch between panels instead.',
-  stories: { Basic, Sizes, IconOnly, Fill, WithLabel },
+  stories: { Basic, Sizes, InToolbar, IconOnly, Fill, WithLabel },
 } satisfies StoryMeta;

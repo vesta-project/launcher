@@ -64,6 +64,21 @@ Follow `button` (reference implementation) and `field` (shared form anatomy):
 9. Never forward an optional `id` as `id={props.id}` when it may be unset — Kobalte stringifies `undefined` into the literal id `"undefined"`, colliding every instance. Spread only when present: `{...(props.id != null ? { id: props.id } : {})}`.
 10. Add a story file that shows every axis plus long labels and an in-context composition.
 
+### Sizing in context
+
+Controls in one row share one size, so their heights and type line up. The row decides,
+not the control:
+
+- **Page and pane toolbars are `md`.** That includes a SegmentedControl that switches the
+  pane's view (Access: People / Invitations / Devices / Join rules), even when it is the
+  only thing in the toolbar: it is that surface's navigation and should fill the strip.
+- **Setting rows are `md`.** A segmented choice in a SettingRow matches the Selects and
+  fields in the rows around it.
+- **`sm` is for dense rows only:** list and table headers, cards, popovers, and compact
+  filter strips whose other controls are already `sm` (Browse toolbar, sync value
+  filters). Never mix an `sm` switcher with `md` buttons, or the reverse.
+- `lg` is for hero actions (Play), not toolbars.
+
 ### Overlays and composition
 
 - Overlays (menu, popover, dialog, tooltip) take a `trigger` render prop and spread its props onto any library control: `trigger={(props) => <Button {...props}>Options</Button>}`.

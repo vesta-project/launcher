@@ -190,7 +190,7 @@ export function AppearanceSettings() {
       <Card title={t("prefs.appearance.colour")}>
         <SettingRow label={t("prefs.appearance.color-mode")}>
           <SegmentedControl
-            size="sm"
+            size="md"
             aria-label={t("prefs.appearance.color-mode")}
             value={setting("theme")}
             onChange={(value) => updateSetting("theme", value as never)}
@@ -255,7 +255,7 @@ export function AppearanceSettings() {
       <Card title={t("prefs.appearance.surfaces")}>
         <SettingRow label={t("prefs.appearance.style")}>
           <SegmentedControl
-            size="sm"
+            size="md"
             aria-label={t("prefs.appearance.style")}
             value={setting("theme_style")}
             onChange={(value) => updateSetting("theme_style", value as never)}
@@ -333,7 +333,7 @@ export function AppearanceSettings() {
               <Show when={setting("theme_gradient_enabled")}>
                 <SettingRow label={t("prefs.appearance.gradient-type")}>
                   <SegmentedControl
-                    size="sm"
+                    size="md"
                     aria-label={t("prefs.appearance.gradient-type")}
                     value={setting("theme_gradient_type")}
                     onChange={(value) => updateSetting("theme_gradient_type", value as never)}
