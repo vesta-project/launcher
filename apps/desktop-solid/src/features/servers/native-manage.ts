@@ -123,7 +123,7 @@ export const serversManageNative = {
   backups: (connectionId: ConnectionId, before: string | null) => call<BackupOverview>('server_backups', { connectionId, before }),
   /** GET backups/snapshots and backups/safety-snapshots for one profile, newest first. */
   backupSnapshots: (connectionId: ConnectionId, profile: string) => call<BackupSnapshot[]>('server_backup_snapshots', { connectionId, profile }),
-  backupStorage: (connectionId: ConnectionId) => call<BackupStorage>('server_backup_storage', { connectionId }),
+  backupStorage: (connectionId: ConnectionId, refresh = false) => call<BackupStorage>('server_backup_storage', { connectionId, refresh }),
   /** POST backups/run → the accepted job. */
   backupRun: (connectionId: ConnectionId, profile: string, intentId: string) => call<BackupJob>('server_backup_run', { connectionId, profile, intentId }),
   backupVerify: (connectionId: ConnectionId, profile: string, intentId: string) => call<BackupJob>('server_backup_verify', { connectionId, profile, intentId }),

@@ -133,6 +133,12 @@ impl Transport {
             },
         )
     }
+    /// Retire cached projections after asynchronous work changes server state.
+    pub fn invalidate_reads(&self) {
+        self.read_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+
     pub async fn request(
         self: &Arc<Self>,
         method: Method,

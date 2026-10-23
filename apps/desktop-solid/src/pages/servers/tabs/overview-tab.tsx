@@ -15,7 +15,7 @@ import { OnlinePlayersPanel } from './players-tab';
 import { ActivityRow } from './activity-tab';
 import { latestMetrics, serverMetrics, serverOperations, useServerTopic, useServersClock } from '../../../features/servers/store';
 import type { MetricsSample, ServerSnapshot } from '../../../features/servers/native';
-import { FactBadge, Freshness, Sensitive } from '../parts';
+import { FactBadge, Freshness, Sensitive, ServerErrorNote } from '../parts';
 
 const bytes = (value: string | null | undefined) => {
   if (!value || !/^\d+$/.test(value)) return null;
@@ -32,12 +32,13 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
   const status = () => props.snapshot.status;
   const recent = () => serverOperations(id()).slice(0, 4);
   // Recent tasks: one cached read per connection; the operations topic keeps it current.
-  useServerResource(id, operationsResource, { enabled: () => agentReachable(props.snapshot) && anyVisible(props.snapshot.capabilities, ['tasks.view']) });
+  const operations = useServerResource(id, operationsResource, { enabled: () => agentReachable(props.snapshot) && anyVisible(props.snapshot.capabilities, ['tasks.view']) });
   /** Warnings beyond the one the header strip already shows. */
   const warnings = () => extraWarnings(props.snapshot, headerNotice(props.snapshot, now(), serverPressure(id())));
 
   return (
     <div data-vesta="server-overview">
+      <ServerErrorNote error={operations.error()} onRetry={() => void operations.refresh()} />
       <Show when={warnings().length > 0}>
         <div data-vesta="server-callout" data-tone="warning" role="status">
           <For each={warnings()}>{(message) => <p>{t(message)}</p>}</For>

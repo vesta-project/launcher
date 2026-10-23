@@ -99,22 +99,11 @@ function ServerContent(props: { id: string }) {
     return current.mode === 'main' && tabs().some((tab) => tab.id === current.tab) ? current.tab : 'overview';
   };
   const settings = () => location().mode === 'settings';
-  const section = (): SettingsSectionId => { const current = location(); return current.mode === 'settings' ? current.section : 'connection'; };
-
-  // Old tab URLs (players, presence, access, connection, settings) move to their settings section,
-  // and a tab or section this server doesn't offer falls back to the one on screen.
-  const canonical = createMemo(() => {
+  const section = (): SettingsSectionId => {
     const current = location();
-    if (current.redirect) return `/servers/${props.id}/${current.redirect}`;
-    if (current.mode === 'main' && current.tab !== activeTab()) return serverPath(props.id, { mode: 'main', tab: activeTab() });
-    if (current.mode === 'settings' && !visibleSections(snapshot()).some((entry) => entry.id === current.section)) {
-      return serverPath(props.id, { mode: 'settings', section: visibleSections(snapshot())[0]?.id ?? 'connection' });
-    }
-    return null;
-  }, { name: 'server-workspace:canonical' });
-  createEffect(canonical, (path) => {
-    if (path) transitionTo(path, undefined, { replace: true });
-  }, { name: 'server-workspace:redirect' });
+    return current.mode === 'settings' && visibleSections(snapshot()).some((entry) => entry.id === current.section)
+      ? current.section : visibleSections(snapshot())[0]?.id ?? 'connection';
+  };
 
   // A new Minecraft run makes run-bound data stale; shown data stays while it revalidates.
   let lastGeneration: string | null | undefined;
@@ -146,6 +135,9 @@ function ServerContent(props: { id: string }) {
       <Board fixed class="instance-board servers-workspace">
         <div data-vesta="instance-layout" ref={(element) => { layout = element; }}>
           <ServerHeader snapshot={snapshot()} compact={settings()} onOpenSettings={openSettings} />
+          <Show when={activeTab() !== 'backups' && reachable()}>
+            <ServerErrorNote error={backups.error()} onRetry={() => void backups.refresh()} />
+          </Show>
           <Show
             when={!blocked()}
             fallback={

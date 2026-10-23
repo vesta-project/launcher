@@ -272,6 +272,18 @@ async fn backup_reads_receipts_storage_snapshot_merge_and_name_cache() {
     let storage = serde_json::to_value(a.client.backup_storage().await.unwrap()).unwrap();
     assert_eq!(storage["repositoryBytes"], 123);
     assert_eq!(storage["stopped"], "backup_snapshot_limit_reached");
+    // Asynchronous jobs can finish after a storage read without another mutation.
+    // A projection refresh must retire the native transport's ten-second cache.
+    a.set("GET", "/api/v3/manage/backups/storage", json!({"repository_bytes":456,"restore_points":3,"safety_snapshots":1,"free_bytes":null,"limits":{"max_snapshots":4,"max_repository_bytes":null,"min_free_bytes":0},"backups_stopped":null}));
+    assert_eq!(
+        a.client.backup_storage().await.unwrap().repository_bytes,
+        123
+    );
+    a.client.transport.invalidate_reads();
+    assert_eq!(
+        a.client.backup_storage().await.unwrap().repository_bytes,
+        456
+    );
     a.set(
         "GET",
         "/api/v3/manage/backups/jobs/job-1",

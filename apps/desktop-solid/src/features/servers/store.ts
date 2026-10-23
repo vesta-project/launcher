@@ -5,6 +5,7 @@ import { createEffect, createMemo, createSignal, onCleanup, untrack, type Access
 import { ConsoleBuffer } from './console-model';
 import { toServerError } from './errors';
 import { mergeOperations } from './operations-model';
+import { releaseServerResources } from './resources';
 import { serversApi, type ServersApi } from './service';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
@@ -89,6 +90,7 @@ export function putSnapshot(snapshot: ServerSnapshot) {
 
 function forget(id: ConnectionId) {
   setOrder((current) => current.filter((entry) => entry !== id));
+  releaseServerResources(id);
   snapshots.delete(id);
   operations.delete(id);
   metrics.delete(id);

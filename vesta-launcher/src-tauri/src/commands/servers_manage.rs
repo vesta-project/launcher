@@ -39,9 +39,13 @@ pub async fn server_backup_storage(
     app: AppHandle,
     manager: Manager<'_>,
     connection_id: String,
+    refresh: Option<bool>,
 ) -> Result<BackupStorage> {
     manager
         .management_read(&app, &connection_id, |client| async move {
+            if refresh.unwrap_or(false) {
+                client.transport.invalidate_reads();
+            }
             client.backup_storage().await
         })
         .await
