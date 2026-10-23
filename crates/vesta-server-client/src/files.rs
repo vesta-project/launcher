@@ -24,6 +24,12 @@ pub struct OfflineWhitelistSnapshot {
     pub items: Vec<crate::model::WhitelistEntry>,
     pub sha256: Option<String>,
 }
+#[derive(Clone, Debug, Deserialize)]
+pub struct WhitelistReceipt {
+    pub id: String,
+    pub status: String,
+    pub player: String,
+}
 
 pub const CHUNK_BYTES: usize = 1024 * 1024;
 pub const MAX_WRITE_BYTES: u64 = 16 * CHUNK_BYTES as u64;
@@ -642,6 +648,94 @@ impl Client {
         let hash = field(&value, "sha256").map_err(|_| unknown())?;
         validate_sha256(&hash).map_err(|_| unknown())?;
         Ok(hash)
+    }
+    pub async fn startup_whitelist_update(
+        &self,
+        player: &str,
+        add: bool,
+        generation: &str,
+        intent: &str,
+    ) -> Result<String> {
+        if player.is_empty()
+            || player.len() > 16
+            || !player
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        {
+            return Err(invalid());
+        }
+        crate::operations::generation(generation)?;
+        let mut input = request(
+            Method::POST,
+            route("players/whitelist/startup", &[]),
+            Some(intent),
+            false,
+        )?;
+        json_body(
+            &mut input,
+            json!({"player":player,"add":add,"expected_generation":generation}),
+        )?;
+        let response = self.file_request(input).await?;
+        self.transport.invalidate_reads();
+        let value = response
+            .json(CHUNK_BYTES)
+            .await
+            .map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
+        if value["outcome"] != "accepted" {
+            return Err(Error::new(ErrorCode::OutcomeUnknown));
+        }
+        let id: String =
+            field(&value, "intent_id").map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
+        uuid::Uuid::parse_str(&id).map_err(|_| Error::new(ErrorCode::OutcomeUnknown))?;
+        Ok(id)
+    }
+    pub async fn startup_whitelist_receipts(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<WhitelistReceipt>> {
+        if ids.is_empty()
+            || ids.len() > 32
+            || ids.iter().collect::<std::collections::HashSet<_>>().len() != ids.len()
+            || ids.iter().any(|id| uuid::Uuid::parse_str(id).is_err())
+        {
+            return Err(invalid());
+        }
+        let value = self
+            .file_request(request(
+                Method::GET,
+                format!(
+                    "/api/v3/manage/players/whitelist/startup?ids={}",
+                    ids.join(",")
+                ),
+                None,
+                false,
+            )?)
+            .await?
+            .json(64 * 1024)
+            .await?;
+        let receipts: Vec<WhitelistReceipt> =
+            decode(value.get("items").cloned().ok_or_else(unsupported)?)?;
+        if receipts.len() != ids.len()
+            || receipts
+                .iter()
+                .map(|r| &r.id)
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                != ids.len()
+            || receipts.iter().any(|r| {
+                !ids.contains(&r.id)
+                    || !matches!(
+                        r.status.as_str(),
+                        "queued" | "applied" | "cancelled" | "superseded" | "failed" | "unknown"
+                    )
+            })
+        {
+            return Err(unsupported());
+        }
+        Ok(receipts)
+    }
+    pub fn retire_player_reads(&self) {
+        self.transport.invalidate_reads();
     }
     pub async fn properties_update(
         &self,

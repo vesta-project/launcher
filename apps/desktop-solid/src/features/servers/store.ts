@@ -246,9 +246,10 @@ export function useServerTopic(id: () => ConnectionId | undefined, topic: Server
         case 'consoleGap': consoleBuffer(connectionId).gap(event.cursor); bumpConsole(connectionId); void recoverConsoleTail(connectionId); break;
         case 'metrics': metrics.update(connectionId, (current) => [...current, event.sample].slice(-METRIC_HISTORY)); break;
         case 'operation': putOperations(connectionId, [event.operation]); break;
+        case 'playerListsChanged': invalidateServerResources(connectionId, ['whitelist']); break;
         case 'resync':
           if (event.topic === 'status') void serverCommand((client) => client.snapshot(connectionId, true)).then(putSnapshot).catch(() => {});
-          if (event.topic === 'operations') void loadOperations(connectionId).catch(() => {});
+          if (event.topic === 'operations') { invalidateServerResources(connectionId, ['whitelist']); void loadOperations(connectionId).catch(() => {}); }
           if (event.topic === 'console') { consoleBuffer(connectionId).gap(`resync:${Date.now()}`); bumpConsole(connectionId); void recoverConsoleTail(connectionId); }
           break;
       }

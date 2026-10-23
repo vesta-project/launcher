@@ -266,6 +266,28 @@ pub async fn server_offline_whitelist_update(
         .await
 }
 #[tauri::command]
+pub async fn server_startup_whitelist_update(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    player: String,
+    add: bool,
+    expected_generation: String,
+    intent_id: String,
+) -> Result<String> {
+    manager
+        .inner()
+        .startup_whitelist_update(
+            &app,
+            &connection_id,
+            &player,
+            add,
+            &expected_generation,
+            &intent_id,
+        )
+        .await
+}
+#[tauri::command]
 pub async fn server_moderate_confirm(
     app: AppHandle,
     manager: Manager<'_>,

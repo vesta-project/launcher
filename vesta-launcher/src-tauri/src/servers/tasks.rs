@@ -181,7 +181,11 @@ impl ServerManager {
                     let active: Vec<String> = store
                         .intents
                         .iter()
-                        .filter(|intent| intent.connection_id == id && !intent.terminal)
+                        .filter(|intent| {
+                            intent.connection_id == id
+                                && !intent.terminal
+                                && intent.action != "players.whitelist.desired"
+                        })
                         .filter_map(|intent| intent.operation_id.clone())
                         .collect::<std::collections::BTreeSet<_>>()
                         .into_iter()
@@ -358,16 +362,90 @@ impl ServerManager {
         Ok(())
     }
     pub(super) async fn resume_operations(self: &Arc<Self>, app: &AppHandle, id: &str) {
-        let pending = self
-            .store
-            .lock()
-            .await
-            .intents
-            .iter()
-            .any(|i| i.connection_id == id && !i.terminal && i.operation_id.is_some());
+        let pending = self.store.lock().await.intents.iter().any(|i| {
+            i.connection_id == id
+                && !i.terminal
+                && i.operation_id.is_some()
+                && i.action != "players.whitelist.desired"
+        });
         if pending {
             let _ = self.ensure_operation_tracker(app, id);
         }
+        if self.store.lock().await.intents.iter().any(|i| {
+            i.connection_id == id
+                && i.action == "players.whitelist.desired"
+                && !i.terminal
+                && !i.uncertain
+                && i.operation_id.is_some()
+        }) {
+            let _ = self.ensure_whitelist_tracker(app, id);
+        }
+    }
+    pub(super) fn ensure_whitelist_tracker(
+        self: &Arc<Self>,
+        app: &AppHandle,
+        id: &str,
+    ) -> Result<()> {
+        let tracker_key = format!("{id}:whitelist");
+        let mut tasks = self.trackers.lock().map_err(|_| internal())?;
+        tasks.retain(|_, t| !t.inner().is_finished());
+        if tasks.contains_key(&tracker_key) {
+            return Ok(());
+        }
+        if tasks.len() >= 32 {
+            return Ok(());
+        } // Accepted durable work remains on the agent.
+        let weak = Arc::downgrade(self);
+        let app = app.clone();
+        let id = id.to_owned();
+        tasks.insert(tracker_key.clone(),tauri::async_runtime::spawn(async move {
+            let mut delay=2u64;
+            loop {
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                let Some(manager)=weak.upgrade() else {break};
+                let store=manager.store.lock().await;
+                let pending=store.intents.iter().filter(|i|i.connection_id==id && i.action=="players.whitelist.desired" && !i.terminal && !i.uncertain).filter_map(|i|i.operation_id.clone()).take(32).collect::<Vec<_>>();
+                if pending.is_empty() {
+                    if let Ok(mut tasks)=manager.trackers.lock() {tasks.remove(&tracker_key);}
+                    break;
+                }
+                drop(store);
+                let client=match manager.client(&id).await {Ok(c)=>c,Err(e)=>{if tracking_blocked(e.code){break}delay=(delay+2).min(15);continue}};
+                let receipts=match client.startup_whitelist_receipts(&pending).await {
+                    Ok(rows)=>rows,
+                    Err(e)=>{if tracking_blocked(e.code){break} delay=(delay+2).min(15).max(e.retry_after_ms.unwrap_or(0).div_ceil(1000).min(3600));continue;}
+                };
+                let unknown=receipts.iter().filter(|r|r.status=="unknown").map(|r|r.id.clone()).collect::<Vec<_>>();
+                if !unknown.is_empty() {
+                    let _=manager.edit_store(|s| {for i in s.intents.iter_mut().filter(|i|i.connection_id==id && i.action=="players.whitelist.desired") {if i.operation_id.as_ref().is_some_and(|receipt|unknown.contains(receipt)) {i.uncertain=true;}}Ok(())}).await;
+                    client.retire_player_reads();
+                    let topic=if manager.demanded(&id,ServerTopic::Status) {ServerTopic::Status} else {ServerTopic::Operations};
+                    manager.deliver(&id,topic,ServerEvent::PlayerListsChanged);
+                    use crate::notifications::{manager::NotificationManager,models::{CreateNotificationInput,NotificationType}};
+                    if let Some(notifications)=app.try_state::<NotificationManager>() {
+                        let _=notifications.create(CreateNotificationInput {client_key:Some(format!("whitelist-unknown:{id}:{}",unknown[0])),title:Some("Whitelist result is unknown".into()),description:Some("The agent no longer has a receipt for a whitelist change. Review the refreshed list before retrying.".into()),severity:Some("warning".into()),notification_type:Some(NotificationType::Patient),..Default::default()});
+                    }
+                }
+                let finished=receipts.iter().filter(|r|pending.contains(&r.id)&&matches!(r.status.as_str(),"applied"|"cancelled"|"superseded"|"failed")).collect::<Vec<_>>();
+                if !finished.is_empty() {
+                    let saved=manager.edit_store(|s|{for i in s.intents.iter_mut().filter(|i|i.connection_id==id&&i.action=="players.whitelist.desired") {if finished.iter().any(|r|i.operation_id.as_deref()==Some(&r.id)) {i.terminal=true;i.uncertain=false;}}Ok(())}).await;
+                    if saved.is_ok() {
+                        client.retire_player_reads();
+                        let topic=if manager.demanded(&id,ServerTopic::Status) {ServerTopic::Status} else {ServerTopic::Operations};
+                        manager.deliver(&id,topic,ServerEvent::PlayerListsChanged);
+                        use crate::notifications::{manager::NotificationManager,models::{CreateNotificationInput,NotificationType}};
+                        if let Some(notifications)=app.try_state::<NotificationManager>() {
+                            for r in finished.iter().filter(|r|r.status=="failed") {
+                                let _=notifications.create(CreateNotificationInput {client_key:Some(format!("whitelist:{id}:{}",r.id)),title:Some("Whitelist change needs attention".into()),description:Some(format!("The change for {} could not be verified. The whitelist has been refreshed.",r.player)),severity:Some("warning".into()),notification_type:Some(NotificationType::Patient),..Default::default()});
+                            }
+                        }
+                        delay=2;continue;
+                    }
+                }
+                delay=(delay+2).min(15);
+            }
+        }));
+        Ok(())
     }
 }
 

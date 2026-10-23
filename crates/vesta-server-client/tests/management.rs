@@ -15,6 +15,77 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn desired_whitelist_receipts_validate_generation_identity_and_uncertainty() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let path = "/api/v3/manage/players/whitelist/startup";
+    let id = "123e4567-e89b-42d3-a456-426614174000".to_string();
+    let generation = "11".repeat(16);
+    a.set("POST", path, json!({"outcome":"accepted","intent_id":id}));
+    assert_eq!(
+        a.client
+            .startup_whitelist_update("Alex", true, &generation, "desired-1")
+            .await
+            .unwrap(),
+        id
+    );
+    assert_eq!(a.calls(path)[0].body["expected_generation"], generation);
+    let get = format!("{path}?ids={id}");
+    a.set(
+        "GET",
+        &get,
+        json!({"items":[{"id":id,"status":"queued","player":"Alex"}]}),
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_receipts(std::slice::from_ref(&id))
+            .await
+            .unwrap()[0]
+            .status,
+        "queued"
+    );
+    a.set(
+        "POST",
+        path,
+        json!({"outcome":"accepted","intent_id":"bad"}),
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_update("Alex", true, &generation, "desired-bad-receipt")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::OutcomeUnknown
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_update("Alex", true, "bad", "desired-bad-generation")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    a.set(
+        "GET",
+        &get,
+        json!({"items":[{"id":"other","status":"applied","player":"Alex"}]}),
+    );
+    assert_eq!(
+        a.client
+            .startup_whitelist_receipts(std::slice::from_ref(&id))
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Unsupported
+    );
+    assert_eq!(
+        serde_json::to_value(vesta_server_client::model::ServerEvent::PlayerListsChanged).unwrap()
+            ["kind"],
+        "playerListsChanged"
+    );
+}
+
+#[tokio::test]
 async fn offline_whitelist_uses_explicit_revision_and_retires_list_cache() {
     let _owner = OWNER.lock().await;
     let a = Agent::start().await;

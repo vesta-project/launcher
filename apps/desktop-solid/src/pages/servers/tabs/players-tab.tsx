@@ -212,12 +212,15 @@ function ModerationDialog(props: {
   /** Once prepared, the confirmation is bound to that exact player; the field locks. */
   const locked = () => !!props.request.player || uncertain() || (!!awaiting() && remaining() > 0);
   let offlineRevision: { sha256: string | null } | null = null;
+  let desiredGeneration: string | null = null;
 
   const submit = async () => {
     const kind = action();
     const generation = props.snapshot.status?.generation;
-    const offlineWhitelist = (kind === 'whitelist_add' || kind === 'whitelist_remove') && ((props.snapshot.status?.state === 'stopped' && !generation) || (intents.uncertain && offlineRevision !== null));
-    if (!kind || (!generation && !offlineWhitelist) || !isPlayerName(player())) return;
+    const whitelist = kind === 'whitelist_add' || kind === 'whitelist_remove';
+    const offlineWhitelist = whitelist && ((!desiredGeneration && props.snapshot.status?.state === 'stopped' && !generation) || (intents.uncertain && offlineRevision !== null));
+    const desiredWhitelist = whitelist && !offlineWhitelist && !!(generation || desiredGeneration);
+    if (!kind || (!generation && !offlineWhitelist && !desiredWhitelist) || !isPlayerName(player())) return;
     setBusy(true); setError(null);
     const id = props.snapshot.connection.id;
     try {
@@ -229,6 +232,12 @@ function ModerationDialog(props: {
         const add = kind === 'whitelist_add';
         const intentId = intents.idFor({ offlineWhitelist: true, name, add, expected });
         await serverCommand((client) => client.offlineWhitelistUpdate(id, name, add, expected, intentId));
+        intents.settle();
+      } else if (desiredWhitelist) {
+        desiredGeneration ??= generation!;
+        const name = player(); const add = kind === 'whitelist_add'; const expected = desiredGeneration;
+        const intentId = intents.idFor({ whitelist: true, name, add, generation: expected });
+        await serverCommand((client) => client.startupWhitelistUpdate(id, name, add, expected, intentId));
         intents.settle();
       } else if (pending && remaining() > 0) {
         const operation = await serverCommand((client) => client.moderateConfirm(id, pending.intentId));
@@ -249,7 +258,7 @@ function ModerationDialog(props: {
       const failure = reason as ServerCommandError;
       if (!awaiting()) intents.settle(failure);
       setUncertain(intents.uncertain);
-      if (!intents.uncertain) offlineRevision = null;
+      if (!intents.uncertain) { offlineRevision = null; desiredGeneration = null; }
       setError(failure);
       if (failure.code === 'confirmation_expired') setAwaiting(null);
     } finally { setBusy(false); }

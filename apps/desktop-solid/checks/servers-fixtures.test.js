@@ -39,6 +39,16 @@ describe('[pairing] connect flow', () => {
 });
 
 describe('[lifecycle] generation-bound operations', () => {
+  test('desired whitelist membership changes immediately and an old add receipt never resurrects a removal', async () => {
+    const servers = api(); const id = 'fixture-survival'; const generation = (await servers.snapshot(id)).status.generation;
+    const receipt = await servers.startupWhitelistUpdate(id, 'NewFriend', true, generation, 'desired-add');
+    expect((await servers.whitelist(id)).some((entry) => entry.name === 'NewFriend')).toBe(true);
+    await servers.startupWhitelistUpdate(id, 'NewFriend', false, generation, 'desired-remove');
+    expect((await servers.whitelist(id)).some((entry) => entry.name === 'NewFriend')).toBe(false);
+    expect(await servers.startupWhitelistUpdate(id, 'NewFriend', true, generation, 'desired-add')).toBe(receipt);
+    expect((await servers.whitelist(id)).some((entry) => entry.name === 'NewFriend')).toBe(false);
+    await expect(servers.startupWhitelistUpdate(id, 'NewFriend', true, 'stale', 'desired-stale')).rejects.toMatchObject({ code: 'stale_target' });
+  });
   test('offline whitelist saves require stopped state and an explicit revision; replay does not edit twice', async () => {
     const servers = api();
     const found = await servers.discover('idle.example');

@@ -221,6 +221,7 @@ pub fn run(context: tauri::Context) {
             commands::servers::server_moderate,
             commands::servers::server_offline_whitelist,
             commands::servers::server_offline_whitelist_update,
+            commands::servers::server_startup_whitelist_update,
             commands::servers::server_moderate_confirm,
             commands::server_files::server_files_list,
             commands::server_files::server_file_read_text,
