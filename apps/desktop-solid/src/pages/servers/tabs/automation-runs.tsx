@@ -2,7 +2,7 @@ import { Badge, Button, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, untrack, type Accessor } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
-import { duration, mergeRunPages, outputFields, pollRunsAfter, runTriggerSentence } from '../../../features/servers/automation-model';
+import { duration, mergeRunPages, outputFields, pollRunsAfter, RUN_POLL_MS, runTriggerSentence, shownRunDetail, startRunPoll } from '../../../features/servers/automation-model';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { errorMessage } from '../../../features/servers/errors';
@@ -22,14 +22,22 @@ const elapsed = (seconds: number) => {
 };
 
 /**
- * Re-reads a page of runs while something in it is running or queued, and only while
- * `active` (the view is on screen). Pauses while the server has asked us to slow down.
+ * Follows a page of runs while something in it is running or queued, and only while
+ * `active` (the view is on screen). One timer per page; it waits out server pressure and a
+ * hidden window, backs off after transient failures and stops for lasting ones.
  */
 export function useRunPolling(id: Accessor<ConnectionId>, page: ServerResourceState<Paged<RunSummary>>, active: Accessor<boolean>) {
-  createEffect(() => (active() ? pollRunsAfter(page.value()?.items) : null), (delay) => {
-    if (!delay) return;
-    const timer = setInterval(() => { if (!serverPressure(untrack(id))) void page.refresh(); }, delay);
-    return () => clearInterval(timer);
+  createEffect(() => active() && pollRunsAfter(page.value()?.items) !== null, (moving) => {
+    if (!moving) return;
+    return startRunPoll({
+      refresh: page.refresh,
+      current: () => untrack(() => ({ runs: page.value()?.items, error: page.error() })),
+      holdFor: () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return RUN_POLL_MS;
+        const pressure = serverPressure(untrack(id));
+        return pressure ? pressure.untilMs - Date.now() : 0;
+      },
+    });
   }, { name: 'server-automation-runs:poll' });
 }
 
@@ -139,6 +147,9 @@ function RunSteps(props: { snapshot: ServerSnapshot; run: RunSummary; onChanged:
   const detail = useServerResource(id, runStepsResource, {
     args: () => ({ runId: props.run.id, progress: `${props.run.state}:${props.run.currentStep}:${props.run.attempt}` }),
   });
+  // Each progress key is its own cached read, so a slower earlier answer can never replace a
+  // newer one; while the newer one loads, the last detail of this run stays on screen.
+  const shown = createMemo<ReturnType<typeof detail.value>>((previous) => shownRunDetail(previous, detail.value(), props.run.id), { name: 'server-automation-run:shown' });
   const discard = async () => {
     setBusy(true);
     const connection = id();
@@ -162,7 +173,7 @@ function RunSteps(props: { snapshot: ServerSnapshot; run: RunSummary; onChanged:
           </Show>
         </div>
       </Show>
-      <Show when={detail.value()} fallback={<Show when={!detail.error()}><p data-vesta="server-muted">{t('servers.loading')}</p></Show>}>
+      <Show when={shown()} fallback={<Show when={!detail.error()}><p data-vesta="server-muted">{t('servers.loading')}</p></Show>}>
         {(current) => (
           <ol data-vesta="server-automation-run-steps">
             <For each={current().rows}>

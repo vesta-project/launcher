@@ -191,19 +191,11 @@
   /* Step cards, joined by a thin rail so the order reads as a flow */
   :where([data-vesta="server-automation-steps"]) { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
   :where([data-vesta="server-automation-step-item"]) { position: relative; display: flex; flex-direction: column; }
-  :where([data-vesta="server-automation-step-item"][data-drop])::before {
-    content: "";
-    position: absolute;
-    z-index: 2;
-    inset-inline: 0;
-    block-size: 2px;
-    border-radius: 1px;
-    background: var(--vesta-color-accent);
-    box-shadow: 0 0 0 2px color-mix(in oklab, var(--vesta-color-accent) 25%, transparent);
+  /* While dragging, the other steps slide aside by one slot to show where it will land. */
+  @media (prefers-reduced-motion: no-preference) {
+    :where([data-vesta="server-automation-step-item"][data-shifting]) { transition: transform 160ms var(--vesta-ease-out); }
   }
-  :where([data-vesta="server-automation-step-item"][data-drop="before"])::before { inset-block-start: -9px; }
-  :where([data-vesta="server-automation-step-item"][data-drop="after"])::before { inset-block-end: -9px; }
-  :where([data-vesta="server-automation-step-item"]:last-child[data-drop="after"])::before { inset-block-end: -6px; }
+  :where([data-vesta="server-automation-step-item"][data-shifting]) { z-index: 1; }
 
   :where([data-vesta="server-automation-step-card"]) {
     position: relative;

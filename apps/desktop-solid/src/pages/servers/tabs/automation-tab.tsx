@@ -199,11 +199,11 @@ function WorkflowRow(props: {
         <Show when={manual() && props.canManage}>
           <Tooltip content={t('server-automation.run-needs-enabled')} disabled={props.workflow.enabled} trigger={(tooltip) => (
             <span {...tooltip}>
-              <Button size="sm" variant="outline" icon={<Icon name="icons/actions/play" />} disabled={!props.workflow.enabled || props.busy} onClick={() => props.onRun()}>{t('server-automation.run-now')}</Button>
+              <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/play" />} disabled={!props.workflow.enabled || props.busy} onClick={() => props.onRun()}>{t('server-automation.run-now')}</Button>
             </span>
           )} />
         </Show>
-        <Switch size="sm" aria-label={t('server-automation.enabled', { name: props.workflow.name })} checked={props.workflow.enabled} disabled={!props.canManage || props.busy}
+        <Switch aria-label={t('server-automation.enabled', { name: props.workflow.name })} checked={props.workflow.enabled} disabled={!props.canManage || props.busy}
           onChange={(value: boolean) => props.onEnabled(value)} />
         <Menu placement="bottom-end" trigger={(menu) => <IconButton {...menu} size="sm" variant="ghost" label={t('servers.actions')} tooltip={false} icon={<Icon name="icons/content/ellipsis-v" />} />}>
           <MenuItem icon={<Icon name="icons/actions/edit" />} onSelect={() => props.onEdit()}>{t(props.canManage ? 'server-automation.edit' : 'server-automation.view-details')}</MenuItem>

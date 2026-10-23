@@ -272,18 +272,22 @@ const shorten = (value: string, max = 60) => (value.length > max ? `${value.slic
 
 /** One line describing a step's action. `duration` fills the `time` argument when present. */
 export function stepSummary(action: WorkflowAction | DraftAction): Sentence & { duration?: { message: MessageId; count: number } } {
+  // A step whose main field is still empty reads as its kind, not as `Run “”`.
+  const unnamed = (value: string, message: MessageId): Sentence | null => (value.trim() ? null : { message, args: {} });
   switch (action.kind) {
     case 'delay': return { message: 'server-automation.step-delay', args: {}, duration: duration(action.secs) };
-    case 'backup': return { message: 'server-automation.step-backup', args: { name: action.profile } };
-    case 'verify_backup': return { message: 'server-automation.step-verify', args: { name: action.profile } };
-    case 'console_command': return { message: 'server-automation.step-console', args: { value: shorten(action.line) } };
+    case 'backup': return unnamed(action.profile, 'server-automation.action-backup') ?? { message: 'server-automation.step-backup', args: { name: action.profile } };
+    case 'verify_backup': return unnamed(action.profile, 'server-automation.action-verify') ?? { message: 'server-automation.step-verify', args: { name: action.profile } };
+    case 'console_command': return unnamed(action.line, 'server-automation.action-console') ?? { message: 'server-automation.step-console', args: { value: shorten(action.line) } };
     case 'notify': {
+      const empty = unnamed(action.title, 'server-automation.action-notify');
+      if (empty) return empty;
       const message: Record<string, MessageId> = {
         info: 'server-automation.step-notify-info', warning: 'server-automation.step-notify-warning', critical: 'server-automation.step-notify-critical',
       };
       return { message: message[action.severity]!, args: { name: shorten(action.title) } };
     }
-    case 'script_preset': return { message: 'server-automation.step-script', args: { name: action.preset, count: Array.isArray(action.params) ? action.params.length : Object.keys(action.params).length } };
+    case 'script_preset': return unnamed(action.preset, 'server-automation.action-script') ?? { message: 'server-automation.step-script', args: { name: action.preset, count: Array.isArray(action.params) ? action.params.length : Object.keys(action.params).length } };
     default: return { message: simpleSteps[action.kind], args: {} };
   }
 }
@@ -442,6 +446,17 @@ export function dropTarget(others: readonly number[], pointerY: number) {
   let index = 0;
   while (index < others.length && pointerY > others[index]!) index++;
   return index;
+}
+
+/**
+ * While a step is dragged from `from` towards drop position `to`, which way the step at
+ * `index` slides to open the gap: -1 up a slot, 1 down a slot, 0 stays.
+ */
+export function dragShift(index: number, from: number, to: number): -1 | 0 | 1 {
+  if (index === from || from === to) return 0;
+  if (from < to && index > from && index <= to) return -1;
+  if (from > to && index >= to && index < from) return 1;
+  return 0;
 }
 
 /** Keyboard reordering: arrows move by one, Home/End to the ends; null for other keys or no move. */
@@ -814,4 +829,76 @@ export function mergeRunPages(pages: readonly (readonly RunSummary[])[]): RunSum
   const merged: RunSummary[] = [];
   for (const page of pages) for (const run of page) if (!seen.has(run.id)) { seen.add(run.id); merged.push(run); }
   return merged;
+}
+
+// ------------------------------------------------------------------ polling
+
+/** Read failures worth trying again; others (forbidden, unsupported, signed out) stop polling. */
+const TRANSIENT_READ_CODES = new Set(['timeout', 'unreachable', 'outcome_unknown', 'server_busy', 'rate_limited']);
+export const RUN_POLL_MAX_MS = 60_000;
+export interface PollError { code: string; retryAfterMs?: number | null }
+
+/**
+ * When to read run history again, or null to stop. Only moving runs are followed. After a
+ * transient failure the shown runs are still the last known ones, so polling continues with
+ * backoff (never sooner than the server's Retry-After); a lasting failure ends it.
+ */
+export function nextRunPoll(runs: readonly RunSummary[] | undefined, error: PollError | null, failures: number, random: () => number = Math.random): number | null {
+  if (!runs?.some(isMovingRun)) return null;
+  if (!error) return RUN_POLL_MS;
+  if (!TRANSIENT_READ_CODES.has(error.code)) return null;
+  const guidance = error.retryAfterMs ?? 0;
+  if (!Number.isFinite(guidance) || guidance > 2_147_483_647) return null;
+  const backoff = Math.min(RUN_POLL_MAX_MS, RUN_POLL_MS * 2 ** Math.min(Math.max(failures - 1, 0), 4));
+  return Math.max(guidance, Math.round(backoff * (1 + random() * 0.2)));
+}
+
+export interface RunPollSource {
+  /** Reads the page again; resolves whether or not the read succeeded. */
+  refresh: () => Promise<void>;
+  /** What is shown now: the last good runs and the latest error. */
+  current: () => { runs: readonly RunSummary[] | undefined; error: PollError | null };
+  /** How long to hold off before reading (server pressure, hidden window); 0 to read now. */
+  holdFor?: () => number;
+  setTimer?: (run: () => void, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
+  random?: () => number;
+}
+
+/**
+ * One poll loop for a page of runs: a single timer, one read at a time, re-armed after
+ * success and after transient failures. Returns a stop function that cancels the timer and
+ * ignores a read still in flight.
+ */
+export function startRunPoll(source: RunPollSource): () => void {
+  const setTimer = source.setTimer ?? ((run, ms) => setTimeout(run, ms));
+  const clearTimer = source.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+  let stopped = false;
+  let handle: unknown;
+  let failures = 0;
+  const arm = (ms: number | null) => { handle = ms === null ? undefined : setTimer(() => void tick(), ms); };
+  const tick = async () => {
+    handle = undefined;
+    if (stopped) return;
+    const hold = source.holdFor?.() ?? 0;
+    if (hold > 0) { arm(Math.max(hold, RUN_POLL_MS)); return; }
+    await source.refresh();
+    if (stopped) return;
+    const { runs, error } = source.current();
+    failures = error ? failures + 1 : 0;
+    arm(nextRunPoll(runs, error, failures, source.random));
+  };
+  const start = source.current();
+  if (start.error) failures = 1;
+  arm(nextRunPoll(start.runs, start.error, failures, source.random));
+  return () => { stopped = true; if (handle !== undefined) clearTimer(handle); handle = undefined; };
+}
+
+/**
+ * The run detail to show. A newer progress key starts a fresh read; until it answers, the
+ * previous detail of the same run stays up instead of flashing back to "Loading".
+ */
+export function shownRunDetail<T extends { run: { id: string } }>(previous: T | undefined, latest: T | undefined, runId: string): T | undefined {
+  if (latest) return latest.run.id === runId ? latest : undefined;
+  return previous?.run.id === runId ? previous : undefined;
 }

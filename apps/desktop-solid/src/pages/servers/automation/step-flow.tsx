@@ -7,12 +7,13 @@ import { For, Show, createSignal, createUniqueId, onCleanup } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import {
-  BOUNDS, dropTarget, incomingJumps, keyboardTarget, stepNotes, stepProblemCount, type DraftStep, type Problem,
+  BOUNDS, dragShift, dropTarget, incomingJumps, keyboardTarget, stepNotes, stepProblemCount, type DraftStep, type Problem,
 } from '../../../features/servers/automation-model';
 import type { ActionKind } from '../../../features/servers/native-automation';
 import { ACTION_ORDER, actionIcons, actionLabels, stepText } from '../tabs/automation-shared';
 
-interface Drag { from: number; dy: number; to: number }
+/** `slot` is the distance one step takes up, so the others can slide by exactly that much. */
+interface Drag { from: number; dy: number; to: number; slot: number }
 
 const DRAG_THRESHOLD = 5;
 const EDGE = 48;
@@ -60,11 +61,23 @@ export function StepFlow(props: {
     let pointerY = startY;
     let started = false;
     let frame = 0;
+    // Measured once when the drag starts: the other cards slide while it runs, so reading
+    // their live positions would move the target under the pointer.
+    let others: number[] = [];
+    let slot = 0;
+    const measure = () => {
+      const items = [...(list?.querySelectorAll<HTMLElement>('[data-vesta="server-automation-step-item"]') ?? [])];
+      const tops = items.map((item) => item.getBoundingClientRect().top);
+      slot = index + 1 < tops.length ? tops[index + 1]! - tops[index]! : index > 0 ? tops[index]! - tops[index - 1]! : 0;
+      others = items.flatMap((item, at) => {
+        if (at === index) return [];
+        const card = item.querySelector<HTMLElement>('[data-vesta="server-automation-step-card"]')!.getBoundingClientRect();
+        return [card.top + card.height / 2];
+      });
+    };
     const update = () => {
       const scrolled = (scroller?.scrollTop ?? 0) - startScroll;
-      const cards = [...(list?.querySelectorAll<HTMLElement>('[data-vesta="server-automation-step-card"]') ?? [])];
-      const others = cards.filter((_, at) => at !== index).map((card) => { const rect = card.getBoundingClientRect(); return rect.top + rect.height / 2; });
-      setDrag({ from: index, dy: pointerY - startY + scrolled, to: dropTarget(others, pointerY) });
+      setDrag({ from: index, dy: pointerY - startY + scrolled, to: dropTarget(others, pointerY + scrolled), slot });
     };
     const tick = () => {
       // Scroll the pane while the pointer rests near its top or bottom edge.
@@ -80,6 +93,7 @@ export function StepFlow(props: {
       if (!started) {
         if (Math.abs(pointerY - startY) < DRAG_THRESHOLD) return;
         started = true;
+        measure();
         setGrabbed(null);
         setAnnouncement(t('server-automation.picked-up', { name: label(index) }));
         frame = requestAnimationFrame(tick);
@@ -153,12 +167,11 @@ export function StepFlow(props: {
     focusGrip(to);
   };
 
-  const dropSide = (index: number): 'before' | 'after' | undefined => {
+  /** Other steps slide aside to open the gap where the dragged one will land. */
+  const shiftOf = (index: number) => {
     const current = drag();
-    if (!current || current.to === current.from) return undefined;
-    const others = props.steps.map((_, at) => at).filter((at) => at !== current.from);
-    if (current.to < others.length) return others[current.to] === index ? 'before' : undefined;
-    return others.at(-1) === index ? 'after' : undefined;
+    const by = current ? dragShift(index, current.from, current.to) : 0;
+    return by && current ? { transform: `translateY(${by * current.slot}px)` } : undefined;
   };
 
   return (
@@ -172,7 +185,7 @@ export function StepFlow(props: {
             const incoming = () => incomingJumps(props.steps, index);
             const dragging = () => drag()?.from === index;
             return (
-              <li data-vesta="server-automation-step-item" data-drop={dropSide(index)}>
+              <li data-vesta="server-automation-step-item" data-shifting={drag() && !dragging() ? '' : undefined} style={shiftOf(index)}>
                 <div data-vesta="server-automation-step-card" data-step-index={index}
                   data-selected={props.selected === index ? '' : undefined} data-invalid={problems() ? '' : undefined}
                   data-dragging={dragging() ? '' : undefined} data-grabbed={grabbed()?.index === index ? '' : undefined}

@@ -325,7 +325,7 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
           onChange={(next) => setSteps((current) => current.map((entry, at) => (at === index ? next : entry)))}
           onKind={(kind) => setSteps((current) => changeStepKind(current, index, kind, people.profiles()[0]))}
           onRename={(value) => setSteps((current) => renameStep(current, index, value))}
-          onRemove={() => askRemove(index)} />
+          onRemove={() => askRemove(index)} onMove={(by) => reorder(index, index + by)} />
       )}
     </Show>
   );
@@ -399,7 +399,7 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
                         error={problem('name')} onChange={(value: string) => patch({ name: value })} />
                     </div>
                     <label data-vesta="server-automation-enabled">
-                      <Switch size="sm" aria-label={t(isNew ? 'server-automation.enable-on-create' : 'server-automation.enabled', { name: current().name })}
+                      <Switch aria-label={t(isNew ? 'server-automation.enable-on-create' : 'server-automation.enabled', { name: current().name })}
                         checked={current().enabled} disabled={!canManage() || toggling()} onChange={(value: boolean) => void setEnabled(value)} />
                       <span>{t(isNew ? 'server-automation.enable-on-create' : current().enabled ? 'server-automation.on' : 'server-automation.off')}</span>
                     </label>

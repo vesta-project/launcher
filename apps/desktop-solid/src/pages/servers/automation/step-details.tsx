@@ -24,7 +24,7 @@ export function StepDetails(props: {
   /** A group to open on arrival, e.g. when a problem in it was chosen from the summary. */
   reveal?: ProblemArea | null;
   onChange: (step: DraftStep) => void; onKind: (kind: ActionKind) => void; onRename: (id: string) => void;
-  onRemove: () => void; onClose?: () => void;
+  onRemove: () => void; onMove: (by: -1 | 1) => void; onClose?: () => void;
 }) {
   const at = () => `steps.${props.index}`;
   const [flowOpen, setFlowOpen] = createSignal(props.reveal === 'flow' || props.invalidAt(`steps.${props.index}.timeout`) || props.invalidAt(`steps.${props.index}.retries`)
@@ -80,6 +80,11 @@ export function StepDetails(props: {
             options={ACTION_ORDER.map((kind) => ({ value: kind, label: t(actionLabels[kind]) }))} onChange={(value: string) => props.onKind(value as ActionKind)} />
         </div>
         <Show when={!props.disabled}>
+          {/* The visible alternative to dragging; the step stays open as it moves. */}
+          <IconButton size="sm" variant="ghost" label={t('server-automation.move-up')} icon={<Icon name="icons/controls/chevron-up" />}
+            disabled={props.index === 0} onClick={() => props.onMove(-1)} />
+          <IconButton size="sm" variant="ghost" label={t('server-automation.move-down')} icon={<Icon name="icons/controls/chevron-down" />}
+            disabled={props.index >= props.steps.length - 1} onClick={() => props.onMove(1)} />
           <IconButton size="sm" variant="ghost" tone="danger" label={t('server-automation.remove-step')} icon={<Icon name="icons/actions/delete" />}
             disabled={props.steps.length <= 1} onClick={() => props.onRemove()} />
         </Show>
