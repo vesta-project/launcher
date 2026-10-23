@@ -7,7 +7,7 @@ import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { isPlayerName, newIntentId } from '../../../features/servers/model';
-import { afterFailure, frozen, isWhitelist, moderationRequest, routeFor, standing, type Attempt } from '../../../features/servers/moderation-attempt';
+import { afterFailure, isWhitelist, moderationRequest, routeFor, standing, type Attempt } from '../../../features/servers/moderation-attempt';
 import { banDuration } from '../../../features/servers/operations-model';
 import {
   BAN_DURATIONS, PLAYER_FILTERS, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, shortUuid, type KnownPlayer, type PlayerFilter,
@@ -323,7 +323,7 @@ function ModerationDialog(props: {
   const remaining = () => Math.max(0, Math.ceil(((confirm()?.expiresAtMs ?? 0) - now()) / 1000));
   /** The confirmation step still stands: within its countdown, or its answer was lost. */
   const confirming = () => !!confirm() && (remaining() > 0 || !!confirm()!.uncertain);
-  const locked = () => busy() || frozen(attempt());
+  const locked = () => busy() || !!standing(attempt(), now());
   const uncertain = () => !!attempt()?.uncertain || !!confirm()?.uncertain;
   const takesReason = () => action() === 'kick' || action() === 'ban';
   const adding = () => !props.request.player && (props.request.choices?.length ?? 0) > 1;

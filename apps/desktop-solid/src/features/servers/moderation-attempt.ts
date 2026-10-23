@@ -78,14 +78,18 @@ export function standing(attempt: Attempt | null, nowMs: number): Attempt | null
   return frozen(attempt) ? attempt : null;
 }
 
-/** What remains of the attempt after a failed send. */
+/**
+ * What remains of the attempt after a failed send. A refusal of a retry says nothing about
+ * an earlier send whose answer was lost, so uncertainty, once set, stays until the dialog
+ * closes; only a first send that is definitely refused releases the request.
+ */
 export function afterFailure(attempt: Attempt, code: ServerErrorCode, nowMs: number): Attempt | null {
+  const uncertain = outcomeUncertain(code);
   if (attempt.confirm) {
-    // The server definitely refused the confirmation: start again from preparation.
+    if (attempt.confirm.uncertain || uncertain) return { ...attempt, confirm: { ...attempt.confirm, uncertain: true } };
+    // Never sent before, and refused: the server said the confirmation is gone, or it lapses with its countdown.
     if (code === 'confirmation_expired') return null;
-    if (outcomeUncertain(code)) return { ...attempt, confirm: { ...attempt.confirm, uncertain: true } };
-    // A definite refusal leaves the prepared request usable until it expires.
-    return attempt.confirm.expiresAtMs > nowMs ? { ...attempt, confirm: { ...attempt.confirm, uncertain: false } } : null;
+    return attempt.confirm.expiresAtMs > nowMs ? attempt : null;
   }
-  return outcomeUncertain(code) ? { ...attempt, uncertain: true } : null;
+  return attempt.uncertain || uncertain ? { ...attempt, uncertain: true } : null;
 }

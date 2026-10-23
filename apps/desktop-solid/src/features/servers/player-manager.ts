@@ -69,7 +69,8 @@ export function mergePlayers(sources: PlayerSources): KnownPlayer[] {
   for (const item of sources.whitelist ?? []) entry(item.name, item.uuid).whitelisted = true;
   for (const item of sources.ops ?? []) entry(item.name, item.uuid).operator = { level: item.level, bypassesPlayerLimit: item.bypassesPlayerLimit };
   for (const item of sources.bans ?? []) entry(item.name, item.uuid).ban = { reason: item.reason, created: item.created, expires: item.expires, source: item.source };
-  if (sources.roster?.known) for (const name of sources.roster.names) entry(name).online = true;
+  // The live name is the current one; actions on the row target it, not an older alias.
+  if (sources.roster?.known) for (const name of sources.roster.names) Object.assign(entry(name), { online: true, name });
   return [...players.values()].sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 

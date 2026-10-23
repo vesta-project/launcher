@@ -149,7 +149,8 @@ describe('[players] one manager over whitelist, operators, bans and the live ros
       roster: { known: true, generation: 'g1', playerCount: 1, names: ['NewName'] },
     });
     expect(players).toHaveLength(1);
-    expect(players[0]).toMatchObject({ key: 'uuid:44444444-0000-0000-0000-000000000000', whitelisted: true, online: true, operator: { level: 3 } });
+    // Kick and other actions target the live name, not the older alias.
+    expect(players[0]).toMatchObject({ key: 'uuid:44444444-0000-0000-0000-000000000000', name: 'NewName', whitelisted: true, online: true, operator: { level: 3 } });
   });
 
   test('an ambiguous roster name stays its own row', () => {

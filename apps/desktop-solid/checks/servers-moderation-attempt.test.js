@@ -25,9 +25,13 @@ describe('[players] a moderation request is frozen once it may have reached the 
     expect(standing(after, 10_000_000)?.generation).toBe('g1');
   });
 
-  test('a definite refusal releases the request', () => {
+  test('a definite refusal releases the request, unless an earlier send was uncertain', () => {
     expect(afterFailure(base, 'forbidden', 0)).toBeNull();
     expect(standing(null, 0)).toBeNull();
+    const lost = afterFailure(base, 'network_error', 0);
+    // Retry refused locally or by the server: the first send may still have been applied.
+    expect(afterFailure(lost, 'credentials_unavailable', 0)).toMatchObject({ intentId: 'i1', generation: 'g1', uncertain: true });
+    expect(afterFailure(lost, 'forbidden', 0)?.intentId).toBe('i1');
   });
 
   test('a lost confirmation stays the retry even after its countdown, and expiry from the server restarts', () => {
@@ -38,7 +42,9 @@ describe('[players] a moderation request is frozen once it may have reached the 
     const lost = afterFailure(awaiting, 'network_error', 500);
     expect(lost.confirm.uncertain).toBe(true);
     expect(standing(lost, 5000)?.confirm.intentId).toBe('i1');
-    expect(afterFailure(lost, 'confirmation_expired', 5000)).toBeNull();
+    // An expiry answer to a retry doesn't prove the lost confirmation wasn't applied.
+    expect(afterFailure(lost, 'confirmation_expired', 5000)?.confirm.uncertain).toBe(true);
+    expect(afterFailure(awaiting, 'confirmation_expired', 500)).toBeNull();
     // A definite refusal keeps the prepared request only within its countdown.
     expect(afterFailure(awaiting, 'forbidden', 500)?.confirm.intentId).toBe('i1');
     expect(afterFailure(awaiting, 'forbidden', 1500)).toBeNull();
