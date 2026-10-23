@@ -112,6 +112,15 @@
     --button-bg-active: oklch(1 0 0 / 0.22);
   }
 
+  /* Outline actions sit on the art in both themes, so they keep light text and a light edge. */
+  :where([data-vesta="instance-header-actions"])
+    :where([data-vesta="button"][data-variant="outline"]:not([data-tone="danger"])) {
+    --button-fg: oklch(0.98 0 0);
+    --button-border-color: oklch(1 0 0 / 0.35);
+    --button-bg-hover: oklch(1 0 0 / 0.16);
+    --button-bg-active: oklch(1 0 0 / 0.22);
+  }
+
   /* Problem strip: sits under the art, in the same gutter. */
   :where([data-vesta="instance-notice"]) {
     position: relative;

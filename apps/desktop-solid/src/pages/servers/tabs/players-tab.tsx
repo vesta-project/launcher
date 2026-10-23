@@ -1,77 +1,74 @@
-import { Button, Dialog, SegmentedControl, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TextField, toast } from '@vesta/ui';
-import { For, Show, createSignal, untrack } from 'solid-js';
+import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, TextField, toast } from '@vesta/ui';
+import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
+import { EmptyLine, EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
-import { formatNumber, t } from '../../../localization';
+import { formatDate, formatNumber, t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { IntentMemo, isPlayerName } from '../../../features/servers/model';
+import { banDuration } from '../../../features/servers/operations-model';
+import {
+  BAN_DURATIONS, PLAYER_FILTERS, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, shortUuid, type KnownPlayer, type PlayerFilter,
+} from '../../../features/servers/player-manager';
+import { effectiveValue, parseProperties, propertyDef } from '../../../features/servers/properties-model';
 import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
-import { bansResource, operatorsResource, whitelistResource } from '../../../features/servers/server-resources';
+import { PLAYER_LIST_RESOURCES, bansResource, operatorsResource, propertiesResource, whitelistResource } from '../../../features/servers/server-resources';
 import { agentReachable } from '../../../features/servers/shell-model';
-import { putOperations, serverCommand, useServerRoster, useServersClock } from '../../../features/servers/store';
-import type { ModerationAction, PlayersView, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import { ServerErrorNote } from '../parts';
+import { putOperations, serverCommand, serverPlayers, useServersClock } from '../../../features/servers/store';
+import type { ModerationAction, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
+import { Sensitive, ServerErrorNote } from '../parts';
+import { CopyValue, SectionLink, SettingsPage, SettingsSearch } from '../settings-parts';
 
-type ListView = 'whitelist' | 'ops' | 'bans';
-type Request = { action: ModerationAction['action']; player: string };
-
-/** Moderation changes any of the player lists; shown lists revalidate, keeping their rows meanwhile. */
-const PLAYER_RESOURCES = ['players', 'whitelist', 'operators', 'bans'];
+type Action = ModerationAction['action'];
+type Request = { action: Action; player: string; choices?: Action[] };
 
 const running = (snapshot: ServerSnapshot) => snapshot.status?.state === 'running' && !!snapshot.status.generation;
+const isWhitelist = (action: Action) => action === 'whitelist_add' || action === 'whitelist_remove';
 
 /**
- * Who is online right now, for the Overview. Names come from the agent for the current run;
- * a list from another run, or a count the server can't observe, reads as unknown.
+ * Who is online right now, for the Overview, from the shared live roster. Join and leave
+ * events keep it current; a roster from another run, or one the server can't observe,
+ * reads as unknown.
  */
 export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-online:dialog' });
-  const generation = () => props.snapshot.status?.generation ?? null;
   const reachable = () => agentReachable(props.snapshot);
   const live = () => reachable() && running(props.snapshot);
-  const players = useServerRoster(() => props.snapshot);
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
-  /** The list for the run on screen, or null when it can't be trusted. */
+  /** The roster for the run on screen, or null when it can't be trusted. */
   const known = () => {
-    const value: PlayersView | undefined = players.value();
-    if (!value?.known || value.generation !== generation()) return null;
-    return value;
+    const roster = serverPlayers(id());
+    return live() && roster.known && roster.generation === props.snapshot.status?.generation ? roster : null;
   };
-  const count = () => (live() ? known()?.playerCount ?? null : null);
 
   return (
     <section data-vesta="server-recent" data-server-online>
       <h2>
         {t('servers.overview.online-players')}
-        <Show when={count() !== null}><span data-vesta="instance-tab-count">{formatNumber(count()!)}</span></Show>
+        <Show when={known()}>{(roster) => <span data-vesta="instance-tab-count">{formatNumber(roster().playerCount)}</span>}</Show>
       </h2>
-      <ServerErrorNote error={players.error()} onRetry={() => void players.refresh()} />
       <Show
-        when={live() ? known() : null}
+        when={known()}
         fallback={
-          <p data-vesta="server-muted" data-server-online-note>
-            {!reachable()
-              ? t('servers.players.unknown-offline')
-              : !running(props.snapshot)
-                ? t('servers.players.not-running')
-                : players.loading() ? t('servers.loading') : t('servers.players.unknown')}
-          </p>
+          <EmptyLine>
+            {!reachable() ? t('servers.players.unknown-offline') : !running(props.snapshot) ? t('servers.players.not-running') : t('servers.loading')}
+          </EmptyLine>
         }
       >
-        {(list) => (
+        {(roster) => (
           <Show
-            when={list().names.length > 0}
+            when={roster().names.length > 0}
             fallback={
-              <p data-vesta="server-muted" data-server-online-note>
+              <EmptyLine>
                 {/* The agent withholds names it can't safely display; the count stays authoritative. */}
-                {list().playerCount > 0 ? t('servers.players.names-withheld', { count: list().playerCount }) : t('servers.players.nobody')}
-              </p>
+                {roster().playerCount > 0 ? t('servers.players.names-withheld', { count: roster().playerCount }) : t('servers.players.nobody')}
+              </EmptyLine>
             }
           >
             <ul data-vesta="server-activity-list" data-server-players>
-              <For each={list().names}>
+              <For each={roster().names}>
                 {(name) => (
                   <li data-vesta="server-activity-row" data-compact>
                     <span data-vesta="server-activity-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
@@ -90,137 +87,256 @@ export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
         )}
       </Show>
       <Show when={dialog()} keyed>
-        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_RESOURCES)} />}
+        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>
     </section>
   );
 }
 
-/** Whitelist, operators and bans, in the Players settings section. */
-export function PlayerListsSection(props: { snapshot: ServerSnapshot }) {
+const filterLabels: Record<PlayerFilter, MessageId> = {
+  all: 'servers.people.filter-all', online: 'servers.people.filter-online', whitelisted: 'servers.people.filter-whitelisted',
+  operators: 'servers.people.filter-operators', banned: 'servers.people.filter-banned',
+};
+
+/**
+ * Players: everyone the server knows (whitelist, operators, bans and who is online) in one
+ * searchable list. A row opens to show the UUID and what you can do about that player.
+ */
+export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
-  const [view, setView] = createSignal<ListView>('whitelist', { name: 'server-players:view' });
+  const [filter, setFilter] = createSignal<PlayerFilter>('all', { name: 'server-players:filter' });
+  const [query, setQuery] = createSignal('', { name: 'server-players:query' });
+  const [expanded, setExpanded] = createSignal<string | null>(null, { name: 'server-players:expanded' });
   const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-players:dialog' });
-  const whitelist = useServerResource(id, whitelistResource, { enabled: () => view() === 'whitelist' });
-  const ops = useServerResource(id, operatorsResource, { enabled: () => view() === 'ops' });
-  const bans = useServerResource(id, bansResource, { enabled: () => view() === 'bans' });
-  const current = () => (view() === 'whitelist' ? whitelist : view() === 'ops' ? ops : bans);
+  const whitelist = useServerResource(id, whitelistResource);
+  const ops = useServerResource(id, operatorsResource);
+  const bans = useServerResource(id, bansResource);
+  const configVisible = () => gate(props.snapshot.capabilities, 'config.view') !== 'denied';
+  const properties = useServerResource(id, propertiesResource, { enabled: configVisible });
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
   const operator = () => gate(props.snapshot.capabilities, 'players.operator') !== 'denied';
   const live = () => running(props.snapshot);
+  /** Whitelist edits also work while stopped: the agent saves them for the next start. */
   const canWhitelist = () => agentReachable(props.snapshot) && (live() || props.snapshot.status?.state === 'stopped');
+  const canAct = (action: Action) =>
+    isWhitelist(action) ? moderate() && canWhitelist() : live() && (action === 'op' || action === 'deop' ? operator() : moderate());
 
-  const views: { value: ListView; label: MessageId }[] = [
-    { value: 'whitelist', label: 'servers.players.whitelist' },
-    { value: 'ops', label: 'servers.players.operators' },
-    { value: 'bans', label: 'servers.players.bans' },
-  ];
+  const players = createMemo(() => mergePlayers({ whitelist: whitelist.value(), ops: ops.value(), bans: bans.value(), roster: serverPlayers(id()) }), { name: 'server-players:merged' });
+  const counts = createMemo(() => filterCounts(players()), { name: 'server-players:counts' });
+  const shown = createMemo(() => filterPlayers(players(), filter(), query()), { name: 'server-players:shown' });
+  const loading = () => whitelist.loading() || ops.loading() || bans.loading();
+  const listError = () => whitelist.error() ?? ops.error() ?? bans.error();
+  /** Whitelist on/off from server.properties, when this role can see it. */
+  const whitelistOn = () => {
+    const file = properties.value();
+    if (!file) return null;
+    return effectiveValue(propertyDef('white-list')!, parseProperties(file.values).typed) === true;
+  };
+  const dateText = (ms: number) => formatDate(ms, { dateStyle: 'medium' });
+  const ask = (request: Request) => setDialog(request);
 
   return (
-    <div data-vesta="server-players">
-      <div data-vesta="server-players-bar">
-        <SegmentedControl aria-label={t('servers.tab.players')} value={view()} onChange={(value) => setView(value as ListView)} options={views.map((entry) => ({ value: entry.value, label: t(entry.label) }))} />
-        <Show when={moderate() && (view() === 'whitelist' ? canWhitelist() : live()) && view() !== 'ops'}>
-          <Button size="sm" variant="outline" onClick={() => setDialog({ action: view() === 'bans' ? 'ban' : 'whitelist_add', player: '' })}>
-            {t(view() === 'bans' ? 'servers.players.ban-player' : 'servers.players.add-whitelist')}
+    <SettingsPage>
+      <Show when={whitelistOn() !== null}>
+        <div data-vesta="server-callout" data-tone={whitelistOn() ? 'success' : 'neutral'} data-server-whitelist-status>
+          <Icon name={whitelistOn() ? 'icons/security/shield-check' : 'icons/security/shield-off'} size={16} />
+          <span>{whitelistOn() ? t('servers.people.whitelist-on') : t('servers.people.whitelist-off')}</span>
+          <span data-vesta="server-toolbar-spacer" />
+          <SectionLink section="game">{t('servers.people.whitelist-change')}</SectionLink>
+        </div>
+      </Show>
+      <Show when={!live()}>
+        <p data-vesta="server-callout" data-tone="neutral" role="status">{t('servers.people.not-running')}</p>
+      </Show>
+
+      <div data-vesta="server-settings-bar">
+        <SegmentedControl
+          size="md"
+          aria-label={t('servers.tab.players')}
+          value={filter()}
+          onChange={(value) => setFilter(value as PlayerFilter)}
+          options={PLAYER_FILTERS.map((entry) => ({ value: entry, label: entry === 'all' ? t(filterLabels[entry]) : `${t(filterLabels[entry])} ${counts()[entry]}` }))}
+        />
+        <SettingsSearch value={query()} onChange={setQuery} placeholder={t('servers.people.search')} />
+        <Show when={moderate() || operator()}>
+          <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
+            {t('servers.people.add')}
           </Button>
         </Show>
-        <Show when={operator() && live() && view() === 'ops'}>
-          <Button size="sm" variant="outline" onClick={() => setDialog({ action: 'op', player: '' })}>{t('servers.players.make-operator')}</Button>
-        </Show>
-        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={current().refreshing()} onClick={() => void current().refresh()}>{t('servers.refresh')}</Button>
       </div>
-      <ServerErrorNote error={current().error()} onRetry={() => void current().refresh()} />
+      <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
 
-      <Show when={current().loading()}><p data-vesta="server-muted">{t('servers.loading')}</p></Show>
-      <Show when={view() === 'whitelist' ? whitelist.value() : undefined}>
-        {(rows) => (
-          <PlayerTable rows={rows()} empty="servers.players.whitelist-empty" actions={(name) => (
-            <Show when={moderate() && canWhitelist()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'whitelist_remove', player: name })}>{t('common.remove')}</Button></Show>
-          )} />
-        )}
-      </Show>
-      <Show when={view() === 'ops' ? ops.value() : undefined}>
-        {(rows) => (
-          <PlayerTable rows={rows().map((entry) => ({ name: entry.name, detail: t('servers.players.level', { count: entry.level }) }))} empty="servers.players.ops-empty" actions={(name) => (
-            <Show when={operator() && live()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'deop', player: name })}>{t('servers.moderate.deop')}</Button></Show>
-          )} />
-        )}
-      </Show>
-      <Show when={view() === 'bans' ? bans.value() : undefined}>
-        {(rows) => (
-          <PlayerTable rows={rows().map((entry) => ({ name: entry.name, detail: entry.reason }))} empty="servers.players.bans-empty" actions={(name) => (
-            <Show when={moderate() && live()}><Button size="sm" variant="ghost" onClick={() => setDialog({ action: 'pardon', player: name })}>{t('servers.moderate.pardon')}</Button></Show>
-          )} />
-        )}
+      <Show when={!loading() || players().length > 0} fallback={<EmptyLine role="status">{t('servers.loading')}</EmptyLine>}>
+        <Show
+          when={players().length > 0}
+          fallback={
+            <EmptyState variant="inline" icon="icons/content/people" title={t('servers.people.empty-title')} description={t('servers.people.empty-description')} />
+          }
+        >
+          <Show when={shown().length > 0} fallback={<EmptyLine role="status">{query().trim() ? t('servers.people.no-match') : t('servers.people.filter-empty')}</EmptyLine>}>
+            <ul data-vesta="server-player-list">
+              <For each={shown()}>
+                {(player) => (
+                  <PlayerRow
+                    player={player}
+                    open={expanded() === player.key}
+                    onToggle={() => setExpanded((current) => (current === player.key ? null : player.key))}
+                    chips={playerChips(player, dateText)}
+                    canAct={canAct}
+                    onAction={(action) => ask({ action, player: player.name })}
+                    date={dateText}
+                  />
+                )}
+              </For>
+            </ul>
+          </Show>
+        </Show>
       </Show>
 
       <Show when={dialog()} keyed>
-        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_RESOURCES)} />}
+        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>
-    </div>
+    </SettingsPage>
   );
+
+  function addChoices(): Action[] {
+    return (['whitelist_add', 'op', 'ban'] as const).filter((action) => canAct(action));
+  }
 }
 
-function PlayerTable(props: { rows: { name: string; detail?: string }[]; empty?: MessageId; actions: (name: string) => unknown }) {
+function PlayerRow(props: {
+  player: KnownPlayer;
+  open: boolean;
+  onToggle: () => void;
+  chips: ReturnType<typeof playerChips>;
+  canAct: (action: Action) => boolean;
+  onAction: (action: Action) => void;
+  date: (ms: number) => string;
+}) {
+  const ban = () => props.player.ban;
+  const expiry = () => (ban() ? banExpiry(ban()!.expires) : null);
+  const created = () => { const value = ban() ? banExpiry(ban()!.created) : null; return value && !value.permanent ? props.date(value.atMs) : null; };
   return (
-    <Show when={props.rows.length > 0} fallback={<Show when={props.empty}><p data-vesta="server-muted">{t(props.empty!)}</p></Show>}>
-      <Table>
-        <TableHeader>
-          <TableRow><TableHead>{t('servers.players.name')}</TableHead><TableHead>{t('servers.players.detail')}</TableHead><TableHead /></TableRow>
-        </TableHeader>
-        <TableBody>
-          <For each={props.rows}>
-            {(row) => (
-              <TableRow>
-                <TableCell>{row.name}</TableCell>
-                <TableCell>{row.detail ?? ''}</TableCell>
-                <TableCell><div data-vesta="server-row-actions">{props.actions(row.name) as never}</div></TableCell>
-              </TableRow>
-            )}
-          </For>
-        </TableBody>
-      </Table>
-    </Show>
+    <li data-vesta="server-player" data-open={props.open ? '' : undefined}>
+      <button type="button" data-vesta="server-player-row" aria-expanded={props.open ? 'true' : 'false'} onClick={() => props.onToggle()}>
+        <span data-vesta="server-activity-avatar" data-online={props.player.online ? '' : undefined} aria-hidden="true">{props.player.name.slice(0, 1).toUpperCase()}</span>
+        <span data-vesta="server-player-name">
+          <strong>{props.player.name}</strong>
+          <Show when={props.player.uuid}>{(uuid) => <small><Sensitive label={t('servers.people.uuid')}>{shortUuid(uuid())}</Sensitive></small>}</Show>
+        </span>
+        <span data-vesta="server-player-chips">
+          <For each={props.chips}>{(chip) => <Badge size="sm" variant="soft" tone={chip.tone}>{t(chip.message, chip.args)}</Badge>}</For>
+        </span>
+        <Icon name="icons/controls/chevron-right" size={14} />
+      </button>
+      <Show when={props.open}>
+        <div data-vesta="server-player-detail">
+          <div data-vesta="server-player-uuid">
+            <span>{t('servers.people.uuid')}</span>
+            <Show when={props.player.uuid} fallback={<span>{t('servers.people.no-uuid')}</span>}>
+              {(uuid) => <CopyValue value={uuid()} label={t('servers.people.copy-uuid')}><Sensitive label={t('servers.people.uuid')}>{uuid()}</Sensitive></CopyValue>}
+            </Show>
+          </div>
+          <div data-vesta="server-player-facts">
+            <div data-vesta="server-player-fact">
+              <span>{t('servers.people.whitelist-section')}</span>
+              <p>{props.player.whitelisted ? t('servers.people.on-whitelist') : t('servers.people.not-on-whitelist')}</p>
+              <Button size="sm" variant="outline" disabled={!props.canAct(props.player.whitelisted ? 'whitelist_remove' : 'whitelist_add')}
+                onClick={() => props.onAction(props.player.whitelisted ? 'whitelist_remove' : 'whitelist_add')}>
+                {props.player.whitelisted ? t('servers.moderate.whitelist-remove') : t('servers.players.add-whitelist')}
+              </Button>
+            </div>
+            <div data-vesta="server-player-fact">
+              <span>{t('servers.people.operator-section')}</span>
+              <Show when={props.player.operator} fallback={<p>{t('servers.people.not-operator')}</p>}>
+                {(op) => (
+                  <p>
+                    {t('servers.people.operator-level', { count: op().level })}
+                    <small>{t('servers.people.operator-level-help')}{op().bypassesPlayerLimit ? ` ${t('servers.people.bypass')}` : ''}</small>
+                  </p>
+                )}
+              </Show>
+              <Button size="sm" variant="outline" disabled={!props.canAct(props.player.operator ? 'deop' : 'op')} onClick={() => props.onAction(props.player.operator ? 'deop' : 'op')}>
+                {props.player.operator ? t('servers.moderate.deop') : t('servers.players.make-operator')}
+              </Button>
+            </div>
+            <div data-vesta="server-player-fact" data-tone={ban() ? 'danger' : undefined}>
+              <span>{t('servers.people.ban-section')}</span>
+              <Show when={ban()} fallback={<p>{t('servers.people.not-banned')}</p>}>
+                {(entry) => (
+                  <p>
+                    {entry().reason || t('servers.people.no-reason')}
+                    <small>
+                      {[
+                        entry().source ? t('servers.people.ban-by', { name: entry().source }) : null,
+                        created() ? t('servers.people.ban-since', { time: created()! }) : null,
+                        expiry() && !expiry()!.permanent ? t('servers.people.ban-ends', { time: props.date((expiry() as { atMs: number }).atMs) }) : t('servers.people.ban-permanent'),
+                      ].filter(Boolean).join(' · ')}
+                    </small>
+                  </p>
+                )}
+              </Show>
+              <Button size="sm" variant="outline" tone={ban() ? undefined : 'danger'} disabled={!props.canAct(ban() ? 'pardon' : 'ban')} onClick={() => props.onAction(ban() ? 'pardon' : 'ban')}>
+                {ban() ? t('servers.people.unban') : t('servers.people.ban')}
+              </Button>
+            </div>
+          </div>
+          <Show when={props.player.online}>
+            <div>
+              <Button size="sm" variant="ghost" disabled={!props.canAct('kick')} onClick={() => props.onAction('kick')}>{t('servers.people.kick')}</Button>
+            </div>
+          </Show>
+        </div>
+      </Show>
+    </li>
   );
 }
 
-const actionTitles: Record<ModerationAction['action'], MessageId> = {
-  kick: 'servers.moderate.kick', ban: 'servers.moderate.ban', pardon: 'servers.moderate.pardon',
+const actionTitles: Record<Action, MessageId> = {
+  kick: 'servers.moderate.kick', ban: 'servers.people.ban', pardon: 'servers.people.unban',
   whitelist_add: 'servers.players.add-whitelist', whitelist_remove: 'servers.moderate.whitelist-remove',
   op: 'servers.players.make-operator', deop: 'servers.moderate.deop', kill: 'servers.moderate.kill', lightning: 'servers.moderate.lightning',
 };
+const choiceLabels: Partial<Record<Action, MessageId>> = {
+  whitelist_add: 'servers.people.add-whitelist-choice', op: 'servers.people.add-operator-choice', ban: 'servers.people.add-ban-choice',
+};
 
+/** Every moderation change, with the server's confirmation step for operators. */
 function ModerationDialog(props: {
   snapshot: ServerSnapshot;
   /** Each request mounts a fresh dialog, so its fields start from the request. */
-  request: { action: ModerationAction['action']; player: string };
+  request: Request;
   onClose: () => void;
+  /** After an accepted change: reread the lists it touches. */
   onDone: () => void;
 }) {
   const now = useServersClock();
-  const [player, setPlayer] = createSignal(untrack(() => props.request.player));
-  const [reason, setReason] = createSignal('');
-  const [busy, setBusy] = createSignal(false);
-  const [error, setError] = createSignal<ServerCommandError | null>(null);
-  const [awaiting, setAwaiting] = createSignal<{ intentId: string; expiresAtMs: number; player: string } | null>(null);
-  const [uncertain, setUncertain] = createSignal(false);
+  const [action, setAction] = createSignal<Action>(untrack(() => props.request.action), { name: 'server-moderate:action' });
+  const [player, setPlayer] = createSignal(untrack(() => props.request.player), { name: 'server-moderate:player' });
+  const [reason, setReason] = createSignal('', { name: 'server-moderate:reason' });
+  const [duration, setDuration] = createSignal('permanent', { name: 'server-moderate:duration' });
+  const [busy, setBusy] = createSignal(false, { name: 'server-moderate:busy' });
+  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-moderate:error' });
+  const [awaiting, setAwaiting] = createSignal<{ intentId: string; expiresAtMs: number; player: string } | null>(null, { name: 'server-moderate:awaiting' });
+  const [uncertain, setUncertain] = createSignal(false, { name: 'server-moderate:uncertain' });
   const intents = new IntentMemo();
-  const action = () => props.request.action;
   const takesReason = () => action() === 'kick' || action() === 'ban';
   const remaining = () => Math.max(0, Math.ceil(((awaiting()?.expiresAtMs ?? 0) - now()) / 1000));
   /** Once prepared, the confirmation is bound to that exact player; the field locks. */
   const locked = () => !!props.request.player || uncertain() || (!!awaiting() && remaining() > 0);
+  const adding = () => !props.request.player && (props.request.choices?.length ?? 0) > 1;
   let offlineRevision: { sha256: string | null } | null = null;
   let desiredGeneration: string | null = null;
 
   const submit = async () => {
     const kind = action();
     const generation = props.snapshot.status?.generation;
-    const whitelist = kind === 'whitelist_add' || kind === 'whitelist_remove';
+    // Whitelist edits go to the agent's file edit while stopped, or its desired-membership
+    // queue once a run exists; everything else needs the running server.
+    const whitelist = isWhitelist(kind);
     const offlineWhitelist = whitelist && ((!desiredGeneration && props.snapshot.status?.state === 'stopped' && !generation) || (intents.uncertain && offlineRevision !== null));
     const desiredWhitelist = whitelist && !offlineWhitelist && !!(generation || desiredGeneration);
-    if (!kind || (!generation && !offlineWhitelist && !desiredWhitelist) || !isPlayerName(player())) return;
+    if ((!generation && !offlineWhitelist && !desiredWhitelist) || !isPlayerName(player())) return;
     setBusy(true); setError(null);
     const id = props.snapshot.connection.id;
     try {
@@ -243,7 +359,12 @@ function ModerationDialog(props: {
         const operation = await serverCommand((client) => client.moderateConfirm(id, pending.intentId));
         putOperations(id, [{ ...operation, intent: operation.intent ?? 'players.moderate' }]);
       } else {
-        const request = { action: kind, player: player(), ...(takesReason() && reason().trim() ? { reason: reason().trim() } : {}) } as ModerationAction;
+        const seconds = duration() === 'permanent' ? null : Number(duration());
+        const request = {
+          action: kind, player: player(),
+          ...(takesReason() && reason().trim() ? { reason: reason().trim() } : {}),
+          ...(kind === 'ban' && seconds ? { durationSeconds: seconds } : {}),
+        } as ModerationAction;
         // Identical retries after an uncertain outcome keep the same intent.
         const intentId = intents.idFor({ request, generation });
         const result = await serverCommand((client) => client.moderate(id, request, generation!, intentId));
@@ -268,27 +389,40 @@ function ModerationDialog(props: {
     <Dialog
       open
       onOpenChange={(open) => { if (!open) props.onClose(); }}
-      title={t(actionTitles[action()])}
+      title={adding() ? t('servers.people.add-title') : t(actionTitles[action()])}
       size="sm"
       footer={
         <>
           <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
           <Button tone={action() === 'ban' || action() === 'op' ? 'danger' : 'accent'} disabled={busy() || !isPlayerName(player())} onClick={() => void submit()}>
-            {awaiting() && remaining() > 0 ? t('servers.moderate.confirm', { count: remaining() }) : t('servers.moderate.apply')}
+            {awaiting() && remaining() > 0 ? t('servers.moderate.confirm', { count: remaining() }) : t(actionTitles[action()])}
           </Button>
         </>
       }
     >
+      <Show when={adding()}>
+        <SegmentedControl size="md" fill aria-label={t('servers.people.add-as')} value={action()} disabled={!!awaiting() || uncertain()}
+          onChange={(value) => setAction(value as Action)}
+          options={(props.request.choices ?? []).map((choice) => ({ value: choice, label: t(choiceLabels[choice] ?? actionTitles[choice]) }))} />
+      </Show>
       <TextField
         label={t('servers.players.name')}
         value={player()}
         onChange={setPlayer}
         readOnly={locked()}
+        autofocus={!props.request.player}
         error={player() && !isPlayerName(player()) ? t('servers.players.name-format') : undefined}
         spellcheck="false"
       />
       <Show when={takesReason()}>
         <TextField label={t('servers.moderate.reason')} value={reason()} onChange={setReason} maxlength={256} />
+      </Show>
+      <Show when={action() === 'ban'}>
+        <Select label={t('servers.moderate.duration')} value={duration()} onChange={setDuration}
+          options={BAN_DURATIONS.map((seconds) => ({
+            value: seconds === null ? 'permanent' : String(seconds),
+            label: seconds === null ? t('servers.people.ban-permanent') : t(banDuration(seconds).message, { count: banDuration(seconds).count }),
+          }))} />
       </Show>
       <Show when={action() === 'op'}>
         <p data-vesta="server-callout" data-tone="warning">{t('servers.moderate.op-warning')}</p>
@@ -304,3 +438,7 @@ function ModerationDialog(props: {
     </Dialog>
   );
 }
+
+/** Kept for prefetch and checks that name the Players section's lists. */
+export const PLAYER_SECTION_LISTS = [whitelistResource, operatorsResource, bansResource] as const;
+export { IconButton as _PlayersIconButton };

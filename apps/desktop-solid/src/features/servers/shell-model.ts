@@ -39,7 +39,7 @@ export const settingsSections: readonly ShellSection[] = [
   { id: 'general', group: 'server', label: 'servers.settings.general', icon: 'icons/content/gear', needs: ['config.view'], live: true },
   { id: 'game', group: 'server', label: 'servers.settings.game', icon: 'icons/content/sliders', needs: ['config.view'], live: true },
   { id: 'presence', group: 'server', label: 'servers.tab.presence', icon: 'icons/status/live', needs: ['config.view'], live: true },
-  { id: 'players', group: 'people', label: 'servers.tab.players', icon: 'icons/content/chat', needs: ['players.view'], live: true },
+  { id: 'players', group: 'people', label: 'servers.tab.players', icon: 'icons/content/people', needs: ['players.view'], live: true },
   { id: 'access', group: 'people', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ACCESS_NEEDS, live: true },
   { id: 'connection', group: 'device', label: 'servers.tab.connection', icon: 'icons/security/network', needs: [], live: false },
 ];

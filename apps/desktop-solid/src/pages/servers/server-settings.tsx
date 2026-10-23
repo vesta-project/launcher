@@ -11,26 +11,18 @@ import type { ServerSnapshot } from '../../features/servers/native';
 import { refreshServerWithFeedback } from './refresh-button';
 import { AccessTab } from './tabs/access-tab';
 import { ConnectionTab } from './tabs/connection-tab';
-import { PlayerListsSection } from './tabs/players-tab';
+import { PlayerManager } from './tabs/players-tab';
 import { PresenceTab } from './tabs/presence-tab';
 import { PropertiesTab } from './tabs/properties-tab';
 import { ServerProfilePanel } from './tabs/server-profile';
 import '../library/instance/settings-tab.css';
 import '../settings/settings-page.css';
 
-function GeneralSection(props: { snapshot: ServerSnapshot }) {
-  return (
-    <div data-vesta="instance-settings-scroll">
-      <ServerProfilePanel snapshot={props.snapshot} />
-    </div>
-  );
-}
-
 const views: Record<SettingsSectionId, { view: Component<{ snapshot: ServerSnapshot }>; flush: boolean }> = {
-  general: { view: GeneralSection, flush: true },
+  general: { view: ServerProfilePanel, flush: true },
   game: { view: PropertiesTab, flush: true },
   presence: { view: PresenceTab, flush: true },
-  players: { view: PlayerListsSection, flush: false },
+  players: { view: PlayerManager, flush: true },
   access: { view: AccessTab, flush: true },
   connection: { view: ConnectionTab, flush: true },
 };

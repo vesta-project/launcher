@@ -30,5 +30,17 @@ export const backupStorageResource = serverResource('backup-storage', (id): Prom
 export const backupSnapshotsResource = serverResource('backup-snapshots', (id, profile: string) =>
   serverCommand((client) => client.backupSnapshots(id, profile)));
 
-/** Player list resources, by the Players settings view that shows them. */
-export const playerListResources = { whitelist: whitelistResource, ops: operatorsResource, bans: bansResource } as const;
+/** Every player list; moderation operations change them, so they revalidate together when one settles. */
+export const PLAYER_LIST_RESOURCES = ['whitelist', 'operators', 'bans'] as const;
+
+// Settings sections. Each is read once per connection and reused while fresh; saves seed
+// the cache with the server's reply so the next visit shows it without a read.
+export const brandingResource = serverResource('branding', (id) => serverCommand((client) => client.branding(id)));
+export const propertiesResource = serverResource('properties', (id) => serverCommand((client) => client.propertiesGet(id)));
+export const sleepPolicyResource = serverResource('sleep-policy', (id) => serverCommand((client) => client.sleepPolicy(id)));
+export const motdPolicyResource = serverResource('motd-policy', (id) => serverCommand((client) => client.motdPolicy(id)));
+export const usersResource = serverResource('users', async (id) => (await serverCommand((client) => client.users(id, 0))).users);
+export const rolesResource = serverResource('roles', (id) => serverCommand((client) => client.roles(id)));
+export const invitationsResource = serverResource('invitations', (id) => serverCommand((client) => client.invitations(id)));
+export const devicesResource = serverResource('devices', (id) => serverCommand((client) => client.devices(id)));
+export const accessSourcesResource = serverResource('access-sources', (id) => serverCommand((client) => client.accessSources(id)));

@@ -1,5 +1,5 @@
-import { Button, TextArea, TextField, toast } from '@vesta/ui';
-import { Show, createEffect, createSignal } from 'solid-js';
+import { Button, Skeleton, TextArea, TextField, toast } from '@vesta/ui';
+import { Show, createSignal } from 'solid-js';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
 import { serverArt, initials } from '../../../features/servers/art';
@@ -7,20 +7,23 @@ import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { normalizeServerIcon } from '../../../features/servers/icon-image';
 import { IntentMemo } from '../../../features/servers/model';
-import type { ServerBranding } from '../../../features/servers/native-branding';
+import { seedServerResource, useServerResource } from '../../../features/servers/resources';
+import { brandingResource } from '../../../features/servers/server-resources';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { serverCommand, serverIcon, setServerIcon } from '../../../features/servers/store';
 import { ServerErrorNote } from '../parts';
+import { SaveBar, SettingsPage, SettingsPanel } from '../settings-parts';
 
 const NAME_LIMIT = 128;
 const DESCRIPTION_LIMIT = 1024;
 
-/** Server-owned name, description and icon that every connected player sees. */
+/** General: the server-owned name, description and icon that every connected player sees. */
 export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
-  const [branding, setBranding] = createSignal<ServerBranding | null>(null, { name: 'server-profile:branding' });
-  const [name, setName] = createSignal('', { name: 'server-profile:name' });
-  const [description, setDescription] = createSignal('', { name: 'server-profile:description' });
+  const branding = useServerResource(id, brandingResource);
+  // Null drafts read through to the saved profile.
+  const [nameDraft, setNameDraft] = createSignal<string | null>(null, { name: 'server-profile:name' });
+  const [descriptionDraft, setDescriptionDraft] = createSignal<string | null>(null, { name: 'server-profile:description' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-profile:error' });
   const [busy, setBusy] = createSignal(false, { name: 'server-profile:busy' });
   const textIntents = new IntentMemo();
@@ -28,45 +31,39 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   let picker: HTMLInputElement | undefined;
   const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') !== 'denied';
 
-  const apply = (value: ServerBranding) => {
-    setBranding(value);
-    setName(value.name);
-    setDescription(value.description ?? '');
-  };
-  const load = async () => {
-    setError(null);
-    try { apply(await serverCommand((client) => client.branding(id()))); } catch (reason) { setError(reason as ServerCommandError); }
-  };
-  createEffect(id, () => { void load(); }, { name: 'server-profile:load' });
+  const name = () => nameDraft() ?? branding.value()?.name ?? '';
+  const description = () => descriptionDraft() ?? branding.value()?.description ?? '';
+  const discard = () => { setNameDraft(null); setDescriptionDraft(null); };
 
   const patch = () => {
-    const current = branding();
+    const current = branding.value();
     if (!current) return {};
     const next: { name?: string; description?: string } = {};
     if (name().trim() !== current.name) next.name = name().trim();
     if (description() !== (current.description ?? '')) next.description = description();
     return next;
   };
-  const dirty = () => Object.keys(patch()).length > 0;
+  const changeCount = () => Object.keys(patch()).length;
   const nameProblem = () => (!name().trim() ? t('servers.profile.name-required') : [...name()].length > NAME_LIMIT ? t('servers.profile.too-long', { max: NAME_LIMIT }) : undefined);
   const descriptionProblem = () => ([...description()].length > DESCRIPTION_LIMIT ? t('servers.profile.too-long', { max: DESCRIPTION_LIMIT }) : undefined);
 
   const save = async () => {
-    const current = branding();
+    const current = branding.value();
     const changes = patch();
     if (!current || !Object.keys(changes).length) return;
     const intentId = textIntents.idFor({ changes, revision: current.revision });
     setBusy(true); setError(null);
     try {
-      apply(await serverCommand((client) => client.updateBranding(id(), changes, current.revision, intentId)));
+      seedServerResource(id(), brandingResource, await serverCommand((client) => client.updateBranding(id(), changes, current.revision, intentId)));
       textIntents.settle();
+      discard();
       toast.show({ title: t('servers.profile.saved'), tone: 'success' });
     } catch (reason) {
       const failure = reason as ServerCommandError;
       textIntents.settle(failure);
       if (failure.code === 'stale_target') {
         toast.show({ title: t('servers.profile.stale'), tone: 'warning' });
-        await load();
+        await branding.refresh();
       } else setError(failure);
     } finally { setBusy(false); }
   };
@@ -100,40 +97,40 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   };
   const clear = () => writeIcon((intentId) => serverCommand((client) => client.clearIcon(id(), intentId)), { clear: true }, null);
 
-  const fallbackArt = () => serverArt(props.snapshot.connection.serverId || id(), initials(branding()?.name ?? props.snapshot.connection.name));
+  const fallbackArt = () => serverArt(props.snapshot.connection.serverId || id(), initials(branding.value()?.name ?? props.snapshot.connection.name));
 
   return (
-    <section data-vesta="settings-panel" data-server-profile>
-      <h3>{t('servers.profile.title')}</h3>
-      <div data-vesta="settings-panel-body">
-        <ServerErrorNote error={error()} onRetry={branding() ? undefined : () => void load()} />
-        <SettingRow label={t('servers.profile.icon')} description={t('servers.profile.icon-description')}>
-          <img data-vesta="server-profile-icon" src={serverIcon(id()) ?? fallbackArt()} alt="" draggable="false" />
-          <input ref={picker} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden
-            onChange={(event) => { const input = event.currentTarget; void pick(input.files?.[0]); input.value = ''; }} />
-          <Button size="sm" variant="outline" disabled={!canEdit() || busy()} onClick={() => picker?.click()}>{t('servers.profile.icon-upload')}</Button>
-          <Show when={serverIcon(id())}>
-            <Button size="sm" variant="ghost" disabled={!canEdit() || busy()} onClick={() => void clear()}>{t('servers.profile.icon-remove')}</Button>
-          </Show>
-        </SettingRow>
-        <SettingRow label={t('servers.profile.name')} description={t('servers.profile.name-description')}>
-          <TextField size="sm" aria-label={t('servers.profile.name')} value={name()} disabled={!branding() || !canEdit()} error={nameProblem()} onChange={setName} />
-        </SettingRow>
-        <div data-vesta="server-setting-block">
-          <div data-vesta="setting-row-copy">
-            <span data-vesta="setting-row-label">{t('servers.profile.description')}</span>
-            <span data-vesta="setting-row-description">{t('servers.profile.description-help')}</span>
-          </div>
-          <TextArea size="sm" aria-label={t('servers.profile.description')} value={description()} rows={3}
-            disabled={!branding() || !canEdit()} error={descriptionProblem()} onChange={setDescription} />
-        </div>
-        <Show when={dirty()}>
-          <div data-vesta="server-profile-actions">
-            <Button size="sm" variant="ghost" disabled={busy()} onClick={() => { const current = branding(); if (current) apply(current); }}>{t('server-files.discard')}</Button>
-            <Button size="sm" tone="accent" disabled={busy() || !canEdit() || !!nameProblem() || !!descriptionProblem()} onClick={() => void save()}>{t('server-files.save')}</Button>
+    <SettingsPage saveBar={
+      <SaveBar show={changeCount() > 0} label={t('server-settings.unsaved', { count: changeCount() })} busy={busy()}
+        disabled={!canEdit() || !!nameProblem() || !!descriptionProblem()} onDiscard={discard} onSave={() => void save()} />
+    }>
+      <SettingsPanel title={t('servers.profile.title')} description={t('servers.profile.help')} name="profile">
+        <ServerErrorNote error={error() ?? branding.error()} onRetry={() => void branding.refresh()} />
+        <Show when={branding.value()} fallback={<Show when={!branding.error()}><Skeleton height={180} radius={0} /></Show>}>
+          <div data-vesta="settings-panel-body" data-server-profile>
+            <SettingRow label={t('servers.profile.icon')} description={t('servers.profile.icon-description')}>
+              <img data-vesta="server-profile-icon" src={serverIcon(id()) ?? fallbackArt()} alt="" draggable="false" />
+              <input ref={picker} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden
+                onChange={(event) => { const input = event.currentTarget; void pick(input.files?.[0]); input.value = ''; }} />
+              <Button size="sm" variant="outline" disabled={!canEdit() || busy()} onClick={() => picker?.click()}>{t('servers.profile.icon-upload')}</Button>
+              <Show when={serverIcon(id())}>
+                <Button size="sm" variant="ghost" disabled={!canEdit() || busy()} onClick={() => void clear()}>{t('servers.profile.icon-remove')}</Button>
+              </Show>
+            </SettingRow>
+            <SettingRow label={t('servers.profile.name')} description={t('servers.profile.name-description')}>
+              <TextField size="sm" aria-label={t('servers.profile.name')} value={name()} disabled={!canEdit()} error={nameProblem()} onChange={setNameDraft} />
+            </SettingRow>
+            <div data-vesta="server-setting-block">
+              <div data-vesta="setting-row-copy">
+                <span data-vesta="setting-row-label">{t('servers.profile.description')}</span>
+                <span data-vesta="setting-row-description">{t('servers.profile.description-help')}</span>
+              </div>
+              <TextArea size="sm" aria-label={t('servers.profile.description')} value={description()} rows={3}
+                disabled={!canEdit()} error={descriptionProblem()} onChange={setDescriptionDraft} />
+            </div>
           </div>
         </Show>
-      </div>
-    </section>
+      </SettingsPanel>
+    </SettingsPage>
   );
 }
