@@ -199,7 +199,7 @@ export function MotdEditor(props: {
           aria-invalid={props.error ? 'true' : undefined}
           rows={props.formatting ? 2 : 1}
           wrap="soft"
-          spellcheck={false}
+          spellcheck="false"
           readonly={props.readOnly}
           placeholder={props.placeholder}
           value={props.value}

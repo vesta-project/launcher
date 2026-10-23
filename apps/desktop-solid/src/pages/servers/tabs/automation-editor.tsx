@@ -56,7 +56,8 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
   const detail = useServerResource(id, workflowResource, { args: () => props.workflowId, enabled: () => !isNew });
   const people = useAutomationPeople(id, () => props.snapshot, { users: () => true, profiles: () => canManage() });
   const [base, setBase] = createSignal<WorkflowDetail | null>(null, { name: 'server-automation-editor:base' });
-  const [draft, setDraft] = createSignal<EditorDraft | null>(null, { name: 'server-automation-editor:draft' });
+  const initialDraft = isNew ? takeHandOff() ?? keptDraft(untrack(id), 'new')?.draft ?? null : null;
+  const [draft, setDraft] = createSignal<EditorDraft | null>(initialDraft, { name: 'server-automation-editor:draft' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-automation-editor:error' });
   const [stale, setStale] = createSignal(false, { name: 'server-automation-editor:stale' });
   const [saving, setSaving] = createSignal(false, { name: 'server-automation-editor:saving' });
@@ -88,10 +89,8 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
   const steps = () => draft()?.steps ?? [];
 
   // A new workflow starts from what was handed over (template, duplicate) or what was left unsaved.
-  if (isNew) {
-    const start = takeHandOff() ?? keptDraft(untrack(id), 'new')?.draft ?? null;
-    if (start) setDraft(start);
-    else void draftFromTemplate(untrack(id), 'blank', '').then((blank) => { if (!untrack(draft)) setDraft(blank); });
+  if (isNew && !initialDraft) {
+    void draftFromTemplate(untrack(id), 'blank', '').then((blank) => { if (!untrack(draft)) setDraft(blank); });
   }
   // An existing workflow follows its cached definition; someone else's save marks the edits stale.
   createEffect(() => detail.value(), (value) => {
