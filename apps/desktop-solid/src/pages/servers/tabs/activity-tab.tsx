@@ -1,12 +1,15 @@
 import { Badge, Button, SegmentedControl } from '@vesta/ui';
-import { For, Show, createSignal, onSettled } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import type { Tone } from '@vesta/ui';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import { age } from '../../../features/servers/model';
 import { describeOperation, isTerminal, operationStateMessage } from '../../../features/servers/operations-model';
-import { loadOperations, serverOperations, useServersClock } from '../../../features/servers/store';
-import type { ServerCommandError, ServerOperation, ServerSnapshot } from '../../../features/servers/native';
+import { serverOperations, useServersClock } from '../../../features/servers/store';
+import { stableConnectionId } from '../../../features/servers/connection-id';
+import { useServerResource } from '../../../features/servers/resources';
+import { operationsResource } from '../../../features/servers/server-resources';
+import type { ServerOperation, ServerSnapshot } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 
 const stateTone = (operation: ServerOperation): Tone => {
@@ -63,15 +66,8 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = () => props.snapshot.connection.id;
   const [filter, setFilter] = createSignal<'all' | 'mine' | 'running'>('all', { name: 'server-activity:filter' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-activity:error' });
-  const [loading, setLoading] = createSignal(false, { name: 'server-activity:loading' });
-  const refresh = async () => {
-    setLoading(true); setError(null);
-    try { await loadOperations(id()); }
-    catch (reason) { setError(reason as ServerCommandError); }
-    finally { setLoading(false); }
-  };
-  onSettled(() => { void refresh(); });
+  // Shared with Overview: switching between them reuses the read; the topic keeps it live.
+  const tasks = useServerResource(stableConnectionId(() => props.snapshot), operationsResource);
   const visible = () => serverOperations(id()).filter((operation) =>
     filter() === 'all' ? true
       : filter() === 'running' ? !isTerminal(operation) || operation.reconciling
@@ -92,11 +88,11 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
           ]}
         />
         <span data-vesta="server-toolbar-spacer" />
-        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={loading()} onClick={() => void refresh()}>{t('servers.refresh')}</Button>
+        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={tasks.refreshing()} onClick={() => void tasks.refresh()}>{t('servers.refresh')}</Button>
       </div>
       <div data-vesta="server-pane-body">
-        <ServerErrorNote error={error()} onRetry={() => void refresh()} />
-        <Show when={visible().length > 0} fallback={<p data-vesta="server-muted">{t('servers.activity.empty')}</p>}>
+        <ServerErrorNote error={tasks.error()} onRetry={() => void tasks.refresh()} />
+        <Show when={visible().length > 0} fallback={<p data-vesta="server-muted">{tasks.loading() ? t('servers.loading') : t('servers.activity.empty')}</p>}>
           <ul data-vesta="server-activity-list" aria-label={t('servers.tab.activity')}>
             <For each={visible()} keyed={(operation) => operation.operationId}>
               {(operation) => <ActivityRow operation={operation()} now={now()} />}

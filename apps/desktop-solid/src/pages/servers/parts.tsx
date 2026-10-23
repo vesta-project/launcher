@@ -9,6 +9,9 @@ import { groupFingerprint } from '../../features/servers/fingerprint';
 import { age, type Dot, type Fact } from '../../features/servers/model';
 import type { ServerCommandError } from '../../features/servers/native';
 import { useServersClock } from '../../features/servers/store';
+import { serverPressure } from '../../features/servers/resources';
+import { headerExplains } from '../../features/servers/shell-model';
+import { useServerShell } from './shell-context';
 
 /** One state fact as a soft badge. */
 export function FactBadge(props: { fact: Fact; now?: number }) {
@@ -49,15 +52,23 @@ export function Freshness(props: { atMs: number | null; now: number }) {
   );
 }
 
-/** A localized error with its recovery action, if the caller can perform it. */
+/**
+ * A localized error with its recovery action, if the caller can perform it. Inside a server
+ * workspace, connection and capacity errors the header strip already explains stay quiet.
+ */
 export function ServerErrorNote(props: {
   error: ServerCommandError | null | undefined;
   onRetry?: () => void;
 }) {
   const now = useServersClock();
+  const shell = useServerShell();
   const retryAt = createMemo(() => Date.now() + (props.error?.retryAfterMs ?? 0), { name: 'server-error:retry-at' });
+  const explained = () => {
+    const snapshot = shell?.snapshot();
+    return !!snapshot && headerExplains(props.error, snapshot, serverPressure(snapshot.connection.id), now());
+  };
   return (
-    <Show when={props.error}>
+    <Show when={explained() ? null : props.error}>
       {(error) => {
         const presentation = () => serverErrorPresentation(error());
         const seconds = () => Math.ceil(Math.max(0, Math.min(error().retryAfterMs ?? 0, retryAt() - now())) / 1000);

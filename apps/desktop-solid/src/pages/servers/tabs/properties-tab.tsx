@@ -17,7 +17,6 @@ import {
 import { putSnapshot, serverCommand, useServersClock } from '../../../features/servers/store';
 import type { PropertyValue, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { ServerProfilePanel } from './server-profile';
 import '../../library/instance/settings-tab.css';
 import './files-tab.css';
 
@@ -153,7 +152,6 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
       <div data-vesta="instance-settings-scroll">
         <Show when={!canEdit()}><p data-vesta="server-callout" data-tone="neutral">{t('server-settings.view-only')}</p></Show>
         <Show when={stale()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('server-settings.stale')}</p></Show>
-        <ServerProfilePanel snapshot={props.snapshot} />
         <ServerErrorNote error={error()} onRetry={() => void load()} />
         <Show when={base()} fallback={<Show when={!error()}><For each={[0, 1, 2]}>{() => <Skeleton height={148} radius={10} />}</For></Show>}>
           <For each={propertyGroups}>
