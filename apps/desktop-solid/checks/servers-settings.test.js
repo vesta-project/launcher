@@ -119,23 +119,56 @@ describe('[players] one manager over whitelist, operators, bans and the live ros
     expect(players.find((player) => player.name === 'Visitor')).toMatchObject({ online: true, uuid: null, whitelisted: false });
   });
 
-  test('a shared name never merges different UUIDs, and an ambiguous roster name stays separate', () => {
+  test('a shared name never merges different UUIDs, and the roster matches names exactly', () => {
     const players = mergePlayers({
       whitelist: [{ name: 'Sam', uuid: '11111111-0000-0000-0000-000000000000' }],
       bans: [{ name: 'sam', uuid: '22222222-0000-0000-0000-000000000000', reason: '', created: '', expires: 'forever', source: 'Server' }],
       roster: { known: true, generation: 'g1', playerCount: 1, names: ['Sam'] },
     });
     expect(players.map((player) => [player.key, player.whitelisted, !!player.ban, player.online])).toEqual([
-      ['name:sam', false, false, true],
-      ['uuid:11111111-0000-0000-0000-000000000000', true, false, false],
+      ['uuid:11111111-0000-0000-0000-000000000000', true, false, true],
       ['uuid:22222222-0000-0000-0000-000000000000', false, true, false],
+    ]);
+  });
+
+  test('a case-different roster name is not assumed to be the saved player (offline UUIDs differ by case)', () => {
+    const players = mergePlayers({
+      whitelist: [{ name: 'Alex', uuid: '11111111-0000-0000-0000-000000000000' }],
+      roster: { known: true, generation: 'g1', playerCount: 1, names: ['alex'] },
+    });
+    expect(players.map((player) => [player.key, player.whitelisted, player.online])).toEqual([
+      ['name:alex', false, true],
+      ['uuid:11111111-0000-0000-0000-000000000000', true, false],
+    ]);
+  });
+
+  test('every name a UUID was listed under is an alias, so a renamed player who is online is one row', () => {
+    const players = mergePlayers({
+      whitelist: [{ name: 'OldName', uuid: '44444444-0000-0000-0000-000000000000' }],
+      ops: [{ name: 'NewName', uuid: '44444444-0000-0000-0000-000000000000', level: 3, bypassesPlayerLimit: false }],
+      roster: { known: true, generation: 'g1', playerCount: 1, names: ['NewName'] },
+    });
+    expect(players).toHaveLength(1);
+    expect(players[0]).toMatchObject({ key: 'uuid:44444444-0000-0000-0000-000000000000', whitelisted: true, online: true, operator: { level: 3 } });
+  });
+
+  test('an ambiguous roster name stays its own row', () => {
+    const players = mergePlayers({
+      whitelist: [{ name: 'Twin', uuid: '55555555-0000-0000-0000-000000000000' }],
+      bans: [{ name: 'Twin', uuid: '66666666-0000-0000-0000-000000000000', reason: '', created: '', expires: 'forever', source: 'Server' }],
+      roster: { known: true, generation: 'g1', playerCount: 1, names: ['Twin'] },
+    });
+    expect(players.map((player) => [player.key, player.online])).toEqual([
+      ['name:Twin', true],
+      ['uuid:55555555-0000-0000-0000-000000000000', false],
+      ['uuid:66666666-0000-0000-0000-000000000000', false],
     ]);
   });
 
   test('a name-only entry becomes the UUID entry once a list reports the UUID', () => {
     const players = mergePlayers({
       whitelist: [{ name: 'Nova', uuid: null }],
-      ops: [{ name: 'nova', uuid: '33333333-0000-0000-0000-000000000000', level: 2, bypassesPlayerLimit: false }],
+      ops: [{ name: 'Nova', uuid: '33333333-0000-0000-0000-000000000000', level: 2, bypassesPlayerLimit: false }],
     });
     expect(players).toHaveLength(1);
     expect(players[0]).toMatchObject({ key: 'uuid:33333333-0000-0000-0000-000000000000', whitelisted: true, operator: { level: 2 } });

@@ -6,7 +6,8 @@ import { formatDate, formatNumber, t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
-import { IntentMemo, isPlayerName } from '../../../features/servers/model';
+import { isPlayerName, newIntentId } from '../../../features/servers/model';
+import { afterFailure, frozen, isWhitelist, moderationRequest, routeFor, standing, type Attempt } from '../../../features/servers/moderation-attempt';
 import { banDuration } from '../../../features/servers/operations-model';
 import {
   BAN_DURATIONS, PLAYER_FILTERS, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, shortUuid, type KnownPlayer, type PlayerFilter,
@@ -24,7 +25,6 @@ type Action = ModerationAction['action'];
 type Request = { action: Action; player: string; choices?: Action[] };
 
 const running = (snapshot: ServerSnapshot) => snapshot.status?.state === 'running' && !!snapshot.status.generation;
-const isWhitelist = (action: Action) => action === 'whitelist_add' || action === 'whitelist_remove';
 
 /**
  * Who is online right now, for the Overview, from the shared live roster. Join and leave
@@ -116,8 +116,8 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
   const operator = () => gate(props.snapshot.capabilities, 'players.operator') !== 'denied';
   const live = () => running(props.snapshot);
-  /** Whitelist edits also work while stopped: the agent saves them for the next start. */
-  const canWhitelist = () => agentReachable(props.snapshot) && (live() || props.snapshot.status?.state === 'stopped');
+  /** Whitelist edits also work while stopped or starting: the agent keeps them for the run. */
+  const canWhitelist = () => agentReachable(props.snapshot) && !!routeFor('whitelist_add', { state: props.snapshot.status?.state, generation: props.snapshot.status?.generation });
   const canAct = (action: Action) =>
     isWhitelist(action) ? moderate() && canWhitelist() : live() && (action === 'op' || action === 'deop' ? operator() : moderate());
 
@@ -317,71 +317,70 @@ function ModerationDialog(props: {
   const [duration, setDuration] = createSignal('permanent', { name: 'server-moderate:duration' });
   const [busy, setBusy] = createSignal(false, { name: 'server-moderate:busy' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-moderate:error' });
-  const [awaiting, setAwaiting] = createSignal<{ intentId: string; expiresAtMs: number; player: string } | null>(null, { name: 'server-moderate:awaiting' });
-  const [uncertain, setUncertain] = createSignal(false, { name: 'server-moderate:uncertain' });
-  const intents = new IntentMemo();
+  /** The request as first sent; frozen while it may have arrived or awaits confirmation. */
+  const [attempt, setAttempt] = createSignal<Attempt | null>(null, { name: 'server-moderate:attempt' });
+  const confirm = () => attempt()?.confirm;
+  const remaining = () => Math.max(0, Math.ceil(((confirm()?.expiresAtMs ?? 0) - now()) / 1000));
+  /** The confirmation step still stands: within its countdown, or its answer was lost. */
+  const confirming = () => !!confirm() && (remaining() > 0 || !!confirm()!.uncertain);
+  const locked = () => busy() || frozen(attempt());
+  const uncertain = () => !!attempt()?.uncertain || !!confirm()?.uncertain;
   const takesReason = () => action() === 'kick' || action() === 'ban';
-  const remaining = () => Math.max(0, Math.ceil(((awaiting()?.expiresAtMs ?? 0) - now()) / 1000));
-  /** Once prepared, the confirmation is bound to that exact player; the field locks. */
-  const locked = () => !!props.request.player || uncertain() || (!!awaiting() && remaining() > 0);
   const adding = () => !props.request.player && (props.request.choices?.length ?? 0) > 1;
-  let offlineRevision: { sha256: string | null } | null = null;
-  let desiredGeneration: string | null = null;
+
+  /** A fresh attempt from the fields, routed by the server's state right now. */
+  const fresh = async (id: string): Promise<Attempt | null> => {
+    const status = props.snapshot.status;
+    const routed = routeFor(action(), { state: status?.state, generation: status?.generation });
+    if (!routed || !isPlayerName(player())) return null;
+    const base: Attempt = {
+      action: action(), player: player(), reason: reason(), durationSeconds: duration() === 'permanent' ? null : Number(duration()),
+      ...routed, intentId: newIntentId(), uncertain: false,
+    };
+    // Reading the file revision sends nothing; a failure here leaves no attempt behind.
+    if (routed.route === 'offline') base.expected = (await serverCommand((client) => client.offlineWhitelist(id))).sha256;
+    return base;
+  };
 
   const submit = async () => {
-    const kind = action();
-    const generation = props.snapshot.status?.generation;
-    // Whitelist edits go to the agent's file edit while stopped, or its desired-membership
-    // queue once a run exists; everything else needs the running server.
-    const whitelist = isWhitelist(kind);
-    const offlineWhitelist = whitelist && ((!desiredGeneration && props.snapshot.status?.state === 'stopped' && !generation) || (intents.uncertain && offlineRevision !== null));
-    const desiredWhitelist = whitelist && !offlineWhitelist && !!(generation || desiredGeneration);
-    if ((!generation && !offlineWhitelist && !desiredWhitelist) || !isPlayerName(player())) return;
-    setBusy(true); setError(null);
+    if (busy()) return;
     const id = props.snapshot.connection.id;
+    setBusy(true); setError(null);
+    let current: Attempt | null = standing(attempt(), now());
     try {
-      const pending = awaiting();
-      if (offlineWhitelist) {
-        offlineRevision ??= await serverCommand((client) => client.offlineWhitelist(id));
-        const expected = offlineRevision.sha256;
-        const name = player();
-        const add = kind === 'whitelist_add';
-        const intentId = intents.idFor({ offlineWhitelist: true, name, add, expected });
-        await serverCommand((client) => client.offlineWhitelistUpdate(id, name, add, expected, intentId));
-        intents.settle();
-      } else if (desiredWhitelist) {
-        desiredGeneration ??= generation!;
-        const name = player(); const add = kind === 'whitelist_add'; const expected = desiredGeneration;
-        const intentId = intents.idFor({ whitelist: true, name, add, generation: expected });
-        await serverCommand((client) => client.startupWhitelistUpdate(id, name, add, expected, intentId));
-        intents.settle();
-      } else if (pending && remaining() > 0) {
-        const operation = await serverCommand((client) => client.moderateConfirm(id, pending.intentId));
+      current ??= await fresh(id);
+      if (!current) return;
+      setAttempt(current);
+      const add = current.action === 'whitelist_add';
+      if (current.confirm) {
+        const ticket = current.confirm.intentId;
+        const operation = await serverCommand((client) => client.moderateConfirm(id, ticket));
         putOperations(id, [{ ...operation, intent: operation.intent ?? 'players.moderate' }]);
+      } else if (current.route === 'offline') {
+        const { player: name, expected, intentId } = current;
+        await serverCommand((client) => client.offlineWhitelistUpdate(id, name, add, expected ?? null, intentId));
+      } else if (current.route === 'desired') {
+        const { player: name, generation, intentId } = current;
+        await serverCommand((client) => client.startupWhitelistUpdate(id, name, add, generation!, intentId));
       } else {
-        const seconds = duration() === 'permanent' ? null : Number(duration());
-        const request = {
-          action: kind, player: player(),
-          ...(takesReason() && reason().trim() ? { reason: reason().trim() } : {}),
-          ...(kind === 'ban' && seconds ? { durationSeconds: seconds } : {}),
-        } as ModerationAction;
-        // Identical retries after an uncertain outcome keep the same intent.
-        const intentId = intents.idFor({ request, generation });
+        const request = moderationRequest(current);
+        const { generation, intentId } = current;
         const result = await serverCommand((client) => client.moderate(id, request, generation!, intentId));
-        intents.settle();
-        if (result.kind === 'awaitingConfirmation') { setAwaiting({ intentId, expiresAtMs: result.expiresAtMs, player: request.player }); return; }
+        if (result.kind === 'awaitingConfirmation') {
+          setAttempt({ ...current, uncertain: false, confirm: { intentId, expiresAtMs: result.expiresAtMs, player: request.player, uncertain: false } });
+          return;
+        }
         putOperations(id, [{ ...result.operation, intent: result.operation.intent ?? 'players.moderate' }]);
       }
-      toast.show({ title: t(offlineWhitelist ? 'servers.players.offline-saved' : 'servers.moderate.accepted'), tone: 'neutral' });
+      const offline = current.route === 'offline';
+      setAttempt(null);
+      toast.show({ title: t(offline ? 'servers.players.offline-saved' : 'servers.moderate.accepted'), tone: 'neutral' });
       props.onDone();
       props.onClose();
     } catch (reason) {
       const failure = reason as ServerCommandError;
-      if (!awaiting()) intents.settle(failure);
-      setUncertain(intents.uncertain);
-      if (!intents.uncertain) { offlineRevision = null; desiredGeneration = null; }
+      setAttempt(current ? afterFailure(current, failure.code, now()) : null);
       setError(failure);
-      if (failure.code === 'confirmation_expired') setAwaiting(null);
     } finally { setBusy(false); }
   };
 
@@ -395,13 +394,13 @@ function ModerationDialog(props: {
         <>
           <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
           <Button tone={action() === 'ban' || action() === 'op' ? 'danger' : 'accent'} disabled={busy() || !isPlayerName(player())} onClick={() => void submit()}>
-            {awaiting() && remaining() > 0 ? t('servers.moderate.confirm', { count: remaining() }) : t(actionTitles[action()])}
+            {confirming() ? t('servers.moderate.confirm', { count: remaining() }) : t(actionTitles[action()])}
           </Button>
         </>
       }
     >
       <Show when={adding()}>
-        <SegmentedControl size="md" fill aria-label={t('servers.people.add-as')} value={action()} disabled={!!awaiting() || uncertain()}
+        <SegmentedControl size="md" fill aria-label={t('servers.people.add-as')} value={action()} disabled={locked()}
           onChange={(value) => setAction(value as Action)}
           options={(props.request.choices ?? []).map((choice) => ({ value: choice, label: t(choiceLabels[choice] ?? actionTitles[choice]) }))} />
       </Show>
@@ -409,16 +408,16 @@ function ModerationDialog(props: {
         label={t('servers.players.name')}
         value={player()}
         onChange={setPlayer}
-        readOnly={locked()}
+        readOnly={!!props.request.player || locked()}
         autofocus={!props.request.player}
         error={player() && !isPlayerName(player()) ? t('servers.players.name-format') : undefined}
         spellcheck="false"
       />
       <Show when={takesReason()}>
-        <TextField label={t('servers.moderate.reason')} value={reason()} onChange={setReason} maxlength={256} />
+        <TextField label={t('servers.moderate.reason')} value={reason()} onChange={setReason} readOnly={locked()} maxlength={256} />
       </Show>
       <Show when={action() === 'ban'}>
-        <Select label={t('servers.moderate.duration')} value={duration()} onChange={setDuration}
+        <Select label={t('servers.moderate.duration')} value={duration()} onChange={setDuration} disabled={locked()}
           options={BAN_DURATIONS.map((seconds) => ({
             value: seconds === null ? 'permanent' : String(seconds),
             label: seconds === null ? t('servers.people.ban-permanent') : t(banDuration(seconds).message, { count: banDuration(seconds).count }),
@@ -427,8 +426,8 @@ function ModerationDialog(props: {
       <Show when={action() === 'op'}>
         <p data-vesta="server-callout" data-tone="warning">{t('servers.moderate.op-warning')}</p>
       </Show>
-      <Show when={awaiting() && remaining() > 0}>
-        <p data-vesta="server-callout" data-tone="warning">{t('servers.moderate.confirm-target', { name: awaiting()!.player })}</p>
+      <Show when={confirming() ? confirm() : undefined}>
+        {(pending) => <p data-vesta="server-callout" data-tone="warning">{t('servers.moderate.confirm-target', { name: pending().player })}</p>}
       </Show>
       <Show when={uncertain()}>
         <p data-vesta="server-muted" role="status">{t('servers.operation.uncertain-retry')}</p>

@@ -6,7 +6,7 @@ import type { Tone } from '@vesta/ui';
 import type { BanEntry, OperatorEntry, PlayersView, WhitelistEntry } from './native';
 
 export interface KnownPlayer {
-  /** `uuid:<uuid>`, or `name:<lowercased name>` for a player known only by name. */
+  /** `uuid:<uuid>`, or `name:<exact name>` for a player known only by name. */
   key: string;
   name: string;
   /** From the first list that reported one; the online roster only has names. */
@@ -26,27 +26,33 @@ export interface PlayerSources {
 
 /**
  * Merges every source. The UUID is the identity: two entries with the same name but
- * different UUIDs (a renamed account, an offline-mode profile) stay separate. Entries with
- * only a name (the online roster) join the one listed player with that name, and stay
- * separate when the name is ambiguous. Online players sort first, then by name.
+ * different UUIDs (a renamed account, an offline-mode profile) stay separate, and every
+ * name a UUID was listed under is an alias for it. Entries with only a name (the online
+ * roster) join the one player with exactly that name; names are compared case-sensitively
+ * because offline-mode UUIDs differ by case. An ambiguous or unknown name stays its own
+ * row. Online players sort first, then by name.
  */
 export function mergePlayers(sources: PlayerSources): KnownPlayer[] {
   const players = new Map<string, KnownPlayer>();
-  const byName = new Map<string, KnownPlayer[]>();
+  const byName = new Map<string, Set<KnownPlayer>>();
+  const alias = (name: string, player: KnownPlayer) => {
+    const named = byName.get(name) ?? new Set<KnownPlayer>();
+    named.add(player);
+    byName.set(name, named);
+  };
   const create = (key: string, name: string, uuid: string | null) => {
     const player: KnownPlayer = { key, name, uuid, online: false, whitelisted: false, operator: null, ban: null };
     players.set(key, player);
-    const lower = name.toLowerCase();
-    byName.set(lower, [...(byName.get(lower) ?? []), player]);
+    alias(name, player);
     return player;
   };
   const entry = (name: string, uuid?: string | null) => {
     if (uuid) {
       const key = `uuid:${uuid.toLowerCase()}`;
       const known = players.get(key);
-      if (known) return known;
+      if (known) { alias(name, known); return known; }
       // A name-only entry from an earlier list is this player once a UUID turns up.
-      const nameOnly = players.get(`name:${name.toLowerCase()}`);
+      const nameOnly = players.get(`name:${name}`);
       if (nameOnly) {
         players.delete(nameOnly.key);
         Object.assign(nameOnly, { key, uuid });
@@ -55,9 +61,9 @@ export function mergePlayers(sources: PlayerSources): KnownPlayer[] {
       }
       return create(key, name, uuid);
     }
-    const named = byName.get(name.toLowerCase()) ?? [];
+    const named = [...(byName.get(name) ?? [])];
     if (named.length === 1) return named[0]!;
-    const key = `name:${name.toLowerCase()}`;
+    const key = `name:${name}`;
     return players.get(key) ?? create(key, name, null);
   };
   for (const item of sources.whitelist ?? []) entry(item.name, item.uuid).whitelisted = true;

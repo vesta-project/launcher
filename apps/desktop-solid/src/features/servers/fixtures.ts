@@ -14,6 +14,19 @@ import { createPresenceFixtures } from './fixtures-presence';
 import { createBrandingFixtures } from './fixtures-branding';
 import { createAutomationFixtures } from './fixtures-automation';
 
+
+/** One stable UUID per player name, as a real server keeps across its lists. */
+function fixtureUuid(name: string): string {
+  let hash = 0x811c9dc5;
+  const hex: string[] = [];
+  for (let round = 0; round < 4; round++) {
+    for (const char of `${round}:${name}`) hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0;
+    hex.push(hash.toString(16).padStart(8, '0'));
+  }
+  const all = hex.join('');
+  return `${all.slice(0, 8)}-${all.slice(8, 12)}-${all.slice(12, 16)}-${all.slice(16, 20)}-${all.slice(20, 32)}`;
+}
+
 const fail = (code: ServerCommandError['code'], retryAfterMs?: number): never => {
   throw { code, retryAfterMs: retryAfterMs ?? null } satisfies ServerCommandError;
 };
@@ -98,9 +111,9 @@ function seed(): FixtureServer[] {
     ],
     console: [],
     cursor: 0,
-    whitelist: PLAYERS.slice(0, 5).map((name) => ({ name, uuid: crypto.randomUUID() })),
-    ops: [{ name: 'Alex', uuid: crypto.randomUUID(), level: 4, bypassesPlayerLimit: false }],
-    bans: [{ name: 'griefer_99', uuid: crypto.randomUUID(), reason: 'Griefing spawn', created: '2026-10-02 18:12:44 +0000', expires: 'forever', source: 'Server' }],
+    whitelist: PLAYERS.slice(0, 5).map((name) => ({ name, uuid: fixtureUuid(name) })),
+    ops: [{ name: 'Alex', uuid: fixtureUuid('Alex'), level: 4, bypassesPlayerLimit: false }],
+    bans: [{ name: 'griefer_99', uuid: fixtureUuid('griefer_99'), reason: 'Griefing spawn', created: '2026-10-02 18:12:44 +0000', expires: 'forever', source: 'Server' }],
     pending: new Map(), intents: new Map(),
   };
   for (let index = 0; index < 40; index++) {
@@ -517,7 +530,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       if (receipt) { if (receipt.payload !== payload) return fail('conflict'); return receipt.sha256; }
       if (target.snapshot.status?.state !== 'stopped' || target.snapshot.status.generation) return fail('stale_target');
       if (expected !== await whitelistHash(target)) return fail('conflict');
-      if (add && !target.whitelist.some((entry) => entry.name.toLowerCase() === player.toLowerCase())) target.whitelist.push({ name: player, uuid: crypto.randomUUID() });
+      if (add && !target.whitelist.some((entry) => entry.name.toLowerCase() === player.toLowerCase())) target.whitelist.push({ name: player, uuid: fixtureUuid(player) });
       if (!add) target.whitelist = target.whitelist.filter((entry) => entry.name.toLowerCase() !== player.toLowerCase());
       const sha256 = await whitelistHash(target); offlineReceipts.set(key, { payload, sha256 }); return sha256;
     },
@@ -528,7 +541,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const receipt = offlineReceipts.get(key);
       if (receipt) { if (receipt.payload !== payload) return fail('conflict'); return receipt.sha256; }
       if (target.snapshot.status?.state !== 'running' || target.snapshot.status.generation !== generation) return fail('stale_target');
-      if (add && !target.whitelist.some((entry) => entry.name.toLowerCase() === player.toLowerCase())) target.whitelist.push({ name: player, uuid: crypto.randomUUID() });
+      if (add && !target.whitelist.some((entry) => entry.name.toLowerCase() === player.toLowerCase())) target.whitelist.push({ name: player, uuid: fixtureUuid(player) });
       if (!add) target.whitelist = target.whitelist.filter((entry) => entry.name.toLowerCase() !== player.toLowerCase());
       const id = crypto.randomUUID(); offlineReceipts.set(key, { payload, sha256: id }); return id;
     },
@@ -590,12 +603,12 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       case 'kick': target.online = target.online.filter((name) => name !== player); line(target, `[Server thread/INFO]: Kicked ${player}: ${request.reason ?? 'Kicked by an operator'}`); break;
       case 'ban':
         target.online = target.online.filter((name) => name !== player);
-        target.bans.push({ name: player, uuid: crypto.randomUUID(), reason: request.reason ?? 'Banned by an operator.', created: new Date().toISOString(), expires: request.durationSeconds ? new Date(Date.now() + request.durationSeconds * 1000).toISOString() : 'forever', source: 'Server' });
+        target.bans.push({ name: player, uuid: fixtureUuid(player), reason: request.reason ?? 'Banned by an operator.', created: new Date().toISOString(), expires: request.durationSeconds ? new Date(Date.now() + request.durationSeconds * 1000).toISOString() : 'forever', source: 'Server' });
         break;
       case 'pardon': target.bans = target.bans.filter((entry) => entry.name !== player); break;
-      case 'whitelist_add': if (!target.whitelist.some((entry) => entry.name === player)) target.whitelist.push({ name: player, uuid: crypto.randomUUID() }); break;
+      case 'whitelist_add': if (!target.whitelist.some((entry) => entry.name === player)) target.whitelist.push({ name: player, uuid: fixtureUuid(player) }); break;
       case 'whitelist_remove': target.whitelist = target.whitelist.filter((entry) => entry.name !== player); break;
-      case 'op': target.ops.push({ name: player, uuid: crypto.randomUUID(), level: 4, bypassesPlayerLimit: false }); break;
+      case 'op': target.ops.push({ name: player, uuid: fixtureUuid(player), level: 4, bypassesPlayerLimit: false }); break;
       case 'deop': target.ops = target.ops.filter((entry) => entry.name !== player); break;
       default: line(target, `[Server thread/INFO]: ${request.action} ${player}`);
     }
