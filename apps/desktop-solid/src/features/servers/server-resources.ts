@@ -7,8 +7,6 @@ import type { BackupOverview, BackupStorage } from './native-manage';
 /** Recent tasks; the operations topic keeps the store current after the first read. */
 export const operationsResource = serverResource('operations', (id) => loadOperations(id));
 
-/** Online players for one Minecraft run (the generation is the argument). */
-export const onlinePlayersResource = serverResource('players', (id, _generation: string | null) => serverCommand((client) => client.players(id)));
 export const whitelistResource = serverResource('whitelist', (id) => serverCommand((client) => client.whitelist(id)));
 export const operatorsResource = serverResource('operators', (id) => serverCommand((client) => client.operators(id)));
 export const bansResource = serverResource('bans', (id) => serverCommand((client) => client.bans(id)));

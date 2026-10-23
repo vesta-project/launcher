@@ -13,6 +13,39 @@ use vesta_server_client::{
 };
 
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+#[tokio::test]
+async fn asynchronous_operation_completion_retires_native_list_cache_once() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let route = "/api/v3/manage/players/whitelist";
+    a.set(
+        "GET",
+        route,
+        json!({"items":[{"name":"Alex","uuid":"old"}]}),
+    );
+    let before: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(before[0]["name"], "Alex");
+    a.set(
+        "GET",
+        route,
+        json!({"items":[{"name":"Steve","uuid":"new"}]}),
+    );
+    let cached: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(cached[0]["name"], "Alex");
+    a.set("GET", "/api/v3/manage/operations/mod1", json!({"operation_id":"mod1","kind":"players.moderate","state":"succeeded","progress_percent":100,"created_at_ms":1,"updated_at_ms":2,"finished_at_ms":2}));
+    assert!(a.client.operation("mod1").await.unwrap().terminal());
+    let after: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(after[0]["name"], "Steve");
+    let reads = a.calls(route).len();
+    a.client.operation("mod1").await.unwrap();
+    let _: Vec<Value> = a.client.player_list("whitelist").await.unwrap();
+    assert_eq!(
+        a.calls(route).len(),
+        reads,
+        "repeated completion cannot force new list reads"
+    );
+}
 #[path = "support/automation.rs"]
 mod automation_tests;
 #[path = "support/presence.rs"]

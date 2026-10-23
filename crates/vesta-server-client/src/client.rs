@@ -17,7 +17,7 @@ use crate::{
 use reqwest::Method;
 use serde_json::{json, Value};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex as StdMutex},
 };
 use tokio::sync::Mutex;
@@ -47,6 +47,7 @@ pub struct Client {
     legacy_intents: StdMutex<HashSet<String>>,
     principal_id: StdMutex<Option<String>>,
     principal_lookup: Mutex<bool>,
+    completed_reads: StdMutex<VecDeque<String>>,
     pub(crate) file_validators: Mutex<HashMap<String, (String, String)>>,
     management: management::State,
 }
@@ -149,6 +150,7 @@ impl Client {
             legacy_intents: Default::default(),
             principal_id: Default::default(),
             principal_lookup: Default::default(),
+            completed_reads: Default::default(),
             file_validators: Default::default(),
             management: Default::default(),
         })
@@ -741,7 +743,25 @@ impl Client {
             .principal_id
             .lock()
             .map_err(|_| Error::new(ErrorCode::Internal))?;
-        crate::operations::decode(value, principal.as_deref())
+        let operation = crate::operations::decode(value, principal.as_deref())?;
+        drop(principal);
+        if operation.terminal() && !operation.reconciling {
+            let mut completed = self
+                .completed_reads
+                .lock()
+                .map_err(|_| Error::new(ErrorCode::Internal))?;
+            if !completed.contains(&operation.operation_id) {
+                // Submission acceptance can precede the actual effect by minutes.
+                // Retire native read caches before delivering the completion to UI.
+                // Bound bookkeeping and ignore repeated history/poll observations.
+                if completed.len() == 256 {
+                    completed.pop_front();
+                }
+                completed.push_back(operation.operation_id.clone());
+                self.transport.invalidate_reads();
+            }
+        }
+        Ok(operation)
     }
 
     async fn enrich_accepted(

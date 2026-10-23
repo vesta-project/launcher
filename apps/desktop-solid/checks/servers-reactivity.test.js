@@ -7,6 +7,63 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 let builtHarness;
 const harness = () => (builtHarness ??= buildHarness());
 
+test('one shared roster follows equal-count replacements and refuses stale/offline names', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    const id = 'roster-owner';
+    const snapshot = { connection: { id }, state: { phase: 'online', access: 'paired' }, status: { state: 'running', generation: 'g1', playerCount: 1 } };
+    check.putSnapshot(snapshot);
+    check.flush();
+    const owner = check.createRoot(dispose => ({ dispose, first: check.useServerRoster(() => check.serverSnapshot(id)), second: check.useServerRoster(() => check.serverSnapshot(id)) }));
+    const opened = check.counts.opened;
+    const value = (view) => check.untrack(view.value);
+    try {
+      check.putPlayers(id, { known: true, generation: 'g1', playerCount: 1, names: ['Alex'] });
+      check.flush();
+      expect(value(owner.first).names).toEqual(['Alex']);
+      check.putPlayers(id, { known: true, generation: 'g1', playerCount: 1, names: ['Steve'] });
+      check.flush();
+      expect(value(owner.first).names).toEqual(['Steve']);
+      expect(value(owner.second).names).toEqual(['Steve']);
+      expect(check.counts.opened).toBe(opened);
+      check.putSnapshot({ ...snapshot, status: { ...snapshot.status, generation: 'g2' } });
+      check.flush();
+      check.putPlayers(id, { known: true, generation: 'g1', playerCount: 1, names: ['Late'] });
+      check.flush();
+      expect(value(owner.first)).toEqual({ known: false });
+      check.putPlayers(id, { known: true, generation: 'g2', playerCount: 1, names: ['New'] });
+      check.putSnapshot({ ...snapshot, state: { phase: 'unreachable', access: 'paired' } });
+      check.flush();
+      check.putPlayers(id, { known: true, generation: 'g1', playerCount: 1, names: ['Late'] });
+      check.flush();
+      expect(value(owner.first)).toEqual({ known: false });
+    } finally { owner.dispose(); await check.removeServer(id); }
+  }, { scenario: 'one-roster-owner-and-generation-isolation' });
+  check.expectNoDiagnostics(artifact);
+});
+
+test('moderation completion retires list caches once, rather than only at acceptance', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    const id = 'moderation-completion';
+    let reads = 0;
+    const list = check.serverResource('whitelist', async () => ++reads);
+    const operation = { operationId: 'mod1', kind: 'players.moderate', state: 'queued', createdAtMs: 1, updatedAtMs: 1, reconciling: false };
+    try {
+      expect(await check.readServerResource(id, list)).toBe(1);
+      check.putOperations(id, [operation]);
+      expect(await check.readServerResource(id, list)).toBe(1);
+      check.putOperations(id, [{ ...operation, state: 'succeeded', updatedAtMs: 2 }]);
+      expect(await check.readServerResource(id, list)).toBe(2);
+      check.putOperations(id, [operation]);
+      check.putOperations(id, [{ ...operation, state: 'succeeded', updatedAtMs: 2 }]);
+      expect(await check.readServerResource(id, list)).toBe(2);
+      expect(reads).toBe(2);
+    } finally { await check.removeServer(id); }
+  }, { scenario: 'moderation-list-invalidation-once-after-completion' });
+  check.expectNoDiagnostics(artifact);
+});
+
 test('manual server refresh coalesces across views and never resurrects a removed connection', async () => {
   const check = await harness();
   const { artifact } = await check.captureArtifact(async () => {
@@ -67,7 +124,8 @@ async function buildHarness() {
         import { createServerRead, readRetryDelay } from ${JSON.stringify(readStatePath)};
         export { createRoot, createSignal, flush, untrack, createServerRead, readRetryDelay };
         import { useServerTopic } from ${JSON.stringify(storePath)};
-        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer } from ${JSON.stringify(storePath)};
+        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations } from ${JSON.stringify(storePath)};
+        export { serverResource, readServerResource } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/resources.ts', import.meta.url)))};
         import { counts } from ${JSON.stringify(servicePath)};
         export { counts, replies, refreshCalls } from ${JSON.stringify(servicePath)};
         export { captureArtifact, expectNoDiagnostics };

@@ -4,7 +4,7 @@
 import { onSettled } from 'solid-js';
 import { anyVisible } from '../../features/servers/capabilities';
 import { prefetchServerResource } from '../../features/servers/resources';
-import { backupStorageResource, backupsResource, onlinePlayersResource, operationsResource, whitelistResource } from '../../features/servers/server-resources';
+import { backupStorageResource, backupsResource, operationsResource, whitelistResource } from '../../features/servers/server-resources';
 import { agentReachable } from '../../features/servers/shell-model';
 import type { ServerSnapshot } from '../../features/servers/native';
 
@@ -25,7 +25,6 @@ const can = (snapshot: ServerSnapshot, capability: string) => anyVisible(snapsho
 registerServerPrefetch('overview', (snapshot) => {
   const id = snapshot.connection.id;
   if (can(snapshot, 'tasks.view')) prefetchServerResource(id, operationsResource);
-  if (can(snapshot, 'players.view') && snapshot.status?.state === 'running') prefetchServerResource(id, onlinePlayersResource, snapshot.status.generation);
 });
 registerServerPrefetch('activity', (snapshot) => prefetchServerResource(snapshot.connection.id, operationsResource));
 registerServerPrefetch('backups', (snapshot) => {

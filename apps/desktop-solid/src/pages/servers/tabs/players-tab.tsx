@@ -7,9 +7,9 @@ import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { IntentMemo, isPlayerName } from '../../../features/servers/model';
 import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
-import { bansResource, onlinePlayersResource, operatorsResource, whitelistResource } from '../../../features/servers/server-resources';
+import { bansResource, operatorsResource, whitelistResource } from '../../../features/servers/server-resources';
 import { agentReachable } from '../../../features/servers/shell-model';
-import { putOperations, serverCommand, useServersClock } from '../../../features/servers/store';
+import { putOperations, serverCommand, useServerRoster, useServersClock } from '../../../features/servers/store';
 import type { ModerationAction, PlayersView, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 
@@ -31,12 +31,7 @@ export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
   const generation = () => props.snapshot.status?.generation ?? null;
   const reachable = () => agentReachable(props.snapshot);
   const live = () => reachable() && running(props.snapshot);
-  const players = useServerResource(id, onlinePlayersResource, {
-    args: generation,
-    enabled: live,
-    // The status topic reports joins and leaves as a count; names follow it.
-    version: () => props.snapshot.status?.playerCount,
-  });
+  const players = useServerRoster(() => props.snapshot);
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
   /** The list for the run on screen, or null when it can't be trusted. */
   const known = () => {

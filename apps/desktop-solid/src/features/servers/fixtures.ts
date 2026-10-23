@@ -152,9 +152,23 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
   const emit = (id: ConnectionId, topic: ServerTopic, event: ServerEvent) => {
     for (const listener of subscribers.get(id)?.get(topic) ?? []) listener(clone(event));
   };
-  const publish = (target: FixtureServer) => {
+    const rosterOf = (target: FixtureServer): PlayersView => {
+      const current = target.snapshot.status;
+      if (target.snapshot.state.phase !== 'online' || target.snapshot.state.access !== 'paired'
+        || !target.snapshot.capabilities.granted.includes('players.view')
+        || current?.state !== 'running' || !current.generation || current.readiness !== 'ready') return { known: false };
+      return { known: true, generation: current.generation, playerCount: target.online.length, names: [...target.online] };
+    };
+    const publishedRosters = new WeakMap<FixtureServer, string>();
+    const publish = (target: FixtureServer) => {
     target.snapshot.statusObservedAtMs = Date.now();
     emit(target.snapshot.connection.id, 'status', { kind: 'snapshot', snapshot: clone(target.snapshot) });
+      const players = rosterOf(target);
+      const key = JSON.stringify(players);
+      if (publishedRosters.get(target) !== key) {
+        publishedRosters.set(target, key);
+        emit(target.snapshot.connection.id, 'status', { kind: 'players', players });
+      }
     changed();
   };
   const requireOnline = (target: FixtureServer) => {
@@ -360,7 +374,10 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const set: Set<(event: ServerEvent) => void> = topics.get(topic) ?? new Set();
       topics.set(topic, set);
       set.add(onEvent);
-      if (topic === 'status') onEvent({ kind: 'snapshot', snapshot: clone(target.snapshot) });
+      if (topic === 'status') {
+        onEvent({ kind: 'snapshot', snapshot: clone(target.snapshot) });
+        onEvent({ kind: 'players', players: rosterOf(target) });
+      }
       if (topic === 'console') onEvent({ kind: 'console', lines: clone(target.console.slice(-16)) });
       if (target.snapshot.state.phase === 'online') ensureTicker(target);
       return () => { set.delete(onEvent); stopTickerIfIdle(target); };
@@ -486,9 +503,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       await wait();
       const target = server(connectionId);
       requireCapability(target, 'players.view');
-      const current = target.snapshot.status;
-      if (current?.state !== 'running' || !current.generation || current.readiness !== 'ready') return { known: false };
-      return { known: true, generation: current.generation, playerCount: target.online.length, names: [...target.online] };
+      return rosterOf(target);
     },
     async whitelist(connectionId) { await wait(); const target = server(connectionId); requireCapability(target, 'players.view'); return clone(target.whitelist); },
     async operators(connectionId) { await wait(); const target = server(connectionId); requireCapability(target, 'players.view'); return clone(target.ops); },
