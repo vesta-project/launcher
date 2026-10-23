@@ -46,12 +46,8 @@ export function useNavigationPreloading() {
     document.addEventListener('pointerout', out);
     document.addEventListener('focusin', focus);
     document.addEventListener('pointerdown', down);
-    const idleHandle = typeof requestIdleCallback === 'function'
-      ? requestIdleCallback(() => prefetchBrowse(), { timeout: 2500 }) : undefined;
-    const idleTimer = idleHandle === undefined ? setTimeout(() => prefetchBrowse(), 700) : undefined;
     return () => {
-      clearTimeout(timer); clearTimeout(idleTimer);
-      if (idleHandle !== undefined) cancelIdleCallback(idleHandle);
+      clearTimeout(timer);
       document.removeEventListener('pointerover', over);
       document.removeEventListener('pointerout', out);
       document.removeEventListener('focusin', focus);

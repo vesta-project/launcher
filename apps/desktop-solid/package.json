@@ -11,6 +11,7 @@
     "workbench": "vite --config workbench/vite.config.ts",
     "lint": "oxlint src ui workbench",
     "typecheck": "tsc",
+    "tauri": "bun scripts/tauri.mjs",
     "tauri:dev": "bun scripts/tauri.mjs dev",
     "tauri:build": "bun scripts/tauri.mjs build"
   },

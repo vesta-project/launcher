@@ -63,32 +63,36 @@ export const systemMemory = cachedResource<number>({
   load: async () => (native ? invoke<number>("get_system_memory_mb") : 16384),
 });
 
-let prefetched = false;
+function prefetchLightSettings() {
+  void systemMemory.refresh();
+  void notificationSubscriptions.refresh();
+  void shortcutCatalog.refresh();
+  void settingsSync.refresh();
+}
 /**
- * Warms every Settings resource. Called once shortly after startup (idle) and again when the
- * pointer reaches the Settings button, so by the time the page opens there is nothing to wait for.
+ * Warms Settings resources on page/hover intent, sharing their normal caches.
+ * Host-wide Java and storage scans are deliberately excluded from startup prefetch.
  */
 export function prefetchSettings() {
   if (typeof window === "undefined") return;
-  const run = () => {
-    void javaInventory.refresh();
-    void storageUsage.refresh();
-    void systemMemory.refresh();
-    void notificationSubscriptions.refresh();
-    void shortcutCatalog.refresh();
-    void settingsSync.refresh();
-  };
-  if (prefetched) return run();
-  prefetched = true;
-  run();
+  void javaInventory.refresh();
+  void storageUsage.refresh();
+  prefetchLightSettings();
 }
 
-/** Schedules the first prefetch for when the browser is idle after startup. */
+/** Warm cheap settings while idle, with owner cleanup; defer scans until intent. */
 export function prefetchSettingsWhenIdle() {
-  if (typeof window === "undefined") return;
-  const schedule =
-    window.requestIdleCallback ?? ((callback: () => void) => window.setTimeout(callback, 800));
-  schedule(() => prefetchSettings());
+  onSettled(() => {
+    if (typeof window === "undefined") return;
+    // Browser idleness does not mean the host CPU/disk is idle. Java detection
+    // and storage scans wait for Settings intent instead of racing startup work.
+    if (window.requestIdleCallback) {
+      const handle = window.requestIdleCallback(prefetchLightSettings);
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(prefetchLightSettings, 800);
+    return () => window.clearTimeout(timer);
+  });
 }
 
 /** Subscribe once in the shell; native mutations retire stale snapshots without polling. */
