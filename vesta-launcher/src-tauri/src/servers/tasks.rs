@@ -1,4 +1,4 @@
-//! Accepted remote work outlives UI subscriptions. Poll only non-terminal IDs.
+//! Accepted work outlives UI subscriptions. One bounded observer per server.
 use super::*;
 use tauri::Manager;
 
@@ -137,115 +137,249 @@ impl ServerManager {
             notify_failure(app, id, operation);
             return Ok(());
         }
-        let tracker_key = format!("{id}:{}", operation.operation_id);
+        activity(app, id, operation, true);
+        self.ensure_operation_tracker(app, id)
+    }
+
+    pub(super) fn tracks_operations(&self, id: &str) -> bool {
+        self.trackers.lock().is_ok_and(|tasks| {
+            tasks
+                .get(id)
+                .is_some_and(|task| !task.inner().is_finished())
+        })
+    }
+
+    fn ensure_operation_tracker(self: &Arc<Self>, app: &AppHandle, id: &str) -> Result<()> {
         let mut trackers = self.trackers.lock().map_err(|_| internal())?;
         trackers.retain(|_, t| !t.inner().is_finished());
-        if trackers.contains_key(&tracker_key) {
+        if trackers.contains_key(id) {
             return Ok(());
         }
         if trackers.len() >= 32 {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
-        activity(app, id, operation, true);
-        let manager = self.clone();
+        let manager = Arc::downgrade(self);
         let app = app.clone();
         let id = id.to_owned();
-        let op_id = operation.operation_id.clone();
         trackers.insert(
-            tracker_key,
+            id.clone(),
             tauri::async_runtime::spawn(async move {
-                let mut delay = 2_u64;
+                use vesta_server_client::observation::OperationObservation;
+                let mut observation = OperationObservation::default();
+                let mut delay = Duration::from_secs(2);
+                let mut list_supported = true;
+                let mut selected_supported = true;
                 loop {
-                    tokio::time::sleep(Duration::from_secs(delay)).await;
+                    tokio::time::sleep(delay).await;
+                    let Some(manager) = manager.upgrade() else {
+                        break;
+                    };
+                    if manager.record(&id).await.is_err() {
+                        break;
+                    }
+                    let store = manager.store.lock().await;
+                    let active: Vec<String> = store
+                        .intents
+                        .iter()
+                        .filter(|intent| intent.connection_id == id && !intent.terminal)
+                        .filter_map(|intent| intent.operation_id.clone())
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .into_iter()
+                        .collect();
+                    if active.is_empty() {
+                        // Admission journals under this same store lock before it
+                        // looks for a tracker, closing the last-job/new-job race.
+                        if let Ok(mut tasks) = manager.trackers.lock() {
+                            tasks.remove(&id);
+                        }
+                        break;
+                    }
+                    drop(store);
+                    let active = observation.active_window(&active);
                     let client = match manager.client(&id).await {
                         Ok(c) => c,
-                        Err(_) => break,
-                    };
-                    match client.operation(&op_id).await {
-                        Ok(mut operation) => {
-                            manager.decorate_operation(&id, &mut operation).await;
-                            let terminal = operation.terminal();
-                            activity(&app, &id, &operation, false);
-                            if terminal {
-                                notify_failure(&app, &id, &operation);
-                            }
-                            manager.deliver(
-                                &id,
-                                ServerTopic::Operations,
-                                ServerEvent::Operation { operation },
-                            );
-                            if terminal {
-                                let _ = manager
-                                    .edit_store(|s| {
-                                        for i in s.intents.iter_mut().filter(|i| {
-                                            i.connection_id == id
-                                                && i.operation_id.as_deref() == Some(op_id.as_str())
-                                        }) {
-                                            i.terminal = true;
-                                            i.uncertain = false;
-                                        }
-                                        Ok(())
-                                    })
-                                    .await;
-                                let _ = manager.refresh(&app, &id, false).await;
+                        Err(error) => {
+                            if tracking_blocked(error.code) {
                                 break;
                             }
+                            delay = observation.delay(false, false, error.retry_after_ms);
+                            continue;
                         }
-                        Err(e)
+                    };
+                    let selected = if selected_supported {
+                        match client.operations_selected(&active).await {
+                            Err(error)
+                                if matches!(
+                                    error.code,
+                                    ErrorCode::InvalidInput
+                                        | ErrorCode::Forbidden
+                                        | ErrorCode::Unsupported
+                                        | ErrorCode::NotFound
+                                ) =>
+                            {
+                                selected_supported = false;
+                                None
+                            }
+                            result => Some(result),
+                        }
+                    } else {
+                        None
+                    };
+                    let page = if let Some(selected) = selected {
+                        selected
+                    } else if list_supported {
+                        client.operations_with_priority(None, false).await
+                    } else {
+                        Ok(Page {
+                            items: Vec::new(),
+                            next_cursor: None,
+                        })
+                    };
+                    let mut observations = match page {
+                        Ok(page) => page
+                            .items
+                            .into_iter()
+                            .filter(|op| active.contains(&op.operation_id))
+                            .collect::<Vec<_>>(),
+                        Err(error) => {
                             if matches!(
-                                e.code,
-                                ErrorCode::Forbidden
-                                    | ErrorCode::CredentialsRejected
-                                    | ErrorCode::FingerprintMismatch
-                                    | ErrorCode::NotFound
-                                    | ErrorCode::Unsupported
-                            ) =>
-                        {
-                            manager.deliver(
-                                &id,
-                                ServerTopic::Operations,
-                                ServerEvent::Resync {
-                                    topic: ServerTopic::Operations,
-                                },
-                            );
-                            break;
+                                error.code,
+                                ErrorCode::Forbidden | ErrorCode::NotFound | ErrorCode::Unsupported
+                            ) {
+                                // Older or own-task-only agents may allow known
+                                // operation IDs without permitting history listing.
+                                list_supported = false;
+                                Vec::new()
+                            } else {
+                                if tracking_blocked(error.code) {
+                                    manager.deliver(
+                                        &id,
+                                        ServerTopic::Operations,
+                                        ServerEvent::Resync {
+                                            topic: ServerTopic::Operations,
+                                        },
+                                    );
+                                    break;
+                                }
+                                delay = observation.delay(
+                                    false,
+                                    manager.demanded(&id, ServerTopic::Operations),
+                                    error.retry_after_ms,
+                                );
+                                continue;
+                            }
                         }
-                        Err(e) => {
-                            if e.code == ErrorCode::RateLimited {
-                                tokio::time::sleep(Duration::from_millis(
-                                    e.retry_after_ms.unwrap_or(60_000).min(3_600_000),
-                                ))
-                                .await;
+                    };
+                    let mut present = observations
+                        .iter()
+                        .map(|op| op.operation_id.clone())
+                        .collect::<Vec<_>>();
+                    let mut retry_after = None;
+                    for _ in 0..if list_supported { 1 } else { 4 } {
+                        let Some(missing) = observation.missing(&active, &present) else {
+                            break;
+                        };
+                        present.push(missing.to_owned());
+                        match client.operation(missing).await {
+                            Ok(operation) => observations.push(operation),
+                            Err(error) => {
+                                // A pruned/missing record is unresolved evidence, never success.
+                                // Keep its durable intent; rotating fallback prevents starvation.
+                                retry_after = error.retry_after_ms;
+                                if tracking_blocked(error.code) && error.code != ErrorCode::NotFound
+                                {
+                                    manager.deliver(
+                                        &id,
+                                        ServerTopic::Operations,
+                                        ServerEvent::Resync {
+                                            topic: ServerTopic::Operations,
+                                        },
+                                    );
+                                    return;
+                                }
+                                if retry_after.is_some() {
+                                    break;
+                                }
                             }
                         }
                     }
-                    delay = (delay + 2).min(10);
+                    let mut changed = false;
+                    let mut finished = Vec::new();
+                    for mut operation in observations {
+                        manager.decorate_operation(&id, &mut operation).await;
+                        if operation.terminal() && !operation.reconciling {
+                            finished.push(operation.operation_id.clone());
+                        }
+                        let initial = !observation.known(&operation.operation_id);
+                        if !observation.changed(&operation) {
+                            continue;
+                        }
+                        changed = true;
+                        activity(&app, &id, &operation, initial);
+                        if operation.terminal() {
+                            notify_failure(&app, &id, &operation);
+                        }
+                        manager.deliver(
+                            &id,
+                            ServerTopic::Operations,
+                            ServerEvent::Operation { operation },
+                        );
+                    }
+                    if !finished.is_empty() {
+                        // One durable journal commit per observed batch, not per job or poll.
+                        let saved = manager
+                            .edit_store(|store| {
+                                for intent in store.intents.iter_mut().filter(|intent| {
+                                    intent.connection_id == id
+                                        && intent
+                                            .operation_id
+                                            .as_ref()
+                                            .is_some_and(|op| finished.contains(op))
+                                }) {
+                                    intent.terminal = true;
+                                    intent.uncertain = false;
+                                }
+                                Ok(())
+                            })
+                            .await;
+                        if saved.is_err() {
+                            observation = OperationObservation::default();
+                        }
+                        let _ = manager.refresh(&app, &id, false).await;
+                    }
+                    delay = observation.delay(
+                        changed,
+                        manager.demanded(&id, ServerTopic::Operations),
+                        retry_after,
+                    );
                 }
             }),
         );
         Ok(())
     }
     pub(super) async fn resume_operations(self: &Arc<Self>, app: &AppHandle, id: &str) {
-        let ids: Vec<String> = self
+        let pending = self
             .store
             .lock()
             .await
             .intents
             .iter()
-            .filter(|i| i.connection_id == id && !i.terminal)
-            .filter_map(|i| i.operation_id.clone())
-            .take(32)
-            .collect();
-        if ids.is_empty() {
-            return;
-        }
-        if let Ok(client) = self.client(id).await {
-            for op_id in ids {
-                if let Ok(mut operation) = client.operation(&op_id).await {
-                    self.decorate_operation(id, &mut operation).await;
-                    let _ = self.start_tracker(app, id, &operation);
-                }
-            }
+            .any(|i| i.connection_id == id && !i.terminal && i.operation_id.is_some());
+        if pending {
+            let _ = self.ensure_operation_tracker(app, id);
         }
     }
+}
+
+fn tracking_blocked(code: ErrorCode) -> bool {
+    matches!(
+        code,
+        ErrorCode::Forbidden
+            | ErrorCode::CredentialsRejected
+            | ErrorCode::CredentialsUnavailable
+            | ErrorCode::FingerprintMismatch
+            | ErrorCode::NotFound
+            | ErrorCode::Unsupported
+            | ErrorCode::NoManagementAccess
+    )
 }

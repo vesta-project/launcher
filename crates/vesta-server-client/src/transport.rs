@@ -1,4 +1,8 @@
-use crate::{endpoint::Endpoint, scheduler::Scheduler, trust, Error, ErrorCode, Result};
+use crate::{
+    endpoint::Endpoint,
+    scheduler::{RequestPriority, Scheduler},
+    trust, Error, ErrorCode, Result,
+};
 use futures_util::{
     future::{BoxFuture, Shared},
     FutureExt,
@@ -10,6 +14,27 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+
+// Closed method/path allowlist: the legacy interactive flag cannot promote reads
+// or unrelated mutations. Aliases, query strings and future routes stay ordinary.
+fn request_priority(method: &Method, path: &str, interactive: bool) -> RequestPriority {
+    if *method == Method::POST
+        && matches!(
+            path,
+            "/api/v3/manage/lifecycle/stop"
+                | "/api/v3/manage/lifecycle/kill"
+                | "/api/v3/manage/lifecycle/restart"
+                | "/api/v3/auth/session/challenge"
+                | "/api/v3/auth/session"
+        )
+    {
+        RequestPriority::Urgent
+    } else if interactive {
+        RequestPriority::Foreground
+    } else {
+        RequestPriority::Background
+    }
+}
 
 fn read_ttl(path: &str) -> Duration {
     if path.starts_with("/api/v3/manage/automation/")
@@ -257,13 +282,13 @@ impl Transport {
         key: Option<&str>,
         interactive: bool,
     ) -> Result<Value> {
-        let _permit = if token.is_some() {
-            self.scheduler
-                .admit_authenticated_request(interactive)
-                .await?
-        } else {
-            self.scheduler.admit_request(interactive).await?
-        };
+        let _permit = self
+            .scheduler
+            .admit_priority_request(
+                request_priority(&method, path, interactive),
+                token.is_some(),
+            )
+            .await?;
         if self.expected.is_none()
             && (method != Method::GET || path != "/api/v3/status" || token.is_some())
         {
@@ -430,6 +455,50 @@ impl Transport {
                     ErrorCode::Unreachable
                 },
             )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod priority_tests {
+    use super::*;
+
+    #[test]
+    fn only_closed_control_and_session_routes_are_urgent() {
+        for path in [
+            "/api/v3/manage/lifecycle/stop",
+            "/api/v3/manage/lifecycle/restart",
+            "/api/v3/manage/lifecycle/kill",
+            "/api/v3/auth/session/challenge",
+            "/api/v3/auth/session",
+        ] {
+            assert_eq!(
+                request_priority(&Method::POST, path, false),
+                RequestPriority::Urgent
+            );
+            assert_eq!(
+                request_priority(&Method::GET, path, true),
+                RequestPriority::Foreground
+            );
+            assert_eq!(
+                request_priority(&Method::POST, &format!("{path}?urgent=1"), true),
+                RequestPriority::Foreground
+            );
+        }
+        for path in [
+            "/api/v3/manage/lifecycle/start",
+            "/api/v3/manage/server/status",
+            "/api/v3/manage/pair",
+            "/api/v3/auth/session/other",
+        ] {
+            assert_eq!(
+                request_priority(&Method::POST, path, true),
+                RequestPriority::Foreground
+            );
+            assert_eq!(
+                request_priority(&Method::GET, path, false),
+                RequestPriority::Background
+            );
         }
     }
 }

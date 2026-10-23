@@ -15,6 +15,48 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn selected_active_operations_use_one_read_and_refuse_unrequested_results() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let ids = (0..32).map(|n| format!("active-{n}")).collect::<Vec<_>>();
+    let route = format!("/api/v3/manage/operations?ids={}", ids.join(","));
+    let rows = ids
+        .iter()
+        .map(|id| json!({"operation_id":id,"state":"running","created_at_ms":1,"updated_at_ms":2}))
+        .collect::<Vec<_>>();
+    a.set("GET", &route, json!({"items":rows,"selected":true}));
+    assert_eq!(
+        a.client
+            .operations_selected(&ids)
+            .await
+            .unwrap()
+            .items
+            .len(),
+        32
+    );
+    assert_eq!(a.calls(&route).len(), 1);
+    assert!(a.calls("/api/v3/manage/operations?limit=100").is_empty());
+    assert_eq!(
+        a.client
+            .operations_selected(&vec!["duplicate".into(); 33])
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    let route = "/api/v3/manage/operations?ids=known";
+    a.set("GET", route, json!({"items":[{"operation_id":"other","state":"running","created_at_ms":1,"updated_at_ms":2}],"selected":true}));
+    assert_eq!(
+        a.client
+            .operations_selected(&["known".into()])
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Unsupported
+    );
+}
+
+#[tokio::test]
 async fn asynchronous_operation_completion_retires_native_list_cache_once() {
     let _owner = OWNER.lock().await;
     let a = Agent::start().await;

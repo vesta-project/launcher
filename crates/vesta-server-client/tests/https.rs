@@ -524,10 +524,10 @@ async fn concurrent_settings_style_control_and_properties_reads_wait_for_infligh
     let _owner = TEST_OWNER.lock().await;
     let agent = Agent::start().await;
     let client = agent.paired().await;
-    // Establish the session before deliberately occupying all origin slots.
+    // Establish the session before deliberately occupying ordinary origin slots.
     client.status(true).await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(260)).await;
-    let held: Vec<_> = (0..3)
+    let held: Vec<_> = (0..2)
         .map(|_| client.transport.scheduler.admit(true).unwrap())
         .collect();
     let release = async move {

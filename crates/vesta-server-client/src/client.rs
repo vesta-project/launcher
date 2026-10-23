@@ -690,6 +690,54 @@ impl Client {
     pub async fn operations(&self, cursor: Option<&str>) -> Result<Page<ServerOperation>> {
         self.operations_with_priority(cursor, true).await
     }
+    /// One bounded observation of admitted IDs, independent of history ordering.
+    pub async fn operations_selected(&self, ids: &[String]) -> Result<Page<ServerOperation>> {
+        if ids.is_empty()
+            || ids.len() > 32
+            || ids.iter().any(|id| {
+                id.is_empty()
+                    || id.len() > 256
+                    || !id
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+            })
+            || ids.iter().collect::<std::collections::BTreeSet<_>>().len() != ids.len()
+        {
+            return Err(Error::new(ErrorCode::InvalidInput));
+        }
+        let value = self
+            .get(
+                &format!("operations?ids={}", ids.join(",")),
+                false,
+                "tasks.view",
+            )
+            .await?;
+        if value["selected"] != true {
+            return Err(Error::new(ErrorCode::Unsupported));
+        }
+        let values = value["items"]
+            .as_array()
+            .ok_or_else(|| Error::new(ErrorCode::Unsupported))?;
+        if values.len() > ids.len() {
+            return Err(Error::new(ErrorCode::Unsupported));
+        }
+        let mut items = Vec::with_capacity(values.len());
+        for value in values {
+            let operation = self.decode_operation(value.clone()).await?;
+            if !ids.contains(&operation.operation_id)
+                || items
+                    .iter()
+                    .any(|item: &ServerOperation| item.operation_id == operation.operation_id)
+            {
+                return Err(Error::new(ErrorCode::Unsupported));
+            }
+            items.push(operation);
+        }
+        Ok(Page {
+            items,
+            next_cursor: None,
+        })
+    }
     pub async fn operations_with_priority(
         &self,
         cursor: Option<&str>,
