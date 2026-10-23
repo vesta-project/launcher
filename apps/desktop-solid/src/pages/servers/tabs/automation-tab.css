@@ -1,12 +1,60 @@
 /*
- * Server automation: workflow rows, the step-card editor and run step detail. The
- * frame (pane toolbar, settings panels, save bar, activity rows) is shared with the
- * other server tabs; these rules only cover what is specific to workflows.
+ * Server automation: the workflow list, the step canvas editor and run step detail. The
+ * frame (pane toolbar, settings scroll, callouts, activity rows) is shared with the other
+ * server tabs; these rules only cover what is specific to workflows.
  */
 @layer launcher {
-  /* Workflow list */
-  :where([data-automation-workflow][data-off]) [data-vesta="setting-row-copy"] { opacity: 0.65; }
-  :where([data-automation-workflow]) [data-vesta="setting-row-control"] { flex-wrap: wrap; gap: var(--vesta-space-2); }
+  /* ---- Workflow list ---- */
+  :where([data-vesta="server-automation-list"]) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    list-style: none;
+    overflow: hidden;
+  }
+  :where([data-vesta="server-automation-row"]) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+  }
+  :where([data-vesta="server-automation-row"] + [data-vesta="server-automation-row"]) { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="server-automation-row"][data-off]) :where([data-vesta="server-automation-row-copy"], [data-vesta="server-automation-tile"]) { opacity: 0.6; }
+  :where([data-vesta="server-automation-row-copy"]) { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="server-automation-row-title"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-2); font-weight: var(--vesta-weight-medium); }
+  :where([data-vesta="server-automation-row-meta"]) { display: flex; flex-wrap: wrap; gap: 0 var(--vesta-space-2); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-automation-row-meta"]) span + span::before { content: "·"; margin-inline-end: var(--vesta-space-2); }
+  :where([data-vesta="server-automation-row-last"]) {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--vesta-space-2);
+    min-inline-size: 150px;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-automation-row-actions"]) { display: flex; align-items: center; justify-content: flex-end; gap: var(--vesta-space-2); }
+  @container pane (max-width: 640px) {
+    :where([data-vesta="server-automation-row"]) { grid-template-columns: auto minmax(0, 1fr) auto; }
+    :where([data-vesta="server-automation-row-last"]) { grid-column: 2; grid-row: 2; justify-content: flex-start; min-inline-size: 0; }
+  }
+
+  :where([data-vesta="server-automation-tile"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
   :where([data-vesta="server-automation-name"]) {
     padding: 0;
     border: 0;
@@ -20,76 +68,323 @@
   :where([data-vesta="server-automation-name"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; border-radius: 2px; }
   :where([data-vesta="server-automation-template"]) { display: flex; flex-direction: column; gap: 1px; }
   :where([data-vesta="server-automation-template"]) small { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-automation-callout-text"]) { flex: 1; }
+  :where([data-vesta="server-automation-more"]) { display: flex; justify-content: center; }
 
-  /* Editor */
-  .server-automation-content { flex: 1; }
-  :where([data-vesta-sentence]) { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-text); }
-  .server-automation-panel-callout { margin: 0 var(--vesta-space-4) var(--vesta-space-2); }
-  :where([data-vesta="server-automation-inline"]) { display: flex; flex: 1; gap: var(--vesta-space-2); }
-  :where([data-vesta="server-automation-inline"]) > * { flex: 1; }
-  :where([data-vesta="server-automation-days"]) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
-  :where([data-vesta="server-automation-days"]) [data-vesta="button"] { min-inline-size: 44px; }
-
-  :where([data-vesta="server-automation-steps"]) {
-    display: flex;
-    flex-direction: column;
-    gap: var(--vesta-space-2);
-    margin: 0;
-    padding: 0 var(--vesta-space-2) var(--vesta-space-2);
-    list-style: none;
-    counter-reset: none;
+  /* ---- Editor header strip (toolbar) ---- */
+  .server-automation-title { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :where([data-vesta="server-automation-dirty"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    white-space: nowrap;
   }
-  :where([data-vesta="server-automation-step"]) {
+  :where([data-vesta="server-automation-dirty-dot"]) { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--vesta-color-warning); }
+
+  /* Problems, each a link to its field */
+  .server-automation-problems { align-items: flex-start; flex-direction: column; gap: var(--vesta-space-1); }
+  .server-automation-problems ul { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="server-automation-problem-link"]) {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0 var(--vesta-space-2);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="server-automation-problem-link"]) span:first-child { font-weight: var(--vesta-weight-medium); }
+  :where([data-vesta="server-automation-problem-link"]) span:last-child { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-automation-problem-link"]):hover span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+  :where([data-vesta="server-automation-problem-link"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; border-radius: 2px; }
+
+  /* ---- Workflow head: name, on/off, trigger sentence, run as ---- */
+  :where([data-vesta="server-automation-head"]) {
     display: flex;
+    flex: none;
     flex-direction: column;
     gap: var(--vesta-space-3);
-    padding: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+  :where([data-vesta="server-automation-head-row"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-2) var(--vesta-space-3); }
+  .server-automation-name-field { flex: 1 1 260px; max-inline-size: 480px; }
+  .server-automation-name-field input { font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta="server-automation-enabled"]) { display: inline-flex; align-items: center; gap: var(--vesta-space-2); margin-inline-start: auto; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-automation-head-label"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-automation-head-label"]):not(:first-child) { margin-inline-start: var(--vesta-space-3); }
+  .server-automation-principal { flex: 0 1 220px; }
+  :where([data-vesta="server-automation-sentence"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-block-size: var(--vesta-size-control-sm);
+    padding: 0 var(--vesta-space-2-5, 10px);
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-sm);
     background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    cursor: default;
   }
-  :where([data-vesta="server-automation-step"][data-invalid]) { border-color: var(--vesta-color-danger-border); }
-  :where([data-vesta="server-automation-step-head"]) { display: flex; align-items: center; gap: var(--vesta-space-2); min-inline-size: 0; }
-  :where([data-vesta="server-automation-step-head"]) > [data-vesta="field"] { flex: 0 0 200px; }
-  :where([data-vesta="server-automation-step-summary"]) {
-    min-inline-size: 0;
-    overflow: hidden;
+  :where([data-vesta="server-automation-sentence"]):hover { border-color: var(--vesta-color-border-strong); }
+  :where([data-vesta="server-automation-sentence"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; }
+  :where([data-vesta="server-automation-sentence"][data-expanded]) { border-color: var(--vesta-color-accent-border); }
+  :where([data-vesta="server-automation-sentence"][data-invalid]) { border-color: var(--vesta-color-danger-border); color: var(--vesta-color-danger-text); }
+  :where([data-vesta="server-automation-sentence"]) > [data-vesta="icon"]:first-child { color: var(--vesta-color-text-muted); }
+
+  /* Trigger popover */
+  .server-automation-trigger-popover { inline-size: min(400px, calc(100vw - 32px)); }
+  :where([data-vesta="server-automation-trigger-form"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); }
+  :where([data-vesta="server-automation-days"]) { display: flex; flex-wrap: wrap; gap: 4px; }
+  :where([data-vesta="server-automation-days"]) [data-vesta="button"] { flex: 1; min-inline-size: 40px; }
+  :where([data-vesta="server-automation-inline"]) { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: var(--vesta-space-2); align-items: start; }
+  :where([data-vesta="server-automation-popover-actions"]) { display: flex; justify-content: flex-end; }
+
+  /* ---- Canvas: steps beside the details of the chosen step ---- */
+  :where([data-vesta="server-automation-canvas"]) {
+    display: grid;
+    flex: none;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    align-items: start;
+    gap: var(--vesta-space-4);
+  }
+  :where([data-vesta="server-automation-canvas"][data-narrow]) { grid-template-columns: minmax(0, 1fr); }
+  :where([data-vesta="server-automation-canvas-steps"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); min-inline-size: 0; }
+  :where([data-vesta="server-automation-section-title"]) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="server-automation-canvas-panel"]) {
+    position: sticky;
+    inset-block-start: 0;
+    max-block-size: calc(100cqb - var(--vesta-space-4));
+    overflow-y: auto;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    scrollbar-width: thin;
+  }
+  :where([data-vesta="server-automation-panel-empty"]) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-4);
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
+  :where([data-vesta="server-automation-panel-empty"]) p { margin: 0; line-height: 1.5; }
+
+  /* Step cards, joined by a thin rail so the order reads as a flow */
+  :where([data-vesta="server-automation-steps"]) { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="server-automation-step-item"]) { position: relative; display: flex; flex-direction: column; }
+  :where([data-vesta="server-automation-step-item"][data-drop])::before {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    inset-inline: 0;
+    block-size: 2px;
+    border-radius: 1px;
+    background: var(--vesta-color-accent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--vesta-color-accent) 25%, transparent);
+  }
+  :where([data-vesta="server-automation-step-item"][data-drop="before"])::before { inset-block-start: -9px; }
+  :where([data-vesta="server-automation-step-item"][data-drop="after"])::before { inset-block-end: -9px; }
+  :where([data-vesta="server-automation-step-item"]:last-child[data-drop="after"])::before { inset-block-end: -6px; }
+
+  :where([data-vesta="server-automation-step-card"]) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-block-size: 48px;
+    padding: var(--vesta-space-2) var(--vesta-space-3) var(--vesta-space-2) var(--vesta-space-1);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-raised);
+    cursor: default;
+    touch-action: pan-y;
+    user-select: none;
+    transition: border-color 120ms var(--vesta-ease-out), box-shadow 120ms var(--vesta-ease-out);
+  }
+  :where([data-vesta="server-automation-step-card"]):hover { border-color: var(--vesta-color-border-strong); }
+  :where([data-vesta="server-automation-step-card"][data-selected]) {
+    border-color: var(--vesta-color-accent-border);
+    background: color-mix(in oklab, var(--vesta-color-accent) 7%, var(--vesta-color-surface-raised));
+  }
+  :where([data-vesta="server-automation-step-card"][data-invalid]) { border-color: var(--vesta-color-danger-border); }
+  :where([data-vesta="server-automation-step-card"][data-grabbed]) { border-color: var(--vesta-color-accent); box-shadow: var(--vesta-shadow-md); }
+  :where([data-vesta="server-automation-step-card"][data-dragging]) {
+    z-index: 3;
+    border-color: var(--vesta-color-accent-border);
+    box-shadow: var(--vesta-shadow-lg);
+    cursor: grabbing;
+    transition: none;
+  }
+  :where([data-vesta="server-automation-grip"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 20px;
+    block-size: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: none;
+    color: var(--vesta-color-text-subtle);
+    cursor: grab;
+  }
+  :where([data-vesta="server-automation-grip"]):hover { background: var(--vesta-color-fill); color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-automation-grip"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
+  :where([data-vesta="server-automation-grip"][aria-pressed="true"]) { background: var(--vesta-color-accent); color: var(--vesta-color-accent-contrast, #fff); }
+  :where([data-vesta="server-automation-step-card"]):not(:has([data-vesta="server-automation-grip"])) { padding-inline-start: var(--vesta-space-3); }
   :where([data-vesta="server-automation-step-index"]) {
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: 24px;
-    block-size: 24px;
+    inline-size: 22px;
+    block-size: 22px;
     border-radius: 50%;
-    background: var(--vesta-color-surface-raised);
+    background: var(--vesta-color-fill);
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
     font-variant-numeric: tabular-nums;
     font-weight: var(--vesta-weight-semibold);
   }
-  :where([data-vesta="server-automation-step-fields"], [data-vesta="server-automation-step-flow"]) {
+  :where([data-vesta="server-automation-step-kind"]) { display: grid; flex: none; place-items: center; color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-automation-step-card"][data-selected]) :where([data-vesta="server-automation-step-kind"]) { color: var(--vesta-color-accent-text); }
+  :where([data-vesta="server-automation-step-open"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="server-automation-step-open"]):focus-visible { outline: none; }
+  :where([data-vesta="server-automation-step-card"]):has([data-vesta="server-automation-step-open"]:focus-visible) { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; }
+  :where([data-vesta="server-automation-step-summary"]) { overflow: hidden; font-size: var(--vesta-text-sm); text-overflow: ellipsis; white-space: nowrap; }
+  :where([data-vesta="server-automation-step-notes"]) { display: flex; flex-wrap: wrap; gap: 2px var(--vesta-space-2); color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-automation-step-notes"]) [data-tone="warning"] { color: var(--vesta-color-warning-text, var(--vesta-color-text-muted)); }
+  :where([data-vesta="server-automation-step-notes"]) span + span::before { content: "·"; margin-inline-end: var(--vesta-space-2); color: var(--vesta-color-text-subtle); }
+  .server-automation-step-chevron { flex: none; color: var(--vesta-color-text-subtle); }
+  :where([data-vesta="server-automation-canvas"][data-narrow]) .server-automation-step-chevron { transform: rotate(90deg); }
+  :where([data-vesta="server-automation-canvas"][data-narrow]) [data-selected] .server-automation-step-chevron { transform: rotate(-90deg); }
+
+  /* The rail between cards; its add button shows on hover or focus. */
+  :where([data-vesta="server-automation-gap"]) {
+    position: relative;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    place-items: center;
+    block-size: 16px;
+  }
+  :where([data-vesta="server-automation-gap"])::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 40px;
+    inline-size: 2px;
+    background: var(--vesta-color-border);
+  }
+  :where([data-vesta="server-automation-gap"]) [data-vesta="icon-button"],
+  :where([data-vesta="server-automation-gap"]) button {
+    position: relative;
+    z-index: 1;
+    inline-size: 20px;
+    min-inline-size: 20px;
+    block-size: 20px;
+    min-block-size: 20px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: 50%;
+    background: var(--vesta-color-surface);
+    opacity: 0;
+    transition: opacity 120ms var(--vesta-ease-out);
+  }
+  :where([data-vesta="server-automation-gap"]):hover button,
+  :where([data-vesta="server-automation-gap"]) button:focus-visible,
+  :where([data-vesta="server-automation-gap"]) button[data-expanded] { opacity: 1; }
+  :where([data-vesta="server-automation-flow"]):has([data-dragging]) :where([data-vesta="server-automation-gap"]) button { visibility: hidden; }
+  :where([data-vesta="server-automation-flow-end"]) { display: flex; align-items: center; gap: var(--vesta-space-3); margin-block-start: var(--vesta-space-3); }
+  :where([data-vesta="server-automation-live"]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-automation-inline-details"]) {
+    margin-block-start: var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  /* ---- Step details ---- */
+  :where([data-vesta="server-automation-details"]) { display: flex; flex-direction: column; }
+  :where([data-vesta="server-automation-details-head"]) {
+    display: flex;
+    align-items: center;
     gap: var(--vesta-space-3);
-    align-items: start;
+    padding: var(--vesta-space-3) var(--vesta-space-3) var(--vesta-space-3) var(--vesta-space-4);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
   }
-  :where([data-vesta="server-automation-step-flow"]) {
-    padding-block-start: var(--vesta-space-3);
-    border-block-start: var(--vesta-border-width) dashed var(--vesta-color-border);
-  }
+  :where([data-vesta="server-automation-details-head"]) [data-vesta="server-automation-tile"] { color: var(--vesta-color-accent-text); }
+  :where([data-vesta="server-automation-details-title"]) { display: flex; flex: 1; flex-direction: column; gap: 4px; min-inline-size: 0; }
+  :where([data-vesta="server-automation-details-title"]) > span { color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-automation-details-fields"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); padding: var(--vesta-space-4); }
+  :where([data-vesta="server-automation-details-fields"]) p[data-vesta="server-muted"] { margin: 0; }
+  :where([data-vesta="server-automation-details-grid"]) { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--vesta-space-3); align-items: start; }
   .server-automation-wide { grid-column: 1 / -1; }
-  p.server-automation-wide { margin: 0; }
+  :where([data-vesta="server-automation-group"]) { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="server-automation-group-head"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    inline-size: 100%;
+    min-block-size: 40px;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border: 0;
+    background: none;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="server-automation-group-head"]):hover { background: var(--vesta-color-fill); }
+  :where([data-vesta="server-automation-group-head"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: -2px; }
+  :where([data-vesta="server-automation-group-head"]) > [data-vesta="icon"]:first-child { color: var(--vesta-color-text-subtle); }
+  :where([data-vesta="server-automation-group-title"]) { flex: none; font-weight: var(--vesta-weight-medium); }
+  :where([data-vesta="server-automation-group-summary"]) { flex: 1; min-inline-size: 0; overflow: hidden; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); text-overflow: ellipsis; white-space: nowrap; }
+  :where([data-vesta="server-automation-group-summary"][data-mono]) { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .server-automation-group-warning { margin-inline-start: auto; color: var(--vesta-color-danger-text); }
+  :where([data-vesta="server-automation-group-body"]) { padding: var(--vesta-space-1) var(--vesta-space-4) var(--vesta-space-4); animation: settings-reveal 180ms var(--vesta-ease-out) both; }
   :where([data-vesta="server-automation-label"]) { font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-medium); }
   :where([data-vesta="server-automation-params"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
-  :where([data-vesta="server-automation-param"]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: var(--vesta-space-2); align-items: start; }
+  :where([data-vesta="server-automation-param"]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--vesta-space-2); align-items: start; }
   :where([data-vesta="server-automation-error"]) { margin: 0; color: var(--vesta-color-danger-text); }
 
-  /* Run step detail, inside an activity row */
+  /* ---- Run step detail, inside an activity row ---- */
   :where([data-automation-run]) [data-vesta="server-activity-body"] > div:not([data-vesta]) { margin-inline-start: calc(-1 * var(--vesta-space-2)); }
   :where([data-vesta="server-automation-run-detail"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); margin-block-start: var(--vesta-space-1); }
   :where([data-vesta="server-automation-run-steps"]) {
@@ -98,23 +393,23 @@
     margin: 0;
     padding: 0;
     border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-sm);
+    border-radius: var(--vesta-radius-md);
     background: var(--vesta-color-surface-sunken);
     list-style: none;
   }
   :where([data-vesta="server-automation-run-steps"]) > li {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     align-items: start;
-    gap: var(--vesta-space-3);
+    gap: var(--vesta-space-2);
     padding: var(--vesta-space-2) var(--vesta-space-3);
   }
+  :where([data-vesta="server-automation-run-steps"]) > li > [data-vesta="server-automation-step-kind"] { block-size: 22px; }
   :where([data-vesta="server-automation-run-steps"]) > li + li { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
   :where([data-vesta="server-automation-run-steps"]) > li[data-state="skipped"],
   :where([data-vesta="server-automation-run-steps"]) > li[data-state="pending"] { opacity: 0.6; }
-  :where([data-vesta="server-automation-run-step-body"]) { display: flex; flex-direction: column; gap: 3px; min-inline-size: 0; }
-  :where([data-vesta="server-automation-run-step-body"]) > p:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--vesta-space-2); margin: 0; font-size: var(--vesta-text-sm); }
-  :where([data-vesta="server-automation-step-id"]) { color: var(--vesta-color-text-subtle); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 11px; }
+  :where([data-vesta="server-automation-run-step-body"]) { display: flex; flex-direction: column; gap: 3px; min-inline-size: 0; padding-block-start: 2px; }
+  :where([data-vesta="server-automation-run-step-body"]) > p:first-child { margin: 0; font-size: var(--vesta-text-sm); }
   :where([data-vesta="server-automation-output"]) { display: flex; flex-wrap: wrap; gap: var(--vesta-space-1) var(--vesta-space-3); margin: 0; font-size: 11px; }
   :where([data-vesta="server-automation-output"]) > div { display: flex; gap: var(--vesta-space-1); min-inline-size: 0; }
   :where([data-vesta="server-automation-output"]) dt { color: var(--vesta-color-text-subtle); }

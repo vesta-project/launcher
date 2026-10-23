@@ -5,6 +5,7 @@ import { onSettled } from 'solid-js';
 import { anyVisible } from '../../features/servers/capabilities';
 import { prefetchServerResource } from '../../features/servers/resources';
 import { backupStorageResource, backupsResource, onlinePlayersResource, operationsResource, whitelistResource } from '../../features/servers/server-resources';
+import { workflowsResource } from './automation/resources';
 import { agentReachable } from '../../features/servers/shell-model';
 import type { ServerSnapshot } from '../../features/servers/native';
 
@@ -33,6 +34,10 @@ registerServerPrefetch('backups', (snapshot) => {
   prefetchServerResource(snapshot.connection.id, backupStorageResource);
 });
 registerServerPrefetch('players', (snapshot) => prefetchServerResource(snapshot.connection.id, whitelistResource));
+// Workflow summaries only; definitions and run history wait until they are shown.
+registerServerPrefetch('automation', (snapshot) => {
+  if (can(snapshot, 'automation.view')) prefetchServerResource(snapshot.connection.id, workflowsResource);
+});
 
 const HOVER_DELAY_MS = 120;
 const ATTRIBUTE = 'data-server-prefetch';

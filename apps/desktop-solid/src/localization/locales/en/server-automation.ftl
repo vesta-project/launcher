@@ -107,7 +107,7 @@ server-automation-move-up = Move up
 server-automation-move-down = Move down
 server-automation-remove-step = Remove step
 server-automation-step-id = Step ID
-server-automation-step-id-help = Used by jumps from earlier steps.
+server-automation-step-id-help = Jumps from other steps use this ID. It follows the step type until you change it.
 server-automation-timeout = Timeout (seconds)
 server-automation-retries = Retries
 server-automation-backoff = Wait between retries (seconds)
@@ -283,3 +283,69 @@ server-automation-discard-run = Discard run
 server-automation-discarded = Run discarded
 server-automation-output-yes = Yes
 server-automation-output-no = No
+
+# Empty state
+server-automation-templates = Start from a template
+server-automation-empty-view-only = Workflows run steps on a schedule or when something happens on the server. Your role can see workflows but can't create them; the server owner or an administrator can set one up.
+server-automation-start-scratch = Start from scratch
+server-automation-template-clean-trash = Empty file trash weekly
+server-automation-template-clean-trash-help = Clear deleted files every Sunday morning
+
+# List
+server-automation-on = On
+server-automation-off = Off
+server-automation-kept-new = You have a new workflow that isn't saved yet.
+server-automation-keep-editing = Keep editing
+server-automation-load-older = Load older runs
+
+# Trigger editor
+server-automation-edit-trigger = Change when it runs: { $name }
+server-automation-group-schedule = Schedule
+server-automation-group-interval = Interval
+server-automation-group-event = Event
+server-automation-group-manual = Manual
+server-automation-when = When
+server-automation-manual-help = Runs only when someone presses Run now. Turn the workflow on to allow that.
+server-automation-done = Done
+
+# Step canvas
+server-automation-step = Step
+server-automation-step-number = Step { $count }
+server-automation-step-label = Step { $count }: { $name }
+server-automation-step-of = Step { $count } of { $max }
+server-automation-reorder = Reorder { $name }
+server-automation-reorder-hint = Press Space to pick the step up, the arrow keys to move it and Space again to drop it. Escape puts it back. Alt with the arrow keys moves it straight away.
+server-automation-picked-up = Moving { $name }. Release to drop it.
+server-automation-picked-up-keyboard = Picked up { $name }. Use the arrow keys to move it.
+server-automation-moved = Moved to position { $count } of { $max }
+server-automation-dropped = Dropped at position { $count } of { $max }
+server-automation-reorder-cancelled = Reorder cancelled
+server-automation-add-step-at = Add a step at position { $count }
+server-automation-problems-short = { $count ->
+    [one] 1 problem
+   *[other] { $count } problems
+  }
+server-automation-note-from = From step { $count }
+server-automation-note-from-failure = If step { $count } fails
+server-automation-note-then-finish = Then finishes
+server-automation-note-then-goto = Then step { $count }
+server-automation-note-conditional = Branches on its output
+server-automation-note-retries = { $count ->
+    [one] Retries once
+   *[other] Retries { $count } times
+  }
+server-automation-note-failure-continue = Continues if it fails
+server-automation-note-failure-goto = If it fails, step { $count }
+server-automation-select-step = Choose a step to change what it does, how long it may take and what happens when it fails. Drag steps to reorder them.
+server-automation-select-step-view = Choose a step to see what it does.
+server-automation-timing-failure = Timing and failure
+server-automation-timeout-after = Times out after { $time }
+server-automation-advanced = Advanced
+server-automation-remove-title = Remove “{ $name }”?
+server-automation-remove-referenced = { $count ->
+    [one] Step { $name } jumps to this step. After removing it, that jump goes back to its default: continue, or stop as failed.
+   *[other] Steps { $name } jump to this step. After removing it, those jumps go back to their defaults: continue, or stop as failed.
+  }
+server-automation-leave-title = Save changes to { $name }?
+server-automation-leave-description = You changed this workflow but haven't saved it. Changes you don't save are lost.
+server-automation-leave-description-invalid = You changed this workflow but haven't saved it, and it has problems to fix before it can be saved. Changes you don't save are lost.

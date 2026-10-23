@@ -5,7 +5,7 @@ import type { MessageId } from '../../localization/messages';
 import { consoleLineProblem } from './model';
 import type {
   ActionKind, FailureBranch, MissedPolicy, RunDetail, RunStep, RunSummary, RunTrigger, SuccessBranch, TriggerKind,
-  WorkflowAction, WorkflowDraft, WorkflowStep, WorkflowTrigger,
+  Paged, WorkflowAction, WorkflowDraft, WorkflowStep, WorkflowSummary, WorkflowTrigger,
 } from './native-automation';
 
 export type Args = Record<string, string | number>;
@@ -410,6 +410,149 @@ export function moveStep<T>(steps: T[], index: number, by: -1 | 1): T[] {
   return next;
 }
 
+// ------------------------------------------------------------------ canvas
+
+/**
+ * Moves the step at `from` so it ends up at `to` (an index in the resulting list). Branches
+ * point at step ids, so every jump keeps its target; a jump the move turns backwards is
+ * left for validation to flag on its card rather than silently rewritten.
+ */
+export function reorderSteps<T>(steps: readonly T[], from: number, to: number): T[] {
+  if (from < 0 || from >= steps.length) return [...steps];
+  const target = Math.max(0, Math.min(steps.length - 1, to));
+  const next = [...steps];
+  const [moved] = next.splice(from, 1);
+  next.splice(target, 0, moved!);
+  return next;
+}
+
+/** Where a selected (or focused) step's index goes after a move from `from` to `to`. */
+export function followIndex(index: number, from: number, to: number) {
+  if (index === from) return to;
+  if (from < index && to >= index) return index - 1;
+  if (from > index && to <= index) return index + 1;
+  return index;
+}
+
+/**
+ * The drop position while dragging: `others` are the vertical midpoints of every card except
+ * the dragged one, in order. The result is the dragged step's index in the reordered list.
+ */
+export function dropTarget(others: readonly number[], pointerY: number) {
+  let index = 0;
+  while (index < others.length && pointerY > others[index]!) index++;
+  return index;
+}
+
+/** Keyboard reordering: arrows move by one, Home/End to the ends; null for other keys or no move. */
+export function keyboardTarget(index: number, length: number, key: string): number | null {
+  const target = key === 'ArrowUp' ? index - 1 : key === 'ArrowDown' ? index + 1 : key === 'Home' ? 0 : key === 'End' ? length - 1 : null;
+  if (target === null || target < 0 || target >= length || target === index) return null;
+  return target;
+}
+
+/** Indices of steps whose branches jump to `id`. */
+export function stepReferences(steps: readonly DraftStep[], id: string): number[] {
+  const found: number[] = [];
+  steps.forEach((step, index) => {
+    const success = step.onSuccess;
+    const failure = step.onFailure;
+    if ((success.kind === 'goto' && success.stepId === id) || (success.kind === 'if_output_equals' && (success.thenStep === id || success.otherwise === id))
+      || (failure.kind === 'goto' && failure.stepId === id)) found.push(index);
+  });
+  return found;
+}
+
+/** Jumps into the step at `index` from earlier steps, as shown on its card. */
+export function incomingJumps(steps: readonly DraftStep[], index: number): { from: number; on: 'success' | 'failure' }[] {
+  const id = steps[index]?.id;
+  if (id === undefined) return [];
+  const found: { from: number; on: 'success' | 'failure' }[] = [];
+  steps.forEach((step, at) => {
+    const success = step.onSuccess;
+    if ((success.kind === 'goto' && success.stepId === id) || (success.kind === 'if_output_equals' && (success.thenStep === id || success.otherwise === id))) found.push({ from: at, on: 'success' });
+    if (step.onFailure.kind === 'goto' && step.onFailure.stepId === id) found.push({ from: at, on: 'failure' });
+  });
+  return found;
+}
+
+/** The id an action kind starts with, e.g. `wait` for a delay. */
+export const stepIdBase = (kind: ActionKind) => actionIds[kind];
+
+/** True when the id is still the one generated for `kind` (`wait`, `wait-2`, …), so it may follow the kind. */
+export function isAutoStepId(id: string, kind: ActionKind) {
+  const base = actionIds[kind];
+  return id === base || new RegExp(`^${base.replace(/[-]/g, '\\-')}-\\d+$`).test(id);
+}
+
+/**
+ * Changes a step's action kind with fresh defaults. A generated id follows the new kind
+ * (`wait` → `restart`), and every jump to it is renamed along with it.
+ */
+export function changeStepKind(steps: DraftStep[], index: number, kind: ActionKind, profile?: string): DraftStep[] {
+  const current = steps[index];
+  if (!current || current.action.kind === kind) return steps;
+  const action = defaultAction(kind, profile);
+  let next = steps.map((step, at) => (at === index ? { ...step, action, timeoutSecs: defaultTimeout(action) } : step));
+  if (isAutoStepId(current.id, current.action.kind)) {
+    const others = next.filter((_, at) => at !== index);
+    next = renameStep(next, index, uniqueStepId(actionIds[kind], others));
+  }
+  return next;
+}
+
+/** Inserts a new step of `kind` at `at` (0 = first, length = last) with a generated id. */
+export function insertStep(steps: readonly DraftStep[], at: number, kind: ActionKind, profile?: string): DraftStep[] {
+  const next = [...steps];
+  next.splice(Math.max(0, Math.min(steps.length, at)), 0, newStep(kind, steps, profile));
+  return next;
+}
+
+export interface StepNote { message: MessageId; args: Args; tone: 'neutral' | 'warning' }
+
+/** Short notes for anything a step does beyond "continue on success, stop on failure". */
+export function stepNotes(steps: readonly DraftStep[], index: number): StepNote[] {
+  const step = steps[index];
+  if (!step) return [];
+  const position = (id: string) => steps.findIndex((entry) => entry.id === id) + 1;
+  const notes: StepNote[] = [];
+  const success = step.onSuccess;
+  if (success.kind === 'end' && index < steps.length - 1) notes.push({ message: 'server-automation.note-then-finish', args: {}, tone: 'neutral' });
+  if (success.kind === 'goto') notes.push({ message: 'server-automation.note-then-goto', args: { count: position(success.stepId) }, tone: 'neutral' });
+  if (success.kind === 'if_output_equals') notes.push({ message: 'server-automation.note-conditional', args: {}, tone: 'neutral' });
+  if (step.retries.maxRetries > 0) notes.push({ message: 'server-automation.note-retries', args: { count: step.retries.maxRetries }, tone: 'neutral' });
+  if (step.onFailure.kind === 'next') notes.push({ message: 'server-automation.note-failure-continue', args: {}, tone: 'warning' });
+  if (step.onFailure.kind === 'goto') notes.push({ message: 'server-automation.note-failure-goto', args: { count: position(step.onFailure.stepId) }, tone: 'warning' });
+  return notes;
+}
+
+/** Timing and branching left at their defaults, so the group can stay folded. */
+export const hasDefaultFlow = (step: DraftStep) =>
+  step.timeoutSecs === defaultTimeout(step.action) && step.retries.maxRetries === 0 && step.onSuccess.kind === 'next' && step.onFailure.kind === 'fail';
+
+/** Which part of the editor a problem path belongs to. */
+export type ProblemArea = 'name' | 'principal' | 'trigger' | 'steps' | 'definition' | 'action' | 'flow' | 'id';
+export function problemArea(path: string): { area: ProblemArea; step: number | null; field: string } {
+  const match = /^steps\.(\d+)\.(.+)$/.exec(path);
+  if (match) {
+    const field = match[2]!;
+    const area: ProblemArea = field === 'id' ? 'id' : field.startsWith('action') ? 'action' : 'flow';
+    return { area, step: Number(match[1]), field };
+  }
+  if (path.startsWith('trigger') || path.startsWith('missed')) return { area: 'trigger', step: null, field: path };
+  if (path === 'name' || path === 'principal' || path === 'steps') return { area: path, step: null, field: path };
+  return { area: 'definition', step: null, field: path };
+}
+
+/** Problems on one step's card. */
+export const stepProblemCount = (problems: readonly Problem[], index: number) =>
+  problems.filter((problem) => problem.path.startsWith(`steps.${index}.`)).length;
+
+/** The trigger editor's four groups. */
+export type TriggerGroup = 'schedule' | 'interval' | 'event' | 'manual';
+export const triggerGroup = (trigger: WorkflowTrigger): TriggerGroup =>
+  trigger.kind === 'cron' ? 'schedule' : trigger.kind === 'interval' ? 'interval' : trigger.kind === 'manual' ? 'manual' : 'event';
+
 // -------------------------------------------------------------- validation
 
 export interface Problem { path: string; message: MessageId; args?: Args }
@@ -516,8 +659,8 @@ export const draftProblems = (draft: WorkflowDraft) => workflowProblems(toEditor
 
 // ---------------------------------------------------------------- templates
 
-export type TemplateId = 'nightly-backup' | 'restart-every' | 'announce-join' | 'blank';
-export const TEMPLATES: TemplateId[] = ['nightly-backup', 'restart-every', 'announce-join', 'blank'];
+export type TemplateId = 'nightly-backup' | 'restart-every' | 'announce-join' | 'clean-trash-weekly' | 'blank';
+export const TEMPLATES: TemplateId[] = ['nightly-backup', 'restart-every', 'announce-join', 'clean-trash-weekly', 'blank'];
 
 const step = (id: string, action: DraftAction, extra: Partial<DraftStep> = {}): DraftStep => ({
   id, action, timeoutSecs: defaultTimeout(action), retries: { maxRetries: 0, backoffSecs: 0 }, onSuccess: { kind: 'next' }, onFailure: { kind: 'fail' }, ...extra,
@@ -555,6 +698,12 @@ export function templateDraft(id: TemplateId, options: { name: string; principal
         ...base,
         trigger: { kind: 'first_player_joined' },
         steps: [step('welcome', { kind: 'console_command', line: 'say Welcome back! Backups run nightly at 04:00.' })],
+      };
+    case 'clean-trash-weekly':
+      return {
+        ...base,
+        trigger: { kind: 'cron', expr: '0 5 * * 0', utcOffsetMinutes: options.offsetMinutes },
+        steps: [step('clean-trash', { kind: 'clean_trash' })],
       };
     case 'blank':
       return { ...base, enabled: false, trigger: { kind: 'manual' }, steps: [step('notify', { kind: 'notify', severity: 'info', title: 'Workflow ran', body: '' })] };
@@ -618,4 +767,51 @@ export function outputFields(output: unknown, max = 6): OutputField[] | null {
     label: key.replace(/[_-]+/g, ' ').replace(/^./, (first) => first.toUpperCase()),
     value: typeof value === 'boolean' ? value : typeof value === 'string' || typeof value === 'number' ? String(value) : outputPreview(value, 60) ?? '',
   }));
+}
+
+// ----------------------------------------------------------------- requests
+
+/**
+ * What the Automation tab reads, and nothing more: the list comes from workflow summaries
+ * (which carry the trigger) plus one newest-first page of runs for "last run". A workflow's
+ * definition is read only when it is opened or duplicated, older runs only on request.
+ */
+export interface AutomationReads {
+  automationWorkflows: (id: string, after: string | null) => Promise<Paged<WorkflowSummary>>;
+  automationRuns: (id: string, after: string | null, newest?: boolean) => Promise<Paged<RunSummary>>;
+  automationWorkflowRuns: (id: string, workflowId: string, after: string | null, newest?: boolean) => Promise<Paged<RunSummary>>;
+}
+
+/** Agents keep at most 128 workflows, so two pages always cover the list. */
+export const WORKFLOW_PAGES = 2;
+
+export async function loadWorkflowSummaries(api: Pick<AutomationReads, 'automationWorkflows'>, id: string): Promise<WorkflowSummary[]> {
+  const items: WorkflowSummary[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < WORKFLOW_PAGES; page++) {
+    const result: Paged<WorkflowSummary> = await api.automationWorkflows(id, after);
+    items.push(...result.items);
+    if (!result.nextAfter) break;
+    after = result.nextAfter;
+  }
+  return items;
+}
+
+/** One page of runs, newest first: every workflow's (`workflowId` null) or one workflow's. */
+export interface RunPageArgs { workflowId: string | null; after: string | null }
+export function loadRunPage(api: Pick<AutomationReads, 'automationRuns' | 'automationWorkflowRuns'>, id: string, args: RunPageArgs): Promise<Paged<RunSummary>> {
+  return args.workflowId === null ? api.automationRuns(id, args.after, true) : api.automationWorkflowRuns(id, args.workflowId, args.after, true);
+}
+
+/** Runs worth polling for: only work that is moving. A suspended run waits for a person. */
+export const isMovingRun = (run: RunSummary) => run.state === 'running' || run.state === 'queued';
+export const RUN_POLL_MS = 5000;
+export const pollRunsAfter = (runs: readonly RunSummary[] | undefined) => (runs?.some(isMovingRun) ? RUN_POLL_MS : null);
+
+/** Appends an older page, dropping runs already shown (a refresh can shift page boundaries). */
+export function mergeRunPages(pages: readonly (readonly RunSummary[])[]): RunSummary[] {
+  const seen = new Set<string>();
+  const merged: RunSummary[] = [];
+  for (const page of pages) for (const run of page) if (!seen.has(run.id)) { seen.add(run.id); merged.push(run); }
+  return merged;
 }
