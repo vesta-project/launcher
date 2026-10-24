@@ -403,18 +403,26 @@ impl Client {
         if !["start", "stop", "restart", "sleep", "wake"].contains(&action) {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
-        let body = if action == "start" || action == "wake" || (action == "stop" && expected.is_none()) {
-            json!({})
-        } else {
-            let g = expected.ok_or_else(|| Error::new(ErrorCode::InvalidInput))?;
-            generation(g)?;
-            json!({"expected_generation":g})
-        };
+        let body =
+            if action == "start" || action == "wake" || (action == "stop" && expected.is_none()) {
+                json!({})
+            } else {
+                let g = expected.ok_or_else(|| Error::new(ErrorCode::InvalidInput))?;
+                generation(g)?;
+                json!({"expected_generation":g})
+            };
         self.submit(
             &format!("lifecycle/{action}"),
             body,
             intent,
-            match action { "sleep" => "lifecycle.stop", "wake" => "lifecycle.start", "start" => "lifecycle.start", "stop" => "lifecycle.stop", "restart" => "lifecycle.restart", _ => unreachable!() },
+            match action {
+                "sleep" => "lifecycle.stop",
+                "wake" => "lifecycle.start",
+                "start" => "lifecycle.start",
+                "stop" => "lifecycle.stop",
+                "restart" => "lifecycle.restart",
+                _ => unreachable!(),
+            },
         )
         .await?
         .operation()

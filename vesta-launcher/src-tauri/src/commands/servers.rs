@@ -307,15 +307,43 @@ pub async fn server_moderate_confirm(
 }
 
 #[tauri::command]
-pub async fn server_sleep(app: AppHandle, manager: Manager<'_>, connection_id: String, expected_generation: String, intent_id: String) -> Result<ServerOperation> {
-    server_lifecycle(app,manager,connection_id,"sleep".into(),Some(expected_generation),intent_id).await
+pub async fn server_sleep(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    expected_generation: String,
+    intent_id: String,
+) -> Result<ServerOperation> {
+    server_lifecycle(
+        app,
+        manager,
+        connection_id,
+        "sleep".into(),
+        Some(expected_generation),
+        intent_id,
+    )
+    .await
 }
 #[tauri::command]
-pub async fn server_wake(app: AppHandle, manager: Manager<'_>, connection_id: String, intent_id: String) -> Result<ServerOperation> {
-    server_lifecycle(app,manager,connection_id,"wake".into(),None,intent_id).await
+pub async fn server_wake(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    intent_id: String,
+) -> Result<ServerOperation> {
+    server_lifecycle(app, manager, connection_id, "wake".into(), None, intent_id).await
 }
 
 #[tauri::command]
-pub async fn server_metrics_history(app:AppHandle,manager:Manager<'_>,connection_id:String,request:vesta_server_client::metrics::MetricsHistoryRequest)->Result<vesta_server_client::metrics::MetricsHistory>{
-    manager.management_read(&app,&connection_id,|client|async move{client.metrics_history(request).await}).await
+pub async fn server_metrics_history(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: vesta_server_client::metrics::MetricsHistoryRequest,
+) -> Result<vesta_server_client::metrics::MetricsHistory> {
+    manager
+        .management_read(&app, &connection_id, |client| async move {
+            client.metrics_history(request).await
+        })
+        .await
 }

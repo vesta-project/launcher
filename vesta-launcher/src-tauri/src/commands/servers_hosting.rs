@@ -3,7 +3,7 @@ use crate::servers::ServerManager;
 use serde_json::json;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
-use vesta_server_client::{Error, ErrorCode, Result, hosting::*};
+use vesta_server_client::{hosting::*, Error, ErrorCode, Result};
 type Manager<'a> = State<'a, Arc<ServerManager>>;
 macro_rules! read_command {
     ($name:ident,$ty:ty,$method:ident) => {
@@ -220,19 +220,82 @@ pub async fn server_sftp_open(
     Ok(target)
 }
 
-read_command!(server_java_inventory,ServerJavaInventory,java_inventory);
+read_command!(server_java_inventory, ServerJavaInventory, java_inventory);
 #[tauri::command]
-pub async fn server_java_select(app:AppHandle,manager:Manager<'_>,connection_id:String,runtime_id:Option<String>,custom_path:Option<String>,intent_id:String)->Result<SoftwareJob>{
-    let payload=json!({"runtimeId":runtime_id,"customPath":custom_path});let journal=intent_id.clone();
-    manager.management_write(&app,&connection_id,&journal,"java/select",payload,false,|client|async move{client.java_select(runtime_id,custom_path,&intent_id).await}).await
+pub async fn server_java_select(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    runtime_id: Option<String>,
+    custom_path: Option<String>,
+    intent_id: String,
+) -> Result<SoftwareJob> {
+    let payload = json!({"runtimeId":runtime_id,"customPath":custom_path});
+    let journal = intent_id.clone();
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &journal,
+            "java/select",
+            payload,
+            false,
+            |client| async move {
+                client
+                    .java_select(runtime_id, custom_path, &intent_id)
+                    .await
+            },
+        )
+        .await
 }
 #[tauri::command]
-pub async fn server_java_download(app:AppHandle,manager:Manager<'_>,connection_id:String,major:u32,intent_id:String)->Result<SoftwareJob>{
-    let journal=intent_id.clone();manager.management_write(&app,&connection_id,&journal,"java/download",json!({"major":major}),false,|client|async move{client.java_download(major,&intent_id).await}).await
+pub async fn server_java_download(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    major: u32,
+    intent_id: String,
+) -> Result<SoftwareJob> {
+    let journal = intent_id.clone();
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &journal,
+            "java/download",
+            json!({"major":major}),
+            false,
+            |client| async move { client.java_download(major, &intent_id).await },
+        )
+        .await
 }
 
 #[tauri::command]
-pub async fn server_world_datapack_toggle(app:AppHandle,manager:Manager<'_>,connection_id:String,pack_id:String,enabled:bool,expected_generation:String,intent_id:String)->Result<vesta_server_client::model::ServerOperation>{
-    let journal=intent_id.clone();let payload=json!({"packId":pack_id,"enabled":enabled,"expectedGeneration":expected_generation});
-    manager.management_write(&app,&connection_id,&journal,"world/datapacks/toggle",payload,false,|client|async move{client.world_datapack_toggle(pack_id,enabled,expected_generation,&intent_id).await}).await
+pub async fn server_world_datapack_toggle(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    pack_id: String,
+    enabled: bool,
+    expected_generation: String,
+    intent_id: String,
+) -> Result<vesta_server_client::model::ServerOperation> {
+    let journal = intent_id.clone();
+    let payload =
+        json!({"packId":pack_id,"enabled":enabled,"expectedGeneration":expected_generation});
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &journal,
+            "world/datapacks/toggle",
+            payload,
+            false,
+            |client| async move {
+                client
+                    .world_datapack_toggle(pack_id, enabled, expected_generation, &intent_id)
+                    .await
+            },
+        )
+        .await
 }

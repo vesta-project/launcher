@@ -75,8 +75,14 @@ impl Error {
         self
     }
     pub fn wire(status: u16, code: &str, retry_after_ms: Option<u64>) -> Self {
-        let reason = (code.len()<=96 && code.bytes().all(|b|b.is_ascii_alphanumeric()||matches!(b,b'_'|b'.'))
-            && ["software_","world_","sftp_","server_install."].iter().any(|prefix|code.starts_with(prefix))).then(||code.to_owned());
+        let reason = (code.len() <= 96
+            && code
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.'))
+            && ["software_", "world_", "sftp_", "server_install."]
+                .iter()
+                .any(|prefix| code.starts_with(prefix)))
+        .then(|| code.to_owned());
         use ErrorCode::*;
         let code = match code {
             "software_runtime_unavailable" | "software_disabled" => Unsupported,
