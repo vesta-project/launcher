@@ -101,6 +101,8 @@ pub fn decode(value: serde_json::Value, own_principal: Option<&str>) -> Result<S
                 }),
                 Some(kind) => {
                     let action = match kind {
+                        "lifecycle.sleep" => LifecycleAction::Sleep,
+                        "lifecycle.wake" => LifecycleAction::Wake,
                         "lifecycle.start" => LifecycleAction::Start,
                         "lifecycle.stop" => LifecycleAction::Stop,
                         "lifecycle.restart" => LifecycleAction::Restart,

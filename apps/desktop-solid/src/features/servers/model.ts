@@ -107,12 +107,14 @@ export function playersFact(status: ServerStatus | null, nowMs: number): Fact {
   return { tone: 'neutral', message: 'servers.players.count', args: { count: status.playerCount }, seen: age(status.playerCountObservedAtMs, nowMs) };
 }
 
-export type LifecycleAction = 'start' | 'stop' | 'restart' | 'kill';
+export type LifecycleAction = 'start' | 'stop' | 'restart' | 'kill' | 'sleep' | 'wake';
 
 export interface LifecycleControls {
   /** Primary action button, or null when nothing applies. */
   primary: LifecycleAction | null;
   restart: boolean;
+  /** Stop remains available in the menu when Sleep is primary. */
+  stop?: boolean;
   /** Reason the controls are unavailable, if they are. */
   blocked: MessageId | null;
 }
@@ -129,7 +131,7 @@ export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
   }
   const can = (capability: string) => gate(caps, capability) !== 'denied';
   if (status.state === 'stopped') {
-    return { primary: can('lifecycle.start') ? 'start' : null, restart: false, blocked: can('lifecycle.start') ? null : 'servers.lifecycle.not-allowed' };
+    return { stop: status.lifecycle === 'sleeping' && can('lifecycle.stop'), primary: can('lifecycle.start') ? (status.lifecycle === 'sleeping' ? 'wake' : 'start') : null, restart: false, blocked: can('lifecycle.start') ? null : 'servers.lifecycle.not-allowed' };
   }
   if (status.state === 'stopping' || status.state === 'draining') {
     const kill = can('lifecycle.force_kill') && status.generation !== null;
@@ -137,7 +139,8 @@ export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
   }
   const stop = can('lifecycle.stop') && status.generation !== null;
   return {
-    primary: stop ? 'stop' : null,
+    primary: stop ? (status.sleepAvailable ? 'sleep' : 'stop') : null,
+    stop,
     restart: can('lifecycle.restart') && status.generation !== null,
     blocked: stop ? null : 'servers.lifecycle.not-allowed',
   };

@@ -305,3 +305,12 @@ pub async fn server_moderate_confirm(
         .confirm(&app, &connection_id, &intent_id, "players/moderate")
         .await
 }
+
+#[tauri::command]
+pub async fn server_sleep(app: AppHandle, manager: Manager<'_>, connection_id: String, expected_generation: String, intent_id: String) -> Result<ServerOperation> {
+    server_lifecycle(app,manager,connection_id,"sleep".into(),Some(expected_generation),intent_id).await
+}
+#[tauri::command]
+pub async fn server_wake(app: AppHandle, manager: Manager<'_>, connection_id: String, intent_id: String) -> Result<ServerOperation> {
+    server_lifecycle(app,manager,connection_id,"wake".into(),None,intent_id).await
+}

@@ -134,6 +134,8 @@ export interface ServerStatus {
   playerCountObservedAtMs: number | null;
   playerRosterRevision?: string | null;
   /** Null/absent on older agents. Explanation only; state/lifecycle are unchanged. */
+  sleepAvailable?: boolean | null;
+  onAgentStart?: 'stay_stopped' | 'sleep' | 'start' | null;
   sleepBlocker?: import('./native-presence').SleepBlocker | null;
   uptimeSeconds: string | null;
   readiness: Readiness;
@@ -220,7 +222,7 @@ export type OperationSummary =
   /** `command` is null when the caller lacks `console.read` (the agent redacts it). */
   | { kind: 'console.command'; command: string | null }
   | { kind: 'players.moderate'; action: string; player: string; reason?: string | null; durationSeconds?: number | null }
-  | { kind: 'lifecycle'; action: 'start' | 'stop' | 'restart' | 'kill'; targetGeneration: string | null; resultGeneration: string | null }
+  | { kind: 'lifecycle'; action: 'start' | 'stop' | 'restart' | 'sleep' | 'wake' | 'kill'; targetGeneration: string | null; resultGeneration: string | null }
   | { kind: 'backup'; action: string; profile: string; snapshot?: string | null }
   | { kind: 'file'; action: string; path: string; to?: string | null }
   /** The canonical input was purged under the agent's retention policy. */
@@ -369,7 +371,7 @@ export const serversNative = {
     call<string>('server_subscribe', { connectionId, topic, channel }),
   unsubscribe: (handle: string) => call<void>('server_unsubscribe', { handle }),
 
-  lifecycle: (connectionId: ConnectionId, action: 'start' | 'stop' | 'restart', expectedGeneration: string | null, intentId: string) =>
+  lifecycle: (connectionId: ConnectionId, action: 'start' | 'stop' | 'restart' | 'sleep' | 'wake', expectedGeneration: string | null, intentId: string) =>
     call<ServerOperation>('server_lifecycle', { connectionId, action, expectedGeneration, intentId }),
   /** Prepare a force kill. Native code keeps the confirmation token. */
   killPrepare: (connectionId: ConnectionId, expectedGeneration: string, intentId: string) =>

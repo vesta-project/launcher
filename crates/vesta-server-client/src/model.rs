@@ -164,6 +164,7 @@ dto!(ServerStatus {
     player_count: Option<u32>, player_count_known: bool, player_count_observed_at_ms: Option<i64>,
     player_roster_revision: Option<String>,
     sleep_blocker: Option<crate::presence::SleepBlocker>,
+    sleep_available: Option<bool>, on_agent_start: Option<String>,
     uptime_seconds: Option<String>, readiness: String, readiness_reason: Option<String>,
     readiness_evidence: String, supervision: String, supervisor: Option<SupervisorStatus>,
 });
@@ -255,6 +256,8 @@ pub enum OperationSummary {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LifecycleAction {
+    Sleep,
+    Wake,
     Start,
     Stop,
     Restart,

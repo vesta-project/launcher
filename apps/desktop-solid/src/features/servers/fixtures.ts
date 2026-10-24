@@ -404,16 +404,16 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       await wait();
       const target = server(connectionId);
       requireOnline(target);
-      requireCapability(target, `lifecycle.${action}`);
+      requireCapability(target, `lifecycle.${action === 'sleep' ? 'stop' : action === 'wake' ? 'start' : action}`);
       const replayed = replay(target, intentId, { action, expectedGeneration });
       if (replayed) return replayed;
       const current = target.snapshot.status;
-      if (action === 'start' && current?.state !== 'stopped') fail('stale_target');
-      if (action !== 'start' && (current?.state !== 'running' || current.generation !== expectedGeneration)) fail('stale_target');
+      if ((action === 'start' || action === 'wake') && current?.state !== 'stopped') fail('stale_target');
+      if (action !== 'start' && action !== 'wake' && !(action === 'stop' && current?.lifecycle === 'sleeping') && (current?.state !== 'running' || current.generation !== expectedGeneration)) fail('stale_target');
       const operation = record(target, `lifecycle.${action}`, { kind: 'lifecycle', action, targetGeneration: expectedGeneration, resultGeneration: null });
       remember(target, intentId, { action, expectedGeneration }, operation);
       setTimeout(() => advance(target, operation, 'running'), 300);
-      if (action === 'start' || action === 'restart') {
+      if (action === 'start' || action === 'wake' || action === 'restart') {
         if (action === 'restart') { setState(target, 'stopping', null); line(target, '[Server thread/INFO]: Stopping server'); }
         setTimeout(() => {
           setState(target, 'running', null);
@@ -435,6 +435,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
         if (target.snapshot.connection.name.includes('hang')) return clone(operation);
         setTimeout(() => {
           setState(target, 'stopped', null);
+          if (target.snapshot.status) target.snapshot.status = { ...target.snapshot.status, lifecycle: action === 'sleep' ? 'sleeping' : 'offline' };
           target.online = [];
           advance(target, operation, 'succeeded');
         }, 3500);

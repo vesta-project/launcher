@@ -632,3 +632,6 @@ servers-presence-max-players-help = The maximum shown in the server list. It doe
 servers-presence-running-note = While Minecraft is running, the server list shows its own MOTD instead.
 servers-presence-edit-motd = Edit the live MOTD
 servers-profile-help = How this server appears in the launcher for everyone you share it with.
+
+servers-lifecycle-sleep = Sleep
+servers-lifecycle-wake = Wake

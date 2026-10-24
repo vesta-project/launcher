@@ -17,6 +17,8 @@ import { RemoveServerDialog } from './remove-dialog';
 
 const actionLabels: Record<LifecycleAction, MessageId> = {
   start: 'servers.lifecycle.start',
+  sleep: 'servers.lifecycle.sleep',
+  wake: 'servers.lifecycle.wake',
   stop: 'servers.lifecycle.stop',
   restart: 'servers.lifecycle.restart',
   kill: 'servers.lifecycle.kill',

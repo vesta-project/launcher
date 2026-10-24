@@ -110,7 +110,7 @@ fn moderation_preserves_reason_and_camel_case_duration() {
 #[test]
 fn lifecycle_action_comes_from_kind_and_generations_stay_strings() {
     let generation = "0123456789abcdef0123456789abcdef";
-    for action in ["start", "stop", "restart", "kill"] {
+    for action in ["start", "stop", "restart", "kill", "sleep", "wake"] {
         let op = operation(
             json!({"kind":format!("lifecycle.{action}"), "summary":{"target_generation":null, "result_generation":generation, "confirmed":true}}),
             None,
@@ -120,8 +120,8 @@ fn lifecycle_action_comes_from_kind_and_generations_stay_strings() {
             json!({"kind":"lifecycle", "action":action, "targetGeneration":null, "resultGeneration":generation})
         );
     }
-    // Sleep and future bindings have no corresponding TS summary variant.
-    for kind in ["lifecycle.sleep", "future.operation", "other"] {
+    // Future bindings have no corresponding TS summary variant.
+    for kind in ["future.operation", "other"] {
         let op = operation(
             json!({"kind":kind, "summary":{"target_generation":generation}}),
             None,

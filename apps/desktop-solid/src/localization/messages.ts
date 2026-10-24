@@ -1590,6 +1590,8 @@ export const messageIds = [
   "servers.lifecycle.restart",
   "servers.lifecycle.sending",
   "servers.lifecycle.start",
+  "servers.lifecycle.sleep",
+  "servers.lifecycle.wake",
   "servers.lifecycle.stop",
   "servers.lifecycle.stopping",
   "servers.lifecycle.unknown-state",
