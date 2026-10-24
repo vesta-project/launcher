@@ -11,6 +11,7 @@ import type { ServersApi, Unsubscribe } from './service';
 import { createFileFixtures } from './fixtures-files';
 import { createManageFixtures, type ManageHost } from './fixtures-manage';
 import { createPresenceFixtures } from './fixtures-presence';
+import { createMetricsFixtures } from './fixtures-metrics';
 import { createHostingFixtures } from './fixtures-hosting';
 import { createBrandingFixtures } from './fixtures-branding';
 import { createAutomationFixtures } from './fixtures-automation';
@@ -598,6 +599,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     // Workflows and run history.
     ...createAutomationFixtures({ server, requireCapability, wait, principals }),
     // World, server software and SFTP.
+    ...createMetricsFixtures({ server, requireOnline, requireCapability }),
     ...createHostingFixtures({ server, requireCapability, wait, datapackOperation: (id: ConnectionId, command: string) => { const target = server(id); const operation = record(target, 'console.command', { kind: 'console.command', command }); setTimeout(() => advance(target, operation, 'succeeded'), 400); return operation; } }),
   };
 

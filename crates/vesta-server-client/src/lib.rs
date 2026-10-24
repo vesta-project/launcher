@@ -5,6 +5,7 @@ pub mod endpoint;
 mod file_transport;
 pub mod files;
 pub mod model;
+pub mod metrics;
 pub mod observation;
 pub mod operations;
 pub mod retry;

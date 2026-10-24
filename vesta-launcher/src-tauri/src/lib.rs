@@ -212,6 +212,7 @@ pub fn run(context: tauri::Context) {
             commands::servers::server_lifecycle,
             commands::servers::server_sleep,
             commands::servers::server_wake,
+            commands::servers::server_metrics_history,
             commands::servers::server_kill_prepare,
             commands::servers::server_kill_confirm,
             commands::servers::server_operations,

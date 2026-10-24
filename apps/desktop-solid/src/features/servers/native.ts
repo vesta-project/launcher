@@ -19,6 +19,7 @@ import { serversManageNative } from './native-manage';
 import { serversPresenceNative } from './native-presence';
 import { serversBrandingNative } from './native-branding';
 import { serversAutomationNative } from './native-automation';
+import { serversMetricsNative } from './native-metrics';
 import { serversJavaNative } from './native-java';
 import { serversHostingNative } from './hosting-native';
 
@@ -419,6 +420,7 @@ export const serversNative = {
   // World, server software and SFTP: see hosting-native.ts.
   ...serversHostingNative,
   ...serversJavaNative,
+  ...serversMetricsNative,
 };
 
 export type ServersNative = typeof serversNative;
