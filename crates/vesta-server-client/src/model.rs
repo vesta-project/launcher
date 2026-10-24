@@ -38,6 +38,8 @@ pub struct Error {
     /// does not blame the server for the launcher's own request pacing.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub local_pressure: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 impl Error {
     pub fn wire_for_route(status: u16, code: &str, retry: Option<u64>, path: &str) -> Self {
@@ -65,6 +67,7 @@ impl Error {
             code,
             retry_after_ms: None,
             local_pressure: false,
+            reason: None,
         }
     }
     pub fn local_pressure(mut self) -> Self {
@@ -72,8 +75,14 @@ impl Error {
         self
     }
     pub fn wire(status: u16, code: &str, retry_after_ms: Option<u64>) -> Self {
+        let reason = (code.len()<=96 && code.bytes().all(|b|b.is_ascii_alphanumeric()||matches!(b,b'_'|b'.'))
+            && ["software_","world_","sftp_","server_install."].iter().any(|prefix|code.starts_with(prefix))).then(||code.to_owned());
         use ErrorCode::*;
         let code = match code {
+            "software_runtime_unavailable" | "software_disabled" => Unsupported,
+            "software_busy" => ServerBusy,
+            "software_plan_expired" | "software_confirmation_invalid" => ConfirmationExpired,
+            "software_revision_conflict" | "world_state_conflict" => StaleTarget,
             "recovery_required" if status == 409 => OutcomeUnknown,
             "backup_busy" => ServerBusy,
             "backups_not_configured" => BackupsNotConfigured,
@@ -107,6 +116,7 @@ impl Error {
             code,
             retry_after_ms,
             local_pressure: false,
+            reason,
         }
     }
 }

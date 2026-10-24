@@ -11,6 +11,7 @@ import type { ServersApi, Unsubscribe } from './service';
 import { createFileFixtures } from './fixtures-files';
 import { createManageFixtures, type ManageHost } from './fixtures-manage';
 import { createPresenceFixtures } from './fixtures-presence';
+import { createHostingFixtures } from './fixtures-hosting';
 import { createBrandingFixtures } from './fixtures-branding';
 import { createAutomationFixtures } from './fixtures-automation';
 
@@ -594,6 +595,8 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     ...createBrandingFixtures({ server, requireCapability, wait, devices: manage.devices } as never),
     // Workflows and run history.
     ...createAutomationFixtures({ server, requireCapability, wait, principals }),
+    // World, server software and SFTP.
+    ...createHostingFixtures({ server, requireCapability, wait } as never),
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {

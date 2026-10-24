@@ -3,6 +3,7 @@ import { toServerError } from './errors';
 import { serverResource } from './resources';
 import { loadOperations, serverCommand } from './store';
 import type { BackupOverview, BackupStorage } from './native-manage';
+import type { SoftwareId } from './hosting-native';
 
 /** Recent tasks; the operations topic keeps the store current after the first read. */
 export const operationsResource = serverResource('operations', (id) => loadOperations(id));
@@ -44,3 +45,13 @@ export const rolesResource = serverResource('roles', (id) => serverCommand((clie
 export const invitationsResource = serverResource('invitations', (id) => serverCommand((client) => client.invitations(id)));
 export const devicesResource = serverResource('devices', (id) => serverCommand((client) => client.devices(id)));
 export const accessSourcesResource = serverResource('access-sources', (id) => serverCommand((client) => client.accessSources(id)));
+
+// World, software and SFTP: owner hosting sections, read when their pane opens.
+export const worldResource = serverResource('world', (id) => serverCommand((client) => client.world(id)));
+export const softwareResource = serverResource('software', (id) => serverCommand((client) => client.software(id)));
+export const softwareJobsResource = serverResource('software-jobs', (id) => serverCommand((client) => client.softwareJobs(id)));
+/** Versions for one software; upstream metadata, so it's read only when picked. */
+export const softwareVersionsResource = serverResource('software-versions', (id, software: SoftwareId) =>
+  serverCommand((client) => client.softwareVersions(id, software)));
+export const sftpResource = serverResource('sftp', (id) => serverCommand((client) => client.sftp(id)));
+export const sftpKeysResource = serverResource('sftp-keys', (id) => serverCommand((client) => client.sftpKeys(id)));

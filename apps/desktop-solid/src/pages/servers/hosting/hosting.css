@@ -1,0 +1,61 @@
+/*
+ * World, software and SFTP surfaces. Built on the server settings panels and callouts.
+ * Hooks: [data-vesta=server-hosting-form|hint|review|warnings|job|block|details|keys|actions|server-sftp-button]
+ */
+@layer launcher {
+  :where([data-vesta="server-hosting-form"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); min-inline-size: 0; }
+  :where([data-vesta="server-hosting-hint"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); line-height: 1.45; }
+  :where([data-vesta="settings-panel-body"]) > :where([data-vesta="server-hosting-hint"]) { padding-inline: var(--vesta-space-4); padding-block-end: var(--vesta-space-3); }
+
+  :where([data-vesta="server-hosting-review"]) {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--vesta-space-1-5, 6px) var(--vesta-space-4);
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-hosting-review"]) dt { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-hosting-review"]) dd { margin: 0; overflow-wrap: anywhere; }
+
+  :where([data-vesta="server-hosting-warnings"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1-5, 6px);
+    margin: 0;
+    padding-inline-start: var(--vesta-space-4);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: 1.45;
+  }
+
+  :where([data-vesta="server-hosting-job"]) { padding: 0 var(--vesta-space-4) var(--vesta-space-3); }
+
+  :where([data-vesta="server-hosting-block"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-hosting-block"]) h4 { margin: 0; font-size: var(--vesta-text-sm); font-weight: 600; }
+  :where([data-vesta="server-hosting-block"]) + :where([data-vesta="server-hosting-block"]),
+  :where([data-vesta="server-hosting-details"]) + :where([data-vesta="server-hosting-block"]) {
+    padding-block-start: var(--vesta-space-3);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="server-hosting-form"]) :where([data-vesta="setting-row"]) { padding-inline: 0; }
+  :where([data-vesta="server-hosting-actions"]) { display: flex; align-items: center; justify-content: flex-end; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-hosting-actions"]) > :where([data-vesta="field"]) { flex: 1; }
+
+  :where([data-vesta="server-hosting-keys"]) { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="server-hosting-keys"]) li {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding-block: var(--vesta-space-1-5, 6px);
+  }
+  :where([data-vesta="server-hosting-key-copy"]) { display: flex; flex: 1; flex-direction: column; min-inline-size: 0; font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-hosting-key-copy"]) code {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="server-sftp-button"]) { display: inline-flex; align-items: center; gap: 2px; }
+}

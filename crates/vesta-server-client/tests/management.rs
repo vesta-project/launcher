@@ -15,6 +15,30 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn hosting_bridge_preserves_seed_precision_and_keeps_approval_tokens_native() {
+    use vesta_server_client::hosting::SoftwarePlanRequest;
+    let _owner=OWNER.lock().await;
+    let a=Agent::start().await;
+    a.set("GET","/api/v3/manage/world",json!({"name":"world","seed":"-9223372036854775808","configured_seed":"","exists":true,"revision":"a".repeat(64)}));
+    assert_eq!(a.client.world().await.unwrap().seed.as_deref(),Some("-9223372036854775808"));
+    let id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    a.set("POST","/api/v3/manage/software/plan",json!({"plan_id":id,"confirmation_token":"native-secret","expires_at_ms":4102444800000i64,"expected_revision":9007199254740993u64,"software":"paper","version":"1.21.4","build":null,"java":{"major":21,"evidence":"fixture"},"warnings":[],"risks":[]}));
+    let plan=a.client.software_plan(SoftwarePlanRequest{software:"paper".into(),version:"1.21.4".into(),build:None,loader_version:None,experimental:None}).await.unwrap();
+    assert_eq!(plan.expected_revision,"9007199254740993");
+    assert!(!serde_json::to_string(&plan).unwrap().contains("native-secret"));
+    assert_eq!(a.calls("/api/v3/manage/software/plan")[0].body["experimental"],false);
+    a.set("POST","/api/v3/manage/software/apply",json!({"id":"job","kind":"apply","state":"queued","created_at_ms":1,"updated_at_ms":1,"error":null}));
+    a.client.software_apply(id.into(),true,false,"apply-once").await.unwrap();
+    a.client.software_apply(id.into(),true,false,"apply-once").await.unwrap();
+    let calls=a.calls("/api/v3/manage/software/apply");
+    assert_eq!(calls.len(),2);assert_eq!(calls[0].key,calls[1].key);assert_eq!(calls[0].body,calls[1].body);
+    assert_eq!(calls[0].body["confirmation_token"],"native-secret");
+    assert_eq!(a.client.software_apply(id.into(),true,false,"another-intent").await.unwrap_err().code,ErrorCode::Conflict);
+    a.reply("POST","/api/v3/manage/software/apply",403,json!({"code":"software_forbidden"}));
+    assert!(a.client.software_apply(id.into(),true,false,"apply-once").await.is_err());
+}
+
+#[tokio::test]
 async fn conflicting_mutations_retire_cached_projections_before_the_next_read() {
     let _owner = OWNER.lock().await;
     for (route, status, code, expected) in [

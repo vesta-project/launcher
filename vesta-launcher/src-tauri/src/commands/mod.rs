@@ -1,5 +1,6 @@
 pub mod app;
 pub mod servers;
+pub mod servers_hosting;
 pub mod server_files;
 pub mod servers_manage;
 pub mod servers_presence;

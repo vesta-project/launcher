@@ -99,7 +99,8 @@ impl ServerManager {
                 );
                 if let Some(job_id) = job_id {
                     if !terminal && state != Some("awaiting_confirmation") {
-                        self.track_backup(app, id, job_id, action);
+                        if action.starts_with("software/") {self.track_software(app,id,job_id,action);}
+                        else {self.track_backup(app, id, job_id, action);}
                     }
                 }
                 self.changed(app);
@@ -180,7 +181,7 @@ fn backup_terminal(state: &str) -> bool {
         "succeeded" | "failed" | "uncertain" | "recovery_required"
     )
 }
-fn management_activity(
+pub(super) fn management_activity(
     app: &AppHandle,
     connection: &str,
     receipt: &str,

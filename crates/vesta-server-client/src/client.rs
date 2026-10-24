@@ -2,6 +2,8 @@
 pub mod automation;
 #[path = "branding.rs"]
 pub mod branding;
+#[path = "hosting.rs"]
+pub mod hosting;
 #[path = "management.rs"]
 pub mod management;
 #[path = "presence.rs"]
@@ -50,6 +52,7 @@ pub struct Client {
     completed_reads: StdMutex<VecDeque<String>>,
     pub(crate) file_validators: Mutex<HashMap<String, (String, String)>>,
     management: management::State,
+    hosting: hosting::State,
 }
 #[derive(Clone)]
 enum Intent {
@@ -153,6 +156,7 @@ impl Client {
             completed_reads: Default::default(),
             file_validators: Default::default(),
             management: Default::default(),
+            hosting: Default::default(),
         })
     }
     pub async fn pair(

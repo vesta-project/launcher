@@ -2,12 +2,12 @@
 // how old URLs map onto them, when a pane needs a live agent, which errors the header
 // already explains, and the one notice the header strip shows.
 import type { MessageId } from '../../localization/messages';
-import { anyVisible, gate } from './capabilities';
+import { anyVisible, gate, roleKey } from './capabilities';
 import { connectionFact, lifecycleControls, readinessReasonMessage, supervisorWarnings } from './model';
 import type { ServerErrorCode, ServerSnapshot } from './native';
 
 export type MainTabId = 'overview' | 'console' | 'files' | 'automation' | 'backups' | 'activity';
-export type SettingsSectionId = 'general' | 'game' | 'presence' | 'players' | 'access' | 'connection';
+export type SettingsSectionId = 'general' | 'game' | 'world' | 'software' | 'presence' | 'players' | 'access' | 'connection';
 export type SettingsGroupId = 'server' | 'people' | 'device';
 
 export interface ShellTab<Id extends string = string> {
@@ -22,6 +22,8 @@ export interface ShellTab<Id extends string = string> {
 
 export interface ShellSection extends ShellTab<SettingsSectionId> {
   group: SettingsGroupId;
+  /** Owner-reserved on the agent: hidden once the caller's role is known to be another. */
+  owner?: boolean;
 }
 
 export const mainTabs: readonly ShellTab<MainTabId>[] = [
@@ -38,6 +40,8 @@ const ACCESS_NEEDS = ['principals.view', 'invitations.create', 'devices.revoke',
 export const settingsSections: readonly ShellSection[] = [
   { id: 'general', group: 'server', label: 'servers.settings.general', icon: 'icons/content/gear', needs: ['config.view'], live: true },
   { id: 'game', group: 'server', label: 'servers.settings.game', icon: 'icons/content/sliders', needs: ['config.view'], live: true },
+  { id: 'world', group: 'server', label: 'server-hosting.world', icon: 'icons/content/globe', needs: ['config.view'], live: true },
+  { id: 'software', group: 'server', label: 'server-hosting.software', icon: 'icons/content/cube', needs: ['content.install'], live: true, owner: true },
   { id: 'presence', group: 'server', label: 'servers.tab.presence', icon: 'icons/status/live', needs: ['config.view'], live: true },
   { id: 'players', group: 'people', label: 'servers.tab.players', icon: 'icons/content/people', needs: ['players.view'], live: true },
   { id: 'access', group: 'people', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ACCESS_NEEDS, live: true },
@@ -109,8 +113,11 @@ export function visibleMainTabs(input: VisibleTabsInput): ShellTab<MainTabId>[] 
   });
 }
 
-export function visibleSections(snapshot: Pick<ServerSnapshot, 'capabilities'>): ShellSection[] {
-  return settingsSections.filter((section) => !section.needs.length || anyVisible(snapshot.capabilities, section.needs));
+export function visibleSections(snapshot: Pick<ServerSnapshot, 'capabilities'> & { connection?: { role: string | null } }): ShellSection[] {
+  const role = snapshot.connection?.role;
+  return settingsSections.filter((section) =>
+    (!section.needs.length || anyVisible(snapshot.capabilities, section.needs))
+    && !(section.owner && role && roleKey(role) !== 'owner'));
 }
 
 /** The agent can be asked for data right now. */

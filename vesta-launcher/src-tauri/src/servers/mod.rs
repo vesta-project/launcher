@@ -1,5 +1,6 @@
 mod credentials;
 mod files;
+mod hosting;
 mod management;
 mod store;
 mod subscriptions;

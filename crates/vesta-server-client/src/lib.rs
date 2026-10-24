@@ -13,7 +13,7 @@ pub mod scheduler;
 pub mod streams;
 pub mod transport;
 pub mod trust;
-pub use client::{automation, branding, management, presence, Client};
+pub use client::{automation, branding, hosting, management, presence, Client};
 pub use model::{Error, ErrorCode, Result};
 // Keep callers independent of the HTTP major version selected by this crate.
 pub use reqwest::Method;

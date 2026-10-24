@@ -21,6 +21,8 @@ import type { FileEntry, ServerCommandError, ServerSnapshot, TrashEntry, UploadC
 import { ServerErrorNote } from '../parts';
 import { FileEditor } from './file-editor';
 import { LogFile } from './log-file';
+import { SftpButton } from '../hosting/sftp';
+import { gate } from '../../../features/servers/capabilities';
 import './files-tab.css';
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -156,6 +158,9 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
           <Show when={view() === 'browse'} fallback={
             <Button size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-back" />} onClick={() => setView('browse')}>{t('server-files.back-to-files')}</Button>
           }>
+            <Show when={gate(props.snapshot.capabilities, 'config.view') !== 'denied'}>
+              <SftpButton snapshot={props.snapshot} />
+            </Show>
             <Show when={folder().trash}>
               <IconButton size="sm" variant="ghost" icon={<Icon name="icons/actions/delete" />} label={t('server-files.trash')} onClick={() => setView('trash')} />
             </Show>

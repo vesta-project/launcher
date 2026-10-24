@@ -19,6 +19,7 @@ import { serversManageNative } from './native-manage';
 import { serversPresenceNative } from './native-presence';
 import { serversBrandingNative } from './native-branding';
 import { serversAutomationNative } from './native-automation';
+import { serversHostingNative } from './hosting-native';
 
 export const nativeServers = typeof window !== 'undefined' && isTauri();
 
@@ -56,6 +57,8 @@ export interface ServerCommandError {
   retryAfterMs?: number | null;
   /** The launcher paced this request locally; it never reached the server. */
   localPressure?: boolean;
+  /** The agent's fixed wire code when it adds detail, e.g. `software_runtime_unavailable`. Never free text. */
+  reason?: string | null;
 }
 
 export const isServerCommandError = (value: unknown): value is ServerCommandError =>
@@ -408,6 +411,8 @@ export const serversNative = {
   ...serversBrandingNative,
   // Workflows and run history: see native-automation.ts.
   ...serversAutomationNative,
+  // World, server software and SFTP: see hosting-native.ts.
+  ...serversHostingNative,
 };
 
 export type ServersNative = typeof serversNative;

@@ -6,7 +6,8 @@ import { anyVisible } from '../../features/servers/capabilities';
 import { prefetchServerResource } from '../../features/servers/resources';
 import {
   accessSourcesResource, backupStorageResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
-  motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, usersResource, whitelistResource,
+  motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, softwareJobsResource, softwareResource,
+  usersResource, whitelistResource, worldResource,
 } from '../../features/servers/server-resources';
 import { workflowsResource } from './automation/resources';
 import { agentReachable } from '../../features/servers/shell-model';
@@ -37,6 +38,11 @@ registerServerPrefetch('backups', (snapshot) => {
 });
 registerServerPrefetch('general', (snapshot) => prefetchServerResource(snapshot.connection.id, brandingResource));
 registerServerPrefetch('game', (snapshot) => prefetchServerResource(snapshot.connection.id, propertiesResource));
+registerServerPrefetch('world', (snapshot) => prefetchServerResource(snapshot.connection.id, worldResource));
+registerServerPrefetch('software', (snapshot) => {
+  prefetchServerResource(snapshot.connection.id, softwareResource);
+  prefetchServerResource(snapshot.connection.id, softwareJobsResource);
+});
 registerServerPrefetch('presence', (snapshot) => {
   prefetchServerResource(snapshot.connection.id, sleepPolicyResource);
   prefetchServerResource(snapshot.connection.id, motdPolicyResource);
