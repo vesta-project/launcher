@@ -1,8 +1,8 @@
 import {
   BreadcrumbItem, Breadcrumbs, Button, ContextMenu, ContextMenuItem, ContextMenuSeparator, Dialog, IconButton, Menu, MenuItem,
-  MenuSeparator, Progress, Skeleton, TextField, toast,
+  MenuSeparator, Progress, SegmentedControl, Skeleton, TextField, toast,
 } from '@vesta/ui';
-import { For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { route } from '../../../app/router';
@@ -12,7 +12,8 @@ import type { MessageId } from '../../../localization/messages';
 import { errorMessage } from '../../../features/servers/errors';
 import {
   baseName, childPath, decodeRouteSegments, encodeRouteSegments, fileActions, fileIcon, fileKind, folderActions, formatBytes,
-  isArchivedLog, isExecutableContent, nameProblem, openMode, parentPath, protectedHome, sortEntries, uploadProblem,
+  isArchivedLog, isExecutableContent, nameProblem, openMode, parentPath, planUploads, protectedHome, sortEntries, uploadConflict, uploadLabel,
+  type ConflictChoice,
 } from '../../../features/servers/files-model';
 import { IntentMemo, age, newIntentId } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
@@ -23,6 +24,11 @@ import { FileEditor } from './file-editor';
 import { LogFile } from './log-file';
 import { SftpButton } from '../hosting/sftp';
 import { gate } from '../../../features/servers/capabilities';
+import { useNativeDropZone } from '../../../features/file-drop/zone';
+import { getDropController } from '../../../features/file-drop/native-bridge';
+import { nativeInstances } from '../../../features/instances/native-service';
+import { usingFixtures } from '../../../features/servers/service';
+import { draggingFiles, droppedPaths, folderAt } from './files-drop';
 import './files-tab.css';
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -30,6 +36,8 @@ const formatDate = (ms: number | null) => (ms === null ? '' : dateFormat.format(
 
 type Opened = { path: string; mode: 'editor' | 'log' };
 type NameRequest = { kind: 'file' | 'folder' | 'rename'; entry?: FileEntry };
+/** Files waiting in the upload dialog, the folder they go to, and its listing for conflicts. */
+type UploadBatch = { files: UploadCandidate[]; directory: string; siblings: FileEntry[]; auto: boolean };
 
 /** Game-root browser: one directory page at a time, with editor, log viewer, trash and transfers. */
 export function FilesTab(props: { snapshot: ServerSnapshot }) {
@@ -47,7 +55,11 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
   const [opened, setOpened] = createSignal<Opened | null>(null, { name: 'server-files:opened' });
   const [naming, setNaming] = createSignal<NameRequest | null>(null, { name: 'server-files:naming' });
   const [deleting, setDeleting] = createSignal<FileEntry | null>(null, { name: 'server-files:deleting' });
-  const [uploads, setUploads] = createSignal<UploadCandidate[] | null>(null, { name: 'server-files:uploads' });
+  const [uploads, setUploads] = createSignal<UploadBatch | null>(null, { name: 'server-files:uploads' });
+  /** The folder row files are being dragged over, if any; a drop there uploads into it. */
+  const [dropFolder, setDropFolder] = createSignal<string | null>(null, { name: 'server-files:drop-folder' });
+  /** Browser previews only: a DOM file drag is over the list. */
+  const [domDrag, setDomDrag] = createSignal(false, { name: 'server-files:dom-drag' });
   const folder = () => folderActions(props.snapshot.capabilities);
   const sorted = createMemo(() => sortEntries(entries()), { name: 'server-files:sorted' });
   const pathOf = (entry: FileEntry) => (directory() ? `${directory()}/${entry.name}` : entry.name);
@@ -100,9 +112,72 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
   const pickUploads = async () => {
     try {
       const picked = await serverCommand((client) => client.uploadPick());
-      if (picked.length) setUploads((current) => [...(current ?? []), ...picked]);
+      if (picked.length) {
+        setUploads((current) => current
+          ? { ...current, files: [...current.files, ...picked], auto: false }
+          : { files: picked, directory: directory(), siblings: entries(), auto: false });
+      }
     } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
   };
+
+  // ---- Drag and drop from the OS: onto the list (this folder) or onto a folder row.
+  let dropElement: HTMLDivElement | undefined;
+  const dropAllowed = () => folder().upload && view() === 'browse' && !opened() && routePath() !== null && !uploads();
+  const dropHint = () => (dropFolder() ? t('server-files.drop-into', { name: dropFolder()! }) : t('server-files.drop-hint'));
+  const receiveDrop = async (paths: string[], into: string | null) => {
+    if (!paths.length || !untrack(dropAllowed)) return;
+    const current = untrack(directory);
+    const target = into ? childPath(current, into) ?? current : current;
+    try {
+      const files = await serverCommand((client) => client.uploadDropped(paths));
+      if (!files.length) return;
+      // A folder row's own listing tells which names are taken there.
+      const siblings = target === current ? untrack(entries) : (await serverCommand((client) => client.filesList(id(), target, null))).items;
+      setUploads({ files, directory: target, siblings, auto: true });
+    } catch {
+      toast.show({ title: t('server-files.drop-failed'), tone: 'danger' });
+    }
+  };
+  // In the app: native drag-drop events (real paths). The hovered folder row comes from the
+  // same hit list the drop controller uses, so the row and the drop agree.
+  let nativeFolder: string | null = null;
+  useNativeDropZone({
+    element: () => dropElement,
+    disabled: () => !dropAllowed(),
+    hint: dropHint,
+    drop: (paths) => { const into = nativeFolder; nativeFolder = null; setDropFolder(null); void receiveDrop(paths, into); },
+  });
+  onSettled(() => {
+    if (!nativeInstances) return;
+    return getDropController().observe((observation) => {
+      if (observation.type === 'end') { setDropFolder(null); return; }
+      const over = observation.hits[0] ? folderAt(observation.hits[0], dropElement) : null;
+      nativeFolder = over;
+      if (observation.type === 'move') setDropFolder(untrack(dropAllowed) ? over : null);
+    });
+  });
+  // Browser previews: DOM drag events with the dropped entries' relative paths.
+  const domDropZone = usingFixtures && !nativeInstances;
+  const domHandlers = domDropZone ? {
+    onDragOver: (event: DragEvent) => {
+      if (!draggingFiles(event) || !dropAllowed()) return;
+      event.preventDefault();
+      event.dataTransfer!.dropEffect = 'copy';
+      setDomDrag(true);
+      setDropFolder(folderAt(event.target, dropElement));
+    },
+    onDragLeave: (event: DragEvent) => {
+      if (dropElement?.contains(event.relatedTarget as Node | null)) return;
+      setDomDrag(false); setDropFolder(null);
+    },
+    onDrop: (event: DragEvent) => {
+      if (!draggingFiles(event) || !dropAllowed()) return;
+      event.preventDefault();
+      const into = folderAt(event.target, dropElement);
+      setDomDrag(false); setDropFolder(null);
+      void droppedPaths(event.dataTransfer!).then((paths) => receiveDrop(paths, into));
+    },
+  } : {};
 
   const actions = (entry: FileEntry, context = false) => {
     const Item = context ? ContextMenuItem : MenuItem;
@@ -182,7 +257,9 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
 
       <Show when={opened()} keyed fallback={
         <Show when={view() === 'browse'} fallback={<TrashView snapshot={props.snapshot} onRestored={refresh} />}>
-          <div data-vesta="server-pane-body" class="server-files-body">
+          <div data-vesta="server-pane-body" class="server-files-body" ref={dropElement} {...domHandlers}
+            data-drop-zone={domDropZone ? '' : undefined}
+            data-drop-target={domDrag() ? 'active' : undefined} data-drop-hint={domDrag() ? dropHint() : undefined}>
             <Show when={routePath() === null}>
               <p data-vesta="server-callout" data-tone="warning">{t('server-files.bad-route')}</p>
             </Show>
@@ -201,7 +278,9 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
                   <For each={sorted()}>
                     {(entry) => (
                       <ContextMenu trigger={(contextProps) => (
-                        <div {...contextProps} data-vesta="server-file-row" role="row" data-protected={protectedHome(pathOf(entry)) ? '' : undefined}>
+                        <div {...contextProps} data-vesta="server-file-row" role="row" data-protected={protectedHome(pathOf(entry)) ? '' : undefined}
+                          data-drop-folder={entry.kind === 'directory' ? entry.name : undefined}
+                          data-drop-over={entry.kind === 'directory' && dropFolder() === entry.name ? '' : undefined}>
                           <button type="button" role="cell" data-vesta="server-file-open" onClick={() => open(entry)}>
                             <span data-vesta="server-file-icon" data-kind={fileKind(pathOf(entry), entry.kind)}>
                               <Icon name={fileIcon[fileKind(pathOf(entry), entry.kind)]} />
@@ -255,9 +334,10 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
         {(entry) => <DeleteDialog snapshot={props.snapshot} path={pathOf(entry)} onClose={() => setDeleting(null)} onDone={() => { setDeleting(null); refresh(); }} />}
       </Show>
       <Show when={uploads()} keyed>
-        {(files) => (
-          <UploadDialog snapshot={props.snapshot} directory={directory()} siblings={entries()} files={files}
-            onPickMore={() => void pickUploads()} onRemove={(localId) => setUploads(files.filter((file) => file.localId !== localId))}
+        {(batch) => (
+          <UploadDialog snapshot={props.snapshot} directory={batch.directory} siblings={batch.siblings} files={batch.files} auto={batch.auto}
+            onPickMore={() => void pickUploads()}
+            onRemove={(localId) => setUploads({ ...batch, files: batch.files.filter((file) => file.localId !== localId), auto: false })}
             onClose={() => { setUploads(null); refresh(); }} />
         )}
       </Show>
@@ -374,40 +454,72 @@ function DeleteDialog(props: { snapshot: ServerSnapshot; path: string; onClose: 
 
 type UploadState = { offset: number; total: number; state: 'waiting' | 'sending' | 'done' | 'failed'; error?: ServerCommandError };
 
-/** Uploads within the server's 16 MiB total, in 1 MiB chunks with per-file progress. */
+/**
+ * Uploads within the server's 16 MiB total, in 1 MiB chunks with per-file progress. Picked
+ * and dropped files share it: names already in the folder ask Replace / Keep both / Skip,
+ * dropped folders are created first, and a clean drop starts on its own.
+ */
 function UploadDialog(props: {
-  snapshot: ServerSnapshot; directory: string; siblings: FileEntry[]; files: UploadCandidate[];
+  snapshot: ServerSnapshot; directory: string; siblings: FileEntry[]; files: UploadCandidate[]; auto: boolean;
   onPickMore: () => void; onRemove: (localId: string) => void; onClose: () => void;
 }) {
   const [progress, setProgress] = createSignal<Record<string, UploadState>>({}, { name: 'server-files:upload-progress' });
   const [running, setRunning] = createSignal(false, { name: 'server-files:upload-running' });
+  const [choices, setChoices] = createSignal<Record<string, ConflictChoice>>({}, { name: 'server-files:upload-choices' });
+  const [folderError, setFolderError] = createSignal<ServerCommandError | null>(null, { name: 'server-files:upload-folder-error' });
   const id = props.snapshot.connection.id;
-  const total = () => props.files.reduce((sum, file) => sum + Number(file.size), 0);
-  const exists = (file: UploadCandidate) => props.siblings.some((entry) => entry.name.toLowerCase() === file.name.toLowerCase());
-  const problem = () => uploadProblem(props.files) ?? (props.files.some(exists) ? 'server-files.upload.exists' as MessageId : null);
-  const executable = () => props.files.some((file) => { const path = childPath(props.directory, file.name); return !!path && isExecutableContent(path); });
-  const finished = () => props.files.length > 0 && props.files.every((file) => progress()[file.localId]?.state === 'done');
+  const plan = createMemo(() => planUploads(props.directory, props.files, props.siblings, choices()), { name: 'server-files:upload-plan' });
+  const step = (localId: string) => plan().uploads.find((entry) => entry.localId === localId);
+  const total = () => props.files.filter((file) => step(file.localId)).reduce((sum, file) => sum + Number(file.size), 0);
+  const conflicts = () => props.files.filter((file) => uploadConflict(file, props.siblings));
+  const canReplace = (file: UploadCandidate) => uploadConflict(file, props.siblings) === 'file'
+    && fileActions(props.snapshot.capabilities, childPath(props.directory, file.name) ?? file.name, { kind: 'file', size: file.size }).delete;
+  const problem = (): MessageId | null => plan().problem
+    ?? (plan().folders.length && !folderActions(props.snapshot.capabilities).newFolder ? 'server-files.upload.folders-denied' : null);
+  const executable = () => plan().uploads.some((entry) => isExecutableContent(entry.path));
+  const finished = () => plan().uploads.length > 0 && plan().uploads.every((entry) => progress()[entry.localId]?.state === 'done');
+  const ready = () => !running() && !problem() && !plan().unresolved.length && plan().uploads.length > 0;
+  const where = () => (props.directory ? baseName(props.directory) : t('server-files.game-root'));
   let cancelled = false;
   let active: string | null = null;
 
   const put = (localId: string, next: UploadState) => setProgress((current) => ({ ...current, [localId]: next }));
+  const choose = (localId: string, choice: string) => setChoices((current) => ({ ...current, [localId]: choice as ConflictChoice }));
   const start = async () => {
+    const current = plan();
     setRunning(true);
+    setFolderError(null);
     cancelled = false;
-    for (const file of props.files) {
+    // Folders first, parents before children; one that already exists is fine.
+    for (const folder of current.folders) {
+      try { await serverCommand((client) => client.fileMkdir(id, folder, newIntentId())); }
+      catch (reason) {
+        if ((reason as ServerCommandError).code === 'stale_target') continue;
+        setFolderError(reason as ServerCommandError);
+        setRunning(false);
+        return;
+      }
+    }
+    for (const entry of current.uploads) {
       if (cancelled) break;
-      if (progress()[file.localId]?.state === 'done') continue;
-      const path = childPath(props.directory, file.name)!;
+      if (progress()[entry.localId]?.state === 'done') continue;
+      const file = props.files.find((candidate) => candidate.localId === entry.localId)!;
       const size = Number(file.size);
       put(file.localId, { offset: 0, total: size, state: 'sending' });
       try {
-        const begun = await serverCommand((client) => client.uploadBegin(id, file.localId, path, null, newIntentId()));
+        // Replace keeps the original recoverable: it goes to the trash, then the upload creates the file.
+        if (entry.mode === 'replace') {
+          await serverCommand((client) => client.fileDelete(id, entry.path, null, newIntentId())).catch((reason: ServerCommandError) => {
+            if (reason.code !== 'not_found') throw reason;
+          });
+        }
+        const begun = await serverCommand((client) => client.uploadBegin(id, file.localId, entry.path, null, newIntentId()));
         active = begun.uploadId;
         let offset = Number(begun.offset);
         while (offset < size) {
           if (cancelled) throw { code: 'invalid_input' } satisfies ServerCommandError;
-          const step = await serverCommand((client) => client.uploadChunk(id, begun.uploadId));
-          offset = Number(step.offset);
+          const chunk = await serverCommand((client) => client.uploadChunk(id, begun.uploadId));
+          offset = Number(chunk.offset);
           put(file.localId, { offset, total: size, state: 'sending' });
         }
         await serverCommand((client) => client.uploadFinish(id, begun.uploadId));
@@ -419,13 +531,15 @@ function UploadDialog(props: {
       }
     }
     setRunning(false);
-    if (finished()) toast.show({ title: t('server-files.uploaded', { count: props.files.length }), tone: 'success' });
+    if (finished()) toast.show({ title: t('server-files.uploaded', { count: current.uploads.length }), tone: 'success' });
   };
   const close = () => { cancelled = true; props.onClose(); };
+  // A drop with nothing to decide starts straight away; anything to choose waits for the owner.
+  onSettled(() => { if (props.auto && untrack(ready)) void start(); });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) close(); }} closeLabel={t('nav.close')} size="md"
-      title={t('server-files.upload-title')}
+      title={props.directory ? t('server-files.upload-into-title', { name: where() }) : t('server-files.upload-title')}
       description={t('server-files.upload-description', { limit: formatBytes(16 * 1_048_576) })}
       footer={<>
         <Show when={!running() && !finished()}>
@@ -434,22 +548,35 @@ function UploadDialog(props: {
         <span data-vesta="server-toolbar-spacer" />
         <Button variant="ghost" onClick={close}>{finished() ? t('nav.close') : t('common.cancel')}</Button>
         <Show when={!finished()}>
-          <Button tone="accent" disabled={running() || !!problem()} onClick={() => void start()}>{t('server-files.upload')}</Button>
+          <Button tone="accent" disabled={!ready()} onClick={() => void start()}>{t('server-files.upload')}</Button>
         </Show>
       </>}
     >
+      <Show when={conflicts().length && !running() && !finished()}>
+        <p data-vesta="server-muted">{t('server-files.upload.choose')}</p>
+      </Show>
       <ul data-vesta="server-upload-list">
         <For each={props.files}>
           {(file) => {
             const state = () => progress()[file.localId];
+            const conflict = () => uploadConflict(file, props.siblings);
+            const skipped = () => choices()[file.localId] === 'skip';
+            const target = () => step(file.localId)?.path;
+            const renamed = () => (target() && baseName(target()!) !== file.name ? baseName(target()!) : null);
             return (
-              <li data-vesta="server-upload-row">
+              <li data-vesta="server-upload-row" data-skipped={skipped() ? '' : undefined}>
                 <span data-vesta="server-file-icon" data-kind={fileKind(file.name)}><Icon name={fileIcon[fileKind(file.name)]} /></span>
                 <div data-vesta="server-upload-copy">
-                  <span data-vesta="server-file-name">{file.name}</span>
+                  <span data-vesta="server-file-name">
+                    {uploadLabel(file)}
+                    <Show when={renamed()}>{(name) => <span data-vesta="server-upload-renamed">{t('server-files.upload.renamed', { name: name() })}</span>}</Show>
+                  </span>
                   <Show when={state() && state()!.state !== 'failed'} fallback={
-                    <span data-vesta="server-file-meta" data-tone={state()?.state === 'failed' || exists(file) ? 'danger' : undefined}>
-                      {state()?.error ? t(errorMessage(state()!.error)) : exists(file) ? t('server-files.upload.exists') : formatBytes(file.size)}
+                    <span data-vesta="server-file-meta" data-tone={state()?.state === 'failed' || (conflict() && !choices()[file.localId]) ? 'danger' : undefined}>
+                      {state()?.error ? t(errorMessage(state()!.error))
+                        : skipped() ? t('server-files.upload.skipped')
+                          : conflict() === 'directory' ? t('server-files.upload.folder-exists')
+                            : conflict() ? t('server-files.upload.exists') : formatBytes(file.size)}
                     </span>
                   }>
                     <Progress size="sm" value={Math.round((state()!.offset / Math.max(1, state()!.total)) * 100)}
@@ -457,6 +584,15 @@ function UploadDialog(props: {
                       label={state()!.state === 'done' ? t('server-files.upload.done') : `${formatBytes(state()!.offset)} / ${formatBytes(state()!.total)}`} />
                   </Show>
                 </div>
+                <Show when={conflict() && !running() && !state()}>
+                  <SegmentedControl size="sm" aria-label={t('server-files.upload.choose')} value={choices()[file.localId]}
+                    onChange={(value) => choose(file.localId, value)}
+                    options={[
+                      { value: 'replace', label: t('server-files.upload.replace'), disabled: !canReplace(file) },
+                      { value: 'keep-both', label: t('server-files.upload.keep-both') },
+                      { value: 'skip', label: t('server-files.upload.skip') },
+                    ]} />
+                </Show>
                 <Show when={!running() && state()?.state !== 'done'}>
                   <IconButton size="sm" variant="ghost" icon={<Icon name="icons/actions/close" />} label={t('common.remove')} onClick={() => props.onRemove(file.localId)} />
                 </Show>
@@ -466,12 +602,16 @@ function UploadDialog(props: {
         </For>
       </ul>
       <p data-vesta="server-muted">{t('server-files.upload-total', { size: formatBytes(total()), limit: formatBytes(16 * 1_048_576) })}</p>
+      <Show when={plan().uploads.some((entry) => entry.mode === 'replace')}>
+        <p data-vesta="server-muted">{t('server-files.upload.replace-note')}</p>
+      </Show>
       <Show when={problem()}>
         {(message) => <p data-vesta="server-callout" data-tone="danger">{t(message())}</p>}
       </Show>
       <Show when={executable()}>
         <p data-vesta="server-callout" data-tone="warning">{t('server-files.executable-warning')}</p>
       </Show>
+      <ServerErrorNote error={folderError()} />
     </Dialog>
   );
 }

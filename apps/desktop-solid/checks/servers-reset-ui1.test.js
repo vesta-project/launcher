@@ -8,6 +8,7 @@ import { STATUS_INTERVAL_MS, freshnessVisible, minecraftFactNow } from '../src/f
 import {
   changeBlocker, choiceState, initialChoice, keepMinecraft, latestVersionLabel, softwareIcon, softwareVersionKind, softwareVersionText,
 } from '../src/features/servers/software-flow';
+import { keepBothName, planUploads, uploadConflict, uploadLabel } from '../src/features/servers/files-model';
 
 const status = { state: 'running', readiness: 'ready', lifecycle: 'running', playerCount: 0, playerCountKnown: true, playerCountObservedAtMs: null };
 const snapshot = (phase, observedAtMs) => ({ state: { phase }, status, statusObservedAtMs: observedAtMs });
@@ -88,5 +89,63 @@ describe('[software] inline change flow', () => {
 
   test('every software has a bundled mark', () => {
     for (const id of SOFTWARE_IDS) expect(existsSync(join(import.meta.dir, '..', 'src', 'assets', `${softwareIcon[id]}.svg`)), id).toBe(true);
+  });
+});
+
+describe('[files] dropped files become an upload plan', () => {
+  const siblings = [
+    { name: 'mods', kind: 'directory', size: '0', modifiedAtMs: null },
+    { name: 'start.sh', kind: 'file', size: '80', modifiedAtMs: null },
+    { name: 'start (2).sh', kind: 'file', size: '80', modifiedAtMs: null },
+  ];
+  const file = (localId, name, folder, size = '1000') => ({ localId, name, size, ...(folder ? { folder } : {}) });
+
+  test('loose files that collide wait for a choice; folder contents never collide with the listing', () => {
+    expect(uploadConflict(file('a', 'START.SH'), siblings)).toBe('file');
+    expect(uploadConflict(file('a', 'mods'), siblings)).toBe('directory');
+    expect(uploadConflict(file('a', 'start.sh', 'plugins'), siblings)).toBeNull();
+    const plan = planUploads('', [file('a', 'start.sh'), file('b', 'welcome.txt')], siblings, {});
+    expect(plan.unresolved).toEqual(['a']);
+    expect(plan.uploads).toEqual([{ localId: 'b', path: 'welcome.txt', mode: 'create' }]);
+  });
+
+  test('replace trashes then creates; keep both picks a free name; skip drops the file', () => {
+    const files = [file('a', 'start.sh'), file('b', 'start.sh', null, '5'), file('c', 'start.sh')];
+    // Same-name files in one drop are separate candidates; each decides for itself.
+    const plan = planUploads('', files, siblings, { a: 'replace', b: 'keep-both', c: 'skip' });
+    expect(plan.uploads).toEqual([
+      { localId: 'a', path: 'start.sh', mode: 'replace' },
+      { localId: 'b', path: 'start (3).sh', mode: 'create' },
+    ]);
+    expect(plan.skipped).toEqual(['c']);
+    expect(plan.unresolved).toEqual([]);
+    expect(keepBothName('notes', new Set(['notes', 'notes (2)']))).toBe('notes (3)');
+    expect(keepBothName('.env', new Set(['.env']))).toBe('.env (2)');
+  });
+
+  test('a folder can only be kept twice or skipped, never replaced by a file', () => {
+    expect(planUploads('', [file('a', 'mods')], siblings, { a: 'replace' }).unresolved).toEqual(['a']);
+    expect(planUploads('', [file('a', 'mods')], siblings, { a: 'keep-both' }).uploads[0].path).toBe('mods (2)');
+  });
+
+  test('dropped folders are created parents first, merging into folders that exist', () => {
+    const plan = planUploads('world', [
+      file('a', 'config.yml', 'plugins/LuckPerms'),
+      file('b', 'LuckPerms.jar', 'plugins'),
+      file('c', 'x.jar', 'mods/extra'),
+    ], [{ name: 'mods', kind: 'directory', size: '0', modifiedAtMs: null }], {});
+    expect(plan.folders).toEqual(['world/plugins', 'world/mods/extra', 'world/plugins/LuckPerms']);
+    expect(plan.uploads.map((entry) => entry.path)).toEqual(['world/plugins/LuckPerms/config.yml', 'world/plugins/LuckPerms.jar', 'world/mods/extra/x.jar']);
+    expect(uploadLabel(file('a', 'config.yml', 'plugins/LuckPerms'))).toBe('plugins/LuckPerms/config.yml');
+  });
+
+  test('the usual upload rules still apply, to the whole path', () => {
+    expect(planUploads('', [], siblings, {}).problem).toBe('server-files.upload.nothing');
+    expect(planUploads('', [file('a', 'ops.json')], siblings, {}).problem).toBe('server-files.protected-name');
+    expect(planUploads('', [file('a', 'x.txt', 'bad:dir')], siblings, {}).problem).toBe('server-files.upload.bad-name');
+    expect(planUploads('', [file('a', 'big.bin', null, String(17 * 1_048_576))], siblings, {}).problem).toBe('server-files.upload.too-large');
+    // Skipping a big file brings the rest back under the limit; skipping everything is simply nothing to do.
+    expect(planUploads('', [file('a', 'start.sh', null, String(17 * 1_048_576)), file('b', 'ok.txt')], siblings, { a: 'skip' }).problem).toBeNull();
+    expect(planUploads('', [file('a', 'start.sh')], siblings, { a: 'skip' })).toMatchObject({ problem: null, uploads: [] });
   });
 });

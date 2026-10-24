@@ -484,6 +484,11 @@ export interface UploadCandidate {
   localId: string;
   name: string;
   size: string;
+  /**
+   * For files that came from a dropped folder: their folder inside the drop, `/`-joined and
+   * starting with the dropped folder's own name (`plugins/LuckPerms`). Absent for loose files.
+   */
+  folder?: string;
 }
 
 export interface UploadProgress {
@@ -553,6 +558,12 @@ function serversFilesNative() {
       call<FileChange>('server_trash_restore', { connectionId, trashId, intentId }),
     /** Native open dialog (multi-select); empty when cancelled. No network work. */
     uploadPick: () => call<UploadCandidate[]>('server_file_upload_pick'),
+    /**
+     * Files dropped from the OS (the webview's drag-drop event). Native accepts only paths of
+     * the drop it observed itself, walks dropped folders (same 64-file cap as the picker) and
+     * keeps the paths, like `uploadPick`. Not yet implemented natively: it rejects until then.
+     */
+    uploadDropped: (paths: string[]) => call<UploadCandidate[]>('server_file_upload_dropped', { paths }),
     /** POST /files/uploads `{path,total_size,sha256}` with the create/overwrite conditional; native hashes the local file. ≤16 MiB. */
     uploadBegin: (connectionId: ConnectionId, localId: string, path: string, expectedSha256: string | null, intentId: string) =>
       call<UploadProgress>('server_file_upload_begin', { connectionId, localId, path, expectedSha256, intentId }),

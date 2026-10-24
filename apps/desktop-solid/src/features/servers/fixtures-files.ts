@@ -21,7 +21,7 @@ export interface FileFixtureContext<T extends { snapshot: ServerSnapshot }> {
 
 type FileCommands = Pick<ServersApi,
   | 'filesList' | 'fileReadText' | 'fileWriteText' | 'fileMkdir' | 'fileRename' | 'fileDelete' | 'trashList' | 'trashRestore'
-  | 'uploadPick' | 'uploadBegin' | 'uploadChunk' | 'uploadFinish' | 'uploadAbort' | 'fileDownload' | 'logTail' | 'logLines'
+  | 'uploadPick' | 'uploadDropped' | 'uploadBegin' | 'uploadChunk' | 'uploadFinish' | 'uploadAbort' | 'fileDownload' | 'logTail' | 'logLines'
   | 'propertiesGet' | 'propertiesUpdate'>;
 
 const fail = (code: ServerCommandError['code']): never => {
@@ -396,6 +396,21 @@ export function createFileFixtures<T extends { snapshot: ServerSnapshot }>(ctx: 
       const candidate = { ...pick, localId: id('local') };
       locals.set(candidate.localId, candidate);
       return [candidate];
+    },
+
+    // Browser previews pass the dropped files' relative paths (`plugins/a.jar`); sizes are
+    // made up from the name, since the fixture never reads bytes.
+    async uploadDropped(paths) {
+      await ctx.wait(120);
+      if (paths.length > 64) fail('invalid_input');
+      return paths.map((path) => {
+        const segments = path.split('/').filter(Boolean);
+        const name = segments.pop() ?? path;
+        const size = 24_000 + ([...name].reduce((sum, char) => sum * 31 + char.charCodeAt(0), 7) >>> 0) % 1_400_000;
+        const candidate: UploadCandidate = { localId: id('local'), name, size: String(size), ...(segments.length ? { folder: segments.join('/') } : {}) };
+        locals.set(candidate.localId, candidate);
+        return candidate;
+      });
     },
 
     async uploadBegin(connectionId, localId, path, expectedSha256, intentId): Promise<UploadProgress> {
