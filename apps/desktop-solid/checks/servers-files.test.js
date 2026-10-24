@@ -56,12 +56,13 @@ describe('[paths] game-root segments', () => {
 });
 
 describe('[files] fixture semantics', () => {
-  test('listing pages a directory; protected documents are refused by generic reads', async () => {
+  test('listing exposes confirmed-edit documents to owners', async () => {
     const servers = api();
     const root = await servers.filesList(ID, '', null);
     expect(root.items.map((entry) => entry.name)).toEqual(expect.arrayContaining(['mods', 'logs', 'server.properties', 'eula.txt']));
     await expect(servers.filesList(ID, '../outside', null)).rejects.toMatchObject({ code: 'invalid_input' });
-    await expect(servers.fileReadText(ID, 'server.properties')).rejects.toMatchObject({ code: 'invalid_input' });
+    expect((await servers.fileReadText(ID, 'server.properties')).text).toContain('online-mode=true');
+    expect(root.items.find(e => e.name === 'server.properties').protection).toBe('confirm_edit');
     await expect(servers.fileReadText(ID, 'nope.txt')).rejects.toMatchObject({ code: 'not_found' });
     const jar = await servers.fileReadText(ID, 'mods/spark-1.10.119-fabric.jar');
     expect(jar.binary).toBe(true);
