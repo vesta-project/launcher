@@ -21,7 +21,8 @@ fn request_priority(method: &Method, path: &str, interactive: bool) -> RequestPr
     if *method == Method::POST
         && matches!(
             path,
-            "/api/v3/manage/lifecycle/stop"
+            "/api/v3/manage/lifecycle/sleep"
+                | "/api/v3/manage/lifecycle/stop"
                 | "/api/v3/manage/lifecycle/kill"
                 | "/api/v3/manage/lifecycle/restart"
                 | "/api/v3/auth/session/challenge"
@@ -483,6 +484,7 @@ mod priority_tests {
     #[test]
     fn only_closed_control_and_session_routes_are_urgent() {
         for path in [
+            "/api/v3/manage/lifecycle/sleep",
             "/api/v3/manage/lifecycle/stop",
             "/api/v3/manage/lifecycle/restart",
             "/api/v3/manage/lifecycle/kill",

@@ -77,8 +77,10 @@ export function createPresenceFixtures(host: PresenceHost) {
         if (!Number.isInteger(value) || value < min || value > max) fail('invalid_input');
       }
       // Sleeping stops Minecraft and waking starts it, so both need lifecycle authority.
-      if (policy.enabled) host.requireCapability(host.server(connectionId), 'lifecycle.stop');
-      if (policy.wakeOnJoin) host.requireCapability(host.server(connectionId), 'lifecycle.start');
+      if (policy.onAgentStart != null && !['stay_stopped', 'sleep', 'start'].includes(policy.onAgentStart)) fail('invalid_input');
+      if (policy.onAgentStart === 'sleep' && !policy.offlineStatus) fail('invalid_input');
+      if (policy.enabled || policy.onAgentStart === 'sleep') host.requireCapability(host.server(connectionId), 'lifecycle.stop');
+      if (policy.wakeOnJoin || policy.onAgentStart === 'start') host.requireCapability(host.server(connectionId), 'lifecycle.start');
       sleep.set(connectionId, { policy: clone(policy), revision: current.revision + 1, sleepBlocker: null });
       return clone(sleepOf(connectionId));
     },

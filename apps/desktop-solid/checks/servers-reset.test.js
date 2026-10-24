@@ -55,3 +55,17 @@ test('history includes raw and five-minute series, gaps, explicit unknowns, and 
   const aggregates = await api.metricsHistory(ID, { ...request, resolution: '5m' }); expect(aggregates.bucketMillis).toBe(300000); expect(aggregates.series.game_cpu_percent.knownCount.some(n => n > 1)).toBe(true);
   const noTps = await api.metricsHistory('fixture-creative', request); expect(noTps.series.tps.avg.every(v => v === null)).toBe(true); expect(noTps.tickSource.every(v => v === null)).toBe(true);
 });
+
+
+test('fixture Sleep / Wake / Stop follow the saved policy and refuse waking Stopped', async () => {
+  const api = createFixtureServers({ latencyMs: 0 }); const view = await api.sleepPolicy(ID);
+  const policy = { ...view.policy, offlineStatus: true, wakeOnJoin: true, onAgentStart: 'sleep' };
+  expect((await api.updateSleepPolicy(ID, policy, view.revision, 'policy-amp')).policy.onAgentStart).toBe('sleep');
+  let snapshot = await api.snapshot(ID); await api.lifecycle(ID, 'sleep', snapshot.status.generation, 'sleep-amp'); await settle(3550);
+  snapshot = await api.snapshot(ID); expect(snapshot.status.lifecycle).toBe('sleeping');
+  await expect(api.lifecycle(ID, 'start', null, 'wrong-start')).rejects.toMatchObject({ code: 'stale_target' });
+  await api.lifecycle(ID, 'wake', null, 'wake-amp'); await settle(3300);
+  snapshot = await api.snapshot(ID); expect(snapshot.status.state).toBe('running');
+  await api.lifecycle(ID, 'stop', snapshot.status.generation, 'stop-amp'); await settle(3550);
+  await expect(api.lifecycle(ID, 'wake', null, 'wrong-wake')).rejects.toMatchObject({ code: 'stale_target' });
+}, 15000);

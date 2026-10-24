@@ -409,6 +409,9 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const replayed = replay(target, intentId, { action, expectedGeneration });
       if (replayed) return replayed;
       const current = target.snapshot.status;
+      if (action === 'sleep' && !current?.sleepAvailable) fail('conflict');
+      if (action === 'wake' && current?.lifecycle !== 'sleeping') fail('stale_target');
+      if (action === 'start' && current?.lifecycle === 'sleeping') fail('stale_target');
       if ((action === 'start' || action === 'wake') && current?.state !== 'stopped') fail('stale_target');
       if (action !== 'start' && action !== 'wake' && !(action === 'stop' && current?.lifecycle === 'sleeping') && (current?.state !== 'running' || current.generation !== expectedGeneration)) fail('stale_target');
       const operation = record(target, `lifecycle.${action}`, { kind: 'lifecycle', action, targetGeneration: expectedGeneration, resultGeneration: null });
