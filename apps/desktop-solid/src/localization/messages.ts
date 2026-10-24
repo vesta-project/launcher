@@ -2001,7 +2001,6 @@ export const messageIds = [
   "server-settings.group.essentials",
   "server-settings.malformed-short",
   "server-settings.motd-help",
-  "server-settings.motd-plain",
   "server-settings.motd-preview-aria",
   "server-settings.motd-title",
   "server-settings.no-results",

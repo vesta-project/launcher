@@ -226,10 +226,9 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
               label={t(motdDef.label)}
               value={String(value(motdDef))}
               onChange={(next) => set(MOTD_KEY, next)}
-              formatting={false}
+              formatting
               readOnly={!canEdit()}
               error={problemText(motdDef)}
-              note={t('server-settings.motd-plain')}
               players={`${onlinePlayers()}/${value(propertyDef('max-players')!)}`}
             />
           </SettingsPanel>

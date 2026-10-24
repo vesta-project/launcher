@@ -67,7 +67,7 @@ export const propertySchema: readonly PropertyDef[] = [
   int('simulation-distance', 'world', 2, 32, 10),
   choice('level-type', 'world', ['minecraft:normal', 'minecraft:flat', 'minecraft:large_biomes', 'minecraft:amplified', 'minecraft:single_biome_surface'], 'minecraft:normal', { readOnly: true }),
 
-  { key: MOTD_KEY, group: 'network', label: label(MOTD_KEY), help: help(MOTD_KEY), type: 'string', maxBytes: 256, default: 'A Minecraft Server' },
+  { key: MOTD_KEY, group: 'network', label: label(MOTD_KEY), help: help(MOTD_KEY), type: 'string', maxBytes: 1024, default: 'A Minecraft Server' },
   int('server-port', 'network', 1, 65535, 25565),
   bool('online-mode', 'network', true),
   bool('enforce-secure-profile', 'network', true),
@@ -150,6 +150,18 @@ export function valueProblem(def: PropertyDef, value: PropertyValue): MessageId 
     case 'enum': return typeof value === 'string' && def.options.includes(value) ? null : 'server-settings.invalid';
     case 'string': {
       if (typeof value !== 'string') return 'server-settings.invalid';
+      if (def.key === MOTD_KEY) {
+        if (/[/\\]/.test(value)) return 'server-settings.no-slashes';
+        if (asciiBytes(value) > def.maxBytes || value.length > 512) return 'server-settings.too-long';
+        const hasControl = Array.from(value).some((char) => {
+          const code = char.charCodeAt(0);
+          return (code < 32 && code !== 10) || (code >= 127 && code <= 159);
+        });
+        if (value.split('\n').length > 2 || hasControl) return 'server-settings.invalid';
+        // The agent accepts Minecraft formatting codes, not arbitrary section escapes.
+        if (/§(?![0-9a-fk-or])/i.test(value)) return 'server-settings.invalid';
+        return null;
+      }
       if (!/^[\x20-\x7e]*$/.test(value)) return 'server-settings.ascii-only';
       if (/[/\\]/.test(value)) return 'server-settings.no-slashes';
       const bytes = asciiBytes(value);

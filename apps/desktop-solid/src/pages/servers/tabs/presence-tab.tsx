@@ -184,6 +184,7 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
                 value={current().template}
                 onChange={(template) => patchState({ template })}
                 formatting
+                placeholders
                 readOnly={!canEdit()}
                 error={problems().length ? problems().map((problem) => t(problemMessages[problem])).join(' ') : undefined}
                 note={checked() ? t('servers.presence.checked') : t('servers.presence.live-motd-note')}

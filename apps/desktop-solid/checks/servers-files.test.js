@@ -224,9 +224,19 @@ describe('[properties] typed parse, serialize and confirmation', () => {
     expect(valueProblem(propertyDef('max-players'), 0)).toBe('server-settings.out-of-range');
     expect(valueProblem(propertyDef('view-distance'), 12)).toBeNull();
     expect(valueProblem(propertyDef('motd'), 'a/b')).toBe('server-settings.no-slashes');
-    expect(valueProblem(propertyDef('motd'), 'é')).toBe('server-settings.ascii-only');
-    expect(valueProblem(propertyDef('motd'), 'x'.repeat(257))).toBe('server-settings.too-long');
+    expect(valueProblem(propertyDef('motd'), '§aCafé\n§lWelcome!')).toBeNull();
+    expect(valueProblem(propertyDef('motd'), 'x'.repeat(512))).toBeNull();
+    expect(valueProblem(propertyDef('motd'), 'x'.repeat(513))).toBe('server-settings.too-long');
     expect(valueProblem(propertyDef('difficulty'), 'nightmare')).toBe('server-settings.invalid');
+  });
+  test('normal MOTD accepts literal braces but enforces agent formatting and text bounds', () => {
+    const motd = propertyDef('motd');
+    expect(valueProblem(motd, '{server_name}')).toBeNull();
+    expect(valueProblem(motd, '界'.repeat(341))).toBeNull();
+    expect(valueProblem(motd, '界'.repeat(342))).toBe('server-settings.too-long');
+    for (const text of ['first\nsecond\nthird', 'bad\rline', 'bad\ttext', '§z', 'trailing§']) {
+      expect(valueProblem(motd, text)).toBe('server-settings.invalid');
+    }
   });
   test('weakening keys follow the agent rules', () => {
     const base = { 'online-mode': true, 'white-list': true, 'op-permission-level': 4, 'function-permission-level': 2 };

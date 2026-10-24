@@ -179,7 +179,6 @@ server-settings-group-essentials = Essentials
 server-settings-malformed-short = Invalid value in the file
 server-settings-motd-title = Server list message (MOTD)
 server-settings-motd-help = What players see under the server name while Minecraft is running.
-server-settings-motd-plain = Plain text only: server.properties doesn't keep colours reliably. For colours, use a server list message in Sleep and status.
 server-settings-motd-preview-aria = Server list preview for { $name }: { $value }
 server-settings-search = Search settings
 server-settings-no-results = No settings match your search.

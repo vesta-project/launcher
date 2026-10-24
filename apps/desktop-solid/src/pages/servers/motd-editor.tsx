@@ -86,8 +86,10 @@ export function MotdEditor(props: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  /** Colours, styles, a second line and placeholders. Off for plain-text sources. */
+  /** Colours, styles and a second line. Off for plain-text sources. */
   formatting: boolean;
+  /** Template placeholders are supported by Vesta status messages only. */
+  placeholders?: boolean;
   readOnly?: boolean;
   /** Localized problem with the current text. */
   error?: string;
@@ -138,7 +140,7 @@ export function MotdEditor(props: {
   return (
     <div data-vesta="server-motd">
       <MotdPreview id={props.id} name={props.name} template={props.value} players={props.players} version={props.version}
-        iconPng={props.iconPng} segments={props.segments} samples={props.samples} />
+        iconPng={props.iconPng} segments={props.segments} samples={props.placeholders ? props.samples : undefined} />
 
       <Show when={props.formatting && !props.readOnly}>
         <div data-vesta="server-motd-toolbar" role="toolbar" aria-label={t('servers.presence.colors')}>
@@ -174,10 +176,12 @@ export function MotdEditor(props: {
             )}
           </For>
           <Button size="sm" variant="ghost" onPointerDown={(event: PointerEvent) => event.preventDefault()} onClick={() => format('r')}>{t('servers.motd.clear')}</Button>
-          <Separator orientation="vertical" />
-          <Menu trigger={(menu) => <Button {...menu} size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />}>{t('servers.presence.placeholder')}</Button>}>
-            <For each={MOTD_PLACEHOLDERS}>{(name) => <MenuItem onSelect={() => insert(`{${name}}`)}>{`{${name}}`}</MenuItem>}</For>
-          </Menu>
+          <Show when={props.placeholders}>
+            <Separator orientation="vertical" />
+            <Menu trigger={(menu) => <Button {...menu} size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />}>{t('servers.presence.placeholder')}</Button>}>
+              <For each={MOTD_PLACEHOLDERS}>{(name) => <MenuItem onSelect={() => insert(`{${name}}`)}>{`{${name}}`}</MenuItem>}</For>
+            </Menu>
+          </Show>
           <span data-vesta="server-motd-hint">{t('servers.motd.hint')}</span>
         </div>
       </Show>
@@ -188,7 +192,7 @@ export function MotdEditor(props: {
             {(token) => {
               if (token.kind === 'code') return <span data-code>{token.text}</span>;
               if (token.kind === 'newline') return token.text === '\n' ? '\n' : <span data-code>{token.text}</span>;
-              return <span data-placeholder={token.kind === 'placeholder' ? '' : undefined} style={textStyle(token.style)}>{token.text}</span>;
+              return <span data-placeholder={props.placeholders && token.kind === 'placeholder' ? '' : undefined} style={textStyle(token.style)}>{token.text}</span>;
             }}
           </For>
           {'\n'}
