@@ -17,7 +17,7 @@ export function createMetricsFixtures<T extends { snapshot: ServerSnapshot }>(ho
     for (const name of request.series) {
       const avg = timestamps.map((_, i) => gaps[i] || (name === 'tps' && noTps) ? null : name === 'tps' ? Math.min(20, 19.6 + Math.sin(i / 7) * .5) : name === 'game_cpu_percent' ? 22 + 12 * Math.sin(i / 5) : name === 'game_memory_bytes' ? 2400000000 + (i % 24) * 36000000 : Math.max(0, Math.round(4 + 3 * Math.sin(i / 8))));
       const samples = resolution === 'raw' ? 1 : resolution === '5m' ? 30 : 8640;
-      const column: MetricColumn = { avg, min: avg.map(v => v === null ? null : Math.max(0, v * .96)), max: avg.map(v => v === null ? null : name === 'tps' ? Math.min(20, v * 1.02) : v * 1.05), knownCount: avg.map(v => v === null ? 0 : samples), unknownCount: avg.map(v => v === null ? samples : 0) };
+      const column: MetricColumn = { avg, min: avg.map(v => v === null ? null : resolution === 'raw' ? v : name === 'players_online' ? Math.floor(v * .96) : Math.max(0, v * .96)), max: avg.map(v => v === null ? null : resolution === 'raw' ? v : name === 'tps' ? Math.min(20, v * 1.02) : name === 'players_online' ? Math.ceil(v * 1.05) : v * 1.05), knownCount: avg.map(v => v === null ? 0 : samples), unknownCount: avg.map(v => v === null ? samples : 0) };
       series[name] = column;
     }
     return { timestamps, series, gaps, tickSource: timestamps.map((_, i) => noTps || gaps[i] ? null : 'spark'), resolution, bucketMillis, cursor: String(request.to), retentionGap: false };
