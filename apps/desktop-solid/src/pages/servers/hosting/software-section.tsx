@@ -108,7 +108,7 @@ function SoftwareHero(props: { state: SoftwareState; job: SoftwareJob | undefine
       <div data-vesta="server-software-hero-main">
         <SoftwareMark software={current()?.software} size="lg" />
         <div data-vesta="server-software-hero-copy">
-          <span data-vesta="server-software-eyebrow">{t('server-hosting.running')}</span>
+          <span data-vesta="server-software-eyebrow">{t('server-hosting.current-software')}</span>
           <h2>{softwareName(current()?.software) ?? t('server-hosting.original-setup')}</h2>
           <p data-vesta="server-software-meta">
             <Show when={current()?.version} fallback={<span>{t('server-hosting.original-description')}</span>}>

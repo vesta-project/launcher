@@ -2562,7 +2562,7 @@ export const messageIds = [
   "server-hosting.software-help",
   "server-hosting.software-unavailable",
   "server-hosting.recovery-banner",
-  "server-hosting.running",
+  "server-hosting.current-software",
   "server-hosting.original-setup",
   "server-hosting.java",
   "server-hosting.java-version",
