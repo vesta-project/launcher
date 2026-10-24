@@ -31,23 +31,12 @@ describe('[world] seeds and confirmation', () => {
     expect(worldConfirmed('World', 'world')).toBe(false);
     expect(worldConfirmed('world ', 'world')).toBe(false);
   });
-  test('a running server refuses; a stopped one switches to a fresh world and keeps the old one', async () => {
-    const running = createFixtureServers({ latencyMs: 0 });
-    const before = await running.world('fixture-survival');
-    expect(typeof before.seed).toBe('string');
-    await expect(running.worldNew('fixture-survival', '', before.revision, before.name, 'w1')).rejects.toMatchObject({ code: 'conflict', reason: 'world_not_stopped' });
-
-    const servers = await stoppedOwner();
-    const world = await servers.world('fixture-survival');
-    await expect(servers.worldNew('fixture-survival', '42', world.revision, 'World', 'w2')).rejects.toMatchObject({ code: 'invalid_input' });
-    await expect(servers.worldNew('fixture-survival', '42', 'stale', world.name, 'w3')).rejects.toMatchObject({ code: 'stale_target' });
-    const result = await servers.worldNew('fixture-survival', '42', world.revision, world.name, 'w4');
-    expect(result.preservedWorlds).toContain(world.name);
-    expect(result.world.name).not.toBe(world.name);
-    expect(result.world).toMatchObject({ seed: null, configuredSeed: '42', exists: false });
-    // A replayed intent returns the same outcome instead of picking a second world.
-    expect((await servers.worldNew('fixture-survival', '42', world.revision, world.name, 'w4')).world.name).toBe(result.world.name);
-  }, 10_000);
+  test('world details expose dimensions and datapacks without a world creation command', async () => {
+    const servers = createFixtureServers({ latencyMs: 0 }); const world = await servers.world('fixture-survival');
+    expect(servers.worldNew).toBeUndefined(); expect(world.sizeComplete).toBe(true);
+    expect(world.dimensions.find(d => d.id === 'nether').layout).toBe('split');
+    expect(world.datapacks.some(p => p.kind === 'folder')).toBe(true); expect(world.datapacks.some(p => p.enabled === null)).toBe(true);
+  });
 });
 
 describe('[software] review, apply and follow', () => {

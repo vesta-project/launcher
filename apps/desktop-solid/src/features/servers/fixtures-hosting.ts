@@ -6,15 +6,16 @@ import type { ServerJavaInventory, ServerJavaRuntime } from './native-java';
 import type { ConnectionId, ServerCommandError } from './native';
 import type {
   ServerWorld, SftpConfigPatch, SftpKey, SftpStatus, SftpTarget, SoftwareDescriptor, SoftwareId, SoftwareJob, SoftwarePlan,
-  SoftwarePlanRequest, SoftwareState, SoftwareVersions, WorldNewResult,
+  SoftwarePlanRequest, SoftwareState, SoftwareVersions,
 } from './hosting-native';
 import { SOFTWARE_IDS } from './hosting-native';
 import { hostOf, publicKeyComment, publicKeyProblem } from './hosting-model';
 
 interface HostingHost {
-  server(id: ConnectionId): { snapshot: { status: { state: string } | null; connection: { role: string | null; endpoint: string } } };
+  server(id: ConnectionId): { snapshot: { status: { state: string; generation: string | null } | null; connection: { role: string | null; endpoint: string } } };
   requireCapability(target: ReturnType<HostingHost['server']>, capability: string): void;
   wait(ms?: number): Promise<unknown>;
+  datapackOperation(id: ConnectionId, command: string): import('./native').ServerOperation;
 }
 
 const fail = (code: ServerCommandError['code'], reason?: string): never => {
@@ -62,7 +63,7 @@ function seed(): HostingState {
   const now = Date.now();
   return {
     java: { runtimes: [17, 21, 25].map(major => ({ id: `java-${major}`, path: `C:/Program Files/Eclipse Adoptium/jdk-${major}/bin/java.exe`, version: `${major}.0.3`, major, vendor: major === 17 ? 'Microsoft' : 'Eclipse Adoptium', arch: 'amd64', managed: false })), selected: { id: 'java-21', path: 'C:/Program Files/Eclipse Adoptium/jdk-21/bin/java.exe', version: '21.0.3', major: 21, vendor: 'Eclipse Adoptium', arch: 'amd64', managed: false }, customPathsAllowed: true, managedMajors: [] },
-    world: { name: 'world', seed: '-4172144997902289642', configuredSeed: '', exists: true, revision: '3' },
+    world: { sizeBytes: '2846072184', sizeComplete: true, sizeObservedAtMs: now - 12_000, lastModifiedAtMs: now - 18_000, lastPlayedAtMs: now - 48_000, dimensions: [{ id: 'overworld', present: true, folders: ['world'], layout: 'nested' }, { id: 'nether', present: true, folders: ['world_nether/DIM-1'], layout: 'split' }, { id: 'end', present: true, folders: ['world_the_end/DIM1'], layout: 'split' }], datapacks: [{ id: 'vanilla', name: 'Vanilla', kind: 'builtin', path: null, enabled: true }, { id: 'file/terralith.zip', name: 'terralith.zip', kind: 'zip', path: 'world/datapacks/terralith.zip', enabled: true }, { id: 'file/seasonal', name: 'seasonal', kind: 'folder', path: 'world/datapacks/seasonal', enabled: false }, { id: 'file/new-pack.zip', name: 'new-pack.zip', kind: 'zip', path: 'world/datapacks/new-pack.zip', enabled: null }], datapackStateSource: 'saved_level_dat', name: 'world', seed: '-4172144997902289642', configuredSeed: '', exists: true, revision: '3' },
     worlds: ['world'],
     software: {
       available: true, unavailableReason: null, revision: '2',
@@ -141,24 +142,14 @@ export function createHostingFixtures(host: HostingHost) {
       host.requireCapability(host.server(connectionId), 'config.view');
       return clone(state(connectionId).world);
     },
-    async worldNew(connectionId: ConnectionId, seedText: string, expectedRevision: string, confirmWorld: string, intentId: string): Promise<WorldNewResult> {
-      await host.wait(500);
-      const target = host.server(connectionId);
-      host.requireCapability(target, 'config.edit');
-      owner(connectionId);
+    async worldDatapackToggle(connectionId: ConnectionId, packId: string, enabled: boolean, expectedGeneration: string, intentId: string) {
+      const target = host.server(connectionId); host.requireCapability(target, 'config.edit'); host.requireCapability(target, 'console.write');
       const current = state(connectionId);
-      return once(current, intentId, { seedText, expectedRevision, confirmWorld }, () => {
-        stopped(connectionId, 'world_not_stopped');
-        if (expectedRevision !== current.world.revision) fail('stale_target');
-        if (confirmWorld !== current.world.name) fail('invalid_input');
-        const base = 'world';
-        let index = current.worlds.length + 1;
-        while (current.worlds.includes(`${base}-${index}`)) index += 1;
-        const preserved = [...current.worlds];
-        const name = `${base}-${index}`;
-        current.worlds.push(name);
-        current.world = { name, seed: null, configuredSeed: seedText.trim(), exists: false, revision: String(Number(current.world.revision) + 1) };
-        return { world: current.world, preservedWorlds: preserved, outcome: 'succeeded' as const };
+      return once(current, intentId, { packId, enabled, expectedGeneration }, () => {
+        if (target.snapshot.status?.state !== 'running' || target.snapshot.status.generation !== expectedGeneration) fail('conflict', 'datapack_requires_running_game');
+        const pack = current.world.datapacks.find(p => p.id === packId && p.kind !== 'missing') ?? fail('invalid_input');
+        const operation = host.datapackOperation(connectionId, `datapack ${enabled ? 'enable' : 'disable'} ${JSON.stringify(packId)}`);
+        setTimeout(() => { pack.enabled = enabled; current.world.lastPlayedAtMs = Date.now(); }, 600); return operation;
       });
     },
 

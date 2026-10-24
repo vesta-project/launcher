@@ -11,6 +11,14 @@ const call = <T>(command: string, args?: Record<string, unknown>) => invoke<T>(c
 // ------------------------------------------------------------------ world
 
 export interface ServerWorld {
+  sizeBytes: string | null;
+  sizeComplete: boolean;
+  sizeObservedAtMs: number | null;
+  lastModifiedAtMs: number | null;
+  lastPlayedAtMs: number | null;
+  dimensions: WorldDimension[];
+  datapacks: WorldDatapack[];
+  datapackStateSource: 'saved_level_dat' | null;
   /** The `level-name` Minecraft loads. */
   name: string;
   /** Actual seed from `level.dat`, signed 64-bit as a decimal string; null before generation. */
@@ -21,12 +29,8 @@ export interface ServerWorld {
   revision: string;
 }
 
-export interface WorldNewResult {
-  world: ServerWorld;
-  /** Game-root-relative locations of the worlds left in place. */
-  preservedWorlds: string[];
-  outcome: 'succeeded';
-}
+export interface WorldDimension { id: 'overworld' | 'nether' | 'end' | string; present: boolean; folders: string[]; layout: 'nested' | 'split' }
+export interface WorldDatapack { id: string; name: string; kind: 'folder' | 'zip' | 'builtin' | 'missing'; path: string | null; enabled: boolean | null }
 
 // ------------------------------------------------------------------ software
 
@@ -162,9 +166,9 @@ export interface SftpTarget { host: string; port: number; username: string; host
 export const serversHostingNative = {
   /** GET world. */
   world: (connectionId: ConnectionId) => call<ServerWorld>('server_world', { connectionId }),
-  /** POST world/new. The game must be stopped; `confirmWorld` is the current world's exact name. */
-  worldNew: (connectionId: ConnectionId, seed: string, expectedRevision: string, confirmWorld: string, intentId: string) =>
-    call<WorldNewResult>('server_world_new', { connectionId, seed, expectedRevision, confirmWorld, intentId }),
+  /** Uses Minecraft's own command while running; state is read from saved level.dat. */
+  worldDatapackToggle: (connectionId: ConnectionId, packId: string, enabled: boolean, expectedGeneration: string, intentId: string) =>
+    call<import('./native').ServerOperation>('server_world_datapack_toggle', { connectionId, packId, enabled, expectedGeneration, intentId }),
 
   /** GET software. */
   software: (connectionId: ConnectionId) => call<SoftwareState>('server_software', { connectionId }),

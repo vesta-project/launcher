@@ -230,7 +230,7 @@ pub fn run(context: tauri::Context) {
             commands::servers_hosting::server_java_inventory,
             commands::servers_hosting::server_java_select,
             commands::servers_hosting::server_java_download,
-            commands::servers_hosting::server_world_new,
+            commands::servers_hosting::server_world_datapack_toggle,
             commands::servers_hosting::server_software,
             commands::servers_hosting::server_software_versions,
             commands::servers_hosting::server_software_plan,

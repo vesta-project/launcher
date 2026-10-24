@@ -9,18 +9,19 @@ macro_rules! dto {($name:ident { $($field:ident:$ty:ty),* $(,)? })=>{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerWorld {
+    pub size_bytes: Option<String>,
+    #[serde(default)] pub size_complete: bool,
+    pub size_observed_at_ms: Option<i64>,
+    pub last_modified_at_ms: Option<i64>,
+    pub last_played_at_ms: Option<i64>,
+    #[serde(default)] pub dimensions: Vec<WorldDimension>,
+    #[serde(default)] pub datapacks: Vec<WorldDatapack>,
+    pub datapack_state_source: Option<String>,
     pub name: String,
     pub seed: Option<String>,
     pub configured_seed: String,
     pub exists: bool,
     pub revision: String,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorldNewResult {
-    pub world: ServerWorld,
-    pub preserved_worlds: Vec<String>,
-    pub outcome: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -203,32 +204,6 @@ fn wire(value: Value) -> Value {
 impl Client {
     pub async fn world(&self) -> Result<ServerWorld> {
         from_wire(self.get("world", true, "config.view").await?)
-    }
-    pub async fn world_new(
-        &self,
-        seed: String,
-        expected: String,
-        name: String,
-        intent: &str,
-    ) -> Result<WorldNewResult> {
-        if seed.len() > 256
-            || seed.chars().any(char::is_control)
-            || expected.len() != 64
-            || name.is_empty()
-            || name.len() > 255
-        {
-            return Err(invalid());
-        }
-        from_wire(
-            self.management_mutate(
-                Method::POST,
-                "world/new",
-                Some(json!({"seed":seed,"expected_revision":expected,"confirm_world":name})),
-                intent,
-                "config.edit",
-            )
-            .await?,
-        )
     }
     pub async fn software(&self) -> Result<SoftwareState> {
         let mut value = self.get("software", true, "content.install").await?;
@@ -500,5 +475,18 @@ impl Client {
     pub async fn java_download(&self,major:u32,intent:&str)->Result<SoftwareJob>{
         if !(8..=99).contains(&major){return Err(invalid());}
         from_wire(self.management_mutate(Method::POST,"java/download",Some(json!({"major":major})),intent,"content.install").await?)
+    }
+}
+
+#[derive(Clone,Debug,Serialize,Deserialize)] #[serde(rename_all="camelCase")]
+pub struct WorldDimension {pub id:String,pub present:bool,pub folders:Vec<String>,pub layout:String}
+#[derive(Clone,Debug,Serialize,Deserialize)] #[serde(rename_all="camelCase")]
+pub struct WorldDatapack {pub id:String,pub name:String,pub kind:String,pub path:Option<String>,pub enabled:Option<bool>}
+impl Client {
+    pub async fn world_datapack_toggle(&self,pack_id:String,enabled:bool,expected_generation:String,intent:&str)->Result<crate::model::ServerOperation>{
+        if pack_id.is_empty() || pack_id.len()>1024 || pack_id.chars().any(char::is_control) {return Err(invalid());}
+        crate::operations::generation(&expected_generation)?;
+        let value=self.management_mutate(Method::POST,"world/datapacks/toggle",Some(json!({"pack_id":pack_id,"enabled":enabled,"expected_generation":expected_generation})),intent,"config.edit").await?;
+        crate::operations::decode(value,None)
     }
 }

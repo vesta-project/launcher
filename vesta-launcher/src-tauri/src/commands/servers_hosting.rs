@@ -38,35 +38,6 @@ pub async fn server_software_jobs(
         .await
 }
 #[tauri::command]
-pub async fn server_world_new(
-    app: AppHandle,
-    manager: Manager<'_>,
-    connection_id: String,
-    seed: String,
-    expected_revision: String,
-    confirm_world: String,
-    intent_id: String,
-) -> Result<WorldNewResult> {
-    let payload =
-        json!({"seed":seed,"expectedRevision":expected_revision,"confirmWorld":confirm_world});
-    let journal = intent_id.clone();
-    manager
-        .management_write(
-            &app,
-            &connection_id,
-            &journal,
-            "world/new",
-            payload,
-            false,
-            |client| async move {
-                client
-                    .world_new(seed, expected_revision, confirm_world, &intent_id)
-                    .await
-            },
-        )
-        .await
-}
-#[tauri::command]
 pub async fn server_software_versions(
     app: AppHandle,
     manager: Manager<'_>,
@@ -258,4 +229,10 @@ pub async fn server_java_select(app:AppHandle,manager:Manager<'_>,connection_id:
 #[tauri::command]
 pub async fn server_java_download(app:AppHandle,manager:Manager<'_>,connection_id:String,major:u32,intent_id:String)->Result<SoftwareJob>{
     let journal=intent_id.clone();manager.management_write(&app,&connection_id,&journal,"java/download",json!({"major":major}),false,|client|async move{client.java_download(major,&intent_id).await}).await
+}
+
+#[tauri::command]
+pub async fn server_world_datapack_toggle(app:AppHandle,manager:Manager<'_>,connection_id:String,pack_id:String,enabled:bool,expected_generation:String,intent_id:String)->Result<vesta_server_client::model::ServerOperation>{
+    let journal=intent_id.clone();let payload=json!({"packId":pack_id,"enabled":enabled,"expectedGeneration":expected_generation});
+    manager.management_write(&app,&connection_id,&journal,"world/datapacks/toggle",payload,false,|client|async move{client.world_datapack_toggle(pack_id,enabled,expected_generation,&intent_id).await}).await
 }

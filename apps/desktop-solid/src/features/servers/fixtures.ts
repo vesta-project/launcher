@@ -598,7 +598,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     // Workflows and run history.
     ...createAutomationFixtures({ server, requireCapability, wait, principals }),
     // World, server software and SFTP.
-    ...createHostingFixtures({ server, requireCapability, wait } as never),
+    ...createHostingFixtures({ server, requireCapability, wait, datapackOperation: (id: ConnectionId, command: string) => { const target = server(id); const operation = record(target, 'console.command', { kind: 'console.command', command }); setTimeout(() => advance(target, operation, 'succeeded'), 400); return operation; } }),
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {
