@@ -22,6 +22,7 @@ macro_rules! dto {
     };
 }
 dto!(SleepPolicy {
+    on_agent_start: Option<String>,
     enabled: bool,
     offline_status: bool,
     wake_on_join: bool,

@@ -7,6 +7,8 @@ import type { ConnectionId } from './native';
 const call = <T>(command: string, args?: Record<string, unknown>) => invoke<T>(command, args);
 
 export interface SleepPolicy {
+  /** Null/absent inherits host.toml; an explicit value persists with this policy. */
+  onAgentStart?: 'stay_stopped' | 'sleep' | 'start' | null;
   enabled: boolean;
   /** Answer server-list pings while Minecraft is asleep or stopped. */
   offlineStatus: boolean;

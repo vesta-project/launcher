@@ -5,7 +5,7 @@ import { motdProblems, parseMotd, fillPlaceholders, MOTD_PLACEHOLDERS } from './
 import { PRESENCE_STATES, SLEEP_BOUNDS, type MotdDocument, type MotdPreview, type PresenceState, type SleepPolicy, type SleepPolicyView, type SleepBlocker } from './native-presence';
 
 interface PresenceHost {
-  server(id: ConnectionId): { snapshot: { status: { state: string; playerCount: number | null; sleepBlocker?: SleepBlocker | null } | null } };
+  server(id: ConnectionId): { snapshot: { status: { state: string; playerCount: number | null; sleepAvailable?: boolean | null; onAgentStart?: SleepPolicy['onAgentStart']; sleepBlocker?: SleepBlocker | null } | null } };
   requireCapability(target: unknown, capability: string): void;
   wait(ms?: number): Promise<unknown>;
 }
@@ -39,14 +39,14 @@ export function createPresenceFixtures(host: PresenceHost) {
   const sleepOf = (id: ConnectionId) => {
     host.server(id);
     let value = sleep.get(id);
-    if (!value) { value = { policy: { enabled: false, offlineStatus: false, wakeOnJoin: false, idleSeconds: 600, warningSeconds: 30, startCooldownSeconds: 30 }, revision: 0, sleepBlocker: { reason: 'disabled' } }; sleep.set(id, value); }
+    if (!value) { value = { policy: { onAgentStart: null, enabled: false, offlineStatus: false, wakeOnJoin: false, idleSeconds: 600, warningSeconds: 30, startCooldownSeconds: 30 }, revision: 0, sleepBlocker: { reason: 'disabled' } }; sleep.set(id, value); }
     const status = host.server(id).snapshot.status;
     value.sleepBlocker = !value.policy.enabled ? { reason: 'disabled' }
       : !status || status.state !== 'running' ? { reason: 'not_ready' }
       : status.playerCount === null ? { reason: 'player_count_unknown' }
       : status.playerCount > 0 ? { reason: 'players_online' }
       : { reason: 'counting_down', remainingSeconds: value.policy.idleSeconds };
-    if (status) status.sleepBlocker = clone(value.sleepBlocker);
+    if (status) { status.sleepBlocker = clone(value.sleepBlocker); status.sleepAvailable = value.policy.offlineStatus; status.onAgentStart = value.policy.onAgentStart ?? 'stay_stopped'; }
     return value;
   };
   const motdOf = (id: ConnectionId) => {
