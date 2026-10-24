@@ -8,4 +8,8 @@ import type { SettingsSectionId } from '../../features/servers/shell-model';
  */
 export const ServerShellContext = createContext<{ snapshot: Accessor<ServerSnapshot>; openSection?: (section: SettingsSectionId) => void } | undefined>(undefined);
 
-export const useServerShell = () => useContext(ServerShellContext);
+/** The open workspace, or undefined outside one (Solid 2 throws for a context without a provider). */
+export const useServerShell = () => {
+  try { return useContext(ServerShellContext); }
+  catch { return undefined; }
+};
