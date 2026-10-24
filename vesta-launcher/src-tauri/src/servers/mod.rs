@@ -1,5 +1,5 @@
 mod credentials;
-mod files;
+pub(crate) mod files;
 mod hosting;
 mod management;
 mod store;

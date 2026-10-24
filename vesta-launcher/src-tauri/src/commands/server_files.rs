@@ -1,4 +1,5 @@
-//! Stage-4 IPC. Local destinations/sources originate only in native dialogs.
+//! Stage-4 IPC. Local sources originate only in native dialogs or observed OS drops.
+use crate::servers::files::{DroppedFiles, DroppedUploadCandidate};
 use crate::servers::ServerManager;
 use std::{collections::BTreeMap, sync::Arc};
 use tauri::{AppHandle, State, WebviewWindow};
@@ -152,6 +153,15 @@ pub async fn server_file_upload_pick(
         candidates.push(transfers.pick(window.label(), file, name).await?);
     }
     Ok(candidates)
+}
+#[tauri::command]
+pub async fn server_file_upload_dropped(
+    window: WebviewWindow,
+    drops: State<'_, DroppedFiles>,
+    transfers: Transfers<'_>,
+    paths: Vec<String>,
+) -> Result<Vec<DroppedUploadCandidate>> {
+    drops.upload(window.label(), paths, &transfers).await
 }
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]

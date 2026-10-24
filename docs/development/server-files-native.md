@@ -31,11 +31,22 @@ and pack implementation can merge independently of these modules.
 
 The native multi-file picker returns only random `localId`, basename and decimal
 size. It snapshots each selected regular file to an owner-only temporary file,
-hashes it with SHA-256, and rejects totals over 16 MiB. Local paths never enter
-IPC, activity events, errors, logs or agent requests. Handles bind to the calling
-window; upload sessions additionally bind to the connection. Collections are
+hashes it with SHA-256, and rejects files over 16 MiB. Local paths never enter
+returned IPC DTOs, activity events, errors, logs or agent requests. Handles bind
+to the calling window; upload sessions additionally bind to the connection. Collections are
 bounded to 64 entries and expire after one hour (pruned on subsequent admission).
 Snapshots are also removed when their owning native state is dropped.
+
+`server_file_upload_dropped` accepts only exact paths observed in the most recent
+native OS drop on the calling window. Enter/hover and frontend-emitted events do
+not authorize uploads. Each accepted drop is consumed once; a newer drop or window
+destruction revokes the previous selection. Dropped directories are walked with
+the same 64-file admission cap and use the same snapshot/transfer store as the
+picker. Symlinks, Windows reparse points (including junctions), linked ancestors,
+non-regular files and nesting deeper than 64 levels are rejected. Nested
+candidates add a portable relative `folder` starting with the dropped directory's
+name; loose files retain the picker DTO. Native paths never appear in returned
+candidates or errors. Existing begin/chunk/finish commands are unchanged.
 
 Begin retains its snapshot and key even when the reply is lost. Chunks are at
 most 1 MiB and use stable keys derived from the original intent and requested
@@ -121,3 +132,26 @@ and inert-test SHA-256
 `663b39e701009082c491462f1e29df6c1cbd1734f380c28d8c6a12ad6fd63808`.
 Agent source was not changed. Private fixture state remains under ignored
 `target/live-files`; it is not part of this change.
+
+### Dropped uploads (Windows, 2026-10-25)
+
+- `cargo test -p vesta-launcher servers::files::dropped::tests:: -- --test-threads=1`:
+  seven passed, covering native drop/window admission, stale/unobserved paths,
+  nesting and candidate serialization, file count/size caps, and junction refusal
+  as a root, nested entry, or ancestor. Unix symlink coverage is compiled only on
+  Unix and was not run on this host.
+- `cargo check -p vesta-launcher`: passed with existing unrelated warnings.
+- Desktop Solid `bun run typecheck`: passed; server Bun tests: 237 passed across
+  17 files. PowerShell requires expanding `checks/servers-*.test.js` into paths.
+- `cargo test -p vesta-launcher`: 572 passed, seven ignored, seven failed in
+  untouched modules. Cargo's disposable test executables needed the repository's
+  `scripts/windows-native-tests.manifest` embedded with Windows SDK `mt.exe`, as
+  described by `scripts/test-server-manager-unit.ps1`, to avoid the existing
+  `STATUS_ENTRYPOINT_NOT_FOUND` loader failure. The failing tests were:
+  - `launcher_import::providers::modrinth_app::count_tests::count_uses_only_identities_without_profile_metadata_or_icons`
+  - `resources::ledger::tests::malformed_optional_source_evidence_does_not_hide_installed_rows`
+  - `resources::ledger::tests::migration_loads_existing_rows_with_nullable_source_evidence`
+  - `resources::ledger::tests::source_only_evidence_cannot_be_used_as_installed_release_identity`
+  - `resources::manual_drop::tests::path_counts_defaults_and_zero_accepted_summary_are_safe`
+  - `resources::source_enrichment::tests::checked_targets_accept_declared_aliases_and_canonical_publication`
+  - `worlds::archive::tests::summaries_assign_descendants_once_and_preserve_ids_backup_and_icons`

@@ -1,4 +1,7 @@
 //! File-specific snapshot effects; kept separate from lifecycle/access modules.
+mod dropped;
+pub(crate) use dropped::{DroppedFiles, DroppedUploadCandidate};
+
 use super::*;
 use std::collections::BTreeMap;
 use vesta_server_client::files::PropertiesUpdateResult;

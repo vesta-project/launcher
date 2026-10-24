@@ -131,6 +131,7 @@ pub fn run(context: tauri::Context) {
         .manage(utils::dialog_manager::DialogManager::new())
         .manage(std::sync::Arc::new(vesta_server_client::files::FileTransfers::default()))
         .manage(vesta_server_client::files::DownloadTransfers::default())
+        .manage(servers::files::DroppedFiles::default())
         .manage(utils::windows::MiniWindowRegistry::default())
         .manage(utils::launch_intents::PendingLaunchIntents::new())
         .manage(resources::manual_drop::ManualDropManager::default())
@@ -254,6 +255,7 @@ pub fn run(context: tauri::Context) {
             commands::server_files::server_trash_list,
             commands::server_files::server_trash_restore,
             commands::server_files::server_file_upload_pick,
+            commands::server_files::server_file_upload_dropped,
             commands::server_files::server_file_upload_begin,
             commands::server_files::server_file_upload_chunk,
             commands::server_files::server_file_upload_finish,
@@ -512,6 +514,13 @@ pub fn run(context: tauri::Context) {
             }
         })
         .on_window_event(|window, event| {
+            if let Some(drops) = window.app_handle().try_state::<servers::files::DroppedFiles>() {
+                match event {
+                    tauri::WindowEvent::DragDrop(event) => drops.observe(window.label(), event),
+                    tauri::WindowEvent::Destroyed => drops.window_closed(window.label()),
+                    _ => {}
+                }
+            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 if let Some(downloads) = window.app_handle().try_state::<vesta_server_client::files::DownloadTransfers>() { downloads.window_closed(window.label()); }
             }
