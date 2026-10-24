@@ -121,7 +121,7 @@ export const rejectionMessage = (error: Pick<ServerCommandError, 'reason'> | nul
 
 // ------------------------------------------------------------------ sftp
 
-const PUBLIC_KEY_TYPES = /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)$/;
+const PUBLIC_KEY_TYPES = /^ssh-ed25519$/;
 
 /** Checks a pasted OpenSSH public key before it leaves the UI. Private keys never pass. */
 export function publicKeyProblem(text: string): 'empty' | 'private' | 'format' | null {
@@ -138,7 +138,7 @@ export function publicKeyProblem(text: string): 'empty' | 'private' | 'format' |
 export const publicKeyComment = (text: string) => text.trim().split(/\s+/).slice(2).join(' ').slice(0, 64);
 
 /** True when the listener only accepts connections from the server computer itself. */
-export const sftpLoopbackOnly = (status: Pick<SftpStatus, 'config'>) => /^(127.|::1$|[::1]$|localhost$)/.test(status.config.bindAddress);
+export const sftpLoopbackOnly = (status: Pick<SftpStatus, 'config'>) => /^127\./.test(status.config.bindAddress) || ['::1', '[::1]', 'localhost'].includes(status.config.bindAddress);
 
 /** An owner without an active key of their own can't sign in yet. */
 export const hasOwnKey = (keys: readonly SftpKey[], username: string, nowMs: number) =>

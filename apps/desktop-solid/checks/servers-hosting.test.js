@@ -105,6 +105,7 @@ describe('[sftp] off by default, public keys only, opened natively', () => {
     expect(publicKeyProblem('-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----')).toBe('private');
     expect(publicKeyProblem('PuTTY-User-Key-File-3: ssh-ed25519')).toBe('private');
     expect(publicKeyProblem('ssh-ed25519 short')).toBe('format');
+    expect(publicKeyProblem(KEY.replace('ssh-ed25519', 'ssh-rsa'))).toBe('format');
     expect(publicKeyProblem('')).toBe('empty');
   });
   test('addresses and ports', () => {
@@ -117,6 +118,8 @@ describe('[sftp] off by default, public keys only, opened natively', () => {
     expect(bindProblem('::')).toBeNull();
     expect(bindProblem('example.com')).toBe('server-hosting.bind-invalid');
     expect(sftpLoopbackOnly({ config: { bindAddress: '127.0.0.1' } })).toBe(true);
+    expect(sftpLoopbackOnly({ config: { bindAddress: '::1' } })).toBe(true);
+    expect(sftpLoopbackOnly({ config: { bindAddress: '2001:db8::1' } })).toBe(false);
   });
   test('opening waits for the owner to enable it, then uses the trusted endpoint host', async () => {
     const servers = createFixtureServers({ latencyMs: 0 });

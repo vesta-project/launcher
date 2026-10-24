@@ -2658,6 +2658,7 @@ export const messageIds = [
   "server-hosting.key-private",
   "server-hosting.key-format",
   "server-hosting.key-label",
+  "server-hosting.key-default-label",
   "server-hosting.key-add-action",
   "server-hosting.key-added",
   "server-hosting.key-revoke",

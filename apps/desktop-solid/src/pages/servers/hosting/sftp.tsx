@@ -216,7 +216,7 @@ function SftpKeys(props: { snapshot: ServerSnapshot; status: SftpStatus }) {
 
   const add = async () => {
     if (publicKeyProblem(text())) return;
-    const payload = { publicKey: text().trim(), label: label().trim() || publicKeyComment(text()) };
+    const payload = { publicKey: text().trim(), label: label().trim() || publicKeyComment(text()) || t('server-hosting.key-default-label') };
     const intentId = intents.idFor(payload);
     setBusy(true); setError(null);
     try {
