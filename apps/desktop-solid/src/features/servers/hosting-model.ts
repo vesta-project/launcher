@@ -107,6 +107,7 @@ const reasons: Record<string, MessageId> = {
   'server_install.approval_mismatch': 'server-hosting.reason-plan-expired',
   world_not_stopped: 'server-hosting.reason-not-stopped',
   world_requires_stopped: 'server-hosting.reason-not-stopped',
+  world_metadata_invalid: 'server-hosting.reason-world-metadata',
   sftp_bind_failed: 'server-hosting.reason-bind-failed',
   sftp_key_invalid: 'server-hosting.reason-key-invalid',
   sftp_key_duplicate: 'server-hosting.reason-key-duplicate',

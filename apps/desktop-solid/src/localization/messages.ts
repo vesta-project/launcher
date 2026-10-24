@@ -2611,6 +2611,7 @@ export const messageIds = [
   "server-hosting.reason-no-previous",
   "server-hosting.reason-recovery",
   "server-hosting.reason-not-stopped",
+  "server-hosting.reason-world-metadata",
   "server-hosting.reason-version-unavailable",
   "server-hosting.reason-source-failed",
   "server-hosting.reason-download-failed",

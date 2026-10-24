@@ -103,6 +103,7 @@ server-hosting-reason-changed = The server changed since you opened this. Review
 server-hosting-reason-no-previous = There's no previous software to restore.
 server-hosting-reason-recovery = Restore the previous software first.
 server-hosting-reason-not-stopped = The server must be fully stopped.
+server-hosting-reason-world-metadata = The server couldn't read this world's saved metadata. Check the world files and try again.
 server-hosting-reason-version-unavailable = That version isn't available.
 server-hosting-reason-source-failed = The download source returned something unexpected. Try again later.
 server-hosting-reason-download-failed = The download didn't complete. Check the server's internet connection and try again.
