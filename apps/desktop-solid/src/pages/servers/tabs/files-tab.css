@@ -2,8 +2,9 @@
  * Server Files and Settings tabs.
  * Hooks: [data-vesta=server-files] -file-list -file-head -file-row -file-open -file-icon
  *        -file-name -file-meta -file-bar -file-compare -upload-list -upload-row -upload-copy
- *        -motd-preview -weakening-list
- * States: file-row: data-protected; file-icon: data-kind; file-meta: data-tone
+ *        -upload-renamed -motd-preview -weakening-list
+ * States: file-row: data-protected, data-drop-folder, data-drop-over; file-icon: data-kind;
+ *         file-meta: data-tone; upload-row: data-skipped. Drop look: file-drop/drop.css
  *
  * Rows follow the Worlds/Resources list: hairline-separated, icon tile, muted metadata.
  */
@@ -315,5 +316,25 @@
     :where([data-vesta="server-file-head"], [data-vesta="server-file-row"]) > :nth-child(3) {
       display: none;
     }
+  }
+}
+
+/* ---- Drag and drop: the list is the drop zone (drop.css); a folder row under the pointer takes it ---- */
+@layer launcher {
+  :where(.server-files-body) { border-radius: var(--vesta-radius-container); }
+  :where([data-vesta="server-file-row"][data-drop-over]) {
+    border-radius: var(--vesta-radius-sm);
+    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+    box-shadow: inset 0 0 0 var(--vesta-border-width) var(--vesta-color-accent);
+  }
+  :where([data-vesta="server-file-row"][data-drop-over]) :where([data-vesta="server-file-icon"]) { color: var(--vesta-color-accent); }
+
+  :where([data-vesta="server-upload-row"][data-skipped]) > :where([data-vesta="server-file-icon"], [data-vesta="server-upload-copy"]) { opacity: 0.55; }
+  :where([data-vesta="server-upload-row"]) > :where([data-vesta="segmented-field"]) { flex: none; }
+  :where([data-vesta="server-upload-renamed"]) {
+    margin-inline-start: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-regular, 400);
   }
 }

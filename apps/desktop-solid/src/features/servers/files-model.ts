@@ -267,3 +267,93 @@ export function changedLineCount(left: string, right: string): number {
   for (let index = 0; index < Math.max(a.length, b.length); index++) if (a[index] !== b[index]) changed++;
   return changed;
 }
+
+// ------------------------------------------------------------------ upload plan (picked or dropped)
+
+/** What to do when an upload's name is already taken in its folder. */
+export type ConflictChoice = 'replace' | 'keep-both' | 'skip';
+
+/** A name already in the target folder: a file can be replaced, a folder cannot. */
+export type UploadConflict = 'file' | 'directory';
+
+export interface PlannedUpload {
+  localId: string;
+  /** Game-root-relative destination. */
+  path: string;
+  /** `replace` moves the current file to the trash first, then creates the upload. */
+  mode: 'create' | 'replace';
+}
+
+export interface UploadPlan {
+  uploads: PlannedUpload[];
+  /** Folders to create first, parents before children. Existing ones are fine. */
+  folders: string[];
+  /** Candidates whose name is taken and that have no choice yet. */
+  unresolved: string[];
+  skipped: string[];
+  problem: MessageId | null;
+}
+
+/** Display path of a candidate inside its drop, e.g. `plugins/LuckPerms/config.yml`. */
+export const uploadLabel = (candidate: Pick<UploadCandidate, 'name' | 'folder'>) =>
+  candidate.folder ? `${candidate.folder}/${candidate.name}` : candidate.name;
+
+/** Only loose files can collide with the listing we have; files in dropped folders go to new or merged folders. */
+export function uploadConflict(candidate: Pick<UploadCandidate, 'name' | 'folder'>, siblings: readonly FileEntry[]): UploadConflict | null {
+  if (candidate.folder) return null;
+  const taken = siblings.find((entry) => entry.name.toLowerCase() === candidate.name.toLowerCase());
+  return taken ? taken.kind : null;
+}
+
+/** `name (2).ext`, the first such name not in `taken` (lower-cased names). */
+export function keepBothName(name: string, taken: ReadonlySet<string>): string {
+  const dot = name.lastIndexOf('.');
+  const [stem, extension] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+  for (let index = 2; ; index++) {
+    const next = `${stem} (${index})${extension}`;
+    if (!taken.has(next.toLowerCase())) return next;
+  }
+}
+
+/**
+ * Turns picked or dropped files into the steps the existing upload path runs: folders to
+ * create, then one create (or trash-then-create) per file. Limits and name rules are the
+ * same as for picked files; protected admission documents stay refused anywhere in a path.
+ */
+export function planUploads(
+  directory: string,
+  candidates: readonly UploadCandidate[],
+  siblings: readonly FileEntry[],
+  choices: Readonly<Record<string, ConflictChoice>>,
+): UploadPlan {
+  const plan: UploadPlan = { uploads: [], folders: [], unresolved: [], skipped: [], problem: null };
+  const taken = new Set(siblings.map((entry) => entry.name.toLowerCase()));
+  const existingFolders = new Set(siblings.filter((entry) => entry.kind === 'directory').map((entry) => entry.name.toLowerCase()));
+  const folders = new Set<string>();
+  const active: UploadCandidate[] = [];
+  for (const candidate of candidates) {
+    const segments = candidate.folder ? candidate.folder.split('/') : [];
+    if (!segments.every(isSafeSegment)) { plan.problem ??= 'server-files.upload.bad-name'; continue; }
+    const conflict = uploadConflict(candidate, siblings);
+    const choice = conflict ? choices[candidate.localId] : undefined;
+    if (conflict && (!choice || (choice === 'replace' && conflict === 'directory'))) { plan.unresolved.push(candidate.localId); active.push(candidate); continue; }
+    if (choice === 'skip') { plan.skipped.push(candidate.localId); continue; }
+    active.push(candidate);
+    let name = candidate.name;
+    if (choice === 'keep-both') { name = keepBothName(name, taken); taken.add(name.toLowerCase()); }
+    const relative = [...segments, name].join('/');
+    const path = directory ? `${directory}/${relative}` : relative;
+    if (isProtectedPath(relative)) plan.problem ??= 'server-files.protected-name';
+    segments.forEach((_, index) => {
+      if (index === 0 && existingFolders.has(segments[0]!.toLowerCase())) return;
+      const folder = segments.slice(0, index + 1).join('/');
+      folders.add(directory ? `${directory}/${folder}` : folder);
+    });
+    plan.uploads.push({ localId: candidate.localId, path, mode: choice === 'replace' ? 'replace' : 'create' });
+  }
+  plan.folders = [...folders].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b));
+  // Skipped files don't count towards the limit; skipping everything is not a problem, just nothing to do.
+  const rules = active.length ? uploadProblem(active) : null;
+  plan.problem = candidates.length ? rules ?? plan.problem : 'server-files.upload.nothing';
+  return plan;
+}

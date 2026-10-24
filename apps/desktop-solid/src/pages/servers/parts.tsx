@@ -6,12 +6,14 @@ import { setting } from '../../features/settings/config';
 import { t } from '../../localization';
 import { serverErrorPresentation } from '../../features/servers/errors';
 import { groupFingerprint } from '../../features/servers/fingerprint';
-import { age, type Dot, type Fact } from '../../features/servers/model';
-import type { ServerCommandError } from '../../features/servers/native';
+import { age, freshnessVisible, type Dot, type Fact } from '../../features/servers/model';
+import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
 import { useServersClock } from '../../features/servers/store';
 import { serverPressure } from '../../features/servers/resources';
 import { headerExplains } from '../../features/servers/shell-model';
 import { useServerShell } from './shell-context';
+
+type ConnectionPhase = ServerSnapshot['state']['phase'];
 
 /** One state fact as a soft badge. */
 export function FactBadge(props: { fact: Fact; now?: number }) {
@@ -40,10 +42,13 @@ export function FingerprintView(props: { value: string; highlight?: number[] }) 
   );
 }
 
-/** Last-known value age, e.g. "Updated 3 min ago". */
-export function Freshness(props: { atMs: number | null; now: number }) {
+/**
+ * Last-known value age, e.g. "Updated 3 min ago". Shown only while the connection is
+ * disrupted or the value is stale (see `freshnessVisible`); a live value needs no age.
+ */
+export function Freshness(props: { atMs: number | null; now: number; phase: ConnectionPhase }) {
   return (
-    <Show when={props.atMs}>
+    <Show when={freshnessVisible(props.phase, props.atMs, props.now) ? props.atMs : null}>
       {(at) => {
         const seen = () => age(at(), props.now);
         return <span data-vesta="server-freshness">{t('servers.updated', { time: t(seen().message, { count: seen().count }) })}</span>;

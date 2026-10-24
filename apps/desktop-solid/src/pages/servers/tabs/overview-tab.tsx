@@ -53,7 +53,7 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
             <dt>{t('servers.overview.version')}</dt><dd>{props.snapshot.info?.minecraftVersion || t('servers.unknown')}</dd>
             <dt>{t('servers.overview.uptime')}</dt><dd>{formatUptime(status()?.uptimeSeconds ?? null) ?? '—'}</dd>
           </dl>
-          <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} />
+          <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} phase={props.snapshot.state.phase} />
         </article>
 
         <Show when={metricsAllowed()}>
