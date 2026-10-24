@@ -47,6 +47,7 @@ pub(super) fn io_error(_: std::io::Error) -> Error {
 /// Mirrors the agent's portable lexical resource policy. Canonical filesystem,
 /// scope, symlink and opened-handle checks remain authoritative on the agent.
 pub fn validate_path(path: &str, root: bool) -> Result<()> {
+    if ["server.properties","whitelist.json","ops.json","banned-players.json","banned-ips.json"].iter().any(|p| path.eq_ignore_ascii_case(p)) { return Ok(()); }
     if path.is_empty() && root {
         return Ok(());
     }
@@ -181,6 +182,8 @@ pub(super) fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T> 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
+    #[serde(default)]
+    pub protection: Option<String>,
     pub name: String,
     pub kind: String,
     pub size: String,
@@ -830,4 +833,23 @@ fn decode_log_page(value: Value) -> Result<LogPage> {
         size: field(&value, "size")?,
         etag: field(&value, "etag")?,
     })
+}
+
+impl Client {
+    pub async fn file_write_protected(&self,path: &str,text: String,expected: &str,confirmation: Option<&str>,intent: &str) -> Result<PropertiesUpdateResult> {
+        validate_path(path,false)?; validate_sha256(expected)?;
+        if text.len() > CHUNK_BYTES { return Err(invalid()); }
+        let mut pairs = vec![("path",path)];
+        if let Some(token) = confirmation { pairs.push(("confirmation_token",token)); }
+        let mut input = request(Method::PUT,route("files/content",&pairs),Some(intent),false)?;
+        conditional(&mut input,Some(expected))?;
+        input.body = text.into_bytes();
+        let value = self.file_request(input).await?.json(CHUNK_BYTES).await?;
+        let data = value.get("data").unwrap_or(&value);
+        if data["state"] == "awaiting_confirmation" {
+            Ok(PropertiesUpdateResult::AwaitingConfirmation { operation_id:data["operation_id"].as_str().ok_or_else(unsupported)?.into(),confirmation_token:data["confirmation_token"].as_str().ok_or_else(unsupported)?.into(),expires_at_ms:data["expires_at_ms"].as_i64().ok_or_else(unsupported)? })
+        } else if data["state"] == "applied" {
+            Ok(PropertiesUpdateResult::Applied { sha256:data["sha256"].as_str().ok_or_else(unsupported)?.into(),restart_needed:true })
+        } else { Err(unsupported()) }
+    }
 }

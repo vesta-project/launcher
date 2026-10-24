@@ -30,7 +30,6 @@ fn portable_game_root_paths_reject_traversal_and_windows_aliases() {
         "a:stream",
         ".vesta/secret",
         "config/SERVER.PROPERTIES",
-        "ops.json",
         "foo/whitelist.json",
         "non-ascii-é",
     ] {
@@ -42,6 +41,8 @@ fn portable_game_root_paths_reject_traversal_and_windows_aliases() {
     }
     for path in [
         "config/a.txt",
+        "ops.json",
+        "server.properties",
         "logs/2026-10-22.log.gz",
         "mods/test mod.jar",
         "a+b#c%.txt",

@@ -445,6 +445,8 @@ export type ServersNative = typeof serversNative;
 // ============================================================================
 
 export interface FileEntry {
+  /** Private paths are never returned. */
+  protection?: 'normal' | 'confirm_edit' | null;
   name: string;
   kind: 'file' | 'directory';
   /** Decimal bytes; `'0'` for directories. */
@@ -537,6 +539,8 @@ function serversFilesNative() {
     /** PUT /files/content, `If-None-Match: *` when `expectedSha256` is null else `If-Match`; ≤16 MiB. `files.create`/`files.overwrite`. */
     fileWriteText: (connectionId: ConnectionId, path: string, text: string, expectedSha256: string | null, intentId: string) =>
       call<FileChange>('server_file_write_text', { connectionId, path, text, expectedSha256, intentId }),
+    fileWriteProtected: (connectionId: ConnectionId, path: string, text: string, expectedSha256: string, confirmationToken: string | null, intentId: string) =>
+      call<PropertiesUpdateResult>('server_file_write_protected', { connectionId, path, text, expectedSha256, confirmationToken, intentId }),
     /** POST /files/mkdir `{path}` — one new directory; `files.mkdir`. */
     fileMkdir: (connectionId: ConnectionId, path: string, intentId: string) =>
       call<void>('server_file_mkdir', { connectionId, path, intentId }),

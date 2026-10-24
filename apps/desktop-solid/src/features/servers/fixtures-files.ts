@@ -6,6 +6,7 @@ import type {
   ConnectionId, FileChange, FileEntry, LogPage, Page, PropertiesUpdateResult, PropertyValue, ServerCommandError,
   ServerSnapshot, TextFile, TrashEntry, UploadCandidate, UploadProgress,
 } from './native';
+import { rawProtectedFile } from './native-files';
 import type { ServersApi } from './service';
 import { TEXT_READ_LIMIT, UPLOAD_CHUNK, WRITE_LIMIT, baseName, isArchivedLog, isProtectedPath, parentPath, splitPath } from './files-model';
 import { MAX_CHANGES, REDACTED, parseSourceValue, propertyDef, serializeValue, valueProblem, weakeningKeys } from './properties-model';
@@ -20,7 +21,7 @@ export interface FileFixtureContext<T extends { snapshot: ServerSnapshot }> {
 }
 
 type FileCommands = Pick<ServersApi,
-  | 'filesList' | 'fileReadText' | 'fileWriteText' | 'fileMkdir' | 'fileRename' | 'fileDelete' | 'trashList' | 'trashRestore'
+  | 'fileWriteProtected' | 'filesList' | 'fileReadText' | 'fileWriteText' | 'fileMkdir' | 'fileRename' | 'fileDelete' | 'trashList' | 'trashRestore'
   | 'uploadPick' | 'uploadBegin' | 'uploadChunk' | 'uploadFinish' | 'uploadAbort' | 'fileDownload' | 'logTail' | 'logLines'
   | 'propertiesGet' | 'propertiesUpdate'>;
 
@@ -273,7 +274,28 @@ export function createFileFixtures<T extends { snapshot: ServerSnapshot }>(ctx: 
     return { values, sha256: await sha256(node.content), node };
   };
 
+  const approvals = new Map<string, { payload: string; token: string; expires: number }>();
   return {
+    async fileWriteProtected(connectionId, path, text, expectedSha256, confirmationToken, intentId) {
+      const { target, root } = open(connectionId);
+      ctx.requireCapability(target, 'config.edit'); ctx.requireCapability(target, 'files.overwrite');
+      if (!rawProtectedFile(path)) fail('invalid_input');
+      const payload = { path, text, expectedSha256 };
+      const prior = replay<PropertiesUpdateResult>(root, intentId, payload); if (prior) return prior;
+      await precondition(root, path, expectedSha256);
+      if (path !== 'server.properties') { try { if (!Array.isArray(JSON.parse(text))) fail('invalid_input'); } catch { fail('invalid_input'); } }
+      const pending = approvals.get(intentId);
+      if (!confirmationToken) {
+        if (pending && pending.payload !== JSON.stringify(payload)) fail('conflict');
+        const approval = { payload: JSON.stringify(payload), token: id('raw-confirm'), expires: Date.now() + 120_000 };
+        approvals.set(intentId, approval);
+        return { kind: 'awaitingConfirmation', operationId: id('raw'), confirmationToken: approval.token, expiresAtMs: approval.expires };
+      }
+      if (!pending || pending.token !== confirmationToken || pending.expires < Date.now() || pending.payload !== JSON.stringify(payload)) fail('confirmation_expired');
+      const node = file(root, path); await toTrash(root, path, node);
+      const next: FileNode = { ...node, content: text, size: bytes(text), modifiedAtMs: Date.now() }; root.nodes.set(path, next); approvals.delete(intentId);
+      return remember(root, intentId, payload, { kind: 'applied', sha256: await nodeHash(path, next), restartNeeded: true });
+    },
     async filesList(connectionId, path, cursor): Promise<Page<FileEntry>> {
       await ctx.wait();
       const { target, root } = open(connectionId);
@@ -283,7 +305,7 @@ export function createFileFixtures<T extends { snapshot: ServerSnapshot }>(ctx: 
       const prefix = path ? `${path}/` : '';
       const children = [...root.nodes.entries()]
         .filter(([key]) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
-        .map(([key, node]): FileEntry => ({ name: baseName(key), kind: node.kind, size: String(node.size), modifiedAtMs: node.modifiedAtMs }))
+        .map(([key, node]): FileEntry => ({ protection: rawProtectedFile(key) ? 'confirm_edit' : 'normal', name: baseName(key), kind: node.kind, size: String(node.size), modifiedAtMs: node.modifiedAtMs }))
         .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase(), 'en') || (a.name < b.name ? -1 : 1));
       const start = cursor ? Number(cursor) : 0;
       if (!Number.isInteger(start) || start < 0 || start > children.length) fail('conflict');
@@ -295,7 +317,7 @@ export function createFileFixtures<T extends { snapshot: ServerSnapshot }>(ctx: 
       await ctx.wait();
       const { target, root } = open(connectionId);
       ctx.requireCapability(target, 'files.read');
-      checkPath(path);
+      if (rawProtectedFile(path)) ctx.requireCapability(target, 'config.edit'); else checkPath(path);
       const node = file(root, path);
       if (node.binary) return { text: '', sha256: await nodeHash(path, node), size: String(node.size), binary: true, truncated: false };
       if (node.size > TEXT_READ_LIMIT) return { text: node.content.slice(0, 64 * 1024), sha256: null, size: String(node.size), binary: false, truncated: true };
@@ -450,7 +472,7 @@ export function createFileFixtures<T extends { snapshot: ServerSnapshot }>(ctx: 
       await ctx.wait(400);
       const { target, root } = open(connectionId);
       ctx.requireCapability(target, 'files.read');
-      checkPath(path);
+      if (rawProtectedFile(path)) ctx.requireCapability(target, 'config.edit'); else checkPath(path);
       const node = file(root, path);
       if (decompress && node.gzText === undefined) fail('invalid_input');
       return { kind: 'saved', size: String(decompress ? bytes(node.gzText!) : node.size) };

@@ -445,3 +445,8 @@ fn transfer_activity_with_cancel(
         serde_json::json!({"id":format!("server-file:{connection}:{transfer}"),"attempt":transfer,"state":state,"kind":"task","title":name,"name":name,"source":"server","visibility":"foreground","progress":progress,"cancellable":cancellable,"pausable":false,"subject":{"id":connection,"name":"Vesta server","instanceId":null,"iconUrl":null}}),
     );
 }
+
+#[tauri::command]
+pub async fn server_file_write_protected(manager: Manager<'_>, connection_id: String, path: String, text: String, expected_sha256: String, confirmation_token: Option<String>, intent_id: String) -> Result<PropertiesUpdateResult> {
+    manager.files_client(&connection_id).await?.file_write_protected(&path,text,&expected_sha256,confirmation_token.as_deref(),&intent_id).await
+}

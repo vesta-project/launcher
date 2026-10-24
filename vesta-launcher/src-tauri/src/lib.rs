@@ -243,6 +243,7 @@ pub fn run(context: tauri::Context) {
             commands::server_files::server_files_list,
             commands::server_files::server_file_read_text,
             commands::server_files::server_file_write_text,
+            commands::server_files::server_file_write_protected,
             commands::server_files::server_file_mkdir,
             commands::server_files::server_file_rename,
             commands::server_files::server_file_delete,
