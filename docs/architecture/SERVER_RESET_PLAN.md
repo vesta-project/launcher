@@ -18,7 +18,7 @@ GPT Sol = agent/native/backend + reviews; GPT Luna = research and code scans.
 - **D2. Software page stays, presentation changes.** Inline picker (no popup) like the
   instance Versions tab: software → software version → Minecraft version, review, apply.
   "Previous version" becomes a quiet "Previous: Paper 1.21.3 · Restore" line with confirm.
-- **P3. Sleep is a first-class state (AMP model).**
+- **D3 (approved). Sleep is a first-class state (AMP model).**
   `Running` → **Sleep** → `Sleeping` (Minecraft off, agent answers the server list, a real
   join or a permitted launcher user **Wakes** it) / **Stop** → `Stopped` (listener off; only a
   permitted launcher user can Start). Idle timer only ever moves Running → Sleeping.
@@ -26,18 +26,18 @@ GPT Sol = agent/native/backend + reviews; GPT Luna = research and code scans.
   "On agent start": stay stopped / sleep / start (replaces `start-on-agent-start`).
   Today the responder can wake a merely *stopped* server if `wake_on_join` is on — that
   changes: wake applies only in Sleeping.
-- **P4. Owners/admins can edit protected Minecraft files raw.** Today `server.properties`,
+- **D4 (approved: owner + admin with confirm; becomes configurable once fine-grained user permissions exist). Owners/admins can edit protected Minecraft files raw.** Today `server.properties`,
   `whitelist.json`, `ops.json`, `banned-*.json` are refused even for owners. Proposal: owner
   (and admin) get raw read + write through the editor with a confirmation and a hint
   ("also editable in Settings → Players"); validators still run where they exist; Vesta's own
   private paths (`.vesta`, wrapper files, VCS dirs) stay hidden for everyone.
-- **P5. Java selection.** Agent detects Java installs on the host (well-known locations +
+- **D5 (approved: detected list + local allowlist for custom paths; plus proper JRE management modelled on the launcher Settings → Java page — detect, download/manage runtimes per required major version). Backlog: encrypt agent state at rest (identity/management DB). Java selection.** Agent detects Java installs on the host (well-known locations +
   `JAVA_HOME`/`PATH`), lists them with version/vendor; owner picks one per server or enters
   a custom path. Security: a custom path is an arbitrary executable, so it requires the
   owner role and either (a) the path to pass the existing probe and live under an allowlist
   configured locally, or (b) a local confirmation on the host. Recommend (a) with
   detected-list as the default UX.
-- **P6. Machine host for agent lifecycle.** Keep per-server connections, add a small
+- **D6 (deferred until phases 0–2 land). Process model today: `vesta-setup` host (starts at sign-in, launches the agent) → `vesta-agent serve` → optional per-server `vesta-supervisor` (keeps Minecraft alive across agent exits). Missing piece is a remote API on the existing host. Machine host for agent lifecycle.** Keep per-server connections, add a small
   per-machine **host service** (from `vesta-setup`, starts at sign-in) that knows every
   instance in the registry and exposes, to paired owners: agent online/offline, start/stop
   agent. Launcher shows "Agent offline · Start agent" when the host is reachable but the agent
@@ -61,19 +61,19 @@ GPT Sol = agent/native/backend + reviews; GPT Luna = research and code scans.
 - Sleep with 60 s idle never triggered: root cause + `sleep_blocker` diagnostic in the
   contract so the UI can explain "why isn't it sleeping".
 
-### Phase 1 — state model + contracts (Sol), after P3/P4/P5 sign-off
+### Phase 1 — state model + contracts (Sol)
 - Sleep/Stop/Wake lifecycle (agent state machine, routes, native, TS contract, fixtures),
   "on agent start" policy, wake only from Sleeping.
-- Protected-file raw access for owner/admin (P4) with audit + confirmation token.
-- Java detection list + selection (P5); world details: size, datapacks list/toggle,
+- Protected-file raw access for owner/admin (D4) with audit + confirmation token.
+- Java detection list + selection + managed JRE downloads (D5); world details: size, datapacks list/toggle,
   dimensions (D1); remove world/new from launcher contract usage.
 - Metrics history route consumption in native (D9).
 
 ### Phase 2 — UI (Claude UI agents, reviewed by Opus, one owner per area)
 - Lifecycle: Sleep/Wake/Stop/Start buttons + states in header, card, rail pin.
-- World page (D1), Software page (D2 + Java picker P5).
+- World page (D1), Software page (D2 + Java picker D5).
 - Overview graphs + freshness rule (D9).
-- Files drag-and-drop (D10) + raw protected-file editing UX (P4).
+- Files drag-and-drop (D10) + raw protected-file editing UX (D4).
 - Access: people vs pack users grouping (D7).
 - Visual pass: less bland — use server art/icon, accent colour from the server icon,
   consistent panel rhythm with instance pages.
