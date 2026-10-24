@@ -20,6 +20,17 @@ export interface SleepPolicy {
   startCooldownSeconds: number;
 }
 
+export type SleepBlocker =
+  | { reason: 'disabled' | 'not_ready' | 'players_online' | 'player_count_unknown' | 'operation_in_progress' | 'hold' | 'authority_unavailable' }
+  | { reason: 'counting_down' | 'warning_sent'; remainingSeconds: number };
+
+export interface SleepPolicyView {
+  policy: SleepPolicy;
+  revision: number;
+  /** Null when connected to an older agent without this diagnostic. */
+  sleepBlocker: SleepBlocker | null;
+}
+
 export const SLEEP_BOUNDS = {
   idleSeconds: [60, 86_400],
   warningSeconds: [5, 300],
@@ -57,10 +68,10 @@ export interface MotdPreview {
 
 export const serversPresenceNative = {
   /** GET sleep/policy → policy plus its revision (starts at 0). */
-  sleepPolicy: (connectionId: ConnectionId) => call<{ policy: SleepPolicy; revision: number }>('server_sleep_policy', { connectionId }),
+  sleepPolicy: (connectionId: ConnectionId) => call<SleepPolicyView>('server_sleep_policy', { connectionId }),
   /** PUT sleep/policy; a stale revision rejects with `stale_target`. */
   updateSleepPolicy: (connectionId: ConnectionId, policy: SleepPolicy, expectedRevision: number, intentId: string) =>
-    call<{ policy: SleepPolicy; revision: number }>('server_sleep_policy_update', { connectionId, policy, expectedRevision, intentId }),
+    call<SleepPolicyView>('server_sleep_policy_update', { connectionId, policy, expectedRevision, intentId }),
   /** GET motd/policy → the document plus its revision (null before the first save). */
   motdPolicy: (connectionId: ConnectionId) => call<{ document: MotdDocument; revision: string | null }>('server_motd_policy', { connectionId }),
   updateMotdPolicy: (connectionId: ConnectionId, document: MotdDocument, expectedRevision: string | null, intentId: string) =>

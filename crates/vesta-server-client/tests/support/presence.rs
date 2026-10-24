@@ -17,10 +17,14 @@ async fn presence_routes_revisions_receipts_and_preview_refusals() {
     a.set(
         "GET",
         "/api/v3/manage/sleep/policy",
-        json!({"policy":policy,"revision":0,"game_port_known":true}),
+        json!({"policy":policy,"revision":0,"game_port_known":true,"sleep_blocker":{"reason":"disabled"}}),
     );
     let sleep = a.client.sleep_policy().await.unwrap();
     assert_eq!(sleep.revision, 0);
+    assert_eq!(
+        sleep.sleep_blocker,
+        Some(vesta_server_client::presence::SleepBlocker::Disabled)
+    );
     a.set(
         "PUT",
         "/api/v3/manage/sleep/policy",

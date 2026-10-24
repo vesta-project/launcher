@@ -133,6 +133,8 @@ export interface ServerStatus {
   playerCountKnown: boolean;
   playerCountObservedAtMs: number | null;
   playerRosterRevision?: string | null;
+  /** Null/absent on older agents. Explanation only; state/lifecycle are unchanged. */
+  sleepBlocker?: import('./native-presence').SleepBlocker | null;
   uptimeSeconds: string | null;
   readiness: Readiness;
   readinessReason: ReadinessReason | null;

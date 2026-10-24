@@ -26,9 +26,11 @@ describe('[sleep] policy follows the agent bounds and revisions', () => {
   test('out-of-range values and stale revisions are refused', async () => {
     const servers = createFixtureServers({ latencyMs: 0 });
     const { policy, revision } = await servers.sleepPolicy('fixture-survival');
+    expect((await servers.sleepPolicy('fixture-survival')).sleepBlocker).toEqual({ reason: 'disabled' });
     await expect(servers.updateSleepPolicy('fixture-survival', { ...policy, enabled: true, idleSeconds: 30 }, revision, 's1')).rejects.toMatchObject({ code: 'invalid_input' });
     const saved = await servers.updateSleepPolicy('fixture-survival', { ...policy, enabled: true, offlineStatus: true, wakeOnJoin: true }, revision, 's2');
     expect(saved.revision).toBe(revision + 1);
+    expect(saved.sleepBlocker).toEqual({ reason: 'players_online' });
     await expect(servers.updateSleepPolicy('fixture-survival', policy, revision, 's3')).rejects.toMatchObject({ code: 'stale_target' });
     await expect(servers.updateSleepPolicy('fixture-creative', policy, 0, 's4')).rejects.toMatchObject({ code: 'forbidden' });
   });

@@ -2,9 +2,30 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::{json, Value};
 use vesta_server_client::{
     branding::{decode_icon, BrandingPatch, MAX_ICON_BYTES},
-    presence::{MotdDocument, MotdPreview, STATES},
+    presence::{MotdDocument, MotdPreview, SleepBlocker, SleepPolicyView, STATES},
     Error, ErrorCode,
 };
+
+#[test]
+fn sleep_diagnostic_maps_countdown_fields_and_preserves_reason_values() {
+    use vesta_server_client::model::from_wire;
+    let policy = json!({"enabled":true,"offline_status":true,"wake_on_join":true,"idle_seconds":60,"warning_seconds":30,"start_cooldown_seconds":30});
+    for reason in ["counting_down", "warning_sent"] {
+        let view: SleepPolicyView = from_wire(json!({"policy":policy,"revision":3,"sleep_blocker":{"reason":reason,"remaining_seconds":42}})).unwrap();
+        let ipc = serde_json::to_value(view).unwrap();
+        assert_eq!(
+            ipc["sleepBlocker"],
+            json!({"reason":reason,"remainingSeconds":42})
+        );
+    }
+    let view: SleepPolicyView = from_wire(
+        json!({"policy":policy,"revision":3,"sleep_blocker":{"reason":"players_online"}}),
+    )
+    .unwrap();
+    assert_eq!(view.sleep_blocker, Some(SleepBlocker::PlayersOnline));
+    let legacy: SleepPolicyView = from_wire(json!({"policy":policy,"revision":3})).unwrap();
+    assert_eq!(legacy.sleep_blocker, None);
+}
 
 fn document() -> Value {
     let states: serde_json::Map<String,Value>=STATES.iter().map(|s|(s.to_string(),json!({"template":"Hello","version_name":"Vesta","maximum_players":0,"icon_png":null}))).collect();

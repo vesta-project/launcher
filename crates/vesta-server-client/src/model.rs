@@ -163,6 +163,7 @@ dto!(ServerStatus {
     state: String, lifecycle: Option<String>, generation: Option<String>,
     player_count: Option<u32>, player_count_known: bool, player_count_observed_at_ms: Option<i64>,
     player_roster_revision: Option<String>,
+    sleep_blocker: Option<crate::presence::SleepBlocker>,
     uptime_seconds: Option<String>, readiness: String, readiness_reason: Option<String>,
     readiness_evidence: String, supervision: String, supervisor: Option<SupervisorStatus>,
 });

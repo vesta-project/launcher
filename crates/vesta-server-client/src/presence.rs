@@ -31,8 +31,28 @@ dto!(SleepPolicy {
 });
 dto!(SleepPolicyView {
     policy: SleepPolicy,
-    revision: i64
+    revision: i64,
+    sleep_blocker: Option<SleepBlocker>
 });
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum SleepBlocker {
+    Disabled,
+    NotReady,
+    PlayersOnline,
+    PlayerCountUnknown,
+    OperationInProgress,
+    Hold,
+    AuthorityUnavailable,
+    CountingDown {
+        #[serde(rename = "remainingSeconds")]
+        remaining_seconds: u32,
+    },
+    WarningSent {
+        #[serde(rename = "remainingSeconds")]
+        remaining_seconds: u32,
+    },
+}
 dto!(StatePresentation { template: String, version_name: Option<String>, maximum_players: Option<u16>, icon_png: Option<String> });
 dto!(MotdDocument { states: BTreeMap<String, StatePresentation>, normal_icon_png: Option<String>, login_message: String });
 dto!(MotdPolicyView { document: MotdDocument, revision: Option<String> });

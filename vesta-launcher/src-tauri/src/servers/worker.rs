@@ -304,25 +304,14 @@ impl ServerManager {
                                         *cache = Some(players.clone());
                                     }
                                 }
-                                if let PlayersView::Known {
-                                    generation,
-                                    player_count,
-                                    ..
-                                } = &players
-                                {
-                                    players_generation = Some(generation.clone());
-                                    players_count = Some(*player_count);
-                                    players_revision = status.player_roster_revision.clone();
-                                    players_retry = Instant::now() + Duration::from_secs(1);
-                                    let mut updated = current_record.snapshot;
-                                    if let Some(current) = updated.status.as_mut() {
-                                        current.player_count = Some(*player_count);
-                                        current.player_count_known = true;
-                                        current.player_count_observed_at_ms =
-                                            Some(vesta_server_client::now_ms());
-                                    }
-                                    let _ = self.publish_observation(&app, updated).await;
-                                }
+                                // Remember the triggering status even for an unknown
+                                // roster. Feeding the returned count into status made
+                                // old agents alternate null/count and refetch forever.
+                                // Only a new authoritative status fact triggers a read.
+                                players_generation = status.generation.clone();
+                                players_count = status.player_count;
+                                players_revision = status.player_roster_revision.clone();
+                                players_retry = Instant::now() + Duration::from_secs(1);
                                 self.deliver(
                                     &id,
                                     ServerTopic::Status,

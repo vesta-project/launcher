@@ -92,7 +92,7 @@ fn projected_operation(state: &State, operation_state: &str) -> Value {
     value
 }
 fn status() -> Value {
-    json!({"state":"stopped","generation":null,"lifecycle":"offline","player_count":null,"player_count_known":false,"player_count_observed_at_ms":null,"uptime_seconds":null,"readiness":"stopped","readiness_reason":null,"readiness_evidence":"log_only","supervision":"in_process","supervisor":null})
+    json!({"state":"stopped","generation":null,"lifecycle":"offline","sleep_blocker":{"reason":"disabled"},"player_count":null,"player_count_known":false,"player_count_observed_at_ms":null,"uptime_seconds":null,"readiness":"stopped","readiness_reason":null,"readiness_evidence":"log_only","supervision":"in_process","supervisor":null})
 }
 impl Agent {
     async fn start() -> Self {
@@ -595,7 +595,9 @@ async fn additive_self_projection_and_status_stream_are_supported() {
         .unwrap()
         .contains("\"type\":\"status\""));
     socket.close(None).await.unwrap();
-    client.status(true).await.unwrap();
+    let status = client.status(true).await.unwrap();
+    assert_eq!(status.sleep_blocker, Some(vesta_server_client::presence::SleepBlocker::Disabled));
+    assert_eq!(serde_json::to_value(status).unwrap()["sleepBlocker"], json!({"reason":"disabled"}));
     tokio::time::sleep(std::time::Duration::from_millis(260)).await;
     assert_eq!(client.status(true).await.unwrap().state, "stopped");
 }

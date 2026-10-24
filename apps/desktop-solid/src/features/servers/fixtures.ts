@@ -70,6 +70,7 @@ function status(state: ServerStatus['state'], generation: string | null, players
     generation,
     playerCount: players,
     playerCountKnown: players !== null,
+    sleepBlocker: { reason: 'disabled' },
     playerCountObservedAtMs: players !== null ? Date.now() - 35_000 : null,
     uptimeSeconds: state === 'running' ? '15840' : null,
     readiness: state === 'stopped' ? 'stopped' : 'ready',

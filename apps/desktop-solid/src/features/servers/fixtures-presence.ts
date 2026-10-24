@@ -2,10 +2,10 @@
 // and template validation.
 import type { ConnectionId, ServerCommandError } from './native';
 import { motdProblems, parseMotd, fillPlaceholders, MOTD_PLACEHOLDERS } from './motd-model';
-import { PRESENCE_STATES, SLEEP_BOUNDS, type MotdDocument, type MotdPreview, type PresenceState, type SleepPolicy } from './native-presence';
+import { PRESENCE_STATES, SLEEP_BOUNDS, type MotdDocument, type MotdPreview, type PresenceState, type SleepPolicy, type SleepPolicyView, type SleepBlocker } from './native-presence';
 
 interface PresenceHost {
-  server(id: ConnectionId): unknown;
+  server(id: ConnectionId): { snapshot: { status: { state: string; playerCount: number | null; sleepBlocker?: SleepBlocker | null } | null } };
   requireCapability(target: unknown, capability: string): void;
   wait(ms?: number): Promise<unknown>;
 }
@@ -34,12 +34,19 @@ function seedDocument(): MotdDocument {
 }
 
 export function createPresenceFixtures(host: PresenceHost) {
-  const sleep = new Map<ConnectionId, { policy: SleepPolicy; revision: number }>();
+  const sleep = new Map<ConnectionId, SleepPolicyView>();
   const motd = new Map<ConnectionId, { document: MotdDocument; revision: string | null }>();
   const sleepOf = (id: ConnectionId) => {
     host.server(id);
     let value = sleep.get(id);
-    if (!value) { value = { policy: { enabled: false, offlineStatus: false, wakeOnJoin: false, idleSeconds: 600, warningSeconds: 30, startCooldownSeconds: 30 }, revision: 0 }; sleep.set(id, value); }
+    if (!value) { value = { policy: { enabled: false, offlineStatus: false, wakeOnJoin: false, idleSeconds: 600, warningSeconds: 30, startCooldownSeconds: 30 }, revision: 0, sleepBlocker: { reason: 'disabled' } }; sleep.set(id, value); }
+    const status = host.server(id).snapshot.status;
+    value.sleepBlocker = !value.policy.enabled ? { reason: 'disabled' }
+      : !status || status.state !== 'running' ? { reason: 'not_ready' }
+      : status.playerCount === null ? { reason: 'player_count_unknown' }
+      : status.playerCount > 0 ? { reason: 'players_online' }
+      : { reason: 'counting_down', remainingSeconds: value.policy.idleSeconds };
+    if (status) status.sleepBlocker = clone(value.sleepBlocker);
     return value;
   };
   const motdOf = (id: ConnectionId) => {
@@ -72,7 +79,7 @@ export function createPresenceFixtures(host: PresenceHost) {
       // Sleeping stops Minecraft and waking starts it, so both need lifecycle authority.
       if (policy.enabled) host.requireCapability(host.server(connectionId), 'lifecycle.stop');
       if (policy.wakeOnJoin) host.requireCapability(host.server(connectionId), 'lifecycle.start');
-      sleep.set(connectionId, { policy: clone(policy), revision: current.revision + 1 });
+      sleep.set(connectionId, { policy: clone(policy), revision: current.revision + 1, sleepBlocker: null });
       return clone(sleepOf(connectionId));
     },
     async motdPolicy(connectionId: ConnectionId) {
