@@ -87,6 +87,9 @@ export interface SoftwarePlan {
   version: string;
   build: number | null;
   java: { major: number; evidence: string };
+  javaCompatible?: boolean | null;
+  selectedJavaMajor?: number | null;
+  managedDownloadMajor?: number | null;
   warnings: (SoftwareWarning | string)[];
   risks: string[];
 }
@@ -95,7 +98,7 @@ export type SoftwareJobState = 'queued' | 'staging' | 'activating' | 'succeeded'
 
 export interface SoftwareJob {
   id: string;
-  kind: 'apply' | 'rollback';
+  kind: 'apply' | 'rollback' | 'java_select' | 'java_download';
   state: SoftwareJobState;
   createdAtMs: number;
   updatedAtMs: number;

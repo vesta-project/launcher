@@ -1,3 +1,4 @@
+import type { ServerJavaInventory, ServerJavaRuntime } from './native-java';
 // Fixture world, software and SFTP management for browser previews and checks. It keeps
 // the agent rules the UI depends on: owner-only writes, a stopped game for world and
 // software changes, exact world-name and revision checks, plans that expire, jobs that
@@ -46,6 +47,7 @@ const catalog: SoftwareDescriptor[] = SOFTWARE_IDS.map((software) => ({
 const javaFor = (version: string) => (/^1\.(2[1-9]|20\.[5-9])/.test(version) ? 21 : /^1\.(1[89]|20)/.test(version) ? 17 : 8);
 
 interface HostingState {
+  java: ServerJavaInventory;
   world: ServerWorld;
   worlds: string[];
   software: SoftwareState;
@@ -59,6 +61,7 @@ interface HostingState {
 function seed(): HostingState {
   const now = Date.now();
   return {
+    java: { runtimes: [17, 21, 25].map(major => ({ id: `java-${major}`, path: `C:/Program Files/Eclipse Adoptium/jdk-${major}/bin/java.exe`, version: `${major}.0.3`, major, vendor: major === 17 ? 'Microsoft' : 'Eclipse Adoptium', arch: 'amd64', managed: false })), selected: { id: 'java-21', path: 'C:/Program Files/Eclipse Adoptium/jdk-21/bin/java.exe', version: '21.0.3', major: 21, vendor: 'Eclipse Adoptium', arch: 'amd64', managed: false }, customPathsAllowed: true, managedMajors: [] },
     world: { name: 'world', seed: '-4172144997902289642', configuredSeed: '', exists: true, revision: '3' },
     worlds: ['world'],
     software: {
@@ -107,6 +110,32 @@ export function createHostingFixtures(host: HostingHost) {
   };
 
   return {
+    async javaInventory(connectionId: ConnectionId): Promise<ServerJavaInventory> { await host.wait(); owner(connectionId); return clone(state(connectionId).java); },
+    async javaSelect(connectionId: ConnectionId, runtimeId: string | null, customPath: string | null, intentId: string): Promise<SoftwareJob> {
+      owner(connectionId); const current = state(connectionId);
+      return once(current, intentId, { runtimeId, customPath }, () => {
+        stopped(connectionId, 'software_state_unavailable');
+        if (!!runtimeId === !!customPath) fail('invalid_input');
+        let runtime: ServerJavaRuntime | undefined;
+        if (runtimeId) runtime = current.java.runtimes.find(r => r.id === runtimeId);
+        else if (customPath?.startsWith('C:/Java/approved/') && !customPath.includes('..') && customPath.endsWith('/bin/java.exe')) runtime = { id: customPath, path: customPath, major: 21, version: '21.0.3', vendor: 'Oracle', arch: 'amd64', managed: false };
+        else fail('forbidden');
+        if (!runtime) fail('invalid_input');
+        const chosen = runtime!;
+        const job: SoftwareJob = { id: `java-select-${hex(8)}`, kind: 'java_select', state: 'queued', createdAtMs: Date.now(), updatedAtMs: Date.now(), error: null };
+        current.jobs.unshift(job); runJob(current, job, () => { current.java.selected = clone(chosen); }); return job;
+      });
+    },
+    async javaDownload(connectionId: ConnectionId, major: number, intentId: string): Promise<SoftwareJob> {
+      owner(connectionId); const current = state(connectionId);
+      return once(current, intentId, { major }, () => {
+        if (!Number.isInteger(major) || major < 8 || major > 99) fail('invalid_input');
+        const job: SoftwareJob = { id: `java-download-${hex(8)}`, kind: 'java_download', state: 'queued', createdAtMs: Date.now(), updatedAtMs: Date.now(), error: null };
+        current.jobs.unshift(job); runJob(current, job, () => {
+          if (!current.java.managedMajors.includes(major)) { current.java.managedMajors.push(major); current.java.runtimes.push({ id: `managed-${major}`, path: `private/managed-java/temurin-${major}/bin/java.exe`, major, version: `${major}.0.3`, vendor: 'Eclipse Adoptium', arch: 'amd64', managed: true }); }
+        }); return job;
+      });
+    },
     async world(connectionId: ConnectionId): Promise<ServerWorld> {
       await host.wait();
       host.requireCapability(host.server(connectionId), 'config.view');
@@ -157,10 +186,13 @@ export function createHostingFixtures(host: HostingHost) {
         planId: `plan-${hex(10)}`, expiresAtMs: Date.now() + 120_000, expectedRevision: current.software.revision,
         software: request.software, version: request.version, build: request.software === 'paper' || request.software === 'purpur' ? 140 + Math.floor(Math.random() * 20) : null,
         java: { major: javaFor(request.version), evidence: `Minecraft ${request.version} requires Java ${javaFor(request.version)}` },
+        javaCompatible: (current.java.selected?.major ?? 0) >= javaFor(request.version),
+        selectedJavaMajor: current.java.selected?.major ?? null,
+        managedDownloadMajor: (current.java.selected?.major ?? 0) < javaFor(request.version) ? javaFor(request.version) : null,
         warnings,
         risks: current.software.current?.software !== request.software ? ['cross_family_switch', 'world_upgrade'] : ['world_upgrade'],
       };
-      current.plans.set(plan.planId, { plan, request, used: false });
+      if (plan.javaCompatible) current.plans.set(plan.planId, { plan, request, used: false });
       return clone(plan);
     },
     async softwareApply(connectionId: ConnectionId, planId: string, acknowledgeWarnings: boolean, acknowledgeLegacyChecksum: boolean, intentId: string): Promise<SoftwareJob> {

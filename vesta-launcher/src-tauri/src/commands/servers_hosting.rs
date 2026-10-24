@@ -248,3 +248,14 @@ pub async fn server_sftp_open(
         })?;
     Ok(target)
 }
+
+read_command!(server_java_inventory,ServerJavaInventory,java_inventory);
+#[tauri::command]
+pub async fn server_java_select(app:AppHandle,manager:Manager<'_>,connection_id:String,runtime_id:Option<String>,custom_path:Option<String>,intent_id:String)->Result<SoftwareJob>{
+    let payload=json!({"runtimeId":runtime_id,"customPath":custom_path});let journal=intent_id.clone();
+    manager.management_write(&app,&connection_id,&journal,"java/select",payload,false,|client|async move{client.java_select(runtime_id,custom_path,&intent_id).await}).await
+}
+#[tauri::command]
+pub async fn server_java_download(app:AppHandle,manager:Manager<'_>,connection_id:String,major:u32,intent_id:String)->Result<SoftwareJob>{
+    let journal=intent_id.clone();manager.management_write(&app,&connection_id,&journal,"java/download",json!({"major":major}),false,|client|async move{client.java_download(major,&intent_id).await}).await
+}

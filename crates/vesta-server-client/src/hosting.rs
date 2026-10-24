@@ -77,6 +77,9 @@ pub struct SoftwarePlan {
     pub version: String,
     pub build: Option<u32>,
     pub java: JavaRequirement,
+    pub java_compatible: Option<bool>,
+    pub selected_java_major: Option<u32>,
+    pub managed_download_major: Option<u32>,
     pub warnings: Vec<String>,
     pub risks: Vec<String>,
 }
@@ -270,6 +273,7 @@ impl Client {
             .to_owned();
         revision(&mut value, "expected_revision")?;
         let plan: SoftwarePlan = from_wire(value)?;
+        if plan.java_compatible == Some(false) { return Ok(plan); }
         let mut approvals = self.hosting.approvals.lock().await;
         approvals
             .retain(|_, approval| approval.attempt.is_some() || approval.expires > crate::now_ms());
@@ -479,4 +483,22 @@ pub fn sftp_target(
             host_key_fingerprint: status.host_key_fingerprint.clone(),
         },
     ))
+}
+
+#[derive(Clone,Debug,Serialize,Deserialize)]
+#[serde(rename_all="camelCase")]
+pub struct ServerJavaRuntime { pub id:String,pub path:String,pub version:String,pub major:u32,pub vendor:String,pub arch:String,pub managed:bool }
+#[derive(Clone,Debug,Serialize,Deserialize)]
+#[serde(rename_all="camelCase")]
+pub struct ServerJavaInventory {pub runtimes:Vec<ServerJavaRuntime>,pub selected:Option<ServerJavaRuntime>,pub custom_paths_allowed:bool,pub managed_majors:Vec<u32>}
+impl Client {
+    pub async fn java_inventory(&self)->Result<ServerJavaInventory>{from_wire(self.get("java",true,"content.install").await?)}
+    pub async fn java_select(&self,runtime_id:Option<String>,custom_path:Option<String>,intent:&str)->Result<SoftwareJob>{
+        if runtime_id.is_some()==custom_path.is_some() || custom_path.as_ref().is_some_and(|p|p.len()>4096||p.chars().any(char::is_control)) {return Err(invalid());}
+        from_wire(self.management_mutate(Method::POST,"java/select",Some(json!({"runtime_id":runtime_id,"custom_path":custom_path})),intent,"content.install").await?)
+    }
+    pub async fn java_download(&self,major:u32,intent:&str)->Result<SoftwareJob>{
+        if !(8..=99).contains(&major){return Err(invalid());}
+        from_wire(self.management_mutate(Method::POST,"java/download",Some(json!({"major":major})),intent,"content.install").await?)
+    }
 }

@@ -19,6 +19,7 @@ import { serversManageNative } from './native-manage';
 import { serversPresenceNative } from './native-presence';
 import { serversBrandingNative } from './native-branding';
 import { serversAutomationNative } from './native-automation';
+import { serversJavaNative } from './native-java';
 import { serversHostingNative } from './hosting-native';
 
 export const nativeServers = typeof window !== 'undefined' && isTauri();
@@ -417,6 +418,7 @@ export const serversNative = {
   ...serversAutomationNative,
   // World, server software and SFTP: see hosting-native.ts.
   ...serversHostingNative,
+  ...serversJavaNative,
 };
 
 export type ServersNative = typeof serversNative;
