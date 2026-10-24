@@ -59,3 +59,169 @@
 
   :where([data-vesta="server-sftp-button"]) { display: inline-flex; align-items: center; gap: 2px; }
 }
+
+/*
+ * Software page: the running software as a hero card, then the inline change flow.
+ * Hooks: [data-vesta=server-software-hero|-hero-main|-hero-copy|-eyebrow|-meta|-java|-previous|
+ *        -restore|-mark|-flow|-field|-versions|-fixed|-actions|-review|-compare|-side]
+ * States: hero/mark: data-software=<id>|original; mark: data-size=sm|lg; side: data-to
+ */
+@layer launcher {
+  :where([data-software]) { --software-tint: var(--vesta-color-accent); }
+  :where([data-software="vanilla"]) { --software-tint: #5aa846; }
+  :where([data-software="paper"]) { --software-tint: #4b8fe8; }
+  :where([data-software="folia"]) { --software-tint: #2bb59a; }
+  :where([data-software="purpur"]) { --software-tint: #a86ae8; }
+  :where([data-software="fabric"]) { --software-tint: #c9a26b; }
+  :where([data-software="quilt"]) { --software-tint: #d466c9; }
+  :where([data-software="forge"]) { --software-tint: #d9873a; }
+  :where([data-software="neoforge"]) { --software-tint: #e7663a; }
+  :where([data-software="original"]) { --software-tint: var(--vesta-color-text-muted); }
+
+  :where([data-vesta="server-software-mark"]) {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 26px;
+    block-size: 26px;
+    border-radius: var(--vesta-radius-md, 6px);
+    background: color-mix(in srgb, var(--software-tint) 18%, transparent);
+    color: var(--software-tint);
+  }
+  :where([data-vesta="server-software-mark"][data-size="lg"]) {
+    inline-size: 60px;
+    block-size: 60px;
+    border-radius: var(--vesta-radius-lg, 10px);
+    box-shadow: inset 0 0 0 var(--vesta-border-width) color-mix(in srgb, var(--software-tint) 35%, transparent);
+  }
+
+  /* ---- Hero: what runs now ---- */
+  :where([data-vesta="server-software-hero"]) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background:
+      radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--software-tint) 16%, transparent), transparent 60%),
+      var(--vesta-color-surface-raised);
+  }
+  :where([data-vesta="server-software-hero-main"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-4);
+    padding: var(--vesta-space-4);
+  }
+  :where([data-vesta="server-software-hero-copy"]) { display: flex; flex: 1; flex-direction: column; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="server-software-eyebrow"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="server-software-hero-copy"]) h2 {
+    margin: 0;
+    font-size: var(--vesta-text-xl, 1.25rem);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 1.2;
+  }
+  :where([data-vesta="server-software-meta"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--vesta-space-1-5, 6px);
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  :where([data-vesta="server-software-java"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-software-hero"]) > :where([data-vesta="server-hosting-job"]) { padding: 0 var(--vesta-space-4) var(--vesta-space-3); }
+
+  /* The way back stays quiet: one muted line, the action reads as a link. */
+  :where([data-vesta="server-software-previous"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5, 6px);
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-software-restore"]) {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+    text-underline-offset: 3px;
+    cursor: default;
+  }
+  :where([data-vesta="server-software-restore"]):hover:not(:disabled) { color: var(--vesta-color-text); }
+  :where([data-vesta="server-software-restore"]):focus-visible { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: 2px; }
+  :where([data-vesta="server-software-restore"]):disabled { opacity: 0.6; text-decoration: none; }
+
+  /* ---- Change flow: fields like the instance Versions tab ---- */
+  :where([data-vesta="server-software-flow"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-4);
+  }
+  :where([data-vesta="server-software-field"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); min-inline-size: 0; }
+  :where([data-vesta="server-software-field"]) > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+  }
+  :where([data-vesta="server-software-field"]) [data-vesta="segmented-field"] { --segmented-height: 68px; }
+  :where([data-vesta="server-software-field"]) [data-vesta="segmented-item"] { flex-direction: column; min-block-size: 60px; }
+  :where([data-vesta="server-software-field"]) [data-vesta="segmented-label"] { display: flex; flex-direction: column; align-items: center; gap: var(--vesta-space-1-5, 6px); }
+  :where([data-vesta="server-software-versions"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--vesta-space-4);
+  }
+  :where([data-vesta="server-software-fixed"]) {
+    display: flex;
+    align-items: center;
+    min-block-size: 32px;
+    padding-inline: var(--vesta-space-3);
+    border: var(--vesta-border-width) dashed var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control, 6px);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  :where([data-vesta="server-software-actions"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-software-actions"]) > :where([data-vesta="progress"]) { flex: 1; min-inline-size: 160px; }
+
+  /* ---- Review, in place ---- */
+  :where([data-vesta="server-software-review"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    padding-block-start: var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="server-software-review"]:first-child) { padding-block-start: 0; border-block-start: 0; }
+  :where([data-vesta="server-software-review"]) h4 { margin: 0; font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta="server-software-compare"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-3); color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-software-side"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 200px;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg, 10px);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="server-software-side"][data-to]) { border-color: color-mix(in srgb, var(--vesta-color-accent) 50%, var(--vesta-color-border)); }
+  :where([data-vesta="server-software-side"]) > div { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-text); font-size: var(--vesta-text-sm); }
+}
