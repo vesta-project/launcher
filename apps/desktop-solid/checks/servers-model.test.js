@@ -273,6 +273,6 @@ describe('[state] last-known Minecraft state while disconnected', () => {
   test('shows the value with its age and without a success tone', () => {
     const offline = snapshot({ state: { phase: 'backoff', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: 'unreachable' }, statusObservedAtMs: 0 });
     expect(minecraftFactNow(offline, 120_000)).toMatchObject({ message: 'servers.minecraft.ready', tone: 'neutral', seen: { message: 'servers.age.minutes', count: 2 } });
-    expect(minecraftFactNow(snapshot(), 120_000).seen).toBeUndefined();
+    expect(minecraftFactNow(snapshot({ statusObservedAtMs: 115_000 }), 120_000).seen).toBeUndefined();
   });
 });

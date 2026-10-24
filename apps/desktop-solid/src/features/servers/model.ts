@@ -224,9 +224,27 @@ export class IntentMemo {
   }
 }
 
-/** The Minecraft fact as shown while disconnected: the last known value, with its age. */
+/** How often native re-confirms status while connected (live stream, or the 10 s poll). */
+export const STATUS_INTERVAL_MS = 10_000;
+
+/**
+ * Whether "Updated/seen N ago" is worth showing. While connected and current the age only
+ * ticks between 0 and the poll interval, which is noise; it matters once the connection is
+ * disrupted, or the last confirmation is older than twice the expected interval.
+ */
+export function freshnessVisible(
+  phase: ServerSnapshot['state']['phase'], observedAtMs: number | null, nowMs: number, intervalMs = STATUS_INTERVAL_MS,
+): boolean {
+  if (observedAtMs === null) return false;
+  return phase !== 'online' || nowMs - observedAtMs > 2 * intervalMs;
+}
+
+/** The Minecraft fact while disconnected or stale: the last known value, with its age. */
 export function minecraftFactNow(snapshot: ServerSnapshot, nowMs: number): Fact {
   const fact = minecraftFact(snapshot.status);
-  if (snapshot.state.phase === 'online' || !snapshot.status || snapshot.statusObservedAtMs === null) return fact;
-  return { ...fact, tone: 'neutral', seen: age(snapshot.statusObservedAtMs, nowMs) };
+  const observed = snapshot.statusObservedAtMs;
+  if (!snapshot.status || observed === null || !freshnessVisible(snapshot.state.phase, observed, nowMs)) return fact;
+  // Disconnected: the value is history, so it loses its success/warning tone. Stale but
+  // connected: keep the tone and just say how old it is.
+  return snapshot.state.phase === 'online' ? { ...fact, seen: age(observed, nowMs) } : { ...fact, tone: 'neutral', seen: age(observed, nowMs) };
 }
