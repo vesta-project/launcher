@@ -235,6 +235,7 @@ pub fn run(context: tauri::Context) {
             commands::servers_hosting::server_world_datapack_toggle,
             commands::servers_hosting::server_software,
             commands::servers_hosting::server_software_versions,
+            commands::servers_hosting::server_software_releases,
             commands::servers_hosting::server_software_plan,
             commands::servers_hosting::server_software_apply,
             commands::servers_hosting::server_software_jobs,

@@ -60,9 +60,36 @@ pub struct SoftwareState {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SoftwareReleases {
+    pub software: String,
+    pub version: String,
+    pub releases: Vec<SoftwareRelease>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SoftwareRelease {
+    pub id: String,
+    pub build: Option<u32>,
+    pub loader_version: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SoftwareVersions {
     pub software: String,
     pub versions: Vec<String>,
+}
+
+#[cfg(test)]
+mod release_tests {
+    use super::*;
+
+    #[test]
+    fn release_wire_preserves_exact_loader_and_build_choices() {
+        let value: SoftwareReleases = from_wire(json!({"software":"fabric","version":"1.21.4","releases":[{"id":"0.16.10","build":null,"loader_version":"0.16.10"}]})).unwrap();
+        assert_eq!(value.releases[0].loader_version.as_deref(), Some("0.16.10"));
+        let value: SoftwareReleases = from_wire(json!({"software":"paper","version":"1.21.4","releases":[{"id":"130","build":130,"loader_version":null}]})).unwrap();
+        assert_eq!(value.releases[0].build, Some(130));
+    }
 }
 dto!(SoftwarePlanRequest {software:String,version:String,build:Option<u32>,loader_version:Option<String>,experimental:Option<bool>});
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -74,6 +101,8 @@ pub struct JavaRequirement {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwarePlan {
+    #[serde(default)]
+    pub loader_version: Option<String>,
     pub plan_id: String,
     pub expires_at_ms: i64,
     pub expected_revision: String,
@@ -217,6 +246,28 @@ impl Client {
         from_wire(
             self.get(
                 &format!("software/versions?software={}", software(id)?),
+                true,
+                "content.install",
+            )
+            .await?,
+        )
+    }
+    pub async fn software_releases(&self, id: &str, version: &str) -> Result<SoftwareReleases> {
+        if version.is_empty()
+            || version.len() > 128
+            || !version
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+        {
+            return Err(invalid());
+        }
+        from_wire(
+            self.get(
+                &format!(
+                    "software/releases?software={}&version={}",
+                    software(id)?,
+                    version
+                ),
                 true,
                 "content.install",
             )

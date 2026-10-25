@@ -54,6 +54,8 @@ export const softwareJobsResource = serverResource('software-jobs', (id) => serv
 /** Java runtimes on the agent host and the one this server uses (owner only). */
 export const javaInventoryResource = serverResource('java', (id) => serverCommand((client) => client.javaInventory(id)));
 /** Versions for one software; upstream metadata, so it's read only when picked. */
+export const softwareReleasesResource = serverResource('software-releases', (id, args: { software: SoftwareId; version: string }) =>
+  serverCommand((client) => client.softwareReleases(id, args.software, args.version)));
 export const softwareVersionsResource = serverResource('software-versions', (id, software: SoftwareId) =>
   serverCommand((client) => client.softwareVersions(id, software)));
 export const sftpResource = serverResource('sftp', (id) => serverCommand((client) => client.sftp(id)));

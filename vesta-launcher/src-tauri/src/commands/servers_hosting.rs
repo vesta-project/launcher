@@ -51,6 +51,20 @@ pub async fn server_software_versions(
         .await
 }
 #[tauri::command]
+pub async fn server_software_releases(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    software: String,
+    version: String,
+) -> Result<SoftwareReleases> {
+    manager
+        .management_read(&app, &connection_id, |client| async move {
+            client.software_releases(&software, &version).await
+        })
+        .await
+}
+#[tauri::command]
 pub async fn server_software_plan(
     app: AppHandle,
     manager: Manager<'_>,

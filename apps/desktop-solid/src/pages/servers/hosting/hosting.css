@@ -179,8 +179,9 @@
     font-weight: var(--vesta-weight-medium);
   }
   :where([data-vesta="server-software-field"]) [data-vesta="segmented-field"] { --segmented-height: 68px; }
-  :where([data-vesta="server-software-field"]) [data-vesta="segmented-item"] { flex-direction: column; min-block-size: 60px; }
-  :where([data-vesta="server-software-field"]) [data-vesta="segmented-label"] { display: flex; flex-direction: column; align-items: center; gap: var(--vesta-space-1-5, 6px); }
+  :where([data-vesta="server-software-field"]) [data-vesta="segmented-item"] { flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-block-size: 60px; }
+  :where([data-vesta="server-software-field"]) [data-vesta="segmented-icon"] { inline-size: auto; block-size: auto; }
+  :where([data-vesta="server-software-field"]) [data-vesta="segmented-label"] { display: block; flex: none; inline-size: 100%; text-align: center; }
   :where([data-vesta="server-software-versions"]) {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -229,4 +230,8 @@
 @layer launcher {
   :where([data-vesta="server-software-summary"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
   :where([data-vesta="server-software-versions"]) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); align-items: start; }
+}
+
+@layer launcher {
+  :where([data-vesta="server-software-installed"]) { display: flex; align-items: center; gap: var(--vesta-space-3); padding: 0 var(--vesta-space-4) var(--vesta-space-4); }
 }

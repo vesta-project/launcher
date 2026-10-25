@@ -128,3 +128,17 @@ describe('[sftp] off by default, public keys only, opened natively', () => {
     expect(gameStopped({ state: { phase: 'backoff' }, status: { state: 'stopped' } })).toBe(false);
   });
 });
+
+describe('[software] explicit releases', () => {
+  test('build and loader choices reach the reviewed plan unchanged', async () => {
+    const servers = createFixtureServers({ latencyMs: 0 });
+    const paper = await servers.softwareReleases('fixture-survival','paper','1.21.4');
+    expect(paper.releases.map(v => v.build)).toEqual([150,149,148,130]);
+    const plan = await servers.softwarePlan('fixture-survival',{software:'paper',version:'1.21.4',build:149});
+    expect(plan.build).toBe(149);
+    const fabric = await servers.softwareReleases('fixture-survival','fabric','1.21.1');
+    expect(fabric.releases[1].loaderVersion).toBe('0.16.8');
+    const loaderPlan = await servers.softwarePlan('fixture-survival',{software:'fabric',version:'1.21.1',loaderVersion:'0.16.8'});
+    expect(loaderPlan.loaderVersion).toBe('0.16.8');
+  });
+});

@@ -68,6 +68,8 @@ export interface SoftwareState {
   catalog: SoftwareDescriptor[];
 }
 
+export interface SoftwareRelease { id: string; build: number | null; loaderVersion: string | null }
+export interface SoftwareReleases { software: SoftwareId; version: string; releases: SoftwareRelease[] }
 export interface SoftwareVersions { software: SoftwareId; versions: string[] }
 
 export interface SoftwarePlanRequest {
@@ -84,6 +86,7 @@ export type SoftwareWarning =
 
 /** A reviewed switch. Native keeps its confirmation token. */
 export interface SoftwarePlan {
+  loaderVersion?: string | null;
   planId: string;
   expiresAtMs: number;
   expectedRevision: string;
@@ -175,6 +178,8 @@ export const serversHostingNative = {
   /** GET software/versions; read on demand for one software. */
   softwareVersions: (connectionId: ConnectionId, software: SoftwareId) =>
     call<SoftwareVersions>('server_software_versions', { connectionId, software }),
+  softwareReleases: (connectionId: ConnectionId, software: SoftwareId, version: string) =>
+    call<SoftwareReleases>('server_software_releases', { connectionId, software, version }),
   /** POST software/plan → a reviewed plan; the confirmation token stays native. */
   softwarePlan: (connectionId: ConnectionId, request: SoftwarePlanRequest) =>
     call<SoftwarePlan>('server_software_plan', { connectionId, request }),

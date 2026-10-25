@@ -1,4 +1,4 @@
-import { Badge, Button, Checkbox, Combobox, Dialog, Progress, SegmentedControl, Skeleton, toast } from '@vesta/ui';
+import { Button, Checkbox, Combobox, Dialog, Progress, SegmentedControl, Skeleton, toast } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
@@ -11,7 +11,7 @@ import type { SoftwareId, SoftwareJob, SoftwareLaunch, SoftwarePlan, SoftwareSta
 import { IntentMemo } from '../../../features/servers/model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
-import { javaInventoryResource, softwareJobsResource, softwareResource, softwareVersionsResource } from '../../../features/servers/server-resources';
+import { javaInventoryResource, softwareJobsResource, softwareResource, softwareVersionsResource, softwareReleasesResource } from '../../../features/servers/server-resources';
 import type { ServerJavaInventory } from '../../../features/servers/native-java';
 import { isJavaJob, javaCompatibility, runtimeFor } from '../../../features/servers/server-java-model';
 import {
@@ -89,13 +89,24 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
             <Show when={state().recoveryRequired}>
               <p data-vesta="server-callout" data-tone="danger">{t('server-hosting.recovery-banner')}</p>
             </Show>
+            <Show when={stopped()} fallback={
+              <SettingsPanel title={t('server-hosting.software-label')} name="software">
+                <div data-vesta="server-software-installed">
+                  <SoftwareMark software={state().current?.software} size="lg" />
+                  <div><strong>{launchText(state().current)}</strong>
+                    <Show when={java.value()?.selected}>{(runtime) => <p data-vesta="server-hosting-hint">{runtime().vendor} · Java {runtime().major}</p>}</Show>
+                  </div>
+                </div>
+              </SettingsPanel>
+            }>
             <SettingsPanel title={t('server-hosting.change')} name="software">
               <For each={[state().current?.installationId ?? 'original']} keyed={(entry) => entry}>{() => <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} java={java.value()} javaActions={javaActions} />}</For>
             </SettingsPanel>
+            </Show>
             <SoftwareOutcome state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
-            <JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
+            <Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
               minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
-              onRefresh={() => void java.refresh()} />
+              onRefresh={() => void java.refresh()} /></Show>
           </>
         )}
       </Show>
@@ -186,16 +197,29 @@ function ChangeFlow(props: {
   const versionList = () => versions.value()?.software === software() ? versions.value()?.versions : undefined;
   const minecraft = () => software() === start.software && wanted() === start.minecraft && start.minecraft
     ? start.minecraft : keepMinecraft(versionList(), wanted());
+  const releaseKey = () => software() + ':' + minecraft();
+  const [pickedRelease, setPickedRelease] = createSignal<{ key: string; id: string } | null>(null, { name: 'server-software:release' });
+  const installedRelease = () => props.state.current?.loaderVersion ?? (props.state.current?.build != null ? String(props.state.current.build) : 'latest');
+  const selectedRelease = () => pickedRelease()?.key === releaseKey() ? pickedRelease()!.id
+    : software() === start.software && minecraft() === start.minecraft ? installedRelease() : 'latest';
+  const releaseArgs = createMemo(() => ({ software: software()!, version: minecraft()! }), { name: 'server-software:release-query' });
+  const releases = useServerResource(id, softwareReleasesResource, { args: releaseArgs, enabled: () => offered() && versionList() !== undefined && !versions.refreshing() && !!minecraft() && !!softwareVersionKind(software()) });
+  const releaseList = () => releases.value()?.software === software() && releases.value()?.version === minecraft() ? releases.value()?.releases ?? [] : [];
+  const releaseOptions = createMemo(() => {
+    const values = releaseList().map(value => ({ value: value.id, label: value.build !== null ? 'Build ' + value.build : value.id }));
+    const selected = selectedRelease();
+    if (selected !== 'latest' && !values.some(v => v.value === selected)) values.unshift({ value: selected, label: softwareVersionKind(software()) === 'build' ? 'Build ' + selected : selected });
+    return [{ value: 'latest', label: t(latestVersionLabel(software()) ?? 'server-hosting.latest-build') }, ...values];
+  }, { name: 'server-software:release-options' });
   const choice = (): SoftwareChoice => ({ software: software(), minecraft: minecraft() });
   const where = () => !choice().software || !choice().minecraft ? 'incomplete'
-    : software() === start.software && minecraft() === start.minecraft ? 'same' : 'changed';
+    : software() === start.software && minecraft() === start.minecraft && (!softwareVersionKind(software()) || selectedRelease() === installedRelease()) ? 'same' : 'changed';
   const blocker = () => changeBlocker({
     available: props.state.available, recoveryRequired: props.state.recoveryRequired,
     stopped: gameStopped(props.snapshot), jobRunning: props.jobRunning,
   });
   const reviewing = () => !!plan();
-  // Choosing stays open while Minecraft runs (like the instance Versions tab); only the
-  // review needs it stopped. Unavailable software, recovery or a running job lock it.
+  // The editor is mounted only while Minecraft is stopped.
   const locked = () => !props.state.available || props.state.recoveryRequired || props.jobRunning || busy() || reviewing();
 
   const softwareOptions = createMemo(() => props.state.catalog.map((entry) => ({
@@ -224,14 +248,19 @@ function ChangeFlow(props: {
   const pick = (value: string) => { setSoftware(value as SoftwareId); setError(null); };
   const discard = () => {
     const reset = initialChoice(props.state.catalog, props.state.current, props.snapshot.info?.minecraftVersion || null);
-    setSoftware(reset.software); setWanted(reset.minecraft); setPlan(null); setError(null);
+    setSoftware(reset.software); setWanted(reset.minecraft); setPickedRelease(null); setPlan(null); setError(null);
   };
   const review = async () => {
     const chosen = software(); const chosenVersion = minecraft();
     if (!chosen || !chosenVersion) return;
     setBusy(true); setError(null);
     try {
-      setPlan(await serverCommand((client) => client.softwarePlan(id(), { software: chosen, version: chosenVersion })));
+      const release = selectedRelease();
+      const kind = softwareVersionKind(chosen);
+      setPlan(await serverCommand((client) => client.softwarePlan(id(), { software: chosen, version: chosenVersion,
+        ...(release !== 'latest' && kind === 'build' ? { build: Number(release) } : {}),
+        ...(release !== 'latest' && kind === 'loader' ? { loaderVersion: release } : {}),
+      })));
       setAcknowledged(false); setLegacyAcknowledged(false);
     } catch (reason) { setError(reason as ServerCommandError); }
     finally { setBusy(false); }
@@ -275,29 +304,23 @@ function ChangeFlow(props: {
             </Show>
           </Field>
           <Show when={latestLabel()}>
-            {(label) => (
+            {(_label) => (
               <Field label={t('server-hosting.software-version-label')}>
-                <div data-vesta="server-software-fixed">
-                  <span>{t(label())}</span>
-                </div>
+                <Combobox aria-label={t('server-hosting.software-version-label')} options={releaseOptions()} maxOptions={80}
+                  value={selectedRelease()} onChange={(value) => setPickedRelease({ key: releaseKey(), id: value })}
+                  disabled={locked()} />
               </Field>
             )}
           </Show>
         </div>
-        <Show when={latestLabel()}><p data-vesta="server-hosting-hint">{t('server-hosting.software-version-hint')}</p></Show>
+        <HostingError error={releases.error()} onRetry={() => void releases.refresh()} />
         <HostingError error={versions.error()} onRetry={() => void versions.refresh()} />
         <Show when={versions.value() && !minecraftOptions().length}><p data-vesta="server-hosting-hint">{t('server-hosting.no-versions')}</p></Show>
 
-        <Show when={where() === 'changed' || (where() === 'same' && offered() && softwareVersionKind(software()) && !blocker())}>
+        <Show when={where() === 'changed'}>
           <div data-vesta="server-software-actions">
-            <Show when={where() === 'changed'} fallback={
-              <Button variant="outline" disabled={busy()} icon={<Icon name="icons/actions/refresh" size={14} />} onClick={() => void review()}>
-                {t('server-hosting.check-newer')}
-              </Button>
-            }>
               <Button tone="accent" disabled={busy() || !!blocker()} onClick={() => void review()}>{t('server-hosting.review')}</Button>
               <Button variant="ghost" disabled={busy()} onClick={discard}>{t('server-hosting.discard')}</Button>
-            </Show>
             <Show when={busy()}><Progress size="sm" label={t('server-hosting.preparing')} /></Show>
           </div>
         </Show>
@@ -318,7 +341,7 @@ function ChangeFlow(props: {
                 <span>{t('server-hosting.to')}</span>
                 <div>
                   <SoftwareMark software={current().software} />
-                  <strong>{launchSummary({ software: current().software, version: current().version, build: current().build, installationId: '' })}</strong>
+                  <strong>{launchSummary({ software: current().software, version: current().version, build: current().build, loaderVersion: current().loaderVersion, installationId: '' })}</strong>
                 </div>
               </div>
             </div>

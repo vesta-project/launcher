@@ -165,6 +165,15 @@ export function createHostingFixtures(host: HostingHost) {
       if (!AUTOMATIC.has(software)) fail('unsupported', 'provider_not_implemented');
       return { software, versions: [...VERSIONS[software]] };
     },
+    async softwareReleases(connectionId: ConnectionId, software: SoftwareId, version: string) {
+      await host.wait(200); owner(connectionId);
+      if (!AUTOMATIC.has(software)) fail('unsupported', 'provider_not_implemented');
+      if (!VERSIONS[software]?.includes(version)) fail('invalid_input');
+      const releases = software === 'vanilla' ? [] : software === 'fabric' || software === 'quilt'
+        ? ['0.16.9', '0.16.8', '0.16.7'].map(id => ({ id, build: null, loaderVersion: id }))
+        : [150, 149, 148, 130].map(build => ({ id: String(build), build, loaderVersion: null }));
+      return { software, version, releases };
+    },
     async softwarePlan(connectionId: ConnectionId, request: SoftwarePlanRequest): Promise<SoftwarePlan> {
       await host.wait(900);
       owner(connectionId);
@@ -175,7 +184,7 @@ export function createHostingFixtures(host: HostingHost) {
       if (request.version.startsWith('1.18')) warnings.push('legacy_checksum');
       const plan: SoftwarePlan = {
         planId: `plan-${hex(10)}`, expiresAtMs: Date.now() + 120_000, expectedRevision: current.software.revision,
-        software: request.software, version: request.version, build: request.software === 'paper' || request.software === 'purpur' ? 140 + Math.floor(Math.random() * 20) : null,
+        software: request.software, version: request.version, loaderVersion: request.loaderVersion ?? (request.software === 'fabric' || request.software === 'quilt' ? '0.16.9' : null), build: ['paper', 'folia', 'purpur'].includes(request.software) ? request.build ?? 150 : null,
         java: { major: javaFor(request.version), evidence: `Minecraft ${request.version} requires Java ${javaFor(request.version)}` },
         javaCompatible: (current.java.selected?.major ?? 0) >= javaFor(request.version),
         selectedJavaMajor: current.java.selected?.major ?? null,
@@ -205,7 +214,7 @@ export function createHostingFixtures(host: HostingHost) {
         // Quilt previews a staging failure so the error path can be seen.
         runJob(current, job, () => {
           current.software.previous = current.software.current;
-          current.software.current = { software: entry.request.software, version: entry.request.version, build: entry.plan.build, installationId: `inst-${hex(8)}`, javaMajor: entry.plan.java.major };
+          current.software.current = { software: entry.request.software, version: entry.request.version, build: entry.plan.build, loaderVersion: entry.plan.loaderVersion, installationId: `inst-${hex(8)}`, javaMajor: entry.plan.java.major };
         }, entry.request.software === 'quilt' ? 'server_install.storage_low' : undefined);
         return job;
       });
