@@ -1,61 +1,20 @@
-import { Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, toast } from '@vesta/ui';
+import { Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator } from '@vesta/ui';
 import { Show, createSignal } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
-import type { MessageId } from '../../localization/messages';
 import { initials, serverArt } from '../../features/servers/art';
-import { errorMessage } from '../../features/servers/errors';
-import { IntentMemo, lifecycleControls, minecraftFactNow, newIntentId, statusDot, type LifecycleAction } from '../../features/servers/model';
-import { busyIntent } from '../../features/servers/operations-model';
-import { serverPressure } from '../../features/servers/resources';
+import { lifecycleControls, minecraftFactNow, newIntentId, statusDot } from '../../features/servers/model';
+import { serverPressure, useServerResource } from '../../features/servers/resources';
+import { sleepPolicyResource } from '../../features/servers/server-resources';
 import { headerNotice, joinAddress, knownPlayerCount } from '../../features/servers/shell-model';
-import { putOperations, putSnapshot, serverCommand, serverIcon, serverOperations, serverRefreshing, updateServer, useServersClock } from '../../features/servers/store';
+import { sleepingMessage } from '../../features/servers/sleep-model';
+import { putOperations, serverCommand, serverIcon, serverRefreshing, updateServer, useServersClock } from '../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
+import { actionIcons, actionLabels, useLifecycle, type Lifecycle, type SubmittableAction } from './lifecycle';
 import { Sensitive, ServerErrorNote, StatusDot } from './parts';
 import { refreshServerWithFeedback } from './refresh-button';
 import { RemoveServerDialog } from './remove-dialog';
 
-const actionLabels: Record<LifecycleAction, MessageId> = {
-  start: 'servers.lifecycle.start',
-  sleep: 'servers.lifecycle.sleep',
-  wake: 'servers.lifecycle.wake',
-  stop: 'servers.lifecycle.stop',
-  restart: 'servers.lifecycle.restart',
-  kill: 'servers.lifecycle.kill',
-};
-
-/** Start / Stop / Restart requests for one server, shared by the header buttons and the restart notice. */
-function useLifecycle(snapshot: () => ServerSnapshot) {
-  const [busy, setBusy] = createSignal<LifecycleAction | null>(null, { name: 'server-lifecycle:busy' });
-  const [uncertain, setUncertain] = createSignal(false, { name: 'server-lifecycle:uncertain' });
-  // Retrying the same action on the same run after an uncertain outcome reuses its intent.
-  const intents = new IntentMemo();
-  const id = () => snapshot().connection.id;
-  const pending = (action: LifecycleAction) => busyIntent(serverOperations(id()), `lifecycle.${action}`);
-
-  const submit = async (action: Exclude<LifecycleAction, 'kill'>) => {
-    const generation = snapshot().status?.generation ?? null;
-    const intentId = intents.idFor({ action, generation });
-    setBusy(action);
-    try {
-      const operation = await serverCommand((client) => client.lifecycle(id(), action, generation, intentId));
-      intents.settle();
-      putOperations(id(), [{ ...operation, intent: operation.intent ?? `lifecycle.${action}` }]);
-      toast.show({ title: t('servers.operation.accepted-toast', { name: t(actionLabels[action]) }), tone: 'neutral' });
-    } catch (reason) {
-      const error = reason as ServerCommandError;
-      intents.settle(error);
-      toast.show({ title: t(errorMessage(error)), tone: error.code === 'stale_target' ? 'warning' : 'danger' });
-      if (error.code === 'stale_target') void serverCommand((client) => client.snapshot(id(), true)).then(putSnapshot).catch(() => {});
-    } finally {
-      setUncertain(intents.uncertain);
-      setBusy(null);
-    }
-  };
-  return { busy, uncertain, pending, submit };
-}
-
-type Lifecycle = ReturnType<typeof useLifecycle>;
 
 /** The instance header's layout: art banner, icon tile, title and meta, then actions, then one notice strip. */
 export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean; onOpenSettings: () => void }) {
@@ -65,7 +24,14 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
   const lifecycle = useLifecycle(() => props.snapshot);
   const id = () => props.snapshot.connection.id;
   const art = () => serverArt(props.snapshot.connection.serverId || id());
-  const minecraft = () => minecraftFactNow(props.snapshot, now());
+  const sleeping = () => props.snapshot.state.phase === 'online' && props.snapshot.status?.lifecycle === 'sleeping';
+  // Whether a join wakes it lives in the sleep policy; read it only while asleep.
+  const sleepPolicy = useServerResource(id, sleepPolicyResource, { enabled: sleeping });
+  const minecraft = () => {
+    const fact = minecraftFactNow(props.snapshot, now());
+    return sleeping() ? { ...fact, message: sleepingMessage(sleepPolicy.value()?.policy) } : fact;
+  };
+  const controls = () => lifecycleControls(props.snapshot);
   const players = () => knownPlayerCount(props.snapshot);
   const address = () => joinAddress(props.snapshot);
   const notice = () => headerNotice(props.snapshot, now(), serverPressure(id()));
@@ -121,6 +87,17 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
             <MenuItem onSelect={() => void updateServer(id(), { pinned: !props.snapshot.connection.pinned })}>
               {props.snapshot.connection.pinned ? t('common.unpin') : t('servers.pin')}
             </MenuItem>
+            {/* Beside Sleep or Wake, a full Stop (listener off too) lives here, as in AMP. */}
+            <Show when={controls().stop}>
+              <MenuSeparator />
+              <MenuItem
+                icon={<Icon name="icons/actions/stop" />}
+                disabled={!!lifecycle.busy() || lifecycle.pending('stop')}
+                onSelect={() => void lifecycle.submit('stop')}
+              >
+                {t('servers.lifecycle.stop')}
+              </MenuItem>
+            </Show>
             <MenuSeparator />
             <MenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</MenuItem>
           </Menu>
@@ -171,6 +148,14 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
       <Show when={uncertain()}>
         <span data-vesta="server-lifecycle-note" role="status">{t('servers.operation.uncertain-retry')}</span>
       </Show>
+      <Show when={controls().progress}>
+        {(progress) => (
+          <span data-vesta="server-lifecycle-progress" role="status">
+            <span data-vesta="server-lifecycle-spinner" aria-hidden="true" />
+            {t(progress() === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}
+          </span>
+        )}
+      </Show>
       <Show when={controls().restart}>
         <Button variant="outline" icon={<Icon name="icons/actions/reload" />} disabled={!!busy() || pending('restart')} onClick={() => void submit('restart')}>
           {t('servers.lifecycle.restart')}
@@ -182,10 +167,10 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
             when={primary() === 'kill'}
             fallback={
               <Button
-                tone={primary() === 'start' ? 'accent' : 'neutral'}
-                icon={<Icon name={primary() === 'start' ? 'icons/actions/play' : 'icons/actions/stop'} />}
+                tone={primary() === 'start' || primary() === 'wake' ? 'accent' : 'neutral'}
+                icon={<Icon name={actionIcons[primary()]} />}
                 disabled={!!busy() || pending(primary())}
-                onClick={() => void submit(primary() as 'start' | 'stop')}
+                onClick={() => void submit(primary() as SubmittableAction)}
               >
                 {busy() === primary() ? t('servers.lifecycle.sending') : t(actionLabels[primary()])}
               </Button>

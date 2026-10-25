@@ -240,7 +240,8 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
   const setState = (target: FixtureServer, state: ServerStatus['state'], players: number | null) => {
     const previous = target.snapshot.status;
     const generation = state === 'stopped' ? null : state === 'running' && previous?.state !== 'running' ? hex(32) : previous?.generation ?? hex(32);
-    target.snapshot.status = { ...status(state, generation, players), playerCountObservedAtMs: players !== null ? Date.now() : null, uptimeSeconds: state === 'running' ? '0' : null };
+    // Sleep configuration belongs to the agent, not the run; keep it across transitions.
+    target.snapshot.status = { ...status(state, generation, players), sleepAvailable: previous?.sleepAvailable, onAgentStart: previous?.onAgentStart, sleepBlocker: previous?.sleepBlocker, playerCountObservedAtMs: players !== null ? Date.now() : null, uptimeSeconds: state === 'running' ? '0' : null };
     if (state === 'running') target.snapshot.status.readiness = 'starting';
     publish(target);
   };
@@ -418,14 +419,16 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       remember(target, intentId, { action, expectedGeneration }, operation);
       setTimeout(() => advance(target, operation, 'running'), 300);
       if (action === 'start' || action === 'wake' || action === 'restart') {
+        if (action === 'wake' && target.snapshot.status) { target.snapshot.status = { ...target.snapshot.status, lifecycle: 'waking' }; publish(target); }
         if (action === 'restart') { setState(target, 'stopping', null); line(target, '[Server thread/INFO]: Stopping server'); }
         setTimeout(() => {
           setState(target, 'running', null);
+          if (action === 'wake' && target.snapshot.status) { target.snapshot.status.lifecycle = 'waking'; publish(target); }
           line(target, '[Server thread/INFO]: Starting minecraft server version 1.21.4');
           ensureTicker(target);
         }, action === 'restart' ? 2200 : 600);
         setTimeout(() => {
-          if (target.snapshot.status) target.snapshot.status = { ...target.snapshot.status, readiness: 'ready', playerCount: 0, playerCountKnown: true, playerCountObservedAtMs: Date.now() };
+          if (target.snapshot.status) target.snapshot.status = { ...target.snapshot.status, lifecycle: 'online', readiness: 'ready', playerCount: 0, playerCountKnown: true, playerCountObservedAtMs: Date.now() };
           target.snapshot.restartRequired = false;
           target.online = [];
           line(target, '[Server thread/INFO]: Done (4.812s)! For help, type "help"');

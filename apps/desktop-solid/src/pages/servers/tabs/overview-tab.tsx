@@ -13,15 +13,10 @@ import { operationsResource } from '../../../features/servers/server-resources';
 import { agentReachable, extraWarnings, headerNotice } from '../../../features/servers/shell-model';
 import { OnlinePlayersPanel } from './players-tab';
 import { ActivityRow } from './activity-tab';
-import { latestMetrics, serverMetrics, serverOperations, useServerTopic, useServersClock } from '../../../features/servers/store';
-import type { MetricsSample, ServerSnapshot } from '../../../features/servers/native';
+import { serverOperations, useServerTopic, useServersClock } from '../../../features/servers/store';
+import type { ServerSnapshot } from '../../../features/servers/native';
+import { OverviewGraphs } from './overview-graphs';
 import { FactBadge, Freshness, Sensitive, ServerErrorNote } from '../parts';
-
-const bytes = (value: string | null | undefined) => {
-  if (!value || !/^\d+$/.test(value)) return null;
-  const gib = Number(value) / 1024 ** 3;
-  return gib >= 1 ? `${gib.toFixed(1)} GB` : `${Math.round(Number(value) / 1024 ** 2)} MB`;
-};
 
 export function OverviewTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
@@ -56,25 +51,6 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
           <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} phase={props.snapshot.state.phase} />
         </article>
 
-        <Show when={metricsAllowed()}>
-          <article data-vesta="server-stat">
-            <h2>{t('servers.overview.performance')}</h2>
-            <Show when={latestMetrics(id())} fallback={<p data-vesta="server-muted">{status()?.state === 'running' && agentReachable(props.snapshot) ? t('servers.overview.waiting-metrics') : t('servers.overview.no-metrics')}</p>}>
-              {(sample) => (
-                <>
-                  <dl>
-                    <dt>TPS</dt><dd>{sample().tps ?? '—'}</dd>
-                    <dt>{t('servers.overview.cpu')}</dt><dd>{sample().cpuPercent == null ? '—' : `${sample().cpuPercent}%`}</dd>
-                    <dt>{t('servers.overview.memory')}</dt>
-                    <dd>{bytes(sample().memoryUsedBytes) ?? '—'}<Show when={bytes(sample().memoryMaxBytes)}> / {bytes(sample().memoryMaxBytes)}</Show></dd>
-                  </dl>
-                  <Sparkline samples={serverMetrics(id())} pick={(entry) => entry.cpuPercent} max={100} />
-                </>
-              )}
-            </Show>
-          </article>
-        </Show>
-
         <Show when={props.snapshot.pack}>
           {(pack) => (
             <article data-vesta="server-stat">
@@ -90,6 +66,10 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
           )}
         </Show>
       </section>
+
+      <Show when={metricsAllowed()}>
+        <OverviewGraphs snapshot={props.snapshot} id={id()} now={now()} />
+      </Show>
 
       <Show when={anyVisible(props.snapshot.capabilities, ['players.view'])}>
         <OnlinePlayersPanel snapshot={props.snapshot} />
@@ -111,29 +91,6 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
         <dt>{t('servers.server-id')}</dt><dd><code><Sensitive label={t('servers.server-id')}>{props.snapshot.connection.serverId}</Sensitive></code></dd>
       </dl>
     </div>
-  );
-}
-
-/** Tiny line chart of the most recent samples; gaps for unknown values. */
-function Sparkline(props: { samples: MetricsSample[]; pick: (sample: MetricsSample) => number | null; max?: number }) {
-  const path = () => {
-    const values = props.samples.map(props.pick);
-    const known = values.filter((value): value is number => value !== null);
-    if (known.length < 2) return '';
-    const top = props.max ?? Math.max(...known, 1);
-    const step = 100 / Math.max(values.length - 1, 1);
-    let drawing = false;
-    return values.map((value, index) => {
-      if (value === null) { drawing = false; return ''; }
-      const command = `${drawing ? 'L' : 'M'}${(index * step).toFixed(2)},${(30 - (value / top) * 28).toFixed(2)}`;
-      drawing = true;
-      return command;
-    }).join(' ');
-  };
-  return (
-    <svg data-vesta="server-sparkline" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
-      <path d={path()} />
-    </svg>
   );
 }
 

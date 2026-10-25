@@ -20,6 +20,12 @@
   :where([data-vesta="server-dot"][data-dot="starting"]) { --dot: var(--vesta-color-accent); }
   :where([data-vesta="server-dot"][data-dot="problem"]) { --dot: oklch(0.72 0.17 60); }
   :where([data-vesta="server-dot"][data-dot="offline"]) { --dot: oklch(0.6 0.02 260 / 0.6); }
+  /* Sleeping: a calm crescent rather than a filled light, so it never reads as "down". */
+  :where([data-vesta="server-dot"][data-dot="sleeping"]) {
+    --dot: var(--server-sleep-tone);
+    background: transparent;
+    box-shadow: inset -2.5px -1.5px 0 0 var(--dot);
+  }
 
   :where([data-vesta="servers-preview-note"]) {
     margin: 0;
@@ -275,6 +281,24 @@
   :where([data-vesta="server-header-state"]) { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--vesta-weight-semibold); }
   :where([data-server-header]) [data-vesta="server-lifecycle"] { gap: var(--vesta-space-2); }
   :where([data-server-header]) [data-vesta="server-lifecycle-note"] { color: oklch(1 0 0 / 0.75); }
+  :where([data-vesta="server-lifecycle-progress"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+  :where([data-server-header]) [data-vesta="server-lifecycle-progress"] { color: oklch(1 0 0 / 0.85); }
+  :where([data-vesta="server-lifecycle-spinner"]) {
+    inline-size: 14px;
+    block-size: 14px;
+    border: 2px solid oklch(1 0 0 / 0.2);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: server-spin 0.9s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { :where([data-vesta="server-lifecycle-spinner"]) { animation-duration: 2.4s; } }
 
   /* Connection settings */
   :where([data-server-connection]) { block-size: 100%; }
@@ -536,4 +560,187 @@
   :where([data-vesta="server-recent"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
   :where([data-vesta="server-recent"]) h2 { display: flex; align-items: baseline; gap: var(--vesta-space-2); }
   :where([data-server-players] [data-vesta="server-activity-row"]) { align-items: center; }
+}
+
+@keyframes server-spin { to { transform: rotate(1turn); } }
+
+/* Sleep tone shared by the status dot, card tag and rail pin. */
+:root { --server-sleep-tone: light-dark(oklch(0.55 0.13 275), oklch(0.78 0.09 275)); }
+
+@layer launcher {
+  :where([data-server-card] [data-vesta='instance-card-tag'][data-status='sleeping']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: oklch(0.86 0.07 275);
+  }
+  :where([data-server-card] [data-vesta='instance-card-play'][data-variant='sleep']) {
+    --play-tone: oklch(0.45 0.1 275);
+    --play-fg: oklch(0.98 0 0);
+  }
+  :where([data-server-card] [data-vesta='instance-card-play'][data-variant='wake']) {
+    --play-tone: var(--vesta-color-accent);
+    --play-fg: var(--vesta-color-on-accent);
+  }
+  /* Rail pin: a small crescent where running pins have a dot. */
+  :where([data-vesta="rail-pin"][data-status="sleeping"])::after {
+    content: "";
+    position: absolute;
+    inline-size: 8px;
+    block-size: 8px;
+    inset: auto 0 0 auto;
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-canvas);
+    box-shadow: inset -2.5px -1.5px 0 0 var(--server-sleep-tone), 0 0 0 2px var(--vesta-color-canvas);
+  }
+}
+@layer launcher {
+  /* The header sits on the art banner in both schemes, so it keeps the light crescent. */
+  :where([data-server-header] [data-vesta="server-dot"][data-dot="sleeping"]) { --dot: oklch(0.82 0.08 275); }
+}
+@layer launcher {
+  /* Sleep & status: the live reason sleep hasn't happened yet, under its toggle. */
+  :where([data-vesta="server-sleep-now"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0 var(--vesta-space-4) var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-sleep-now"]) > [data-vesta="icon"] { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-sleep-now"][data-kind="asleep"]) > [data-vesta="icon"],
+  :where([data-vesta="server-sleep-now"][data-kind="counting"]) > [data-vesta="icon"] { color: var(--server-sleep-tone); }
+  :where([data-vesta="server-sleep-now-label"]) { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-sleep-now-label"])::after { content: " ·"; }
+}
+@layer launcher {
+  /* Overview graphs (D9): one card per reported metric, one accent line each, recessive grid. */
+  :where([data-vesta="server-graphs"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-graphs-head"]) { display: flex; align-items: center; gap: var(--vesta-space-3); }
+  :where([data-vesta="server-graphs-head"]) h2 {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="server-graphs-head"]) > :last-child { margin-inline-start: auto; }
+  :where([data-vesta="server-graphs-grid"]) {
+    display: grid;
+    /* Two across at most, so four graphs form a calm 2 × 2 rather than 3 + 1. */
+    grid-template-columns: repeat(auto-fit, minmax(max(280px, calc(50% - var(--vesta-space-3))), 1fr));
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="server-graph"]) {
+    --graph-line: var(--vesta-color-accent);
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: var(--vesta-space-4) var(--vesta-space-4) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="server-graph-head"]) { display: flex; flex-direction: column; gap: 2px; }
+  :where([data-vesta="server-graph-label"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta="server-graph-value"]) { display: flex; align-items: baseline; gap: var(--vesta-space-1-5); min-block-size: 30px; }
+  :where([data-vesta="server-graph-value"]) strong {
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-2xl);
+    font-weight: var(--vesta-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  :where([data-vesta="server-graph-value"]) span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-variant-numeric: tabular-nums; }
+  :where([data-vesta="server-graph-value"][data-idle]) { align-items: center; }
+  :where([data-vesta="server-graph-summary"]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-graph-plot"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--graph-line);
+    cursor: default;
+    touch-action: pan-y;
+  }
+  :where([data-vesta="server-graph-plot"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: 4px; border-radius: var(--vesta-radius-sm); }
+  :where([data-vesta="server-graph-plot"]) svg { display: block; inline-size: 100%; block-size: 100%; overflow: visible; }
+  :where([data-vesta="server-graph-grid"]) { stroke: var(--vesta-color-border); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 2 4; }
+  :where([data-vesta="server-graph-grid"][data-base]) { stroke-dasharray: none; }
+  :where([data-vesta="server-graph-grid"][data-limit]) { stroke: var(--vesta-color-border-strong); stroke-dasharray: 6 4; }
+  :where([data-vesta="server-graph-area"]) { stroke: none; }
+  :where([data-vesta="server-graph-line"]) {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  :where([data-vesta="server-graph-canvas"]) { position: relative; block-size: 96px; }
+  :where([data-vesta="server-graph-tick"]) {
+    align-self: flex-end;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  :where([data-vesta="server-graph-crosshair"]) {
+    position: absolute;
+    inset-block: 0;
+    inline-size: 1px;
+    background: var(--vesta-color-border-strong);
+    pointer-events: none;
+  }
+  :where([data-vesta="server-graph-dot"]) {
+    position: absolute;
+    inline-size: 9px;
+    block-size: 9px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 2px var(--vesta-color-surface-raised);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  :where([data-vesta="server-graph-tooltip"]) {
+    position: absolute;
+    inset-block-start: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-tooltip);
+    color: var(--vesta-color-tooltip-text);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transform: translateX(10px);
+    pointer-events: none;
+    box-shadow: var(--vesta-shadow-md);
+  }
+  :where([data-vesta="server-graph-tooltip"][data-flip]) { transform: translateX(calc(-100% - 10px)); }
+  :where([data-vesta="server-graph-tooltip"]) strong { font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-graph-tooltip"]) span { opacity: 0.8; }
+  :where([data-vesta="server-graph-axis"]) {
+    display: flex;
+    justify-content: space-between;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
 }
