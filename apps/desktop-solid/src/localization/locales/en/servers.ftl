@@ -637,7 +637,6 @@ servers-lifecycle-sleep = Sleep
 servers-lifecycle-wake = Wake
 servers-lifecycle-waking = Waking up…
 servers-lifecycle-starting = Starting…
-servers-lifecycle-stop-help = Turns Minecraft and its join listener off. Only someone in the launcher can start it again.
 servers-minecraft-sleeping-wakes = Sleeping · joins wake it
 servers-card-sleeping = Sleeping
 

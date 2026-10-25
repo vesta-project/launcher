@@ -1594,7 +1594,6 @@ export const messageIds = [
   "servers.lifecycle.wake",
   "servers.lifecycle.waking",
   "servers.lifecycle.starting",
-  "servers.lifecycle.stop-help",
   "servers.minecraft.sleeping-wakes",
   "servers.card.sleeping",
   "servers.sleep-blocker.asleep",

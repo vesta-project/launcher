@@ -20,6 +20,12 @@
   :where([data-vesta="server-dot"][data-dot="starting"]) { --dot: var(--vesta-color-accent); }
   :where([data-vesta="server-dot"][data-dot="problem"]) { --dot: oklch(0.72 0.17 60); }
   :where([data-vesta="server-dot"][data-dot="offline"]) { --dot: oklch(0.6 0.02 260 / 0.6); }
+  /* Sleeping: a calm crescent rather than a filled light, so it never reads as "down". */
+  :where([data-vesta="server-dot"][data-dot="sleeping"]) {
+    --dot: var(--server-sleep-tone);
+    background: transparent;
+    box-shadow: inset -2.5px -1.5px 0 0 var(--dot);
+  }
 
   :where([data-vesta="servers-preview-note"]) {
     margin: 0;
@@ -275,6 +281,24 @@
   :where([data-vesta="server-header-state"]) { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--vesta-weight-semibold); }
   :where([data-server-header]) [data-vesta="server-lifecycle"] { gap: var(--vesta-space-2); }
   :where([data-server-header]) [data-vesta="server-lifecycle-note"] { color: oklch(1 0 0 / 0.75); }
+  :where([data-vesta="server-lifecycle-progress"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+  :where([data-server-header]) [data-vesta="server-lifecycle-progress"] { color: oklch(1 0 0 / 0.85); }
+  :where([data-vesta="server-lifecycle-spinner"]) {
+    inline-size: 14px;
+    block-size: 14px;
+    border: 2px solid oklch(1 0 0 / 0.2);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: server-spin 0.9s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { :where([data-vesta="server-lifecycle-spinner"]) { animation-duration: 2.4s; } }
 
   /* Connection settings */
   :where([data-server-connection]) { block-size: 100%; }
@@ -536,4 +560,41 @@
   :where([data-vesta="server-recent"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
   :where([data-vesta="server-recent"]) h2 { display: flex; align-items: baseline; gap: var(--vesta-space-2); }
   :where([data-server-players] [data-vesta="server-activity-row"]) { align-items: center; }
+}
+
+@keyframes server-spin { to { transform: rotate(1turn); } }
+
+/* Sleep tone shared by the status dot, card tag and rail pin. */
+:root { --server-sleep-tone: light-dark(oklch(0.55 0.13 275), oklch(0.78 0.09 275)); }
+
+@layer launcher {
+  :where([data-server-card] [data-vesta='instance-card-tag'][data-status='sleeping']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: oklch(0.86 0.07 275);
+  }
+  :where([data-server-card] [data-vesta='instance-card-play'][data-variant='sleep']) {
+    --play-tone: oklch(0.45 0.1 275);
+    --play-fg: oklch(0.98 0 0);
+  }
+  :where([data-server-card] [data-vesta='instance-card-play'][data-variant='wake']) {
+    --play-tone: var(--vesta-color-accent);
+    --play-fg: var(--vesta-color-on-accent);
+  }
+  /* Rail pin: a small crescent where running pins have a dot. */
+  :where([data-vesta="rail-pin"][data-status="sleeping"])::after {
+    content: "";
+    position: absolute;
+    inline-size: 8px;
+    block-size: 8px;
+    inset: auto 0 0 auto;
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-canvas);
+    box-shadow: inset -2.5px -1.5px 0 0 var(--server-sleep-tone), 0 0 0 2px var(--vesta-color-canvas);
+  }
+}
+@layer launcher {
+  /* The header sits on the art banner in both schemes, so it keeps the light crescent. */
+  :where([data-server-header] [data-vesta="server-dot"][data-dot="sleeping"]) { --dot: oklch(0.82 0.08 275); }
 }

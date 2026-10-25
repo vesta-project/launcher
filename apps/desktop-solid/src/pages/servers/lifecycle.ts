@@ -5,7 +5,7 @@ import { createSignal } from 'solid-js';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { errorMessage } from '../../features/servers/errors';
-import { IntentMemo, type LifecycleAction } from '../../features/servers/model';
+import { IntentMemo, lifecycleControls, type LifecycleAction } from '../../features/servers/model';
 import { busyIntent } from '../../features/servers/operations-model';
 import { putOperations, putSnapshot, serverCommand, serverOperations } from '../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
@@ -62,3 +62,9 @@ export function useLifecycle(snapshot: () => ServerSnapshot) {
 }
 
 export type Lifecycle = ReturnType<typeof useLifecycle>;
+
+/** The quick action a card or pin offers: the header's primary, never Force kill. */
+export function quickAction(snapshot: ServerSnapshot): SubmittableAction | null {
+  const primary = lifecycleControls(snapshot).primary;
+  return primary && primary !== 'kill' && primary !== 'restart' ? primary : null;
+}

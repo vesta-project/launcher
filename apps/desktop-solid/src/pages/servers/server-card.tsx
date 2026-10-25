@@ -1,7 +1,7 @@
 // A server in the Servers grid, drawn with the instance card's own hooks so it shares its
 // size, art scrim, status tag and hover action. Actions live in the context menu, as on
 // instance cards.
-import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, toast } from '@vesta/ui';
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip } from '@vesta/ui';
 import { Show, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from '../../components/icon';
@@ -9,11 +9,11 @@ import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { serverArt } from '../../features/servers/art';
-import { errorMessage } from '../../features/servers/errors';
-import { IntentMemo, lifecycleControls, minecraftFact, playersFact, statusDot } from '../../features/servers/model';
-import { putOperations, serverCommand, serverRefreshing, updateServer } from '../../features/servers/store';
+import { lifecycleControls, minecraftFact, playersFact, statusDot } from '../../features/servers/model';
+import { serverRefreshing, updateServer } from '../../features/servers/store';
 import { refreshServerWithFeedback } from './refresh-button';
-import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
+import type { ServerSnapshot } from '../../features/servers/native';
+import { actionIcons, actionLabels, quickAction, useLifecycle } from './lifecycle';
 import { RemoveServerDialog } from './remove-dialog';
 import '../../features/instances/instance-card.css';
 
@@ -24,6 +24,7 @@ function cardState(snapshot: ServerSnapshot): { tone: string; tag: Tag | null } 
   switch (statusDot(snapshot)) {
     case 'online': return { tone: 'success', tag: { status: 'running', label: 'servers.card.online' } };
     case 'starting': return { tone: 'warning', tag: { status: 'warming', label: 'servers.card.starting' } };
+    case 'sleeping': return { tone: 'neutral', tag: { status: 'sleeping', label: 'servers.card.sleeping' } };
     case 'problem': return { tone: 'danger', tag: { status: 'crashed', label: 'servers.card.attention' } };
     case 'offline': return { tone: 'neutral', tag: { status: 'offline', label: 'servers.card.unreachable' } };
     default: return { tone: 'neutral', tag: null };
@@ -31,34 +32,20 @@ function cardState(snapshot: ServerSnapshot): { tone: string; tag: Tag | null } 
 }
 
 export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
-  const [busy, setBusy] = createSignal(false, { name: 'server-card:busy' });
   const [removing, setRemoving] = createSignal(false, { name: 'server-card:removing' });
-  const intents = new IntentMemo();
+  const lifecycle = useLifecycle(() => props.snapshot);
   const id = () => props.snapshot.connection.id;
   const href = () => `/servers/${id()}`;
   const state = () => cardState(props.snapshot);
   const controls = () => lifecycleControls(props.snapshot);
-  /** The card's quick action: Start when stopped, Stop while running; never Force kill. */
-  const quick = () => (controls().primary === 'start' || controls().primary === 'stop' ? controls().primary as 'start' | 'stop' : null);
+  const quick = () => quickAction(props.snapshot);
+  const busy = () => !!lifecycle.busy() || controls().progress !== null;
   const players = () => playersFact(props.snapshot.status, props.now);
 
-  const runQuick = async (event?: Event) => {
+  const runQuick = (event?: Event) => {
     event?.stopPropagation();
     const action = quick();
-    if (!action || busy()) return;
-    const generation = props.snapshot.status?.generation ?? null;
-    setBusy(true);
-    try {
-      const operation = await serverCommand((client) => client.lifecycle(id(), action, generation, intents.idFor({ action, generation })));
-      intents.settle();
-      putOperations(id(), [{ ...operation, intent: operation.intent ?? `lifecycle.${action}` }]);
-      toast.show({ title: t('servers.operation.accepted-toast', { name: t(action === 'start' ? 'servers.lifecycle.start' : 'servers.lifecycle.stop') }), tone: 'neutral' });
-    } catch (reason) {
-      intents.settle(reason as ServerCommandError);
-      toast.show({ title: t(errorMessage(reason)), tone: 'danger' });
-    } finally {
-      setBusy(false);
-    }
+    if (action && !busy()) void lifecycle.submit(action);
   };
 
   const open = () => transitionTo(href());
@@ -80,32 +67,35 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
       <div data-vesta="instance-card-top">
         <div data-vesta="instance-card-indicators">
           <Show when={state().tag}>
-            {(tag) => <span data-vesta="instance-card-tag" data-status={tag().status}>{t(tag().label)}</span>}
+            {(tag) => (
+              <span data-vesta="instance-card-tag" data-status={tag().status}>
+                <Show when={tag().status === 'sleeping'}><Icon name="icons/status/moon" size={11} /></Show>
+                {t(tag().label)}
+              </span>
+            )}
           </Show>
         </div>
-        <Show when={quick()}>
-          {(action) => (
-            <Tooltip
-              content={t(action() === 'start' ? 'servers.lifecycle.start' : 'servers.lifecycle.stop')}
-              placement="top"
-              trigger={(tooltip) => (
-                <button
-                  {...tooltip}
-                  type="button"
-                  data-vesta="instance-card-play"
-                  data-variant={busy() ? 'busy' : action() === 'start' ? 'launch' : 'kill'}
-                  aria-label={t(action() === 'start' ? 'servers.lifecycle.start' : 'servers.lifecycle.stop')}
-                  aria-busy={busy() ? 'true' : undefined}
-                  disabled={busy()}
-                  onClick={(event) => void runQuick(event)}
-                >
-                  <Show when={!busy()} fallback={<span data-vesta="instance-card-spinner" aria-hidden="true" />}>
-                    <Icon name={action() === 'start' ? 'icons/actions/play' : 'icons/actions/stop'} size={14} />
-                  </Show>
-                </button>
-              )}
-            />
-          )}
+        <Show when={quick() || controls().progress}>
+          <Tooltip
+            content={quick() ? t(actionLabels[quick()!]) : t(controls().progress === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}
+            placement="top"
+            trigger={(tooltip) => (
+              <button
+                {...tooltip}
+                type="button"
+                data-vesta="instance-card-play"
+                data-variant={busy() ? 'busy' : quick() === 'start' ? 'launch' : quick() === 'wake' ? 'wake' : quick() === 'sleep' ? 'sleep' : 'kill'}
+                aria-label={quick() && !busy() ? t(actionLabels[quick()!]) : t(controls().progress === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}
+                aria-busy={busy() ? 'true' : undefined}
+                disabled={busy()}
+                onClick={(event) => runQuick(event)}
+              >
+                <Show when={!busy() && quick()} fallback={<span data-vesta="instance-card-spinner" aria-hidden="true" />}>
+                  {(action) => <Icon name={actionIcons[action()]} size={14} />}
+                </Show>
+              </button>
+            )}
+          />
         </Show>
       </div>
       <div data-vesta="instance-card-bottom">
@@ -124,7 +114,10 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
         <ContextMenuItem onSelect={open}>{t('servers.open')}</ContextMenuItem>
         <ContextMenuItem disabled={serverRefreshing(id())} onSelect={() => void refreshServerWithFeedback(id())}>{t('servers.refresh')}</ContextMenuItem>
         <Show when={quick()}>
-          {(action) => <ContextMenuItem disabled={busy()} onSelect={() => void runQuick()}>{t(action() === 'start' ? 'servers.lifecycle.start' : 'servers.lifecycle.stop')}</ContextMenuItem>}
+          {(action) => <ContextMenuItem disabled={busy()} onSelect={() => runQuick()}>{t(actionLabels[action()])}</ContextMenuItem>}
+        </Show>
+        <Show when={controls().stop}>
+          <ContextMenuItem disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
         </Show>
         <ContextMenuItem onSelect={() => transitionTo(`${href()}/console`)}>{t('servers.tab.console')}</ContextMenuItem>
         <ContextMenuSeparator />
