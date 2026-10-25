@@ -56,13 +56,15 @@ describe('[shell] routing', () => {
     expect(ids).toEqual(['overview', 'console', 'files', 'automation', 'backups', 'activity']);
   });
 
-  test('backups show only when the server has a backup profile', () => {
-    const ids = (configured, requested) => visibleMainTabs({ snapshot: snapshot(), backupsConfigured: configured, requested }).map((tab) => tab.id);
+  test('backups show when set up, or while the user can set them up', () => {
+    const ids = (configured, requested, role = 'maintainer') => visibleMainTabs({ snapshot: snapshot({}, role), backupsConfigured: configured, requested }).map((tab) => tab.id);
     expect(ids(false)).not.toContain('backups');
     expect(ids(undefined)).not.toContain('backups');
     // A deep link keeps the tab while the answer is still loading.
     expect(ids(undefined, 'backups')).toContain('backups');
     expect(ids(false, 'backups')).not.toContain('backups');
+    // Owners keep the tab to set backups up.
+    expect(ids(false, undefined, 'owner')).toContain('backups');
     expect(backupsConfigured(snapshot(), undefined)).toBeUndefined();
     expect(backupsConfigured(snapshot(), { profiles: [] })).toBe(false);
     expect(backupsConfigured(snapshot(), { profiles: [{}] })).toBe(true);

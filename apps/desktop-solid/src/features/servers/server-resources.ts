@@ -29,6 +29,9 @@ export const backupsResource = serverResource('backups', async (id): Promise<Bac
 export const backupStorageResource = serverResource('backup-storage', (id): Promise<BackupStorage | null> =>
   serverCommand((client) => client.backupStorage(id, true)).catch(() => null));
 
+/** The editable profile set, revision and repository location (owners and administrators). */
+export const backupConfigResource = serverResource('backup-config', (id) => serverCommand((client) => client.backupConfiguration(id)));
+
 /** Expanded restore points share the normal refresh and invalidation lifecycle. */
 export const backupSnapshotsResource = serverResource('backup-snapshots', (id, profile: string) =>
   serverCommand((client) => client.backupSnapshots(id, profile)));

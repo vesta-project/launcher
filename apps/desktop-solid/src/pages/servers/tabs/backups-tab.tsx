@@ -13,8 +13,10 @@ import { invalidateServerResources, useServerResource } from '../../../features/
 import { createBackupJobFollower } from '../../../features/servers/backup-jobs';
 import { backupSnapshotsResource, backupStorageResource, backupsResource } from '../../../features/servers/server-resources';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import type { BackupJob, BackupProfile, BackupSnapshot } from '../../../features/servers/native-manage';
+import type { BackupJob, BackupSnapshot } from '../../../features/servers/native-manage';
 import { ServerErrorNote } from '../parts';
+import { backupsConfigured } from '../../../features/servers/shell-model';
+import { BackupProfilesEditor, BackupSetup, BackupsEnabled, retentionText as retention } from './backup-profiles';
 import '../../library/instance/settings-tab.css';
 
 const bytes = (value: number | null | undefined) => {
@@ -54,17 +56,6 @@ const backupErrors: Record<string, MessageId> = {
   backup_confirmation_expired: 'servers.error.confirmation-expired',
 };
 
-/** Retention as a short sentence, e.g. "Keeps 7 latest · 7 daily · 4 weekly". */
-function retention(profile: BackupProfile) {
-  const parts = [
-    profile.keepLast && t('servers.backups.keep-last', { count: profile.keepLast }),
-    profile.keepDaily && t('servers.backups.keep-daily', { count: profile.keepDaily }),
-    profile.keepWeekly && t('servers.backups.keep-weekly', { count: profile.keepWeekly }),
-    profile.keepMonthly && t('servers.backups.keep-monthly', { count: profile.keepMonthly }),
-  ].filter(Boolean);
-  return parts.length ? parts.join(' · ') : t('servers.backups.keep-all');
-}
-
 export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = () => props.snapshot.connection.id;
@@ -80,7 +71,29 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const [restoring, setRestoring] = createSignal<{ profile: string; snapshot: BackupSnapshot } | null>(null, { name: 'server-backups:restoring' });
   const [started, setStarted] = createSignal<BackupJob | null>(null, { name: 'server-backups:started' });
   const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
+  const canConfigure = () => can('backups.configure');
+  const configured = () => backupsConfigured(props.snapshot, overview());
+  const settingUp = () => configured() === false && canConfigure();
+  const [enabled, setEnabled] = createSignal<string | null>(null, { name: 'server-backups:just-enabled' });
 
+  const profileActions = (name: string) => (
+    <>
+      <Button size="sm" variant="ghost" onClick={() => setOpenProfile(openProfile() === name ? null : name)}>
+        {t(openProfile() === name ? 'servers.backups.hide-points' : 'servers.backups.show-points')}
+      </Button>
+      <Show when={can('backups.verify')}>
+        <Button size="sm" variant="outline" onClick={() => void start('verify', name)}>{t('servers.backups.verify')}</Button>
+      </Show>
+      <Show when={can('backups.create')}>
+        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start('run', name)}>{t('servers.backups.run')}</Button>
+      </Show>
+    </>
+  );
+  const profilePoints = (name: string) => (
+    <Show when={openProfile() === name}>
+      <RestorePoints snapshot={props.snapshot} profile={name} onRestore={(point) => setRestoring({ profile: name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
+    </Show>
+  );
   let disposed = false;
   onCleanup(() => { disposed = true; });
   const refreshProjections = async () => {
@@ -144,6 +157,10 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
           </div>
         </Show>
 
+        <Show when={enabled()}>
+          {(profile) => <BackupsEnabled snapshot={props.snapshot} profile={profile()} onDismiss={() => setEnabled(null)} onRun={() => { setEnabled(null); void start('run', profile()); }} />}
+        </Show>
+        <Show when={!settingUp()} fallback={<BackupSetup snapshot={props.snapshot} onEnabled={(profile) => { setEnabled(profile); void refresh(); }} />}>
         <Show when={storage()}>
           {(space) => (
             <section data-vesta="settings-panel">
@@ -168,8 +185,11 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
           )}
         </Show>
 
+        <Show when={canConfigure()} fallback={
+          <>
         <section data-vesta="settings-panel">
           <h3>{t('servers.backups.profiles')}</h3>
+          <Show when={configured()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.backup-setup.view-only')}</p></Show>
           <div data-vesta="settings-panel-body">
             <Show when={overview()?.profiles.length} fallback={<p data-vesta="server-muted" class="server-panel-note">{loading() ? t('servers.loading') : overview() ? t('servers.backups.no-profiles') : t('servers.backups.not-loaded')}</p>}>
               <For each={overview()?.profiles ?? []}>
@@ -183,27 +203,19 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                         </span>
                         <span data-vesta="setting-row-description">{retention(profile)}</span>
                       </div>
-                      <div data-vesta="setting-row-control">
-                        <Button size="sm" variant="ghost" onClick={() => setOpenProfile(openProfile() === profile.name ? null : profile.name)}>
-                          {t(openProfile() === profile.name ? 'servers.backups.hide-points' : 'servers.backups.show-points')}
-                        </Button>
-                        <Show when={can('backups.verify')}>
-                          <Button size="sm" variant="outline" onClick={() => void start('verify', profile.name)}>{t('servers.backups.verify')}</Button>
-                        </Show>
-                        <Show when={can('backups.create')}>
-                          <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start('run', profile.name)}>{t('servers.backups.run')}</Button>
-                        </Show>
-                      </div>
+                      <div data-vesta="setting-row-control">{profileActions(profile.name)}</div>
                     </div>
-                    <Show when={openProfile() === profile.name}>
-                      <RestorePoints snapshot={props.snapshot} profile={profile.name} onRestore={(point) => setRestoring({ profile: profile.name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
-                    </Show>
+                    {profilePoints(profile.name)}
                   </div>
                 )}
               </For>
             </Show>
           </div>
         </section>
+          </>
+        }>
+          <BackupProfilesEditor snapshot={props.snapshot} actions={profileActions} details={profilePoints} />
+        </Show>
 
         <section data-vesta="settings-panel">
           <h3>{t('servers.backups.recent')}</h3>
@@ -238,6 +250,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
             </ul>
           </Show>
         </section>
+        </Show>
       </div>
       <Show when={restoring()} keyed>
         {(target) => <RestoreDialog snapshot={props.snapshot} profile={target.profile} point={target.snapshot} onClose={() => setRestoring(null)} onDone={(job) => { setStarted(job); void refresh(); }} />}

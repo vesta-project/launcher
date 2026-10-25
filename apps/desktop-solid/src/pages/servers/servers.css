@@ -414,6 +414,18 @@
   :where([data-vesta="server-backup-profile"]) + :where([data-vesta="server-backup-profile"]) { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
   :where([data-vesta="server-backup-profile"]) [data-vesta="setting-row-control"] { flex-wrap: wrap; gap: var(--vesta-space-2); }
 
+  /* Backup setup and profile editing */
+  :where([data-vesta="server-backup-fields"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); padding: var(--vesta-space-3) var(--vesta-space-4); max-inline-size: 640px; }
+  :where([data-vesta="server-backup-field"]) { display: flex; flex-direction: column; align-items: flex-start; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-backup-field"]) > :where([data-vesta="setting-row-description"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-backup-field"]) > :where(:not([data-vesta="segmented-control"], [data-vesta="setting-row-label"], [data-vesta="setting-row-description"])) { align-self: stretch; }
+  :where([data-vesta="server-backup-keep"]) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--vesta-space-3); align-self: stretch; }
+  :where([data-vesta="server-backup-actions"]) { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--vesta-space-2); padding: var(--vesta-space-3) var(--vesta-space-4); }
+  :where([data-vesta="server-backup-actions"]) > :where([data-vesta="server-muted"]) { margin-inline-end: auto; font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-callout"]) :where([data-vesta="server-backup-actions"]) { padding: var(--vesta-space-2) 0 0; }
+  :where([data-vesta="server-backup-location"]) { max-inline-size: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-backup-profile"][data-open]) { background: var(--vesta-color-fill-subtle, transparent); }
+
   /* Invitations */
   :where([data-vesta="server-invite-result"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); }
   :where([data-vesta="server-invite-result"]) p { margin: 0; color: var(--vesta-color-text-muted); }
