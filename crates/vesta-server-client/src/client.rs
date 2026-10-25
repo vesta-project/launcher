@@ -2,6 +2,8 @@
 pub mod automation;
 #[path = "branding.rs"]
 pub mod branding;
+#[path = "backups_config.rs"]
+pub mod backups_config;
 #[path = "hosting.rs"]
 pub mod hosting;
 #[path = "management.rs"]

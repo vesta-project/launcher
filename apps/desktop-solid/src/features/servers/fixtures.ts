@@ -154,8 +154,12 @@ function seed(): FixtureServer[] {
   return [survival, creative, away];
 }
 
-export function createFixtureServers(options: { seeded?: boolean; latencyMs?: number } = {}): ServersApi {
+export function createFixtureServers(options: { seeded?: boolean; latencyMs?: number; backupsConfigured?: boolean } = {}): ServersApi {
   const servers = new Map<ConnectionId, FixtureServer>((options.seeded ?? true ? seed() : []).map((server) => [server.snapshot.connection.id, server]));
+  if (options.backupsConfigured !== undefined) {
+    const target = servers.get('fixture-survival');
+    if (target) target.snapshot.backupsConfigured = options.backupsConfigured;
+  }
   const discoveries = new Map<string, Discovery & { address: string }>();
   const offlineReceipts = new Map<string, { payload: string; sha256: string }>();
   const whitelistHash = async (target: FixtureServer) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(target.whitelist)))), (b) => b.toString(16).padStart(2, '0')).join('');

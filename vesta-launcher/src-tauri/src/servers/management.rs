@@ -3,6 +3,24 @@ use super::*;
 use serde::Serialize;
 
 impl ServerManager {
+    /// Re-read the authoritative flag after a configuration save, including a replay.
+    pub async fn refresh_backups_configured(&self, app: &AppHandle, id: &str) {
+        let Ok(slot) = self.slot(id) else { return; };
+        let _gate = slot.refresh.lock().await;
+        let Ok(client) = self.client(id).await else { return; };
+        client.transport.invalidate_reads();
+        match client.info().await {
+            Ok(info) => {
+                if let Ok(mut record) = self.record(id).await {
+                    record.snapshot.backups_configured = info.backups_configured;
+                    record.snapshot.info = Some(info);
+                    let _ = self.publish(app, record.snapshot).await;
+                }
+            }
+            Err(_) => { slot.info_loaded.store(false, std::sync::atomic::Ordering::Relaxed); }
+        }
+    }
+
     /// Explicit refresh must retire native GETs as well as the frontend cache.
     /// With no client there are no projections to retire; never construct a
     /// session or issue a request just to discard local cached observations.

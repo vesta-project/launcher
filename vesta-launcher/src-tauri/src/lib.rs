@@ -182,6 +182,8 @@ pub fn run(context: tauri::Context) {
             commands::servers_presence::server_device_rename,
             commands::servers_manage::server_backup_snapshots,
             commands::servers_manage::server_backup_storage,
+            commands::servers_backups_config::server_backup_configuration,
+            commands::servers_backups_config::server_backup_configure,
             commands::servers_manage::server_users,
             commands::servers_manage::server_roles,
             commands::servers_manage::server_devices,

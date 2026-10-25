@@ -15,6 +15,31 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn backup_configuration_bridge_maps_closed_drafts_and_preserves_retry_intents() {
+    use vesta_server_client::backups_config::{BackupConfigDraft, BackupConfigLimits, BackupProfileConfig};
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    a.set("GET", "/api/v3/manage/backups/config", json!({"source":"host_config","revision":null,"profiles":[],"limits":{"max_snapshots":null,"max_repository_bytes":null,"min_free_bytes":1073741824},"repository":{"kind":"local","location":"C:/Vesta/backups/repository","initialized":false},"backups_configured":false,"schedule_owner":"automation"}));
+    let view = a.client.backup_configuration().await.unwrap();
+    assert!(!view.backups_configured); assert!(!view.repository.initialized);
+    assert_eq!(view.revision, None);
+    let draft = BackupConfigDraft {
+        profiles: vec![BackupProfileConfig {name:"daily".into(),mode:"stopped".into(),keep_last:7,keep_daily:7,keep_weekly:4,keep_monthly:3,on_mutation:"fail-world".into(),warn_seconds:60,max_snapshots:None,include:vec![],exclude:vec!["logs/".into()]}],
+        limits: BackupConfigLimits {max_snapshots:None,max_repository_bytes:None,min_free_bytes:1073741824}, initialize_repository:true,
+    };
+    a.set("PUT", "/api/v3/manage/backups/config", json!({"revision":1}));
+    assert_eq!(a.client.backup_configure(draft.clone(), None, "setup-config").await.unwrap().revision, 1);
+    a.client.backup_configure(draft.clone(), None, "setup-config").await.unwrap();
+    let calls = a.calls("/api/v3/manage/backups/config");
+    let writes: Vec<_> = calls.iter().filter(|c| c.method == "PUT").collect();
+    assert_eq!(writes.len(), 2); assert_eq!(writes[0].key, writes[1].key);
+    assert_eq!(writes[0].body, writes[1].body);
+    assert_eq!(writes[0].body["profiles"][0]["keep_last"], 7);
+    assert_eq!(writes[0].body["initialize_repository"], true);
+    assert!(draft.wire(Some(9_007_199_254_740_992)).is_err());
+}
+
+#[tokio::test]
 async fn hosting_bridge_preserves_seed_precision_and_keeps_approval_tokens_native() {
     use vesta_server_client::hosting::SoftwarePlanRequest;
     let _owner=OWNER.lock().await;

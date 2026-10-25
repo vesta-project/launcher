@@ -3,6 +3,7 @@ pub mod servers;
 pub mod servers_hosting;
 pub mod server_files;
 pub mod servers_manage;
+pub mod servers_backups_config;
 pub mod servers_presence;
 pub mod servers_automation;
 pub mod file_drop;

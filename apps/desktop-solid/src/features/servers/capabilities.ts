@@ -15,11 +15,11 @@ const ADMINISTRATOR = [
   'public.info', 'pack.download', 'pack.realtime', 'pack.access', 'pack.edit', 'pack.build', 'pack.publish', 'pack.force_update',
   'roles.manage', 'access-sources.manage', 'invitations.create', 'automation.view', 'automation.manage', 'notifications.view',
   'principals.view', 'principals.manage', 'devices.revoke', 'roles.create', 'roles.assign', 'roles.revoke',
-  'credentials.manage', 'security.manage', 'audit.view',
+  'credentials.manage', 'security.manage', 'audit.view', 'backups.configure',
 ];
 
 export const builtinRoleCapabilities: Record<string, readonly string[]> = {
-  owner: [...ADMINISTRATOR, 'backups.restore', 'recovery.export', 'backups.configure'],
+  owner: [...ADMINISTRATOR, 'backups.restore', 'recovery.export'],
   administrator: ADMINISTRATOR,
   maintainer: OPERATIONS,
   moderator: ['notifications.view', 'status.view', 'players.view', 'players.moderate'],

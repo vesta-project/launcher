@@ -112,6 +112,7 @@ pub(crate) fn role_defaults(role: Option<&str>) -> Vec<String> {
             "automation.view",
             "automation.manage",
             "notifications.view",
+            "backups.configure",
             "principals.view",
             "principals.manage",
             "devices.revoke",

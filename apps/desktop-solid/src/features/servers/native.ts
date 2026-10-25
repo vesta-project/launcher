@@ -16,6 +16,7 @@
 //   an automatic retry.
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import { serversManageNative } from './native-manage';
+import { serversBackupsConfigNative } from './native-backups-config';
 import { serversPresenceNative } from './native-presence';
 import { serversBrandingNative } from './native-branding';
 import { serversAutomationNative } from './native-automation';
@@ -412,6 +413,7 @@ export const serversNative = {
 
   // Backups, access and pack: see native-manage.ts.
   ...serversManageNative,
+  ...serversBackupsConfigNative,
   // Sleep and server-list presentation: see native-presence.ts.
   ...serversPresenceNative,
   ...serversBrandingNative,

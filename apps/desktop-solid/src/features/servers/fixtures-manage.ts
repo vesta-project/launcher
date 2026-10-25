@@ -4,15 +4,16 @@
 // invitation codes, and monotonic pack revisions.
 import type { ConnectionId, ServerCommandError, ServerOperation } from './native';
 import type {
-  AccessSources, BackupJob, BackupOverview, BackupProfile, BackupSnapshot, BackupStorage, Invitation, IssuedInvitation,
+  AccessSources, BackupJob, BackupOverview, BackupSnapshot, BackupStorage, Invitation, IssuedInvitation,
   PackOutcome, RoleSummary, ServerDevice, ServerUser,
 } from './native-manage';
 import { capabilitiesForRole } from './capabilities';
+import type { BackupConfiguration, BackupConfigDraft, BackupConfigOutcome, BackupProfileConfig } from './native-backups-config';
 
 export interface ManageHost {
   /** Throws `not_found` for unknown connections. */
   server(id: ConnectionId): {
-    snapshot: { status: { state: string } | null; pack: { hostedRevision: string | null; minimumRevision: string | null; status: 'published' | 'unpublished' } | null; connection: { role: string | null } };
+    snapshot: { backupsConfigured?: boolean | null; status: { state: string } | null; pack: { hostedRevision: string | null; minimumRevision: string | null; status: 'published' | 'unpublished' } | null; connection: { role: string | null } };
   };
   requireOnline(target: ReturnType<ManageHost['server']>): void;
   requireCapability(target: ReturnType<ManageHost['server']>, capability: string): void;
@@ -36,7 +37,11 @@ const builtinRoles: RoleSummary[] = [
 const roleById = (roles: RoleSummary[], id: string) => roles.find((role) => role.id === id) ?? fail('not_found');
 
 interface ManageState {
-  profiles: BackupProfile[];
+  profiles: BackupProfileConfig[];
+  backupRevision: number | null;
+  repositoryInitialized: boolean;
+  backupLimits: BackupStorage['limits'];
+  configReceipts: Map<string, { payload: string; result: BackupConfigOutcome }>;
   jobs: BackupJob[];
   snapshots: Record<string, BackupSnapshot[]>;
   recoveryRequired: boolean;
@@ -57,9 +62,13 @@ function seed(): ManageState {
     roles: [{ role: roleById(roles, roleId), expiresAtMs: null }], rank: roleById(roles, roleId).rank, deviceCount: devices, version: version(),
   });
   return {
+    backupRevision: null,
+    repositoryInitialized: true,
+    backupLimits: { maxSnapshots: 60, maxRepositoryBytes: 20_000_000_000, minFreeBytes: 5_000_000_000 },
+    configReceipts: new Map(),
     profiles: [
-      { name: 'daily', mode: 'online', keepLast: 7, keepDaily: 7, keepWeekly: 4, keepMonthly: 3, onMutation: 'fail-world', warnSeconds: 60, maxSnapshots: 30 },
-      { name: 'before-updates', mode: 'stopped', keepLast: 5, keepDaily: 0, keepWeekly: 0, keepMonthly: 0, onMutation: 'fail-any', warnSeconds: 0, maxSnapshots: 5 },
+      { name: 'daily', mode: 'online', keepLast: 7, keepDaily: 7, keepWeekly: 4, keepMonthly: 3, onMutation: 'fail-world', warnSeconds: 60, maxSnapshots: 30, include: [], exclude: [] },
+      { name: 'before-updates', mode: 'stopped', keepLast: 5, keepDaily: 0, keepWeekly: 0, keepMonthly: 0, onMutation: 'fail-any', warnSeconds: 0, maxSnapshots: 5, include: [], exclude: ['logs/'] },
     ],
     jobs: [
       { id: `job-${hex(6)}`, profile: 'daily', kind: 'backup', state: 'succeeded', requestedBy: 'Nightly backup', snapshotId: hex(32), errorCode: null,
@@ -97,7 +106,19 @@ function seed(): ManageState {
 
 export function createManageFixtures(host: ManageHost) {
   const states = new Map<ConnectionId, ManageState>();
-  const state = (id: ConnectionId) => { host.server(id); let value = states.get(id); if (!value) { value = seed(); states.set(id, value); } return value; };
+  const state = (id: ConnectionId) => {
+    const target = host.server(id);
+    let value = states.get(id);
+    if (!value) {
+      value = seed();
+      if (!target.snapshot.backupsConfigured) {
+        value.profiles = []; value.jobs = []; value.snapshots = {}; value.repositoryInitialized = false;
+        value.backupLimits = { maxSnapshots: null, maxRepositoryBytes: null, minFreeBytes: 1_073_741_824 };
+      }
+      states.set(id, value);
+    }
+    return value;
+  };
   const callerRank = (id: ConnectionId) => {
     const role = host.server(id).snapshot.connection.role ?? 'public';
     return builtinRoles.find((entry) => entry.id === role)?.rank ?? 1;
@@ -114,6 +135,45 @@ export function createManageFixtures(host: ManageHost) {
   const knownProfile = (id: ConnectionId, profile: string) => { if (!state(id).profiles.some((entry) => entry.name === profile)) fail('not_found'); };
 
   return {
+    async backupConfiguration(connectionId: ConnectionId): Promise<BackupConfiguration> {
+      await host.wait();
+      const target = host.server(connectionId);
+      host.requireOnline(target); host.requireCapability(target, 'backups.configure');
+      const current = state(connectionId);
+      return clone({ source: current.backupRevision === null ? 'host_config' : 'stored', revision: current.backupRevision,
+        profiles: current.profiles, limits: current.backupLimits, backupsConfigured: current.profiles.length > 0,
+        repository: { kind: 'local', location: 'C:\\Vesta\\instances\\riverside\\backups\\repository', initialized: current.repositoryInitialized }, scheduleOwner: 'automation' });
+    },
+    async backupConfigure(connectionId: ConnectionId, draft: BackupConfigDraft, expectedRevision: number | null, intentId: string): Promise<BackupConfigOutcome> {
+      await host.wait();
+      const target = host.server(connectionId);
+      host.requireOnline(target); host.requireCapability(target, 'backups.configure');
+      const current = state(connectionId);
+      const payload = JSON.stringify({ draft, expectedRevision });
+      const receipt = current.configReceipts.get(intentId);
+      if (receipt) { if (receipt.payload !== payload) fail('conflict'); return clone(receipt.result); }
+      if (!intentId || draft.profiles.length > 16 || new Set(draft.profiles.map((p) => p.name)).size !== draft.profiles.length) fail('invalid_input');
+      const bounded = (n: number, max: number) => Number.isSafeInteger(n) && n >= 0 && n <= max;
+      const relative = (p: string) => p.length > 0 && p.length <= 512 && !p.startsWith('/') && !/[\\:*?\[\]{}\x00-\x1f]/.test(p) && p.split('/').every((s) => s && s !== '.' && s !== '..');
+      for (const p of draft.profiles) {
+        if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(p.name) || !['online', 'stopped'].includes(p.mode)
+          || !['warn', 'fail-world', 'fail-any'].includes(p.onMutation)
+          || ![p.keepLast, p.keepDaily, p.keepWeekly, p.keepMonthly].every((v) => bounded(v, 1000))
+          || !bounded(p.warnSeconds, 600) || (p.maxSnapshots !== null && (!bounded(p.maxSnapshots, 4294967295) || p.maxSnapshots === 0))
+          || p.include.length > 64 || !p.include.every(relative) || p.exclude.length > 64
+          || p.exclude.some((s) => !s || s.length > 512 || /[\x00-\x1f]/.test(s) || /^[!#\\]/.test(s) || s.split('/').includes('..'))) fail('invalid_input');
+      }
+      if (![draft.limits.maxSnapshots, draft.limits.maxRepositoryBytes].every((v) => v === null || (bounded(v, Number.MAX_SAFE_INTEGER) && v > 0)) || !bounded(draft.limits.minFreeBytes, Number.MAX_SAFE_INTEGER)) fail('invalid_input');
+      if (current.backupRevision !== expectedRevision) fail('stale_target');
+      current.profiles = clone(draft.profiles); current.backupLimits = clone(draft.limits);
+      if (draft.initializeRepository) current.repositoryInitialized = true;
+      current.backupRevision = (current.backupRevision ?? 0) + 1;
+      target.snapshot.backupsConfigured = current.profiles.length > 0;
+      const result = { revision: current.backupRevision };
+      current.configReceipts.set(intentId, { payload, result });
+      host.publish(target);
+      return clone(result);
+    },
     async backups(connectionId: ConnectionId, before: string | null): Promise<BackupOverview> {
       await host.wait();
       host.requireCapability(host.server(connectionId), 'backups.view');
@@ -132,8 +192,8 @@ export function createManageFixtures(host: ManageHost) {
       host.requireCapability(host.server(connectionId), 'backups.view');
       const current = state(connectionId);
       const restorePoints = Object.values(current.snapshots).flat().filter((entry) => !entry.safety).length;
-      return { repositoryBytes: 3_410_000_000, restorePoints, safetySnapshots: Object.values(current.snapshots).flat().filter((entry) => entry.safety).length,
-        freeBytes: 182_000_000_000, limits: { maxSnapshots: 60, maxRepositoryBytes: 20_000_000_000, minFreeBytes: 5_000_000_000 }, stopped: null };
+      return { repositoryBytes: current.repositoryInitialized ? 3_410_000_000 : 0, restorePoints, safetySnapshots: Object.values(current.snapshots).flat().filter((entry) => entry.safety).length,
+        freeBytes: 182_000_000_000, limits: clone(current.backupLimits), stopped: null };
     },
     async backupRun(connectionId: ConnectionId, profile: string, _intentId: string): Promise<BackupJob> {
       await host.wait();
