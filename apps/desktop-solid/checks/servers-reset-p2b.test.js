@@ -4,6 +4,16 @@ import { describe, expect, test } from 'bun:test';
 import {
   SEED_MASK, datapackBlocker, datapackViews, dimensionViews, seedRevealed, seedText, splitLayout, toggleFeedback, toggleRejection, worldSize,
 } from '../src/features/servers/world-model';
+import {
+  customPathProblem, downloadOffers, isJavaJob, javaCompatibility, javaGroups, javaJobMessage, javaRejection, runtimeFor,
+} from '../src/features/servers/server-java-model';
+import { fileActions } from '../src/features/servers/files-model';
+import {
+  IDLE, protectedAccess, protectedEditReducer, protectedEditSends, protectedErrorEvent, protectedErrorMessage, protectedResultEvent, protectedSection,
+} from '../src/features/servers/protected-edit';
+import { capabilitiesForRole } from '../src/features/servers/capabilities';
+import { createFixtureServers } from '../src/features/servers/fixtures';
+import { deviceNameProblem, groupAccess, isManagement, renamable, sortDevices } from '../src/features/servers/access-model';
 
 const caps = (granted) => ({ source: 'session', granted, refused: [] });
 const running = { state: { phase: 'online' }, status: { state: 'running', generation: 'g1' }, capabilities: caps(['config.edit', 'console.write']) };
@@ -77,10 +87,6 @@ describe('[world] size, dimensions and datapacks', () => {
   });
 });
 
-import {
-  customPathProblem, downloadOffers, isJavaJob, javaCompatibility, javaGroups, javaJobMessage, javaRejection, runtimeFor,
-} from '../src/features/servers/server-java-model';
-
 const rt = (id, major, extra = {}) => ({ id, path: `/opt/${id}/bin/java`, version: `${major}.0.1`, major, vendor: 'Eclipse Adoptium', arch: 'amd64', managed: false, ...extra });
 
 describe('[java] runtime list', () => {
@@ -140,13 +146,6 @@ describe('[java] compatibility, custom paths and jobs', () => {
     expect(javaRejection('forbidden', null)).toBe('server-java.custom-refused');
   });
 });
-
-import { fileActions } from '../src/features/servers/files-model';
-import {
-  IDLE, protectedAccess, protectedEditReducer, protectedEditSends, protectedErrorEvent, protectedErrorMessage, protectedResultEvent, protectedSection,
-} from '../src/features/servers/protected-edit';
-import { capabilitiesForRole } from '../src/features/servers/capabilities';
-import { createFixtureServers } from '../src/features/servers/fixtures';
 
 const roleView = (role) => ({ source: 'role_defaults', granted: capabilitiesForRole(role), refused: [] });
 
@@ -223,8 +222,6 @@ describe('[protected files] edit state machine', () => {
     await expect(servers.fileWriteProtected('fixture-survival', 'ops.json', '[]', file.sha256, null, 'raw-2')).rejects.toMatchObject({ code: 'stale_target' });
   });
 });
-
-import { deviceNameProblem, groupAccess, isManagement, renamable, sortDevices } from '../src/features/servers/access-model';
 
 const role = (id, rank) => ({ role: { id, name: id, rank, builtin: true, capabilities: [] }, expiresAtMs: null });
 const person = (id, roleId, rank) => ({ id, displayName: id, minecraftAccounts: [], roles: [role(roleId, rank)], rank, deviceCount: 0, version: 'v' });
