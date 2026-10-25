@@ -84,3 +84,28 @@ GPT Sol = agent/native/backend + reviews; GPT Luna = research and code scans.
 - Every UI change is screenshotted (dark + light) and compared with the instance page.
 - No new section/tab without an owner-visible reason; prefer fewer, richer pages.
 - Opus does not scan code; Luna scans, Sol implements backend, Claude agents do UI.
+
+## Phase 2 completion checkpoint (2026-10-25)
+
+The current UI reset is integrated on `feat/frontend-rewrite`: P2A at `918fcd54`,
+P2B plus independent Sol review fixes at merge `6ad24a46`. World details/datapacks,
+masked seed, Java selection/download controls, protected-file confirmation and
+people/device grouping now accompany the lifecycle controls, graphs, inline
+software selection and native file-drop support.
+
+Review fixes (`378c2256`) preserve submitted datapack state across stale saved
+observations and bounded operation-history eviction, let expired file confirmations
+be reviewed again, and resume Save-and-leave only after a confirmed write applies.
+The independent review and dispositions are preserved outside the repo at
+`V:/tmp/reset-sol-review.md`; dark/light fixture screenshots are in
+`V:/tmp/reset/p2a` and `V:/tmp/reset/p2b`.
+
+Combined validation: 300 server/localization/icon checks passed; TypeScript and
+lint passed (existing warnings remain). The seven pre-existing native Rust failures
+were repaired in `dd2a9e22`: six portable path fixtures and a real Windows ZIP world
+icon lookup defect. The rebuilt launcher library passed 579 tests, zero failed,
+seven ignored. See `docs/development/server-files-native.md` for native evidence.
+
+This checkpoint completes phases 0-2 implementation and source/fixture checks;
+a live launcher/agent walkthrough remains necessary. Phase 3 machine-host design
+and implementation remain separate, deferred work. Nothing was pushed or deployed.
