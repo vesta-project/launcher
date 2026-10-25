@@ -89,7 +89,7 @@ console-line-count = { $visible } of { $total } { $total ->
 }
 console-jump-latest = Jump to latest
 console-copy-status = Copied
-console-copy-failed = Copy failed — select and copy the text below.
+console-copy-failed = Copy failed. Select and copy the text below.
 console-log-output = { $name } log output
 console-line-truncated = This line was shortened before it reached the launcher.
 

@@ -45,6 +45,13 @@ export function mergeOperations(current: readonly ServerOperation[], incoming: r
   return [...byId.values()].sort((a, b) => b.createdAtMs - a.createdAtMs).slice(0, limit);
 }
 
+/** Preserve a history page's boundaries while updating rows and showing new work on page one. */
+export function activityPageRows(page: readonly ServerOperation[], live: readonly ServerOperation[], firstPage: boolean) {
+  const oldest = page.reduce((time, operation) => Math.min(time, operation.createdAtMs), Infinity);
+  const rows = firstPage ? mergeOperations(page, live.filter((operation) => !page.length || operation.createdAtMs >= oldest), page.length + 100) : page;
+  return rows.map((operation) => live.find((candidate) => candidate.operationId === operation.operationId && candidate.updatedAtMs >= operation.updatedAtMs) ?? operation);
+}
+
 /** An intent whose operation is not finished (or still being reconciled) cannot be submitted again. */
 export function busyIntent(operations: readonly ServerOperation[], intent: string) {
   return operations.some((operation) => operation.intent === intent && (!isTerminal(operation) || operation.reconciling));

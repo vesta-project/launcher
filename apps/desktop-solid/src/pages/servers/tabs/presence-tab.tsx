@@ -130,6 +130,7 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
     const saved = sleep.value();
     if (!saved?.policy.enabled || !policy()?.enabled) return null;
     const status = props.snapshot.status;
+    if (props.snapshot.state.phase !== 'online' || (status?.state === 'stopped' && status.lifecycle !== 'sleeping')) return null;
     return sleepBlockerCopy(liveBlocker(status?.sleepBlocker, saved.sleepBlocker, true), status?.lifecycle ?? undefined, props.snapshot.statusObservedAtMs, now());
   };
   const agentStart = () => agentStartChoice(policy(), props.snapshot.status);

@@ -1,5 +1,9 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "servers.activity.pages",
+  "servers.activity.newer",
+  "servers.activity.older",
+  "server-automation.no-backup-profiles",
   "create-menu.new",
   "create-menu.file",
   "create-menu.packs",

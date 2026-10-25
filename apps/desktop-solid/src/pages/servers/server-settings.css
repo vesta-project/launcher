@@ -86,7 +86,7 @@
   :where([data-vesta="server-settings-search"]) { position: relative; display: flex; flex: 1 1 220px; align-items: center; max-inline-size: 420px; }
   :where([data-vesta="server-settings-search"]) > :where([data-vesta="field"]) { flex: 1; }
   :where([data-vesta="server-settings-search"]) > :where([data-vesta="icon-button"], [data-vesta="button"]) { position: absolute; inset-inline-end: 4px; }
-  :where([data-vesta="server-settings-bar"]) > :where(label) {
+  :where([data-vesta="server-settings-bar"]) > :where([data-vesta="switch"]) {
     display: inline-flex;
     align-items: center;
     gap: var(--vesta-space-2);

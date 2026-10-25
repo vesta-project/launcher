@@ -84,13 +84,16 @@ describe('[sleep] plain-language copy', () => {
 
   test('each blocker maps to a calm explanation; disabled and unknown say nothing', () => {
     const cases = {
-      not_ready: 'servers.sleep-blocker.not-ready',
       player_count_unknown: 'servers.sleep-blocker.player-count-unknown', operation_in_progress: 'servers.sleep-blocker.operation',
       hold: 'servers.sleep-blocker.hold', authority_unavailable: 'servers.sleep-blocker.authority',
     };
     for (const [reason, message] of Object.entries(cases)) expect(sleepBlockerCopy({ reason }, 'online')).toEqual({ message, kind: 'waiting' });
     expect(sleepBlockerCopy({ reason: 'disabled' }, 'online')).toBeNull();
     expect(sleepBlockerCopy(null, 'online')).toBeNull();
+    expect(sleepBlockerCopy({ reason: 'not_ready' }, 'online')).toBeNull();
+    expect(sleepBlockerCopy({ reason: 'not_ready' }, 'offline')).toBeNull();
+    expect(sleepBlockerCopy({ reason: 'counting_down', remainingSeconds: 30 }, 'offline')).toBeNull();
+    expect(sleepBlockerCopy({ reason: 'not_ready' }, 'starting')).toEqual({ message: 'servers.sleep-blocker.not-ready', kind: 'waiting' });
     expect(sleepBlockerCopy({ reason: 'players_online' }, 'online')).toBeNull();
     expect(sleepBlockerCopy({ reason: 'not_ready' }, 'sleeping')).toEqual({ message: 'servers.sleep-blocker.asleep', kind: 'asleep' });
   });

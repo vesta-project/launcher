@@ -397,11 +397,11 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
                       <TextField aria-label={t('server-automation.name')} value={current().name} readOnly={!canManage()} placeholder={t('server-automation.name-placeholder')}
                         error={problem('name')} onChange={(value: string) => patch({ name: value })} />
                     </div>
-                    <label data-vesta="server-automation-enabled">
+                    <div data-vesta="server-automation-enabled">
                       <Switch aria-label={t(isNew ? 'server-automation.enable-on-create' : 'server-automation.enabled', { name: current().name })}
-                        checked={current().enabled} disabled={!canManage() || toggling()} onChange={(value: boolean) => void setEnabled(value)} />
-                      <span>{t(isNew ? 'server-automation.enable-on-create' : current().enabled ? 'server-automation.on' : 'server-automation.off')}</span>
-                    </label>
+                        checked={current().enabled} disabled={!canManage() || toggling()} onChange={(value: boolean) => void setEnabled(value)}
+                        label={t(isNew ? 'server-automation.enable-on-create' : current().enabled ? 'server-automation.on' : 'server-automation.off')} />
+                    </div>
                   </div>
                   <div data-vesta="server-automation-head-row">
                     <span data-vesta="server-automation-head-label">{t('server-automation.starts')}</span>

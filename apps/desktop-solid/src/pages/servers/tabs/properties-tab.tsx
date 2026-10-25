@@ -208,10 +208,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
     >
       <div data-vesta="server-settings-bar">
         <SettingsSearch value={query()} onChange={setQuery} placeholder={t('server-settings.search')} />
-        <label>
-          <Switch size="sm" checked={showKeys()} onChange={setShowKeys} aria-label={t('server-settings.show-keys')} />
-          {t('server-settings.show-keys')}
-        </label>
+        <Switch size="sm" checked={showKeys()} onChange={setShowKeys} label={t('server-settings.show-keys')} />
       </div>
       <Show when={!canEdit()}><p data-vesta="server-callout" data-tone="neutral">{t('server-settings.view-only')}</p></Show>
       <Show when={stale()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('server-settings.stale')}</p></Show>
@@ -263,7 +260,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
                   <div data-vesta="setting-row-copy"><code data-vesta="setting-row-label">{entry.key}</code></div>
                   <div data-vesta="setting-row-control">
                     <span data-vesta="server-setting-value">
-                      <Show when={ADDRESS_KEYS.has(entry.key)} fallback={entry.value || '—'}><Sensitive>{entry.value}</Sensitive></Show>
+                      <Show when={ADDRESS_KEYS.has(entry.key)} fallback={entry.value || t('servers.unknown')}><Sensitive>{entry.value}</Sensitive></Show>
                     </span>
                   </div>
                 </div>

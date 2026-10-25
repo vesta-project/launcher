@@ -4,11 +4,11 @@ import type { Tone } from '@vesta/ui';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import { age } from '../../../features/servers/model';
-import { describeOperation, isTerminal, operationStateMessage } from '../../../features/servers/operations-model';
+import { activityPageRows, describeOperation, isTerminal, operationStateMessage } from '../../../features/servers/operations-model';
 import { serverOperations, useServersClock } from '../../../features/servers/store';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { useServerResource } from '../../../features/servers/resources';
-import { operationsResource } from '../../../features/servers/server-resources';
+import { operationsResource, operationHistoryResource } from '../../../features/servers/server-resources';
 import type { ServerOperation, ServerSnapshot } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 
@@ -68,7 +68,16 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
   const [filter, setFilter] = createSignal<'all' | 'mine' | 'running'>('all', { name: 'server-activity:filter' });
   // Shared with Overview: switching between them reuses the read; the topic keeps it live.
   const tasks = useServerResource(stableConnectionId(() => props.snapshot), operationsResource);
-  const visible = () => serverOperations(id()).filter((operation) =>
+  const [cursors, setCursors] = createSignal<string[]>([], { name: 'server-activity:cursors' });
+  const cursor = () => cursors().at(-1);
+  const history = useServerResource(stableConnectionId(() => props.snapshot), operationHistoryResource, {
+    args: () => cursor()!, enabled: () => !!cursor(),
+  });
+  const page = () => cursor() ? history.value() : tasks.value();
+  const refreshing = () => cursor() ? history.refreshing() : tasks.refreshing();
+  const loading = () => cursor() ? history.loading() : tasks.loading();
+  const refresh = () => cursor() ? history.refresh() : tasks.refresh();
+  const visible = () => activityPageRows(page()?.items ?? [], serverOperations(id()), !cursor()).filter((operation) =>
     filter() === 'all' ? true
       : filter() === 'running' ? !isTerminal(operation) || operation.reconciling
         : operation.actor?.kind === 'principal' && operation.actor.self);
@@ -88,17 +97,21 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
           ]}
         />
         <span data-vesta="server-toolbar-spacer" />
-        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={tasks.refreshing()} onClick={() => void tasks.refresh()}>{t('servers.refresh')}</Button>
+        <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={refreshing()} onClick={() => void refresh()}>{t('servers.refresh')}</Button>
       </div>
       <div data-vesta="server-pane-body">
-        <ServerErrorNote error={tasks.error()} onRetry={() => void tasks.refresh()} />
-        <Show when={visible().length > 0} fallback={<p data-vesta="server-muted">{tasks.loading() ? t('servers.loading') : t('servers.activity.empty')}</p>}>
+        <ServerErrorNote error={cursor() ? history.error() : tasks.error()} onRetry={() => void refresh()} />
+        <Show when={visible().length > 0} fallback={<p data-vesta="server-muted">{loading() ? t('servers.loading') : t('servers.activity.empty')}</p>}>
           <ul data-vesta="server-activity-list" aria-label={t('servers.tab.activity')}>
             <For each={visible()} keyed={(operation) => operation.operationId}>
               {(operation) => <ActivityRow operation={operation()} now={now()} />}
             </For>
           </ul>
         </Show>
+        <div data-vesta="server-backup-actions" aria-label={t('servers.activity.pages')}>
+          <Show when={cursors().length}><Button size="sm" variant="outline" disabled={refreshing()} onClick={() => setCursors((items) => items.slice(0, -1))}>{t('servers.activity.newer')}</Button></Show>
+          <Show when={page()?.nextCursor}><Button size="sm" variant="outline" disabled={refreshing()} onClick={() => { const next = page()?.nextCursor; if (next && next !== cursor()) setCursors((items) => [...items, next]); }}>{t('servers.activity.older')}</Button></Show>
+        </div>
         <p data-vesta="server-muted">{t('servers.activity.description')}</p>
       </div>
     </div>

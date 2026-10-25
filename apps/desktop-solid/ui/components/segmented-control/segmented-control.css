@@ -40,7 +40,7 @@
     display: inline-flex;
     flex-direction: column;
     align-items: flex-start;
-    align-self: flex-start;
+    align-self: center;
     gap: var(--vesta-space-1-5);
     max-inline-size: 100%;
     min-inline-size: 0;
@@ -170,10 +170,16 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
+    padding-block: 0.15em;
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: inherit;
+  }
+
+  :where([data-vesta='segmented-text']) {
+    display: block;
+    text-box: trim-both cap alphabetic;
   }
 
   /* The label is what Kobalte selects on click, so it reaches over the whole item:

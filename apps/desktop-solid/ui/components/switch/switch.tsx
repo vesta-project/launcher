@@ -53,7 +53,8 @@ export function Switch(props: SwitchProps) {
       validationState={error() == null ? 'valid' : 'invalid'}
     >
       <KobalteSwitch.Input aria-label={props['aria-label']} />
-      <KobalteSwitch.Control data-vesta="switch-track">
+      {/* The control toggles itself. Suppress an enclosing label's second activation. */}
+      <KobalteSwitch.Control data-vesta="switch-track" onClick={(event: MouseEvent) => event.preventDefault()}>
         <KobalteSwitch.Thumb data-vesta="switch-thumb" />
       </KobalteSwitch.Control>
       <Show when={label()}>

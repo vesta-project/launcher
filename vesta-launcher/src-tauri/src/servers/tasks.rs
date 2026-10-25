@@ -2,13 +2,47 @@
 use super::*;
 use tauri::Manager;
 
-fn activity(app: &AppHandle, id: &str, operation: &ServerOperation, initial: bool) {
+fn operation_title(operation: &ServerOperation) -> String {
+    match operation.summary.as_deref() {
+        Some(OperationSummary::Lifecycle { action, .. }) => match action {
+            LifecycleAction::Start => "Start server",
+            LifecycleAction::Stop => "Stop server",
+            LifecycleAction::Restart => "Restart server",
+            LifecycleAction::Kill => "Force stop server",
+            LifecycleAction::Sleep => "Sleep server",
+            LifecycleAction::Wake => "Wake server",
+        }.into(),
+        Some(OperationSummary::ConsoleCommand { .. }) => "Send console command".into(),
+        Some(OperationSummary::PlayersModerate { action, player, .. }) => {
+            let action = match action.as_str() {
+                "whitelist_add" => "Whitelist", "whitelist_remove" => "Remove from whitelist",
+                "kick" => "Kick", "ban" => "Ban", "pardon" => "Unban",
+                "op" => "Make operator", "deop" => "Remove operator",
+                _ => "Manage player",
+            };
+            format!("{action}: {player}")
+        }
+        _ => match operation.intent.as_deref().or(operation.kind.as_deref()) {
+            Some("lifecycle.start") => "Start server",
+            Some("lifecycle.stop") => "Stop server",
+            Some("lifecycle.restart") => "Restart server",
+            Some("lifecycle.sleep") => "Sleep server",
+            Some("lifecycle.wake") => "Wake server",
+            Some("lifecycle.kill") => "Force stop server",
+            Some("console.command") => "Send console command",
+            _ => "Server task",
+        }.into(),
+    }
+}
+
+fn activity(app: &AppHandle, id: &str, server_name: &str, operation: &ServerOperation, initial: bool) {
     let activity_id = format!("server:{id}:{}", operation.operation_id);
+    let title = format!("{}: {server_name}", operation_title(operation));
     if initial {
         crate::tasks::activity::publish(
             app,
             "core://task-state",
-            json!({"id":activity_id,"attempt":operation.operation_id,"state":"queued","kind":"task","title":"Remote server operation","name":"Remote server operation","source":"server","visibility":"foreground","cancellable":false,"pausable":false,"subject":{"id":id,"name":"Vesta server","instanceId":null,"iconUrl":null}}),
+            json!({"id":activity_id,"attempt":operation.operation_id,"state":"queued","kind":"task","title":title,"name":title,"source":"server","visibility":"foreground","cancellable":false,"pausable":false,"subject":{"id":id,"name":server_name,"instanceId":null,"iconUrl":null}}),
         );
     }
     let state = match operation.state.as_str() {
@@ -20,7 +54,7 @@ fn activity(app: &AppHandle, id: &str, operation: &ServerOperation, initial: boo
     crate::tasks::activity::publish(
         app,
         "core://task-state",
-        json!({"id":activity_id,"attempt":operation.operation_id,"state":state,"step":operation.state,"progress":operation.progress_percent.map(i32::from).unwrap_or(-1),"cancellable":false}),
+        json!({"id":activity_id,"attempt":operation.operation_id,"title":title,"state":state,"step":operation.outcome.as_deref().unwrap_or(&operation.state),"progress":operation.progress_percent.map(i32::from).unwrap_or(-1),"cancellable":false}),
     );
 }
 fn notify_failure(app: &AppHandle, id: &str, operation: &ServerOperation) {
@@ -32,7 +66,7 @@ fn notify_failure(app: &AppHandle, id: &str, operation: &ServerOperation) {
         models::{CreateNotificationInput, NotificationType},
     };
     if let Some(notifications) = app.try_state::<NotificationManager>() {
-        let _=notifications.create(CreateNotificationInput {client_key:Some(format!("server:{id}:{}",operation.operation_id)),title:Some("Server operation needs attention".into()),description:Some("The agent reported a failed or recovery-required operation. Review its console and activity.".into()),severity:Some("warning".into()),notification_type:Some(NotificationType::Patient),..Default::default()});
+        let _=notifications.create(CreateNotificationInput {client_key:Some(format!("server:{id}:{}",operation.operation_id)),title:Some(format!("{} needs attention", operation_title(operation))),description:Some(format!("Result: {}. Review this server's console and Activity for details.", operation.outcome.as_deref().unwrap_or(&operation.state))),severity:Some("warning".into()),notification_type:Some(NotificationType::Patient),..Default::default()});
     }
 }
 
@@ -110,7 +144,8 @@ impl ServerManager {
                 operation: operation.clone(),
             },
         );
-        match self.start_tracker(app, id, operation) {
+        let server_name = self.record(id).await.map(|record| record.snapshot.connection.name).unwrap_or_else(|_| "Server".into());
+        match self.start_tracker(app, id, &server_name, operation) {
             Err(e) if e.code == ErrorCode::ServerBusy => {
                 // The remote acceptance and its durable ID are already known.
                 // Tracking pressure must not turn that receipt into a refusal.
@@ -130,14 +165,15 @@ impl ServerManager {
         self: &Arc<Self>,
         app: &AppHandle,
         id: &str,
+        server_name: &str,
         operation: &ServerOperation,
     ) -> Result<()> {
         if operation.terminal() {
-            activity(app, id, operation, true);
+            activity(app, id, server_name, operation, true);
             notify_failure(app, id, operation);
             return Ok(());
         }
-        activity(app, id, operation, true);
+        activity(app, id, server_name, operation, true);
         self.ensure_operation_tracker(app, id)
     }
 
@@ -309,6 +345,7 @@ impl ServerManager {
                     }
                     let mut changed = false;
                     let mut finished = Vec::new();
+                    let server_name = manager.record(&id).await.map(|record| record.snapshot.connection.name).unwrap_or_else(|_| "Server".into());
                     for mut operation in observations {
                         manager.decorate_operation(&id, &mut operation).await;
                         if operation.terminal() && !operation.reconciling {
@@ -319,7 +356,7 @@ impl ServerManager {
                             continue;
                         }
                         changed = true;
-                        activity(&app, &id, &operation, initial);
+                        activity(&app, &id, &server_name, &operation, initial);
                         if operation.terminal() {
                             notify_failure(&app, &id, &operation);
                         }

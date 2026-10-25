@@ -349,3 +349,5 @@ server-automation-remove-referenced = { $count ->
 server-automation-leave-title = Save changes to { $name }?
 server-automation-leave-description = You changed this workflow but haven't saved it. Changes you don't save are lost.
 server-automation-leave-description-invalid = You changed this workflow but haven't saved it, and it has problems to fix before it can be saved. Changes you don't save are lost.
+
+server-automation-no-backup-profiles = Set up a backup profile in Backups first.

@@ -95,7 +95,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
                   </span>
                 </Show>
                 <KobalteSegmentedControl.ItemLabel data-vesta="segmented-label">
-                  {option.label}
+                  <span data-vesta="segmented-text">{option.label}</span>
                 </KobalteSegmentedControl.ItemLabel>
               </KobalteSegmentedControl.Item>
             );

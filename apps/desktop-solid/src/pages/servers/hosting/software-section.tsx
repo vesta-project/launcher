@@ -8,6 +8,7 @@ import {
   gameStopped, jobActive, jobPollDelay, jobStepMessage, launchSummary, reasonMessage, softwareName, warningCopy,
 } from '../../../features/servers/hosting-model';
 import type { SoftwareId, SoftwareJob, SoftwareLaunch, SoftwarePlan, SoftwareState } from '../../../features/servers/hosting-native';
+import { compareGameVersions } from '../../../features/browse/browse-model';
 import { IntentMemo } from '../../../features/servers/model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
@@ -206,7 +207,7 @@ function ChangeFlow(props: {
   const releases = useServerResource(id, softwareReleasesResource, { args: releaseArgs, enabled: () => offered() && versionList() !== undefined && !versions.refreshing() && !!minecraft() && !!softwareVersionKind(software()) });
   const releaseList = () => releases.value()?.software === software() && releases.value()?.version === minecraft() ? releases.value()?.releases ?? [] : [];
   const releaseOptions = createMemo(() => {
-    const values = releaseList().map(value => ({ value: value.id, label: value.build !== null ? 'Build ' + value.build : value.id }));
+    const values = [...releaseList()].sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true })).map(value => ({ value: value.id, label: value.build !== null ? 'Build ' + value.build : value.id }));
     const selected = selectedRelease();
     if (selected !== 'latest' && !values.some(v => v.value === selected)) values.unshift({ value: selected, label: softwareVersionKind(software()) === 'build' ? 'Build ' + selected : selected });
     return [{ value: 'latest', label: t(latestVersionLabel(software()) ?? 'server-hosting.latest-build') }, ...values];
@@ -228,7 +229,7 @@ function ChangeFlow(props: {
     icon: <SoftwareMark software={entry.software} />,
   })), { name: 'server-software:options' });
   const minecraftOptions = createMemo(() => {
-    const values = versionList() ?? [];
+    const values = [...(versionList() ?? [])].sort((a, b) => compareGameVersions(b, a));
     const current = software() === start.software ? start.minecraft : null;
     return (current && !values.includes(current) ? [current, ...values] : values).map((value) => ({ value, label: value }));
   }, { name: 'server-software:mc-options' });
@@ -309,14 +310,14 @@ function ChangeFlow(props: {
           <Field label={t('server-hosting.version-label')}>
             <Show when={!versions.loading() || versionList()} fallback={<Skeleton height={32} />}>
               <Combobox aria-label={t('server-hosting.version-label')} placeholder={t('server-hosting.version-placeholder')}
-                options={minecraftOptions()} maxOptions={80} value={minecraft() ?? undefined}
+                options={minecraftOptions()} pageSize={80} value={minecraft() ?? undefined}
                 onChange={setWanted} disabled={locked() || !minecraftOptions().length} />
             </Show>
           </Field>
           <Show when={latestLabel()}>
             {(_label) => (
               <Field label={t('server-hosting.software-version-label')}>
-                <Combobox aria-label={t('server-hosting.software-version-label')} options={releaseOptions()} maxOptions={80}
+                <Combobox aria-label={t('server-hosting.software-version-label')} options={releaseOptions()} pageSize={80}
                   value={selectedRelease()} onChange={(value) => setPickedRelease({ key: releaseKey(), id: value })}
                   disabled={locked()} />
               </Field>

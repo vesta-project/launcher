@@ -9,6 +9,8 @@ import { historyRequest, type GraphRange } from './metrics-model';
 
 /** Recent tasks; the operations topic keeps the store current after the first read. */
 export const operationsResource = serverResource('operations', (id) => loadOperations(id));
+export const operationHistoryResource = serverResource('operation-history', (id, cursor: string) =>
+  serverCommand((client) => client.operations(id, cursor)));
 
 export const whitelistResource = serverResource('whitelist', (id) => serverCommand((client) => client.whitelist(id)));
 export const operatorsResource = serverResource('operators', (id) => serverCommand((client) => client.operators(id)));

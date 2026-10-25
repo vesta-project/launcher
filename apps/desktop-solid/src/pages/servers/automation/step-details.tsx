@@ -169,13 +169,8 @@ function ActionFields(props: { action: DraftAction; at: string; disabled: boolea
       <Show when={backup()}>
         {(current) => (
           <div data-problem-path={`${props.at}.profile`}>
-            <Show when={props.profiles.length} fallback={
-              <TextField size="sm" label={t('server-automation.backup-profile')} value={current().profile} readOnly={props.disabled} error={props.problem(`${props.at}.profile`)}
-                onChange={(value: string) => props.onChange({ kind: current().kind, profile: value })} />
-            }>
-              <Select size="sm" label={t('server-automation.backup-profile')} value={current().profile} disabled={props.disabled} error={props.problem(`${props.at}.profile`)}
+              <Select size="sm" label={t('server-automation.backup-profile')} value={current().profile} disabled={props.disabled || !props.profiles.length} description={!props.profiles.length ? t('server-automation.no-backup-profiles') : undefined} error={props.problem(`${props.at}.profile`)}
                 options={profileOptions(props.profiles, current().profile)} onChange={(value: string) => props.onChange({ kind: current().kind, profile: value })} />
-            </Show>
           </div>
         )}
       </Show>

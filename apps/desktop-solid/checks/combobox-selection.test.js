@@ -2,12 +2,12 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { transform } from '@solidjs/compiler';
 
 // Exercise the real wrapper and installed Kobalte state, replacing only DOM children.
 async function harness() {
-  const app = new URL('../', import.meta.url).pathname;
+  const app = fileURLToPath(new URL('../', import.meta.url)).replaceAll('\\', '/');
   const directory = await mkdtemp(join(tmpdir(), 'vesta-combobox-'));
   try {
     const entry = join(directory, 'fixture.tsx');
@@ -41,18 +41,18 @@ async function harness() {
           export const probe = {};
           export function Probe() {probe.current = useComboboxContext(); return null;}
         ` }));
-        build.onLoad({filter: /ui\/components\/combobox\/combobox.tsx$/}, async ({path}) => {
+        build.onLoad({filter: /ui[\\/]components[\\/]combobox[\\/]combobox.tsx$/}, async ({path}) => {
           let source = await readFile(path, 'utf8');
           source = source.replace(/      <Show when=\{label\(\)\}>[\s\S]*    <\/KobalteCombobox>/, '      <Probe />\n    </KobalteCombobox>');
           source = source.replace(/      itemComponent=\{[\s\S]*?    >/, '    >');
           source = `import {Probe} from 'probe';\n` + source;
           return {loader:'ts', contents:transform(source, {filename:path, generate:'dom', dev:true}).code};
         });
-        build.onLoad({filter:/ui\/internal\/icons.tsx$/}, () => ({loader:'js',contents:'export const CheckGlyph = () => null, ChevronDownGlyph = () => null;'}));
-        build.onLoad({filter:/components\/overlay\/mount.tsx?$/}, () => ({loader:'js',contents:'export const useOverlayMount = () => undefined;'}));
+        build.onLoad({filter:/ui[\\/]internal[\\/]icons.tsx$/}, () => ({loader:'js',contents:'export const CheckGlyph = () => null, ChevronDownGlyph = () => null;'}));
+        build.onLoad({filter:/components[\\/]overlay[\\/]mount.tsx?$/}, () => ({loader:'js',contents:'export const useOverlayMount = () => undefined;'}));
         build.onLoad({filter:/\.css$/}, () => ({loader:'js',contents:''}));
-        build.onLoad({filter:/polymorphic\/index\.js$/}, () => ({loader:'js',contents:`import {children} from '${app}node_modules/solid-js/dist/solid.dev.js'; export const Polymorphic = props => children(() => props.children);`}));
-        build.onLoad({filter:/@solid-primitives\/platform\/dist\/index\.js$/}, () => ({loader:'js',contents:'export const isWebKit=false,isAppleDevice=false,isMac=false,isIOS=false,isAndroid=false,isFirefox=false,isSafari=false;'}));
+        build.onLoad({filter:/polymorphic[\\/]index\.js$/}, () => ({loader:'js',contents:`import {children} from '${app}node_modules/solid-js/dist/solid.dev.js'; export const Polymorphic = props => children(() => props.children);`}));
+        build.onLoad({filter:/@solid-primitives[\\/]platform[\\/]dist[\\/]index\.js$/}, () => ({loader:'js',contents:'export const isWebKit=false,isAppleDevice=false,isMac=false,isIOS=false,isAndroid=false,isFirefox=false,isSafari=false;'}));
       }}]});
     if (!built.success) throw new AggregateError(built.logs, 'Combobox state harness failed');
     const output = join(directory, 'fixture.mjs'); await Bun.write(output, built.outputs[0]);

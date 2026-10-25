@@ -36,7 +36,9 @@ export function sleepBlockerCopy(
   observedAtMs: number | null = null,
   nowMs = observedAtMs ?? 0,
 ): SleepCopy | null {
+  if (lifecycle === 'offline' || lifecycle === 'stopping' || lifecycle === 'crash_loop' || lifecycle === 'recovery_required') return null;
   if (lifecycle === 'sleeping') return { message: 'servers.sleep-blocker.asleep', kind: 'asleep' };
+  if (blocker?.reason === 'not_ready' && lifecycle !== 'starting') return null;
   if (!blocker || blocker.reason === 'disabled' || blocker.reason === 'players_online') return null;
   if (blocker.reason === 'counting_down' || blocker.reason === 'warning_sent') {
     const seconds = remainingSeconds(blocker.remainingSeconds, observedAtMs, nowMs);
