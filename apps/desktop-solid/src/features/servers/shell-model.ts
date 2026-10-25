@@ -2,6 +2,7 @@
 // how old URLs map onto them, when a pane needs a live agent, which errors the header
 // already explains, and the one notice the header strip shows.
 import type { MessageId } from '../../localization/messages';
+import { backupsTabVisible } from './backup-setup-model';
 import { anyVisible, gate, roleKey } from './capabilities';
 import { connectionFact, lifecycleControls, readinessReasonMessage, supervisorWarnings } from './model';
 import type { ServerErrorCode, ServerSnapshot } from './native';
@@ -31,7 +32,7 @@ export const mainTabs: readonly ShellTab<MainTabId>[] = [
   { id: 'console', label: 'servers.tab.console', icon: 'icons/content/terminal', needs: ['console.read'], live: true },
   { id: 'files', label: 'server-files.tab', icon: 'icons/content/folder', needs: ['files.list'], live: true },
   { id: 'automation', label: 'servers.tab.automation', icon: 'icons/content/timer', needs: ['automation.view'], live: true },
-  { id: 'backups', label: 'servers.tab.backups', icon: 'icons/content/storage', needs: ['backups.view'], live: true },
+  { id: 'backups', label: 'servers.tab.backups', icon: 'icons/content/storage', needs: ['backups.view', 'backups.configure'], live: true },
   { id: 'activity', label: 'servers.tab.activity', icon: 'icons/content/history', needs: ['tasks.view'], live: true },
 ];
 
@@ -95,7 +96,7 @@ export function serverPath(id: string, location: ServerLocation): string {
   return location.tab === 'overview' ? `/servers/${id}` : `/servers/${id}/${location.tab}`;
 }
 
-/** True when the backups tab belongs in the nav: the server has at least one backup profile. */
+/** Whether the server has at least one backup profile; undefined while unknown. */
 export type BackupsConfigured = boolean | undefined;
 
 export interface VisibleTabsInput {
@@ -109,7 +110,8 @@ export interface VisibleTabsInput {
 export function visibleMainTabs(input: VisibleTabsInput): ShellTab<MainTabId>[] {
   return mainTabs.filter((tab) => {
     if (tab.needs.length && !anyVisible(input.snapshot.capabilities, tab.needs)) return false;
-    if (tab.id === 'backups') return input.backupsConfigured === true || (input.backupsConfigured === undefined && input.requested === 'backups');
+    // Shown once set up, or while this user could set it up (owners and administrators).
+    if (tab.id === 'backups') return backupsTabVisible(input.backupsConfigured, gate(input.snapshot.capabilities, 'backups.configure') !== 'denied', input.requested === 'backups');
     return true;
   });
 }

@@ -40,8 +40,11 @@ function nativeApi(): ServersApi {
   };
 }
 
+/** Preview only: `localStorage['vesta.fixtures.backups'] = 'off'` starts the owner server without backups. */
+const fixtureOptions = () => (globalThis.localStorage?.getItem('vesta.fixtures.backups') === 'off' ? { backupsConfigured: false } : {});
+
 let fixtureApi: Promise<ServersApi> | undefined;
-const fixtures = () => (fixtureApi ??= import('./fixtures').then((module) => module.createFixtureServers()));
+const fixtures = () => (fixtureApi ??= import('./fixtures').then((module) => module.createFixtureServers(fixtureOptions())));
 
 const native = nativeServers ? nativeApi() : undefined;
 
