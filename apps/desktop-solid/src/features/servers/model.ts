@@ -113,41 +113,61 @@ export interface LifecycleControls {
   /** Primary action button, or null when nothing applies. */
   primary: LifecycleAction | null;
   restart: boolean;
-  /** Stop remains available in the menu when Sleep is primary. */
-  stop?: boolean;
+  /** Stop offered in the overflow menu because the primary is Sleep or Wake. */
+  stop: boolean;
+  /** A start or wake the server is working through; the header shows it as progress. */
+  progress: 'starting' | 'waking' | null;
   /** Reason the controls are unavailable, if they are. */
   blocked: MessageId | null;
 }
 
-/** Start when stopped; Stop when running; Force kill replaces Stop while stopping. */
+const NONE = { restart: false, stop: false, progress: null } as const;
+
+/**
+ * The AMP model: Sleep is primary while running when the agent can answer for a sleeping
+ * server (Stop moves to the menu); a sleeping server Wakes, a stopped one Starts. Force
+ * kill replaces the primary while a stop hangs. Starting and waking show as progress.
+ */
 export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
   const caps = snapshot.capabilities;
-  if (snapshot.state.phase !== 'online') return { primary: null, restart: false, blocked: 'servers.lifecycle.offline' };
-  if (snapshot.state.access !== 'paired') return { primary: null, restart: false, blocked: 'servers.lifecycle.no-access' };
+  if (snapshot.state.phase !== 'online') return { ...NONE, primary: null, blocked: 'servers.lifecycle.offline' };
+  if (snapshot.state.access !== 'paired') return { ...NONE, primary: null, blocked: 'servers.lifecycle.no-access' };
   const status = snapshot.status;
-  if (!status) return { primary: null, restart: false, blocked: 'servers.lifecycle.unknown-state' };
+  if (!status) return { ...NONE, primary: null, blocked: 'servers.lifecycle.unknown-state' };
   if (status.lifecycle === 'crash_loop' || status.lifecycle === 'recovery_required') {
-    return { primary: null, restart: false, blocked: 'servers.lifecycle.needs-attention' };
+    return { ...NONE, primary: null, blocked: 'servers.lifecycle.needs-attention' };
   }
   const can = (capability: string) => gate(caps, capability) !== 'denied';
+  const progress = status.lifecycle === 'waking' ? 'waking' : status.lifecycle === 'starting' ? 'starting' : null;
   if (status.state === 'stopped') {
-    return { stop: status.lifecycle === 'sleeping' && can('lifecycle.stop'), primary: can('lifecycle.start') ? (status.lifecycle === 'sleeping' ? 'wake' : 'start') : null, restart: false, blocked: can('lifecycle.start') ? null : 'servers.lifecycle.not-allowed' };
+    // Waking or starting before the process exists: nothing to press yet.
+    if (progress) return { ...NONE, primary: null, progress, blocked: null };
+    const start = can('lifecycle.start');
+    if (status.lifecycle === 'sleeping') {
+      return { ...NONE, primary: start ? 'wake' : null, stop: can('lifecycle.stop'), blocked: start ? null : 'servers.lifecycle.not-allowed' };
+    }
+    return { ...NONE, primary: start ? 'start' : null, blocked: start ? null : 'servers.lifecycle.not-allowed' };
   }
   if (status.state === 'stopping' || status.state === 'draining') {
     const kill = can('lifecycle.force_kill') && status.generation !== null;
-    return { primary: kill ? 'kill' : null, restart: false, blocked: kill ? null : 'servers.lifecycle.stopping' };
+    return { ...NONE, primary: kill ? 'kill' : null, blocked: kill ? null : 'servers.lifecycle.stopping' };
   }
   const stop = can('lifecycle.stop') && status.generation !== null;
+  // Still coming up: Stop cancels it; sleeping or restarting a half-started game helps nobody.
+  const coming = progress ?? (status.readiness === 'ready' || status.readiness === 'degraded' ? null : 'starting');
+  if (coming) return { ...NONE, primary: stop ? 'stop' : null, progress: coming, blocked: stop ? null : 'servers.lifecycle.not-allowed' };
+  const sleep = stop && status.sleepAvailable === true;
   return {
-    primary: stop ? (status.sleepAvailable ? 'sleep' : 'stop') : null,
-    stop,
+    primary: stop ? (sleep ? 'sleep' : 'stop') : null,
+    stop: sleep,
     restart: can('lifecycle.restart') && status.generation !== null,
+    progress: null,
     blocked: stop ? null : 'servers.lifecycle.not-allowed',
   };
 }
 
 /** Small status dot for the rail and server list. */
-export type Dot = 'online' | 'starting' | 'stopped' | 'problem' | 'offline';
+export type Dot = 'online' | 'starting' | 'sleeping' | 'stopped' | 'problem' | 'offline';
 
 export function statusDot(snapshot: ServerSnapshot): Dot {
   if (snapshot.state.access === 'fingerprint_changed' || snapshot.state.access === 'credentials_rejected') return 'problem';
@@ -155,6 +175,7 @@ export function statusDot(snapshot: ServerSnapshot): Dot {
   const fact = minecraftFact(snapshot.status);
   if (fact.tone === 'danger' || fact.tone === 'warning') return 'problem';
   if (fact.message === 'servers.minecraft.ready') return 'online';
+  if (fact.message === 'servers.minecraft.sleeping') return 'sleeping';
   if (fact.message === 'servers.minecraft.starting' || fact.message === 'servers.minecraft.waking') return 'starting';
   return 'stopped';
 }
