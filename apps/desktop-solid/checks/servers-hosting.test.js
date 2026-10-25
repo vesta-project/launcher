@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { createFixtureServers } from '../src/features/servers/fixtures';
 import {
-  bindProblem, gameStopped, hasOwnKey, hostOf, isExactSeed, jobActive, jobPollDelay, launchSummary, mayOwn, portProblem,
-  publicKeyProblem, reasonMessage, seedProblem, sftpLoopbackOnly, warningCopy, worldConfirmed,
+  bindProblem, gameStopped, hasOwnKey, hostOf, jobActive, jobPollDelay, launchSummary, mayOwn, portProblem,
+  publicKeyProblem, reasonMessage, sftpLoopbackOnly, warningCopy,
 } from '../src/features/servers/hosting-model';
 import { visibleSections } from '../src/features/servers/shell-model';
 
@@ -17,20 +17,7 @@ async function stoppedOwner() {
   return servers;
 }
 
-describe('[world] seeds and confirmation', () => {
-  test('seeds keep 64-bit precision as strings; blank means random', () => {
-    expect(isExactSeed('-4172144997902289642')).toBe(true);
-    expect(isExactSeed('9223372036854775807')).toBe(true);
-    expect(isExactSeed('9223372036854775808')).toBe(false);
-    expect(isExactSeed('glacier')).toBe(false);
-    expect(seedProblem('')).toBeNull();
-    expect(seedProblem('a\nb')).toBe('server-hosting.seed-invalid');
-  });
-  test('replacement needs the exact world name, untrimmed and case-sensitive', () => {
-    expect(worldConfirmed('world', 'world')).toBe(true);
-    expect(worldConfirmed('World', 'world')).toBe(false);
-    expect(worldConfirmed('world ', 'world')).toBe(false);
-  });
+describe('[world] one world, no creation', () => {
   test('world details expose dimensions and datapacks without a world creation command', async () => {
     const servers = createFixtureServers({ latencyMs: 0 }); const world = await servers.world('fixture-survival');
     expect(servers.worldNew).toBeUndefined(); expect(world.sizeComplete).toBe(true);

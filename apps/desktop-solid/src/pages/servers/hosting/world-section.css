@@ -1,0 +1,262 @@
+/*
+ * World page: the one world as a hero card (art, name, seed, stats), its dimensions and datapacks.
+ * Hooks: [data-vesta=server-world-hero|-hero-main|-hero-copy|-art|-stats|-stat|-seed|-seed-label|-seed-row|
+ *        -seed-value|-seed-pending|-seed-hint|-dimensions|-dimension|-dimension-swatch|-note|-packs|-pack|
+ *        -pack-icon|-pack-copy|-pack-state|-pack-switch|-pack-feedback|-pack-spinner]
+ * States: seed-value: data-masked; dimension: data-dimension=<id>, data-present; pack: data-state, data-kind;
+ *         pack-feedback: data-step=sending|sent|done|failed
+ */
+@layer launcher {
+  /* ---- Hero ---- */
+  :where([data-vesta="server-world-hero"]) {
+    position: relative;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    isolation: isolate;
+  }
+  /* The world's art, blurred and faded behind the identity strip, like an instance header. */
+  :where([data-vesta="server-world-hero"])::before {
+    position: absolute;
+    z-index: -1;
+    inset: -24px -24px auto;
+    block-size: 180px;
+    background: var(--world-art) center / cover;
+    content: "";
+    filter: blur(28px) saturate(1.2);
+    mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.55), transparent);
+    opacity: 0.7;
+  }
+  :where([data-vesta="server-world-hero-main"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-4);
+    padding: var(--vesta-space-4);
+  }
+  :where([data-vesta="server-world-art"]) {
+    flex: none;
+    inline-size: 88px;
+    block-size: 66px;
+    border-radius: 8px;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px var(--vesta-color-border-strong), 0 6px 18px rgb(0 0 0 / 0.25);
+    image-rendering: pixelated;
+  }
+  :where([data-vesta="server-world-hero-copy"]) { display: flex; flex: 1; flex-direction: column; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="server-world-hero-copy"]) h2 {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--vesta-text-xl, 1.25rem);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---- Seed ---- */
+  :where([data-vesta="server-world-seed"]) {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+  :where([data-vesta="server-world-seed-label"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="server-world-seed-row"]) { display: flex; align-items: center; gap: var(--vesta-space-1); }
+  :where([data-vesta="server-world-seed-value"]) {
+    display: inline-flex;
+    align-items: center;
+    min-inline-size: 22ch;
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-sm);
+    background: color-mix(in oklab, var(--vesta-color-surface) 70%, transparent);
+    color: var(--vesta-color-text);
+    font: inherit;
+    cursor: default;
+  }
+  :where([data-vesta="server-world-seed-value"]) code {
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-world-seed-value"][data-masked]) code {
+    color: var(--vesta-color-text-muted);
+    letter-spacing: 0.08em;
+  }
+  :where([data-vesta="server-world-seed-value"]:focus-visible) {
+    outline: 2px solid var(--vesta-color-accent);
+    outline-offset: 1px;
+  }
+  :where([data-vesta="server-world-seed-pending"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-world-seed-hint"]) { min-block-size: 1.2em; color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted)); font-size: var(--vesta-text-xs); }
+
+  /* ---- Stats strip ---- */
+  :where([data-vesta="server-world-stats"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    margin: 0;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: color-mix(in oklab, var(--vesta-color-surface) 40%, transparent);
+  }
+  :where([data-vesta="server-world-stat"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+  }
+  :where([data-vesta="server-world-stat"]) + :where([data-vesta="server-world-stat"]) {
+    border-inline-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="server-world-stat"]) dt { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-world-stat"]) dd {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+  :where([data-vesta="server-world-stat"]) small {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: normal;
+  }
+
+  /* ---- Dimensions ---- */
+  :where([data-vesta="server-world-dimensions"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
+    list-style: none;
+  }
+  :where([data-vesta="server-world-dimension"]) {
+    --dimension-a: #6fae4a;
+    --dimension-b: #7a5a3a;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md, 8px);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--dimension-a) 10%, transparent), transparent 70%);
+  }
+  :where([data-vesta="server-world-dimension"][data-dimension="nether"]) { --dimension-a: #c2453a; --dimension-b: #5a1d1d; }
+  :where([data-vesta="server-world-dimension"][data-dimension="end"]) { --dimension-a: #dcd89a; --dimension-b: #6d4f8f; }
+  :where([data-vesta="server-world-dimension"]:not([data-present])) { background: none; opacity: 0.7; }
+  /* A two-block swatch: top block and the block beneath it, as each dimension looks. */
+  :where([data-vesta="server-world-dimension-swatch"]) {
+    flex: none;
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: 6px;
+    background: linear-gradient(to bottom, var(--dimension-a) 0 38%, var(--dimension-b) 38% 100%);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+  }
+  :where([data-vesta="server-world-dimension"]:not([data-present])) :where([data-vesta="server-world-dimension-swatch"]) { filter: grayscale(1); opacity: 0.6; }
+  :where([data-vesta="server-world-dimension"]) > div { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="server-world-dimension"]) strong { font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta="server-world-dimension"]) span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-world-dimension"]) code {
+    overflow: hidden;
+    color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted));
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-world-note"]) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-1-5, 6px);
+    margin: 0;
+    padding: 0 var(--vesta-space-4) var(--vesta-space-3);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    line-height: 1.45;
+  }
+  :where([data-vesta="server-world-note"]) > :first-child { flex: none; margin-block-start: 2px; }
+
+  /* ---- Datapacks ---- */
+  :where([data-vesta="server-world-packs"]) { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="server-world-pack"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 52px;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="server-world-pack"][data-state="missing"]) { opacity: 0.75; }
+  :where([data-vesta="server-world-pack-icon"]) {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="server-world-pack"][data-state="enabled"]) :where([data-vesta="server-world-pack-icon"]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+    color: var(--vesta-color-accent-text, var(--vesta-color-accent));
+  }
+  :where([data-vesta="server-world-pack-copy"]) { display: flex; flex: 1; flex-direction: column; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="server-world-pack-copy"]) > span { display: flex; align-items: center; gap: var(--vesta-space-1-5, 6px); min-inline-size: 0; }
+  :where([data-vesta="server-world-pack-copy"]) strong {
+    overflow: hidden;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-world-pack-copy"]) code {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-world-pack-state"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-world-pack-switch"]) { display: inline-flex; }
+  :where([data-vesta="server-world-pack-feedback"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5, 6px);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="server-world-pack-feedback"][data-step="done"]) { color: var(--vesta-color-success-text, var(--vesta-color-accent-text)); }
+  :where([data-vesta="server-world-pack-feedback"][data-step="failed"]) { color: var(--vesta-color-danger-text); }
+  :where([data-vesta="server-world-pack-spinner"]) {
+    inline-size: 10px;
+    block-size: 10px;
+    border: 2px solid currentColor;
+    border-block-start-color: transparent;
+    border-radius: 50%;
+    animation: server-world-spin 0.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="server-world-pack-spinner"]) { animation: none; }
+  }
+  :where([data-vesta="settings-panel"][data-server-panel="world-datapacks"]) > :where([data-vesta="server-world-note"]) { padding-block-end: var(--vesta-space-2); }
+}
+
+@keyframes server-world-spin { to { transform: rotate(360deg); } }
