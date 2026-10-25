@@ -598,3 +598,22 @@
   /* The header sits on the art banner in both schemes, so it keeps the light crescent. */
   :where([data-server-header] [data-vesta="server-dot"][data-dot="sleeping"]) { --dot: oklch(0.82 0.08 275); }
 }
+@layer launcher {
+  /* Sleep & status: the live reason sleep hasn't happened yet, under its toggle. */
+  :where([data-vesta="server-sleep-now"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0 var(--vesta-space-4) var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-sleep-now"]) > [data-vesta="icon"] { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-sleep-now"][data-kind="asleep"]) > [data-vesta="icon"],
+  :where([data-vesta="server-sleep-now"][data-kind="counting"]) > [data-vesta="icon"] { color: var(--server-sleep-tone); }
+  :where([data-vesta="server-sleep-now-label"]) { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-sleep-now-label"])::after { content: " ·"; }
+}

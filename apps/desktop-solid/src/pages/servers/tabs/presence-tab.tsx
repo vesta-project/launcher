@@ -9,11 +9,13 @@ import { newIntentId } from '../../../features/servers/model';
 import { motdProblems, type MotdProblem } from '../../../features/servers/motd-model';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
 import { motdPolicyResource, sleepPolicyResource } from '../../../features/servers/server-resources';
-import { serverCommand } from '../../../features/servers/store';
+import { serverCommand, useServersClock } from '../../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import {
   PRESENCE_STATES, SLEEP_BOUNDS, type MotdDocument, type MotdPreview as AgentPreview, type PresenceState, type SleepPolicy, type StatePresentation,
 } from '../../../features/servers/native-presence';
+import { AGENT_START_CHOICES, agentStartAllowed, agentStartChoice, sleepBlockerCopy, type AgentStartChoice } from '../../../features/servers/sleep-model';
+import { Icon } from '../../../components/icon';
 import { MotdEditor } from '../motd-editor';
 import { ServerErrorNote } from '../parts';
 import { SaveBar, SectionLink, SettingsPage, SettingsPanel } from '../settings-parts';
@@ -29,6 +31,10 @@ const problemMessages: Record<MotdProblem, MessageId> = {
   'too-long': 'servers.presence.problem-length',
   'unknown-placeholder': 'servers.presence.problem-placeholder',
   'unclosed-placeholder': 'servers.presence.problem-unclosed',
+};
+
+const agentStartLabels: Record<AgentStartChoice, MessageId> = {
+  stay_stopped: 'servers.presence.agent-start-stay-stopped', sleep: 'servers.presence.agent-start-sleep', start: 'servers.presence.agent-start-start',
 };
 
 const sameJson = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
@@ -116,6 +122,15 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
     pack_version: props.snapshot.info?.packVersion ?? '', maintenance_reason: t('servers.presence.sample-reason'),
   });
   const minutes = () => Math.round((policy()?.idleSeconds ?? 0) / 60);
+  const now = useServersClock();
+  /** The live reason an enabled timer isn't sleeping yet, for the saved policy only. */
+  const sleepNow = () => {
+    const saved = sleep.value();
+    if (!saved?.policy.enabled || !policy()?.enabled) return null;
+    const status = props.snapshot.status;
+    return sleepBlockerCopy(status?.sleepBlocker ?? saved.sleepBlocker, status?.lifecycle ?? undefined, props.snapshot.statusObservedAtMs, now());
+  };
+  const agentStart = () => agentStartChoice(policy(), props.snapshot.status);
 
   return (
     <SettingsPage saveBar={
@@ -132,6 +147,15 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
               </SettingRow>
               <Show when={current().enabled}>
                 <div data-vesta="settings-reveal">
+                  <Show when={sleepNow()}>
+                    {(copy) => (
+                      <p data-vesta="server-sleep-now" data-kind={copy().kind} role="status">
+                        <Icon name={copy().kind === 'asleep' ? 'icons/status/moon' : copy().kind === 'counting' ? 'icons/content/timer' : 'icons/status/info'} size={14} />
+                        <span data-vesta="server-sleep-now-label">{t('servers.presence.sleep-now')}</span>
+                        <span>{t(copy().message, copy().args)}</span>
+                      </p>
+                    )}
+                  </Show>
                   <SettingRow label={t('servers.presence.idle')} description={t('servers.presence.idle-help')}>
                     <NumberField size="sm" aria-label={t('servers.presence.idle')} disabled={!canEdit()} value={minutes()} min={1} max={SLEEP_BOUNDS.idleSeconds[1] / 60}
                       onChange={(value: number) => patchSleep({ idleSeconds: Math.round(value) * 60 })} />
@@ -144,7 +168,11 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
               </Show>
               <SettingRow label={t('servers.presence.offline-status')} description={t('servers.presence.offline-status-help')}>
                 <Toggle size="sm" aria-label={t('servers.presence.offline-status')} disabled={!canEdit()} checked={current().offlineStatus}
-                  onChange={(value: boolean) => patchSleep({ offlineStatus: value, wakeOnJoin: value && current().wakeOnJoin })} />
+                  onChange={(value: boolean) => patchSleep({
+                    offlineStatus: value, wakeOnJoin: value && current().wakeOnJoin,
+                    // The agent refuses to sleep at startup without the responder.
+                    ...(value || agentStart() !== 'sleep' ? {} : { onAgentStart: 'stay_stopped' as const }),
+                  })} />
               </SettingRow>
               <SettingRow label={t('servers.presence.wake')} description={current().offlineStatus ? t('servers.presence.wake-help') : t('servers.presence.wake-needs')}>
                 <Toggle size="sm" aria-label={t('servers.presence.wake')} disabled={!canEdit() || !current().offlineStatus} checked={current().wakeOnJoin}
@@ -159,6 +187,12 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
                   </SettingRow>
                 </div>
               </Show>
+              <SettingRow label={t('servers.presence.agent-start')}
+                description={current().offlineStatus ? t('servers.presence.agent-start-help') : `${t('servers.presence.agent-start-help')} ${t('servers.presence.agent-start-sleep-needs')}`}>
+                <Select size="sm" aria-label={t('servers.presence.agent-start')} disabled={!canEdit()} value={agentStart()}
+                  onChange={(value) => { if (value !== agentStart()) patchSleep({ onAgentStart: value as AgentStartChoice }); }}
+                  options={AGENT_START_CHOICES.map((choice) => ({ value: choice, label: t(agentStartLabels[choice]), disabled: !agentStartAllowed(choice, current()) }))} />
+              </SettingRow>
             </div>
           )}
         </Show>
