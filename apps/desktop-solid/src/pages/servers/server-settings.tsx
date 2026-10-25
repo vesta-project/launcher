@@ -15,6 +15,7 @@ import { PlayerManager } from './tabs/players-tab';
 import { PresenceTab } from './tabs/presence-tab';
 import { PropertiesTab } from './tabs/properties-tab';
 import { ServerProfilePanel } from './tabs/server-profile';
+import { SftpSection } from './hosting/sftp';
 import { SoftwareSection } from './hosting/software-section';
 import { WorldSection } from './hosting/world-section';
 import '../library/instance/settings-tab.css';
@@ -25,6 +26,7 @@ const views: Record<SettingsSectionId, { view: Component<{ snapshot: ServerSnaps
   game: { view: PropertiesTab, flush: true },
   world: { view: WorldSection, flush: true },
   software: { view: SoftwareSection, flush: true },
+  sftp: { view: SftpSection, flush: true },
   presence: { view: PresenceTab, flush: true },
   players: { view: PlayerManager, flush: true },
   access: { view: AccessTab, flush: true },

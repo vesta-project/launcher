@@ -1,6 +1,6 @@
 /*
  * World, software and SFTP surfaces. Built on the server settings panels and callouts.
- * Hooks: [data-vesta=server-hosting-form|hint|review|warnings|job|block|details|keys|actions|server-sftp-button]
+ * Hooks: [data-vesta=server-hosting-form|hint|review|warnings|job|keys|actions|server-sftp-link|server-sftp-key-add]
  */
 @layer launcher {
   :where([data-vesta="server-hosting-form"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); min-inline-size: 0; }
@@ -30,18 +30,17 @@
 
   :where([data-vesta="server-hosting-job"]) { padding: 0 var(--vesta-space-4) var(--vesta-space-3); }
 
-  :where([data-vesta="server-hosting-block"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
-  :where([data-vesta="server-hosting-block"]) h4 { margin: 0; font-size: var(--vesta-text-sm); font-weight: 600; }
-  :where([data-vesta="server-hosting-block"]) + :where([data-vesta="server-hosting-block"]),
-  :where([data-vesta="server-hosting-details"]) + :where([data-vesta="server-hosting-block"]) {
-    padding-block-start: var(--vesta-space-3);
-    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
-  }
   :where([data-vesta="server-hosting-form"]) :where([data-vesta="setting-row"]) { padding-inline: 0; }
   :where([data-vesta="server-hosting-actions"]) { display: flex; align-items: center; justify-content: flex-end; gap: var(--vesta-space-2); }
   :where([data-vesta="server-hosting-actions"]) > :where([data-vesta="field"]) { flex: 1; }
 
-  :where([data-vesta="server-hosting-keys"]) { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="server-hosting-keys"]) { display: flex; flex-direction: column; margin: 0; padding: 0 var(--vesta-space-4); list-style: none; }
+  :where([data-vesta="server-hosting-keys"]) li + li { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="server-sftp-key-add"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-4); }
+  :where([data-vesta="settings-panel-body"]) > :where([data-vesta="server-hosting-actions"]) { padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-3); }
+  :where([data-vesta="server-sftp-link"]) { display: flex; padding: var(--vesta-space-2) var(--vesta-space-3); border: var(--vesta-border-width) solid var(--vesta-color-border); border-radius: var(--vesta-radius-control, 6px); background: var(--vesta-color-surface-sunken, transparent); }
+  :where([data-vesta="server-sftp-link"]) :where([data-vesta="server-copy-value"]) { flex: 1; justify-content: space-between; }
+  :where([data-vesta="server-sftp-link"]) code { overflow-wrap: anywhere; white-space: normal; }
   :where([data-vesta="server-hosting-keys"]) li {
     display: flex;
     align-items: center;
@@ -57,7 +56,6 @@
     white-space: nowrap;
   }
 
-  :where([data-vesta="server-sftp-button"]) { display: inline-flex; align-items: center; gap: 2px; }
 }
 
 /*

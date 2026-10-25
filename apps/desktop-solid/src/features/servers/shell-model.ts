@@ -7,7 +7,7 @@ import { connectionFact, lifecycleControls, readinessReasonMessage, supervisorWa
 import type { ServerErrorCode, ServerSnapshot } from './native';
 
 export type MainTabId = 'overview' | 'console' | 'files' | 'automation' | 'backups' | 'activity';
-export type SettingsSectionId = 'general' | 'game' | 'world' | 'software' | 'presence' | 'players' | 'access' | 'connection';
+export type SettingsSectionId = 'general' | 'game' | 'world' | 'software' | 'sftp' | 'presence' | 'players' | 'access' | 'connection';
 export type SettingsGroupId = 'server' | 'people' | 'device';
 
 export interface ShellTab<Id extends string = string> {
@@ -42,6 +42,7 @@ export const settingsSections: readonly ShellSection[] = [
   { id: 'game', group: 'server', label: 'servers.settings.game', icon: 'icons/content/sliders', needs: ['config.view'], live: true },
   { id: 'world', group: 'server', label: 'server-hosting.world', icon: 'icons/content/globe', needs: ['config.view'], live: true },
   { id: 'software', group: 'server', label: 'server-hosting.software', icon: 'icons/content/cube', needs: ['content.install'], live: true, owner: true },
+  { id: 'sftp', group: 'server', label: 'server-hosting.sftp', icon: 'icons/security/folder-lock', needs: ['config.view'], live: true },
   { id: 'presence', group: 'server', label: 'servers.tab.presence', icon: 'icons/status/live', needs: ['config.view'], live: true },
   { id: 'players', group: 'people', label: 'servers.tab.players', icon: 'icons/content/people', needs: ['players.view'], live: true },
   { id: 'access', group: 'people', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ACCESS_NEEDS, live: true },

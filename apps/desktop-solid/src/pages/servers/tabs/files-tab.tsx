@@ -237,7 +237,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
             <Button size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-back" />} onClick={() => setView('browse')}>{t('server-files.back-to-files')}</Button>
           }>
             <Show when={gate(props.snapshot.capabilities, 'config.view') !== 'denied'}>
-              <SftpButton snapshot={props.snapshot} />
+              <SftpButton snapshot={props.snapshot} path={directory()} />
             </Show>
             <Show when={folder().trash}>
               <IconButton size="sm" variant="ghost" icon={<Icon name="icons/actions/delete" />} label={t('server-files.trash')} onClick={() => setView('trash')} />
