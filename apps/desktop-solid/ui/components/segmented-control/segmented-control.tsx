@@ -76,7 +76,6 @@ export function SegmentedControl(props: SegmentedControlProps) {
         aria-label={props['aria-label']}
         aria-labelledby={label() ? labelId : undefined}
       >
-        <KobalteSegmentedControl.Indicator data-vesta="segmented-thumb" />
         <For each={props.options}>
           {(option) => {
             const icon = children(() => option.icon);
@@ -88,6 +87,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
                 // Icon-only items still name themselves on hover.
                 data-tip={props.iconOnly ? option.label : undefined}
               >
+                <span data-vesta="segmented-thumb" aria-hidden="true" />
                 <KobalteSegmentedControl.ItemInput />
                 <Show when={icon()}>
                   <span data-vesta="segmented-icon" aria-hidden="true">

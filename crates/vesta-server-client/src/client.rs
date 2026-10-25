@@ -165,12 +165,52 @@ impl Client {
         code: &str,
         signer: &dyn DeviceSigner,
     ) -> Result<Enrollment> {
+        Self::pair_named(transport, server_id, code, signer, "Vesta Launcher").await
+    }
+    /// Enroll with the caller's bounded human-readable device name.
+    pub async fn pair_named(
+        transport: &Arc<Transport>,
+        server_id: &str,
+        code: &str,
+        signer: &dyn DeviceSigner,
+        device_name: &str,
+    ) -> Result<Enrollment> {
+        if device_name.trim().is_empty()
+            || device_name.len() > 64
+            || device_name.chars().any(char::is_control)
+        {
+            return Err(Error::new(ErrorCode::InvalidInput));
+        }
         if code.is_empty() || code.len() > 256 {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
-        let value = transport.request(Method::POST, "/api/v3/manage/pair", None, Some(json!({"code":code,"device_name":"Vesta Launcher","public_key":signer.public_key()})), None, true).await.map_err(|e| {
-            if matches!(e.code, ErrorCode::Timeout | ErrorCode::Unreachable | ErrorCode::OutcomeUnknown | ErrorCode::Unsupported) { Error::new(ErrorCode::PairOutcomeUnknown) } else if e.code == ErrorCode::CredentialsRejected { Error::new(ErrorCode::PairCodeInvalid) } else { e }
-        })?;
+        let value = transport
+            .request(
+                Method::POST,
+                "/api/v3/manage/pair",
+                None,
+                Some(
+                    json!({"code":code,"device_name":device_name,"public_key":signer.public_key()}),
+                ),
+                None,
+                true,
+            )
+            .await
+            .map_err(|e| {
+                if matches!(
+                    e.code,
+                    ErrorCode::Timeout
+                        | ErrorCode::Unreachable
+                        | ErrorCode::OutcomeUnknown
+                        | ErrorCode::Unsupported
+                ) {
+                    Error::new(ErrorCode::PairOutcomeUnknown)
+                } else if e.code == ErrorCode::CredentialsRejected {
+                    Error::new(ErrorCode::PairCodeInvalid)
+                } else {
+                    e
+                }
+            })?;
         let enrollment: Enrollment =
             serde_json::from_value(value).map_err(|_| Error::new(ErrorCode::PairOutcomeUnknown))?;
         auth::check_identity(server_id, &enrollment.server_id)?;

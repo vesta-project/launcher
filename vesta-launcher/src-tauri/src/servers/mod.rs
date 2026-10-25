@@ -529,7 +529,9 @@ impl ServerManager {
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
         let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
         let contact = self.contacts.lock().await.remove(discovery_id);
-        let e = match Client::pair(&t, &d.server_id, code, s.as_ref()).await {
+        let e = match Client::pair_named(&t, &d.server_id, code, s.as_ref(), &local_device_name())
+            .await
+        {
             Ok(e) => e,
             Err(e) => {
                 if !matches!(
@@ -634,7 +636,7 @@ impl ServerManager {
         }
         let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
         self.contacts.lock().await.remove(discovery_id);
-        let complete = t.request(vesta_server_client::Method::POST,"/api/v3/auth/minecraft/complete",None,Some(json!({"challenge":challenge_id,"device_name":"Vesta Launcher","public_key":s.public_key()})),None,true).await.map_err(|e| if matches!(e.code,ErrorCode::Timeout|ErrorCode::OutcomeUnknown|ErrorCode::Unreachable) { Error::new(ErrorCode::PairOutcomeUnknown) } else {e})?;
+        let complete = t.request(vesta_server_client::Method::POST,"/api/v3/auth/minecraft/complete",None,Some(json!({"challenge":challenge_id,"device_name":local_device_name(),"public_key":s.public_key()})),None,true).await.map_err(|e| if matches!(e.code,ErrorCode::Timeout|ErrorCode::OutcomeUnknown|ErrorCode::Unreachable) { Error::new(ErrorCode::PairOutcomeUnknown) } else {e})?;
         let device = complete["device_id"]
             .as_str()
             .ok_or_else(|| Error::new(ErrorCode::PairOutcomeUnknown))?
@@ -1267,5 +1269,31 @@ impl Drop for ServerManager {
                 t.abort();
             }
         }
+    }
+}
+
+/// Device identity remains the enrolled key; this is only its display label.
+fn local_device_name() -> String {
+    let name = sysinfo::System::host_name().unwrap_or_default();
+    let mut name: String = name
+        .trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(64)
+        .collect();
+    while name.len() > 64 {
+        name.pop();
+    }
+    if name.is_empty() {
+        if cfg!(target_os = "windows") {
+            "Windows computer"
+        } else if cfg!(target_os = "macos") {
+            "Mac"
+        } else {
+            "Linux computer"
+        }
+        .into()
+    } else {
+        name
     }
 }

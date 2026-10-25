@@ -37,14 +37,11 @@ export function sleepBlockerCopy(
   nowMs = observedAtMs ?? 0,
 ): SleepCopy | null {
   if (lifecycle === 'sleeping') return { message: 'servers.sleep-blocker.asleep', kind: 'asleep' };
-  if (!blocker || blocker.reason === 'disabled') return null;
+  if (!blocker || blocker.reason === 'disabled' || blocker.reason === 'players_online') return null;
   if (blocker.reason === 'counting_down' || blocker.reason === 'warning_sent') {
     const seconds = remainingSeconds(blocker.remainingSeconds, observedAtMs, nowMs);
     const minutes = seconds >= 120;
-    const warned = blocker.reason === 'warning_sent';
-    const message: MessageId = warned
-      ? (minutes ? 'servers.sleep-blocker.warned-minutes' : 'servers.sleep-blocker.warned-seconds')
-      : (minutes ? 'servers.sleep-blocker.counting-minutes' : 'servers.sleep-blocker.counting-seconds');
+    const message: MessageId = minutes ? 'servers.sleep-blocker.counting-minutes' : 'servers.sleep-blocker.counting-seconds';
     return { message, args: { count: minutes ? Math.round(seconds / 60) : seconds }, kind: 'counting' };
   }
   return { message: WAITING[blocker.reason], kind: 'waiting' };

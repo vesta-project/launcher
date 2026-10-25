@@ -88,14 +88,24 @@ export function livePoints(samples: readonly MetricsSample[], metric: GraphMetri
 }
 
 /** History for the window, extended by live samples newer than its last row. */
-export function graphPoints(input: { history: MetricsHistory | null | undefined; samples: readonly MetricsSample[]; metric: GraphMetric; range: GraphRange; nowMs: number }): GraphPoint[] {
+export function graphPoints(input: { history: MetricsHistory | null | undefined; samples: readonly MetricsSample[]; metric: GraphMetric; range: GraphRange; nowMs: number; playerObservation?: { atMs: number; count: number } | null }): GraphPoint[] {
   const spec = RANGE_SPEC[input.range];
   const bucketMillis = input.history?.bucketMillis ?? spec.bucketMillis;
   const seeded = input.history ? historyPoints(input.history, input.metric) ?? [] : [];
   const last = seeded.at(-1)?.atMs ?? -Infinity;
   const live = livePoints(input.samples, input.metric, bucketMillis, last);
   const from = input.nowMs - spec.spanMs;
-  return [...seeded, ...live].filter((point) => point.atMs >= from);
+  const points = [...seeded, ...live].filter((point) => point.atMs >= from);
+  const observation = input.metric === 'players' ? input.playerObservation : null;
+  if (observation && Number.isInteger(observation.count) && observation.count >= 0 && observation.atMs >= from
+    && observation.atMs >= (latestKnown(points)?.atMs ?? -Infinity)) {
+    const point = { atMs: observation.atMs, value: observation.count, min: observation.count, max: observation.count };
+    const at = points.findIndex((entry) => entry.atMs >= observation.atMs);
+    if (at < 0) points.push(point);
+    else if (points[at].atMs === observation.atMs) points[at] = point;
+    else points.splice(at, 0, point);
+  }
+  return points;
 }
 
 /** A graph is shown only once the server has reported the metric at least once. */

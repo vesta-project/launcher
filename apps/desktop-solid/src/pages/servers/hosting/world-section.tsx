@@ -15,7 +15,7 @@ import { worldResource } from '../../../features/servers/server-resources';
 import { putOperations, serverCommand, serverOperations, useServersClock } from '../../../features/servers/store';
 import {
   SEED_REVEAL_MS, datapackBlocker, datapackKindMessage, datapackStateMessage, datapackViews, dimensionViews, seedRevealed, seedText,
-  retainDatapackIntent, settleDatapackIntent, splitLayout, toggleFeedback, toggleRejection, worldSize, type DatapackView, type PendingDatapack, type ToggleFeedback,
+  retainDatapackIntent, settleDatapackIntent, toggleFeedback, toggleRejection, worldSize, type DatapackView, type PendingDatapack, type ToggleFeedback,
 } from '../../../features/servers/world-model';
 import { setting } from '../../../features/settings/config';
 import { copyText, SettingsPage, SettingsPanel } from '../settings-parts';
@@ -135,7 +135,7 @@ function SeedValue(props: { seed: string | null; exists: boolean }) {
 function Dimensions(props: { world: ServerWorld }) {
   const views = createMemo(() => dimensionViews(props.world.dimensions), { name: 'server-world:dimensions' });
   return (
-    <SettingsPanel title={t('server-world.dimensions')} description={t('server-world.dimensions-help')} name="world-dimensions">
+    <SettingsPanel title={t('server-world.dimensions')} name="world-dimensions">
       <ul data-vesta="server-world-dimensions">
         <For each={views()} keyed={(view) => view.id}>
           {(view) => (
@@ -152,9 +152,6 @@ function Dimensions(props: { world: ServerWorld }) {
           )}
         </For>
       </ul>
-      <Show when={splitLayout(props.world.dimensions)}>
-        <p data-vesta="server-world-note"><Icon name="icons/status/info" size={13} />{t('server-world.split-note')}</p>
-      </Show>
     </SettingsPanel>
   );
 }

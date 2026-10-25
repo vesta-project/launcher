@@ -32,7 +32,7 @@
     font-size: var(--vesta-text-sm);
     line-height: 1.45;
   }
-  :where([data-vesta="server-panel-head-action"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-2); margin-block: -4px; }
+  :where([data-vesta="server-panel-head-action"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-2); }
   :where([data-vesta="server-panel-foot"]) {
     display: flex;
     flex-wrap: wrap;
@@ -365,4 +365,8 @@
   }
   :where([data-vesta="server-access-devices"]) small { font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-access-devices"]) li[data-revoked] > div > span { color: var(--vesta-color-text-muted); text-decoration: line-through; }
+}
+
+@layer launcher {
+  :where([data-vesta="server-panel-actions"]) { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-2); margin-inline-start: auto; }
 }

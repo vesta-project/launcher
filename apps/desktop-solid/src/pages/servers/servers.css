@@ -604,7 +604,7 @@
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);
-    margin: 0 var(--vesta-space-4) var(--vesta-space-2);
+    margin: 0 var(--vesta-space-4) var(--vesta-space-3);
     padding: var(--vesta-space-2) var(--vesta-space-3);
     border-radius: var(--vesta-radius-md);
     background: var(--vesta-color-fill);
@@ -743,4 +743,10 @@
     font-size: var(--vesta-text-xs);
     font-variant-numeric: tabular-nums;
   }
+}
+
+@layer launcher {
+  :where([data-vesta="server-overview"], [data-vesta="server-graphs"], [data-vesta="server-graph-canvas"]) { min-inline-size: 0; max-inline-size: 100%; }
+  :where([data-vesta="server-graphs-grid"]) { grid-template-columns: repeat(auto-fit, minmax(min(100%, max(280px, calc(50% - var(--vesta-space-3)))), 1fr)); }
+  :where([data-vesta="server-graphs-head"]) { flex-wrap: wrap; }
 }

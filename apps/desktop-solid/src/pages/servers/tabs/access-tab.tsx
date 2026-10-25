@@ -165,8 +165,8 @@ function PersonRow(props: {
                 <Icon name="icons/content/monitor" size={14} />
                 <div>
                   <span>
-                    {device().name}
-                    <Show when={device().current}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.this-device')}</Badge></Show>
+                    {device().current && device().name === 'Vesta Launcher' ? t('servers.access.this-device') : device().name}
+                    <Show when={device().current && device().name !== 'Vesta Launcher'}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.this-device')}</Badge></Show>
                     <Show when={device().revoked}><Badge size="sm" variant="soft" tone="danger">{t('servers.access.revoked')}</Badge></Show>
                   </span>
                   <Show when={device().lastSeenAtMs}>

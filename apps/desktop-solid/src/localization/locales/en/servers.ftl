@@ -531,9 +531,9 @@ servers-presence-version-placeholder = Shown instead of the version, e.g. Sleepi
 servers-presence-max-players = Maximum players shown
 servers-presence-login-message = Message to the player who wakes it
 servers-presence-login-message-help = They're disconnected with this text while Minecraft starts.
-servers-presence-check = Check with server
+servers-presence-check = Preview with server
 servers-presence-checked = This is exactly how the server will show it.
-servers-presence-live-motd-note = Previews use sample values. Check with server for the exact result.
+servers-presence-live-motd-note = Previews use sample values. Preview with server for its current values.
 servers-presence-sample-reason = Updating mods
 
 servers-profile-title = Server profile

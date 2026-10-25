@@ -109,3 +109,15 @@ seven ignored. See `docs/development/server-files-native.md` for native evidence
 This checkpoint completes phases 0-2 implementation and source/fixture checks;
 a live launcher/agent walkthrough remains necessary. Phase 3 machine-host design
 and implementation remain separate, deferred work. Nothing was pushed or deployed.
+
+## Feedback follow-up (2026-10-25)
+
+- Preserve the existing page structure. Remove the redundant software hero; keep job/rollback feedback secondary. Start from the installed selection (including unsupported installed providers), retain the observed Minecraft version for unmanaged installations, and show Discard only for a changed selection.
+- Extend the Players graph with the same authoritative live status count used by the header. Historical samples remain historical; unknown/offline counts do not become zero, and this adds no network request.
+- Show the empty-server countdown without normal players-online/extra warning copy. Group MOTD preview/edit actions and clarify that the server preview renders the message rather than testing reachability.
+- Keep World artwork square; remove the dimensions filler copy. Anchor segmented selection backgrounds inside their selected item, avoiding delayed indicator measurements after resets/resizes.
+- New launcher enrollments use a bounded computer hostname instead of a hard-coded application name, for both pairing and Microsoft authentication. Existing generic current-device names display as This device; stored/custom names are preserved.
+
+Validation: TypeScript, production build, lint (existing warnings), native cargo check, strict client-library Clippy and all 24 client HTTPS tests pass. Browser fixture checks cover pristine/change/discard, square artwork, grouped actions and exact selected-background bounds in dark/light. An empty-server fixture countdown was observed decreasing from 60 to 59 seconds. Screenshots and browser results: V:/tmp/ui-feedback-20261025.
+
+The full frontend check run has 300 passing tests and one existing console HOT_SCOPE_TIME budget failure; its unchanged eight-test reactivity file passes separately after builds stop. The 8ms console threshold was not relaxed. Logs: V:/tmp/ui-feedback-tests-idle.log and V:/tmp/ui-feedback-reactivity-final.log. Live Minecraft join/leave timing was not exercised by this fixture pass.

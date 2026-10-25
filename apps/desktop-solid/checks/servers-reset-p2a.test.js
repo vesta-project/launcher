@@ -84,13 +84,14 @@ describe('[sleep] plain-language copy', () => {
 
   test('each blocker maps to a calm explanation; disabled and unknown say nothing', () => {
     const cases = {
-      not_ready: 'servers.sleep-blocker.not-ready', players_online: 'servers.sleep-blocker.players-online',
+      not_ready: 'servers.sleep-blocker.not-ready',
       player_count_unknown: 'servers.sleep-blocker.player-count-unknown', operation_in_progress: 'servers.sleep-blocker.operation',
       hold: 'servers.sleep-blocker.hold', authority_unavailable: 'servers.sleep-blocker.authority',
     };
     for (const [reason, message] of Object.entries(cases)) expect(sleepBlockerCopy({ reason }, 'online')).toEqual({ message, kind: 'waiting' });
     expect(sleepBlockerCopy({ reason: 'disabled' }, 'online')).toBeNull();
     expect(sleepBlockerCopy(null, 'online')).toBeNull();
+    expect(sleepBlockerCopy({ reason: 'players_online' }, 'online')).toBeNull();
     expect(sleepBlockerCopy({ reason: 'not_ready' }, 'sleeping')).toEqual({ message: 'servers.sleep-blocker.asleep', kind: 'asleep' });
   });
 
@@ -98,7 +99,7 @@ describe('[sleep] plain-language copy', () => {
     expect(sleepBlockerCopy({ reason: 'counting_down', remainingSeconds: 40 }, 'online', 10_000, 10_000)).toEqual({ message: 'servers.sleep-blocker.counting-seconds', args: { count: 40 }, kind: 'counting' });
     expect(sleepBlockerCopy({ reason: 'counting_down', remainingSeconds: 40 }, 'online', 10_000, 25_000).args).toEqual({ count: 25 });
     expect(sleepBlockerCopy({ reason: 'counting_down', remainingSeconds: 600 }, 'online', 0, 0)).toMatchObject({ message: 'servers.sleep-blocker.counting-minutes', args: { count: 10 } });
-    expect(sleepBlockerCopy({ reason: 'warning_sent', remainingSeconds: 20 }, 'online', 0, 0).message).toBe('servers.sleep-blocker.warned-seconds');
+    expect(sleepBlockerCopy({ reason: 'warning_sent', remainingSeconds: 20 }, 'online', 0, 0).message).toBe('servers.sleep-blocker.counting-seconds');
     expect(remainingSeconds(5, 0, 60_000)).toBe(0);
   });
 
@@ -193,4 +194,23 @@ describe('[graphs] series from history plus live samples', () => {
     expect(seriesStats(points)).toEqual({ min: 4, max: 8, avg: 6 });
     expect(seriesStats([p(0, null)])).toBeNull();
   });
+});
+
+
+test('player graph takes the newer live status count without waiting for metrics', () => {
+  const stale = sample(20_000, { playersOnline: 0 });
+  const input = { history: null, samples: [stale], metric: 'players', range: '1h', nowMs: 30_000 };
+  expect(graphPoints({ ...input, playerObservation: { atMs: 25_000, count: 1 } }).at(-1)).toMatchObject({ atMs: 25_000, value: 1 });
+  expect(graphPoints({ ...input, playerObservation: { atMs: 10_000, count: 5 } }).at(-1).value).toBe(0);
+  expect(graphPoints({ ...input, playerObservation: { atMs: 20_000, count: 1 } })).toHaveLength(1);
+  expect(graphPoints({ ...input, playerObservation: { atMs: 20_000, count: 1 } })[0].value).toBe(1);
+  expect(graphPoints({ ...input, metric: 'cpu', playerObservation: { atMs: 25_000, count: 1 } }).at(-1).value).toBe(50);
+  expect(graphPoints({ ...input, playerObservation: null }).at(-1).value).toBe(0);
+});
+
+
+test('unknown newer metric rows do not hide a newer known status player count', () => {
+  const points = graphPoints({ history: null, samples: [sample(20_000, { playersOnline: 0 }), sample(30_000, { playersOnline: null })], metric: 'players', range: '1h', nowMs: 35_000, playerObservation: { atMs: 25_000, count: 1 } });
+  expect(points.map(p => [p.atMs, p.value])).toEqual([[20_000, 0], [25_000, 1], [30_000, null]]);
+  expect(latestKnown(points).value).toBe(1);
 });

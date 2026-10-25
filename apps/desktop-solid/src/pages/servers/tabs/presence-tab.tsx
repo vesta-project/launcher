@@ -153,7 +153,6 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
                     {(copy) => (
                       <p data-vesta="server-sleep-now" data-kind={copy().kind} role="status">
                         <Icon name={copy().kind === 'asleep' ? 'icons/status/moon' : copy().kind === 'counting' ? 'icons/content/timer' : 'icons/status/info'} size={14} />
-                        <span data-vesta="server-sleep-now-label">{t('servers.presence.sleep-now')}</span>
                         <span>{t(copy().message, copy().args)}</span>
                       </p>
                     )}
@@ -248,8 +247,10 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
               </div>
               <div data-vesta="server-panel-foot">
                 <span>{t('servers.presence.running-note')}</span>
-                <SectionLink section="game">{t('servers.presence.edit-motd')}</SectionLink>
-                <Button size="sm" variant="outline" disabled={problems().length > 0} onClick={() => void check()}>{t('servers.presence.check')}</Button>
+                <span data-vesta="server-panel-actions">
+                  <SectionLink section="game">{t('servers.presence.edit-motd')}</SectionLink>
+                  <Button size="sm" variant="outline" disabled={problems().length > 0} onClick={() => void check()}>{t('servers.presence.check')}</Button>
+                </span>
               </div>
             </>
           )}

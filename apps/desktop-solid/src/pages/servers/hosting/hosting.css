@@ -225,3 +225,8 @@
   :where([data-vesta="server-software-side"][data-to]) { border-color: color-mix(in srgb, var(--vesta-color-accent) 50%, var(--vesta-color-border)); }
   :where([data-vesta="server-software-side"]) > div { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-text); font-size: var(--vesta-text-sm); }
 }
+
+@layer launcher {
+  :where([data-vesta="server-software-summary"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-software-versions"]) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); align-items: start; }
+}

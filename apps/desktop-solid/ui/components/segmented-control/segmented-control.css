@@ -1,6 +1,6 @@
 /*
  * Segmented control — choose one value among a few options. A recessed track
- * holds the items; a raised thumb slides under the selected one.
+ * holds the items; a raised thumb fills the selected item.
  *
  * Hooks:   [data-vesta=segmented-field] [data-vesta=field-label]
  *          [data-vesta=segmented-control] (the track) [data-vesta=segmented-thumb]
@@ -14,9 +14,9 @@
  *          --segmented-item-padding-x, --segmented-item-gap, --segmented-font-size,
  *          --segmented-icon-size
  *
- * Kobalte positions the thumb with an inline width/height/translate measured
- * from the track, so the track carries no border: the thumb's hairline is
- * drawn inside its own box-shadow instead.
+ * The thumb lives inside its item, so selected backgrounds stay aligned during
+ * label changes, resets and resizes without asynchronous indicator measurements.
+ * Its hairline is drawn inside its own box-shadow.
  */
 /* Repeated so the order holds even if this file loads first. */
 @layer ui.tokens, ui.base, ui.components;
@@ -98,17 +98,20 @@
 
   :where([data-vesta='segmented-thumb']) {
     position: absolute;
-    inset: 0 auto auto 0;
+    inset: 0;
+    z-index: -1;
     border-radius: calc(var(--segmented-radius) - var(--segmented-padding));
     background: var(--segmented-thumb-bg);
     box-shadow: var(--segmented-thumb-shadow);
     pointer-events: none;
-    transition-property: transform, inline-size, block-size;
+    transition-property: background-color;
     transition-duration: var(--vesta-duration-normal);
     transition-timing-function: var(--vesta-ease-standard);
   }
 
-  /* Kobalte zeroes the duration inline while the track resizes. */
+  :where([data-vesta='segmented-item']:not([data-checked]) > [data-vesta='segmented-thumb']) { display: none; }
+
+  /* Retained for themes using the resize state hook. */
   :where([data-vesta='segmented-thumb'][data-resizing='true']) {
     transition-duration: 0ms;
   }
@@ -163,6 +166,10 @@
   }
 
   :where([data-vesta='segmented-label']) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;

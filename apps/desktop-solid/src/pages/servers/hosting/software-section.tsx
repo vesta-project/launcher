@@ -15,8 +15,8 @@ import { javaInventoryResource, softwareJobsResource, softwareResource, software
 import type { ServerJavaInventory } from '../../../features/servers/native-java';
 import { isJavaJob, javaCompatibility, runtimeFor } from '../../../features/servers/server-java-model';
 import {
-  changeBlocker, choiceState, initialChoice, keepMinecraft, latestVersionLabel, selectable, softwareIcon, softwareVersionKind,
-  softwareVersionText, type SoftwareChoice,
+  changeBlocker, initialChoice, keepMinecraft, latestVersionLabel, selectable, softwareIcon, softwareVersionKind,
+  type SoftwareChoice,
 } from '../../../features/servers/software-flow';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { SettingsPage, SettingsPanel } from '../settings-parts';
@@ -81,7 +81,6 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
       <Show when={software.value()} fallback={<Show when={!software.error()}><Skeleton height={132} radius={12} /></Show>}>
         {(state) => (
           <>
-            <SoftwareHero state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
             <Show when={!state().available}>
               <p data-vesta="server-callout" data-tone="warning">
                 {t(reasonMessage(state().unavailableReason) ?? 'server-hosting.software-unavailable')}
@@ -90,9 +89,10 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
             <Show when={state().recoveryRequired}>
               <p data-vesta="server-callout" data-tone="danger">{t('server-hosting.recovery-banner')}</p>
             </Show>
-            <SettingsPanel title={t('server-hosting.change')} description={t('server-hosting.change-pick-description')} name="software">
-              <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} java={java.value()} javaActions={javaActions} />
+            <SettingsPanel title={t('server-hosting.change')} name="software">
+              <For each={[state().current?.installationId ?? 'original']} keyed={(entry) => entry}>{() => <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} java={java.value()} javaActions={javaActions} />}</For>
             </SettingsPanel>
+            <SoftwareOutcome state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
             <JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
               minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
               onRefresh={() => void java.refresh()} />
@@ -107,36 +107,11 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
   );
 }
 
-/** What runs now, as a rich card: mark, name, versions, Java, job progress and the quiet way back. */
-function SoftwareHero(props: { state: SoftwareState; job: SoftwareJob | undefined; java: ServerJavaInventory | undefined; busy: boolean; stopped: boolean; onRestore: () => void }) {
+/** Job feedback and the quiet, secondary rollback action. */
+function SoftwareOutcome(props: { state: SoftwareState; job: SoftwareJob | undefined; java: ServerJavaInventory | undefined; busy: boolean; stopped: boolean; onRestore: () => void }) {
   const current = () => props.state.current;
-  const extra = () => softwareVersionText(current());
   return (
-    <section data-vesta="server-software-hero" data-software={current()?.software ?? 'original'} data-server-software-current>
-      <div data-vesta="server-software-hero-main">
-        <SoftwareMark software={current()?.software} size="lg" />
-        <div data-vesta="server-software-hero-copy">
-          <span data-vesta="server-software-eyebrow">{t('server-hosting.current-software')}</span>
-          <h2>{softwareName(current()?.software) ?? t('server-hosting.original-setup')}</h2>
-          <p data-vesta="server-software-meta">
-            <Show when={current()?.version} fallback={<span>{t('server-hosting.original-description')}</span>}>
-              {(version) => <span>{t('server-hosting.minecraft-version', { version: version() })}</span>}
-            </Show>
-            <Show when={extra()}>{(text) => <><span aria-hidden="true">·</span><span>{text()}</span></>}</Show>
-          </p>
-        </div>
-        {/* The runtime this server starts with; the Java panel below changes it. */}
-        <div data-vesta="server-software-java" data-server-software-java>
-          <Show when={props.java?.selected?.major ?? current()?.javaMajor}>
-            {(major) => (
-              <Badge tone="neutral" variant="outline" title={props.java?.selected?.path}>
-                {t('server-hosting.java-version', { version: String(major()) })}
-                <Show when={props.java?.selected?.vendor}>{(vendor) => <> · {vendor()}</>}</Show>
-              </Badge>
-            )}
-          </Show>
-        </div>
-      </div>
+    <Show when={props.job || props.state.previous}><section data-vesta="server-software-summary" data-server-software-current>
       <Show when={props.job}>{(job) => <JobStatus job={job()} current={current()} />}</Show>
       <Show when={props.state.previous}>
         {(previous) => (
@@ -153,7 +128,7 @@ function SoftwareHero(props: { state: SoftwareState; job: SoftwareJob | undefine
           </footer>
         )}
       </Show>
-    </section>
+    </section></Show>
   );
 }
 
@@ -195,7 +170,7 @@ function ChangeFlow(props: {
 }) {
   const id = stableConnectionId(() => props.snapshot);
   const now = useServersClock();
-  const start = untrack(() => initialChoice(props.state.catalog, props.state.current));
+  const start = untrack(() => initialChoice(props.state.catalog, props.state.current, props.snapshot.info?.minecraftVersion || null));
   const [software, setSoftware] = createSignal<SoftwareId | null>(start.software, { name: 'server-software:pick' });
   /** The Minecraft version asked for; the shown value falls back when the list lacks it. */
   const [wanted, setWanted] = createSignal<string | null>(start.minecraft, { name: 'server-software:minecraft' });
@@ -205,12 +180,15 @@ function ChangeFlow(props: {
   const [busy, setBusy] = createSignal(false, { name: 'server-software:busy' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-software:error' });
   const intents = new IntentMemo();
-  const versions = useServerResource(id, softwareVersionsResource, { args: () => software()!, enabled: () => !!software() });
+  const offered = () => props.state.catalog.some((entry) => entry.software === software() && selectable(entry));
+  const versions = useServerResource(id, softwareVersionsResource, { args: () => software()!, enabled: offered });
 
   const versionList = () => versions.value()?.software === software() ? versions.value()?.versions : undefined;
-  const minecraft = () => keepMinecraft(versionList(), wanted());
+  const minecraft = () => software() === start.software && wanted() === start.minecraft && start.minecraft
+    ? start.minecraft : keepMinecraft(versionList(), wanted());
   const choice = (): SoftwareChoice => ({ software: software(), minecraft: minecraft() });
-  const where = () => choiceState(choice(), props.state.current);
+  const where = () => !choice().software || !choice().minecraft ? 'incomplete'
+    : software() === start.software && minecraft() === start.minecraft ? 'same' : 'changed';
   const blocker = () => changeBlocker({
     available: props.state.available, recoveryRequired: props.state.recoveryRequired,
     stopped: gameStopped(props.snapshot), jobRunning: props.jobRunning,
@@ -227,7 +205,11 @@ function ChangeFlow(props: {
     icon: <SoftwareMark software={entry.software} />,
   })), { name: 'server-software:options' });
   const notHere = () => props.state.catalog.filter((entry) => !selectable(entry)).map((entry) => softwareName(entry.software)).join(', ');
-  const minecraftOptions = createMemo(() => (versionList() ?? []).map((value) => ({ value, label: value })), { name: 'server-software:mc-options' });
+  const minecraftOptions = createMemo(() => {
+    const values = versionList() ?? [];
+    const current = software() === start.software ? start.minecraft : null;
+    return (current && !values.includes(current) ? [current, ...values] : values).map((value) => ({ value, label: value }));
+  }, { name: 'server-software:mc-options' });
   const caution = () => props.state.catalog.find((entry) => entry.software === software())?.caution;
   const latestLabel = () => latestVersionLabel(software());
 
@@ -241,7 +223,7 @@ function ChangeFlow(props: {
 
   const pick = (value: string) => { setSoftware(value as SoftwareId); setError(null); };
   const discard = () => {
-    const reset = initialChoice(props.state.catalog, props.state.current);
+    const reset = initialChoice(props.state.catalog, props.state.current, props.snapshot.info?.minecraftVersion || null);
     setSoftware(reset.software); setWanted(reset.minecraft); setPlan(null); setError(null);
   };
   const review = async () => {
@@ -306,7 +288,7 @@ function ChangeFlow(props: {
         <HostingError error={versions.error()} onRetry={() => void versions.refresh()} />
         <Show when={versions.value() && !minecraftOptions().length}><p data-vesta="server-hosting-hint">{t('server-hosting.no-versions')}</p></Show>
 
-        <Show when={where() === 'changed' || (where() === 'same' && softwareVersionKind(software()) && !blocker())}>
+        <Show when={where() === 'changed' || (where() === 'same' && offered() && softwareVersionKind(software()) && !blocker())}>
           <div data-vesta="server-software-actions">
             <Show when={where() === 'changed'} fallback={
               <Button variant="outline" disabled={busy()} icon={<Icon name="icons/actions/refresh" size={14} />} onClick={() => void review()}>

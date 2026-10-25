@@ -39,8 +39,9 @@
   }
   :where([data-vesta="server-world-art"]) {
     flex: none;
-    inline-size: 88px;
-    block-size: 66px;
+    inline-size: 64px;
+    block-size: 64px;
+    aspect-ratio: 1;
     border-radius: 8px;
     object-fit: cover;
     box-shadow: 0 0 0 1px var(--vesta-color-border-strong), 0 6px 18px rgb(0 0 0 / 0.25);

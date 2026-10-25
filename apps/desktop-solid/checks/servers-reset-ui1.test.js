@@ -46,8 +46,9 @@ const paper = { software: 'paper', version: '1.21.1', build: 130, installationId
 describe('[software] inline change flow', () => {
   test('starts from what runs now, or the first software that can be set up here', () => {
     expect(initialChoice(catalog, paper)).toEqual({ software: 'paper', minecraft: '1.21.1' });
-    expect(initialChoice(catalog, { ...paper, software: 'forge' })).toEqual({ software: 'vanilla', minecraft: '1.21.1' });
+    expect(initialChoice(catalog, { ...paper, software: 'forge' })).toEqual({ software: 'forge', minecraft: '1.21.1' });
     expect(initialChoice(catalog, null)).toEqual({ software: 'vanilla', minecraft: null });
+    expect(initialChoice(catalog, null, '26.3')).toEqual({ software: 'vanilla', minecraft: '26.3' });
     expect(initialChoice([entry('forge', false)], paper).software).toBeNull();
   });
 

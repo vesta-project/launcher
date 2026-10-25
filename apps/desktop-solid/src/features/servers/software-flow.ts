@@ -49,11 +49,11 @@ export interface SoftwareChoice {
   minecraft: string | null;
 }
 
-/** Starts from what runs now when it can be set up here, otherwise the first software that can. */
-export function initialChoice(catalog: readonly SoftwareDescriptor[], current: SoftwareLaunch | null): SoftwareChoice {
+/** Keep the installed choice selected, even when it cannot be installed here; use observed version for unmanaged setups. */
+export function initialChoice(catalog: readonly SoftwareDescriptor[], current: SoftwareLaunch | null, observedVersion: string | null = null): SoftwareChoice {
   const running = current?.software ? catalog.find((entry) => entry.software === current.software) : undefined;
-  if (running && selectable(running)) return { software: running.software, minecraft: current?.version ?? null };
-  return { software: catalog.find(selectable)?.software ?? null, minecraft: current?.version ?? null };
+  if (running) return { software: running.software, minecraft: current?.version ?? null };
+  return { software: catalog.find(selectable)?.software ?? null, minecraft: current?.version ?? observedVersion };
 }
 
 /**

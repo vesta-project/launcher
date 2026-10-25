@@ -41,7 +41,12 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
   });
   const samples = () => serverMetrics(props.id);
   const series = createMemo(() => {
-    const input = { history: history.value(), samples: samples(), range: range(), nowMs: props.now };
+    const status = props.snapshot.status;
+    const observed = props.snapshot.statusObservedAtMs;
+    const playerObservation = props.snapshot.state.phase === 'online' && status?.state === 'running'
+      && status.playerCountKnown && status.playerCount !== null && observed !== null
+      ? { atMs: observed, count: status.playerCount } : null;
+    const input = { history: history.value(), samples: samples(), range: range(), nowMs: props.now, playerObservation };
     return Object.fromEntries(GRAPH_METRICS.map((metric) => [metric, graphPoints({ ...input, metric })])) as Record<GraphMetric, GraphPoint[]>;
   }, { name: 'server-graphs:series' });
   const shown = () => GRAPH_METRICS.filter((metric) => metricPresent(series()[metric]));

@@ -34,6 +34,7 @@ struct State {
     files: file_tests::Files,
     key: Mutex<Option<[u8; 32]>>,
     pairs: AtomicUsize,
+    pair_names: Mutex<Vec<String>>,
     sessions: AtomicUsize,
     starts: AtomicUsize,
     start_keys: Mutex<Vec<String>>,
@@ -200,6 +201,11 @@ async fn route(
         }
         "/api/v3/manage/pair" => {
             state.pairs.fetch_add(1, Ordering::SeqCst);
+            state
+                .pair_names
+                .lock()
+                .unwrap()
+                .push(body["device_name"].as_str().unwrap().to_owned());
             let key = URL_SAFE_NO_PAD
                 .decode(body["public_key"].as_str().unwrap())
                 .unwrap();
@@ -596,8 +602,14 @@ async fn additive_self_projection_and_status_stream_are_supported() {
         .contains("\"type\":\"status\""));
     socket.close(None).await.unwrap();
     let status = client.status(true).await.unwrap();
-    assert_eq!(status.sleep_blocker, Some(vesta_server_client::presence::SleepBlocker::Disabled));
-    assert_eq!(serde_json::to_value(status).unwrap()["sleepBlocker"], json!({"reason":"disabled"}));
+    assert_eq!(
+        status.sleep_blocker,
+        Some(vesta_server_client::presence::SleepBlocker::Disabled)
+    );
+    assert_eq!(
+        serde_json::to_value(status).unwrap()["sleepBlocker"],
+        json!({"reason":"disabled"})
+    );
     tokio::time::sleep(std::time::Duration::from_millis(260)).await;
     assert_eq!(client.status(true).await.unwrap().state, "stopped");
 }
@@ -928,4 +940,33 @@ async fn complete_receipt_skips_refetch_and_denied_detail_does_not_lose_acceptan
     assert_eq!(agent.state.operation_reads.load(Ordering::SeqCst), 1);
     assert!(client.lifecycle("start", None, "denied").await.is_err());
     assert_eq!(agent.state.starts.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn named_pairing_sends_device_label_and_refuses_invalid_names_before_network() {
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let transport =
+        Transport::new(agent.endpoint.clone(), Some(agent.fingerprint.clone())).unwrap();
+    let signer = Ed25519Signer::from_seed([17; 32]);
+    Client::pair_named(&transport, "server-1", "code", &signer, "Home desktop")
+        .await
+        .unwrap();
+    assert_eq!(*agent.state.pair_names.lock().unwrap(), ["Home desktop"]);
+    for name in [
+        String::new(),
+        " ".into(),
+        "a".repeat(65),
+        "bad\nname".into(),
+    ] {
+        assert_eq!(
+            Client::pair_named(&transport, "server-1", "code", &signer, &name)
+                .await
+                .err()
+                .unwrap()
+                .code,
+            ErrorCode::InvalidInput
+        );
+    }
+    assert_eq!(agent.state.pairs.load(Ordering::SeqCst), 1);
 }
