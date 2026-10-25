@@ -617,3 +617,130 @@
   :where([data-vesta="server-sleep-now-label"]) { color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-sleep-now-label"])::after { content: " ·"; }
 }
+@layer launcher {
+  /* Overview graphs (D9): one card per reported metric, one accent line each, recessive grid. */
+  :where([data-vesta="server-graphs"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-graphs-head"]) { display: flex; align-items: center; gap: var(--vesta-space-3); }
+  :where([data-vesta="server-graphs-head"]) h2 {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="server-graphs-head"]) > :last-child { margin-inline-start: auto; }
+  :where([data-vesta="server-graphs-grid"]) {
+    display: grid;
+    /* Two across at most, so four graphs form a calm 2 × 2 rather than 3 + 1. */
+    grid-template-columns: repeat(auto-fit, minmax(max(280px, calc(50% - var(--vesta-space-3))), 1fr));
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="server-graph"]) {
+    --graph-line: var(--vesta-color-accent);
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: var(--vesta-space-4) var(--vesta-space-4) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="server-graph-head"]) { display: flex; flex-direction: column; gap: 2px; }
+  :where([data-vesta="server-graph-label"]) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta="server-graph-value"]) { display: flex; align-items: baseline; gap: var(--vesta-space-1-5); min-block-size: 30px; }
+  :where([data-vesta="server-graph-value"]) strong {
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-2xl);
+    font-weight: var(--vesta-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  :where([data-vesta="server-graph-value"]) span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-variant-numeric: tabular-nums; }
+  :where([data-vesta="server-graph-value"][data-stale]) strong { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-graph-summary"]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-graph-plot"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--graph-line);
+    cursor: default;
+    touch-action: pan-y;
+  }
+  :where([data-vesta="server-graph-plot"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: 4px; border-radius: var(--vesta-radius-sm); }
+  :where([data-vesta="server-graph-plot"]) svg { display: block; inline-size: 100%; block-size: 100%; overflow: visible; }
+  :where([data-vesta="server-graph-grid"]) { stroke: var(--vesta-color-border); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 2 4; }
+  :where([data-vesta="server-graph-grid"][data-base]) { stroke-dasharray: none; }
+  :where([data-vesta="server-graph-grid"][data-limit]) { stroke: var(--vesta-color-border-strong); stroke-dasharray: 6 4; }
+  :where([data-vesta="server-graph-area"]) { stroke: none; }
+  :where([data-vesta="server-graph-line"]) {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  :where([data-vesta="server-graph-canvas"]) { position: relative; block-size: 96px; }
+  :where([data-vesta="server-graph-tick"]) {
+    align-self: flex-end;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  :where([data-vesta="server-graph-crosshair"]) {
+    position: absolute;
+    inset-block: 0;
+    inline-size: 1px;
+    background: var(--vesta-color-border-strong);
+    pointer-events: none;
+  }
+  :where([data-vesta="server-graph-dot"]) {
+    position: absolute;
+    inline-size: 9px;
+    block-size: 9px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 2px var(--vesta-color-surface-raised);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  :where([data-vesta="server-graph-tooltip"]) {
+    position: absolute;
+    inset-block-start: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-tooltip);
+    color: var(--vesta-color-tooltip-text);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transform: translateX(10px);
+    pointer-events: none;
+    box-shadow: var(--vesta-shadow-md);
+  }
+  :where([data-vesta="server-graph-tooltip"][data-flip]) { transform: translateX(calc(-100% - 10px)); }
+  :where([data-vesta="server-graph-tooltip"]) strong { font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-graph-tooltip"]) span { opacity: 0.8; }
+  :where([data-vesta="server-graph-axis"]) {
+    display: flex;
+    justify-content: space-between;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+}

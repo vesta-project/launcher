@@ -4,6 +4,7 @@ import { serverResource } from './resources';
 import { loadOperations, serverCommand } from './store';
 import type { BackupOverview, BackupStorage } from './native-manage';
 import type { SoftwareId } from './hosting-native';
+import { historyRequest, type GraphRange } from './metrics-model';
 
 /** Recent tasks; the operations topic keeps the store current after the first read. */
 export const operationsResource = serverResource('operations', (id) => loadOperations(id));
@@ -55,3 +56,11 @@ export const softwareVersionsResource = serverResource('software-versions', (id,
   serverCommand((client) => client.softwareVersions(id, software)));
 export const sftpResource = serverResource('sftp', (id) => serverCommand((client) => client.sftp(id)));
 export const sftpKeysResource = serverResource('sftp-keys', (id) => serverCommand((client) => client.sftpKeys(id)));
+
+/**
+ * Server-side metrics history for one Overview range (D9). Every read asks for the whole
+ * window, so a retention gap or a mutable five-minute bucket is replaced on the next read;
+ * live samples extend it in between.
+ */
+export const metricsHistoryResource = serverResource('metrics-history', (id, range: GraphRange) =>
+  serverCommand((client) => client.metricsHistory(id, historyRequest(range, Date.now()))));

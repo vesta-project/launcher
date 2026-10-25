@@ -9,12 +9,12 @@ import { newIntentId } from '../../../features/servers/model';
 import { motdProblems, type MotdProblem } from '../../../features/servers/motd-model';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
 import { motdPolicyResource, sleepPolicyResource } from '../../../features/servers/server-resources';
-import { serverCommand, useServersClock } from '../../../features/servers/store';
+import { putSnapshot, serverCommand, useServersClock } from '../../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import {
   PRESENCE_STATES, SLEEP_BOUNDS, type MotdDocument, type MotdPreview as AgentPreview, type PresenceState, type SleepPolicy, type StatePresentation,
 } from '../../../features/servers/native-presence';
-import { AGENT_START_CHOICES, agentStartAllowed, agentStartChoice, sleepBlockerCopy, type AgentStartChoice } from '../../../features/servers/sleep-model';
+import { AGENT_START_CHOICES, agentStartAllowed, agentStartChoice, liveBlocker, sleepBlockerCopy, type AgentStartChoice } from '../../../features/servers/sleep-model';
 import { Icon } from '../../../components/icon';
 import { MotdEditor } from '../motd-editor';
 import { ServerErrorNote } from '../parts';
@@ -82,6 +82,8 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
       try {
         const next = await serverCommand((client) => client.updateSleepPolicy(id(), sleepPolicy, sleepSaved.revision, newIntentId()));
         seedServerResource(id(), sleepPolicyResource, next);
+        // Sleep availability and the startup choice show in the header; re-read status now.
+        void serverCommand((client) => client.snapshot(id(), true)).then(putSnapshot).catch(() => {});
         setSleepDraft(null);
         saved++;
       } catch (reason) {
@@ -128,7 +130,7 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
     const saved = sleep.value();
     if (!saved?.policy.enabled || !policy()?.enabled) return null;
     const status = props.snapshot.status;
-    return sleepBlockerCopy(status?.sleepBlocker ?? saved.sleepBlocker, status?.lifecycle ?? undefined, props.snapshot.statusObservedAtMs, now());
+    return sleepBlockerCopy(liveBlocker(status?.sleepBlocker, saved.sleepBlocker, true), status?.lifecycle ?? undefined, props.snapshot.statusObservedAtMs, now());
   };
   const agentStart = () => agentStartChoice(policy(), props.snapshot.status);
 

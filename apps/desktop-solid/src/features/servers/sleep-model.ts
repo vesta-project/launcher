@@ -69,3 +69,12 @@ export function agentStartChoice(policy: Pick<SleepPolicy, 'onAgentStart'> | nul
 /** Sleep at startup needs the agent to answer the server list; the agent rejects it otherwise. */
 export const agentStartAllowed = (choice: AgentStartChoice, policy: Pick<SleepPolicy, 'offlineStatus'>) =>
   choice !== 'sleep' || policy.offlineStatus;
+
+/**
+ * The freshest blocker: status carries the live one, but right after enabling sleep it can
+ * still say "disabled" until the next status read, so the policy read's own answer wins.
+ */
+export function liveBlocker(fromStatus: SleepBlocker | null | undefined, fromPolicy: SleepBlocker | null | undefined, enabled: boolean): SleepBlocker | null {
+  if (fromStatus && !(enabled && fromStatus.reason === 'disabled')) return fromStatus;
+  return fromPolicy ?? null;
+}
