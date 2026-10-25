@@ -2,14 +2,14 @@
 // raw protected-file editing (D4) and Access grouping (D7).
 import { describe, expect, test } from 'bun:test';
 import {
-  SEED_MASK, datapackBlocker, datapackViews, dimensionViews, seedRevealed, seedText, splitLayout, toggleFeedback, toggleRejection, worldSize,
+  SEED_MASK, retainDatapackIntent, settleDatapackIntent, datapackBlocker, datapackViews, dimensionViews, seedRevealed, seedText, splitLayout, toggleFeedback, toggleRejection, worldSize,
 } from '../src/features/servers/world-model';
 import {
   customPathProblem, downloadOffers, isJavaJob, javaCompatibility, javaGroups, javaJobMessage, javaRejection, runtimeFor,
 } from '../src/features/servers/server-java-model';
 import { fileActions } from '../src/features/servers/files-model';
 import {
-  IDLE, protectedAccess, protectedEditReducer, protectedEditSends, protectedErrorEvent, protectedErrorMessage, protectedResultEvent, protectedSection,
+  IDLE, protectedLeaveDestination, protectedAccess, protectedEditReducer, protectedEditSends, protectedErrorEvent, protectedErrorMessage, protectedResultEvent, protectedSection,
 } from '../src/features/servers/protected-edit';
 import { capabilitiesForRole } from '../src/features/servers/capabilities';
 import { createFixtureServers } from '../src/features/servers/fixtures';
@@ -260,5 +260,59 @@ describe('[access] grouping', () => {
     expect(deviceNameProblem('a\tb')).toBe('invalid');
     expect(deviceNameProblem('Travel laptop')).toBeNull();
     expect(sortDevices([device('b', 'u'), device('a', 'u')]).map((entry) => entry.id)).toEqual(['a', 'b']);
+  });
+});
+
+
+describe('[world] submitted datapack reconciliation', () => {
+  const entry = { operationId: 'op', enabled: true, generation: 'g1' };
+  const pack = { id: 'file/pack', state: 'disabled' };
+  const done = { operationId: 'op', state: 'succeeded', reconciling: false };
+  test('a completed command keeps its requested state through stale saved observations', () => {
+    // Repeated reads, including those well after the former six-second timeout, remain stale.
+    for (let reads = 0; reads < 20; reads++) expect(retainDatapackIntent(entry, pack, 'g1', done)).toBe(true);
+    expect(retainDatapackIntent(entry, { ...pack, state: 'enabled' }, 'g1', done)).toBe(false);
+  });
+  test('a matching save cannot retire an operation still running or reconciling', () => {
+    const enabled = { ...pack, state: 'enabled' };
+    expect(retainDatapackIntent(entry, enabled, 'g1', undefined)).toBe(true);
+    expect(retainDatapackIntent(entry, enabled, 'g1', { ...done, state: 'running' })).toBe(true);
+    expect(retainDatapackIntent(entry, enabled, 'g1', { ...done, reconciling: true })).toBe(true);
+  });
+  test('terminal feedback survives global operation eviction without relocking the switch', () => {
+    const settled = settleDatapackIntent(entry, done);
+    expect(settled.terminal).toEqual({ step: 'done' });
+    expect(settleDatapackIntent(settled, undefined)).toBe(settled);
+    expect(retainDatapackIntent(settled, pack, 'g1', undefined)).toBe(true);
+    expect(retainDatapackIntent(settled, { ...pack, state: 'enabled' }, 'g1', undefined)).toBe(false);
+    expect(settleDatapackIntent(entry, { ...done, state: 'failed' }).terminal.step).toBe('failed');
+  });
+  test('retention ends when the pack disappears or game generation changes', () => {
+    expect(retainDatapackIntent(entry, undefined, 'g1', done)).toBe(false);
+    expect(retainDatapackIntent(entry, pack, 'g2', done)).toBe(false);
+    expect(retainDatapackIntent(entry, pack, null, done)).toBe(false);
+    // A failed command remains as feedback, with shownEnabled already using saved state.
+    expect(toggleFeedback({ ...done, state: 'failed' }).step).toBe('failed');
+  });
+});
+
+describe('[protected files] deferred leave and renewed confirmation', () => {
+  test('expiry preserves reviewed text and validator but requires a new confirmation', () => {
+    const expired = { step: 'confirm', text: 'reviewed', expected: 'sha', token: 'old', expiresAtMs: 10 };
+    const preparing = protectedEditReducer(expired, { type: 'confirm', nowMs: 11 });
+    expect(preparing).toEqual({ step: 'preparing', text: 'reviewed', expected: 'sha' });
+    const renewed = protectedEditReducer(preparing, { type: 'prepared', token: 'new', expiresAtMs: 100 });
+    expect(renewed.step).toBe('confirm');
+    expect(protectedEditSends(renewed)).toBe(false);
+    expect(protectedEditReducer(renewed, { type: 'confirm', nowMs: 12 }).token).toBe('new');
+  });
+  test('a route or Back destination resumes only on applied, never preparation, expiry or cancellation', () => {
+    for (const destination of ['/servers/another/overview', 'close']) {
+      for (const event of [{ type: 'prepared', token: 't', expiresAtMs: 9 }, { type: 'expired' }, { type: 'cancel' }, { type: 'failed' }, { type: 'stale' }]) {
+        expect(protectedLeaveDestination(destination, event)).toBeNull();
+      }
+      expect(protectedLeaveDestination(destination, { type: 'applied' })).toBe(destination);
+    }
+    expect(protectedLeaveDestination(null, { type: 'applied' })).toBeNull();
   });
 });

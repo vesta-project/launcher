@@ -1,5 +1,5 @@
 import { Badge, Button, IconButton, Skeleton, Switch, toast } from '@vesta/ui';
-import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
@@ -15,7 +15,7 @@ import { worldResource } from '../../../features/servers/server-resources';
 import { putOperations, serverCommand, serverOperations, useServersClock } from '../../../features/servers/store';
 import {
   SEED_REVEAL_MS, datapackBlocker, datapackKindMessage, datapackStateMessage, datapackViews, dimensionViews, seedRevealed, seedText,
-  splitLayout, toggleFeedback, toggleRejection, worldSize, type DatapackView, type ToggleFeedback,
+  retainDatapackIntent, settleDatapackIntent, splitLayout, toggleFeedback, toggleRejection, worldSize, type DatapackView, type PendingDatapack, type ToggleFeedback,
 } from '../../../features/servers/world-model';
 import { setting } from '../../../features/settings/config';
 import { copyText, SettingsPage, SettingsPanel } from '../settings-parts';
@@ -168,19 +168,29 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
   const views = createMemo(() => datapackViews(props.world.datapacks), { name: 'server-world:datapacks' });
   const blocker = () => datapackBlocker(props.snapshot);
   /** Per pack: the operation its last toggle started, or the moment it was sent. */
-  const [pending, setPending] = createSignal<Record<string, { operationId: string | null; enabled: boolean; error?: ServerCommandError }>>({}, { name: 'server-world:pending' });
+  const [pending, setPending] = createSignal<Record<string, PendingDatapack>>({}, { name: 'server-world:pending' });
   const intents = new Map<string, IntentMemo>();
   const timers = new Set<ReturnType<typeof setTimeout>>();
-  onCleanup(() => timers.forEach(clearTimeout));
+  let disposed = false;
+  onCleanup(() => { disposed = true; timers.forEach(clearTimeout); });
   const later = (ms: number, run: () => void) => { const timer = setTimeout(() => { timers.delete(timer); run(); }, ms); timers.add(timer); };
 
   const operation = (operationId: string | null): ServerOperation | undefined =>
     operationId ? serverOperations(id()).find((entry) => entry.operationId === operationId) : undefined;
+  createEffect(() => ({ packs: views(), generation: props.snapshot.status?.generation, operations: serverOperations(id()) }), ({ packs, generation, operations }) => {
+    const current = untrack(pending);
+    const retained = Object.fromEntries(Object.entries(current).flatMap(([key, entry]) => {
+      const op = operations.find((value) => value.operationId === entry.operationId);
+      const settled = settleDatapackIntent(entry, op);
+      return retainDatapackIntent(settled, packs.find((pack) => pack.id === key), generation, op) ? [[key, settled]] : [];
+    }));
+    if (Object.keys(retained).length !== Object.keys(current).length || Object.entries(retained).some(([key, entry]) => current[key] !== entry)) setPending(retained);
+  }, { name: 'server-world:reconcile-packs' });
   const feedback = (pack: DatapackView): ToggleFeedback | null => {
     const entry = pending()[pack.id];
     if (!entry) return null;
     if (entry.error) return { step: 'failed', message: toggleRejection(entry.error.reason, entry.error.code) };
-    return entry.operationId ? toggleFeedback(operation(entry.operationId)) : { step: 'sending' };
+    return entry.terminal ?? (entry.operationId ? toggleFeedback(operation(entry.operationId)) : { step: 'sending' });
   };
   /** While a toggle is in flight, the switch shows what was asked for, not the last save. */
   const shownEnabled = (pack: DatapackView) => {
@@ -195,19 +205,23 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
     const memo = intents.get(pack.id) ?? new IntentMemo();
     intents.set(pack.id, memo);
     const intentId = memo.idFor({ pack: pack.id, enabled, generation });
-    setPending((all) => ({ ...all, [pack.id]: { operationId: null, enabled } }));
+    const request: PendingDatapack = { operationId: null, enabled, generation };
+    setPending((all) => ({ ...all, [pack.id]: request }));
+    const current = () => !disposed && props.snapshot.status?.generation === generation && pending()[pack.id] === request;
     try {
       const started = await serverCommand((client) => client.worldDatapackToggle(id(), pack.id, enabled, generation, intentId));
       memo.settle();
+      if (!current()) return;
       putOperations(id(), [{ ...started, intent: started.intent ?? 'console.command' }]);
-      setPending((all) => ({ ...all, [pack.id]: { operationId: started.operationId, enabled } }));
+      setPending((all) => ({ ...all, [pack.id]: { operationId: started.operationId, enabled, generation } }));
       // Minecraft writes level.dat on its next save; reread then, and once more a little later.
-      later(1_500, props.onChanged);
-      later(6_000, () => { props.onChanged(); setPending(({ [pack.id]: _done, ...rest }) => rest); });
+      later(1_500, () => props.onChanged());
+      later(6_000, () => props.onChanged());
     } catch (reason) {
       const failure = reason as ServerCommandError;
       memo.settle(failure);
-      setPending((all) => ({ ...all, [pack.id]: { operationId: null, enabled, error: failure } }));
+      if (!current()) return;
+      setPending((all) => ({ ...all, [pack.id]: { operationId: null, enabled, generation, error: failure } }));
       toast.show({ title: t(toggleRejection(failure.reason, failure.code)), description: t(errorMessage(failure)), tone: 'danger' });
     }
   };
@@ -244,7 +258,7 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
                   <Show when={pack().toggleable} fallback={<span data-vesta="server-world-pack-state">{t(datapackStateMessage[pack().state])}</span>}>
                     <span data-vesta="server-world-pack-switch" data-tip={blocker() ? t(blocker()!) : t(shownEnabled(pack()) ? 'server-world.pack-disable' : 'server-world.pack-enable')}>
                       <Switch size="sm" aria-label={t('server-world.pack-toggle', { name: pack().name })} checked={shownEnabled(pack())}
-                        disabled={!!blocker() || state()?.step === 'sending'} onChange={(value: boolean) => void toggle(pack(), value)} />
+                        disabled={!!blocker() || (state()?.step === 'sending' || state()?.step === 'sent')} onChange={(value: boolean) => void toggle(pack(), value)} />
                     </span>
                   </Show>
                 </li>

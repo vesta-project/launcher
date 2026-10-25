@@ -9,7 +9,7 @@ import { IntentMemo } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import {
   IDLE, protectedAccess, protectedErrorEvent, protectedErrorMessage, protectedEditReducer, protectedEditSends, protectedNotice, protectedResultEvent,
-  protectedSection, type ProtectedEdit, type ProtectedEditEvent,
+  protectedLeaveDestination, protectedSection, type ProtectedEdit, type ProtectedEditEvent,
 } from '../../../features/servers/protected-edit';
 import type { MessageId } from '../../../localization/messages';
 import type { ServerCommandError, ServerSnapshot, TextFile } from '../../../features/servers/native';
@@ -43,6 +43,7 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   const dirty = () => !!file() && draft() !== file()!.text;
   /** Where the user tried to go with unsaved edits: a route, or `close` for the Back button. */
   const [leaving, setLeaving] = createSignal<string | null>(null, { name: 'server-file-editor:leaving' });
+  let rawLeave: string | null = null;
   const saveKeys = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 
   const load = async () => {
@@ -84,6 +85,7 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   // ---- Raw protected documents: validate → confirm the risk → write with the token.
   /** Applies one transition and sends the request the next step needs. */
   const step = (event: ProtectedEditEvent) => {
+    if (event.type === 'cancel' || event.type === 'reload' || event.type === 'failed' || event.type === 'gone') rawLeave = null;
     const next = protectedEditReducer(untrack(edit), event);
     setEdit(next);
     if (next.step === 'conflict') setConflict(next.server);
@@ -103,7 +105,11 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
         setValidator(result.sha256); setConflict(null); setGone(false);
         toast.show({ title: t('server-files.saved', { name: baseName(props.path) }), description: result.restartNeeded ? t('server-files.raw-restart') : undefined, tone: 'success' });
       }
-      step(protectedResultEvent(result));
+      const event = protectedResultEvent(result);
+      const destination = protectedLeaveDestination(rawLeave, event);
+      step(event);
+      if (event.type === 'applied') rawLeave = null;
+      if (destination && draft() === state.text) proceed(destination);
     } catch (reason) {
       const failure = reason as ServerCommandError;
       rawIntents.settle(failure);
@@ -147,7 +153,12 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
     if (to === 'close') props.onClose(); else navigate(to);
   };
   const leaveDiscarding = () => { const to = leaving(); discard(); if (to) proceed(to); };
-  const leaveSaving = async () => { const to = leaving(); if (to && await saveNow()) proceed(to); else setLeaving(null); };
+  const leaveSaving = async () => {
+    const to = leaving();
+    if (!to) return;
+    if (raw() && canSave() && validator()) { rawLeave = to; setLeaving(null); void saveNow(); return; }
+    if (await saveNow()) proceed(to); else setLeaving(null);
+  };
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 's') return;
@@ -225,8 +236,8 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
           <span data-vesta="server-muted">{secondsLeft() !== null ? t('server-files.raw-confirm-expires', { count: secondsLeft()! }) : t('server-files.raw-saving')}</span>
           <span data-vesta="server-toolbar-spacer" />
           <Button variant="ghost" disabled={edit().step !== 'confirm'} onClick={() => step({ type: 'cancel' })}>{t('common.cancel')}</Button>
-          <Button tone="danger" disabled={edit().step !== 'confirm' || secondsLeft() === 0} onClick={() => step({ type: 'confirm', nowMs: Date.now() })}>
-            {t(overwriting() ? 'server-files.raw-confirm-overwrite' : 'server-files.raw-confirm-save')}
+          <Button tone="danger" disabled={edit().step !== 'confirm'} onClick={() => step({ type: 'confirm', nowMs: Date.now() })}>
+            {t(secondsLeft() === 0 ? 'server-hosting.review-again' : overwriting() ? 'server-files.raw-confirm-overwrite' : 'server-files.raw-confirm-save')}
           </Button>
         </>}
       >

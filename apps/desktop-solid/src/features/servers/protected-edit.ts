@@ -105,3 +105,8 @@ export function protectedErrorMessage(error: Pick<ServerCommandError, 'code'>, p
   if (error.code === 'forbidden') return 'server-files.raw-forbidden';
   return null;
 }
+
+/** Resume a deferred navigation only after the confirmed write actually applied. */
+export function protectedLeaveDestination(destination: string | null, event: ProtectedEditEvent): string | null {
+  return event.type === 'applied' ? destination : null;
+}

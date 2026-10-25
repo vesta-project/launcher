@@ -157,3 +157,23 @@ export function toggleRejection(reason: string | null | undefined, code: string)
   if (code === 'forbidden') return 'server-world.pack-no-permission';
   return 'server-world.pack-failed';
 }
+
+/** One intent per present pack and game generation. Submission does not prove a save. */
+export interface PendingDatapack {
+  operationId: string | null;
+  enabled: boolean;
+  generation: string;
+  terminal?: Extract<ToggleFeedback, { step: 'done' | 'failed' }>;
+  error?: import('./native').ServerCommandError;
+}
+export function retainDatapackIntent(entry: PendingDatapack, pack: DatapackView | undefined, generation: string | null | undefined, operation: ServerOperation | undefined): boolean {
+  if (!pack || entry.generation !== generation) return false;
+  return !((entry.terminal ?? (operation ? toggleFeedback(operation) : null))?.step === 'done' && (pack.state === 'enabled' || pack.state === 'disabled') && entry.enabled === (pack.state === 'enabled'));
+}
+
+/** Remember completion before the bounded global operation history can evict it. */
+export function settleDatapackIntent(entry: PendingDatapack, operation: ServerOperation | undefined): PendingDatapack {
+  if (entry.terminal || !operation) return entry;
+  const feedback = toggleFeedback(operation);
+  return feedback.step === 'done' || feedback.step === 'failed' ? { ...entry, terminal: feedback } : entry;
+}
