@@ -478,6 +478,87 @@ impl Client {
     }
 }
 
+/// Validate a server-relative directory and encode each segment for appending to an SFTP root URL.
+pub fn sftp_relative_url_path(path: &str) -> Result<String> {
+    let path = path.replace('\\', "/");
+    if path.starts_with('/')
+        || path.chars().any(char::is_control)
+        || (path.as_bytes().get(1) == Some(&b':') && path.as_bytes()[0].is_ascii_alphabetic())
+    {
+        return Err(invalid());
+    }
+    let mut encoded = String::new();
+    for segment in path.split('/') {
+        if segment == ".." {
+            return Err(invalid());
+        }
+        if segment.is_empty() || segment == "." {
+            continue;
+        }
+        for byte in segment.bytes() {
+            if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
+                encoded.push(char::from(byte));
+            } else {
+                use std::fmt::Write;
+                write!(encoded, "%{byte:02X}").expect("writing to a String cannot fail");
+            }
+        }
+        encoded.push('/');
+    }
+    Ok(encoded)
+}
+
+#[cfg(test)]
+mod sftp_path_tests {
+    use super::*;
+
+    #[test]
+    fn sftp_path_normalizes_and_encodes_segments() {
+        for (path, expected) in [
+            ("", ""),
+            ("./", ""),
+            ("world/datapacks", "world/datapacks/"),
+            (".\\plugins\\Essentials//./", "plugins/Essentials/"),
+            (
+                "world/ä b/50%#?@:!",
+                "world/%C3%A4%20b/50%25%23%3F%40%3A%21/",
+            ),
+            ("%2e%2e/%2F", "%252e%252e/%252F/"),
+            ("a..b/~_-.", "a..b/~_-./"),
+        ] {
+            assert_eq!(sftp_relative_url_path(path).unwrap(), expected, "{path:?}");
+        }
+    }
+
+    #[test]
+    fn sftp_path_rejects_traversal_absolute_paths_and_controls() {
+        for path in [
+            "..",
+            "a/../b",
+            "a\\..\\b",
+            "/world",
+            "\\world",
+            "//host/share",
+            "\\\\host\\share",
+            "C:/world",
+            "c:\\world",
+            "C:world",
+            "a\0b",
+            "a\nb",
+            "a\rb",
+            "a\tb",
+            "a\u{7f}b",
+            "a\u{85}b",
+        ] {
+            assert_eq!(
+                sftp_relative_url_path(path).unwrap_err().code,
+                ErrorCode::InvalidInput,
+                "{path:?}"
+            );
+        }
+    }
+}
+
 /// Build a fixed-scheme URL from a pinned management endpoint and authenticated status.
 pub fn sftp_target(
     endpoint: &crate::endpoint::Endpoint,

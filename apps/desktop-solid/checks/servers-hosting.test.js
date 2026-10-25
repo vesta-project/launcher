@@ -109,6 +109,10 @@ describe('[sftp] off by default, public keys only, opened natively', () => {
     expect(on.hostKeyFingerprint).toMatch(/^SHA256:/);
     const target = await servers.sftpOpen('fixture-survival');
     expect(target).toMatchObject({ host: 'play.riverside.example', port: 2222, username: on.username });
+    expect(await servers.sftpOpen('fixture-survival', './world\\my folder//')).toEqual(target);
+    for (const path of ['..', 'world/../logs', 'world\\..\\logs', '/world', '\\world', 'C:\\world', 'C:world', 'a\0b', 'a\nb', 'a\u0085b']) {
+      await expect(servers.sftpOpen('fixture-survival', path)).rejects.toMatchObject({ code: 'invalid_input' });
+    }
   });
   test('keys: add, duplicate refused, revoke keeps the record', async () => {
     const servers = createFixtureServers({ latencyMs: 0 });

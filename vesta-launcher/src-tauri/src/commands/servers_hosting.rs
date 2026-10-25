@@ -214,7 +214,9 @@ pub async fn server_sftp_open(
     app: AppHandle,
     manager: Manager<'_>,
     connection_id: String,
+    path: Option<String>,
 ) -> Result<SftpTarget> {
+    let path = sftp_relative_url_path(path.as_deref().unwrap_or_default())?;
     let status = manager
         .management_read(
             &app,
@@ -222,7 +224,8 @@ pub async fn server_sftp_open(
             |client| async move { client.sftp().await },
         )
         .await?;
-    let (url, target) = manager.sftp_target(&connection_id, &status).await?;
+    let (mut url, target) = manager.sftp_target(&connection_id, &status).await?;
+    url.push_str(&path);
     tauri::async_runtime::spawn_blocking(move || open::that(url))
         .await
         .map_err(|_| Error::new(ErrorCode::Internal))?

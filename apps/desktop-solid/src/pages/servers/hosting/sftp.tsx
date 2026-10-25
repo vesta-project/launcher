@@ -67,7 +67,7 @@ function SftpDialog(props: { snapshot: ServerSnapshot; path: string; onClose: ()
   const launch = async () => {
     setOpening(true); setOpenError(null);
     try {
-      if (isTauri()) await serverCommand((client) => client.sftpOpen(id()));
+      if (isTauri()) await serverCommand((client) => client.sftpOpen(id(), props.path));
       else window.open(link(), '_blank', 'noopener');
       props.onClose();
     } catch (reason) { setOpenError(toServerError(reason)); }

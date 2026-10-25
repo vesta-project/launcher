@@ -286,7 +286,9 @@ export function createHostingFixtures(host: HostingHost) {
         return key;
       });
     },
-    async sftpOpen(connectionId: ConnectionId): Promise<SftpTarget> {
+    async sftpOpen(connectionId: ConnectionId, path = ''): Promise<SftpTarget> {
+      const relative = path.replace(/\\/g, '/');
+      if (relative.startsWith('/') || /^[a-z]:/i.test(relative) || /[\u0000-\u001f\u007f-\u009f]/.test(relative) || relative.split('/').includes('..')) fail('invalid_input');
       await host.wait(150);
       const current = state(connectionId);
       if (!current.sftp.running) fail('unsupported', 'sftp_disabled');

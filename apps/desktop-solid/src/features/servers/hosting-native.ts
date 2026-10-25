@@ -207,7 +207,8 @@ export const serversHostingNative = {
     call<void>('server_sftp_key_revoke', { connectionId, keyId, intentId }),
   /**
    * Opens the OS default SFTP client. Native builds `sftp://user@host:port/` from the trusted
-   * connection hostname and the agent's SFTP port; the UI never supplies a URL.
+   * connection hostname and the agent's SFTP port, then appends the validated relative directory.
+   * Omit path to open the server root; the UI never supplies a URL.
    */
-  sftpOpen: (connectionId: ConnectionId) => call<SftpTarget>('server_sftp_open', { connectionId }),
+  sftpOpen: (connectionId: ConnectionId, path?: string) => call<SftpTarget>('server_sftp_open', { connectionId, path }),
 };
