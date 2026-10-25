@@ -1,5 +1,6 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "server-hosting.previous-installation",
   "servers.activity.pages",
   "servers.activity.newer",
   "servers.activity.older",

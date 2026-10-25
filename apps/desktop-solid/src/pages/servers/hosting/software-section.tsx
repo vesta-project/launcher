@@ -129,7 +129,9 @@ function SoftwareOutcome(props: { state: SoftwareState; job: SoftwareJob | undef
         {(previous) => (
           <footer data-vesta="server-software-previous">
             <Icon name="icons/content/history" size={13} />
-            <span>{t('server-hosting.previously', { name: launchText(previous()) })}</span>
+            <span>{launchSummary(previous())
+              ? t('server-hosting.previously', { name: launchSummary(previous())! })
+              : t('server-hosting.previous-installation')}</span>
             <Show when={props.state.available}>
               <span aria-hidden="true">·</span>
               <button type="button" data-vesta="server-software-restore" disabled={!props.stopped || props.busy}
@@ -468,7 +470,7 @@ function RestoreDialog(props: { snapshot: ServerSnapshot; state: SoftwareState; 
       open
       size="sm"
       onOpenChange={(open) => { if (!open && !busy()) props.onClose(); }}
-      title={t('server-hosting.restore-title', { name: launchText(props.state.previous) })}
+      title={t('server-hosting.restore-title', { name: launchSummary(props.state.previous) ?? t('server-hosting.previous-installation') })}
       description={t('server-hosting.restore-software-only')}
       footer={
         <>
