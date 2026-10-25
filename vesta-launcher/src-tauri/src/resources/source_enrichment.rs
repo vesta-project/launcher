@@ -672,10 +672,18 @@ mod tests {
         assert!(real_target_path(&game, &game.canonicalize().unwrap()));
         assert!(!real_direct_child_file(&game, &mods, &mods));
         assert!(!real_target_path(&game, &mods.join("../mods/a.jar")));
-        assert!(!real_target_path(
-            &game,
-            &game.canonicalize().unwrap().join("mods/../mods/a.jar")
+        let canonical_game = game.canonicalize().unwrap();
+        // PathBuf::join normalizes `..` for Windows verbatim paths. Build the
+        // incoming spelling directly so this still exercises traversal refusal.
+        let separator = std::path::MAIN_SEPARATOR;
+        let traversal = PathBuf::from(format!(
+            "{}{separator}mods{separator}..{separator}mods{separator}a.jar",
+            canonical_game.display()
         ));
+        assert!(traversal
+            .components()
+            .any(|part| part == std::path::Component::ParentDir));
+        assert!(!real_target_path(&game, &traversal));
         fs::create_dir_all(game.join("saves/World/.vesta")).unwrap();
         fs::write(game.join("saves/World/.vesta/world.json"), b"{}").unwrap();
         assert!(real_target_path(

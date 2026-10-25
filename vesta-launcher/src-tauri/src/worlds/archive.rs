@@ -147,9 +147,14 @@ pub(crate) fn world_icon_entry<R: Read + Seek>(archive: &ZipArchive<R>, path: &P
     }
     let root = path.parent().unwrap_or(Path::new(""));
     ["level.dat", "level.dat_old"].iter().any(|marker| {
-        root.join(marker)
-            .to_str()
-            .is_some_and(|name| archive.index_for_name(name).is_some())
+        // ZIP central-directory names always use '/', including on Windows.
+        let name = root
+            .join(marker)
+            .components()
+            .map(|component| component.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+            .map(|parts| parts.join("/"));
+        name.is_some_and(|name| archive.index_for_name(&name).is_some())
     })
 }
 

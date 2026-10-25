@@ -155,3 +155,26 @@ Agent source was not changed. Private fixture state remains under ignored
   - `resources::manual_drop::tests::path_counts_defaults_and_zero_accepted_summary_are_safe`
   - `resources::source_enrichment::tests::checked_targets_accept_declared_aliases_and_canonical_publication`
   - `worlds::archive::tests::summaries_assign_descendants_once_and_preserve_ids_backup_and_icons`
+
+### Windows library test follow-up (2026-10-25)
+
+The seven failures above are resolved. Five assertions/fixtures assumed Unix
+path spelling or absoluteness; they now use native paths and the ledger's
+existing normalized storage contract. The source-enrichment traversal fixture
+now preserves a literal parent component: joining onto a Windows verbatim
+canonical path had removed `..` before validation could inspect it. The test
+still requires traversal refusal and acceptance of declared/canonical aliases.
+
+The archive failure exposed a production bug: world icon marker lookup used
+native backslashes to query slash-separated ZIP central-directory names on
+Windows. Marker lookup now joins path components with `/`, retaining rejection
+of non-UTF-8 paths. The existing nested-world summary test verifies the parent's
+icon survives, the child has no icon, and ownership/installation remain intact.
+
+Verification on Windows: all seven focused tests passed; the complete
+`vesta-launcher` library suite passed **579 tests, zero failures, seven ignored**
+with `--test-threads=1`. Built using `cargo test --locked -p vesta-launcher --lib
+--no-run --message-format=json`, `CARGO_INCREMENTAL=0` and two build jobs;
+embedded the same repository manifest into Cargo's reported disposable test
+executable with SDK `mt.exe` before running it. Existing unrelated compiler
+warnings remain. Unix-only cases and ignored live fixtures were not run.

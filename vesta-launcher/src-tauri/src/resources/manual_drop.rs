@@ -1800,7 +1800,12 @@ mod tests {
         assert!(validate_paths(&vec!["/file.jar".into(); MAX_PATHS + 1]).is_err());
         assert!(validate_paths(&["relative.jar".into()]).is_err());
         assert!(validate_paths(&["/file.jar\0".into()]).is_err());
-        assert!(validate_paths(&["/file.jar".into()]).is_ok());
+        let temp = tempfile::tempdir().unwrap();
+        let absolute = temp.path().join("file.jar").to_string_lossy().into_owned();
+        assert!(validate_paths(&[absolute.clone()]).is_ok());
+        assert!(validate_paths(&[format!("{absolute}\0")]).is_err());
+        #[cfg(windows)]
+        assert!(validate_paths(&["/file.jar".into()]).is_err());
         let defaults: ManualDropResponse = serde_json::from_value(serde_json::json!({})).unwrap();
         assert!(!defaults.download_dependencies && !defaults.remember && !defaults.cancel);
         assert_eq!(

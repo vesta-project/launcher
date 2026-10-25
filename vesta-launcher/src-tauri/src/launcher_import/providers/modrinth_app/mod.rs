@@ -194,6 +194,8 @@ mod count_tests {
             .unwrap();
         let paths = ModrinthAppProvider.instance_paths(root.path()).unwrap();
         assert_eq!(paths.len(), 2);
-        assert!(paths.iter().any(|path| path.ends_with("profiles/one")));
+        assert!(paths
+            .iter()
+            .any(|path| Path::new(path) == root.path().join("profiles").join("one")));
     }
 }

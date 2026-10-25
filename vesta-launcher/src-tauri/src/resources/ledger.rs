@@ -1890,6 +1890,7 @@ mod tests {
         ResourceProvenance,
     };
     use crate::models::resource::{ReleaseType, ResourceVersion, SourcePlatform};
+    use crate::utils::instance_helpers::normalize_path;
     use diesel::connection::SimpleConnection;
     use diesel::prelude::*;
     use std::path::Path;
@@ -2088,7 +2089,10 @@ mod tests {
             let row = ir::installed_resource
                 .first::<InstalledResource>(&mut conn)
                 .unwrap();
-            assert_eq!(row.local_path, "/game/mods/local.jar");
+            assert_eq!(
+                row.local_path,
+                normalize_path(Path::new("/game/mods/local.jar"))
+            );
             assert!(row.manual_source_evidence.is_none());
             assert_eq!(
                 ir::installed_resource
@@ -2125,7 +2129,10 @@ mod tests {
             .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
             .unwrap();
         assert!(row.manual_source_evidence.is_none());
-        assert_eq!(row.local_path, "/game/mods/old.jar");
+        assert_eq!(
+            row.local_path,
+            normalize_path(Path::new("/game/mods/old.jar"))
+        );
     }
 
     #[test]
@@ -2264,7 +2271,7 @@ mod tests {
             .unwrap();
         assert_eq!(row.resource_type, "datapack");
         assert_eq!(row.source_kind, "custom");
-        assert_eq!(row.local_path, path.to_string_lossy());
+        assert_eq!(row.local_path, normalize_path(path));
         assert_eq!(row.manual_source_evidence.unwrap().scope, evidence.scope);
     }
 
