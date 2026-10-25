@@ -2664,6 +2664,7 @@ export const messageIds = [
   "server-hosting.sftp-title",
   "server-hosting.sftp-off-description",
   "server-hosting.sftp-ask-owner",
+  "server-hosting.sftp-turn-on",
   "server-hosting.sftp-open",
   "server-hosting.sftp-open-failed",
   "server-hosting.sftp-no-handler",

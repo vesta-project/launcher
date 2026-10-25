@@ -111,6 +111,7 @@ server-hosting-sftp-keys = SSH keys
 server-hosting-sftp-title = SFTP
 server-hosting-sftp-off-description = SFTP is off for this server.
 server-hosting-sftp-ask-owner = Ask the server owner to turn it on.
+server-hosting-sftp-turn-on = Turn it on in SFTP settings to open folders in your SFTP app.
 server-hosting-sftp-open = Open
 server-hosting-sftp-open-failed = Couldn't open your SFTP app.
 server-hosting-sftp-no-handler = No app on this computer opens SFTP links. Copy the link into your SFTP app instead.

@@ -96,7 +96,7 @@ function SftpDialog(props: { snapshot: ServerSnapshot; path: string; onClose: ()
         <HostingError error={status.error()} onRetry={() => void status.refresh()} />
         <Show when={status.value()} fallback={<Show when={!status.error()}><Skeleton height={40} radius={8} /></Show>}>
           {(current) => (
-            <Show when={running()} fallback={<Hint when={!mayConfigure(props.snapshot)}>{t('server-hosting.sftp-ask-owner')}</Hint>}>
+            <Show when={running()} fallback={<p data-vesta="server-hosting-hint">{t(mayConfigure(props.snapshot) ? 'server-hosting.sftp-turn-on' : 'server-hosting.sftp-ask-owner')}</p>}>
               <div data-vesta="server-sftp-link">
                 <CopyValue value={link()} label={t('server-hosting.sftp-copy-link')}><Sensitive>{link()}</Sensitive></CopyValue>
               </div>
