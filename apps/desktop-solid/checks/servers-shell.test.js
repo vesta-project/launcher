@@ -71,7 +71,7 @@ describe('[shell] routing', () => {
   });
 
   test('settings sections follow capabilities; connection is always there', () => {
-    expect(visibleSections(snapshot()).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'presence', 'players', 'access', 'connection']);
+    expect(visibleSections(snapshot()).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'sftp', 'presence', 'players', 'access', 'connection']);
     expect(visibleSections(snapshot({}, 'viewer')).map((section) => section.id)).toEqual(['players', 'connection']);
     expect(visibleSections(snapshot({}, 'pack-user')).map((section) => section.id)).toEqual(['connection']);
   });

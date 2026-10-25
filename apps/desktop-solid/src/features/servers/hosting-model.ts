@@ -154,3 +154,24 @@ export const mayOwn = (role: string | null | undefined) => !role || roleKey(role
 /** World and software changes need Minecraft positively stopped, on a reachable agent. */
 export const gameStopped = (snapshot: Pick<ServerSnapshot, 'state' | 'status'>) =>
   snapshot.state.phase === 'online' && snapshot.status?.state === 'stopped';
+
+/** SFTP's well-known port; links leave it out. */
+export const SFTP_DEFAULT_PORT = 22;
+
+/** A host as it goes in a URL: bare IPv6 addresses gain brackets. */
+export function sftpUrlHost(host: string): string {
+  const value = host.trim();
+  return !value.startsWith('[') && value.includes(':') ? `[${value}]` : value;
+}
+
+/** `/a/b%20c/` for a game-root-relative folder; the root is `/`. Each segment is percent-encoded. */
+export function sftpUrlPath(path: string): string {
+  const segments = path.split(/[\\/]+/).filter((segment) => segment && segment !== '.').map(encodeURIComponent);
+  return segments.length ? `/${segments.join('/')}/` : '/';
+}
+
+/** `sftp://user@host[:port]/folder/` for the given folder. */
+export function sftpLink(target: { host: string; port: number; username: string; path?: string }): string {
+  const port = target.port === SFTP_DEFAULT_PORT ? '' : `:${target.port}`;
+  return `sftp://${encodeURIComponent(target.username)}@${sftpUrlHost(target.host)}${port}${sftpUrlPath(target.path ?? '')}`;
+}

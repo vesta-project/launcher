@@ -106,16 +106,14 @@ server-hosting-reason-key-limit = The server has reached its key limit. Revoke a
 ## SFTP
 
 server-hosting-sftp = SFTP
-server-hosting-sftp-more = More SFTP options
 server-hosting-sftp-details = Connection details
 server-hosting-sftp-keys = SSH keys
 server-hosting-sftp-title = SFTP
-server-hosting-sftp-running-description = Open the server's files in your SFTP app.
 server-hosting-sftp-off-description = SFTP is off for this server.
 server-hosting-sftp-ask-owner = Ask the server owner to turn it on.
-server-hosting-sftp-open = Open in SFTP app
+server-hosting-sftp-open = Open
 server-hosting-sftp-open-failed = Couldn't open your SFTP app.
-server-hosting-sftp-no-handler = No app on this computer opens SFTP links. Use the details above in your SFTP app.
+server-hosting-sftp-no-handler = No app on this computer opens SFTP links. Copy the link into your SFTP app instead.
 server-hosting-sftp-host = Host
 server-hosting-sftp-port = Port
 server-hosting-sftp-username = Username
@@ -124,13 +122,27 @@ server-hosting-copy = Copy
 server-hosting-sftp-sign-in-help = Sign in with the SSH key you added. Check the host key matches the first time you connect.
 server-hosting-sftp-loopback = SFTP only accepts connections from the server computer itself.
 server-hosting-sftp-enable = SFTP
-server-hosting-sftp-enable-description = Let people with an added SSH key manage files with an SFTP app.
+server-hosting-sftp-enable-description = Let people with an added SSH key manage the server files with an SFTP app.
 server-hosting-sftp-bind = Listen address
 server-hosting-sftp-bind-description = 0.0.0.0 accepts connections on every network.
 server-hosting-sftp-disconnects = Saving disconnects anyone connected.
 server-hosting-sftp-on = SFTP is on
 server-hosting-sftp-off = SFTP is off
-server-hosting-more = More
+server-hosting-sftp-open-here = Open in SFTP
+server-hosting-sftp-here-description = Open this folder in your SFTP app, or copy the link.
+server-hosting-sftp-settings = SFTP settings
+server-hosting-sftp-copy-link = Copy link
+server-hosting-sftp-link = Link
+server-hosting-sftp-host-key-check = The first time you connect, check the host key is { $value }.
+server-hosting-sftp-service = Service
+server-hosting-sftp-status-off = Off
+server-hosting-sftp-sessions = { $count ->
+    [0] On
+    [one] On · { $count } connected
+   *[other] On · { $count } connected
+}
+server-hosting-sftp-sign-in = Sign-in methods
+server-hosting-sftp-keys-description = Public keys that may sign in as you.
 server-hosting-port-invalid = Use a port from 1 to 65535.
 server-hosting-bind-invalid = Use an IP address, like 0.0.0.0 or 127.0.0.1.
 server-hosting-key-needed = Add your public key to sign in.

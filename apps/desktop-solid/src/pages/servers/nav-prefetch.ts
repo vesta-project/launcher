@@ -8,7 +8,7 @@ import { initialChoice, selectable } from '../../features/servers/software-flow'
 import { gameStopped } from '../../features/servers/hosting-model';
 import {
   accessSourcesResource, backupStorageResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
-  motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, softwareJobsResource, softwareResource,
+  motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, softwareJobsResource, softwareResource, sftpResource,
   usersResource, whitelistResource, worldResource, warmSoftwareMetadata,
 } from '../../features/servers/server-resources';
 import { workflowsResource } from './automation/resources';
@@ -41,6 +41,7 @@ registerServerPrefetch('backups', (snapshot) => {
 registerServerPrefetch('general', (snapshot) => prefetchServerResource(snapshot.connection.id, brandingResource));
 registerServerPrefetch('game', (snapshot) => prefetchServerResource(snapshot.connection.id, propertiesResource));
 registerServerPrefetch('world', (snapshot) => prefetchServerResource(snapshot.connection.id, worldResource));
+registerServerPrefetch('sftp', (snapshot) => prefetchServerResource(snapshot.connection.id, sftpResource));
 registerServerPrefetch('software', (snapshot) => {
   void readServerResource(snapshot.connection.id, softwareResource).then((state) => {
     if (!state.available || state.recoveryRequired || !gameStopped(snapshot)) return;
