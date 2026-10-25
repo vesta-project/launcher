@@ -166,6 +166,7 @@ export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
   };
 }
 
+/** The quick action a card or pin offers: the header's primary, never Force kill. */export function quickAction(snapshot: ServerSnapshot): Exclude<LifecycleAction, 'kill' | 'restart'> | null {  const primary = lifecycleControls(snapshot).primary;  return primary && primary !== 'kill' && primary !== 'restart' ? primary : null;}
 /** Small status dot for the rail and server list. */
 export type Dot = 'online' | 'starting' | 'sleeping' | 'stopped' | 'problem' | 'offline';
 

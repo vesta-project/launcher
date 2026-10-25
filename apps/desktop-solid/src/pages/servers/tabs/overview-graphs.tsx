@@ -12,6 +12,7 @@ import {
 import { useServerResource } from '../../../features/servers/resources';
 import { metricsHistoryResource, propertiesResource } from '../../../features/servers/server-resources';
 import { agentReachable } from '../../../features/servers/shell-model';
+import { minecraftFact } from '../../../features/servers/model';
 import { serverMetrics } from '../../../features/servers/store';
 import type { ConnectionId, ServerSnapshot } from '../../../features/servers/native';
 import { Freshness } from '../parts';
@@ -84,7 +85,7 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
                   nowMs={props.now}
                   bucketMillis={bucketMillis()}
                   limit={metric === 'memory' ? memoryLimit() : metric === 'players' ? playerLimit() : null}
-                  running={running()}
+                  idle={running() ? null : minecraftFact(props.snapshot.status).message}
                 />
               )}
             </For>
@@ -96,7 +97,9 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
 }
 
 function MetricGraph(props: {
-  metric: GraphMetric; points: GraphPoint[]; range: GraphRange; nowMs: number; bucketMillis: number; limit: number | null; running: boolean;
+  metric: GraphMetric; points: GraphPoint[]; range: GraphRange; nowMs: number; bucketMillis: number; limit: number | null;
+  /** Set while Minecraft isn't running: the history stays, but there is no current value. */
+  idle: MessageId | null;
 }) {
   const gradient = `server-graph-fill-${createUniqueId()}`;
   /** Hovered sample by time, so it stays put while the window slides. */
@@ -151,12 +154,17 @@ function MetricGraph(props: {
     <figure data-vesta="server-graph" data-metric={props.metric}>
       <figcaption data-vesta="server-graph-head">
         <span data-vesta="server-graph-label">{t(metricLabels[props.metric])}</span>
-        <span data-vesta="server-graph-value" data-stale={props.running ? undefined : ''}>
-          <strong>{latest() ? fmt(latest()!.value!) : ''}</strong>
-          <Show when={props.limit}>
-            {(limit) => <span>{t('servers.graphs.of-max', { max: fmt(limit()) })}</span>}
-          </Show>
-        </span>
+        <Show
+          when={!props.idle}
+          fallback={<span data-vesta="server-graph-value" data-idle=""><span>{t(props.idle!)}</span></span>}
+        >
+          <span data-vesta="server-graph-value">
+            <strong>{latest() ? fmt(latest()!.value!) : ''}</strong>
+            <Show when={props.limit}>
+              {(limit) => <span>{t('servers.graphs.of-max', { max: fmt(limit()) })}</span>}
+            </Show>
+          </span>
+        </Show>
         <span data-vesta="server-graph-summary">{summary()}</span>
       </figcaption>
       <div

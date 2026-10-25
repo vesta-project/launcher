@@ -667,6 +667,6 @@ servers-graphs-tps = TPS
 servers-graphs-players = Players
 servers-graphs-of-max = of { $max }
 servers-graphs-empty = No performance history for this time range yet.
-servers-graphs-summary = { $name } over the last { $time }: now { $value }, low { $min }, high { $max }.
+servers-graphs-summary = { $name } over the last { $time }: latest { $value }, low { $min }, high { $max }.
 servers-graphs-summary-empty = { $name }: no samples in this time range.
 servers-graphs-allocated = Allocated

@@ -659,7 +659,7 @@
     line-height: 1.1;
   }
   :where([data-vesta="server-graph-value"]) span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-variant-numeric: tabular-nums; }
-  :where([data-vesta="server-graph-value"][data-stale]) strong { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-graph-value"][data-idle]) { align-items: center; }
   :where([data-vesta="server-graph-summary"]) {
     position: absolute;
     inline-size: 1px;

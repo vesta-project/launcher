@@ -4,9 +4,9 @@ import { route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
-import { lifecycleControls, minecraftFact, statusDot } from '../../features/servers/model';
+import { lifecycleControls, minecraftFact, quickAction, statusDot } from '../../features/servers/model';
 import { pinnedServers, serverIcon, updateServer } from '../../features/servers/store';
-import { actionLabels, quickAction, useLifecycle } from './lifecycle';
+import { actionLabels, useLifecycle } from './lifecycle';
 import './servers.css';
 
 /** Status for the shared pin dot: green while ready, red when it needs attention, a crescent while asleep. */

@@ -9,11 +9,11 @@ import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { serverArt } from '../../features/servers/art';
-import { lifecycleControls, minecraftFact, playersFact, statusDot } from '../../features/servers/model';
+import { lifecycleControls, minecraftFact, playersFact, quickAction, statusDot } from '../../features/servers/model';
 import { serverRefreshing, updateServer } from '../../features/servers/store';
 import { refreshServerWithFeedback } from './refresh-button';
 import type { ServerSnapshot } from '../../features/servers/native';
-import { actionIcons, actionLabels, quickAction, useLifecycle } from './lifecycle';
+import { actionIcons, actionLabels, useLifecycle } from './lifecycle';
 import { RemoveServerDialog } from './remove-dialog';
 import '../../features/instances/instance-card.css';
 
