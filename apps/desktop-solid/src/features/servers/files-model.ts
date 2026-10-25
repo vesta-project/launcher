@@ -4,6 +4,7 @@
 import type { MessageId } from '../../localization/messages';
 import { gate } from './capabilities';
 import type { CapabilityView, FileEntry, ServerCommandError, TextFile, UploadCandidate } from './native';
+import { rawProtectedFile } from './native-files';
 
 /** Whole-file text reads (and so the editor) are bounded by the agent's legacy read. */
 export const TEXT_READ_LIMIT = 1_048_576;
@@ -68,6 +69,22 @@ export function decodeRouteSegments(segments: readonly (string | undefined)[]): 
 
 export function isProtectedPath(path: string): boolean {
   return path.split('/').some((segment) => PROTECTED.includes(segment.toLowerCase()));
+}
+
+/** `raw`: editable here with confirmation. `redirect`: locked, managed in Settings. `none`: an ordinary file. */
+export type ProtectedAccess = 'none' | 'raw' | 'redirect';
+
+/**
+ * Trusts the agent's flag when it sends one (`confirm_edit` for the root documents); an older
+ * agent without it keeps every protected name locked. Raw access needs config.edit plus
+ * files.read and files.overwrite, which owners and admins have by default.
+ */
+export function protectedAccess(view: CapabilityView | undefined, path: string, protection?: FileEntry['protection']): ProtectedAccess {
+  if (protection === 'normal') return 'none';
+  if (!isProtectedPath(path)) return 'none';
+  const raw = protection === 'confirm_edit' || (protection === undefined && rawProtectedFile(path));
+  const can = (capability: string) => gate(view, capability) !== 'denied';
+  return raw && can('config.edit') && can('files.read') && can('files.overwrite') ? 'raw' : 'redirect';
 }
 
 /** Where a protected document is managed instead. */
@@ -197,11 +214,13 @@ export interface FileActions {
 }
 
 /** What may be offered for one entry. Directories only open; rename and delete are regular-file only. */
-export function fileActions(view: CapabilityView | undefined, path: string, entry: Pick<FileEntry, 'kind' | 'size'>): FileActions {
+export function fileActions(view: CapabilityView | undefined, path: string, entry: Pick<FileEntry, 'kind' | 'size' | 'protection'>): FileActions {
   const can = (capability: string) => gate(view, capability) !== 'denied';
-  const isProtected = isProtectedPath(path);
+  const access = protectedAccess(view, path, entry.protection);
+  // Raw protected documents open in the editor (with confirmation) but are never renamed or deleted here.
+  const isProtected = access !== 'none';
   if (entry.kind === 'directory') return { open: can('files.list'), edit: false, rename: false, delete: false, download: false };
-  const read = can('files.read') && !isProtected;
+  const read = can('files.read') && access !== 'redirect';
   const mode = openMode(path, entry);
   return {
     open: read && mode !== 'download',

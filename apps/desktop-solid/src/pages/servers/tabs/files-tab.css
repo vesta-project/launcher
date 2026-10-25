@@ -3,7 +3,7 @@
  * Hooks: [data-vesta=server-files] -file-list -file-head -file-row -file-open -file-icon
  *        -file-name -file-meta -file-bar -file-compare -upload-list -upload-row -upload-copy
  *        -upload-renamed -motd-preview -weakening-list
- * States: file-row: data-protected, data-drop-folder, data-drop-over; file-icon: data-kind;
+ * States: file-row: data-protected=raw|redirect, data-drop-folder, data-drop-over; file-icon: data-kind;
  *         file-meta: data-tone; upload-row: data-skipped. Drop look: file-drop/drop.css
  *
  * Rows follow the Worlds/Resources list: hairline-separated, icon tile, muted metadata.
@@ -120,7 +120,7 @@
     font-weight: var(--vesta-weight-medium);
   }
 
-  :where([data-vesta="server-file-row"][data-protected]) :where([data-vesta="server-file-name"]) {
+  :where([data-vesta="server-file-row"][data-protected="redirect"]) :where([data-vesta="server-file-name"]) {
     color: var(--vesta-color-text-muted);
   }
 
@@ -337,4 +337,27 @@
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-regular, 400);
   }
+}
+
+/*
+ * Raw protected documents (D4): a quiet shield on the row, and a calm notice above the editor.
+ * Hooks: [data-vesta=server-file-guarded|server-file-raw-notice]
+ */
+@layer launcher {
+  :where([data-vesta="server-file-guarded"]) { display: inline-flex; color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted)); }
+  :where([data-vesta="server-file-raw-notice"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md, 8px);
+    background: color-mix(in oklab, var(--vesta-color-accent) 6%, var(--vesta-color-surface-raised));
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-file-raw-notice"]) > span { display: flex; flex: 1 1 280px; align-items: center; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-file-raw-notice"]) strong { color: var(--vesta-color-text); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta="server-file-raw-risk"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); margin: 0; padding-inline-start: var(--vesta-space-4); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); line-height: 1.45; }
 }

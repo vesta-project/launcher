@@ -12,7 +12,7 @@ import type { MessageId } from '../../../localization/messages';
 import { errorMessage } from '../../../features/servers/errors';
 import {
   baseName, childPath, decodeRouteSegments, encodeRouteSegments, fileActions, fileIcon, fileKind, folderActions, formatBytes,
-  isArchivedLog, isExecutableContent, nameProblem, openMode, parentPath, planUploads, protectedHome, sortEntries, uploadConflict, uploadLabel,
+  isArchivedLog, isExecutableContent, nameProblem, openMode, parentPath, planUploads, protectedAccess, sortEntries, uploadConflict, uploadLabel,
   type ConflictChoice,
 } from '../../../features/servers/files-model';
 import { IntentMemo, age, newIntentId } from '../../../features/servers/model';
@@ -21,6 +21,7 @@ import { stableConnectionId } from '../../../features/servers/connection-id';
 import type { FileEntry, ServerCommandError, ServerSnapshot, TrashEntry, UploadCandidate } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 import { FileEditor } from './file-editor';
+import { protectedSection } from '../../../features/servers/protected-edit';
 import { LogFile } from './log-file';
 import { SftpButton } from '../hosting/sftp';
 import { gate } from '../../../features/servers/capabilities';
@@ -92,10 +93,12 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
     return segments.map((name, index) => ({ name, path: segments.slice(0, index + 1).join('/') }));
   };
 
+  /** Raw protected documents open in the editor for owners/admins; everyone else is sent to Settings. */
+  const access = (entry: FileEntry) => protectedAccess(props.snapshot.capabilities, pathOf(entry), entry.protection);
+  const openSettings = (path: string) => transitionTo(`/servers/${id()}/settings/${protectedSection(path)}`);
   const open = (entry: FileEntry) => {
     const path = pathOf(entry);
-    const home = protectedHome(path);
-    if (home) { transitionTo(`/servers/${id()}/${home}`); return; }
+    if (access(entry) === 'redirect') { openSettings(path); return; }
     const mode = openMode(path, entry);
     if (mode === 'directory') go(path);
     else if (mode === 'download') void download(path);
@@ -184,15 +187,15 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
     const Separator = context ? ContextMenuSeparator : MenuSeparator;
     const path = () => pathOf(entry);
     const allowed = () => fileActions(props.snapshot.capabilities, path(), entry);
-    const home = () => protectedHome(path());
+    const guarded = () => access(entry) !== 'none';
     return (
       <>
-        <Show when={home()}>
-          <Item icon={<Icon name="icons/actions/external-link" />} onSelect={() => open(entry)}>
-            {t(home() === 'settings' ? 'server-files.open-in-settings' : 'server-files.open-in-players')}
+        <Show when={guarded()}>
+          <Item icon={<Icon name="icons/actions/external-link" />} onSelect={() => openSettings(path())}>
+            {t(protectedSection(path()) === 'game' ? 'server-files.open-in-settings' : 'server-files.open-in-players')}
           </Item>
         </Show>
-        <Show when={!home() && (allowed().open || entry.kind === 'directory')}>
+        <Show when={access(entry) !== 'redirect' && (allowed().open || entry.kind === 'directory')}>
           <Item icon={<Icon name={entry.kind === 'directory' ? 'icons/content/folder' : 'icons/actions/edit'} />} onSelect={() => open(entry)}>
             {t(entry.kind === 'directory' ? 'server-files.open-folder' : openMode(path(), entry) === 'log' ? 'server-files.view-log' : allowed().edit ? 'server-files.edit' : 'server-files.view')}
           </Item>
@@ -278,7 +281,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
                   <For each={sorted()}>
                     {(entry) => (
                       <ContextMenu trigger={(contextProps) => (
-                        <div {...contextProps} data-vesta="server-file-row" role="row" data-protected={protectedHome(pathOf(entry)) ? '' : undefined}
+                        <div {...contextProps} data-vesta="server-file-row" role="row" data-protected={access(entry) !== 'none' ? access(entry) : undefined}
                           data-drop-folder={entry.kind === 'directory' ? entry.name : undefined}
                           data-drop-over={entry.kind === 'directory' && dropFolder() === entry.name ? '' : undefined}>
                           <button type="button" role="cell" data-vesta="server-file-open" onClick={() => open(entry)}>
@@ -286,8 +289,13 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
                               <Icon name={fileIcon[fileKind(pathOf(entry), entry.kind)]} />
                             </span>
                             <span data-vesta="server-file-name">{entry.name}</span>
-                            <Show when={protectedHome(pathOf(entry))}>
+                            <Show when={access(entry) === 'redirect'}>
                               <Icon name="icons/security/lock" size={12} label={t('server-files.protected')} />
+                            </Show>
+                            <Show when={access(entry) === 'raw'}>
+                              <span data-vesta="server-file-guarded" data-tip={t('server-files.raw-tip')}>
+                                <Icon name="icons/security/shield" size={12} label={t('server-files.raw-tip')} />
+                              </span>
                             </Show>
                           </button>
                           <span role="cell" data-vesta="server-file-meta">{entry.kind === 'directory' ? '' : formatBytes(entry.size)}</span>

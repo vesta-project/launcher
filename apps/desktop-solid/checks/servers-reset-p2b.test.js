@@ -140,3 +140,86 @@ describe('[java] compatibility, custom paths and jobs', () => {
     expect(javaRejection('forbidden', null)).toBe('server-java.custom-refused');
   });
 });
+
+import { fileActions } from '../src/features/servers/files-model';
+import {
+  IDLE, protectedAccess, protectedEditReducer, protectedEditSends, protectedErrorEvent, protectedErrorMessage, protectedResultEvent, protectedSection,
+} from '../src/features/servers/protected-edit';
+import { capabilitiesForRole } from '../src/features/servers/capabilities';
+import { createFixtureServers } from '../src/features/servers/fixtures';
+
+const roleView = (role) => ({ source: 'role_defaults', granted: capabilitiesForRole(role), refused: [] });
+
+describe('[protected files] who may edit raw', () => {
+  test('owners and admins edit the root documents with confirmation; others are redirected', () => {
+    for (const role of ['owner', 'administrator']) expect(protectedAccess(roleView(role), 'server.properties', 'confirm_edit')).toBe('raw');
+    expect(protectedAccess(roleView('maintainer'), 'ops.json', 'confirm_edit')).toBe('redirect');
+    expect(protectedAccess(roleView('owner'), 'eula.txt', 'normal')).toBe('none');
+  });
+  test('an older agent without the flag keeps nested look-alikes locked', () => {
+    expect(protectedAccess(roleView('owner'), 'whitelist.json')).toBe('raw');
+    expect(protectedAccess(roleView('owner'), 'backup/whitelist.json')).toBe('redirect');
+    expect(protectedAccess(roleView('owner'), 'backup/whitelist.json', 'normal')).toBe('none');
+  });
+  test('raw documents open in the editor but are never renamed or deleted from Files', () => {
+    const owner = fileActions(roleView('owner'), 'ops.json', { kind: 'file', size: '3', protection: 'confirm_edit' });
+    expect(owner).toEqual({ open: true, edit: true, rename: false, delete: false, download: true });
+    const maintainer = fileActions(roleView('maintainer'), 'ops.json', { kind: 'file', size: '3', protection: 'confirm_edit' });
+    expect(maintainer).toEqual({ open: false, edit: false, rename: false, delete: false, download: false });
+    expect(protectedSection('server.properties')).toBe('game');
+    expect(protectedSection('banned-ips.json')).toBe('players');
+  });
+});
+
+describe('[protected files] edit state machine', () => {
+  const server = { text: 'theirs', sha256: 'sha-new', size: '6', binary: false, truncated: false };
+  const run = (events, from = IDLE) => events.reduce(protectedEditReducer, from);
+  test('save → validate → confirm → write with the token → idle', () => {
+    let state = run([{ type: 'save', text: 'mine', expected: 'sha-old' }]);
+    expect(state).toEqual({ step: 'preparing', text: 'mine', expected: 'sha-old' });
+    expect(protectedEditSends(state)).toBe(true);
+    state = protectedEditReducer(state, protectedResultEvent({ kind: 'awaitingConfirmation', operationId: 'o', confirmationToken: 'tok', expiresAtMs: 2_000 }));
+    expect(state).toMatchObject({ step: 'confirm', token: 'tok' });
+    expect(protectedEditSends(state)).toBe(false);
+    state = protectedEditReducer(state, { type: 'confirm', nowMs: 1_000 });
+    expect(state).toEqual({ step: 'applying', text: 'mine', expected: 'sha-old', token: 'tok' });
+    expect(protectedEditReducer(state, protectedResultEvent({ kind: 'applied', sha256: 'x', restartNeeded: true }))).toBe(IDLE);
+  });
+  test('cancelling the confirmation writes nothing', () => {
+    expect(run([{ type: 'save', text: 'm', expected: 'a' }, { type: 'prepared', token: 't', expiresAtMs: 9 }, { type: 'cancel' }])).toBe(IDLE);
+  });
+  test('an expired token is asked for again rather than sent', () => {
+    const confirm = run([{ type: 'save', text: 'm', expected: 'a' }, { type: 'prepared', token: 't', expiresAtMs: 1_000 }]);
+    expect(protectedEditReducer(confirm, { type: 'confirm', nowMs: 1_000 })).toEqual({ step: 'preparing', text: 'm', expected: 'a' });
+    const applying = protectedEditReducer(confirm, { type: 'confirm', nowMs: 10 });
+    expect(protectedEditReducer(applying, protectedErrorEvent({ code: 'confirmation_expired' }))).toEqual({ step: 'preparing', text: 'm', expected: 'a' });
+  });
+  test('stale: compare, then reload theirs or overwrite after a fresh confirmation', () => {
+    expect(protectedErrorEvent({ code: 'stale_target' })).toBeNull();
+    const conflict = run([{ type: 'save', text: 'mine', expected: 'sha-old' }, { type: 'stale', server }]);
+    expect(conflict).toEqual({ step: 'conflict', text: 'mine', server });
+    expect(protectedEditReducer(conflict, { type: 'reload' })).toBe(IDLE);
+    const again = protectedEditReducer(conflict, { type: 'overwrite' });
+    expect(again).toEqual({ step: 'preparing', text: 'mine', expected: 'sha-new' });
+    expect(protectedEditReducer(again, { type: 'prepared', token: 't2', expiresAtMs: 5 }).step).toBe('confirm');
+    // No validator for the server copy (preview only): nothing to overwrite against.
+    expect(protectedEditReducer({ ...conflict, server: { ...server, sha256: null } }, { type: 'overwrite' }).step).toBe('conflict');
+  });
+  test('deleted on the server, refusals and unrelated events', () => {
+    expect(run([{ type: 'save', text: 'm', expected: 'a' }, protectedErrorEvent({ code: 'not_found' })])).toEqual({ step: 'gone' });
+    expect(run([{ type: 'save', text: 'm', expected: 'a' }, protectedErrorEvent({ code: 'invalid_input' })])).toBe(IDLE);
+    expect(protectedErrorMessage({ code: 'invalid_input' }, 'ops.json')).toBe('server-files.raw-invalid-json');
+    expect(protectedErrorMessage({ code: 'invalid_input' }, 'server.properties')).toBe('server-files.raw-invalid-properties');
+    expect(protectedEditReducer(IDLE, { type: 'confirm', nowMs: 0 })).toBe(IDLE);
+  });
+  test('fixtures: the token write applies only with the same intent and validator', async () => {
+    const servers = createFixtureServers({ latencyMs: 0 });
+    const file = await servers.fileReadText('fixture-survival', 'ops.json');
+    const next = `${file.text.trim()} \n`;
+    const first = await servers.fileWriteProtected('fixture-survival', 'ops.json', next, file.sha256, null, 'raw-1');
+    expect(first.kind).toBe('awaitingConfirmation');
+    const done = await servers.fileWriteProtected('fixture-survival', 'ops.json', next, file.sha256, first.confirmationToken, 'raw-1');
+    expect(done).toMatchObject({ kind: 'applied', restartNeeded: true });
+    await expect(servers.fileWriteProtected('fixture-survival', 'ops.json', '[]', file.sha256, null, 'raw-2')).rejects.toMatchObject({ code: 'stale_target' });
+  });
+});
