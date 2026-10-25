@@ -13,6 +13,20 @@ function deferred() {
 }
 
 describe('request cache correctness', () => {
+  test('catalogue freshness extends reuse without delaying invalidation or expiry', async () => {
+    const { cache, advance } = setup();
+    let loads = 0;
+    const load = async () => ++loads;
+    await cache.read('catalogue', load, 80);
+    advance(30);
+    expect(await cache.read('catalogue', load, 80)).toBe(1);
+    cache.invalidate('catalogue');
+    expect(await cache.read('catalogue', load, 80)).toBe(2);
+    advance(80);
+    expect(await cache.read('catalogue', load, 80)).toBe(3);
+    expect(() => cache.read('catalogue', load, 101)).toThrow('Invalid freshness lifetime');
+  });
+
   test('100 concurrent consumers share one request; warm reads avoid loading', async () => {
     const { cache } = setup();
     let calls = 0;

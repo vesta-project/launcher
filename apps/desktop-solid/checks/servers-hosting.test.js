@@ -67,7 +67,7 @@ describe('[software] review, apply and follow', () => {
     expect(state.current).toMatchObject({ software: 'fabric', version: '1.21.1' });
     expect(state.previous).toMatchObject({ software: 'paper' });
   }, 15_000);
-  test('unsupported software is visible but cannot be planned', async () => {
+  test('unsupported providers remain described by the API but cannot be planned', async () => {
     const servers = createFixtureServers({ latencyMs: 0 });
     const state = await servers.software('fixture-survival');
     expect(state.catalog.find((entry) => entry.software === 'forge')).toMatchObject({ automaticBackend: false, unavailableReason: 'provider_not_implemented' });

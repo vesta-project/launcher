@@ -11,7 +11,7 @@ import type { SoftwareId, SoftwareJob, SoftwareLaunch, SoftwarePlan, SoftwareSta
 import { IntentMemo } from '../../../features/servers/model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
-import { javaInventoryResource, softwareJobsResource, softwareResource, softwareVersionsResource, softwareReleasesResource } from '../../../features/servers/server-resources';
+import { javaInventoryResource, softwareJobsResource, softwareResource, softwareVersionsResource, softwareReleasesResource, warmSoftwareMetadata } from '../../../features/servers/server-resources';
 import type { ServerJavaInventory } from '../../../features/servers/native-java';
 import { isJavaJob, javaCompatibility, runtimeFor } from '../../../features/servers/server-java-model';
 import {
@@ -222,13 +222,11 @@ function ChangeFlow(props: {
   // The editor is mounted only while Minecraft is stopped.
   const locked = () => !props.state.available || props.state.recoveryRequired || props.jobRunning || busy() || reviewing();
 
-  const softwareOptions = createMemo(() => props.state.catalog.map((entry) => ({
+  const softwareOptions = createMemo(() => props.state.catalog.filter(selectable).map((entry) => ({
     value: entry.software,
     label: softwareName(entry.software)!,
-    disabled: !selectable(entry),
     icon: <SoftwareMark software={entry.software} />,
   })), { name: 'server-software:options' });
-  const notHere = () => props.state.catalog.filter((entry) => !selectable(entry)).map((entry) => softwareName(entry.software)).join(', ');
   const minecraftOptions = createMemo(() => {
     const values = versionList() ?? [];
     const current = software() === start.software ? start.minecraft : null;
@@ -246,6 +244,17 @@ function ChangeFlow(props: {
     && (!plan()!.warnings.length || acknowledged()) && (!legacy() || legacyAcknowledged());
 
   const pick = (value: string) => { setSoftware(value as SoftwareId); setError(null); };
+  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  const warmOption = (target: EventTarget | null) => {
+    clearTimeout(hoverTimer);
+    const name = target instanceof Element ? target.closest('[data-vesta="segmented-item"]')?.querySelector('[data-software]')?.getAttribute('data-software') : null;
+    const entry = props.state.catalog.find(entry => entry.software === name && selectable(entry));
+    if (!entry) return;
+    hoverTimer = setTimeout(() => {
+      if (!versions.refreshing() && !releases.refreshing() && !locked()) void warmSoftwareMetadata(id(), entry.software, minecraft());
+    }, 150);
+  };
+  onCleanup(() => clearTimeout(hoverTimer));
   const discard = () => {
     const reset = initialChoice(props.state.catalog, props.state.current, props.snapshot.info?.minecraftVersion || null);
     setSoftware(reset.software); setWanted(reset.minecraft); setPickedRelease(null); setPlan(null); setError(null);
@@ -289,9 +298,10 @@ function ChangeFlow(props: {
     <div data-vesta="server-software-flow" data-server-software-step={reviewing() ? 'review' : 'pick'}>
       <Show when={!reviewing()}>
         <Field label={t('server-hosting.software-label')}>
+          <div onPointerOver={(event) => { if (event.pointerType !== 'touch') warmOption(event.target); }} onPointerLeave={() => clearTimeout(hoverTimer)} onFocusIn={(event) => warmOption(event.target)}>
           <SegmentedControl aria-label={t('server-hosting.software-label')} fill value={software() ?? undefined}
             options={softwareOptions()} onChange={pick} disabled={locked()} />
-          <Show when={notHere()}>{(names) => <p data-vesta="server-hosting-hint">{t('server-hosting.not-set-up-here', { name: names() })}</p>}</Show>
+          </div>
           <Show when={caution()}><p data-vesta="server-hosting-hint">{t('server-hosting.warning-region-threading')}</p></Show>
         </Field>
 

@@ -13,9 +13,10 @@ import type { ConnectionId, ServerCommandError } from './native';
 export interface ServerResourceDef<T, A = undefined> {
   name: string;
   load: (connectionId: ConnectionId, args: A) => Promise<T>;
+  staleTimeMs?: number;
 }
 
-export const serverResource = <T, A = undefined>(name: string, load: (connectionId: ConnectionId, args: A) => Promise<T>): ServerResourceDef<T, A> => ({ name, load });
+export const serverResource = <T, A = undefined>(name: string, load: (connectionId: ConnectionId, args: A) => Promise<T>, staleTimeMs?: number): ServerResourceDef<T, A> => ({ name, load, staleTimeMs });
 
 const STALE_MS = 30_000;
 const RETAIN_MS = 10 * 60_000;
@@ -26,6 +27,7 @@ export const resourceKey = (connectionId: ConnectionId, name: string, args?: unk
 interface ResourceEntry {
   id: ConnectionId;
   name: string;
+  staleTimeMs?: number;
   load: () => Promise<unknown>;
   readers: number;
   failures: number;
@@ -117,7 +119,7 @@ function track<T, A>(id: ConnectionId, def: ServerResourceDef<T, A>, args?: A) {
   const key = resourceKey(id, def.name, args);
   let entry = knownKeys.get(key);
   if (!entry) {
-    const next: ResourceEntry = { id, name: def.name, load: async () => {
+    const next: ResourceEntry = { id, name: def.name, staleTimeMs: def.staleTimeMs, load: async () => {
       // RequestCache may queue a replacement behind invalidated IPC. Check guidance
       // here too, because the retired request can fail after that replacement queued.
       if (next.error && next.retryAt > Date.now()) throw next.error;
@@ -152,7 +154,7 @@ function readShared(key: string, entry: ResourceEntry): Promise<unknown> {
     scheduleRetry(key, entry);
     return Promise.reject(entry.error);
   }
-  try { return serverResourceCache.read(key, entry.load); }
+  try { return serverResourceCache.read(key, entry.load, entry.staleTimeMs); }
   catch (reason) {
     // A budget failure must not leave an orphan metadata entry.
     if (!serverResourceCache.peek(key)) evict(key);

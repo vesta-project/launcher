@@ -3,11 +3,13 @@
 // opens with data. Nothing here navigates or writes view state.
 import { onSettled } from 'solid-js';
 import { anyVisible } from '../../features/servers/capabilities';
-import { prefetchServerResource } from '../../features/servers/resources';
+import { prefetchServerResource, readServerResource } from '../../features/servers/resources';
+import { initialChoice, selectable } from '../../features/servers/software-flow';
+import { gameStopped } from '../../features/servers/hosting-model';
 import {
   accessSourcesResource, backupStorageResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
   motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, softwareJobsResource, softwareResource,
-  usersResource, whitelistResource, worldResource,
+  usersResource, whitelistResource, worldResource, warmSoftwareMetadata,
 } from '../../features/servers/server-resources';
 import { workflowsResource } from './automation/resources';
 import { agentReachable } from '../../features/servers/shell-model';
@@ -40,7 +42,11 @@ registerServerPrefetch('general', (snapshot) => prefetchServerResource(snapshot.
 registerServerPrefetch('game', (snapshot) => prefetchServerResource(snapshot.connection.id, propertiesResource));
 registerServerPrefetch('world', (snapshot) => prefetchServerResource(snapshot.connection.id, worldResource));
 registerServerPrefetch('software', (snapshot) => {
-  prefetchServerResource(snapshot.connection.id, softwareResource);
+  void readServerResource(snapshot.connection.id, softwareResource).then((state) => {
+    if (!state.available || state.recoveryRequired || !gameStopped(snapshot)) return;
+    const choice = initialChoice(state.catalog, state.current, snapshot.info?.minecraftVersion ?? null);
+    if (choice.software && state.catalog.some(entry => entry.software === choice.software && selectable(entry))) void warmSoftwareMetadata(snapshot.connection.id, choice.software, choice.minecraft);
+  }).catch(() => {});
   prefetchServerResource(snapshot.connection.id, softwareJobsResource);
 });
 registerServerPrefetch('presence', (snapshot) => {

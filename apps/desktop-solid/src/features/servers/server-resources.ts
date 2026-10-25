@@ -1,6 +1,7 @@
 // The cached reads the server workspace shares between tabs, prefetch and the shell.
 import { toServerError } from './errors';
-import { serverResource } from './resources';
+import { readServerResource, serverResource } from './resources';
+import { keepMinecraft, softwareVersionKind } from './software-flow';
 import { loadOperations, serverCommand } from './store';
 import type { BackupOverview, BackupStorage } from './native-manage';
 import type { SoftwareId } from './hosting-native';
@@ -53,11 +54,27 @@ export const softwareResource = serverResource('software', (id) => serverCommand
 export const softwareJobsResource = serverResource('software-jobs', (id) => serverCommand((client) => client.softwareJobs(id)));
 /** Java runtimes on the agent host and the one this server uses (owner only). */
 export const javaInventoryResource = serverResource('java', (id) => serverCommand((client) => client.javaInventory(id)));
-/** Versions for one software; upstream metadata, so it's read only when picked. */
+/** Slow-changing upstream lists share five minutes of freshness, including hover warmups. */
+const CATALOGUE_FRESH_MS = 5 * 60_000;
 export const softwareReleasesResource = serverResource('software-releases', (id, args: { software: SoftwareId; version: string }) =>
-  serverCommand((client) => client.softwareReleases(id, args.software, args.version)));
+  serverCommand((client) => client.softwareReleases(id, args.software, args.version)), CATALOGUE_FRESH_MS);
 export const softwareVersionsResource = serverResource('software-versions', (id, software: SoftwareId) =>
-  serverCommand((client) => client.softwareVersions(id, software)));
+  serverCommand((client) => client.softwareVersions(id, software)), CATALOGUE_FRESH_MS);
+
+/** Warm only the intended provider and likely version, sharing reads with the mounted view. */
+const warmingCatalogues = new Set<string>();
+export async function warmSoftwareMetadata(id: string, software: SoftwareId, wanted: string | null) {
+  // Moving across several tiles must not fan out upstream requests or fill the
+  // agent's single metadata query slot with speculative work.
+  if (warmingCatalogues.has(id)) return;
+  warmingCatalogues.add(id);
+  try {
+    const catalogue = await readServerResource(id, softwareVersionsResource, software);
+    const version = keepMinecraft(catalogue.versions, wanted);
+    if (version && softwareVersionKind(software)) await readServerResource(id, softwareReleasesResource, { software, version });
+  } catch { /* The visible resource owns errors and retry guidance. */ }
+  finally { warmingCatalogues.delete(id); }
+}
 export const sftpResource = serverResource('sftp', (id) => serverCommand((client) => client.sftp(id)));
 export const sftpKeysResource = serverResource('sftp-keys', (id) => serverCommand((client) => client.sftpKeys(id)));
 

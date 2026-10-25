@@ -7,6 +7,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 let builtHarness;
 const harness = () => (builtHarness ??= buildHarness());
 
+test('catalogue warmup and mounted readers share one load without reactive diagnostics', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    let reads = 0;
+    const catalogue = check.serverResource('software-versions', async () => { reads++; return ['1.21.4']; }, 300_000);
+    await Promise.all(Array.from({ length: 20 }, () => check.readServerResource('catalogue-warmup', catalogue, 'paper')));
+    await check.readServerResource('catalogue-warmup', catalogue, 'paper');
+    expect(reads).toBe(1);
+    await check.removeServer('catalogue-warmup');
+  }, { scenario: 'catalogue-prefetch-read-sharing' });
+  check.expectNoDiagnostics(artifact);
+});
+
 test('one shared roster follows equal-count replacements and refuses stale/offline names', async () => {
   const check = await harness();
   const { artifact } = await check.captureArtifact(async () => {

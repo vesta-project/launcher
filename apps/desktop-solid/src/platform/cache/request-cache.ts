@@ -141,7 +141,8 @@ export class RequestCache<T> {
     this.policy.onEvict?.(key);
   }
 
-  read(key: string, loader: () => Promise<T>): Promise<T> {
+  read(key: string, loader: () => Promise<T>, staleTimeMs = this.policy.staleTimeMs): Promise<T> {
+    if (!Number.isFinite(staleTimeMs) || staleTimeMs < 0 || staleTimeMs > this.policy.retentionMs) throw new Error('Invalid freshness lifetime');
     const entry = this.entry(key);
     if (entry.hasData && this.now() < entry.freshUntil) {
       this.metrics.hits++;
@@ -154,7 +155,7 @@ export class RequestCache<T> {
       const queuedGeneration = entry.generation;
       return entry.pending.catch(() => undefined).then(() => {
         if (queuedGeneration !== entry.generation) throw new CacheInvalidatedError();
-        return this.read(key, loader);
+        return this.read(key, loader, staleTimeMs);
       });
     }
     this.metrics.misses++;
@@ -175,7 +176,7 @@ export class RequestCache<T> {
         throw new CacheInvalidatedError();
       }
       Object.assign(entry, { data, hasData: true, updatedAt: this.now(),
-        freshUntil: this.now() + this.policy.staleTimeMs });
+        freshUntil: this.now() + staleTimeMs });
       return data;
     }).catch((error: unknown) => {
       if (generation !== entry.generation) {
