@@ -670,3 +670,17 @@ servers-graphs-empty = No performance history for this time range yet.
 servers-graphs-summary = { $name } over the last { $time }: latest { $value }, low { $min }, high { $max }.
 servers-graphs-summary-empty = { $name }: no samples in this time range.
 servers-graphs-allocated = Allocated
+
+servers-access-people-help = People who can manage this server, and the devices they use. Only the server computer can grant Owner or Administrator.
+servers-access-no-people = No one else manages this server yet. Invite someone to add them.
+servers-access-you = You
+servers-access-unknown-person = Unknown person
+servers-access-devices-of = Devices of { $name }
+servers-access-pack-users = Pack users ({ $count })
+servers-access-pack-users-summary = { $count } active devices
+servers-access-pack-users-help = People who download this server's pack through Vesta. Plain Minecraft players aren't listed.
+servers-access-rename-device = Rename { $name }
+servers-access-rename-title = Rename device
+servers-access-device-name = Device name
+servers-access-device-name-long = Use 64 characters or fewer.
+servers-access-device-name-invalid = Device names can't contain control characters.

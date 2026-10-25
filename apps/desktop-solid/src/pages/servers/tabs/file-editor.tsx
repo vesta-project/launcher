@@ -1,11 +1,17 @@
 import { Badge, Button, Dialog, IconButton, Skeleton, TextArea, toast } from '@vesta/ui';
-import { Show, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Show, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 import { navigate, setLeaveGuard } from '../../../app/router';
+import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import { baseName, changedLineCount, fileActions, fileIcon, fileKind, formatBytes, saveTextFile } from '../../../features/servers/files-model';
 import { IntentMemo } from '../../../features/servers/model';
-import { serverCommand } from '../../../features/servers/store';
+import { serverCommand, useServersClock } from '../../../features/servers/store';
+import {
+  IDLE, protectedAccess, protectedErrorEvent, protectedErrorMessage, protectedEditReducer, protectedEditSends, protectedNotice, protectedResultEvent,
+  protectedLeaveDestination, protectedSection, type ProtectedEdit, type ProtectedEditEvent,
+} from '../../../features/servers/protected-edit';
+import type { MessageId } from '../../../localization/messages';
 import type { ServerCommandError, ServerSnapshot, TextFile } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
 import '../../library/instance/settings-tab.css';
@@ -24,6 +30,12 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   const [conflict, setConflict] = createSignal<TextFile | null>(null, { name: 'server-file-editor:conflict' });
   const [gone, setGone] = createSignal(false, { name: 'server-file-editor:gone' });
   const intents = new IntentMemo();
+  /** Owners/admins editing server.properties, whitelist.json, ops.json or banned-*.json directly. */
+  const raw = () => protectedAccess(props.snapshot.capabilities, props.path) === 'raw';
+  const [edit, setEdit] = createSignal<ProtectedEdit>(IDLE, { name: 'server-file-editor:protected' });
+  const [rawProblem, setRawProblem] = createSignal<MessageId | null>(null, { name: 'server-file-editor:raw-problem' });
+  const rawIntents = new IntentMemo();
+  const now = useServersClock();
   const editable = () => {
     const current = file();
     return !!current && !current.binary && !current.truncated && fileActions(props.snapshot.capabilities, props.path, { kind: 'file', size: current.size }).edit;
@@ -31,6 +43,7 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   const dirty = () => !!file() && draft() !== file()!.text;
   /** Where the user tried to go with unsaved edits: a route, or `close` for the Back button. */
   const [leaving, setLeaving] = createSignal<string | null>(null, { name: 'server-file-editor:leaving' });
+  let rawLeave: string | null = null;
   const saveKeys = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 
   const load = async () => {
@@ -62,8 +75,63 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
     } finally { setSaving(false); }
     return false;
   };
-  const canSave = () => dirty() && editable() && !saving();
-  const saveNow = () => (canSave() ? save(draft(), validator()) : Promise.resolve(false));
+  const canSave = () => dirty() && editable() && !saving() && edit().step === 'idle';
+  const saveNow = () => {
+    if (!canSave()) return Promise.resolve(false);
+    if (raw() && validator()) { setRawProblem(null); step({ type: 'save', text: draft(), expected: validator()! }); return Promise.resolve(false); }
+    return save(draft(), validator());
+  };
+
+  // ---- Raw protected documents: validate → confirm the risk → write with the token.
+  /** Applies one transition and sends the request the next step needs. */
+  const step = (event: ProtectedEditEvent) => {
+    if (event.type === 'cancel' || event.type === 'reload' || event.type === 'failed' || event.type === 'gone') rawLeave = null;
+    const next = protectedEditReducer(untrack(edit), event);
+    setEdit(next);
+    if (next.step === 'conflict') setConflict(next.server);
+    if (next.step === 'gone') { setGone(true); setValidator(null); }
+    if (protectedEditSends(next)) void send(next);
+  };
+  const send = async (state: ProtectedEdit) => {
+    if (state.step !== 'preparing' && state.step !== 'applying') return;
+    setSaving(true); setError(null);
+    const intentId = rawIntents.idFor({ path: props.path, text: state.text, expected: state.expected });
+    try {
+      const result = await serverCommand((client) => client.fileWriteProtected(id(), props.path, state.text, state.expected,
+        state.step === 'applying' ? state.token : null, intentId));
+      if (result.kind === 'applied') {
+        rawIntents.settle();
+        setFile({ text: state.text, sha256: result.sha256, size: String(new TextEncoder().encode(state.text).length), binary: false, truncated: false });
+        setValidator(result.sha256); setConflict(null); setGone(false);
+        toast.show({ title: t('server-files.saved', { name: baseName(props.path) }), description: result.restartNeeded ? t('server-files.raw-restart') : undefined, tone: 'success' });
+      }
+      const event = protectedResultEvent(result);
+      const destination = protectedLeaveDestination(rawLeave, event);
+      step(event);
+      if (event.type === 'applied') rawLeave = null;
+      if (destination && draft() === state.text) proceed(destination);
+    } catch (reason) {
+      const failure = reason as ServerCommandError;
+      rawIntents.settle(failure);
+      const event = protectedErrorEvent(failure);
+      if (event) {
+        if (event.type === 'failed') { const message = protectedErrorMessage(failure, props.path); if (message) setRawProblem(message); else setError(failure); }
+        if (event.type === 'expired') toast.show({ title: t('server-files.raw-expired'), tone: 'neutral' });
+        step(event);
+        return;
+      }
+      // Stale: read the server's copy so the user can compare before choosing.
+      try { step({ type: 'stale', server: await serverCommand((client) => client.fileReadText(id(), props.path)) }); }
+      catch (readError) {
+        if ((readError as ServerCommandError).code === 'not_found') step({ type: 'gone' });
+        else { setError(readError as ServerCommandError); step({ type: 'failed' }); }
+      }
+    } finally { setSaving(false); }
+  };
+  const confirming = () => { const current = edit(); return current.step === 'confirm' || current.step === 'applying' ? current : null; };
+  const secondsLeft = () => { const current = edit(); return current.step === 'confirm' ? Math.max(0, Math.ceil((current.expiresAtMs - now()) / 1000)) : null; };
+  /** The draft goes over a newer server copy (after "Overwrite with mine"). */
+  const overwriting = () => { const current = confirming(); return !!current && current.expected !== file()?.sha256; };
   const discard = () => { if (file()) setDraft(file()!.text); };
 
   // Unsaved edits hold every way out: other routes, the Back button, and closing the window.
@@ -85,7 +153,12 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
     if (to === 'close') props.onClose(); else navigate(to);
   };
   const leaveDiscarding = () => { const to = leaving(); discard(); if (to) proceed(to); };
-  const leaveSaving = async () => { const to = leaving(); if (to && await saveNow()) proceed(to); else setLeaving(null); };
+  const leaveSaving = async () => {
+    const to = leaving();
+    if (!to) return;
+    if (raw() && canSave() && validator()) { rawLeave = to; setLeaving(null); void saveNow(); return; }
+    if (await saveNow()) proceed(to); else setLeaving(null);
+  };
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 's') return;
@@ -97,6 +170,11 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
     const server = conflict();
     if (!server) return;
     setFile(server); setDraft(server.text); setValidator(server.sha256); setConflict(null);
+    if (edit().step !== 'idle') step({ type: 'reload' });
+  };
+  const overwriteMine = () => {
+    if (edit().step === 'conflict') { setConflict(null); step({ type: 'overwrite' }); }
+    else void save(draft(), conflict()?.sha256 ?? null);
   };
 
   return (
@@ -123,6 +201,14 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
         <IconButton size="sm" variant="ghost" icon={<Icon name="icons/actions/download" />} label={t('server-files.download')} onClick={props.onDownload} />
       </div>
       <div data-vesta="server-pane-body" class="server-file-editor-body">
+        <Show when={raw()}>
+          <div data-vesta="server-file-raw-notice" role="note">
+            <span><Icon name="icons/security/shield" size={14} /><span><strong>{t('server-files.raw-notice-title')}</strong> {t(protectedNotice(props.path))}</span></span>
+            <Button size="sm" variant="outline" icon={<Icon name="icons/actions/external-link" />}
+              onClick={() => transitionTo(`/servers/${id()}/settings/${protectedSection(props.path)}`)}>{t('server-files.raw-open-there')}</Button>
+          </div>
+        </Show>
+        <Show when={rawProblem()}>{(message) => <p data-vesta="server-callout" data-tone="danger" role="alert">{t(message())}</p>}</Show>
         <ServerErrorNote error={error()} onRetry={() => void load()} />
         <Show when={file()?.truncated}><p data-vesta="server-callout" data-tone="neutral">{t('server-files.preview-only')}</p></Show>
         <Show when={gone()}><p data-vesta="server-callout" data-tone="warning">{t('server-files.deleted-on-server')}</p></Show>
@@ -143,14 +229,33 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
           <Button tone="accent" disabled={!canSave()} onClick={() => void leaveSaving()}>{t('server-files.save')}</Button>
         </>}
       />
-      <Dialog open={!!conflict()} onOpenChange={(open) => { if (!open) setConflict(null); }} closeLabel={t('nav.close')} size="lg"
+      <Dialog open={!!confirming()} onOpenChange={(open) => { if (!open && edit().step === 'confirm') step({ type: 'cancel' }); }} closeLabel={t('nav.close')} size="sm"
+        title={t('server-files.raw-confirm-title', { name: baseName(props.path) })}
+        description={t('server-files.raw-confirm-description')}
+        footer={<>
+          <span data-vesta="server-muted">{secondsLeft() !== null ? t('server-files.raw-confirm-expires', { count: secondsLeft()! }) : t('server-files.raw-saving')}</span>
+          <span data-vesta="server-toolbar-spacer" />
+          <Button variant="ghost" disabled={edit().step !== 'confirm'} onClick={() => step({ type: 'cancel' })}>{t('common.cancel')}</Button>
+          <Button tone="danger" disabled={edit().step !== 'confirm'} onClick={() => step({ type: 'confirm', nowMs: Date.now() })}>
+            {t(secondsLeft() === 0 ? 'server-hosting.review-again' : overwriting() ? 'server-files.raw-confirm-overwrite' : 'server-files.raw-confirm-save')}
+          </Button>
+        </>}
+      >
+        <ul data-vesta="server-file-raw-risk">
+          <li>{t(protectedSection(props.path) === 'game' ? 'server-files.raw-risk-checks-game' : 'server-files.raw-risk-checks-players')}</li>
+          <li>{t('server-files.raw-risk-trash')}</li>
+          <li>{t('server-files.raw-risk-restart')}</li>
+          <Show when={overwriting()}><li>{t('server-files.raw-risk-overwrite')}</li></Show>
+        </ul>
+      </Dialog>
+      <Dialog open={!!conflict()} onOpenChange={(open) => { if (!open) { setConflict(null); if (edit().step === 'conflict') step({ type: 'cancel' }); } }} closeLabel={t('nav.close')} size="lg"
         title={t('server-files.conflict-title')}
         description={t('server-files.conflict-description', { name: baseName(props.path) })}
         footer={<>
-          <Button variant="ghost" onClick={() => setConflict(null)}>{t('server-files.keep-editing')}</Button>
+          <Button variant="ghost" onClick={() => { setConflict(null); if (edit().step === 'conflict') step({ type: 'cancel' }); }}>{t('server-files.keep-editing')}</Button>
           <span data-vesta="server-toolbar-spacer" />
           <Button variant="outline" onClick={discardMine}>{t('server-files.discard-mine')}</Button>
-          <Button tone="danger" disabled={saving()} onClick={() => void save(draft(), conflict()?.sha256 ?? null)}>{t('server-files.overwrite-mine')}</Button>
+          <Button tone="danger" disabled={saving()} onClick={overwriteMine}>{t('server-files.overwrite-mine')}</Button>
         </>}
       >
         <Show when={conflict()}>

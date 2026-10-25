@@ -11,7 +11,9 @@ import type { SoftwareId, SoftwareJob, SoftwareLaunch, SoftwarePlan, SoftwareSta
 import { IntentMemo } from '../../../features/servers/model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
-import { softwareJobsResource, softwareResource, softwareVersionsResource } from '../../../features/servers/server-resources';
+import { javaInventoryResource, softwareJobsResource, softwareResource, softwareVersionsResource } from '../../../features/servers/server-resources';
+import type { ServerJavaInventory } from '../../../features/servers/native-java';
+import { isJavaJob, javaCompatibility, runtimeFor } from '../../../features/servers/server-java-model';
 import {
   changeBlocker, choiceState, initialChoice, keepMinecraft, latestVersionLabel, selectable, softwareIcon, softwareVersionKind,
   softwareVersionText, type SoftwareChoice,
@@ -19,6 +21,7 @@ import {
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { SettingsPage, SettingsPanel } from '../settings-parts';
 import { Hint, HostingError } from './parts';
+import { JavaPanel, useJavaActions, type JavaActions } from './java-panel';
 import './hosting.css';
 
 const launchText = (launch: SoftwareLaunch | null | undefined) => launchSummary(launch) ?? t('server-hosting.original-setup');
@@ -37,6 +40,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const software = useServerResource(id, softwareResource);
   const jobs = useServerResource(id, softwareJobsResource);
+  const java = useServerResource(id, javaInventoryResource);
   const [restoring, setRestoring] = createSignal(false, { name: 'server-software:restoring' });
   /** The job this view accepted or found running; its outcome is shown once it ends. */
   const [followed, setFollowed] = createSignal<string | null>(null, { name: 'server-software:followed' });
@@ -54,7 +58,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
       await jobs.refresh();
       if (disposed) return;
       if (jobActive(untrack(latest))) follow(attempt + 1);
-      else { timer = undefined; void software.refresh(); }
+      else { timer = undefined; void software.refresh(); void java.refresh(); }
     }, jobPollDelay(attempt));
   };
   createEffect(busy, (active) => {
@@ -69,6 +73,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
     follow();
   };
   const outcome = () => { const job = latest(); return job && job.id === followed() ? job : undefined; };
+  const javaActions = useJavaActions(() => props.snapshot, accepted);
 
   return (
     <SettingsPage>
@@ -76,7 +81,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
       <Show when={software.value()} fallback={<Show when={!software.error()}><Skeleton height={132} radius={12} /></Show>}>
         {(state) => (
           <>
-            <SoftwareHero state={state()} job={outcome()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
+            <SoftwareHero state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
             <Show when={!state().available}>
               <p data-vesta="server-callout" data-tone="warning">
                 {t(reasonMessage(state().unavailableReason) ?? 'server-hosting.software-unavailable')}
@@ -86,8 +91,11 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
               <p data-vesta="server-callout" data-tone="danger">{t('server-hosting.recovery-banner')}</p>
             </Show>
             <SettingsPanel title={t('server-hosting.change')} description={t('server-hosting.change-pick-description')} name="software">
-              <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} />
+              <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} java={java.value()} javaActions={javaActions} />
             </SettingsPanel>
+            <JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
+              minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
+              onRefresh={() => void java.refresh()} />
           </>
         )}
       </Show>
@@ -100,7 +108,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
 }
 
 /** What runs now, as a rich card: mark, name, versions, Java, job progress and the quiet way back. */
-function SoftwareHero(props: { state: SoftwareState; job: SoftwareJob | undefined; busy: boolean; stopped: boolean; onRestore: () => void }) {
+function SoftwareHero(props: { state: SoftwareState; job: SoftwareJob | undefined; java: ServerJavaInventory | undefined; busy: boolean; stopped: boolean; onRestore: () => void }) {
   const current = () => props.state.current;
   const extra = () => softwareVersionText(current());
   return (
@@ -117,12 +125,13 @@ function SoftwareHero(props: { state: SoftwareState; job: SoftwareJob | undefine
             <Show when={extra()}>{(text) => <><span aria-hidden="true">·</span><span>{text()}</span></>}</Show>
           </p>
         </div>
-        {/* Java is information for now; the runtime picker (D5) takes this slot. */}
+        {/* The runtime this server starts with; the Java panel below changes it. */}
         <div data-vesta="server-software-java" data-server-software-java>
-          <Show when={current()?.javaMajor}>
+          <Show when={props.java?.selected?.major ?? current()?.javaMajor}>
             {(major) => (
-              <Badge tone="neutral" variant="outline">
+              <Badge tone="neutral" variant="outline" title={props.java?.selected?.path}>
                 {t('server-hosting.java-version', { version: String(major()) })}
+                <Show when={props.java?.selected?.vendor}>{(vendor) => <> · {vendor()}</>}</Show>
               </Badge>
             )}
           </Show>
@@ -180,7 +189,10 @@ function Field(props: { label: string; aside?: JSX.Element; children: JSX.Elemen
  * Inline change: software → Minecraft version → software version, then the agent's plan is
  * reviewed in place and applied. Same plan/apply contract and confirmations as before.
  */
-function ChangeFlow(props: { snapshot: ServerSnapshot; state: SoftwareState; jobRunning: boolean; onAccepted: (job: SoftwareJob) => void }) {
+function ChangeFlow(props: {
+  snapshot: ServerSnapshot; state: SoftwareState; jobRunning: boolean; onAccepted: (job: SoftwareJob) => void;
+  java: ServerJavaInventory | undefined; javaActions: JavaActions;
+}) {
   const id = stableConnectionId(() => props.snapshot);
   const now = useServersClock();
   const start = untrack(() => initialChoice(props.state.catalog, props.state.current));
@@ -223,7 +235,8 @@ function ChangeFlow(props: { snapshot: ServerSnapshot; state: SoftwareState; job
   const expired = () => !!plan() && remaining() === 0;
   const legacy = () => !!plan()?.warnings.includes('legacy_checksum');
   const otherWarnings = () => plan()?.warnings.filter((code) => code !== 'legacy_checksum') ?? [];
-  const canApply = () => !!plan() && !expired() && !busy() && gameStopped(props.snapshot)
+  const compat = () => (plan() ? javaCompatibility(plan()!) : null);
+  const canApply = () => !!plan() && !expired() && !busy() && gameStopped(props.snapshot) && compat()?.state !== 'incompatible'
     && (!plan()!.warnings.length || acknowledged()) && (!legacy() || legacyAcknowledged());
 
   const pick = (value: string) => { setSoftware(value as SoftwareId); setError(null); };
@@ -327,7 +340,7 @@ function ChangeFlow(props: { snapshot: ServerSnapshot; state: SoftwareState; job
                 </div>
               </div>
             </div>
-            <p data-vesta="server-hosting-hint">{t('server-hosting.java-needs', { version: String(current().java.major) })}</p>
+            <Show when={compat()}>{(java) => <JavaCompat compat={java()} inventory={props.java} actions={props.javaActions} locked={busy() || props.jobRunning} stopped={gameStopped(props.snapshot)} onReplan={() => void review()} />}</Show>
             <p data-vesta="server-callout" data-tone="warning">{t('server-hosting.backup-first')}</p>
             <Show when={otherWarnings().length || current().risks.length}>
               <ul data-vesta="server-hosting-warnings">
@@ -357,6 +370,51 @@ function ChangeFlow(props: { snapshot: ServerSnapshot; state: SoftwareState; job
         )}
       </Show>
       <HostingError error={error()} />
+    </div>
+  );
+}
+
+/**
+ * The plan's Java verdict. When the chosen software needs a Java this server doesn't use,
+ * offer the installed runtime, or the agent's managed download, then plan again.
+ */
+function JavaCompat(props: {
+  compat: ReturnType<typeof javaCompatibility>; inventory: ServerJavaInventory | undefined; actions: JavaActions;
+  locked: boolean; stopped: boolean; onReplan: () => void;
+}) {
+  const installed = () => runtimeFor(props.inventory, props.compat.required);
+  const usingIt = () => !!installed() && props.inventory?.selected?.id === installed()!.id;
+  return (
+    <div data-vesta="server-java-compat" data-state={props.compat.state}>
+      <Icon name={props.compat.state === 'ok' ? 'icons/security/shield-check' : 'icons/status/info'} size={15} />
+      <span data-vesta="server-java-compat-text">
+        {props.compat.state === 'ok'
+          ? t('server-java.compat-ok', { version: String(props.compat.required) })
+          : props.compat.state === 'incompatible'
+            ? props.compat.selected === null
+              ? t('server-java.compat-none', { version: String(props.compat.required) })
+              : t('server-java.compat-bad', { version: String(props.compat.required), found: String(props.compat.selected) })
+            : t('server-hosting.java-needs', { version: String(props.compat.required) })}
+      </span>
+      <Show when={props.compat.state === 'incompatible'}>
+        <Show when={installed()} fallback={
+          <Show when={props.compat.download}>
+            {(major) => (
+              <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} disabled={props.locked} onClick={() => void props.actions.download(major())}>
+                {t('server-java.download', { version: String(major()) })}
+              </Button>
+            )}
+          </Show>
+        }>
+          {(runtime) => (
+            <Show when={!usingIt()} fallback={<Button size="sm" variant="outline" disabled={props.locked} onClick={() => props.onReplan()}>{t('server-hosting.review-again')}</Button>}>
+              <Button size="sm" tone="accent" disabled={props.locked || !props.stopped} onClick={() => void props.actions.select(runtime().id)}>
+                {t('server-java.use-version', { version: String(runtime().major) })}
+              </Button>
+            </Show>
+          )}
+        </Show>
+      </Show>
     </div>
   );
 }

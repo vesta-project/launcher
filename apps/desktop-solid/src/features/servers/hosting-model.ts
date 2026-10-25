@@ -5,27 +5,6 @@ import { roleKey } from './capabilities';
 import type { ServerCommandError, ServerSnapshot } from './native';
 import type { SftpKey, SftpStatus, SoftwareId, SoftwareJob, SoftwareLaunch } from './hosting-native';
 
-// ------------------------------------------------------------------ world
-
-const INT64_MIN = -(2n ** 63n);
-const INT64_MAX = 2n ** 63n - 1n;
-
-/** True when Minecraft uses the text as the seed itself rather than hashing it. */
-export function isExactSeed(value: string): boolean {
-  const text = value.trim();
-  if (!/^-?\d{1,20}$/.test(text)) return false;
-  const number = BigInt(text);
-  return number >= INT64_MIN && number <= INT64_MAX;
-}
-
-/** A seed field problem, or null. Blank is fine: Minecraft picks a random seed. */
-export function seedProblem(value: string): MessageId | null {
-  return /[\u0000-\u001f\u007f]/.test(value) ? 'server-hosting.seed-invalid' : null;
-}
-
-/** The exact-name check for replacing the active world; never trims or folds case. */
-export const worldConfirmed = (typed: string, name: string) => typed === name;
-
 // ------------------------------------------------------------------ software
 
 export const softwareNames: Record<SoftwareId, string> = {

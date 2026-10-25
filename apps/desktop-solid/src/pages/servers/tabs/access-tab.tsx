@@ -1,5 +1,5 @@
-import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, Switch as Toggle, toast } from '@vesta/ui';
-import { For, Show, createSignal, untrack } from 'solid-js';
+import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, Switch as Toggle, TextField, toast } from '@vesta/ui';
+import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
@@ -14,9 +14,11 @@ import { serverCommand, useServersClock } from '../../../features/servers/store'
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { AccessSources, Invitation, IssuedInvitation, RoleSummary, ServerDevice, ServerUser } from '../../../features/servers/native-manage';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { SettingsPage, SettingsPanel } from '../settings-parts';
+import { SettingsGroup, SettingsPage, SettingsPanel } from '../settings-parts';
+import { activeDevices, deviceNameProblem, groupAccess, renamable, type AccessPerson } from '../../../features/servers/access-model';
+import { IntentMemo } from '../../../features/servers/model';
 
-type View = 'people' | 'invitations' | 'devices' | 'rules';
+type View = 'people' | 'invitations' | 'rules';
 
 /** Roles the local console grants; never assignable remotely. */
 const LOCAL_ONLY = new Set(['owner', 'administrator']);
@@ -26,9 +28,9 @@ const SAFE_SOURCE_ROLES = ['public', 'player'];
 export function AccessTab(props: { snapshot: ServerSnapshot }) {
   const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
   const views = (): { value: View; label: MessageId }[] => [
-    ...(can('principals.view') ? [{ value: 'people' as const, label: 'servers.access.people' as MessageId }] : []),
+    // People and their devices are one view: devices sit under the person they belong to.
+    ...(can('principals.view') || can('devices.revoke') ? [{ value: 'people' as const, label: 'servers.access.people' as MessageId }] : []),
     ...(can('invitations.create') ? [{ value: 'invitations' as const, label: 'servers.access.invitations' as MessageId }] : []),
-    ...(can('devices.revoke') ? [{ value: 'devices' as const, label: 'servers.access.devices' as MessageId }] : []),
     ...(can('access-sources.manage') ? [{ value: 'rules' as const, label: 'servers.access.rules' as MessageId }] : []),
   ];
   const [view, setView] = createSignal<View>(untrack(() => views()[0]?.value ?? 'people'), { name: 'server-access:view' });
@@ -42,7 +44,6 @@ export function AccessTab(props: { snapshot: ServerSnapshot }) {
       </Show>
       <Show when={view() === 'people'}><PeopleView snapshot={props.snapshot} /></Show>
       <Show when={view() === 'invitations'}><InvitationsView snapshot={props.snapshot} /></Show>
-      <Show when={view() === 'devices'}><DevicesView snapshot={props.snapshot} /></Show>
       <Show when={view() === 'rules'}><RulesView snapshot={props.snapshot} /></Show>
     </SettingsPage>
   );
@@ -57,47 +58,164 @@ function useRoles(snapshot: () => ServerSnapshot) {
   return () => roles.value() ?? [];
 }
 
+/**
+ * People with management roles first, each with their devices nested under them; pack users
+ * (who only download the pack) folded into one group. Revoke and rename stay per device.
+ */
 function PeopleView(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
+  const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
   const roles = useRoles(() => props.snapshot);
-  const users = useServerResource(id, usersResource);
+  const users = useServerResource(id, usersResource, { enabled: () => can('principals.view') });
+  const devices = useServerResource(id, devicesResource, { enabled: () => can('devices.revoke') });
+  const groups = createMemo(() => groupAccess(users.value(), devices.value()), { name: 'server-access:groups' });
   const [editing, setEditing] = createSignal<ServerUser | null>(null, { name: 'server-access:editing' });
-  const canManage = () => gate(props.snapshot.capabilities, 'principals.manage') !== 'denied';
+  const [revoking, setRevoking] = createSignal<ServerDevice | null>(null, { name: 'server-access:revoking' });
+  const [renaming, setRenaming] = createSignal<ServerDevice | null>(null, { name: 'server-access:renaming' });
+  const [packOpen, setPackOpen] = createSignal(false, { name: 'server-access:pack-open' });
+  const canManage = () => can('principals.manage');
   const saved = (next: ServerUser) => seedServerResource(id(), usersResource, (users.value() ?? []).map((entry) => (entry.id === next.id ? next : entry)));
+  const renamed = (device: ServerDevice, name: string) =>
+    seedServerResource(id(), devicesResource, (devices.value() ?? []).map((entry) => (entry.id === device.id ? { ...entry, name } : entry)));
+  const revoke = async () => {
+    const target = revoking();
+    if (!target) return;
+    try {
+      await serverCommand((client) => client.revokeDevice(id(), target.id, newIntentId()));
+      setRevoking(null);
+      // A revoked device also changes its owner's device count.
+      invalidateServerResources(id(), [devicesResource.name, usersResource.name]);
+    } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
+  };
+  const loaded = () => !!(users.value() || devices.value());
+  const Person = (row: { entry: AccessPerson }) => (
+    <PersonRow snapshot={props.snapshot} person={row.entry} roles={roles()} canManage={canManage()} canRevoke={can('devices.revoke')}
+      allDevices={devices.value() ?? []} onRole={setEditing} onRevoke={setRevoking} onRename={setRenaming} />
+  );
   return (
-    <SettingsPanel title={t('servers.access.people')} description={t('servers.access.local-only')} name="access-people">
-      <ServerErrorNote error={users.error()} onRetry={() => void users.refresh()} />
-      <Show when={users.value()} fallback={<Show when={!users.error()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p></Show>}>
-        {(list) => (
-          <div data-vesta="settings-panel-body">
-            <For each={list()}>
-              {(user) => (
-                <div data-vesta="setting-row">
-                  <div data-vesta="server-person">
-                    <span data-vesta="server-activity-avatar" aria-hidden="true">{user.displayName.slice(0, 1).toUpperCase()}</span>
-                    <div data-vesta="setting-row-copy">
-                      <span data-vesta="setting-row-label">
-                        {user.displayName}
-                        <For each={user.roles}>{(entry) => <Badge size="sm" variant="soft" tone={entry.role.rank >= 90 ? 'accent' : 'neutral'}>{entry.role.name}</Badge>}</For>
-                      </span>
-                      <span data-vesta="setting-row-description">{t('servers.access.devices-count', { count: user.deviceCount })}</span>
-                    </div>
-                  </div>
-                  <Show when={canManage() && user.rank < myRank(props.snapshot, roles())}>
-                    <div data-vesta="setting-row-control">
-                      <Button size="sm" variant="outline" onClick={() => setEditing(user)}>{t('servers.access.change-role')}</Button>
-                    </div>
-                  </Show>
-                </div>
-              )}
-            </For>
+    <>
+      <SettingsPanel title={t('servers.access.people')} description={t('servers.access.people-help')} name="access-people">
+        <ServerErrorNote error={users.error() ?? devices.error()} onRetry={() => { void users.refresh(); void devices.refresh(); }} />
+        <Show when={loaded()} fallback={<Show when={!users.error() && !devices.error()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p></Show>}>
+          <div data-vesta="server-access-people">
+            <For each={groups().people} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+            <For each={groups().others} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+            <Show when={!groups().people.length && !groups().others.length}>
+              <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-people')}</p>
+            </Show>
           </div>
-        )}
+        </Show>
+      </SettingsPanel>
+      <Show when={groups().packUsers.length}>
+        <SettingsGroup title={t('servers.access.pack-users', { count: groups().packUsers.length })} open={packOpen()} onToggle={() => setPackOpen(!packOpen())}
+          summary={t('servers.access.pack-users-summary', { count: groups().packUsers.reduce((sum, entry) => sum + activeDevices(entry), 0) })}>
+          <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.pack-users-help')}</p>
+          <div data-vesta="server-access-people">
+            <For each={groups().packUsers} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+          </div>
+        </SettingsGroup>
       </Show>
       <Show when={editing()} keyed>
         {(user) => <RoleDialog snapshot={props.snapshot} user={user} roles={roles()} onClose={() => setEditing(null)} onSaved={saved} />}
       </Show>
-    </SettingsPanel>
+      <Show when={renaming()} keyed>
+        {(device) => <RenameDialog snapshot={props.snapshot} device={device} onClose={() => setRenaming(null)} onSaved={(name) => { renamed(device, name); setRenaming(null); }} />}
+      </Show>
+      <Dialog open={!!revoking()} onOpenChange={(open) => { if (!open) setRevoking(null); }} title={t('servers.access.revoke-title', { name: revoking()?.name ?? '' })}
+        description={t('servers.access.revoke-description')} size="sm"
+        footer={<><Button variant="ghost" onClick={() => setRevoking(null)}>{t('common.cancel')}</Button><Button tone="danger" onClick={() => void revoke()}>{t('servers.access.revoke')}</Button></>}
+      />
+    </>
+  );
+}
+
+/** One person: avatar, roles and role change, with their devices nested underneath. */
+function PersonRow(props: {
+  snapshot: ServerSnapshot; person: AccessPerson; roles: RoleSummary[]; canManage: boolean; canRevoke: boolean; allDevices: ServerDevice[];
+  onRole: (user: ServerUser) => void; onRevoke: (device: ServerDevice) => void; onRename: (device: ServerDevice) => void;
+}) {
+  const now = useServersClock();
+  const user = () => props.person.user;
+  const count = () => user()?.deviceCount ?? activeDevices(props.person);
+  return (
+    <div data-vesta="server-access-person" data-self={props.person.self ? '' : undefined}>
+      <div data-vesta="setting-row">
+        <div data-vesta="server-person">
+          <span data-vesta="server-activity-avatar" aria-hidden="true">{(props.person.name || '?').slice(0, 1).toUpperCase()}</span>
+          <div data-vesta="setting-row-copy">
+            <span data-vesta="setting-row-label">
+              {props.person.name || t('servers.access.unknown-person')}
+              <Show when={props.person.self}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.you')}</Badge></Show>
+              <For each={user()?.roles ?? []}>{(entry) => <Badge size="sm" variant="soft" tone={entry.role.rank >= 90 ? 'accent' : 'neutral'}>{entry.role.name}</Badge>}</For>
+            </span>
+            <span data-vesta="setting-row-description">{t('servers.access.devices-count', { count: count() })}</span>
+          </div>
+        </div>
+        <Show when={user() && props.canManage && user()!.rank < myRank(props.snapshot, props.roles)}>
+          <div data-vesta="setting-row-control">
+            <Button size="sm" variant="outline" onClick={() => props.onRole(user()!)}>{t('servers.access.change-role')}</Button>
+          </div>
+        </Show>
+      </div>
+      <Show when={props.person.devices.length}>
+        <ul data-vesta="server-access-devices" aria-label={t('servers.access.devices-of', { name: props.person.name })}>
+          <For each={props.person.devices} keyed={(device) => device.id}>
+            {(device) => (
+              <li data-revoked={device().revoked ? '' : undefined}>
+                <Icon name="icons/content/monitor" size={14} />
+                <div>
+                  <span>
+                    {device().name}
+                    <Show when={device().current}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.this-device')}</Badge></Show>
+                    <Show when={device().revoked}><Badge size="sm" variant="soft" tone="danger">{t('servers.access.revoked')}</Badge></Show>
+                  </span>
+                  <Show when={device().lastSeenAtMs}>
+                    {(seen) => <small>{t('servers.seen', { time: t(age(seen(), now()).message, { count: age(seen(), now()).count }) })}</small>}
+                  </Show>
+                </div>
+                <Show when={renamable(device(), props.allDevices)}>
+                  <IconButton size="sm" variant="ghost" label={t('servers.access.rename-device', { name: device().name })} icon={<Icon name="icons/actions/edit" />}
+                    onClick={() => props.onRename(device())} />
+                </Show>
+                <Show when={props.canRevoke && !device().current && !device().revoked}>
+                  <Button size="sm" variant="ghost" tone="danger" onClick={() => props.onRevoke(device())}>{t('servers.access.revoke')}</Button>
+                </Show>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
+    </div>
+  );
+}
+
+function RenameDialog(props: { snapshot: ServerSnapshot; device: ServerDevice; onClose: () => void; onSaved: (name: string) => void }) {
+  const [name, setName] = createSignal(untrack(() => props.device.name), { name: 'server-device:rename' });
+  const [busy, setBusy] = createSignal(false, { name: 'server-device:rename-busy' });
+  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-device:rename-error' });
+  const intents = new IntentMemo();
+  const problem = () => deviceNameProblem(name());
+  const save = async () => {
+    if (problem()) return;
+    const value = name().trim();
+    setBusy(true); setError(null);
+    const intentId = intents.idFor({ device: props.device.id, name: value });
+    try {
+      const result = await serverCommand((client) => client.renameDevice(props.snapshot.connection.id, props.device.id, value, intentId));
+      intents.settle();
+      props.onSaved(result.name);
+    } catch (reason) {
+      intents.settle(reason as ServerCommandError);
+      setError(reason as ServerCommandError);
+    } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }} title={t('servers.access.rename-title')} size="sm"
+      footer={<><Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button><Button tone="accent" disabled={busy() || !!problem() || name().trim() === props.device.name} onClick={() => void save()}>{t('servers.save')}</Button></>}>
+      <TextField label={t('servers.access.device-name')} value={name()} onChange={setName} maxlength={64}
+        error={problem() && problem() !== 'empty' ? t(problem() === 'long' ? 'servers.access.device-name-long' : 'servers.access.device-name-invalid') : undefined} />
+      <ServerErrorNote error={error()} />
+    </Dialog>
   );
 }
 
@@ -232,56 +350,6 @@ function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; o
       </Show>
       <ServerErrorNote error={error()} />
     </Dialog>
-  );
-}
-
-function DevicesView(props: { snapshot: ServerSnapshot }) {
-  const now = useServersClock();
-  const id = stableConnectionId(() => props.snapshot);
-  const devices = useServerResource(id, devicesResource);
-  const [revoking, setRevoking] = createSignal<ServerDevice | null>(null, { name: 'server-access:revoking' });
-  const revoke = async () => {
-    const target = revoking();
-    if (!target) return;
-    try {
-      await serverCommand((client) => client.revokeDevice(id(), target.id, newIntentId()));
-      setRevoking(null);
-      // A revoked device also changes its owner's device count.
-      invalidateServerResources(id(), [devicesResource.name, usersResource.name]);
-    } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
-  };
-  return (
-    <SettingsPanel title={t('servers.access.devices')} description={t('servers.access.devices-help')} name="access-devices">
-      <ServerErrorNote error={devices.error()} onRetry={() => void devices.refresh()} />
-      <div data-vesta="settings-panel-body">
-        <For each={devices.value() ?? []}>
-          {(device) => (
-            <div data-vesta="setting-row" data-revoked={device.revoked ? '' : undefined}>
-              <div data-vesta="setting-row-copy">
-                <span data-vesta="setting-row-label">
-                  {device.name}
-                  <Show when={device.current}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.this-device')}</Badge></Show>
-                  <Show when={device.revoked}><Badge size="sm" variant="soft" tone="danger">{t('servers.access.revoked')}</Badge></Show>
-                </span>
-                <span data-vesta="setting-row-description">
-                  {device.userName ?? ''}
-                  <Show when={device.lastSeenAtMs}>{(seen) => <> · {t('servers.seen', { time: t(age(seen(), now()).message, { count: age(seen(), now()).count }) })}</>}</Show>
-                </span>
-              </div>
-              <Show when={!device.current && !device.revoked}>
-                <div data-vesta="setting-row-control">
-                  <Button size="sm" variant="outline" tone="danger" onClick={() => setRevoking(device)}>{t('servers.access.revoke')}</Button>
-                </div>
-              </Show>
-            </div>
-          )}
-        </For>
-      </div>
-      <Dialog open={!!revoking()} onOpenChange={(open) => { if (!open) setRevoking(null); }} title={t('servers.access.revoke-title', { name: revoking()?.name ?? '' })}
-        description={t('servers.access.revoke-description')} size="sm"
-        footer={<><Button variant="ghost" onClick={() => setRevoking(null)}>{t('common.cancel')}</Button><Button tone="danger" onClick={() => void revoke()}>{t('servers.access.revoke')}</Button></>}
-      />
-    </SettingsPanel>
   );
 }
 

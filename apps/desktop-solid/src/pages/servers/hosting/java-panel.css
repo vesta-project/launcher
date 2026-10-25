@@ -1,0 +1,118 @@
+/*
+ * Server Java picker, mirroring the launcher's Settings → Java cards.
+ * Hooks: [data-vesta=server-java|-group|-mark|-radio|-more|-offers|-custom]
+ * States: group: data-in-use; runtime row: data-active
+ */
+@layer launcher {
+  :where([data-vesta="server-java"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    padding: 0 var(--vesta-space-4) var(--vesta-space-4);
+  }
+  :where([data-vesta="server-java-group"]) {
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md, 8px);
+    background: var(--vesta-color-surface);
+  }
+  :where([data-vesta="server-java-group"][data-in-use]) {
+    border-color: color-mix(in oklab, var(--vesta-color-accent) 35%, var(--vesta-color-border));
+  }
+  :where([data-vesta="server-java-group"]) > header {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2-5, 10px) var(--vesta-space-3);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="server-java-group"]) > header > div { flex: 1; min-inline-size: 0; }
+  :where([data-vesta="server-java-group"]) h4 {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+  :where([data-vesta="server-java-group"]) > header p { margin: 2px 0 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-java-mark"]) { font-family: var(--vesta-font-mono); }
+  :where([data-vesta="server-java-group"]) ul { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="server-java-group"]) li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 52px;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+  }
+  :where([data-vesta="server-java-group"]) li + li { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="server-java-group"]) li[data-active] { background: color-mix(in oklab, var(--vesta-color-accent) 7%, transparent); }
+  :where([data-vesta="server-java-radio"]) {
+    flex: none;
+    inline-size: 14px;
+    block-size: 14px;
+    border: 2px solid var(--vesta-color-border-strong);
+    border-radius: 50%;
+  }
+  :where([data-vesta="server-java-group"]) li[data-active] :where([data-vesta="server-java-radio"]) {
+    border-color: var(--vesta-color-accent);
+    background: radial-gradient(circle, var(--vesta-color-accent) 40%, transparent 45%);
+  }
+  :where([data-vesta="server-java-group"]) li > div:not([data-vesta]) {
+    display: flex;
+    flex: 1 1 220px;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+  :where([data-vesta="server-java-group"]) li > div:not([data-vesta]) > span {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5, 6px);
+  }
+  :where([data-vesta="server-java-group"]) li small { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-java-group"]) code {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-vesta="server-java-more"]) { display: flex; flex-direction: column; align-items: flex-start; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-java-offers"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-java-custom"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    align-self: stretch;
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-md, 8px);
+  }
+  :where([data-server-java-custom-off]) { display: flex; align-items: center; gap: var(--vesta-space-1-5, 6px); font-size: var(--vesta-text-xs); }
+
+  /* Java compatibility in the software review. */
+  :where([data-vesta="server-java-compat"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    padding: var(--vesta-space-2-5, 10px) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md, 8px);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-java-compat"][data-state="incompatible"]) {
+    border-color: color-mix(in oklab, var(--vesta-color-warning, #d9a23a) 45%, var(--vesta-color-border));
+    background: color-mix(in oklab, var(--vesta-color-warning, #d9a23a) 8%, transparent);
+  }
+  :where([data-vesta="server-java-compat-text"]) { flex: 1 1 260px; }
+}
