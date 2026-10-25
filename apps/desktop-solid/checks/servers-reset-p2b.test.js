@@ -223,3 +223,45 @@ describe('[protected files] edit state machine', () => {
     await expect(servers.fileWriteProtected('fixture-survival', 'ops.json', '[]', file.sha256, null, 'raw-2')).rejects.toMatchObject({ code: 'stale_target' });
   });
 });
+
+import { deviceNameProblem, groupAccess, isManagement, renamable, sortDevices } from '../src/features/servers/access-model';
+
+const role = (id, rank) => ({ role: { id, name: id, rank, builtin: true, capabilities: [] }, expiresAtMs: null });
+const person = (id, roleId, rank) => ({ id, displayName: id, minecraftAccounts: [], roles: [role(roleId, rank)], rank, deviceCount: 0, version: 'v' });
+const device = (id, userId, extra = {}) => ({ id, name: id, revoked: false, current: false, userId, userName: userId, lastSeenAtMs: 0, ...extra });
+
+describe('[access] grouping', () => {
+  const users = [person('zoe', 'moderator', 40), person('me', 'owner', 100), person('pat', 'pack-user', 10), person('ann', 'player', 5), person('cus', 'builders', 30)];
+  const devices = [
+    device('pat-pc', 'pat'), device('me-laptop', 'me', { lastSeenAtMs: 5 }), device('me-here', 'me', { current: true }),
+    device('me-old', 'me', { revoked: true, lastSeenAtMs: 9 }), device('ghost', 'gone-user', { userName: 'Ghost' }),
+  ];
+  test('management roles (including custom ones) are people; pack/player/public fold into pack users', () => {
+    expect(isManagement(person('x', 'builders', 30))).toBe(true);
+    expect(isManagement(person('x', 'pack-user', 10))).toBe(false);
+    const groups = groupAccess(users, devices);
+    expect(groups.people.map((entry) => entry.key)).toEqual(['me', 'zoe', 'cus']);
+    expect(groups.packUsers.map((entry) => entry.key)).toEqual(['ann', 'pat']);
+  });
+  test('devices nest under their person: this device first, active before revoked, then most recent', () => {
+    const me = groupAccess(users, devices).people[0];
+    expect(me.self).toBe(true);
+    expect(me.devices.map((entry) => entry.id)).toEqual(['me-here', 'me-laptop', 'me-old']);
+    expect(groupAccess(users, devices).packUsers[1].devices.map((entry) => entry.id)).toEqual(['pat-pc']);
+  });
+  test('devices whose person is not listed still show, grouped by name', () => {
+    expect(groupAccess(users, devices).others).toMatchObject([{ key: 'device-owner:Ghost', user: null, name: 'Ghost' }]);
+    // Without principals.view there is no user list: everything groups by device owner.
+    expect(groupAccess(undefined, devices).others.map((entry) => entry.name)).toEqual(['me', 'Ghost', 'pat']);
+  });
+  test('only your own active devices can be renamed; names are 1–64 printable characters', () => {
+    expect(renamable(devices[1], devices)).toBe(true);
+    expect(renamable(devices[3], devices)).toBe(false);
+    expect(renamable(devices[0], devices)).toBe(false);
+    expect(deviceNameProblem('  ')).toBe('empty');
+    expect(deviceNameProblem('x'.repeat(65))).toBe('long');
+    expect(deviceNameProblem('a\tb')).toBe('invalid');
+    expect(deviceNameProblem('Travel laptop')).toBeNull();
+    expect(sortDevices([device('b', 'u'), device('a', 'u')]).map((entry) => entry.id)).toEqual(['a', 'b']);
+  });
+});

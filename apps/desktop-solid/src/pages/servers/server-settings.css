@@ -324,3 +324,45 @@
     :where([data-vesta="server-player-detail"]) { animation: none; }
   }
 }
+
+/*
+ * Access (D7): each person with their devices nested beneath; pack users fold into one group.
+ * Hooks: [data-vesta=server-access-people|server-access-person|server-access-devices]
+ * States: person: data-self; device row: data-revoked
+ */
+@layer launcher {
+  :where([data-vesta="server-access-people"]) { display: flex; flex-direction: column; }
+  :where([data-vesta="server-access-person"]) + :where([data-vesta="server-access-person"]) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="server-access-person"]) > :where([data-vesta="setting-row"]) { border: 0; }
+  /* Devices hang off the avatar with a thin guide line, so they read as this person's. */
+  :where([data-vesta="server-access-devices"]) {
+    display: flex;
+    flex-direction: column;
+    margin: calc(-1 * var(--vesta-space-1)) var(--vesta-space-4) var(--vesta-space-3) calc(var(--vesta-space-4) + 15px);
+    padding: 0 0 0 calc(var(--vesta-space-3) + 2px);
+    border-inline-start: 2px solid var(--vesta-color-border);
+    list-style: none;
+  }
+  :where([data-vesta="server-access-devices"]) li {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-block-size: 36px;
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    border-radius: var(--vesta-radius-sm);
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="server-access-devices"]) li:hover { background: var(--vesta-color-fill); }
+  :where([data-vesta="server-access-devices"]) li > div { display: flex; flex: 1; flex-wrap: wrap; align-items: baseline; gap: 0 var(--vesta-space-2); min-inline-size: 0; }
+  :where([data-vesta="server-access-devices"]) li > div > span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5, 6px);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="server-access-devices"]) small { font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-access-devices"]) li[data-revoked] > div > span { color: var(--vesta-color-text-muted); text-decoration: line-through; }
+}

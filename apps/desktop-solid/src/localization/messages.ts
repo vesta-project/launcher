@@ -2780,6 +2780,19 @@ export const messageIds = [
   "server-files.raw-invalid-json",
   "server-files.raw-invalid-properties",
   "server-files.raw-forbidden",
+  "servers.access.people-help",
+  "servers.access.no-people",
+  "servers.access.you",
+  "servers.access.unknown-person",
+  "servers.access.devices-of",
+  "servers.access.pack-users",
+  "servers.access.pack-users-summary",
+  "servers.access.pack-users-help",
+  "servers.access.rename-device",
+  "servers.access.rename-title",
+  "servers.access.device-name",
+  "servers.access.device-name-long",
+  "servers.access.device-name-invalid",
 ] as const;
 
 export type MessageId = (typeof messageIds)[number];
