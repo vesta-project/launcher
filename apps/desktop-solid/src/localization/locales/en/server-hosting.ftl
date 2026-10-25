@@ -96,6 +96,7 @@ server-hosting-reason-integrity = The download didn't match its published checks
 server-hosting-reason-java-missing = The server computer doesn't have the Java version this needs.
 server-hosting-reason-java-incompatible = The installed Java can't run this version.
 server-hosting-reason-storage-low = Not enough free disk space on the server computer.
+server-hosting-reason-storage-unknown = Vesta couldn't verify the installation disk's available space or filesystem support.
 server-hosting-reason-limit = The download is larger than the server allows.
 server-hosting-reason-bind-failed = SFTP couldn't use that address and port. It's still off.
 server-hosting-reason-key-invalid = That isn't a public SSH key the server accepts.

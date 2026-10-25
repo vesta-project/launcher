@@ -36,6 +36,7 @@ describe('[software] review, apply and follow', () => {
     expect(jobPollDelay(50)).toBe(10_000);
     expect(warningCopy('something_new')).toBe('server-hosting.warning-other');
     expect(reasonMessage('server_install.storage_low')).toBe('server-hosting.reason-storage-low');
+    expect(reasonMessage('server_install.storage_unknown')).toBe('server-hosting.reason-storage-unknown');
     expect(reasonMessage('world_metadata_invalid')).toBe('server-hosting.reason-world-metadata');
     expect(reasonMessage('unheard_of')).toBeNull();
   });

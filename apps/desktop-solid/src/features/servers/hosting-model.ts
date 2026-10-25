@@ -79,7 +79,7 @@ const reasons: Record<string, MessageId> = {
   'server_install.runtime_incompatible': 'server-hosting.reason-java-incompatible',
   'server_install.runtime_failed': 'server-hosting.reason-java-missing',
   'server_install.storage_low': 'server-hosting.reason-storage-low',
-  'server_install.storage_unknown': 'server-hosting.reason-storage-low',
+  'server_install.storage_unknown': 'server-hosting.reason-storage-unknown',
   'server_install.limit_exceeded': 'server-hosting.reason-limit',
   'server_install.busy': 'server-hosting.reason-busy',
   'server_install.expired': 'server-hosting.reason-plan-expired',

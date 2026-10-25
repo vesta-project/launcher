@@ -2652,6 +2652,7 @@ export const messageIds = [
   "server-hosting.reason-java-missing",
   "server-hosting.reason-java-incompatible",
   "server-hosting.reason-storage-low",
+  "server-hosting.reason-storage-unknown",
   "server-hosting.reason-limit",
   "server-hosting.reason-bind-failed",
   "server-hosting.reason-key-invalid",
