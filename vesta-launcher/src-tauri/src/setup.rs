@@ -123,6 +123,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     crate::startup::resources::start_resource_watchers(app);
 
     crate::startup::processes::start(app.handle().clone());
+    app.state::<std::sync::Arc<crate::servers::ServerManager>>()
+        .start_pack_sync_polling(app.handle().clone());
 
     crate::startup::shell::initialize(app)?;
 

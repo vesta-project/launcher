@@ -31,3 +31,12 @@ pub async fn server_pack_sync_link(
 ) -> Result<Option<Link>> {
     manager.pack_link(instance_id).await
 }
+
+#[tauri::command]
+pub async fn server_pack_sync_check(
+    app: AppHandle,
+    manager: State<'_, Arc<ServerManager>>,
+    instance_id: i32,
+) -> Result<Option<crate::servers::pack_sync::Check>> {
+    manager.pack_sync_check(&app, instance_id).await
+}

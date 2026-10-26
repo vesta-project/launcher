@@ -391,14 +391,11 @@ impl ServerManager {
             .pack_sync_release(installed)
             .await?;
         if let Some(link) = &link {
-            let latest = revision(&release.revision)?;
-            if latest < revision(&link.highest_revision)?
-                || revision(&release.minimum_revision)? < revision(&link.highest_minimum)?
-                || latest == revision(&link.highest_revision)?
-                    && release.sha256 != link.highest_sha256
-            {
-                return Err(conflict("pack_rollback_rejected"));
-            }
+            release.reject_rollback(
+                &link.highest_revision,
+                &link.highest_minimum,
+                &link.highest_sha256,
+            )?;
         }
         if let Some(i) = instance {
             if link.is_some() {
@@ -667,3 +664,6 @@ async fn download_provider(raw: &str) -> Result<Vec<u8>> {
 #[path = "pack_sync_apply.rs"]
 mod apply;
 pub use apply::ApplyRequest;
+#[path = "pack_sync_check.rs"]
+mod check;
+pub use check::Check;

@@ -1592,6 +1592,8 @@ pub async fn launch_instance(
     }
 
     let notification_instance_id = instance_data.id;
+    app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>()
+        .pack_sync_enforce_launch(&app_handle, instance_data.id).await?;
     crate::settings_sync::game_options::apply_under_play_guard(instance_data.id).await?;
     crate::settings_sync::keybinds::apply_under_play_guard(instance_data.id).await?;
     crate::settings_sync::servers::apply_under_play_guard(instance_data.id).await?;

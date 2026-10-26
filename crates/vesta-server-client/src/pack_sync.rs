@@ -59,6 +59,23 @@ pub struct SignedRelease {
     pub certificate_base64: String,
     pub signature_base64: String,
 }
+impl Release {
+    pub fn reject_rollback(
+        &self,
+        highest_revision: &str,
+        highest_minimum: &str,
+        highest_sha256: &str,
+    ) -> Result<()> {
+        let latest = revision(&self.revision)?;
+        if latest < revision(highest_revision)?
+            || revision(&self.minimum_revision)? < revision(highest_minimum)?
+            || latest == revision(highest_revision)? && self.sha256 != highest_sha256
+        {
+            return Err(failure("pack_rollback_rejected"));
+        }
+        Ok(())
+    }
+}
 impl SignedRelease {
     pub fn verify(
         &self,
@@ -229,5 +246,11 @@ mod tests {
         assert!(status(1, 3, 4).is_err());
         assert_eq!(revision("9007199254740993").unwrap(), 9007199254740993);
         assert!(revision("01").is_err());
+        let (envelope, fp) = signed();
+        let release = envelope.verify("server", &fp, "test-nonce", 2).unwrap();
+        assert!(release.reject_rollback("4", "2", &release.sha256).is_err());
+        assert!(release.reject_rollback("3", "3", &release.sha256).is_err());
+        assert!(release.reject_rollback("3", "2", &"f".repeat(64)).is_err());
+        release.reject_rollback("2", "1", &"f".repeat(64)).unwrap();
     }
 }
