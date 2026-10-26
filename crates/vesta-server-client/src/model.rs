@@ -79,9 +79,15 @@ impl Error {
             && code
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.'))
-            && ["software_", "world_", "sftp_", "server_install."]
-                .iter()
-                .any(|prefix| code.starts_with(prefix)))
+            && [
+                "software_",
+                "world_",
+                "sftp_",
+                "content_",
+                "server_install.",
+            ]
+            .iter()
+            .any(|prefix| code.starts_with(prefix)))
         .then(|| code.to_owned());
         use ErrorCode::*;
         let code = match code {

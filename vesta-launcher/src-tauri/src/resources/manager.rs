@@ -311,6 +311,37 @@ impl ResourceManager {
         loader: &str,
         allow_inexact_datapacks: bool,
     ) -> Result<Vec<(ResourceProject, ResourceVersion)>> {
+        Ok(self
+            .resolve_dependency_preview(
+                platform,
+                resource_type,
+                version,
+                datapack_mc_version,
+                instance_mc_version,
+                loader,
+                allow_inexact_datapacks,
+                false,
+            )
+            .await?
+            .into_iter()
+            .map(|(p, v, _)| (p, v))
+            .collect())
+    }
+
+    /// Shared traversal: server previews include optional rows, instance installs
+    /// retain the required-only behavior through the wrapper above.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn resolve_dependency_preview(
+        &self,
+        platform: SourcePlatform,
+        resource_type: ResourceType,
+        version: &ResourceVersion,
+        datapack_mc_version: &str,
+        instance_mc_version: &str,
+        loader: &str,
+        allow_inexact_datapacks: bool,
+        include_optional: bool,
+    ) -> Result<Vec<(ResourceProject, ResourceVersion, DependencyType)>> {
         let mut resolved = Vec::new();
         let mut visited = HashSet::new();
         let mut current_level_deps = version.dependencies.clone();
@@ -357,16 +388,24 @@ impl ResourceManager {
         visited.insert(version.project_id.clone());
 
         while !current_level_deps.is_empty() {
+            if include_optional && current_level_deps.len() > 256 {
+                return Err(anyhow!("Dependency graph exceeds the 256 edge limit"));
+            }
             let mut next_level_deps = Vec::new();
 
             // 1. Identify unique, unvisited, required projects in this level
             let mut dep_ids_set = HashSet::new();
             let mut unique_deps_to_process = Vec::new();
 
+            current_level_deps.sort_by_key(|dep| dep.dependency_type != DependencyType::Required);
+            if include_optional && visited.len() > 256 {
+                return Err(anyhow!("Dependency graph exceeds the 256 project limit"));
+            }
             for dep in &current_level_deps {
                 let is_required = dep.dependency_type == DependencyType::Required;
 
-                if is_required
+                if (is_required
+                    || (include_optional && dep.dependency_type == DependencyType::Optional))
                     && !visited.contains(&dep.project_id)
                     && dep_ids_set.insert(dep.project_id.clone())
                 {
@@ -410,6 +449,12 @@ impl ResourceManager {
                     Some(p) => p,
                     None => {
                         log::warn!("[DependencyResolution] Could not find project metadata for {} in fetched results", dep.project_id);
+                        if include_optional && dep.dependency_type == DependencyType::Required {
+                            return Err(anyhow!(
+                                "Required dependency metadata unavailable: {}",
+                                dep.project_id
+                            ));
+                        }
                         continue;
                     }
                 };
@@ -530,6 +575,10 @@ impl ResourceManager {
                                     .any(|candidate| candidate.eq_ignore_ascii_case("datapack"))
                         } else {
                             is_loader_compatible(&v.loaders, loader)
+                                || (dependency_type == ResourceType::Plugin
+                                    && platform == SourcePlatform::CurseForge
+                                    && v.loaders.is_empty()
+                                    && loader != "folia")
                         };
                         if game_matches && loader_matches {
                             best_version = Some(v.clone());
@@ -566,6 +615,10 @@ impl ResourceManager {
                                         .any(|candidate| candidate.eq_ignore_ascii_case("datapack"))
                             } else {
                                 is_loader_compatible(&v.loaders, loader)
+                                    || (dependency_type == ResourceType::Plugin
+                                        && platform == SourcePlatform::CurseForge
+                                        && v.loaders.is_empty()
+                                        && loader != "folia")
                             };
                             game_matches && loader_matches
                         })
@@ -612,9 +665,23 @@ impl ResourceManager {
                         dep.project_id,
                         v.version_number
                     );
-                    next_level_deps.extend(v.dependencies.clone());
-                    resolved.push((project, v));
+                    let mut children = v.dependencies.clone();
+                    if dep.dependency_type == DependencyType::Optional {
+                        for child in &mut children {
+                            if child.dependency_type == DependencyType::Required {
+                                child.dependency_type = DependencyType::Optional;
+                            }
+                        }
+                    }
+                    next_level_deps.extend(children);
+                    resolved.push((project, v, dep.dependency_type));
                 } else {
+                    if include_optional && dep.dependency_type == DependencyType::Required {
+                        return Err(anyhow!(
+                            "No compatible release for required dependency {}",
+                            project.name
+                        ));
+                    }
                     if dependency_type == ResourceType::DataPack && !allow_inexact_datapacks {
                         return Err(anyhow!(
                             "Required datapack dependency {} has no exact release for Minecraft {}. Its compatibility must be acknowledged before installation.",
@@ -634,6 +701,44 @@ impl ResourceManager {
             "[DependencyResolution] Finished resolution. Found {} unique dependencies.",
             resolved.len()
         );
+        if include_optional {
+            // Derive requiredness from the finished graph, so a dependency first
+            // reached through an optional branch is upgraded by a required branch.
+            let mut required = HashSet::new();
+            let mut work: Vec<_> = version
+                .dependencies
+                .iter()
+                .filter(|dep| dep.dependency_type == DependencyType::Required)
+                .map(|dep| dep.project_id.clone())
+                .collect();
+            while let Some(id) = work.pop() {
+                if id == version.project_id {
+                    continue;
+                }
+                let Some((project, release, _)) = resolved
+                    .iter()
+                    .find(|(p, _, _)| p.id == id || p.web_url.ends_with(&format!("/{id}")))
+                else {
+                    return Err(anyhow!("Required dependency was not resolved: {id}"));
+                };
+                if required.insert(project.id.clone()) {
+                    work.extend(
+                        release
+                            .dependencies
+                            .iter()
+                            .filter(|dep| dep.dependency_type == DependencyType::Required)
+                            .map(|dep| dep.project_id.clone()),
+                    );
+                }
+            }
+            for (project, _, kind) in &mut resolved {
+                *kind = if required.contains(&project.id) {
+                    DependencyType::Required
+                } else {
+                    DependencyType::Optional
+                };
+            }
+        }
         Ok(resolved)
     }
 

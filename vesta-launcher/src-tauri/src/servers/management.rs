@@ -5,9 +5,13 @@ use serde::Serialize;
 impl ServerManager {
     /// Re-read the authoritative flag after a configuration save, including a replay.
     pub async fn refresh_backups_configured(&self, app: &AppHandle, id: &str) {
-        let Ok(slot) = self.slot(id) else { return; };
+        let Ok(slot) = self.slot(id) else {
+            return;
+        };
         let _gate = slot.refresh.lock().await;
-        let Ok(client) = self.client(id).await else { return; };
+        let Ok(client) = self.client(id).await else {
+            return;
+        };
         client.transport.invalidate_reads();
         match client.info().await {
             Ok(info) => {
@@ -17,7 +21,10 @@ impl ServerManager {
                     let _ = self.publish(app, record.snapshot).await;
                 }
             }
-            Err(_) => { slot.info_loaded.store(false, std::sync::atomic::Ordering::Relaxed); }
+            Err(_) => {
+                slot.info_loaded
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+            }
         }
     }
 
@@ -91,7 +98,10 @@ impl ServerManager {
                 let job = value.get("job").unwrap_or(&value);
                 let state = job.get("state").and_then(Value::as_str);
                 let job_id = state.and_then(|_| job.get("id").and_then(Value::as_str));
-                let terminal = state.is_none_or(backup_terminal);
+                // A content receipt completes the request even when its live file
+                // effect is queued. Inventory owns that queue; it is not a backup job.
+                let content = action.starts_with("content/");
+                let terminal = content || state.is_none_or(backup_terminal);
                 // Acceptance is already known: a local bookkeeping failure cannot undo it.
                 let _ = self
                     .edit_store(|s| {
@@ -112,13 +122,20 @@ impl ServerManager {
                     id,
                     &activity_id,
                     action,
-                    state.unwrap_or("succeeded"),
+                    if content {
+                        "succeeded"
+                    } else {
+                        state.unwrap_or("succeeded")
+                    },
                     true,
                 );
                 if let Some(job_id) = job_id {
                     if !terminal && state != Some("awaiting_confirmation") {
-                        if action.starts_with("software/") {self.track_software(app,id,job_id,action);}
-                        else {self.track_backup(app, id, job_id, action);}
+                        if action.starts_with("software/") {
+                            self.track_software(app, id, job_id, action);
+                        } else {
+                            self.track_backup(app, id, job_id, action);
+                        }
                     }
                 }
                 self.changed(app);

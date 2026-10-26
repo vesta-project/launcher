@@ -13,6 +13,7 @@ import { createManageFixtures, type ManageHost } from './fixtures-manage';
 import { createPresenceFixtures } from './fixtures-presence';
 import { createMetricsFixtures } from './fixtures-metrics';
 import { createHostingFixtures } from './fixtures-hosting';
+import { createContentFixtures } from './fixtures-content';
 import { createBrandingFixtures } from './fixtures-branding';
 import { createAutomationFixtures } from './fixtures-automation';
 
@@ -277,7 +278,9 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     return { selfId: 'p-self', ranks: Object.fromEntries(users.map((user) => [user.id, user.rank])) };
   };
 
+  const hosting = createHostingFixtures({ server, requireCapability, wait, datapackOperation: (id: ConnectionId, command: string) => { const target = server(id); const operation = record(target, 'console.command', { kind: 'console.command', command }); setTimeout(() => advance(target, operation, 'succeeded'), 400); return operation; } });
   const api: ServersApi = {
+    ...createContentFixtures({ server, wait, software: id => hosting.contentTarget(id).software, minecraftVersion: id => hosting.contentTarget(id).minecraftVersion }),
     async list() { await wait(60); return [...servers.values()].map((entry) => clone(entry.snapshot)); },
 
     async discover(address) {
@@ -610,7 +613,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     ...createAutomationFixtures({ server, requireCapability, wait, principals }),
     // World, server software and SFTP.
     ...createMetricsFixtures({ server, requireOnline, requireCapability }),
-    ...createHostingFixtures({ server, requireCapability, wait, datapackOperation: (id: ConnectionId, command: string) => { const target = server(id); const operation = record(target, 'console.command', { kind: 'console.command', command }); setTimeout(() => advance(target, operation, 'succeeded'), 400); return operation; } }),
+    ...hosting,
   };
 
   function applyModeration(target: FixtureServer, request: ModerationAction) {

@@ -9,6 +9,7 @@ import type {
   SoftwarePlanRequest, SoftwareState, SoftwareVersions,
 } from './hosting-native';
 import { SOFTWARE_IDS } from './hosting-native';
+import type { CustomJarPlan } from './native-content';
 import { hostOf, publicKeyComment, publicKeyProblem } from './hosting-model';
 
 interface HostingHost {
@@ -88,8 +89,10 @@ function seed(): HostingState {
 }
 
 export function createHostingFixtures(host: HostingHost) {
+  const customPlans = new Map<string, { plan: CustomJarPlan; id: string; used: boolean }>();
+  const managedLaunches = new Map<string, SoftwareState['current']>();
   const states = new Map<ConnectionId, HostingState>();
-  const state = (id: ConnectionId) => { host.server(id); let value = states.get(id); if (!value) { value = seed(); states.set(id, value); } return value; };
+  const state = (id: ConnectionId) => { host.server(id); let value = states.get(id); if (!value) { value = seed(); if (value.software.current) value.software.current.software = id === 'fixture-away' ? 'fabric' : id === 'fixture-creative' ? 'vanilla' : 'paper'; states.set(id, value); } return value; };
   const owner = (id: ConnectionId) => { if (host.server(id).snapshot.connection.role !== 'owner') fail('forbidden', 'software_forbidden'); };
   const stopped = (id: ConnectionId, reason: string) => { if (host.server(id).snapshot.status?.state !== 'stopped') fail('conflict', reason); };
   /** Same intent and payload replays the first result; a changed payload conflicts. */
@@ -112,6 +115,34 @@ export function createHostingFixtures(host: HostingHost) {
   };
 
   return {
+    contentTarget(id: string) { const launch = state(id).software.current; return { software: launch?.software ?? null, minecraftVersion: launch?.version ?? '1.21.4' }; },
+    async customJarPlan(id: string, path: string | null, expectedRevision: string): Promise<CustomJarPlan> {
+      owner(id); const current = state(id);
+      if (current.software.revision !== expectedRevision) fail('stale_target');
+      if (path !== null && (!path.endsWith('.jar') || path.startsWith('/') || path.includes('..') || path.includes('\\') || path.includes(':'))) fail('invalid_input');
+      if (path === null && !managedLaunches.has(id)) fail('conflict', 'software_previous_unavailable');
+      const plan: CustomJarPlan = { planId: crypto.randomUUID(), expectedRevision, expiresAtMs: Date.now() + 120_000, customJar: path === null ? null : { path }, mainClass: path === null ? null : 'net.minecraft.server.Main', risks: ['executes_owner_selected_server_jar'] };
+      customPlans.set(plan.planId, { plan, id, used: false }); return clone(plan);
+    },
+    async customJarApply(id: string, planId: string, intentId: string): Promise<SoftwareJob> {
+      owner(id); const current = state(id);
+      return once(current, intentId, { planId }, () => {
+        stopped(id, 'software_busy');
+        const saved = customPlans.get(planId) ?? fail('confirmation_expired');
+        if (saved.id !== id || saved.used || saved.plan.expiresAtMs <= Date.now()) fail('confirmation_expired');
+        if (saved.plan.expectedRevision !== current.software.revision) fail('stale_target');
+        saved.used = true;
+        const job: SoftwareJob = { id: crypto.randomUUID(), kind: saved.plan.customJar ? 'custom_jar' : 'restore_managed', state: 'queued', createdAtMs: Date.now(), updatedAtMs: Date.now(), error: null };
+        current.jobs.unshift(job);
+        runJob(current, job, () => {
+          if (saved.plan.customJar) {
+            if (!current.software.current?.customJar) managedLaunches.set(id, clone(current.software.current));
+            current.software.previous = clone(current.software.current);
+            current.software.current = { software: null, version: current.software.current?.version ?? null, build: null, installationId: 'custom_jar', customJar: saved.plan.customJar };
+          } else current.software.current = clone(managedLaunches.get(id) ?? null);
+        }); return job;
+      });
+    },
     async javaInventory(connectionId: ConnectionId): Promise<ServerJavaInventory> { await host.wait(); owner(connectionId); return clone(state(connectionId).java); },
     async javaSelect(connectionId: ConnectionId, runtimeId: string | null, customPath: string | null, intentId: string): Promise<SoftwareJob> {
       owner(connectionId); const current = state(connectionId);

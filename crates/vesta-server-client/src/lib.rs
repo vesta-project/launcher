@@ -14,7 +14,9 @@ pub mod scheduler;
 pub mod streams;
 pub mod transport;
 pub mod trust;
-pub use client::{automation, backups_config, branding, hosting, management, presence, Client};
+pub use client::{
+    automation, backups_config, branding, content, hosting, management, presence, Client,
+};
 pub use model::{Error, ErrorCode, Result};
 // Keep callers independent of the HTTP major version selected by this crate.
 pub use reqwest::Method;
