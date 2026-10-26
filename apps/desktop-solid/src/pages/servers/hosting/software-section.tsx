@@ -11,7 +11,7 @@ import type { SoftwareId, SoftwareJob, SoftwareLaunch, SoftwarePlan, SoftwareSta
 import { compareGameVersions } from '../../../features/browse/browse-model';
 import { IntentMemo } from '../../../features/servers/model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import { seedServerResource, useServerResource } from '../../../features/servers/resources';
+import { invalidateServerResources, seedServerResource, useServerResource } from '../../../features/servers/resources';
 import { javaInventoryResource, softwareJobsResource, softwareResource, softwareVersionsResource, softwareReleasesResource, warmSoftwareMetadata } from '../../../features/servers/server-resources';
 import type { ServerJavaInventory } from '../../../features/servers/native-java';
 import { isJavaJob, javaCompatibility, runtimeFor } from '../../../features/servers/server-java-model';
@@ -25,6 +25,7 @@ import { Hint, HostingError } from './parts';
 import { JavaPanel, useJavaActions, type JavaActions } from './java-panel';
 import { CustomJarPanel } from './custom-jar';
 import { roleKey } from '../../../features/servers/capabilities';
+import { launchKind } from '../../../features/servers/content-model';
 import './hosting.css';
 
 /** A custom JAR is shown as itself, never as a managed family. */
@@ -64,7 +65,11 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
       await jobs.refresh();
       if (disposed) return;
       if (jobActive(untrack(latest))) follow(attempt + 1);
-      else { timer = undefined; void software.refresh(); void java.refresh(); }
+      else {
+        timer = undefined; void software.refresh(); void java.refresh();
+        // The software decides which content kinds the server loads.
+        invalidateServerResources(id(), ['content']);
+      }
     }, jobPollDelay(attempt));
   };
   createEffect(busy, (active) => {
@@ -95,7 +100,8 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
             <Show when={state().recoveryRequired}>
               <p data-vesta="server-callout" data-tone="danger">{t(softwareRestoreKind(state()) === 'launch' ? 'server-hosting.recover-launch-banner' : 'server-hosting.recovery-banner')}</p>
             </Show>
-            <Show when={stopped()} fallback={
+            {/* A custom JAR has no managed family to preselect; it shows as itself until restored. */}
+            <Show when={stopped() && launchKind(state()).kind !== 'custom'} fallback={
               <SettingsPanel title={t('server-hosting.software-label')} name="software">
                 <div data-vesta="server-software-installed">
                   <SoftwareMark software={state().current?.software} size="lg" />

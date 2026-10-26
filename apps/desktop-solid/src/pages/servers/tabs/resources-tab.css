@@ -84,7 +84,7 @@
     color: var(--summary-tint);
   }
 
-  :where([data-vesta="server-content-summary"]) > span {
+  :where([data-vesta="server-content-summary-text"]) {
     display: flex;
     flex: 1;
     flex-wrap: wrap;
@@ -92,7 +92,7 @@
     min-inline-size: 0;
   }
 
-  :where([data-vesta="server-content-summary"]) > span > span {
+  :where([data-vesta="server-content-summary-text"]) > span {
     color: var(--vesta-color-text-muted);
   }
 

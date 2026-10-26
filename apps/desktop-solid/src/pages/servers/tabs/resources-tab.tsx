@@ -358,7 +358,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
       <Show when={summary().count}>
         <div data-vesta="server-content-summary" data-tone={summary().failed ? 'danger' : 'accent'} role="status">
           <Icon name={summary().failed ? 'icons/controls/warning' : 'icons/actions/reload'} size={15} />
-          <span>
+          <span data-vesta="server-content-summary-text">
             <strong>{t('server-content.pending-count', { count: summary().count })}</strong>
             <span>{t(summary().running ? 'server-content.pending-running' : 'server-content.pending-stopped')}</span>
           </span>
