@@ -65,6 +65,7 @@ export const warningCopy = (code: string): MessageId => warningMessage[code] ?? 
 const reasons: Record<string, MessageId> = {
   'server_install.build_tools_missing': 'server-hosting.reason-build-tools',
   'server_install.build_memory_low': 'server-hosting.reason-build-memory',
+  'server_install.build_output_mismatch': 'server-hosting.reason-build-output',
   software_forbidden: 'server-hosting.reason-owner-only',
   software_disabled: 'server-hosting.reason-software-disabled',
   software_runtime_unavailable: 'server-hosting.reason-software-disabled',

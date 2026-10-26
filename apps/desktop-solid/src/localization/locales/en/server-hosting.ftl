@@ -79,6 +79,7 @@ server-hosting-warning-first-run = The first start after switching may update th
 server-hosting-warning-source-build = Builds from source using Git and a JDK. Minecraft stays stopped during compilation, which can take up to an hour.
 server-hosting-reason-build-tools = Install Git and a JDK on the server computer before building CraftBukkit or Spigot. Windows also needs Git Bash.
 server-hosting-reason-build-memory = Not enough free RAM to build this version. Free some memory, or build it on another computer and import the JAR.
+server-hosting-reason-build-output = The built server doesn't match this release's published checksum. Your current software is unchanged.
 server-hosting-warning-proxy = Check that your proxy supports this version.
 server-hosting-warning-other = Review this change carefully before applying it.
 server-hosting-risk-cross-family = Mods and plugins made for the current software may not load.

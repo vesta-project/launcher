@@ -2704,6 +2704,7 @@ export const messageIds = [
   "server-hosting.warning-source-build",
   "server-hosting.reason-build-tools",
   "server-hosting.reason-build-memory",
+  "server-hosting.reason-build-output",
   "server-hosting.warning-proxy",
   "server-hosting.warning-other",
   "server-hosting.risk-cross-family",
