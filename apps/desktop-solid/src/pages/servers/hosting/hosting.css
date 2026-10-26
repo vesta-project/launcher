@@ -235,3 +235,19 @@
 @layer launcher {
   :where([data-vesta="server-software-installed"]) { display: flex; align-items: center; gap: var(--vesta-space-3); padding: 0 var(--vesta-space-4) var(--vesta-space-4); }
 }
+
+/* Custom JAR: what the agent reported, and a folder browser limited to .jar files. */
+@layer launcher {
+  :where([data-vesta="server-custom-jar-facts"]) { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--vesta-space-1-5) var(--vesta-space-4); margin: 0; font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-custom-jar-facts"]) dt { color: var(--vesta-color-text-muted); }
+  :where([data-vesta="server-custom-jar-facts"]) dd { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; }
+  :where([data-vesta="server-jar-picker"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-jar-picker-path"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-1); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-jar-picker-path"]) button { padding: 0 var(--vesta-space-1); border: 0; border-radius: var(--vesta-radius-sm); background: none; color: inherit; font: inherit; cursor: default; }
+  :where([data-vesta="server-jar-picker-path"]) button:hover { background: var(--vesta-color-fill); color: var(--vesta-color-text); }
+  :where([data-vesta="server-jar-picker-list"]) { display: flex; flex-direction: column; max-block-size: 320px; margin: 0; padding: var(--vesta-space-1); overflow-y: auto; border: var(--vesta-border-width) solid var(--vesta-color-border); border-radius: var(--vesta-radius-lg, 10px); list-style: none; }
+  :where([data-vesta="server-jar-picker-row"]) { display: flex; align-items: center; gap: var(--vesta-space-2); inline-size: 100%; min-block-size: 30px; padding: 0 var(--vesta-space-2); border: 0; border-radius: var(--vesta-radius-sm); background: none; color: var(--vesta-color-text); font: inherit; font-size: var(--vesta-text-sm); text-align: start; cursor: default; }
+  :where([data-vesta="server-jar-picker-row"]):hover { background: var(--vesta-color-fill); }
+  :where([data-vesta="server-jar-picker-row"][aria-selected="true"]) { background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent); color: var(--vesta-color-accent-text); }
+  :where([data-vesta="server-jar-picker-row"]) > :where([data-vesta="icon"]) { color: var(--vesta-color-text-muted); }
+}

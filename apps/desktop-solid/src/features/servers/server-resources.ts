@@ -80,6 +80,10 @@ export async function warmSoftwareMetadata(id: string, software: SoftwareId, wan
   } catch { /* The visible resource owns errors and retry guidance. */ }
   finally { warmingCatalogues.delete(id); }
 }
+/** Live server content (mods, plugins, datapacks) with staged changes. Listing does no provider IO. */
+export const contentResource = serverResource('content', (id) => serverCommand((client) => client.content(id)));
+/** What a content mutation can change: the inventory, and the world's datapack state. */
+export const CONTENT_RESOURCES = ['content', 'world'] as const;
 export const sftpResource = serverResource('sftp', (id) => serverCommand((client) => client.sftp(id)));
 export const sftpKeysResource = serverResource('sftp-keys', (id) => serverCommand((client) => client.sftpKeys(id)));
 

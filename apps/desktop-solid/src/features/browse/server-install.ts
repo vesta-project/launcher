@@ -1,19 +1,27 @@
-// The glue between Browse and a server target. Every call the server content contract will
-// replace lives here, so connecting it is one function each:
-//   serverSoftware          -> `server_content` inventory `software` (today: `server_software`)
-//   resolveServerDependencies -> `server_content_dependencies`
-//   installToServer          -> `server_content_install`
-//   installToModpack         -> the stage 2 pack draft
+// The glue between Browse and a server target, over the server content contract:
+//   serverSoftware            -> `server_content` inventory `software`
+//   resolveServerDependencies -> `server_content_dependencies` (the shared instance resolver)
+//   installToServer           -> `server_content_install`, one durable intent per resource
+//   installToModpack          -> the stage 2 pack draft
 import { fetchProjects } from './browse-api';
-import type { ResourceProject, ResourceVersion } from './browse-model';
-import type { DependencyCandidate, DependencyRow, Destination, ServerTarget, TargetKind } from './install-targets';
-import { readServerResource } from '../servers/resources';
-import { softwareResource } from '../servers/server-resources';
-import type { ConnectionId } from '../servers/native';
+import type { ResourceProject, ResourceType, ResourceVersion } from './browse-model';
+import { isContentProvider, previewCandidates, serverInstallPlan, type DependencyCandidate, type DependencyRow, type Destination, type ServerTarget } from './install-targets';
+export { isContentProvider, isServerContentKind, previewCandidates, serverInstallPlan, type ServerInstallItem } from './install-targets';
+import { invalidateServerResources, readServerResource } from '../servers/resources';
+import { CONTENT_RESOURCES, contentResource, softwareResource } from '../servers/server-resources';
+import { newIntentId } from '../servers/model';
+import { serverCommand } from '../servers/store';
+import type { ConnectionId, ServerCommandError } from '../servers/native';
+import type { ContentChange } from '../servers/native-content';
 
-/** Managed server software id, or null when it is unidentified or cannot be read. */
+/**
+ * Managed server software id, or null when it is unidentified or cannot be read. The content
+ * inventory reports the authoritative family to anyone who may list content; the owner-only
+ * software state is the fallback when the inventory cannot be read.
+ */
 export async function serverSoftware(id: ConnectionId): Promise<string | null> {
-  // TODO(server-content): prefer `ServerContentInventory.software` from `server_content`.
+  const inventory = await readServerResource(id, contentResource).catch(() => undefined);
+  if (inventory) return inventory.software;
   const state = await readServerResource(id, softwareResource).catch(() => undefined);
   return state?.current?.software ?? null;
 }
@@ -59,40 +67,56 @@ export async function declaredDependencies({ project, version }: DependencyReque
 /** Instance targets: the same preview; the host resolves the real set while installing. */
 export const resolveInstanceDependencies: DependencyResolver = declaredDependencies;
 
-/** Server targets: resolved against the server's Minecraft version, software and inventory. */
+/**
+ * Server targets: native resolves against the server's authoritative Minecraft version,
+ * software and inventory with the same traversal instances use.
+ */
 export function resolveServerDependencies(target: ServerTarget): DependencyResolver {
-  // TODO(server-content): call `server_content_dependencies` (serversContentNative.contentDependencies
-  // with target.id, project.source, project.id, version.id) and map
-  // `ServerDependency { project, version, required, installed }` straight to DependencyCandidate.
-  void target;
-  return declaredDependencies;
+  return async ({ project, version }) => {
+    const source = project.source;
+    // Other sources have no server install path; their declared list is still worth showing.
+    if (!isContentProvider(source)) return declaredDependencies({ project, version });
+    const preview = await serverCommand((client) => client.contentDependencies(target.id, source, project.id, version.id));
+    return previewCandidates(preview);
+  };
 }
 
 export interface ServerSelection {
   project: ResourceProject;
   version: ResourceVersion;
-  kind: TargetKind;
+  kind: ResourceType;
   destination: Destination;
   dependencies: readonly DependencyRow[];
 }
 
 export type ServerInstallOutcome =
-  | { kind: 'started'; count: number }
+  /** `staged`: Minecraft is running, so at least one change applies on its next start or restart. */
+  | { kind: 'started'; count: number; staged: boolean }
   | { kind: 'unavailable'; reason: 'server-coming' | 'modpack-coming' }
-  | { kind: 'failed'; message: string };
+  | { kind: 'failed'; message: string; error?: ServerCommandError; installed?: number };
 
 /** Installs the project and the ticked dependencies into the server's files. */
 export async function installToServer(target: ServerTarget, selection: ServerSelection): Promise<ServerInstallOutcome> {
-  // TODO(server-content): for the project and each selected dependency, call `server_content_install`
-  // (serversContentNative.contentInstall(target.id, { provider, projectId, versionId, kind }, newIntentId())).
-  // Dependency rows without a resolved version need the resolver above to supply one first.
-  void target;
-  void selection;
-  return { kind: 'unavailable', reason: 'server-coming' };
+  const plan = serverInstallPlan(selection);
+  if (!plan) return { kind: 'unavailable', reason: 'server-coming' };
+  const changes: ContentChange[] = [];
+  try {
+    // There is no multi-resource transaction; each request is its own durable intent.
+    for (const { provider, projectId, versionId, kind } of plan) {
+      changes.push(await serverCommand((client) => client.contentInstall(target.id, { provider, projectId, versionId, kind }, newIntentId())));
+    }
+  } catch (reason) {
+    const error = reason as ServerCommandError;
+    return { kind: 'failed', message: error.reason ?? error.code, error, installed: changes.length };
+  } finally {
+    if (changes.length) invalidateServerResources(target.id, CONTENT_RESOURCES);
+  }
+  return { kind: 'started', count: changes.length, staged: changes.some((change) => change.state === 'pending') };
 }
 
 /** Adds the project to the client modpack draft. Comes with the pack workspace (stage 2). */
 export async function installToModpack(target: ServerTarget, selection: ServerSelection): Promise<ServerInstallOutcome> {
+  // TODO(server-content): stage 2 pack draft.
   void target;
   void selection;
   return { kind: 'unavailable', reason: 'modpack-coming' };
@@ -107,7 +131,9 @@ export async function installToServerTarget(
     if (selection.destination === 'modpack') return await installToModpack(target, selection);
     const server = await installToServer(target, selection);
     if (selection.destination === 'server' || server.kind !== 'started') return server;
-    return await installToModpack(target, selection);
+    // The server half landed; the pack half explains itself until stage 2.
+    const pack = await installToModpack(target, selection);
+    return pack.kind === 'unavailable' ? server : pack;
   } catch (reason) {
     return { kind: 'failed', message: String(reason) };
   }

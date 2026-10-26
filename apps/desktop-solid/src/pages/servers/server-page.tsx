@@ -23,6 +23,7 @@ import { BackupsTab } from './tabs/backups-tab';
 import { ConsoleTab } from './tabs/console-tab';
 import { FilesTab } from './tabs/files-tab';
 import { OverviewTab } from './tabs/overview-tab';
+import { ServerResourcesTab } from './tabs/resources-tab';
 import { prefetchServerTarget, useServerNavPrefetch } from './nav-prefetch';
 import { FingerprintView, ServerErrorNote } from './parts';
 import { ServerHeader } from './server-header';
@@ -34,6 +35,7 @@ import '../library/instance/instance-page.css';
 const views: Record<MainTabId, { view: Component<{ snapshot: ServerSnapshot }>; flush: boolean }> = {
   overview: { view: OverviewTab, flush: false },
   console: { view: ConsoleTab, flush: true },
+  resources: { view: ServerResourcesTab, flush: true },
   files: { view: FilesTab, flush: true },
   automation: { view: AutomationTab, flush: true },
   backups: { view: BackupsTab, flush: true },

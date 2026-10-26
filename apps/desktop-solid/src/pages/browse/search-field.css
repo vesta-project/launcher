@@ -104,6 +104,19 @@
     outline-offset: calc(var(--vesta-focus-width) * -1);
   }
 
+  /* The server Browse was opened for: accent-tinted, so it reads as the target, not a filter. */
+  :where([data-vesta='browse-chip'][data-kind='server']) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-chip'][data-kind='server'] [data-vesta='browse-chip-body']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    max-inline-size: 24ch;
+  }
+
   @keyframes browse-chip-in {
     from {
       opacity: 0;
