@@ -8,6 +8,7 @@ pub mod metrics;
 pub mod model;
 pub mod observation;
 pub mod operations;
+pub mod pack_sync;
 pub mod retry;
 mod role_defaults;
 pub mod scheduler;

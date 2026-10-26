@@ -2,6 +2,7 @@ mod credentials;
 pub(crate) mod files;
 mod hosting;
 mod management;
+pub(crate) mod pack_sync;
 mod store;
 mod subscriptions;
 mod tasks;
@@ -50,6 +51,8 @@ struct Live {
     players: StdMutex<Option<PlayersView>>,
 }
 pub struct ServerManager {
+    pack_previews: Mutex<HashMap<String, pack_sync::Prepared>>,
+    pack_gate: Mutex<()>,
     root: PathBuf,
     credentials: Arc<Credentials>,
     store: Arc<Mutex<Store>>,
@@ -110,6 +113,8 @@ impl ServerManager {
             }
         };
         Ok(Arc::new(Self {
+            pack_previews: Default::default(),
+            pack_gate: Default::default(),
             credentials: Arc::new(Credentials::new(&root)),
             root,
             store: Arc::new(Mutex::new(store)),

@@ -9634,6 +9634,7 @@ dependencies = [
  "rcgen",
  "reqwest 0.12.28",
  "rustls",
+ "rustls-webpki",
  "serde",
  "serde_json",
  "sha2 0.10.9",
