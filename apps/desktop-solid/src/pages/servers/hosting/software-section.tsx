@@ -23,9 +23,14 @@ import { serverCommand, useServersClock } from '../../../features/servers/store'
 import { SettingsPage, SettingsPanel } from '../settings-parts';
 import { Hint, HostingError } from './parts';
 import { JavaPanel, useJavaActions, type JavaActions } from './java-panel';
+import { CustomJarPanel } from './custom-jar';
+import { roleKey } from '../../../features/servers/capabilities';
 import './hosting.css';
 
-const launchText = (launch: SoftwareLaunch | null | undefined) => launchSummary(launch) ?? t('server-hosting.original-setup');
+/** A custom JAR is shown as itself, never as a managed family. */
+const launchText = (launch: SoftwareLaunch | null | undefined) => launch?.customJar?.path
+  ? t('server-hosting.custom-jar-summary', { path: launch.customJar.path })
+  : launchSummary(launch) ?? t('server-hosting.original-setup');
 
 /** The software's mark on a tile tinted with its colour; a server glyph for the original setup. */
 function SoftwareMark(props: { software: SoftwareId | null | undefined; size?: 'sm' | 'lg' }) {
@@ -103,6 +108,9 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
             <SettingsPanel title={t('server-hosting.change')} name="software">
               <For each={[state().current?.installationId ?? 'original']} keyed={(entry) => entry}>{() => <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} java={java.value()} javaActions={javaActions} />}</For>
             </SettingsPanel>
+            </Show>
+            <Show when={!props.snapshot.connection.role || roleKey(props.snapshot.connection.role) === 'owner'}>
+              <CustomJarPanel snapshot={props.snapshot} state={state()} java={java.value()} jobRunning={busy()} onAccepted={accepted} />
             </Show>
             <SoftwareOutcome state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
             <Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
