@@ -47,7 +47,7 @@ describe('search operators', () => {
   test('a trailing token waits for Enter and unknown values stay in the text', () => {
     expect(parseOperators('mc:1.21.1').didExtract).toBe(false);
     expect(parseOperators('mc:1.21.1', { commitTrailing: true }).gameVersion).toBe('1.21.1');
-    expect(parseOperators('loader:bukkit ', { commitTrailing: true }).didExtract).toBe(false);
+    expect(parseOperators('loader:unknown ', { commitTrailing: true }).didExtract).toBe(false);
     expect(parseOperators('mc:1.20-1.21 ').didExtract).toBe(false);
   });
 });

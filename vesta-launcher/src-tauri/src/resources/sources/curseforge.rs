@@ -266,9 +266,8 @@ impl CurseForgeSource {
 
         for value in values {
             match value.trim().to_lowercase().as_str() {
-                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => {
-                    loaders.push(value.clone())
-                }
+                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" | "paper"
+                | "spigot" | "bukkit" | "purpur" | "folia" => loaders.push(value.clone()),
                 // CurseForge includes side/environment labels in the same field as
                 // Minecraft versions. They are not valid version choices.
                 "client" | "server" => {}
@@ -281,6 +280,7 @@ impl CurseForgeSource {
 
     pub fn map_class_id_to_type(class_id: i64) -> ResourceType {
         match class_id {
+            5 => ResourceType::Plugin,
             6 => ResourceType::Mod,
             12 => ResourceType::ResourcePack,
             6552 => ResourceType::Shader,
@@ -294,6 +294,7 @@ impl CurseForgeSource {
 
     pub fn map_type_to_class_id(res_type: ResourceType) -> i64 {
         match res_type {
+            ResourceType::Plugin => 5,
             ResourceType::Mod => 6,
             ResourceType::ResourcePack => 12,
             ResourceType::Shader => 6552,
@@ -498,7 +499,7 @@ impl ResourceSource for CurseForgeSource {
 
                 // Filter out Bukkit Plugins (Class ID 5), Shaders (6552), and Data Packs (6945)
                 // Also filter out ID 4559 (Videos/Tutorials)
-                if c.class_id == Some(5) || c.id == 6552 || c.id == 6945 || c.id == 4559 {
+                if c.id == 6552 || c.id == 6945 || c.id == 4559 {
                     return false;
                 }
 
@@ -676,7 +677,8 @@ impl ResourceSource for CurseForgeSource {
                     .collect(),
                 web_url: item.links.website_url.clone(),
                 links: Self::map_links(&item.links),
-                environment: None,
+                environment: (query.resource_type == ResourceType::Plugin)
+                    .then(crate::models::resource::ResourceEnvironment::server_only),
                 external_ids: None,
                 featured_gallery: item
                     .screenshots
@@ -772,7 +774,8 @@ impl ResourceSource for CurseForgeSource {
                 .collect(),
             web_url: item.links.website_url.clone(),
             links: Self::map_links(&item.links),
-            environment: None,
+            environment: (item.class_id == Some(5))
+                .then(crate::models::resource::ResourceEnvironment::server_only),
             external_ids: None,
             featured_gallery: item
                 .screenshots
@@ -850,7 +853,8 @@ impl ResourceSource for CurseForgeSource {
                     .collect(),
                 web_url: item.links.website_url.clone(),
                 links: Self::map_links(&item.links),
-                environment: None,
+                environment: (item.class_id == Some(5))
+                    .then(crate::models::resource::ResourceEnvironment::server_only),
                 external_ids: None,
                 featured_gallery: item
                     .screenshots
@@ -1360,6 +1364,25 @@ impl ResourceSource for CurseForgeSource {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn plugin_class_and_loader_labels_are_first_class() {
+        use crate::models::resource::ResourceType;
+        assert_eq!(
+            super::CurseForgeSource::map_class_id_to_type(5),
+            ResourceType::Plugin
+        );
+        assert_eq!(
+            super::CurseForgeSource::map_type_to_class_id(ResourceType::Plugin),
+            5
+        );
+        let (games, loaders) = super::CurseForgeSource::split_game_versions(&[
+            "1.21.4".into(),
+            "Paper".into(),
+            "Folia".into(),
+        ]);
+        assert_eq!(games, vec!["1.21.4"]);
+        assert_eq!(loaders, vec!["Paper", "Folia"]);
+    }
     use super::{CFFile, CurseForgeSource};
     use crate::models::resource::{
         DependencyType, ResourceChangelogFormat, ResourceChangelogStatus,

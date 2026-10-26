@@ -112,6 +112,7 @@ pub struct ResourceDownloadTask {
 fn resource_type_name(resource_type: ResourceType) -> &'static str {
     match resource_type {
         ResourceType::Mod => "mod",
+        ResourceType::Plugin => "plugin",
         ResourceType::ResourcePack => "resourcepack",
         ResourceType::Shader => "shader",
         ResourceType::DataPack => "datapack",
@@ -127,6 +128,7 @@ fn artifact_target_directory(
 ) -> Result<PathBuf, String> {
     match artifact_type {
         ResourceType::Mod => Ok(instance_path.join("mods")),
+        ResourceType::Plugin => Err("Plugins require a server target".to_string()),
         ResourceType::ResourcePack => Ok(instance_path.join("resourcepacks")),
         ResourceType::Shader => Ok(instance_path.join("shaderpacks")),
         ResourceType::DataPack => world_path

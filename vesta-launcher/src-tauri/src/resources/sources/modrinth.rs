@@ -187,11 +187,15 @@ fn project_type_filter(resource_type: ResourceType) -> &'static str {
 }
 
 fn supports_loader_filter(resource_type: ResourceType) -> bool {
-    matches!(resource_type, ResourceType::Mod | ResourceType::Modpack)
+    matches!(
+        resource_type,
+        ResourceType::Mod | ResourceType::Modpack | ResourceType::Plugin
+    )
 }
 
 fn resource_type(value: &str) -> ResourceType {
     match value {
+        "plugin" => ResourceType::Plugin,
         "resourcepack" => ResourceType::ResourcePack,
         "shader" => ResourceType::Shader,
         "datapack" => ResourceType::DataPack,
@@ -205,6 +209,7 @@ fn matches_resource_type(value: &str, expected: ResourceType) -> bool {
     matches!(
         (value, expected),
         ("mod", ResourceType::Mod)
+            | ("plugin", ResourceType::Plugin)
             | ("resourcepack", ResourceType::ResourcePack)
             | ("shader", ResourceType::Shader)
             | ("datapack", ResourceType::DataPack)
@@ -264,7 +269,30 @@ fn map_environment(values: &[String]) -> Option<ResourceEnvironment> {
             _ => {}
         }
     }
-    (client || server).then_some(ResourceEnvironment { client, server })
+    use crate::models::resource::SideRequirement::{Optional, Required, Unsupported};
+    let mut requirements = None;
+    for value in values {
+        let sides = match value.as_str() {
+            "client_and_server" => (Required, Required),
+            "client_only" | "singleplayer_only" => (Required, Unsupported),
+            "server_only" | "dedicated_server_only" => (Unsupported, Required),
+            "client_only_server_optional" => (Required, Optional),
+            "server_only_client_optional" => (Optional, Required),
+            "client_or_server"
+            | "client_or_server_prefers_both"
+            | "client_or_server_prefers_client"
+            | "client_or_server_prefers_server" => (Optional, Optional),
+            _ => continue,
+        };
+        requirements = Some(sides);
+        break;
+    }
+    (client || server).then_some(ResourceEnvironment {
+        client,
+        server,
+        client_requirement: requirements.map(|v| v.0),
+        server_requirement: requirements.map(|v| v.1),
+    })
 }
 
 fn link_label(kind: &str) -> String {
@@ -567,6 +595,7 @@ impl ResourceSource for ModrinthSource {
 
         // Resource Type
         let mr_type = match query.resource_type {
+            ResourceType::Plugin => "plugin",
             ResourceType::Mod => "mod",
             ResourceType::ResourcePack => "resourcepack",
             ResourceType::Shader => "shader",
@@ -1108,6 +1137,7 @@ impl ResourceSource for ModrinthSource {
                 display_index: None,
                 project_type: match c.project_type.as_str() {
                     "mod" => Some(ResourceType::Mod),
+                    "plugin" => Some(ResourceType::Plugin),
                     "modpack" => Some(ResourceType::Modpack),
                     "resourcepack" => Some(ResourceType::ResourcePack),
                     "shader" => Some(ResourceType::Shader),
@@ -1171,6 +1201,12 @@ mod tests {
 
     #[test]
     fn environment_values_normalize_to_supported_sides() {
+        use crate::models::resource::SideRequirement::{Optional, Required, Unsupported};
+        let sides = map_environment(&["server_only_client_optional".into()]).unwrap();
+        assert_eq!(sides.client_requirement, Some(Optional));
+        assert_eq!(sides.server_requirement, Some(Required));
+        let sides = map_environment(&["client_only".into()]).unwrap();
+        assert_eq!(sides.server_requirement, Some(Unsupported));
         let client = map_environment(&["client_only".to_string()]).unwrap();
         assert!(client.client);
         assert!(!client.server);
@@ -1191,6 +1227,8 @@ mod tests {
 
     #[test]
     fn creator_project_types_do_not_treat_plugins_as_mods() {
+        assert!(matches_resource_type("plugin", ResourceType::Plugin));
+        assert!(supports_loader_filter(ResourceType::Plugin));
         assert!(matches_resource_type("mod", ResourceType::Mod));
         assert!(!matches_resource_type("plugin", ResourceType::Mod));
         assert!(matches_resource_type("modpack", ResourceType::Modpack));

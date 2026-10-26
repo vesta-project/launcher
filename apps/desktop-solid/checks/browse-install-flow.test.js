@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const project = { source: 'modrinth', id: 'project', name: 'Project', icon_url: 'https://example.test/icon.png', web_url: 'https://example.test/project' };
 const release = { id: 'release', release_type: 'release', game_versions: ['1.21.1'], loaders: ['fabric'], download_url: 'https://example.test/file.jar' };
@@ -39,7 +39,7 @@ async function harness(entry, run) {
     '../../features/browse/new-instance-install': 'export const installIntoNewInstance = async (...args) => c.handoffs.push(args);',
   };
   try {
-    const built = await Bun.build({ entrypoints: [new URL(`../src/${entry}`, import.meta.url).pathname],
+    const built = await Bun.build({ entrypoints: [fileURLToPath(new URL(`../src/${entry}`, import.meta.url))],
       target: 'bun', conditions: ['browser', 'development'], plugins: [{ name: 'install-boundaries', setup(build) {
         build.onResolve({ filter: /.*/ }, ({ path }) => path in fixtures ? { path, namespace: 'fixture' } : undefined);
         build.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ contents: prefix + fixtures[path], loader: 'js' }));

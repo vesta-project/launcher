@@ -24,6 +24,7 @@ impl SourceCapabilities {
                 platform,
                 display_name: platform.display_name().to_string(),
                 supported_resource_types: vec![
+                    ResourceType::Plugin,
                     ResourceType::Mod,
                     ResourceType::ResourcePack,
                     ResourceType::Shader,
@@ -47,6 +48,7 @@ impl SourceCapabilities {
                 platform,
                 display_name: platform.display_name().to_string(),
                 supported_resource_types: vec![
+                    ResourceType::Plugin,
                     ResourceType::Mod,
                     ResourceType::ResourcePack,
                     ResourceType::Shader,

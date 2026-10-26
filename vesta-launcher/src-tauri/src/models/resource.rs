@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum ResourceType {
     #[default]
     Mod,
+    Plugin,
     ResourcePack,
     Shader,
     DataPack,
@@ -100,6 +101,27 @@ pub struct ResourceProjectLink {
 pub struct ResourceEnvironment {
     pub client: bool,
     pub server: bool,
+    #[serde(default)]
+    pub client_requirement: Option<SideRequirement>,
+    #[serde(default)]
+    pub server_requirement: Option<SideRequirement>,
+}
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SideRequirement {
+    Required,
+    Optional,
+    Unsupported,
+}
+impl ResourceEnvironment {
+    pub fn server_only() -> Self {
+        Self {
+            client: false,
+            server: true,
+            client_requirement: Some(SideRequirement::Unsupported),
+            server_requirement: Some(SideRequirement::Required),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]

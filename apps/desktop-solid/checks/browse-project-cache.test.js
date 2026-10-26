@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
 async function harness(run) {
   const directory = await mkdtemp(join(tmpdir(), 'vesta-project-cache-'));
@@ -20,13 +20,13 @@ async function harness(run) {
   try {
     const entry = join(directory, 'entry.ts');
     await Bun.write(entry, `
-      export * from ${JSON.stringify(new URL('../src/features/browse/browse-projects.ts', import.meta.url).pathname)};
+      export * from ${JSON.stringify(fileURLToPath(new URL('../src/features/browse/browse-projects.ts', import.meta.url)))};
       export { createRoot, createEffect, flush } from 'solid-js';
       export { captureArtifact } from '@solidjs/diagnostics';
     `);
     const built = await Bun.build({ entrypoints: [entry], target: 'bun', conditions: ['browser', 'development'],
       plugins: [{ name: 'project-cache-boundaries', setup(build) {
-        build.onResolve({ filter: /^solid-js$|^@solidjs\/diagnostics$/ }, ({ path }) => ({ path: new URL(path === 'solid-js' ? '../node_modules/solid-js/dist/solid.dev.js' : '../node_modules/@solidjs/diagnostics/dist/index.js', import.meta.url).pathname }));
+        build.onResolve({ filter: /^solid-js$|^@solidjs\/diagnostics$/ }, ({ path }) => ({ path: fileURLToPath(new URL(path === 'solid-js' ? '../node_modules/solid-js/dist/solid.dev.js' : '../node_modules/@solidjs/diagnostics/dist/index.js', import.meta.url)) }));
         build.onResolve({ filter: /^\.\/browse-api$/ }, () => ({ path: 'api', namespace: 'fixture' }));
         build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ loader: 'js', contents: `
           const c = globalThis[${JSON.stringify(key)}];

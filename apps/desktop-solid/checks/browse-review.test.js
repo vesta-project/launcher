@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { isPopoverChild } from '../ui/components/overlay/popover-scope.ts';
 
 // Test explicit ownership with an inert element Interface; no DOM or browser.
@@ -33,7 +33,7 @@ test('retained result install state uses project type while a different type loa
   };
   try {
     const built = await Bun.build({
-      entrypoints: [new URL('../src/features/browse/browse-store.ts', import.meta.url).pathname],
+      entrypoints: [fileURLToPath(new URL('../src/features/browse/browse-store.ts', import.meta.url))],
       target: 'bun', conditions: ['browser', 'development'],
       plugins: [{ name: 'browse-state-boundaries', setup(build) {
         build.onResolve({ filter: /^(\.\.\/\.\.\/app\/router|\.\.\/\.\.\/localization|\.\.\/instances\/catalog|\.\/browse-api|\.\/browse-projects)$/ },

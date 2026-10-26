@@ -2,13 +2,22 @@ import type { MessageId } from '../../localization/messages';
 
 /** Pure browse helpers: types, source capabilities, query normalisation and version choice. */
 
-export type ResourceType = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world';
+export type ResourceType = 'mod' | 'plugin' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world';
 export type SourceId = 'modrinth' | 'curseforge' | 'smithed';
 export type SortOrder = 'asc' | 'desc';
 export type ReleaseType = 'release' | 'beta' | 'alpha';
 
-export const resourceTypes: ResourceType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'];
+export const resourceTypes: ResourceType[] = ['mod', 'plugin', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'];
 export const loaderIds = ['fabric', 'forge', 'neoforge', 'quilt'] as const;
+export const pluginLoaderIds = ['paper', 'spigot', 'bukkit', 'purpur', 'folia'] as const;
+export type SideRequirement = 'required' | 'optional' | 'unsupported';
+export const loadersForType = (type: ResourceType): readonly string[] => type === 'plugin' ? pluginLoaderIds : loaderIds;
+export function defaultServerInstallDestination(project: Pick<ResourceProject, 'resource_type' | 'environment'>): 'server' | 'modpack' | 'both' {
+  if (project.resource_type === 'plugin') return 'server';
+  if (project.environment?.server_requirement === 'unsupported' || project.environment?.server === false) return 'modpack';
+  if (project.environment?.client_requirement === 'unsupported' || project.environment?.client === false) return 'server';
+  return 'both';
+}
 export const pageSizes = [20, 50, 100] as const;
 /** CurseForge refuses result windows past 10 000 entries. */
 export const maxResultWindow = 10_000;
@@ -50,7 +59,7 @@ export interface ResourceProject {
   /** Extra links the provider lists: source, issues, wiki, Discord, donations. */
   links?: ProjectLink[];
   /** Where the project runs; absent when the provider does not say. */
-  environment?: { client: boolean; server: boolean } | null;
+  environment?: { client: boolean; server: boolean; client_requirement?: SideRequirement | null; server_requirement?: SideRequirement | null } | null;
   [field: string]: unknown;
 }
 
@@ -137,7 +146,7 @@ export interface SourceDescriptor {
   environmentTypes: ResourceType[];
 }
 
-const everything: ResourceType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'];
+const everything: ResourceType[] = ['mod', 'plugin', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'];
 
 /** Mirrors the old launcher's source catalogue (and the Rust `SourceCapabilities`). */
 export const sources: SourceDescriptor[] = [
@@ -200,7 +209,7 @@ export const firstSourceForType = (type: ResourceType) => sourcesForType(type)[0
 export const supportsEnvironment = (source: SourceId, type: ResourceType) =>
   sourceById(source).environmentTypes.includes(type);
 /** Mods and modpacks are the only types the host filters by loader. */
-export const typeUsesLoader = (type: ResourceType) => type === 'mod' || type === 'modpack';
+export const typeUsesLoader = (type: ResourceType) => type === 'mod' || type === 'modpack' || type === 'plugin';
 export const isResourceType = (value: unknown): value is ResourceType => resourceTypes.includes(value as ResourceType);
 export const isSourceId = (value: unknown): value is SourceId => sources.some((source) => source.id === value);
 
@@ -310,6 +319,7 @@ export function filterCount(query: BrowseQuery, hasTarget: boolean): number {
 /* ---- Search operators ---- */
 
 const loaderAliases: Record<string, string> = {
+  paper: 'paper', spigot: 'spigot', bukkit: 'bukkit', purpur: 'purpur', folia: 'folia',
   forge: 'forge',
   fabric: 'fabric',
   quilt: 'quilt',
@@ -463,7 +473,7 @@ const asItem = (category: ResourceCategory): CategoryItem => ({
 });
 
 /** Modrinth lists loaders among its categories; they are loader filters, not facets. */
-export const isLoaderCategory = (id: string) => (loaderIds as readonly string[]).includes(id.toLowerCase());
+export const isLoaderCategory = (id: string) => ([...loaderIds, ...pluginLoaderIds] as readonly string[]).includes(id.toLowerCase());
 
 export function categoriesForType(all: ResourceCategory[], type: ResourceType): ResourceCategory[] {
   return all.filter(
@@ -545,6 +555,7 @@ export function projectCompatibility(
   type: ResourceType,
   target: InstallTarget,
 ): Compatibility {
+  if (type === 'plugin') return { kind: 'incompatible', reason: 'loader' };
   const loader = loaderOf(target);
   if (loader === 'vanilla') {
     return type === 'mod' || type === 'shader' ? { kind: 'incompatible', reason: 'vanilla' } : { kind: 'compatible' };
@@ -570,6 +581,7 @@ export function gameVersionMatches(supported: readonly string[], target: string)
 }
 
 function loaderMatches(version: ResourceVersion, type: ResourceType, target: InstallTarget): boolean {
+    if (type === 'plugin') return false;
   const loader = loaderOf(target);
   const loaders = version.loaders.map((item) => item.toLowerCase());
   // Only mods are bound to the instance's loader; packs, shaders, worlds and data are not.

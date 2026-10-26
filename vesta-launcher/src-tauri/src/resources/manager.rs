@@ -1393,6 +1393,23 @@ pub fn is_loader_compatible(supported: &[String], target: &str) -> bool {
             let sl = l.to_lowercase();
             sl == "quilt" || sl == "fabric"
         })
+    } else if matches!(
+        t.as_str(),
+        "paper" | "purpur" | "spigot" | "bukkit" | "folia"
+    ) {
+        supported.iter().any(|loader| match t.as_str() {
+            "purpur" => matches!(
+                loader.to_ascii_lowercase().as_str(),
+                "purpur" | "paper" | "spigot" | "bukkit"
+            ),
+            "paper" => matches!(
+                loader.to_ascii_lowercase().as_str(),
+                "paper" | "spigot" | "bukkit"
+            ),
+            "spigot" => matches!(loader.to_ascii_lowercase().as_str(), "spigot" | "bukkit"),
+            "folia" => loader.eq_ignore_ascii_case("folia"),
+            _ => loader.eq_ignore_ascii_case("bukkit"),
+        })
     } else if t == "neoforge" {
         supported.iter().any(|l| {
             let sl = l.to_lowercase();
@@ -1405,6 +1422,15 @@ pub fn is_loader_compatible(supported: &[String], target: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn bukkit_family_compatibility_preserves_folia_opt_in() {
+        let loaders = |s: &str| vec![s.to_owned()];
+        assert!(super::is_loader_compatible(&loaders("bukkit"), "paper"));
+        assert!(super::is_loader_compatible(&loaders("paper"), "purpur"));
+        assert!(!super::is_loader_compatible(&loaders("paper"), "folia"));
+        assert!(super::is_loader_compatible(&loaders("folia"), "folia"));
+        assert!(!super::is_loader_compatible(&loaders("paper"), "fabric"));
+    }
     use super::{dependency_type_for_pinned_loaders, dependency_version_filters, peer_sha1};
 
     #[test]

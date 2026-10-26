@@ -135,6 +135,7 @@ impl ModpackResolver for PistonModpackResolver {
             );
 
             let subfolder = match project.resource_type {
+                crate::models::resource::ResourceType::Plugin => return Err(anyhow::anyhow!("Plugins require a server target")),
                 crate::models::resource::ResourceType::Mod => "mods",
                 crate::models::resource::ResourceType::ResourcePack => "resourcepacks",
                 crate::models::resource::ResourceType::Shader => "shaderpacks",

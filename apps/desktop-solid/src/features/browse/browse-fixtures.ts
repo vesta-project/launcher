@@ -246,7 +246,9 @@ Object.assign(modrinth[0], {
   environment: { client: true, server: false },
 });
 
-export const fixtureProjects: ResourceProject[] = [...modrinth, ...curseforge];
+export const fixtureProjects: ResourceProject[] = [...modrinth, ...curseforge,
+  { ...project('luckperms', 'LuckPerms', 'plugin', 'Permissions for Bukkit servers.', 'Luck', 1_000_000, ['paper', 'spigot', 'bukkit', 'purpur'], 3), environment: { client: false, server: true, client_requirement: 'unsupported', server_requirement: 'required' } },
+];
 
 const icon = (path: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -327,6 +329,7 @@ export function fixtureSearch(
 }
 
 export function fixtureVersions(projectId: string): ResourceVersion[] {
+  if (projectId === 'luckperms') return [{ id: 'lp-5', project_id: projectId, version_number: '5.4', game_versions: ['1.21.4'], loaders: ['bukkit', 'paper', 'spigot', 'purpur'], download_url: 'https://example.invalid/LuckPerms.jar', file_name: 'LuckPerms.jar', release_type: 'release', dependencies: [] }];
   const make = (
     id: string,
     number: string,
