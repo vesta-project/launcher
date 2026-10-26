@@ -41,17 +41,18 @@ export function consoleDisplayBoundary(entries: readonly ConsoleEntry[], boundar
   const after = boundary.hiddenAfterCursor ? position(boundary.hiddenAfterCursor) : null;
   if (!after) return boundary.hiddenUntil;
   let firstInScope: number | undefined;
-  let lastHidden = -1;
-  for (let i = 0; i < entries.length; i++) {
+  // The last hidden line determines the boundary. Walking back from the tail
+  // avoids reparsing the retained history after every new console batch.
+  for (let i = entries.length - 1; i >= 0; i--) {
     const current = entries[i].kind === 'line' ? position(entries[i].cursor) : null;
     if (current?.scope !== after.scope) continue;
-    firstInScope ??= entries[i].id;
-    if (current.value <= after.value) lastHidden = i;
-  }
-  if (lastHidden >= 0) {
-    // Hide markers left before the next visible line too, including a trailing
-    // marker that was present when Clear was pressed. A new run remains visible.
-    return entries.slice(lastHidden + 1).find((entry) => entry.kind === 'line')?.id ?? Infinity;
+    firstInScope = entries[i].id;
+    if (current.value <= after.value) {
+      for (let next = i + 1; next < entries.length; next++) {
+        if (entries[next].kind === 'line') return entries[next].id;
+      }
+      return Infinity;
+    }
   }
   return firstInScope ?? boundary.hiddenUntil;
 }

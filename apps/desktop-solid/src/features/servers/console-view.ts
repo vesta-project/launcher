@@ -13,15 +13,21 @@ export interface GapCopy { label: string; detail?: string }
  * cache holds them while the buffer does), so a new line doesn't re-parse the rest.
  */
 export function toLogEntries(entries: readonly ConsoleEntry[], gap: GapCopy, cache: WeakMap<ConsoleEntry, LogEntry>): LogEntry[] {
-  return entries.map((entry) => {
-    if (entry.kind === 'gap') return { kind: 'gap', id: entry.id, label: gap.label, detail: gap.detail };
+  const rows = new Array<LogEntry>(entries.length);
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    if (entry.kind === 'gap') {
+      rows[index] = { kind: 'gap', id: entry.id, label: gap.label, detail: gap.detail };
+      continue;
+    }
     let row = cache.get(entry);
     if (!row) {
       row = { ...parseLog(entry.text, entry.id), kind: 'line', truncated: entry.truncated };
       cache.set(entry, row);
     }
-    return row;
-  });
+    rows[index] = row;
+  }
+  return rows;
 }
 
 export interface ServerConsoleViewState extends LogViewState, ConsoleDisplayBoundary {}
