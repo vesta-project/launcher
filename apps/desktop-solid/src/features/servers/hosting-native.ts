@@ -38,6 +38,7 @@ export const SOFTWARE_IDS = ['vanilla', 'paper', 'folia', 'purpur', 'fabric', 'q
 export type SoftwareId = (typeof SOFTWARE_IDS)[number];
 
 export interface SoftwareLaunch {
+  customJar?: { path: string } | null;
   /** Null for the original, locally approved launch. */
   software: SoftwareId | null;
   version: string | null;
@@ -106,7 +107,7 @@ export type SoftwareJobState = 'queued' | 'staging' | 'activating' | 'succeeded'
 
 export interface SoftwareJob {
   id: string;
-  kind: 'apply' | 'rollback' | 'java_select' | 'java_download';
+  kind: 'apply' | 'rollback' | 'java_select' | 'java_download' | 'custom_jar' | 'restore_managed';
   state: SoftwareJobState;
   createdAtMs: number;
   updatedAtMs: number;

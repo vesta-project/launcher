@@ -29,12 +29,28 @@ pub struct ServerWorld {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareLaunch {
+    #[serde(default)]
+    pub custom_jar: Option<CustomJar>,
     pub software: Option<String>,
     pub version: Option<String>,
     pub build: Option<u32>,
     pub installation_id: String,
     pub loader_version: Option<String>,
     pub java_major: Option<u32>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CustomJar {
+    pub path: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomJarPlan {
+    pub plan_id: String,
+    pub expires_at_ms: i64,
+    pub expected_revision: String,
+    pub custom_jar: Option<CustomJar>,
+    pub main_class: Option<String>,
+    pub risks: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -212,7 +228,7 @@ fn revision(value: &mut Value, key: &str) -> Result<()> {
     }
     Ok(())
 }
-fn wire(value: Value) -> Value {
+pub(super) fn wire(value: Value) -> Value {
     match value {
         Value::Object(map) => Value::Object(
             map.into_iter()
@@ -236,6 +252,69 @@ fn wire(value: Value) -> Value {
     }
 }
 impl Client {
+    pub async fn custom_jar_plan(
+        &self,
+        path: Option<String>,
+        expected_revision: String,
+    ) -> Result<CustomJarPlan> {
+        let expected = expected_revision.parse::<u64>().map_err(|_| invalid())?;
+        let route = if path.is_some() {
+            "software/custom-jar/plan"
+        } else {
+            "software/restore-managed/plan"
+        };
+        let mut value = self
+            .request(
+                Method::POST,
+                &format!("/api/v3/manage/{route}"),
+                Some(json!({"path":path,"expected_revision":expected})),
+                None,
+                true,
+                "content.install",
+            )
+            .await?;
+        let token = value
+            .get("confirmation_token")
+            .and_then(Value::as_str)
+            .filter(|token| !token.is_empty() && token.len() <= 128)
+            .ok_or_else(unsupported)?
+            .to_owned();
+        revision(&mut value, "expected_revision")?;
+        let plan: CustomJarPlan = from_wire(value)?;
+        let mut approvals = self.hosting.approvals.lock().await;
+        approvals.retain(|_, a| a.attempt.is_some() || a.expires > crate::now_ms());
+        if approvals.len() >= 64 {
+            return Err(Error::new(ErrorCode::ServerBusy));
+        }
+        approvals.insert(
+            format!("custom:{}", plan.plan_id),
+            Approval {
+                token: zeroize::Zeroizing::new(token),
+                expires: plan.expires_at_ms,
+                attempt: None,
+            },
+        );
+        Ok(plan)
+    }
+    pub async fn custom_jar_apply(&self, id: String, intent: &str) -> Result<SoftwareJob> {
+        let key = self.intent_key(intent)?;
+        let mut approvals = self.hosting.approvals.lock().await;
+        let approval = approvals
+            .get_mut(&format!("custom:{id}"))
+            .ok_or_else(|| Error::new(ErrorCode::ConfirmationExpired))?;
+        if approval
+            .attempt
+            .as_ref()
+            .is_some_and(|previous| previous != &key)
+        {
+            return Err(Error::new(ErrorCode::Conflict));
+        }
+        if approval.attempt.is_none() && approval.expires <= crate::now_ms() {
+            return Err(Error::new(ErrorCode::ConfirmationExpired));
+        }
+        approval.attempt = Some(key.clone());
+        from_wire(self.request(Method::POST,"/api/v3/manage/software/custom-jar/apply",Some(json!({"plan_id":id,"confirmation_token":approval.token.as_str(),"idempotency_key":key})),Some(&key),true,"content.install").await?)
+    }
     pub async fn world(&self) -> Result<ServerWorld> {
         from_wire(self.get("world", true, "config.view").await?)
     }
@@ -681,9 +760,31 @@ pub struct WorldDatapack {
     pub enabled: Option<bool>,
 }
 impl Client {
-    pub async fn world_datapack_offline(&self, pack_id: String, enabled: bool, expected_revision: String, intent: &str) -> Result<ServerWorld> {
-        if !pack_id.starts_with("file/") || pack_id.len() > 1024 || pack_id.chars().any(char::is_control) || expected_revision.len() != 64 || !expected_revision.bytes().all(|b| b.is_ascii_hexdigit()) { return Err(invalid()); }
-        self.management_mutate(Method::POST, "world/datapacks/offline", Some(json!({"pack_id":pack_id,"enabled":enabled,"expected_revision":expected_revision})), intent, "config.edit").await?;
+    pub async fn world_datapack_offline(
+        &self,
+        pack_id: String,
+        enabled: bool,
+        expected_revision: String,
+        intent: &str,
+    ) -> Result<ServerWorld> {
+        if !pack_id.starts_with("file/")
+            || pack_id.len() > 1024
+            || pack_id.chars().any(char::is_control)
+            || expected_revision.len() != 64
+            || !expected_revision.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(invalid());
+        }
+        self.management_mutate(
+            Method::POST,
+            "world/datapacks/offline",
+            Some(
+                json!({"pack_id":pack_id,"enabled":enabled,"expected_revision":expected_revision}),
+            ),
+            intent,
+            "config.edit",
+        )
+        .await?;
         self.world().await
     }
     pub async fn world_datapack_toggle(
