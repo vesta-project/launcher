@@ -7,7 +7,7 @@ import { prefetchServerResource, readServerResource } from '../../features/serve
 import { initialChoice, selectable } from '../../features/servers/software-flow';
 import { gameStopped } from '../../features/servers/hosting-model';
 import {
-  accessSourcesResource, backupStorageResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
+  accessSourcesResource, backupStorageResource, contentResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
   motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, softwareJobsResource, softwareResource, sftpResource,
   usersResource, whitelistResource, worldResource, warmSoftwareMetadata,
 } from '../../features/servers/server-resources';
@@ -32,6 +32,9 @@ const can = (snapshot: ServerSnapshot, capability: string) => anyVisible(snapsho
 registerServerPrefetch('overview', (snapshot) => {
   const id = snapshot.connection.id;
   if (can(snapshot, 'tasks.view')) prefetchServerResource(id, operationsResource);
+});
+registerServerPrefetch('resources', (snapshot) => {
+  if (can(snapshot, 'files.list')) prefetchServerResource(snapshot.connection.id, contentResource);
 });
 registerServerPrefetch('activity', (snapshot) => prefetchServerResource(snapshot.connection.id, operationsResource));
 registerServerPrefetch('backups', (snapshot) => {

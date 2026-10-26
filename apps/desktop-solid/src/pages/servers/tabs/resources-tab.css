@@ -1,0 +1,112 @@
+/*
+ * Server Resources tab: the instance Resources table (resources-tab.css) with a status
+ * column for staged changes instead of selection and size.
+ * Hooks: [data-server-content] [data-vesta=server-content-summary] -provider -placeholder -pending-cell
+ * States: row data-pending; provider data-provider / data-unknown; summary data-tone
+ */
+@layer launcher {
+  .server-content-table [data-vesta="table-row"] {
+    grid-template-columns: minmax(0, 1fr) 140px 176px 56px calc(var(--instance-gutter) + 32px);
+  }
+
+  .server-content-table .col-name {
+    padding-inline-start: var(--instance-gutter);
+  }
+
+  .server-content-table .col-status {
+    gap: var(--vesta-space-1);
+  }
+
+  /* A staged change keeps the row readable; the badge says what happens next. */
+  .server-content-table .resource-row[data-pending="install"] :where([data-vesta="resource-identity"]) {
+    opacity: 0.75;
+  }
+
+  :where([data-vesta="server-content-pending-cell"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-0-5);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="server-content-placeholder"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--resource-icon-size);
+    block-size: var(--resource-icon-size);
+    border-radius: 6px;
+    background: var(--vesta-color-fill);
+    box-shadow: 0 0 0 1px var(--vesta-color-border);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="server-content-provider"]) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 3px;
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="server-content-provider"][data-unknown]) {
+    padding: 0 5px;
+    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
+    border-radius: 4px;
+    font-size: 10px;
+    line-height: 14px;
+  }
+
+  :where([data-vesta="server-content-provider"]) + :where([data-vesta="resource-file"])::before {
+    content: "·";
+    margin-inline-end: var(--vesta-space-1-5);
+  }
+
+  /* Header summary: staged changes and the restart that applies them. */
+  :where([data-vesta="server-content-summary"]) {
+    --summary-tint: var(--vesta-color-accent);
+
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--instance-gutter);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: color-mix(in oklab, var(--summary-tint) 9%, transparent);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="server-content-summary"][data-tone="danger"]) {
+    --summary-tint: var(--vesta-color-danger);
+  }
+
+  :where([data-vesta="server-content-summary"]) > :where([data-vesta="icon"]) {
+    color: var(--summary-tint);
+  }
+
+  :where([data-vesta="server-content-summary"]) > span {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 0 var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="server-content-summary"]) > span > span {
+    color: var(--vesta-color-text-muted);
+  }
+
+  .server-content-note {
+    margin: var(--vesta-space-2) var(--instance-gutter) 0;
+  }
+
+  @container pane (max-width: 640px) {
+    .server-content-table [data-vesta="table-row"] {
+      grid-template-columns: minmax(0, 1fr) 176px 56px calc(var(--instance-gutter) + 32px);
+    }
+
+    .server-content-table .col-version {
+      display: none;
+    }
+  }
+}

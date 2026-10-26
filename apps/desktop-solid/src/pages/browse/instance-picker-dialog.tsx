@@ -10,6 +10,7 @@ import {
   updateAvailable,
   versionFit,
   type ResourceProject,
+  type ResourceType,
   type ResourceVersion,
 } from '../../features/browse/browse-model';
 import { loadVersions } from '../../features/browse/browse-projects';
@@ -26,13 +27,13 @@ import {
   type Destination,
   type DependencyRow,
   type ServerTarget,
-  type TargetKind,
   type TargetStates,
 } from '../../features/browse/install-targets';
 import { resolveServerDependencies, serverSoftware } from '../../features/browse/server-install';
 import { instances } from '../../features/instances/catalog';
 import type { ConnectionId } from '../../features/servers/native';
 import { serverSnapshots } from '../../features/servers/store';
+import { serverFocus } from '../../features/browse/browse-store';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import {
@@ -46,7 +47,7 @@ import { installFromServerPicker } from './server-install-actions';
 import { DependencyStep, ServerRow, TargetStep } from './server-target-steps';
 
 /** Kinds a server or its client modpack can receive. */
-const serverKinds: readonly TargetKind[] = ['mod', 'plugin', 'datapack', 'resourcepack', 'shader'];
+const serverKinds: readonly ResourceType[] = ['mod', 'plugin', 'datapack', 'resourcepack', 'shader'];
 
 type Step =
   | { kind: 'pick' }
@@ -92,6 +93,8 @@ export function InstancePickerDialog() {
   const [step, setStep] = createSignal<Step>({ kind: 'pick' }, { name: 'browsePickerStep' });
   const [software, setSoftware] = createSignal<Record<ConnectionId, string | null>>({}, { name: 'browsePickerSoftware' });
   let depsRequest = 0;
+  /** The server Browse was opened for; chosen for the user once its row can take the project. */
+  let preselect: ConnectionId | undefined;
 
   createEffect(
     () => pickerProject(),
@@ -100,6 +103,7 @@ export function InstancePickerDialog() {
       setLoaded(undefined);
       setStep({ kind: 'pick' });
       depsRequest++;
+      preselect = project ? untrack(serverFocus)?.id : undefined;
       if (!project) return;
       let cancelled = false;
       const entries = untrack(instances);
@@ -242,6 +246,25 @@ export function InstancePickerDialog() {
     const destination = defaultDestination(projectSides(project), project.resource_type, row.states);
     setStep({ kind: 'target', server: row.target.id, destination });
   };
+
+  // Skip the list when Browse was opened for one server and that server can take the project.
+  // A row that cannot (or is gone) leaves the list showing, with its reason.
+  createEffect(
+    () => ({ rows: servers(), picking: step().kind === 'pick' }),
+    ({ rows, picking }) => {
+      if (!preselect || !picking) return;
+      const row = rows.find((entry) => entry.target.id === preselect);
+      if (!row) {
+        if (rows.length || untrack(loaded)) preselect = undefined;
+        return;
+      }
+      const state = row.states.row;
+      if ((row.checking && row.target.connection === 'online') || (!state.available && state.reason === 'checking')) return;
+      preselect = undefined;
+      if (state.available) chooseServer(row);
+    },
+    { name: 'browsePickerPreselect' },
+  );
 
   /** Settles the version for the destination, then asks the resolver for its dependencies. */
   const continueToDependencies = async () => {

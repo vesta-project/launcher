@@ -30,6 +30,8 @@ import {
   setLoader,
   setServer,
   clearFilters,
+  clearServerFocus,
+  serverFocus,
   setText,
   results,
   text,
@@ -204,6 +206,29 @@ export function SearchField() {
           <Icon name="icons/content/search" size={14} />
         </span>
         <div data-vesta="browse-chips">
+          <Show when={serverFocus()}>
+            {(focus) => (
+              <span data-vesta="browse-chip" data-kind="server">
+                <button
+                  type="button"
+                  data-vesta="browse-chip-body"
+                  title={t('browse.server-focus-back', { title: focus().name })}
+                  onClick={() => transitionTo(`/servers/${focus().id}/resources`)}
+                >
+                  <Icon name="icons/rail/servers" size={11} />
+                  {t('browse.server-focus', { title: focus().name })}
+                </button>
+                <button
+                  type="button"
+                  data-vesta="browse-chip-remove"
+                  aria-label={t('browse.remove-filter', { name: focus().name })}
+                  onClick={clearServerFocus}
+                >
+                  <Icon name="icons/actions/close" size={10} />
+                </button>
+              </span>
+            )}
+          </Show>
           <For each={shown()} keyed={(chip) => chip.key}>
             {(chip) => (
               <span data-vesta="browse-chip" data-kind={chip().kind}>

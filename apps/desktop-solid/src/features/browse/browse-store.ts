@@ -328,6 +328,8 @@ export function syncTarget(id: string | undefined) {
     appliedTarget = undefined;
     return;
   }
+  // An instance target replaces a server one.
+  setServerFocus(null);
   const instance = targetEntry();
   if (!instance || appliedTarget === id) return;
   appliedTarget = id;
@@ -344,6 +346,29 @@ export function removeTarget() {
   setLoaderSignal(null);
   firstPage();
   navigate('/browse', { replace: true });
+}
+
+/** A server Browse was opened for: its picker row is preselected when the user installs. */
+export interface ServerFocus {
+  id: string;
+  name: string;
+}
+const [serverFocus, setServerFocus] = createSignal<ServerFocus | null>(null, { name: 'browseServerFocus' });
+export { serverFocus };
+export const clearServerFocus = () => setServerFocus(null);
+
+/**
+ * Opens Browse for a server (its Resources tab's Add content): the kind it takes, its
+ * Minecraft version, and the mod loader when it runs one. Plugin servers accept several
+ * plugin loaders, so the loader filter stays open and the picker checks compatibility.
+ */
+export function browseForServer(focus: ServerFocus & { type: ResourceType; minecraftVersion: string | null; loader: string | null }) {
+  setServerFocus({ id: focus.id, name: focus.name });
+  setType(focus.type);
+  setGameVersionSignal(focus.minecraftVersion || null);
+  setLoaderSignal(focus.type === 'mod' && focus.loader ? focus.loader.toLowerCase() : null);
+  firstPage();
+  navigate('/browse');
 }
 
 export function chooseTarget(id: string | undefined) {

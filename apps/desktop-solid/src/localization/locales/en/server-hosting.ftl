@@ -164,3 +164,4 @@ server-hosting-key-added = Key added
 server-hosting-key-revoke = Revoke
 server-hosting-key-revoke-confirm = Confirm revoke
 server-hosting-key-default-label = SSH key
+server-hosting-custom-jar-risk-executes = The server runs this JAR with full access to its files. Only use JARs you trust.

@@ -13,9 +13,6 @@ import {
   type SourceId,
 } from './browse-model';
 
-/** Browse kinds plus `plugin`, which the shared model gains with the server content contract. */
-export type TargetKind = ResourceType | 'plugin';
-
 /* ---- Project sides ---- */
 
 export type Side = 'required' | 'optional' | 'unsupported' | 'unknown';
@@ -176,7 +173,7 @@ const no = (reason: TargetReason): DestinationState => ({ available: false, reas
 
 export interface TargetInput {
   project: Pick<ResourceProject, 'categories' | 'environment' | 'source'> & Record<string, unknown>;
-  kind: TargetKind;
+  kind: ResourceType;
   /** Undefined while loading or when the list could not be read; checks then stay optimistic. */
   versions?: readonly ResourceVersion[];
   /** A version page installs exactly this version. */
@@ -189,7 +186,7 @@ export interface TargetInput {
 export function serverVersion(
   versions: readonly ResourceVersion[],
   target: Pick<ServerTarget, 'minecraftVersion' | 'software'>,
-  kind: TargetKind,
+  kind: ResourceType,
   source?: SourceId,
 ): ResourceVersion | undefined {
   const minecraftVersion = target.minecraftVersion ?? '';
@@ -278,7 +275,7 @@ export function targetStates(target: ServerTarget, input: TargetInput): TargetSt
 }
 
 /** The destination the project's sides suggest, before availability is considered. */
-export function preferredDestination(sides: ProjectSides, kind: TargetKind): Destination {
+export function preferredDestination(sides: ProjectSides, kind: ResourceType): Destination {
   if (kind === 'plugin' || kind === 'datapack') return 'server';
   if (kind === 'resourcepack' || kind === 'shader') return 'modpack';
   const client = runs(sides.client);
@@ -298,7 +295,7 @@ const fallbacks: Record<Destination, Destination[]> = {
 /** The smart default: the preferred destination, else the closest available one. */
 export function defaultDestination(
   sides: ProjectSides,
-  kind: TargetKind,
+  kind: ResourceType,
   states?: Pick<TargetStates, Destination>,
 ): Destination {
   const preferred = preferredDestination(sides, kind);
