@@ -15,10 +15,12 @@ export const softwareIcon: Record<SoftwareId, string> = {
   quilt: 'branding/modloaders/quilt-logo',
   forge: 'branding/modloaders/forge-logo',
   neoforge: 'branding/modloaders/neoforge-logo',
+  bukkit: 'icons/rail/library',
+  spigot: 'icons/rail/library',
 };
 
 /** Software whose own version is a build number on top of the Minecraft version. */
-const BUILDS: ReadonlySet<SoftwareId> = new Set(['paper', 'folia', 'purpur']);
+const BUILDS: ReadonlySet<SoftwareId> = new Set(['paper', 'folia', 'purpur', 'bukkit', 'spigot']);
 
 /** What the "software version" means for a software: a build, a loader version, or nothing extra. */
 export function softwareVersionKind(software: SoftwareId | null | undefined): 'build' | 'loader' | null {

@@ -34,7 +34,7 @@ export interface WorldDatapack { id: string; name: string; kind: 'folder' | 'zip
 
 // ------------------------------------------------------------------ software
 
-export const SOFTWARE_IDS = ['vanilla', 'paper', 'folia', 'purpur', 'fabric', 'quilt', 'forge', 'neoforge'] as const;
+export const SOFTWARE_IDS = ['vanilla', 'paper', 'folia', 'purpur', 'fabric', 'quilt', 'forge', 'neoforge', 'bukkit', 'spigot'] as const;
 export type SoftwareId = (typeof SOFTWARE_IDS)[number];
 
 export interface SoftwareLaunch {
@@ -84,7 +84,7 @@ export interface SoftwarePlanRequest {
 
 export type SoftwareWarning =
   | 'legacy_checksum' | 'unsupported_upstream' | 'experimental_build'
-  | 'region_threading' | 'first_run_effects' | 'proxy_resolution';
+  | 'region_threading' | 'first_run_effects' | 'proxy_resolution' | 'source_build';
 
 /** A reviewed switch. Native keeps its confirmation token. */
 export interface SoftwarePlan {

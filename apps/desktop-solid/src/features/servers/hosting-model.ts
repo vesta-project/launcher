@@ -9,7 +9,7 @@ import type { SftpKey, SftpStatus, SoftwareId, SoftwareJob, SoftwareLaunch, Soft
 
 export const softwareNames: Record<SoftwareId, string> = {
   vanilla: 'Vanilla', paper: 'Paper', folia: 'Folia', purpur: 'Purpur',
-  fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge',
+  fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge', bukkit: 'CraftBukkit', spigot: 'Spigot',
 };
 
 /** Loaders whose `version` is the Minecraft version and that add their own loader version. */
@@ -54,6 +54,7 @@ export const warningMessage: Record<string, MessageId> = {
   experimental_build: 'server-hosting.warning-experimental',
   region_threading: 'server-hosting.warning-region-threading',
   first_run_effects: 'server-hosting.warning-first-run',
+  source_build: 'server-hosting.warning-source-build',
   proxy_resolution: 'server-hosting.warning-proxy',
 };
 export const warningCopy = (code: string): MessageId => warningMessage[code] ?? 'server-hosting.warning-other';
@@ -62,6 +63,8 @@ export const warningCopy = (code: string): MessageId => warningMessage[code] ?? 
 
 /** Copy for the agent's fixed reason codes (software_*, server_install.*, sftp/world). */
 const reasons: Record<string, MessageId> = {
+  'server_install.build_tools_missing': 'server-hosting.reason-build-tools',
+  'server_install.build_memory_low': 'server-hosting.reason-build-memory',
   software_forbidden: 'server-hosting.reason-owner-only',
   software_disabled: 'server-hosting.reason-software-disabled',
   software_runtime_unavailable: 'server-hosting.reason-software-disabled',

@@ -210,7 +210,8 @@ fn unsupported() -> Error {
 }
 fn software(id: &str) -> Result<&str> {
     if [
-        "vanilla", "paper", "folia", "purpur", "fabric", "quilt", "forge", "neoforge",
+        "vanilla", "paper", "folia", "purpur", "fabric", "quilt", "forge", "neoforge", "bukkit",
+        "spigot",
     ]
     .contains(&id)
     {
@@ -219,6 +220,7 @@ fn software(id: &str) -> Result<&str> {
         Err(invalid())
     }
 }
+
 fn revision(value: &mut Value, key: &str) -> Result<()> {
     if let Some(n) = value.get(key).and_then(Value::as_u64) {
         value[key] = json!(n.to_string());
@@ -800,5 +802,16 @@ impl Client {
         crate::operations::generation(&expected_generation)?;
         let value=self.management_mutate(Method::POST,"world/datapacks/toggle",Some(json!({"pack_id":pack_id,"enabled":enabled,"expected_generation":expected_generation})),intent,"config.edit").await?;
         crate::operations::decode(value, None)
+    }
+}
+
+#[cfg(test)]
+mod software_ids_tests {
+    #[test]
+    fn source_build_targets_use_fixed_software_ids() {
+        for id in ["bukkit", "spigot"] {
+            assert_eq!(super::software(id).unwrap(), id);
+        }
+        assert!(super::software("https://example.invalid/server.jar").is_err());
     }
 }

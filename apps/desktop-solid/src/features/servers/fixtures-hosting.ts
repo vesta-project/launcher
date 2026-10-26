@@ -35,8 +35,10 @@ const VERSIONS: Record<SoftwareId, string[]> = {
   quilt: ['1.21.1', '1.20.6', '1.20.1'],
   forge: [],
   neoforge: [],
+  bukkit: ['1.21.8'],
+  spigot: ['1.21.8'],
 };
-const AUTOMATIC: ReadonlySet<SoftwareId> = new Set(['vanilla', 'paper', 'folia', 'purpur', 'fabric', 'quilt']);
+const AUTOMATIC: ReadonlySet<SoftwareId> = new Set(['vanilla', 'paper', 'folia', 'purpur', 'fabric', 'quilt', 'bukkit', 'spigot']);
 const catalog: SoftwareDescriptor[] = SOFTWARE_IDS.map((software) => ({
   software,
   automaticBackend: AUTOMATIC.has(software),
@@ -215,6 +217,7 @@ export function createHostingFixtures(host: HostingHost) {
       if (!VERSIONS[software]?.includes(version)) fail('invalid_input');
       const releases = software === 'vanilla' ? [] : software === 'fabric' || software === 'quilt'
         ? ['0.16.9', '0.16.8', '0.16.7'].map(id => ({ id, build: null, loaderVersion: id }))
+        : software === 'bukkit' || software === 'spigot' ? [{ id: '4534', build: 4534, loaderVersion: null }]
         : [150, 149, 148, 130].map(build => ({ id: String(build), build, loaderVersion: null }));
       return { software, version, releases };
     },
@@ -224,11 +227,12 @@ export function createHostingFixtures(host: HostingHost) {
       const current = state(connectionId);
       if (!VERSIONS[request.software]?.includes(request.version)) fail('invalid_input', 'server_install.unavailable');
       const warnings: string[] = ['first_run_effects'];
+      if (request.software === 'bukkit' || request.software === 'spigot') warnings.push('source_build');
       if (request.software === 'folia') warnings.push('region_threading');
       if (request.version.startsWith('1.18')) warnings.push('legacy_checksum');
       const plan: SoftwarePlan = {
         planId: `plan-${hex(10)}`, expiresAtMs: Date.now() + 120_000, expectedRevision: current.software.revision,
-        software: request.software, version: request.version, loaderVersion: request.loaderVersion ?? (request.software === 'fabric' || request.software === 'quilt' ? '0.16.9' : null), build: ['paper', 'folia', 'purpur'].includes(request.software) ? request.build ?? 150 : null,
+        software: request.software, version: request.version, loaderVersion: request.loaderVersion ?? (request.software === 'fabric' || request.software === 'quilt' ? '0.16.9' : null), build: ['bukkit', 'spigot'].includes(request.software) ? request.build ?? 4534 : ['paper', 'folia', 'purpur'].includes(request.software) ? request.build ?? 150 : null,
         java: { major: javaFor(request.version), evidence: `Minecraft ${request.version} requires Java ${javaFor(request.version)}` },
         javaCompatible: (current.java.selected?.major ?? 0) >= javaFor(request.version),
         selectedJavaMajor: current.java.selected?.major ?? null,

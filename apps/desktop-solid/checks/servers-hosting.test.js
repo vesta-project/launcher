@@ -143,6 +143,19 @@ describe('[sftp] off by default, public keys only, opened natively', () => {
 });
 
 describe('[software] explicit releases', () => {
+  test('CraftBukkit and Spigot keep their identities and explain source compilation', async () => {
+    const servers = createFixtureServers({ latencyMs: 0 });
+    for (const software of ['bukkit', 'spigot']) {
+      const releases = await servers.softwareReleases('fixture-survival', software, '1.21.8');
+      expect(releases.releases).toEqual([{ id: '4534', build: 4534, loaderVersion: null }]);
+      const plan = await servers.softwarePlan('fixture-survival', { software, version: '1.21.8', build: 4534 });
+      expect(plan.software).toBe(software);
+      expect(plan.build).toBe(4534);
+      expect(plan.warnings).toContain('source_build');
+    }
+    expect(warningCopy('source_build')).toBe('server-hosting.warning-source-build');
+    expect(reasonMessage('server_install.build_tools_missing')).toBe('server-hosting.reason-build-tools');
+  });
   test('build and loader choices reach the reviewed plan unchanged', async () => {
     const servers = createFixtureServers({ latencyMs: 0 });
     const paper = await servers.softwareReleases('fixture-survival','paper','1.21.4');
