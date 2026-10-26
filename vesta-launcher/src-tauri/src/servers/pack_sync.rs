@@ -120,11 +120,23 @@ fn link_path(root: &Path, id: i32) -> PathBuf {
     root.join("pack-sync").join(format!("{id}.json"))
 }
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Option<T>> {
-    match std::fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).map(Some).map_err(io),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(io(e)),
-    }
+    let bytes = match std::fs::File::open(path) {
+        Ok(file) => {
+            let mut bytes = Vec::new();
+            file.take(1024 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(io)?;
+            if bytes.len() > 1024 * 1024 {
+                return Err(conflict("pack_invalid_receipt"));
+            }
+            bytes
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(io(e)),
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|_| conflict("pack_invalid_receipt"))
 }
 fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     let parent = path.parent().ok_or_else(|| io("parent"))?;
@@ -220,7 +232,12 @@ fn safe_path(path: &str) -> Result<()> {
         || parts.len() == 1
             && matches!(
                 parts[0],
-                "options.txt" | "optionsof.txt" | "optionsshaders.txt" | "servers.dat"
+                "options.txt"
+                    | "optionsof.txt"
+                    | "optionsshaders.txt"
+                    | "servers.dat"
+                    | "pack-icon.png"
+                    | "pack-icon.jpg"
             ))
     {
         return Err(conflict("pack_unsafe_path"));
@@ -348,6 +365,9 @@ fn read_member(
 }
 
 impl ServerManager {
+    pub async fn pack_sync_discard(&self, review_id: &str) {
+        self.pack_previews.lock().await.remove(review_id);
+    }
     pub async fn pack_link(&self, id: i32) -> Result<Option<Link>> {
         read_json(&link_path(&self.root, id))
     }
@@ -374,9 +394,9 @@ impl ServerManager {
             Some(i) if link.is_some() => read_json::<Receipt>(&game_dir(i)?.join(RECEIPT))?,
             _ => None,
         };
-        if link.is_some() && receipt.is_none() {
-            return Err(conflict("pack_receipt_missing"));
-        }
+        // An interrupted first link can leave the durable high-water binding
+        // after the file journal restores an absent receipt. Explicit preview
+        // may reinstall it; the launch check below always requires a receipt.
         if let (Some(i), Some(receipt)) = (instance, &receipt) {
             assert_runtime(i, receipt)?;
         }
@@ -429,7 +449,10 @@ impl ServerManager {
             .transpose()
             .map_err(io)?;
         let (release, old) = self.verified_release(connection, instance.as_ref()).await?;
-        if release.format != "vestapack" {
+        if !matches!(
+            release.format.as_str(),
+            "vestapack" | "mrpack" | "zip" | "catalogue"
+        ) {
             return Err(conflict("pack_format_unsupported"));
         }
         let archive = self
@@ -437,6 +460,11 @@ impl ServerManager {
             .await?
             .pack_sync_download(&release)
             .await?;
+        let archive = if release.format == "vestapack" {
+            archive
+        } else {
+            legacy::normalize(app, &release, archive).await?
+        };
         let mut zip = zip::ZipArchive::new(Cursor::new(archive.as_slice()))
             .map_err(|_| conflict("pack_unsafe_archive"))?;
         if zip.len() > 4097 {
@@ -456,7 +484,7 @@ impl ServerManager {
                 .map_err(|_| conflict("pack_invalid_index"))?;
         if index.format_version != 1
             || index.revision != revision(&release.revision)?
-            || index.files.len() > 256
+            || index.files.len() > 257
             || index.minecraft_version.is_empty()
         {
             return Err(conflict("pack_invalid_index"));
@@ -518,42 +546,59 @@ impl ServerManager {
             if file.size > FILE_LIMIT || total > TOTAL_LIMIT {
                 return Err(conflict("pack_too_large"));
             }
-            let bytes = match file.source.r#type.as_str() {
-                "embedded" | "override" => {
-                    read_member(&mut zip, &format!("overrides/{}", file.path), FILE_LIMIT)?
-                }
-                "platform" | "modrinth" | "curseforge" => {
-                    let source = match file.source.platform.as_deref() {
-                        Some("modrinth") => crate::models::SourcePlatform::Modrinth,
-                        Some("curseforge") => crate::models::SourcePlatform::CurseForge,
-                        _ => return Err(conflict("pack_invalid_source")),
-                    };
-                    let project = file
-                        .source
-                        .project_id
-                        .as_deref()
-                        .ok_or_else(|| conflict("pack_invalid_source"))?;
-                    let version = file
-                        .source
-                        .version_id
-                        .as_deref()
-                        .ok_or_else(|| conflict("pack_invalid_source"))?;
-                    let v = resources
-                        .get_version(source, project, version)
-                        .await
-                        .map_err(io)?;
-                    if !v.game_versions.contains(&target_runtime.minecraft_version)
-                        || file.path.starts_with("mods/")
-                            && !crate::resources::manager::is_loader_compatible(
-                                &v.loaders,
-                                &target_runtime.loader,
-                            )
-                    {
-                        return Err(conflict("pack_incompatible_runtime"));
+            if !matches!(
+                file.source.r#type.as_str(),
+                "embedded" | "override" | "platform" | "modrinth" | "curseforge"
+            ) {
+                return Err(conflict("pack_invalid_source"));
+            }
+            let cached = instance
+                .as_ref()
+                .map(|i| {
+                    read_matching_file(&game_dir(i)?, &file.path, file.size, &file.hashes.sha256)
+                })
+                .transpose()?
+                .flatten();
+            let bytes = if let Some(bytes) = cached {
+                bytes
+            } else {
+                match file.source.r#type.as_str() {
+                    "embedded" | "override" => {
+                        read_member(&mut zip, &format!("overrides/{}", file.path), FILE_LIMIT)?
                     }
-                    download_provider(&v.download_url).await?
+                    "platform" | "modrinth" | "curseforge" => {
+                        let source = match file.source.platform.as_deref() {
+                            Some("modrinth") => crate::models::SourcePlatform::Modrinth,
+                            Some("curseforge") => crate::models::SourcePlatform::CurseForge,
+                            _ => return Err(conflict("pack_invalid_source")),
+                        };
+                        let project = file
+                            .source
+                            .project_id
+                            .as_deref()
+                            .ok_or_else(|| conflict("pack_invalid_source"))?;
+                        let version = file
+                            .source
+                            .version_id
+                            .as_deref()
+                            .ok_or_else(|| conflict("pack_invalid_source"))?;
+                        let v = resources
+                            .get_version(source, project, version)
+                            .await
+                            .map_err(io)?;
+                        if !v.game_versions.contains(&target_runtime.minecraft_version)
+                            || file.path.starts_with("mods/")
+                                && !crate::resources::manager::is_loader_compatible(
+                                    &v.loaders,
+                                    &target_runtime.loader,
+                                )
+                        {
+                            return Err(conflict("pack_incompatible_runtime"));
+                        }
+                        download_provider(&v.download_url).await?
+                    }
+                    _ => return Err(conflict("pack_invalid_source")),
                 }
-                _ => return Err(conflict("pack_invalid_source")),
             };
             if bytes.len() as u64 != file.size || digest(&bytes) != file.hashes.sha256 {
                 return Err(conflict("pack_integrity_failure"));
@@ -614,6 +659,21 @@ impl ServerManager {
 }
 
 async fn download_provider(raw: &str) -> Result<Vec<u8>> {
+    download_provider_limit(raw, FILE_LIMIT).await
+}
+
+fn read_matching_file(root: &Path, path: &str, size: u64, sha256: &str) -> Result<Option<Vec<u8>>> {
+    let path = confined(root, path)?;
+    let Ok(metadata) = std::fs::metadata(&path) else {
+        return Ok(None);
+    };
+    if !metadata.is_file() || metadata.len() != size {
+        return Ok(None);
+    }
+    let bytes = std::fs::read(&path).map_err(io)?;
+    Ok((digest(&bytes) == sha256).then_some(bytes))
+}
+async fn download_provider_limit(raw: &str, limit: u64) -> Result<Vec<u8>> {
     let mut url = url::Url::parse(raw).map_err(io)?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -624,9 +684,11 @@ async fn download_provider(raw: &str) -> Result<Vec<u8>> {
         if url.scheme() != "https"
             || !url.username().is_empty()
             || url.password().is_some()
+            || url.port_or_known_default() != Some(443)
+            || url.fragment().is_some()
             || !matches!(
                 url.host_str(),
-                Some("cdn.modrinth.com" | "edge.forgecdn.net" | "media.forgecdn.net")
+                Some("cdn.modrinth.com" | "edge.forgecdn.net" | "mediafilez.forgecdn.net")
             )
         {
             return Err(conflict("pack_download_unavailable"));
@@ -644,14 +706,12 @@ async fn download_provider(raw: &str) -> Result<Vec<u8>> {
                 .map_err(io)?;
             continue;
         }
-        if !response.status().is_success()
-            || response.content_length().is_some_and(|n| n > FILE_LIMIT)
-        {
+        if !response.status().is_success() || response.content_length().is_some_and(|n| n > limit) {
             return Err(conflict("pack_download_unavailable"));
         }
         let mut bytes = vec![];
         while let Some(chunk) = response.chunk().await.map_err(io)? {
-            if bytes.len() + chunk.len() > FILE_LIMIT as usize {
+            if bytes.len() + chunk.len() > limit as usize {
                 return Err(conflict("pack_too_large"));
             }
             bytes.extend_from_slice(&chunk);
@@ -667,3 +727,5 @@ pub use apply::ApplyRequest;
 #[path = "pack_sync_check.rs"]
 mod check;
 pub use check::Check;
+#[path = "pack_sync_legacy.rs"]
+mod legacy;

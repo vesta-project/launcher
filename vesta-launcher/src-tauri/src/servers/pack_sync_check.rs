@@ -44,11 +44,15 @@ impl ServerManager {
             .verified_release(&link.connection_id, Some(&instance))
             .await
         {
-            Ok((release, _)) => {
+            Ok((release, Some(_))) => {
                 check.published_revision = release.revision;
                 check.minimum_revision = release.minimum_revision;
                 check.can_launch = release.status != SyncStatus::UpdateRequired;
                 check.status = Some(release.status);
+            }
+            Ok((_, None)) => {
+                check.availability = "verification_failed".into();
+                check.error = Some(conflict("pack_receipt_missing"));
             }
             Err(error) => {
                 check.availability = if matches!(
