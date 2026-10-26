@@ -24,6 +24,7 @@ import { serversMetricsNative } from './native-metrics';
 import { serversJavaNative } from './native-java';
 import { serversHostingNative } from './hosting-native';
 import { serversContentNative } from './native-content';
+import { serversPackNative } from './native-pack';
 
 export const nativeServers = typeof window !== 'undefined' && isTauri();
 
@@ -423,6 +424,7 @@ export const serversNative = {
   // World, server software and SFTP: see hosting-native.ts.
   ...serversHostingNative,
   ...serversContentNative,
+  ...serversPackNative,
   ...serversJavaNative,
   ...serversMetricsNative,
 };

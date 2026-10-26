@@ -6,6 +6,8 @@ pub mod backups_config;
 pub mod branding;
 #[path = "content.rs"]
 pub mod content;
+#[path = "pack.rs"]
+pub mod pack;
 #[path = "hosting.rs"]
 pub mod hosting;
 #[path = "management.rs"]

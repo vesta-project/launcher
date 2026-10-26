@@ -14,6 +14,7 @@ import { createPresenceFixtures } from './fixtures-presence';
 import { createMetricsFixtures } from './fixtures-metrics';
 import { createHostingFixtures } from './fixtures-hosting';
 import { createContentFixtures } from './fixtures-content';
+import { createPackFixtures } from './fixtures-pack';
 import { createBrandingFixtures } from './fixtures-branding';
 import { createAutomationFixtures } from './fixtures-automation';
 
@@ -279,8 +280,10 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
   };
 
   const hosting = createHostingFixtures({ server, requireCapability, wait, datapackOperation: (id: ConnectionId, command: string) => { const target = server(id); const operation = record(target, 'console.command', { kind: 'console.command', command }); setTimeout(() => advance(target, operation, 'succeeded'), 400); return operation; } });
+  const content = createContentFixtures({ server, wait, software: id => hosting.contentTarget(id).software, minecraftVersion: id => hosting.contentTarget(id).minecraftVersion });
   const api: ServersApi = {
-    ...createContentFixtures({ server, wait, software: id => hosting.contentTarget(id).software, minecraftVersion: id => hosting.contentTarget(id).minecraftVersion }),
+    ...content,
+    ...createPackFixtures({ server, wait, software: id => hosting.contentTarget(id).software, minecraftVersion: id => hosting.contentTarget(id).minecraftVersion, content: content.content, publish: id => publish(server(id)) }),
     async list() { await wait(60); return [...servers.values()].map((entry) => clone(entry.snapshot)); },
 
     async discover(address) {
