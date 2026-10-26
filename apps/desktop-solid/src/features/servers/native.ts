@@ -25,6 +25,7 @@ import { serversJavaNative } from './native-java';
 import { serversHostingNative } from './hosting-native';
 import { serversContentNative } from './native-content';
 import { serversPackNative } from './native-pack';
+import { serversPackSyncNative } from './native-pack-sync';
 
 export const nativeServers = typeof window !== 'undefined' && isTauri();
 
@@ -425,6 +426,7 @@ export const serversNative = {
   ...serversHostingNative,
   ...serversContentNative,
   ...serversPackNative,
+  ...serversPackSyncNative,
   ...serversJavaNative,
   ...serversMetricsNative,
 };

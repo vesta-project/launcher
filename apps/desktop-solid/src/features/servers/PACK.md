@@ -1,5 +1,8 @@
 # Client modpack workspace UI handoff — Stage 2
 
+Stage 3 client installation, linking, signed update checks and launch enforcement
+are now available; see [PACK-SYNC.md](./PACK-SYNC.md) and `native-pack-sync.ts`.
+
 `native-pack.ts` is spread into `serversNative`, so all methods are available from
 `serversApi()` in native mode and browser fixtures. No pages or
 `features/browse/server-install.ts` were edited. The approved model remains in
@@ -132,7 +135,7 @@ Archive fixture import uses a deterministic imported manifest; actual archive
 parsing/confinement and authenticated publication are covered by agent Rust/TLS
 tests. No production provider download or publication is performed by tests.
 Linked client-instance sync, signing/server binding, rollback rejection and consent
-for executable changes remain Stage 3. Do not promise those guarantees in this UI.
+for executable changes are described separately in [PACK-SYNC.md](./PACK-SYNC.md).
 
 ## Validation on 2026-10-26
 

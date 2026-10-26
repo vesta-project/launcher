@@ -135,6 +135,7 @@ impl ServerManager {
         crate::modpack::update::begin(app, &instance, &root, &plan.release.revision).map_err(io)?;
         let mut status_guard =
             crate::modpack::update::StatusGuard::new(app.clone(), instance.id, root.clone());
+        drop(_gate);
         let result: Result<()> = async {
             // The existing installer owns Minecraft, loader, Java and shared
             // artifact verification. Pack code never implements a second runtime.
@@ -167,8 +168,29 @@ impl ServerManager {
                     .await
                     .map_err(io)?;
             }
-            let snapshot = apply_files(&root, &plan, &changes, &receipt)?;
-            self.remember_release(instance.id, &plan.preview.connection_id, &active)?;
+            // Runtime downloads do not monopolize the signed-status gate.
+            // Recheck the selected publication after that potentially slow work.
+            let _gate = self.pack_gate.lock().await;
+            let (latest, latest_old) = self
+                .verified_release(&plan.preview.connection_id, Some(&instance))
+                .await?;
+            if latest.revision != plan.release.revision
+                || latest.sha256 != plan.release.sha256
+                || latest.server_id != plan.release.server_id
+                || latest.fingerprint != plan.release.fingerprint
+                || latest_old.as_ref().map(|r| (&r.revision, &r.sha256))
+                    != plan.old.as_ref().map(|r| (&r.revision, &r.sha256))
+            {
+                return Err(conflict("pack_review_stale"));
+            }
+            let final_changes = diff(&root, old.as_ref(), &plan.files)?;
+            if serde_json::to_value(&final_changes).map_err(io)?
+                != serde_json::to_value(&changes).map_err(io)?
+            {
+                return Err(conflict("pack_review_stale"));
+            }
+            let snapshot = apply_files(&root, &plan, &final_changes, &receipt)?;
+            self.remember_release(instance.id, &plan.preview.connection_id, &latest)?;
             // Commit marker is the point after which recovery preserves the new
             // receipt. DB/status refresh may be retried after an app crash.
             snapshot.finalize().map_err(io)?;
@@ -187,7 +209,6 @@ impl ServerManager {
         status_guard.recover_failure().map_err(io)?;
         // Reconciliation acquires the same resource guards. The transaction is
         // durable now; release exclusion before registering/scanning watchers.
-        drop(_gate);
         drop(_play);
         // A new pack instance deferred its initial scan until the durable commit.
         // Existing watchers already queue their reconciliation behind our guards.

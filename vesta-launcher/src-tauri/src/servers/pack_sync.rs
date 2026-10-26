@@ -449,6 +449,9 @@ impl ServerManager {
             .transpose()
             .map_err(io)?;
         let (release, old) = self.verified_release(connection, instance.as_ref()).await?;
+        // Download/resolve outside the policy gate so a slow provider cannot
+        // stall launch checks or periodic status for unrelated linked instances.
+        drop(_gate);
         if !matches!(
             release.format.as_str(),
             "vestapack" | "mrpack" | "zip" | "catalogue"

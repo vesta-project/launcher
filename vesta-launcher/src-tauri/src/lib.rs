@@ -249,6 +249,7 @@ pub fn run(context: tauri::Context) {
             commands::servers_pack_sync::server_pack_sync_apply,
             commands::servers_pack_sync::server_pack_sync_link,
             commands::servers_pack_sync::server_pack_sync_check,
+            commands::servers_pack_sync::server_pack_sync_discard,
             commands::servers_content::server_content,
             commands::servers_content::server_content_dependencies,
             commands::servers_content::server_content_install,

@@ -28,15 +28,15 @@ interface Host {
   publish?(id: string): void;
   wait(ms?: number): Promise<unknown>;
 }
-export function createPackFixtures(host: Host): typeof serversPackNative {
+export function createPackFixtures(host: Host): typeof serversPackNative & { fixturePublishedManifest(id: string): PackManifest } {
   const states = new Map<string, { view: PackWorkspace; published: PackManifest; publishedDraft: string }>();
   const receipts = new Map<string, { input: string; result: unknown }>();
   const blobs = new Map<string, Uint8Array>();
   const uploads = new Map<string, { request: PackUploadBegin; bytes: Uint8Array; complete: boolean }>();
   const tails = new Map<string, Promise<unknown>>();
   const requireCap = (id: string, cap = 'pack.edit') => { if (!host.server(id).snapshot.capabilities.granted.includes(cap)) fail('forbidden'); };
-  const state = (id: string) => {
-    requireCap(id);
+  const state = (id: string, requireEdit = true) => {
+    if (requireEdit) requireCap(id);
     let s = states.get(id);
     if (!s) { const view = seedPackWorkspace(host.scenario ?? (host.software(id) === 'vanilla' ? 'vanilla' : host.software(id) === 'paper' ? 'paper' : 'fabric')); const pack = host.server(id).snapshot.pack; view.publishedRevision = pack?.hostedRevision ?? '0'; view.minimumRevision = pack?.minimumRevision ?? '0'; s = { view, published: clone(view.draft.manifest), publishedDraft: view.pendingPublication ? '2' : view.draft.revision };
       if (host.scenario === 'diff') { s.published.entries = s.published.entries.filter(e => e.kind !== 'resource_pack'); const old = s.published.entries[0]; if (old?.source.type === 'provider') old.source.versionId += '-old'; s.published.entries.push(entry('previous-mod')); }
@@ -93,6 +93,7 @@ export function createPackFixtures(host: Host): typeof serversPackNative {
     return { project, version, entry: e };
   };
   return {
+    fixturePublishedManifest(id) { return clone(state(id, false).published); },
     async packDraft(id) { await host.wait(); return clone(state(id).view); },
     async packIcon(id) { const sha = state(id).view.draft.manifest.icon; if (!sha) return null; const bytes = blobs.get(`${id}:${sha}`) ?? fail('not_found'); let binary = ''; for (let offset = 0; offset < bytes.length; offset += 32768) binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768)); return { mimeType: bytes[0] === 0x89 ? 'image/png' : 'image/jpeg', contentBase64: btoa(binary) }; },
     async packWrite(id, request, intent) { return mutate(id, intent, request, () => save(id, request.expectedRevision, request.manifest)); },

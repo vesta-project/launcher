@@ -40,3 +40,12 @@ pub async fn server_pack_sync_check(
 ) -> Result<Option<crate::servers::pack_sync::Check>> {
     manager.pack_sync_check(&app, instance_id).await
 }
+
+#[tauri::command]
+pub async fn server_pack_sync_discard(
+    manager: State<'_, Arc<ServerManager>>,
+    review_id: String,
+) -> Result<()> {
+    manager.pack_sync_discard(&review_id).await;
+    Ok(())
+}

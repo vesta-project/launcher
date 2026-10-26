@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseInstanceShortcutArgs } from '../src/features/instances/shortcut-intent-model';
 
 test('shortcut intents accept host CLI and encoded macOS deep links', () => {
@@ -20,7 +20,7 @@ test('malformed and unrelated arguments cannot launch an instance', () => {
 
 async function nativeHarness() {
   const built = await Bun.build({
-    entrypoints: [new URL('../src/features/instances/native-service.ts', import.meta.url).pathname],
+    entrypoints: [fileURLToPath(new URL('../src/features/instances/native-service.ts', import.meta.url))],
     target: 'bun', conditions: ['browser', 'development'],
     plugins: [{ name: 'shortcut-host', setup(build) {
       build.onResolve({ filter: /^(@tauri-apps\/api\/(core|event)|\.\.\/accounts\/accounts|\.\/icon-catalog)$/ }, ({ path }) => ({ path, namespace: 'fixture' }));
