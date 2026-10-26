@@ -5,13 +5,14 @@
 //   installToModpack          -> the stage 2 pack draft
 import { fetchProjects } from './browse-api';
 import type { ResourceProject, ResourceType, ResourceVersion } from './browse-model';
-import type { DependencyCandidate, DependencyRow, Destination, ServerTarget } from './install-targets';
+import { isContentProvider, previewCandidates, serverInstallPlan, type DependencyCandidate, type DependencyRow, type Destination, type ServerTarget } from './install-targets';
+export { isContentProvider, isServerContentKind, previewCandidates, serverInstallPlan, type ServerInstallItem } from './install-targets';
 import { invalidateServerResources, readServerResource } from '../servers/resources';
 import { CONTENT_RESOURCES, contentResource, softwareResource } from '../servers/server-resources';
 import { newIntentId } from '../servers/model';
 import { serverCommand } from '../servers/store';
 import type { ConnectionId, ServerCommandError } from '../servers/native';
-import type { ContentChange, ContentProvider, ServerContentKind, ServerDependencyPreview } from '../servers/native-content';
+import type { ContentChange } from '../servers/native-content';
 
 /**
  * Managed server software id, or null when it is unidentified or cannot be read. The content
@@ -24,11 +25,6 @@ export async function serverSoftware(id: ConnectionId): Promise<string | null> {
   const state = await readServerResource(id, softwareResource).catch(() => undefined);
   return state?.current?.software ?? null;
 }
-
-const PROVIDERS: readonly string[] = ['modrinth', 'curseforge'];
-export const isContentProvider = (source: string): source is ContentProvider['provider'] => PROVIDERS.includes(source);
-const SERVER_KINDS: readonly ResourceType[] = ['mod', 'plugin', 'datapack'];
-export const isServerContentKind = (kind: ResourceType): kind is ServerContentKind => SERVER_KINDS.includes(kind);
 
 export interface DependencyRequest {
   project: ResourceProject;
@@ -71,21 +67,6 @@ export async function declaredDependencies({ project, version }: DependencyReque
 /** Instance targets: the same preview; the host resolves the real set while installing. */
 export const resolveInstanceDependencies: DependencyResolver = declaredDependencies;
 
-/** The shared resolver's rows, as the install dialog shows them. */
-export function previewCandidates(preview: Pick<ServerDependencyPreview, 'dependencies'>): DependencyCandidate[] {
-  return preview.dependencies.map((dependency) => ({
-    project: {
-      id: dependency.project.id,
-      name: dependency.project.name,
-      source: dependency.project.source,
-      icon_url: dependency.project.icon_url,
-    },
-    version: { id: dependency.version.id, version_number: dependency.version.version_number },
-    required: dependency.required,
-    installed: dependency.installed,
-  }));
-}
-
 /**
  * Server targets: native resolves against the server's authoritative Minecraft version,
  * software and inventory with the same traversal instances use.
@@ -113,29 +94,6 @@ export type ServerInstallOutcome =
   | { kind: 'started'; count: number; staged: boolean }
   | { kind: 'unavailable'; reason: 'server-coming' | 'modpack-coming' }
   | { kind: 'failed'; message: string; error?: ServerCommandError; installed?: number };
-
-export interface ServerInstallItem extends ContentProvider {
-  kind: ServerContentKind;
-  name: string;
-}
-
-/**
- * What `installToServer` sends: the ticked, not yet installed dependencies first (so the root
- * finds them on its first start), then the project. Rows without an exact version are skipped;
- * the agent installs by provider version only. Null when the server cannot take this kind.
- */
-export function serverInstallPlan(selection: Pick<ServerSelection, 'project' | 'version' | 'kind' | 'dependencies'>): ServerInstallItem[] | null {
-  const { project, version, kind } = selection;
-  const source = project.source;
-  if (!isServerContentKind(kind) || !isContentProvider(source)) return null;
-  const dependencies = selection.dependencies.flatMap((row): ServerInstallItem[] => {
-    const provider = row.project.source;
-    return row.selected && !row.installed && row.version && isContentProvider(provider)
-      ? [{ provider, projectId: row.project.id, versionId: row.version.id, kind, name: row.project.name }]
-      : [];
-  });
-  return [...dependencies, { provider: source, projectId: project.id, versionId: version.id, kind, name: project.name }];
-}
 
 /** Installs the project and the ticked dependencies into the server's files. */
 export async function installToServer(target: ServerTarget, selection: ServerSelection): Promise<ServerInstallOutcome> {

@@ -12,6 +12,7 @@ import {
   type ResourceVersion,
   type SourceId,
 } from './browse-model';
+import type { ContentProvider, ServerContentKind, ServerDependencyPreview } from '../servers/native-content';
 
 /* ---- Project sides ---- */
 
@@ -321,4 +322,49 @@ export interface DependencyRow extends DependencyCandidate {
 /** Required dependencies start ticked, optional ones unticked, installed ones are left alone. */
 export function dependencyRows(candidates: readonly DependencyCandidate[]): DependencyRow[] {
   return candidates.map((candidate) => ({ ...candidate, selected: candidate.required && !candidate.installed }));
+}
+
+/* ---- Server install requests ---- */
+
+const PROVIDERS: readonly string[] = ['modrinth', 'curseforge'];
+export const isContentProvider = (source: string): source is ContentProvider['provider'] => PROVIDERS.includes(source);
+const SERVER_KINDS: readonly ResourceType[] = ['mod', 'plugin', 'datapack'];
+export const isServerContentKind = (kind: ResourceType): kind is ServerContentKind => SERVER_KINDS.includes(kind);
+
+/** The shared resolver's rows, as the install dialog shows them. */
+export function previewCandidates(preview: Pick<ServerDependencyPreview, 'dependencies'>): DependencyCandidate[] {
+  return preview.dependencies.map((dependency) => ({
+    project: {
+      id: dependency.project.id,
+      name: dependency.project.name,
+      source: dependency.project.source,
+      icon_url: dependency.project.icon_url,
+    },
+    version: { id: dependency.version.id, version_number: dependency.version.version_number },
+    required: dependency.required,
+    installed: dependency.installed,
+  }));
+}
+
+export interface ServerInstallItem extends ContentProvider {
+  kind: ServerContentKind;
+  name: string;
+}
+
+/**
+ * What `installToServer` sends: the ticked, not yet installed dependencies first (so the root
+ * finds them on its first start), then the project. Rows without an exact version are skipped;
+ * the agent installs by provider version only. Null when the server cannot take this kind.
+ */
+export function serverInstallPlan(selection: { project: Pick<ResourceProject, 'id' | 'name' | 'source'>; version: Pick<ResourceVersion, 'id'>; kind: ResourceType; dependencies: readonly DependencyRow[] }): ServerInstallItem[] | null {
+  const { project, version, kind } = selection;
+  const source = project.source;
+  if (!isServerContentKind(kind) || !isContentProvider(source)) return null;
+  const dependencies = selection.dependencies.flatMap((row): ServerInstallItem[] => {
+    const provider = row.project.source;
+    return row.selected && !row.installed && row.version && isContentProvider(provider)
+      ? [{ provider, projectId: row.project.id, versionId: row.version.id, kind, name: row.project.name }]
+      : [];
+  });
+  return [...dependencies, { provider: source, projectId: project.id, versionId: version.id, kind, name: project.name }];
 }
