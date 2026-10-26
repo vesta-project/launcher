@@ -84,7 +84,7 @@ export interface SoftwarePlanRequest {
 
 export type SoftwareWarning =
   | 'legacy_checksum' | 'unsupported_upstream' | 'experimental_build'
-  | 'region_threading' | 'first_run_effects' | 'proxy_resolution' | 'source_build';
+  | 'region_threading' | 'first_run_effects' | 'proxy_resolution' | 'source_build' | 'source_build_reference_mismatch';
 
 /** A reviewed switch. Native keeps its confirmation token. */
 export interface SoftwarePlan {
@@ -113,6 +113,7 @@ export interface SoftwareJob {
   updatedAtMs: number;
   /** Fixed safe code, e.g. `server_install.storage_low`. */
   error: string | null;
+  warnings?: (SoftwareWarning | string)[];
 }
 
 // ------------------------------------------------------------------ sftp

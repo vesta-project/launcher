@@ -164,15 +164,20 @@ function JobStatus(props: { job: SoftwareJob; current: SoftwareLaunch | null }) 
   return (
     <div data-vesta="server-hosting-job" data-state={props.job.state}>
       <Show when={jobActive(props.job)} fallback={
-        <p data-vesta="server-callout" data-tone={props.job.state === 'succeeded' ? 'success' : 'danger'}>
+        <p data-vesta="server-callout" data-tone={props.job.state === 'succeeded' ? (props.job.warnings?.length ? 'warning' : 'success') : 'danger'}>
           {props.job.state === 'succeeded'
-            ? t('server-hosting.job-succeeded-now', { name: launchText(props.current) })
+            ? t(props.job.warnings?.length ? 'server-hosting.job-succeeded-warning-now' : 'server-hosting.job-succeeded-now', { name: launchText(props.current) })
             : t(jobStepMessage[props.job.state])}
           <Show when={props.job.state !== 'succeeded' && reasonMessage(props.job.error)}>{(message) => <> {t(message())}</>}</Show>
         </p>
       }>
         {/* The agent reports steps, not amounts, so progress stays indeterminate. */}
         <Progress size="sm" label={t(jobStepMessage[props.job.state])} />
+      </Show>
+      <Show when={props.job.state === 'succeeded' && props.job.warnings?.length}>
+        <ul data-vesta="server-hosting-warnings" role="status">
+          <For each={props.job.warnings}>{(warning) => <li>{t(warningCopy(warning))}</li>}</For>
+        </ul>
       </Show>
     </div>
   );

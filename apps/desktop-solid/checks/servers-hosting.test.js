@@ -8,6 +8,11 @@ import { visibleSections } from '../src/features/servers/shell-model';
 
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl rae@laptop';
+
+test('completed source-build warnings have specific copy without keeping the job active', () => {
+  expect(warningCopy('source_build_reference_mismatch')).toBe('server-hosting.warning-source-reference');
+  expect(jobActive({ state: 'succeeded', warnings: ['source_build_reference_mismatch'] })).toBe(false);
+});
 test('software restore requires retained file evidence; interrupted baselines only recover configuration', () => {
   const known = { software: 'paper', version: '26.3', build: 222, installationId: 'managed' };
   expect(softwareRestoreKind({ previous: known, previousRestorable: true, recoveryRequired: false })).toBe('software');

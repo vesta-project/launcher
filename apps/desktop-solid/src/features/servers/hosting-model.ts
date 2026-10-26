@@ -55,6 +55,7 @@ export const warningMessage: Record<string, MessageId> = {
   region_threading: 'server-hosting.warning-region-threading',
   first_run_effects: 'server-hosting.warning-first-run',
   source_build: 'server-hosting.warning-source-build',
+  source_build_reference_mismatch: 'server-hosting.warning-source-reference',
   proxy_resolution: 'server-hosting.warning-proxy',
 };
 export const warningCopy = (code: string): MessageId => warningMessage[code] ?? 'server-hosting.warning-other';

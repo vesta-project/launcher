@@ -143,6 +143,8 @@ pub struct SoftwareJob {
     pub created_at_ms: i64,
     pub updated_at_ms: i64,
     pub error: Option<String>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -807,6 +809,16 @@ impl Client {
 
 #[cfg(test)]
 mod software_ids_tests {
+    #[test]
+    fn job_warnings_round_trip_and_old_agents_default_to_none() {
+        let old = serde_json::json!({"id":"job","kind":"apply","state":"succeeded","createdAtMs":1,"updatedAtMs":2,"error":null});
+        let job: super::SoftwareJob = serde_json::from_value(old.clone()).unwrap();
+        assert!(job.warnings.is_empty());
+        let mut new = old;
+        new["warnings"] = serde_json::json!(["source_build_reference_mismatch"]);
+        let job: super::SoftwareJob = serde_json::from_value(new.clone()).unwrap();
+        assert_eq!(serde_json::to_value(job).unwrap(), new);
+    }
     #[test]
     fn source_build_targets_use_fixed_software_ids() {
         for id in ["bukkit", "spigot"] {
