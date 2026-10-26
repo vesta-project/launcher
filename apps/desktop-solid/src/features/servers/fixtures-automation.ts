@@ -70,10 +70,10 @@ function seed(): AutomationState {
       stepDefaults({ id: 'alert', action: { kind: 'notify', severity: 'critical', title: 'Nightly backup failed', body: "The nightly backup didn't finish, so the server wasn't restarted." }, timeoutSecs: 60 }),
     ],
   }, 30);
-  const announce = workflow('Announce on first join', 'p-self', true, {
-    trigger: { kind: 'first_player_joined' },
+  const announce = workflow('Welcome new players', 'p-self', true, {
+    trigger: { kind: 'player_first_joined' },
     missedPolicy: { kind: 'skip_and_notify' },
-    steps: [stepDefaults({ id: 'welcome', action: { kind: 'console_command', line: 'say Welcome back! Backups run nightly at 04:00.' }, timeoutSecs: 60 })],
+    steps: [stepDefaults({ id: 'welcome', action: { kind: 'console_command', line: 'say Welcome to the server!' }, timeoutSecs: 60 })],
   }, 20);
   const wake = workflow('Wake-up check', 'p-rae', true, {
     trigger: { kind: 'agent_startup' },
@@ -145,7 +145,7 @@ function seed(): AutomationState {
     [2, 'succeeded', { output: { snapshot: '77ad01c4e9f0', files_changed: 208, data_added: 92_400_000 }, finishedAtMs: 88_000 }],
     [3, 'timed_out', { errorCode: 'timed_out', operationReference: 'op-81aa', finishedAtMs: 600_000 }],
   ]);
-  run(announce, { kind: 'event', event: { kind: 'first_player_joined' } }, now - 2 * 3600_000, { state: 'succeeded', code: 'completed', finishedAfterMs: 1_000 }, [
+  run(announce, { kind: 'event', event: { kind: 'player_first_joined', player: 'Alex', uuid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } }, now - 2 * 3600_000, { state: 'succeeded', code: 'completed', finishedAfterMs: 1_000 }, [
     [0, 'succeeded', { output: { stdin_written: true }, operationReference: 'op-90b2', finishedAtMs: 600 }],
   ]);
   // Rae lost the backups capability, so the engine suspended the run until someone discards it.

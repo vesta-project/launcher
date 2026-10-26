@@ -78,6 +78,7 @@ export const triggerLabels: Record<TriggerKind, MessageId> = {
   server_crashed: 'server-automation.trigger-server-crashed',
   player_count_zero: 'server-automation.trigger-player-count-zero',
   first_player_joined: 'server-automation.trigger-first-player-joined',
+  player_first_joined: 'server-automation.trigger-player-first-joined',
   update_available: 'server-automation.trigger-update-available',
   backup_completed: 'server-automation.trigger-backup-completed',
   backup_failed: 'server-automation.trigger-backup-failed',
@@ -89,7 +90,7 @@ export function triggerIcon(trigger: WorkflowTrigger | null | undefined) {
     case 'cron': case 'interval': return 'icons/content/timer';
     case 'manual': return 'icons/actions/play';
     case 'backup_completed': case 'backup_failed': return 'icons/content/storage';
-    case 'first_player_joined': case 'player_count_zero': return 'icons/content/chat';
+    case 'first_player_joined': case 'player_first_joined': case 'player_count_zero': return 'icons/content/chat';
     case undefined: return 'icons/content/timer';
     default: return 'icons/status/live';
   }

@@ -1,5 +1,14 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "server-hosting.recover-launch-action",
+  "server-hosting.recover-launch-banner",
+  "server-hosting.saved-launch",
+  "server-hosting.recover-launch",
+  "server-hosting.restore-launch-title",
+  "server-hosting.restore-launch-only",
+  "server-automation.trigger-player-first-joined",
+  "server-automation.sentence-player-first-joined",
+  "server-automation.run-new-player",
   "server-world.pack-transitioning",
   "server-hosting.previous-installation",
   "servers.activity.pages",

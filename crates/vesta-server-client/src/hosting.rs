@@ -55,6 +55,8 @@ pub struct SoftwareState {
     pub revision: String,
     pub current: Option<SoftwareLaunch>,
     pub previous: Option<SoftwareLaunch>,
+    #[serde(default)]
+    pub previous_restorable: bool,
     pub recovery_required: bool,
     pub catalog: Vec<SoftwareDescriptor>,
 }

@@ -3,7 +3,7 @@
 import type { MessageId } from '../../localization/messages';
 import { roleKey } from './capabilities';
 import type { ServerCommandError, ServerSnapshot } from './native';
-import type { SftpKey, SftpStatus, SoftwareId, SoftwareJob, SoftwareLaunch } from './hosting-native';
+import type { SftpKey, SftpStatus, SoftwareId, SoftwareJob, SoftwareLaunch, SoftwareState } from './hosting-native';
 
 // ------------------------------------------------------------------ software
 
@@ -24,6 +24,12 @@ export function launchSummary(launch: SoftwareLaunch | null | undefined): string
   if (launch.loaderVersion) parts.push(`loader ${launch.loaderVersion}`);
   if (launch.build !== null && launch.build !== undefined) parts.push(`build ${launch.build}`);
   return parts.join(' · ');
+}
+
+export function softwareRestoreKind(state: Pick<SoftwareState, 'previous' | 'previousRestorable' | 'recoveryRequired'>): 'software' | 'launch' | null {
+  if (!state.previous) return null;
+  if (state.previousRestorable && launchSummary(state.previous)) return 'software';
+  return state.recoveryRequired ? 'launch' : null;
 }
 
 export const jobActive = (job: Pick<SoftwareJob, 'state'> | null | undefined) =>

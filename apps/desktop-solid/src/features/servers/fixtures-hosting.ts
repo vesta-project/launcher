@@ -69,6 +69,7 @@ function seed(): HostingState {
       available: true, unavailableReason: null, revision: '2',
       current: { software: 'paper', version: '1.21.1', build: 130, installationId: `inst-${hex(8)}`, javaMajor: 21 },
       previous: { software: 'vanilla', version: '1.21.1', build: null, installationId: `inst-${hex(8)}` },
+      previousRestorable: true,
       recoveryRequired: false, catalog: clone(catalog),
     },
     plans: new Map(),

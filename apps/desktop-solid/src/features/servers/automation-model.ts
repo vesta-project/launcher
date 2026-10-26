@@ -196,6 +196,7 @@ const eventSentences: Record<Exclude<TriggerKind, 'cron' | 'interval' | 'backup_
   server_crashed: 'server-automation.sentence-server-crashed',
   player_count_zero: 'server-automation.sentence-player-count-zero',
   first_player_joined: 'server-automation.sentence-first-player-joined',
+  player_first_joined: 'server-automation.sentence-player-first-joined',
   update_available: 'server-automation.sentence-update-available',
 };
 
@@ -243,6 +244,7 @@ export function triggerSentence(trigger: WorkflowTrigger, weekdayName: (day: num
 const eventTriggers: Record<string, TriggerKind> = {
   agent_started: 'agent_startup', server_started: 'server_started', server_stopped: 'server_stopped', server_crashed: 'server_crashed',
   player_count_zero: 'player_count_zero', first_player_joined: 'first_player_joined', update_available: 'update_available',
+  player_first_joined: 'player_first_joined',
   backup_completed: 'backup_completed', backup_failed: 'backup_failed',
 };
 
@@ -252,6 +254,7 @@ export function runTriggerSentence(trigger: RunTrigger, formatTime: (ms: number)
     case 'manual': return { message: 'server-automation.run-trigger-manual', args: {} };
     case 'schedule': return { message: 'server-automation.run-trigger-schedule', args: { time: formatTime(trigger.occurrenceMs) } };
     case 'event': {
+      if (trigger.event.kind === 'player_first_joined' && trigger.event.player) return { message: 'server-automation.run-new-player', args: { name: trigger.event.player } };
       const kind = eventTriggers[trigger.event.kind];
       if (!kind) return { message: 'server-automation.run-trigger-other', args: {} };
       if (kind === 'backup_completed' || kind === 'backup_failed') return triggerSentence({ kind, profile: trigger.event.profile ?? null });
@@ -711,8 +714,8 @@ export function templateDraft(id: TemplateId, options: { name: string; principal
     case 'announce-join':
       return {
         ...base,
-        trigger: { kind: 'first_player_joined' },
-        steps: [step('welcome', { kind: 'console_command', line: 'say Welcome back! Backups run nightly at 04:00.' })],
+        trigger: { kind: 'player_first_joined' },
+        steps: [step('welcome', { kind: 'console_command', line: 'say Welcome to the server!' })],
       };
     case 'clean-trash-weekly':
       return {

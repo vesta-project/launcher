@@ -9,6 +9,13 @@ import { createAutomationFixtures } from '../src/features/servers/fixtures-autom
 const draft = (overrides = {}) => ({ ...templateDraft('nightly-backup', { name: 'Nightly', principalId: 'p-self', offsetMinutes: 600 }), ...overrides });
 const paths = (problems) => problems.map((problem) => problem.path);
 const wire = (overrides = {}) => fromEditorDraft(draft(overrides));
+test('new-player template uses a distinct first-visit trigger with named history', () => {
+  const template = templateDraft('announce-join', { name: 'Welcome', principalId: 'p-self', offsetMinutes: 0 });
+  expect(template.trigger.kind).toBe('player_first_joined');
+  expect(workflowProblems(template)).toEqual([]);
+  expect(triggerSentence({ kind: 'player_first_joined' }).message).toBe('server-automation.sentence-player-first-joined');
+  expect(runTriggerSentence({ kind: 'event', event: { kind: 'player_first_joined', player: 'Alex', uuid: 'a'.repeat(32) } })).toEqual({ message: 'server-automation.run-new-player', args: { name: 'Alex' } });
+});
 
 describe('[cron] numeric five-field parsing mirrors the agent', () => {
   test('lists, ranges, steps and wildcards', () => {
@@ -202,7 +209,7 @@ describe('[fixtures] workflows behave like the agent', () => {
   test('seeded workflows and history', async () => {
     const api = servers();
     const { items } = await api.automationWorkflows('fixture-survival', null);
-    expect(items.map((item) => item.name)).toEqual(expect.arrayContaining(['Nightly backup & restart', 'Announce on first join', 'Wake-up check']));
+    expect(items.map((item) => item.name)).toEqual(expect.arrayContaining(['Nightly backup & restart', 'Welcome new players', 'Wake-up check']));
     const runs = await api.automationRuns('fixture-survival', null);
     expect(new Set(runs.items.map((run) => run.state))).toEqual(new Set(['succeeded', 'failed', 'suspended']));
     const failed = runs.items.find((run) => run.state === 'failed');

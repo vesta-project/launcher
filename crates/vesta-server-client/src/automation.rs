@@ -179,6 +179,7 @@ pub enum WorkflowTrigger {
     ServerCrashed,
     PlayerCountZero,
     FirstPlayerJoined,
+    PlayerFirstJoined,
     UpdateAvailable,
     Cron {
         expr: String,
@@ -284,6 +285,7 @@ pub enum AutomationEvent {
     ServerCrashed,
     PlayerCountZero,
     FirstPlayerJoined,
+    PlayerFirstJoined { player: String, uuid: String },
     UpdateAvailable,
     BackupCompleted { profile: Option<String> },
     BackupFailed { profile: Option<String> },

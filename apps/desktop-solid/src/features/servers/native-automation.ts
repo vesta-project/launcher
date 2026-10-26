@@ -26,7 +26,7 @@ const call = <T>(command: string, args?: Record<string, unknown>) => invoke<T>(c
 /** Triggers without parameters. */
 export const EVENT_TRIGGERS = [
   'manual', 'agent_startup', 'server_started', 'server_stopped', 'server_crashed',
-  'player_count_zero', 'first_player_joined', 'update_available',
+  'player_count_zero', 'first_player_joined', 'player_first_joined', 'update_available',
 ] as const;
 export type EventTriggerKind = (typeof EVENT_TRIGGERS)[number];
 
@@ -110,14 +110,14 @@ export interface WorkflowDetail extends WorkflowSummary {
 /** Engine event names, which differ slightly from trigger kinds (`agent_started`). */
 export type AutomationEventKind =
   | 'agent_started' | 'server_started' | 'server_stopped' | 'server_crashed' | 'player_count_zero'
-  | 'first_player_joined' | 'update_available' | 'backup_completed' | 'backup_failed';
+  | 'first_player_joined' | 'player_first_joined' | 'update_available' | 'backup_completed' | 'backup_failed';
 
 /** What admitted a run. Native passes unknown shapes through as `{ kind: 'other' }`. */
 export type RunTrigger =
   | { kind: 'manual' }
   /** Scheduled occurrence (cron or interval), epoch ms. */
   | { kind: 'schedule'; occurrenceMs: number }
-  | { kind: 'event'; event: { kind: AutomationEventKind; profile?: string | null } }
+  | { kind: 'event'; event: { kind: AutomationEventKind; profile?: string | null; player?: string; uuid?: string } }
   | { kind: 'other' };
 
 /**

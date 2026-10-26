@@ -13,7 +13,7 @@ import { triggerIcon, triggerLabels, triggerText, weekdayName } from '../tabs/au
 
 /** Monday first, as most schedules are read. */
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
-const EVENTS: TriggerKind[] = ['server_started', 'server_stopped', 'server_crashed', 'first_player_joined', 'player_count_zero', 'update_available', 'backup_completed', 'backup_failed', 'agent_startup'];
+const EVENTS: TriggerKind[] = ['server_started', 'server_stopped', 'server_crashed', 'player_first_joined', 'first_player_joined', 'player_count_zero', 'update_available', 'backup_completed', 'backup_failed', 'agent_startup'];
 
 /** The starting trigger for a group, keeping what still applies. */
 function triggerFor(group: TriggerGroup, previous: WorkflowTrigger): WorkflowTrigger {

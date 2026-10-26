@@ -2,12 +2,20 @@ import { describe, expect, test } from 'bun:test';
 import { createFixtureServers } from '../src/features/servers/fixtures';
 import {
   bindProblem, gameStopped, hasOwnKey, hostOf, jobActive, jobPollDelay, launchSummary, mayOwn, portProblem,
-  publicKeyProblem, reasonMessage, sftpLoopbackOnly, warningCopy,
+  publicKeyProblem, reasonMessage, sftpLoopbackOnly, softwareRestoreKind, warningCopy,
 } from '../src/features/servers/hosting-model';
 import { visibleSections } from '../src/features/servers/shell-model';
 
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl rae@laptop';
+test('software restore requires retained file evidence; interrupted baselines only recover configuration', () => {
+  const known = { software: 'paper', version: '26.3', build: 222, installationId: 'managed' };
+  expect(softwareRestoreKind({ previous: known, previousRestorable: true, recoveryRequired: false })).toBe('software');
+  expect(softwareRestoreKind({ previous: known, previousRestorable: false, recoveryRequired: false })).toBeNull();
+  expect(softwareRestoreKind({ previous: { ...known, software: null }, previousRestorable: false, recoveryRequired: false })).toBeNull();
+  expect(softwareRestoreKind({ previous: known, previousRestorable: false, recoveryRequired: true })).toBe('launch');
+  expect(softwareRestoreKind({ previous: null, previousRestorable: true, recoveryRequired: true })).toBeNull();
+});
 
 async function stoppedOwner() {
   const servers = createFixtureServers({ latencyMs: 0 });

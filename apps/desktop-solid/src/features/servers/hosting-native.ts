@@ -64,6 +64,7 @@ export interface SoftwareState {
   revision: string;
   current: SoftwareLaunch | null;
   previous: SoftwareLaunch | null;
+  previousRestorable?: boolean;
   recoveryRequired: boolean;
   catalog: SoftwareDescriptor[];
 }
