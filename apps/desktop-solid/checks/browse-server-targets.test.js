@@ -140,9 +140,20 @@ describe('compatibility reasons', () => {
     expect(states({}).both).toEqual({ available: false, reason: 'modpack-coming' });
   });
 
-  test('a row stays open to explain that the modpack comes next', () => {
-    expect(states({ software: 'paper' }).row).toEqual({ available: true });
-    expect(states({ software: 'paper', canEditPack: false }).row).toEqual({ available: false, reason: 'needs-mod-loader' });
+  test('a row with no valid destination is dimmed with the reason, like an instance', () => {
+    // Lithium (a Fabric mod) on Paper: the server rejects it and the modpack is not editable yet.
+    expect(states({ software: 'paper' }).row).toEqual({ available: false, reason: 'needs-mod-loader' });
+    expect(states({ software: 'paper', canInstall: false }).row).toEqual({ available: false, reason: 'modpack-coming' });
+    expect(states({ software: 'paper' }).only).toBeUndefined();
+  });
+
+  test('a row with some valid destinations stays choosable with a hint', () => {
+    expect(states({ software: 'fabric' })).toMatchObject({ row: { available: true }, only: 'server' });
+    // Paper rejects the mod, the (future) modpack accepts it.
+    expect(states({ software: 'paper' }, { modpackReady: true })).toMatchObject({
+      row: { available: true }, only: 'modpack', server: { available: false, reason: 'needs-mod-loader' },
+    });
+    expect(states({ software: 'fabric' }, { modpackReady: true }).only).toBeUndefined();
   });
 
   test('server versions follow the software family', () => {

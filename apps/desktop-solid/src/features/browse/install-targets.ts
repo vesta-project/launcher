@@ -181,6 +181,8 @@ export interface TargetInput {
   versions?: readonly ResourceVersion[];
   /** A version page installs exactly this version. */
   pinned?: ResourceVersion;
+  /** Overrides MODPACK_TARGET_READY; for checks. */
+  modpackReady?: boolean;
 }
 
 /** The version a server receives, or undefined when none fits its Minecraft version and software. */
@@ -242,13 +244,15 @@ function modpackState(target: ServerTarget, input: TargetInput): DestinationStat
   if (projectSides(project).client === 'unsupported') return no('server-only');
   const candidates = input.pinned ? [input.pinned] : input.versions;
   if (candidates && !modpackVersion(candidates, target)) return no('no-version');
-  if (!MODPACK_TARGET_READY) return no('modpack-coming');
+  if (!(input.modpackReady ?? MODPACK_TARGET_READY)) return no('modpack-coming');
   return ok;
 }
 
 export interface TargetStates {
   /** Whether the server row can be chosen at all, and why not. */
   row: DestinationState;
+  /** Set when the row can be chosen but only one destination is valid. */
+  only?: 'server' | 'modpack';
   server: DestinationState;
   modpack: DestinationState;
   both: DestinationState;
@@ -266,16 +270,11 @@ export function targetStates(target: ServerTarget, input: TargetInput): TargetSt
   });
   if (target.connection !== 'online') return blocked(target.connection);
   if (!target.minecraftVersion) return blocked('unknown-version');
-  // A row opens when something can be chosen, or to explain that the modpack comes next.
-  const row =
-    server.available || modpack.available
-      ? ok
-      : !modpack.available && modpack.reason === 'modpack-coming'
-        ? ok
-        : target.canInstall
-          ? server
-          : modpack;
-  return { row, server, modpack, both };
+  // Like instances: a row with no valid destination is dimmed with the reason that matters most.
+  if (!server.available && !modpack.available)
+    return { row: target.canInstall ? server : modpack, server, modpack, both };
+  const only = server.available && !modpack.available ? 'server' : !server.available ? 'modpack' : undefined;
+  return { row: ok, ...(only ? { only } : {}), server, modpack, both };
 }
 
 /** The destination the project's sides suggest, before availability is considered. */

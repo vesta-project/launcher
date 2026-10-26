@@ -2919,6 +2919,8 @@ export const messageIds = [
   "browse.server-software-unknown",
   "browse.server-software-checking",
   "browse.server-choose",
+  "browse.server-only",
+  "browse.modpack-only",
   "browse.target-title",
   "browse.target-description",
   "browse.target-server",

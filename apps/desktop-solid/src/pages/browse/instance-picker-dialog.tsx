@@ -454,6 +454,7 @@ export function InstancePickerDialog() {
                       <ServerRow
                         target={row().target}
                         state={row().checking && row().target.connection === 'online' ? 'checking' : row().states.row}
+                        only={row().states.only}
                         onChoose={() => chooseServer(row())}
                       />
                     )}

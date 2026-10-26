@@ -20,6 +20,9 @@ import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 
 export const reasonMessage = (reason: TargetReason) => `browse.target-reason-${reason}` as MessageId;
+/** Reasons name the server software, e.g. "Paper can't run mods." */
+export const reasonText = (reason: TargetReason, target: Pick<ServerTarget, 'software'>) =>
+  t(reasonMessage(reason), { title: softwareText(target.software) });
 
 const connectionLabels: Record<ServerTarget['connection'], MessageId> = {
   online: 'browse.server-online',
@@ -45,9 +48,21 @@ export function softwareText(software: ServerTarget['software']): string {
 }
 
 /** One server in the picker's Servers section. */
-export function ServerRow(props: { target: ServerTarget; state: DestinationState | 'checking'; onChoose: () => void }) {
+export function ServerRow(props: {
+  target: ServerTarget;
+  state: DestinationState | 'checking';
+  only?: 'server' | 'modpack';
+  onChoose: () => void;
+}) {
   const status = () => (props.state === 'checking' ? 'checking' : props.state.available ? 'ready' : 'incompatible');
   const reason = () => (props.state === 'checking' ? undefined : blockedReason(props.state));
+  const statusText = () => {
+    const why = reason();
+    if (why) return reasonText(why, props.target);
+    if (status() === 'checking') return t('browse.status-checking');
+    if (props.only) return t(props.only === 'server' ? 'browse.server-only' : 'browse.modpack-only');
+    return t('browse.server-choose');
+  };
   return (
     <li data-vesta="browse-picker-row" data-status={status()}>
       <button
@@ -76,12 +91,7 @@ export function ServerRow(props: { target: ServerTarget; state: DestinationState
         {/* A connection problem is already said by the connection label. */}
         <Show when={reason() !== props.target.connection}>
           <span data-vesta="browse-picker-status" data-status={status()}>
-            <Show
-              when={reason()}
-              fallback={t(status() === 'checking' ? 'browse.status-checking' : 'browse.server-choose')}
-            >
-              {(why) => t(reasonMessage(why()))}
-            </Show>
+            {statusText()}
           </span>
         </Show>
       </button>
@@ -135,7 +145,7 @@ export function TargetStep(props: {
                   </strong>
                   <span>{t(labels().help)}</span>
                   <Show when={blockedReason(state())}>
-                    {(reason) => <span data-vesta="browse-target-reason">{t(reasonMessage(reason()))}</span>}
+                    <span data-vesta="browse-target-reason">{reasonText(blockedReason(state())!, props.target)}</span>
                   </Show>
                 </span>
               </button>
