@@ -679,6 +679,11 @@ pub struct WorldDatapack {
     pub enabled: Option<bool>,
 }
 impl Client {
+    pub async fn world_datapack_offline(&self, pack_id: String, enabled: bool, expected_revision: String, intent: &str) -> Result<ServerWorld> {
+        if !pack_id.starts_with("file/") || pack_id.len() > 1024 || pack_id.chars().any(char::is_control) || expected_revision.len() != 64 || !expected_revision.bytes().all(|b| b.is_ascii_hexdigit()) { return Err(invalid()); }
+        self.management_mutate(Method::POST, "world/datapacks/offline", Some(json!({"pack_id":pack_id,"enabled":enabled,"expected_revision":expected_revision})), intent, "config.edit").await?;
+        self.world().await
+    }
     pub async fn world_datapack_toggle(
         &self,
         pack_id: String,

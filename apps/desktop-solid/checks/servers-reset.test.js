@@ -5,6 +5,20 @@ import { fileProtection } from '../src/features/servers/native-files';
 const ID = 'fixture-survival';
 const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+test('offline datapack edits update saved selection, refuse stale revisions and replay safely', async () => {
+  const api = createFixtureServers({ latencyMs: 0 });
+  const before = await api.world(ID);
+  await expect(api.worldDatapackOffline(ID, 'file/seasonal', true, before.revision, 'pack-running')).rejects.toMatchObject({ code: 'conflict' });
+  const snapshot = await api.snapshot(ID);
+  await api.lifecycle(ID, 'stop', snapshot.status.generation, 'stop-for-pack');
+  await settle(3600);
+  const saved = await api.worldDatapackOffline(ID, 'file/seasonal', true, before.revision, 'pack-offline');
+  expect(saved.datapacks.find(pack => pack.id === 'file/seasonal').enabled).toBe(true);
+  expect(await api.worldDatapackOffline(ID, 'file/seasonal', true, before.revision, 'pack-offline')).toEqual(saved);
+  await expect(api.worldDatapackOffline(ID, 'file/seasonal', false, before.revision, 'pack-stale')).rejects.toMatchObject({ code: 'conflict' });
+  await expect(api.worldDatapackOffline(ID, 'vanilla', false, saved.revision, 'pack-builtin')).rejects.toMatchObject({ code: 'invalid_input' });
+});
+
 test('protected files need a payload-bound confirmation; private paths remain hidden', async () => {
   const api = createFixtureServers({ latencyMs: 0 }); const before = await api.fileReadText(ID, 'ops.json');
   const pending = await api.fileWriteProtected(ID, 'ops.json', '[]', before.sha256, null, 'raw-1');

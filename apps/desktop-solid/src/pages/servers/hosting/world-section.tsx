@@ -10,7 +10,7 @@ import { errorMessage } from '../../../features/servers/errors';
 import type { ServerWorld } from '../../../features/servers/hosting-native';
 import { age, IntentMemo } from '../../../features/servers/model';
 import type { ServerCommandError, ServerOperation, ServerSnapshot } from '../../../features/servers/native';
-import { useServerResource } from '../../../features/servers/resources';
+import { seedServerResource, useServerResource } from '../../../features/servers/resources';
 import { worldResource } from '../../../features/servers/server-resources';
 import { putOperations, serverCommand, serverOperations, useServersClock } from '../../../features/servers/store';
 import {
@@ -164,6 +164,8 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
   const id = stableConnectionId(() => props.snapshot);
   const views = createMemo(() => datapackViews(props.world.datapacks), { name: 'server-world:datapacks' });
   const blocker = () => datapackBlocker(props.snapshot);
+  const stopped = () => props.snapshot.status?.state === 'stopped';
+  const [offlineBusy, setOfflineBusy] = createSignal<{ id: string; enabled: boolean } | null>(null, { name: 'server-world:offline-datapack' });
   /** Per pack: the operation its last toggle started, or the moment it was sent. */
   const [pending, setPending] = createSignal<Record<string, PendingDatapack>>({}, { name: 'server-world:pending' });
   const intents = new Map<string, IntentMemo>();
@@ -191,12 +193,35 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
   };
   /** While a toggle is in flight, the switch shows what was asked for, not the last save. */
   const shownEnabled = (pack: DatapackView) => {
+    if (offlineBusy()?.id === pack.id) return offlineBusy()!.enabled;
     const entry = pending()[pack.id];
     const step = feedback(pack)?.step;
     return entry && step !== 'failed' ? entry.enabled : pack.state === 'enabled';
   };
 
   const toggle = async (pack: DatapackView, enabled: boolean) => {
+    if (blocker() || offlineBusy()) return;
+    if (stopped()) {
+      if (pack.kind !== 'folder' && pack.kind !== 'zip') return;
+      const memo = intents.get(pack.id) ?? new IntentMemo();
+      intents.set(pack.id, memo);
+      const expectedRevision = props.world.revision;
+      const intentId = memo.idFor({ pack: pack.id, enabled, expectedRevision });
+      setOfflineBusy({ id: pack.id, enabled });
+      try {
+        const world = await serverCommand((client) => client.worldDatapackOffline(id(), pack.id, enabled, expectedRevision, intentId));
+        memo.settle();
+        if (!disposed) seedServerResource(id(), worldResource, world);
+      } catch (reason) {
+        const failure = reason as ServerCommandError;
+        memo.settle(failure);
+        if (!disposed) {
+          props.onChanged();
+          toast.show({ title: t(errorMessage(failure)), tone: 'danger' });
+        }
+      } finally { if (!disposed) setOfflineBusy(null); }
+      return;
+    }
     const generation = props.snapshot.status?.generation;
     if (!generation || blocker()) return;
     const memo = intents.get(pack.id) ?? new IntentMemo();
@@ -227,7 +252,7 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
 
   return (
     <SettingsPanel title={t('server-world.datapacks')} name="world-datapacks"
-      description={props.world.datapackStateSource === 'saved_level_dat' ? t('server-world.datapacks-saved-help') : t('server-world.datapacks-help')}
+      description={!stopped() && props.world.datapackStateSource === 'saved_level_dat' ? t('server-world.datapacks-saved-help') : undefined}
       action={<Button size="sm" variant="ghost" icon={<Icon name="icons/content/folder" />} onClick={openFolder}>{t('server-world.open-datapacks')}</Button>}>
       <Show when={views().length} fallback={
         <EmptyState variant="inline" icon="icons/content/layers" title={t('server-world.no-datapacks')} description={t('server-world.no-datapacks-help')} />
@@ -252,10 +277,10 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
                       {(current) => <PackFeedback feedback={current()} />}
                     </Show>
                   </div>
-                  <Show when={pack().toggleable} fallback={<span data-vesta="server-world-pack-state">{t(datapackStateMessage[pack().state])}</span>}>
+                  <Show when={pack().toggleable && (!stopped() || pack().kind === 'folder' || pack().kind === 'zip')} fallback={<span data-vesta="server-world-pack-state">{t(datapackStateMessage[pack().state])}</span>}>
                     <span data-vesta="server-world-pack-switch" data-tip={blocker() ? t(blocker()!) : t(shownEnabled(pack()) ? 'server-world.pack-disable' : 'server-world.pack-enable')}>
                       <Switch size="sm" aria-label={t('server-world.pack-toggle', { name: pack().name })} checked={shownEnabled(pack())}
-                        disabled={!!blocker() || (state()?.step === 'sending' || state()?.step === 'sent')} onChange={(value: boolean) => void toggle(pack(), value)} />
+                        disabled={!!blocker() || !!offlineBusy() || (state()?.step === 'sending' || state()?.step === 'sent')} onChange={(value: boolean) => void toggle(pack(), value)} />
                     </span>
                   </Show>
                 </li>

@@ -1,5 +1,6 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "server-world.pack-transitioning",
   "server-hosting.previous-installation",
   "servers.activity.pages",
   "servers.activity.newer",

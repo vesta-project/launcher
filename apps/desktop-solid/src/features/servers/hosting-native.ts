@@ -169,6 +169,8 @@ export interface SftpTarget { host: string; port: number; username: string; host
 export const serversHostingNative = {
   /** GET world. */
   world: (connectionId: ConnectionId) => call<ServerWorld>('server_world', { connectionId }),
+  worldDatapackOffline: (connectionId: ConnectionId, packId: string, enabled: boolean, expectedRevision: string, intentId: string) =>
+    call<ServerWorld>('server_world_datapack_offline', { connectionId, packId, enabled, expectedRevision, intentId }),
   /** Uses Minecraft's own command while running; state is read from saved level.dat. */
   worldDatapackToggle: (connectionId: ConnectionId, packId: string, enabled: boolean, expectedGeneration: string, intentId: string) =>
     call<import('./native').ServerOperation>('server_world_datapack_toggle', { connectionId, packId, enabled, expectedGeneration, intentId }),

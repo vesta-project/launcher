@@ -288,6 +288,15 @@ pub async fn server_java_download(
 }
 
 #[tauri::command]
+pub async fn server_world_datapack_offline(app: AppHandle, manager: Manager<'_>, connection_id: String, pack_id: String, enabled: bool, expected_revision: String, intent_id: String) -> Result<ServerWorld> {
+    let journal = intent_id.clone();
+    let payload = json!({"packId":pack_id,"enabled":enabled,"expectedRevision":expected_revision});
+    manager.management_write(&app, &connection_id, &journal, "world/datapacks/offline", payload, false, |client| async move {
+        client.world_datapack_offline(pack_id, enabled, expected_revision, &intent_id).await
+    }).await
+}
+
+#[tauri::command]
 pub async fn server_world_datapack_toggle(
     app: AppHandle,
     manager: Manager<'_>,

@@ -134,8 +134,11 @@ export const datapackStateMessage: Record<DatapackState, MessageId> = {
 /** Why datapacks can't be switched right now, or null. The agent checks all of this again. */
 export function datapackBlocker(snapshot: Pick<ServerSnapshot, 'state' | 'status'> & { capabilities?: CapabilityView }): MessageId | null {
   const view = snapshot.capabilities;
-  if (gate(view, 'config.edit') === 'denied' || gate(view, 'console.write') === 'denied') return 'server-world.pack-no-permission';
+  if (gate(view, 'config.edit') === 'denied') return 'server-world.pack-no-permission';
   if (snapshot.state.phase !== 'online') return 'server-world.pack-offline';
+  if (snapshot.status?.state === 'stopped') return null;
+  if (snapshot.status?.readiness === 'starting' || snapshot.status?.lifecycle === 'waking' || snapshot.status?.state === 'stopping' || snapshot.status?.state === 'draining') return 'server-world.pack-transitioning';
+  if (gate(view, 'console.write') === 'denied') return 'server-world.pack-no-permission';
   if (snapshot.status?.state !== 'running' || !snapshot.status.generation) return 'server-world.pack-needs-running';
   return null;
 }

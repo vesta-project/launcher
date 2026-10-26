@@ -142,6 +142,18 @@ export function createHostingFixtures(host: HostingHost) {
       host.requireCapability(host.server(connectionId), 'config.view');
       return clone(state(connectionId).world);
     },
+    async worldDatapackOffline(connectionId: ConnectionId, packId: string, enabled: boolean, expectedRevision: string, intentId: string) {
+      const target = host.server(connectionId); host.requireCapability(target, 'config.edit');
+      const current = state(connectionId);
+      return once(current, intentId, { packId, enabled, expectedRevision }, () => {
+        if (target.snapshot.status?.state !== 'stopped') fail('conflict');
+        if (current.world.revision !== expectedRevision) fail('conflict');
+        const pack = current.world.datapacks.find(p => p.id === packId && (p.kind === 'folder' || p.kind === 'zip')) ?? fail('invalid_input');
+        pack.enabled = enabled;
+        current.world.revision = hex(64);
+        return clone(current.world);
+      });
+    },
     async worldDatapackToggle(connectionId: ConnectionId, packId: string, enabled: boolean, expectedGeneration: string, intentId: string) {
       const target = host.server(connectionId); host.requireCapability(target, 'config.edit'); host.requireCapability(target, 'console.write');
       const current = state(connectionId);

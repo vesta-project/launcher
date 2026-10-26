@@ -71,7 +71,7 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
         <OverviewGraphs snapshot={props.snapshot} id={id()} now={now()} />
       </Show>
 
-      <Show when={anyVisible(props.snapshot.capabilities, ['players.view'])}>
+      <Show when={props.snapshot.status?.state === 'running' && anyVisible(props.snapshot.capabilities, ['players.view'])}>
         <OnlinePlayersPanel snapshot={props.snapshot} />
       </Show>
 

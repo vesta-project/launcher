@@ -70,11 +70,13 @@ describe('[world] size, dimensions and datapacks', () => {
     expect(views.map((view) => view.state)).toEqual(['enabled', 'unknown', 'disabled', 'missing']);
     expect(views.map((view) => view.toggleable)).toEqual([false, true, true, false]);
   });
-  test('toggling needs a running game and config.edit + console.write', () => {
+  test('stopped edits need config.edit; running commands also need console.write', () => {
     expect(datapackBlocker(running)).toBeNull();
-    expect(datapackBlocker({ ...running, status: { state: 'stopped', generation: null } })).toBe('server-world.pack-needs-running');
+    expect(datapackBlocker({ ...running, status: { state: 'stopped', generation: null } })).toBeNull();
     expect(datapackBlocker({ ...running, state: { phase: 'backoff' } })).toBe('server-world.pack-offline');
     expect(datapackBlocker({ ...running, capabilities: caps(['config.edit']) })).toBe('server-world.pack-no-permission');
+    expect(datapackBlocker({ ...running, status: { state: 'stopped', generation: null }, capabilities: caps(['config.edit']) })).toBeNull();
+    expect(datapackBlocker({ ...running, status: { ...running.status, readiness: 'starting' } })).toBe('server-world.pack-transitioning');
   });
   test('toggle feedback follows the operation; completion only proves submission', () => {
     expect(toggleFeedback(undefined)).toEqual({ step: 'sending' });
