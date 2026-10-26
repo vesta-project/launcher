@@ -1,0 +1,328 @@
+// Pure model for Browse install targets beyond instances: which servers can receive a
+// project, where on the server it goes (server files, client modpack or both), and why a
+// choice is unavailable. No IO here; `server-install.ts` holds the effectful glue.
+import { gate } from '../servers/capabilities';
+import type { ConnectionId, ServerSnapshot } from '../servers/native';
+import {
+  gameVersionMatches,
+  projectCompatibility,
+  selectInstallVersion,
+  type ResourceProject,
+  type ResourceType,
+  type ResourceVersion,
+  type SourceId,
+} from './browse-model';
+
+/** Browse kinds plus `plugin`, which the shared model gains with the server content contract. */
+export type TargetKind = ResourceType | 'plugin';
+
+/* ---- Project sides ---- */
+
+export type Side = 'required' | 'optional' | 'unsupported' | 'unknown';
+export interface ProjectSides {
+  client: Side;
+  server: Side;
+}
+
+const isSide = (value: unknown): value is Exclude<Side, 'unknown'> =>
+  value === 'required' || value === 'optional' || value === 'unsupported';
+
+function side(requirement: unknown, raw: unknown, flag: unknown): Side {
+  if (isSide(requirement)) return requirement;
+  if (isSide(raw)) return raw;
+  // The booleans only say "runs there", not whether it is needed there.
+  if (flag === true) return 'optional';
+  if (flag === false) return 'unsupported';
+  return 'unknown';
+}
+
+/**
+ * Where a project runs. Reads the normalized `environment.client_requirement` /
+ * `server_requirement` when present, then provider `client_side` / `server_side`
+ * strings, then the `environment` booleans every source fills today.
+ */
+export function projectSides(project: Pick<ResourceProject, 'environment'> & Record<string, unknown>): ProjectSides {
+  const environment = (project.environment ?? null) as Record<string, unknown> | null;
+  return {
+    client: side(environment?.client_requirement, project.client_side, environment?.client),
+    server: side(environment?.server_requirement, project.server_side, environment?.server),
+  };
+}
+
+const runs = (value: Side) => value !== 'unsupported';
+
+/* ---- Server software ---- */
+
+export type ServerFamily = 'modded' | 'plugin' | 'vanilla' | 'unknown';
+const MOD_SOFTWARE = ['fabric', 'quilt', 'forge', 'neoforge'];
+const PLUGIN_SOFTWARE = ['paper', 'folia', 'purpur', 'spigot', 'bukkit'];
+
+export function softwareFamily(software: string | null | undefined): ServerFamily {
+  const id = (software ?? '').toLowerCase();
+  if (MOD_SOFTWARE.includes(id)) return 'modded';
+  if (PLUGIN_SOFTWARE.includes(id)) return 'plugin';
+  if (id === 'vanilla') return 'vanilla';
+  return 'unknown';
+}
+
+/** Plugin loaders a server family runs: Paper runs Bukkit/Spigot plugins, Purpur also Paper ones. */
+export function pluginLoadersFor(software: string | null | undefined): string[] {
+  switch ((software ?? '').toLowerCase()) {
+    case 'folia':
+      return ['folia'];
+    case 'purpur':
+      return ['purpur', 'paper', 'spigot', 'bukkit'];
+    case 'paper':
+      return ['paper', 'spigot', 'bukkit'];
+    case 'spigot':
+      return ['spigot', 'bukkit'];
+    case 'bukkit':
+      return ['bukkit'];
+    default:
+      return [];
+  }
+}
+
+/* ---- Server targets ---- */
+
+export type ServerConnectionState = 'online' | 'connecting' | 'offline' | 'access';
+
+export interface ServerTarget {
+  id: ConnectionId;
+  /** Seed for generated art when the server has no icon. */
+  serverId: string;
+  name: string;
+  minecraftVersion: string | null;
+  /** Managed software id; `null` when unidentified, `undefined` while still loading. */
+  software: string | null | undefined;
+  connection: ServerConnectionState;
+  /** May install into the server's files (`content.install`). */
+  canInstall: boolean;
+  /** May edit the client modpack draft (`pack.edit`). */
+  canEditPack: boolean;
+}
+
+export const SERVER_INSTALL_CAPABILITY = 'content.install';
+export const PACK_EDIT_CAPABILITY = 'pack.edit';
+
+/** Unknown capability sets count as allowed; the server authorizes the request itself. */
+export function serverPermissions(snapshot: Pick<ServerSnapshot, 'capabilities'>) {
+  return {
+    server: gate(snapshot.capabilities, SERVER_INSTALL_CAPABILITY) !== 'denied',
+    modpack: gate(snapshot.capabilities, PACK_EDIT_CAPABILITY) !== 'denied',
+  };
+}
+
+export function connectionState(snapshot: Pick<ServerSnapshot, 'state'>): ServerConnectionState {
+  if (snapshot.state.access !== 'paired') return 'access';
+  if (snapshot.state.phase === 'online') return 'online';
+  if (snapshot.state.phase === 'connecting' || snapshot.state.phase === 'backoff') return 'connecting';
+  return 'offline';
+}
+
+/** Servers the user may install to or edit the pack of. Others are left out entirely. */
+export function serverTargets(
+  snapshots: readonly ServerSnapshot[],
+  software: (id: ConnectionId) => string | null | undefined,
+): ServerTarget[] {
+  return snapshots.flatMap((snapshot) => {
+    const allowed = serverPermissions(snapshot);
+    if (!allowed.server && !allowed.modpack) return [];
+    const { connection } = snapshot;
+    return [
+      {
+        id: connection.id,
+        serverId: connection.serverId || connection.id,
+        name: connection.name,
+        minecraftVersion: snapshot.info?.minecraftVersion || null,
+        software: software(connection.id),
+        connection: connectionState(snapshot),
+        canInstall: allowed.server,
+        canEditPack: allowed.modpack,
+      },
+    ];
+  });
+}
+
+/* ---- Destinations ---- */
+
+export type Destination = 'server' | 'modpack' | 'both';
+export const destinations: Destination[] = ['server', 'modpack', 'both'];
+
+/** The client modpack draft lands in stage 2; until then the modpack destination explains itself. */
+export const MODPACK_TARGET_READY = false;
+
+export type TargetReason =
+  | 'offline'
+  | 'connecting'
+  | 'access'
+  | 'no-permission'
+  | 'unknown-version'
+  | 'checking'
+  | 'not-server-content'
+  | 'not-client-content'
+  | 'client-only'
+  | 'server-only'
+  | 'needs-mod-loader'
+  | 'needs-plugin-server'
+  | 'unknown-software'
+  | 'loader'
+  | 'no-version'
+  | 'modpack-coming';
+
+export type DestinationState = { available: true } | { available: false; reason: TargetReason };
+const ok: DestinationState = { available: true };
+const no = (reason: TargetReason): DestinationState => ({ available: false, reason });
+
+export interface TargetInput {
+  project: Pick<ResourceProject, 'categories' | 'environment' | 'source'> & Record<string, unknown>;
+  kind: TargetKind;
+  /** Undefined while loading or when the list could not be read; checks then stay optimistic. */
+  versions?: readonly ResourceVersion[];
+  /** A version page installs exactly this version. */
+  pinned?: ResourceVersion;
+}
+
+/** The version a server receives, or undefined when none fits its Minecraft version and software. */
+export function serverVersion(
+  versions: readonly ResourceVersion[],
+  target: Pick<ServerTarget, 'minecraftVersion' | 'software'>,
+  kind: TargetKind,
+  source?: SourceId,
+): ResourceVersion | undefined {
+  const minecraftVersion = target.minecraftVersion ?? '';
+  if (kind === 'plugin') {
+    const accepted = pluginLoadersFor(target.software);
+    return versions.find(
+      (version) =>
+        gameVersionMatches(version.game_versions, minecraftVersion) &&
+        version.loaders.some((loader) => accepted.includes(loader.toLowerCase())),
+    );
+  }
+  return selectInstallVersion(versions, { minecraftVersion, modloader: target.software ?? 'vanilla' }, kind, source)
+    ?.version;
+}
+
+/** The version the client modpack receives: its loader is free, its Minecraft version is the server's. */
+export function modpackVersion(
+  versions: readonly ResourceVersion[],
+  target: Pick<ServerTarget, 'minecraftVersion'>,
+): ResourceVersion | undefined {
+  return versions.find((version) => gameVersionMatches(version.game_versions, target.minecraftVersion ?? ''));
+}
+
+function serverState(target: ServerTarget, input: TargetInput): DestinationState {
+  const { kind, project } = input;
+  if (!target.canInstall) return no('no-permission');
+  if (kind !== 'mod' && kind !== 'plugin' && kind !== 'datapack') return no('not-server-content');
+  if (projectSides(project).server === 'unsupported') return no('client-only');
+  if (kind !== 'datapack') {
+    if (target.software === undefined) return no('checking');
+    const family = softwareFamily(target.software);
+    if (kind === 'mod' && family === 'unknown') return no('unknown-software');
+    if (kind === 'plugin' && family === 'unknown') return no('unknown-software');
+    if (kind === 'mod' && family !== 'modded') return no('needs-mod-loader');
+    if (kind === 'plugin' && family !== 'plugin') return no('needs-plugin-server');
+    if (
+      kind === 'mod' &&
+      projectCompatibility(project, 'mod', { minecraftVersion: target.minecraftVersion ?? '', modloader: target.software ?? '' })
+        .kind === 'incompatible'
+    )
+      return no('loader');
+  }
+  const candidates = input.pinned ? [input.pinned] : input.versions;
+  if (candidates && !serverVersion(candidates, target, kind, project.source)) return no('no-version');
+  return ok;
+}
+
+function modpackState(target: ServerTarget, input: TargetInput): DestinationState {
+  const { kind, project } = input;
+  if (!target.canEditPack) return no('no-permission');
+  if (kind !== 'mod' && kind !== 'resourcepack' && kind !== 'shader') return no('not-client-content');
+  if (projectSides(project).client === 'unsupported') return no('server-only');
+  const candidates = input.pinned ? [input.pinned] : input.versions;
+  if (candidates && !modpackVersion(candidates, target)) return no('no-version');
+  if (!MODPACK_TARGET_READY) return no('modpack-coming');
+  return ok;
+}
+
+export interface TargetStates {
+  /** Whether the server row can be chosen at all, and why not. */
+  row: DestinationState;
+  server: DestinationState;
+  modpack: DestinationState;
+  both: DestinationState;
+}
+
+export function targetStates(target: ServerTarget, input: TargetInput): TargetStates {
+  const server = serverState(target, input);
+  const modpack = modpackState(target, input);
+  const both = !server.available ? server : !modpack.available ? modpack : ok;
+  const blocked = (reason: TargetReason): TargetStates => ({
+    row: no(reason),
+    server: no(reason),
+    modpack: no(reason),
+    both: no(reason),
+  });
+  if (target.connection !== 'online') return blocked(target.connection);
+  if (!target.minecraftVersion) return blocked('unknown-version');
+  // A row opens when something can be chosen, or to explain that the modpack comes next.
+  const row =
+    server.available || modpack.available
+      ? ok
+      : !modpack.available && modpack.reason === 'modpack-coming'
+        ? ok
+        : target.canInstall
+          ? server
+          : modpack;
+  return { row, server, modpack, both };
+}
+
+/** The destination the project's sides suggest, before availability is considered. */
+export function preferredDestination(sides: ProjectSides, kind: TargetKind): Destination {
+  if (kind === 'plugin' || kind === 'datapack') return 'server';
+  if (kind === 'resourcepack' || kind === 'shader') return 'modpack';
+  const client = runs(sides.client);
+  const server = runs(sides.server);
+  if (client && server) return 'both';
+  if (server) return 'server';
+  if (client) return 'modpack';
+  return 'server';
+}
+
+const fallbacks: Record<Destination, Destination[]> = {
+  both: ['both', 'server', 'modpack'],
+  server: ['server', 'both'],
+  modpack: ['modpack', 'both'],
+};
+
+/** The smart default: the preferred destination, else the closest available one. */
+export function defaultDestination(
+  sides: ProjectSides,
+  kind: TargetKind,
+  states?: Pick<TargetStates, Destination>,
+): Destination {
+  const preferred = preferredDestination(sides, kind);
+  if (!states) return preferred;
+  return fallbacks[preferred].find((destination) => states[destination].available) ?? preferred;
+}
+
+/* ---- Dependencies ---- */
+
+export interface DependencyCandidate {
+  project: Pick<ResourceProject, 'id' | 'name' | 'source'> & { icon_url?: string | null };
+  /** Null while the resolver only knows the project, not the exact version. */
+  version: Pick<ResourceVersion, 'id' | 'version_number'> | null;
+  required: boolean;
+  /** Already present at the target; shown, never installed again. */
+  installed?: boolean;
+}
+
+export interface DependencyRow extends DependencyCandidate {
+  selected: boolean;
+}
+
+/** Required dependencies start ticked, optional ones unticked, installed ones are left alone. */
+export function dependencyRows(candidates: readonly DependencyCandidate[]): DependencyRow[] {
+  return candidates.map((candidate) => ({ ...candidate, selected: candidate.required && !candidate.installed }));
+}

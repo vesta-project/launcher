@@ -13,10 +13,52 @@ import {
   type ResourceVersion,
 } from '../../features/browse/browse-model';
 import { loadVersions } from '../../features/browse/browse-projects';
+import {
+  defaultDestination,
+  dependencyRows,
+  modpackVersion,
+  preferredDestination,
+  projectSides,
+  serverPermissions,
+  serverTargets,
+  serverVersion,
+  targetStates,
+  type Destination,
+  type DependencyRow,
+  type ServerTarget,
+  type TargetKind,
+  type TargetStates,
+} from '../../features/browse/install-targets';
+import { resolveServerDependencies, serverSoftware } from '../../features/browse/server-install';
 import { instances } from '../../features/instances/catalog';
+import type { ConnectionId } from '../../features/servers/native';
+import { serverSnapshots } from '../../features/servers/store';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
-import { closePicker, installFromPicker, installIntoNew, pickerProject, pickerVersion } from './install-actions';
+import {
+  closePicker,
+  installFromPicker,
+  installIntoNew,
+  pickerProject,
+  pickerVersion,
+} from './install-actions';
+import { installFromServerPicker } from './server-install-actions';
+import { DependencyStep, ServerRow, TargetStep } from './server-target-steps';
+
+/** Kinds a server or its client modpack can receive. */
+const serverKinds: readonly TargetKind[] = ['mod', 'plugin', 'datapack', 'resourcepack', 'shader'];
+
+type Step =
+  | { kind: 'pick' }
+  | { kind: 'target'; server: ConnectionId; destination: Destination }
+  | {
+      kind: 'deps';
+      server: ConnectionId;
+      destination: Destination;
+      version?: ResourceVersion;
+      rows?: DependencyRow[];
+      error?: string;
+    };
 
 type Status =
   | { kind: 'checking' | 'ready' | 'installed' | 'update' | 'replace' }
@@ -47,15 +89,29 @@ interface Loaded {
 export function InstancePickerDialog() {
   const [filter, setFilter] = createSignal('', { name: 'browsePickerFilter' });
   const [loaded, setLoaded] = createSignal<Loaded | undefined>(undefined, { name: 'browsePickerLoaded' });
+  const [step, setStep] = createSignal<Step>({ kind: 'pick' }, { name: 'browsePickerStep' });
+  const [software, setSoftware] = createSignal<Record<ConnectionId, string | null>>({}, { name: 'browsePickerSoftware' });
+  let depsRequest = 0;
 
   createEffect(
     () => pickerProject(),
     (project) => {
       setFilter('');
       setLoaded(undefined);
+      setStep({ kind: 'pick' });
+      depsRequest++;
       if (!project) return;
       let cancelled = false;
       const entries = untrack(instances);
+      // Software decides whether mods or plugins can go on a server; read once per opening.
+      if (serverKinds.includes(project.resource_type))
+        for (const snapshot of untrack(serverSnapshots)) {
+          const allowed = serverPermissions(snapshot);
+          if ((!allowed.server && !allowed.modpack) || snapshot.state.phase !== 'online') continue;
+          void serverSoftware(snapshot.connection.id).then((id) => {
+            if (!cancelled) setSoftware((current) => ({ ...current, [snapshot.connection.id]: id }));
+          });
+        }
       void (async () => {
         const [versions, ...lists] = await Promise.all([
           loadVersions(project.source, project.id).catch(() => undefined),
@@ -127,21 +183,150 @@ export function InstancePickerDialog() {
     { name: 'browsePickerRows' },
   );
 
-  return (
-    <Dialog
-      closeLabel={t('nav.close')}
-      open={!!pickerProject()}
-      onOpenChange={(open) => !open && closePicker()}
-      size="md"
-      title={t('browse.picker-title')}
-      description={
-        pickerProject()
-          ? pickerVersion()
-            ? t('browse.picker-description-version', { name: pickerProject()!.name, version: pickerVersion()!.version_number })
-            : t('browse.picker-description', { name: pickerProject()!.name })
-          : undefined
+  /** Servers the user may install to or edit the pack of, each with what it can receive. */
+  const servers = createMemo(
+    () => {
+      const project = pickerProject();
+      if (!project || !serverKinds.includes(project.resource_type)) return [];
+      const data = loaded();
+      const needle = filter().trim().toLowerCase();
+      const known = software();
+      return serverTargets(serverSnapshots(), (id) => (id in known ? known[id] : undefined))
+        .filter((target) => !needle || target.name.toLowerCase().includes(needle))
+        .map((target) => ({
+          target,
+          states: targetStates(target, {
+            project,
+            kind: project.resource_type,
+            versions: data?.versions,
+            pinned: pickerVersion(),
+          }),
+          checking: !data,
+        }));
+    },
+    { name: 'browsePickerServers' },
+  );
+  const showServers = createMemo(
+    () => {
+      const project = pickerProject();
+      return (
+        !!project &&
+        serverKinds.includes(project.resource_type) &&
+        serverSnapshots().some((snapshot) => {
+          const allowed = serverPermissions(snapshot);
+          return allowed.server || allowed.modpack;
+        })
+      );
+    },
+    { name: 'browsePickerShowServers' },
+  );
+  const chosen = createMemo(
+    () => {
+      const current = step();
+      if (current.kind === 'pick') return undefined;
+      return servers().find((row) => row.target.id === current.server);
+    },
+    { name: 'browsePickerChosenServer' },
+  );
+  const suggested = createMemo(
+    () => {
+      const project = pickerProject();
+      return project ? preferredDestination(projectSides(project), project.resource_type) : 'server';
+    },
+    { name: 'browsePickerSuggested' },
+  );
+
+  const chooseServer = (row: { target: ServerTarget; states: TargetStates }) => {
+    const project = untrack(pickerProject);
+    if (!project) return;
+    const destination = defaultDestination(projectSides(project), project.resource_type, row.states);
+    setStep({ kind: 'target', server: row.target.id, destination });
+  };
+
+  /** Settles the version for the destination, then asks the resolver for its dependencies. */
+  const continueToDependencies = async () => {
+    const current = untrack(step);
+    const row = untrack(chosen);
+    const project = untrack(pickerProject);
+    if (current.kind !== 'target' || !row || !project) return;
+    const request = ++depsRequest;
+    const base = { kind: 'deps' as const, server: current.server, destination: current.destination };
+    setStep(base);
+    try {
+      const pinned = untrack(pickerVersion);
+      const versions = pinned
+        ? [pinned]
+        : (untrack(loaded)?.versions ?? (await loadVersions(project.source, project.id)));
+      const version =
+        current.destination === 'modpack'
+          ? modpackVersion(versions, row.target)
+          : serverVersion(versions, row.target, project.resource_type, project.source);
+      if (request !== depsRequest) return;
+      if (!version) {
+        setStep({ ...base, error: t('browse.target-reason-no-version') });
+        return;
       }
-      footer={
+      setStep({ ...base, version });
+      const candidates = await resolveServerDependencies(row.target)({ project, version });
+      if (request !== depsRequest) return;
+      setStep({ ...base, version, rows: dependencyRows(candidates) });
+    } catch (reason) {
+      if (request === depsRequest) setStep({ ...base, error: String(reason) });
+    }
+  };
+
+  const toggleDependency = (index: number, selected: boolean) =>
+    setStep((current) =>
+      current.kind === 'deps' && current.rows
+        ? { ...current, rows: current.rows.map((row, at) => (at === index ? { ...row, selected } : row)) }
+        : current,
+    );
+
+  const install = () => {
+    const current = untrack(step);
+    const row = untrack(chosen);
+    const project = untrack(pickerProject);
+    if (current.kind !== 'deps' || !current.version || !current.rows || !row || !project) return;
+    void installFromServerPicker(row.target, {
+      project,
+      version: current.version,
+      kind: project.resource_type,
+      destination: current.destination,
+      dependencies: current.rows,
+    });
+  };
+
+  const back = () => {
+    depsRequest++;
+    setStep((current) =>
+      current.kind === 'deps'
+        ? { kind: 'target', server: current.server, destination: current.destination }
+        : { kind: 'pick' },
+    );
+  };
+
+  const title = () => {
+    const current = step();
+    const project = pickerProject();
+    if (current.kind === 'target') return t('browse.target-title', { title: chosen()?.target.name ?? '' });
+    if (current.kind === 'deps') return t('browse.deps-title', { name: project?.name ?? '' });
+    return showServers() ? t('browse.picker-title-any') : t('browse.picker-title');
+  };
+  const description = () => {
+    const project = pickerProject();
+    if (!project) return undefined;
+    if (step().kind === 'target') return t('browse.target-description', { name: project.name });
+    if (step().kind === 'deps') return undefined;
+    const pinned = pickerVersion();
+    return pinned
+      ? t('browse.picker-description-version', { name: project.name, version: pinned.version_number })
+      : t('browse.picker-description', { name: project.name });
+  };
+
+  const footer = () => {
+    const current = step();
+    if (current.kind === 'pick')
+      return (
         <Button
           size="sm"
           variant="outline"
@@ -153,67 +338,151 @@ export function InstancePickerDialog() {
         >
           {t('browse.picker-new-instance')}
         </Button>
-      }
-    >
-      <div data-vesta="browse-picker">
-        <TextField
+      );
+    const ready =
+      current.kind === 'target' ? !!chosen()?.states[current.destination].available : !!current.version && !!current.rows;
+    return (
+      <div data-vesta="browse-picker-footer">
+        <Button size="sm" variant="ghost" onClick={back}>
+          {t('browse.target-back')}
+        </Button>
+        <Button
           size="sm"
-          aria-label={t('browse.picker-search')}
-          placeholder={t('browse.picker-search')}
-          icon={<Icon name="icons/content/search" size={14} />}
-          value={filter()}
-          onChange={setFilter}
-        />
-        <ul data-vesta="browse-picker-list">
-          <For each={list()} keyed={(row) => row.instance.id}>
-            {(row) => {
-              const status = () => row().status;
-              const disabled = () => !['ready', 'warning', 'update', 'replace'].includes(status().kind);
-              return (
-                <li data-vesta="browse-picker-row" data-status={status().kind}>
-                  <button
-                    type="button"
-                    data-vesta="browse-picker-choice"
-                    disabled={disabled()}
-                    onClick={() => {
-                      const project = pickerProject();
-                      if (project) void installFromPicker(project, project.resource_type, { ...row().instance });
-                    }}
-                  >
-                    <img
-                      data-vesta="browse-picker-icon"
-                      src={row().instance.image}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                    />
-                    <span data-vesta="browse-picker-text">
-                      <strong>{row().instance.name}</strong>
-                      <span>
-                        {row().instance.minecraftVersion} · {row().instance.modloader}
-                      </span>
-                    </span>
-                    <span data-vesta="browse-picker-status" data-status={status().kind}>
-                      <Show when={status().kind === 'installed'}>
-                        <Icon name="icons/controls/check" size={12} />
-                      </Show>
-                      <Show
-                        when={'reason' in status()}
-                        fallback={t(statusLabels[status().kind as keyof typeof statusLabels])}
-                      >
-                        {t((status() as { reason: MessageId }).reason)}
-                      </Show>
-                    </span>
-                  </button>
-                </li>
-              );
-            }}
-          </For>
-        </ul>
-        <Show when={!list().length}>
-          <EmptyLine>{t('browse.picker-empty')}</EmptyLine>
-        </Show>
+          variant="solid"
+          tone="accent"
+          disabled={!ready}
+          icon={current.kind === 'deps' ? <Icon name="icons/actions/download" size={14} /> : undefined}
+          onClick={() => (untrack(step).kind === 'target' ? void continueToDependencies() : install())}
+        >
+          {t(current.kind === 'target' ? 'browse.target-continue' : 'browse.deps-install')}
+        </Button>
       </div>
+    );
+  };
+
+  const depsStep = () => {
+    const current = step();
+    return current.kind === 'deps' ? current : undefined;
+  };
+  const targetStep = () => {
+    const current = step();
+    const row = chosen();
+    return current.kind === 'target' && row ? { ...row, destination: current.destination } : undefined;
+  };
+
+  return (
+    <Dialog
+      closeLabel={t('nav.close')}
+      open={!!pickerProject()}
+      onOpenChange={(open) => !open && closePicker()}
+      size="md"
+      title={title()}
+      description={description()}
+      footer={footer()}
+    >
+      <Show when={step().kind === 'pick'}>
+        <div data-vesta="browse-picker">
+          <TextField
+            size="sm"
+            aria-label={t(showServers() ? 'browse.picker-search-any' : 'browse.picker-search')}
+            placeholder={t(showServers() ? 'browse.picker-search-any' : 'browse.picker-search')}
+            icon={<Icon name="icons/content/search" size={14} />}
+            value={filter()}
+            onChange={setFilter}
+          />
+          <div data-vesta="browse-picker-sections">
+            <section data-vesta="browse-picker-section">
+              <Show when={showServers()}>
+                <h3 data-vesta="browse-picker-heading">{t('browse.picker-instances')}</h3>
+              </Show>
+              <ul data-vesta="browse-picker-list">
+                <For each={list()} keyed={(row) => row.instance.id}>
+                  {(row) => {
+                    const status = () => row().status;
+                    const disabled = () => !['ready', 'warning', 'update', 'replace'].includes(status().kind);
+                    return (
+                      <li data-vesta="browse-picker-row" data-status={status().kind}>
+                        <button
+                          type="button"
+                          data-vesta="browse-picker-choice"
+                          disabled={disabled()}
+                          onClick={() => {
+                            const project = pickerProject();
+                            if (project) void installFromPicker(project, project.resource_type, { ...row().instance });
+                          }}
+                        >
+                          <img
+                            data-vesta="browse-picker-icon"
+                            src={row().instance.image}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          <span data-vesta="browse-picker-text">
+                            <strong>{row().instance.name}</strong>
+                            <span>
+                              {row().instance.minecraftVersion} · {row().instance.modloader}
+                            </span>
+                          </span>
+                          <span data-vesta="browse-picker-status" data-status={status().kind}>
+                            <Show when={status().kind === 'installed'}>
+                              <Icon name="icons/controls/check" size={12} />
+                            </Show>
+                            <Show
+                              when={'reason' in status()}
+                              fallback={t(statusLabels[status().kind as keyof typeof statusLabels])}
+                            >
+                              {t((status() as { reason: MessageId }).reason)}
+                            </Show>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  }}
+                </For>
+              </ul>
+              <Show when={!list().length}>
+                <EmptyLine>{t('browse.picker-empty')}</EmptyLine>
+              </Show>
+            </section>
+            <Show when={showServers()}>
+              <section data-vesta="browse-picker-section" data-kind="servers">
+                <h3 data-vesta="browse-picker-heading">{t('browse.picker-servers')}</h3>
+                <ul data-vesta="browse-picker-list">
+                  <For each={servers()} keyed={(row) => row.target.id}>
+                    {(row) => (
+                      <ServerRow
+                        target={row().target}
+                        state={row().checking && row().target.connection === 'online' ? 'checking' : row().states.row}
+                        onChoose={() => chooseServer(row())}
+                      />
+                    )}
+                  </For>
+                </ul>
+                <Show when={!servers().length}>
+                  <EmptyLine>{t('browse.picker-servers-empty')}</EmptyLine>
+                </Show>
+              </section>
+            </Show>
+          </div>
+        </div>
+      </Show>
+      <Show when={targetStep()}>
+        {(current) => (
+          <TargetStep
+            target={current().target}
+            states={current().states}
+            suggested={suggested()}
+            selected={current().destination}
+            onSelect={(destination) =>
+              setStep((previous) => (previous.kind === 'target' ? { ...previous, destination } : previous))
+            }
+          />
+        )}
+      </Show>
+      <Show when={depsStep()}>
+        {(current) => <DependencyStep rows={current().rows} error={current().error} onToggle={toggleDependency} />}
+      </Show>
     </Dialog>
   );
 }
