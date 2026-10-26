@@ -19,6 +19,7 @@ import type { MessageId } from '../../localization/messages';
 
 export const typeLabels: Record<ResourceType, MessageId> = {
   mod: 'browse.type-mod',
+  plugin: 'browse.type-plugin',
   modpack: 'browse.type-modpack',
   resourcepack: 'browse.type-resourcepack',
   shader: 'browse.type-shader',

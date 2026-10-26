@@ -21,6 +21,7 @@ import type { MessageId } from '../../../localization/messages';
 /** One project's kind (Browse's type tabs are plural). */
 export const kindLabels: Record<ResourceType, MessageId> = {
   mod: 'browse.kind-mod',
+  plugin: 'browse.kind-plugin',
   modpack: 'browse.kind-modpack',
   resourcepack: 'browse.kind-resourcepack',
   shader: 'browse.kind-shader',
