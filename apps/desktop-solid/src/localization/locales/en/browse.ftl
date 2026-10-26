@@ -3,6 +3,7 @@
 browse-trail-for = for { $name }
 browse-type-label = Resource type
 browse-type-mod = Mods
+browse-type-plugin = Plugins
 browse-type-modpack = Modpacks
 browse-type-resourcepack = Resource packs
 browse-type-shader = Shaders
@@ -149,6 +150,7 @@ browse-tab-description = Description
 browse-tab-gallery = Gallery
 browse-tab-versions = Versions
 browse-kind-mod = Mod
+browse-kind-plugin = Plugin
 browse-kind-modpack = Modpack
 browse-kind-resourcepack = Resource pack
 browse-kind-shader = Shader
