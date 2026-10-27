@@ -16,20 +16,19 @@ import {
 import { loadVersions } from '../../features/browse/browse-projects';
 import {
   defaultDestination,
-  dependencyRows,
-  modpackVersion,
   preferredDestination,
   projectSides,
   serverPermissions,
   serverTargets,
-  serverVersion,
   targetStates,
   type Destination,
   type DependencyRow,
   type ServerTarget,
   type TargetStates,
 } from '../../features/browse/install-targets';
-import { resolveServerDependencies, serverSoftware } from '../../features/browse/server-install';
+import { prepareServerSelection, serverSoftware } from '../../features/browse/server-install';
+import { contentErrorMessage } from '../../features/servers/content-model';
+import type { ServerCommandError } from '../../features/servers/native';
 import { instances } from '../../features/instances/catalog';
 import type { ConnectionId } from '../../features/servers/native';
 import { serverSnapshots } from '../../features/servers/store';
@@ -59,6 +58,8 @@ type Step =
       version?: ResourceVersion;
       rows?: DependencyRow[];
       error?: string;
+      packRevision?: string;
+      intentId?: string;
     };
 
 type Status =
@@ -280,21 +281,15 @@ export function InstancePickerDialog() {
       const versions = pinned
         ? [pinned]
         : (untrack(loaded)?.versions ?? (await loadVersions(project.source, project.id)));
-      const version =
-        current.destination === 'modpack'
-          ? modpackVersion(versions, row.target)
-          : serverVersion(versions, row.target, project.resource_type, project.source);
+      const prepared = await prepareServerSelection(row.target, project, versions, current.destination);
       if (request !== depsRequest) return;
-      if (!version) {
+      if (!prepared) {
         setStep({ ...base, error: t('browse.target-reason-no-version') });
         return;
       }
-      setStep({ ...base, version });
-      const candidates = await resolveServerDependencies(row.target)({ project, version });
-      if (request !== depsRequest) return;
-      setStep({ ...base, version, rows: dependencyRows(candidates) });
+      setStep({ ...base, ...prepared });
     } catch (reason) {
-      if (request === depsRequest) setStep({ ...base, error: String(reason) });
+      if (request === depsRequest) setStep({ ...base, error: t(contentErrorMessage(reason as ServerCommandError)) });
     }
   };
 
@@ -316,6 +311,8 @@ export function InstancePickerDialog() {
       kind: project.resource_type,
       destination: current.destination,
       dependencies: current.rows,
+      packRevision: current.packRevision,
+      intentId: current.intentId,
     });
   };
 

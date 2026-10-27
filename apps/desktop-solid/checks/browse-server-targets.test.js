@@ -83,9 +83,8 @@ describe('default target mapping', () => {
 
   test('the default falls back to an available destination', () => {
     const sides = projectSides({ environment: { client: true, server: true } });
-    const states = targetStates(target(), { project: project(), kind: 'mod', versions: [version()] });
-    // The modpack is not editable yet, so Both falls back to the server.
-    expect(states.modpack).toEqual({ available: false, reason: 'modpack-coming' });
+    const states = targetStates(target({ canEditPack: false }), { project: project(), kind: 'mod', versions: [version()] });
+    expect(states.modpack).toEqual({ available: false, reason: 'no-permission' });
     expect(defaultDestination(sides, 'mod', states)).toBe('server');
     const none = { available: false, reason: 'offline' };
     expect(defaultDestination(sides, 'mod', { server: none, modpack: none, both: none })).toBe('both');
@@ -137,19 +136,18 @@ describe('compatibility reasons', () => {
     expect(states({ software: 'paper' }, { kind: 'datapack', versions: [version({ loaders: ['datapack'] })] }).server)
       .toEqual({ available: true });
     // Both needs both.
-    expect(states({}).both).toEqual({ available: false, reason: 'modpack-coming' });
+    expect(states({}).both).toEqual({ available: true });
   });
 
   test('a row with no valid destination is dimmed with the reason, like an instance', () => {
-    // Lithium (a Fabric mod) on Paper: the server rejects it and the modpack is not editable yet.
-    expect(states({ software: 'paper' }).row).toEqual({ available: false, reason: 'needs-mod-loader' });
-    expect(states({ software: 'paper', canInstall: false }).row).toEqual({ available: false, reason: 'modpack-coming' });
-    expect(states({ software: 'paper' }).only).toBeUndefined();
+    expect(states({ software: 'paper', canEditPack: false }).row).toEqual({ available: false, reason: 'needs-mod-loader' });
+    expect(states({ software: 'paper', canInstall: false, canEditPack: false }).row).toEqual({ available: false, reason: 'no-permission' });
+    expect(states({ software: 'paper', canEditPack: false }).only).toBeUndefined();
   });
 
   test('a row with some valid destinations stays choosable with a hint', () => {
-    expect(states({ software: 'fabric' })).toMatchObject({ row: { available: true }, only: 'server' });
-    // Paper rejects the mod, the (future) modpack accepts it.
+    expect(states({ software: 'fabric' })).toMatchObject({ row: { available: true } });
+    // Paper rejects server mods while its independent client pack accepts them.
     expect(states({ software: 'paper' }, { modpackReady: true })).toMatchObject({
       row: { available: true }, only: 'modpack', server: { available: false, reason: 'needs-mod-loader' },
     });

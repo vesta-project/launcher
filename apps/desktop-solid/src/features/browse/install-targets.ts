@@ -147,8 +147,9 @@ export function serverTargets(
 export type Destination = 'server' | 'modpack' | 'both';
 export const destinations: Destination[] = ['server', 'modpack', 'both'];
 
-/** The client modpack draft lands in stage 2; until then the modpack destination explains itself. */
-export const MODPACK_TARGET_READY = false;
+/** The Browse destination uses the same readiness flag as the pack workspace contract. */
+export { MODPACK_TARGET_READY } from '../servers/native-pack';
+import { MODPACK_TARGET_READY } from '../servers/native-pack';
 
 export type TargetReason =
   | 'offline'
@@ -307,6 +308,8 @@ export function defaultDestination(
 /* ---- Dependencies ---- */
 
 export interface DependencyCandidate {
+  /** Browse Both reviews each destination independently. Instance rows have no scope. */
+  destination?: 'server' | 'modpack';
   project: Pick<ResourceProject, 'id' | 'name' | 'source'> & { icon_url?: string | null };
   /** Null while the resolver only knows the project, not the exact version. */
   version: Pick<ResourceVersion, 'id' | 'version_number'> | null;
@@ -362,7 +365,7 @@ export function serverInstallPlan(selection: { project: Pick<ResourceProject, 'i
   if (!isServerContentKind(kind) || !isContentProvider(source)) return null;
   const dependencies = selection.dependencies.flatMap((row): ServerInstallItem[] => {
     const provider = row.project.source;
-    return row.selected && !row.installed && row.version && isContentProvider(provider)
+    return row.destination !== 'modpack' && row.selected && !row.installed && row.version && isContentProvider(provider)
       ? [{ provider, projectId: row.project.id, versionId: row.version.id, kind, name: row.project.name }]
       : [];
   });

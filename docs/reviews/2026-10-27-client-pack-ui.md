@@ -1,0 +1,16 @@
+# Client pack UI implementation � 2026-10-27
+
+Implemented a discoverable **Client modpack** server workspace tab, separate from server Resources. Reads occur on pane mount / explicit actions; no idle polling or publishing during reads. Uses serverCommand and existing native/fixture APIs.
+
+- Full draft name/summary/display version, authoritative locked Minecraft version with explicit drift repair, independent none/Fabric/Quilt/Forge/NeoForge client loader and existing instance metadata loader versions.
+- Entry paths and source type, required/optional and removal. Browse opens existing server focus using client loader. Save and review are separated; editing invalidates review. Suggestions are read-only and never alter a draft.
+- Resolver review shows metadata and added/removed/changed entries, custom overrides, symbolic links, validation errors and warnings. Publication binds the original review hash, decimal draft/published revisions and exact resolved entries; optional release is default, raising minimum is capability gated, and lower display version needs acknowledgement. Exact request bodies retain durable intent IDs for retries.
+- Download/access users can review a new instance or native numeric existing catalog target. Review shows server identity/fingerprint, archive hash, runtime, decimal release/minimum and every changed path/executable classification. Installation requires revision-specific executable consent. Exact-file linking is distinct. Native is authoritative for runtime/file compatibility. Reviews are discarded on close/unmount/selection replacement. Busy guard prevents duplicate submissions. Uncertain apply outcomes block repeat installation pending library/status inspection.
+
+Owned files: pages/servers/pack/*, features/servers/shell-model.ts, pages/servers/server-page.tsx, localization/locales/en/server-pack.ftl, appended localization/messages.ts IDs, checks/servers-pack-ui.test.js. Browse and Rust files untouched.
+
+Validation: `bun run typecheck` passed. `bun test checks/servers-pack-ui.test.js checks/servers-pack.test.js checks/servers-pack-sync.test.js checks/localization.test.mjs`: 23 passed, 0 failed. No screenshot review or real pack publication, real Minecraft file access, app restarts, or preview tool use.
+
+Parent follow-up: added a linked-pack panel to the local instance overview. It reads the link and signed status on demand, subscribes to native status/change events with disposal, and shows installed, published and minimum revisions separately. Review opens the server pack workspace; nothing updates or installs automatically. The old overview publication shortcut now opens the review workspace. Save appears only with unsaved changes. Fixed optional signal types found by the final typecheck. Final verification: typecheck passed, 65 focused Browse, pack, sync, shell and localization tests passed. No screenshot review or real publication was performed.
+
+Still deferred: import/upload/icon editing in this initial pack editor, actionable suggestion edits, and richer launch-error presentation for structured pack gate failures. Suggestions remain advisory. Native launch verification remains authoritative; the overview status cannot override it.

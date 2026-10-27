@@ -1,3 +1,4 @@
+import { ClientPackTab } from './pack/client-pack-tab';
 import { Button, Tab, TabList, TabPanel, Tabs } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack, type Component } from 'solid-js';
 import { Dynamic, isServer } from '@solidjs/web';
@@ -36,6 +37,7 @@ const views: Record<MainTabId, { view: Component<{ snapshot: ServerSnapshot }>; 
   overview: { view: OverviewTab, flush: false },
   console: { view: ConsoleTab, flush: true },
   resources: { view: ServerResourcesTab, flush: true },
+  pack: { view: ClientPackTab, flush: false },
   files: { view: FilesTab, flush: true },
   automation: { view: AutomationTab, flush: true },
   backups: { view: BackupsTab, flush: true },

@@ -192,6 +192,9 @@ export function DependencyStep(props: {
                   disabled={row.required || !!row.installed}
                   onChange={(checked) => props.onToggle(index(), checked)}
                 />
+                <Show when={row.destination}>
+                  <Badge size="sm" tone="neutral">{t(row.destination === 'modpack' ? 'browse.target-modpack' : 'browse.target-server')}</Badge>
+                </Show>
                 <Badge size="sm" tone={row.installed ? 'success' : row.required ? 'accent' : 'neutral'}>
                   {t(row.installed ? 'browse.deps-installed' : row.required ? 'browse.deps-required' : 'browse.deps-optional')}
                 </Badge>

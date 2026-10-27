@@ -2,17 +2,15 @@
 //   serverSoftware            -> `server_content` inventory `software`
 //   resolveServerDependencies -> `server_content_dependencies` (the shared instance resolver)
 //   installToServer           -> `server_content_install`, one durable intent per resource
-//   installToModpack          -> the stage 2 pack draft
+//   installToModpack          -> one reviewed, atomic pack draft edit
 import { fetchProjects } from './browse-api';
-import type { ResourceProject, ResourceType, ResourceVersion } from './browse-model';
-import { isContentProvider, previewCandidates, serverInstallPlan, type DependencyCandidate, type DependencyRow, type Destination, type ServerTarget } from './install-targets';
+import type { ResourceProject, ResourceVersion } from './browse-model';
+import { isContentProvider, previewCandidates, type DependencyCandidate, type Destination, type ServerTarget } from './install-targets';
 export { isContentProvider, isServerContentKind, previewCandidates, serverInstallPlan, type ServerInstallItem } from './install-targets';
 import { invalidateServerResources, readServerResource } from '../servers/resources';
 import { CONTENT_RESOURCES, contentResource, softwareResource } from '../servers/server-resources';
-import { newIntentId } from '../servers/model';
 import { serverCommand } from '../servers/store';
-import type { ConnectionId, ServerCommandError } from '../servers/native';
-import type { ContentChange } from '../servers/native-content';
+import type { ConnectionId } from '../servers/native';
 
 /**
  * Managed server software id, or null when it is unidentified or cannot be read. The content
@@ -81,60 +79,18 @@ export function resolveServerDependencies(target: ServerTarget): DependencyResol
   };
 }
 
-export interface ServerSelection {
-  project: ResourceProject;
-  version: ResourceVersion;
-  kind: ResourceType;
-  destination: Destination;
-  dependencies: readonly DependencyRow[];
-}
+export type { ServerSelection, ServerInstallOutcome } from './server-install-flow';
+import type { ServerSelection } from './server-install-flow';
+import * as flow from './server-install-flow';
 
-export type ServerInstallOutcome =
-  /** `staged`: Minecraft is running, so at least one change applies on its next start or restart. */
-  | { kind: 'started'; count: number; staged: boolean }
-  | { kind: 'unavailable'; reason: 'server-coming' | 'modpack-coming' }
-  | { kind: 'failed'; message: string; error?: ServerCommandError; installed?: number };
+const changed = (id: ConnectionId) => (destination: 'server' | 'modpack') =>
+  invalidateServerResources(id, destination === 'server' ? CONTENT_RESOURCES : ['pack-draft', 'pack-suggestions', 'pack-preview']);
 
-/** Installs the project and the ticked dependencies into the server's files. */
-export async function installToServer(target: ServerTarget, selection: ServerSelection): Promise<ServerInstallOutcome> {
-  const plan = serverInstallPlan(selection);
-  if (!plan) return { kind: 'unavailable', reason: 'server-coming' };
-  const changes: ContentChange[] = [];
-  try {
-    // There is no multi-resource transaction; each request is its own durable intent.
-    for (const { provider, projectId, versionId, kind } of plan) {
-      changes.push(await serverCommand((client) => client.contentInstall(target.id, { provider, projectId, versionId, kind }, newIntentId())));
-    }
-  } catch (reason) {
-    const error = reason as ServerCommandError;
-    return { kind: 'failed', message: error.reason ?? error.code, error, installed: changes.length };
-  } finally {
-    if (changes.length) invalidateServerResources(target.id, CONTENT_RESOURCES);
-  }
-  return { kind: 'started', count: changes.length, staged: changes.some((change) => change.state === 'pending') };
-}
-
-/** Adds the project to the client modpack draft. Comes with the pack workspace (stage 2). */
-export async function installToModpack(target: ServerTarget, selection: ServerSelection): Promise<ServerInstallOutcome> {
-  // TODO(server-content): stage 2 pack draft.
-  void target;
-  void selection;
-  return { kind: 'unavailable', reason: 'modpack-coming' };
-}
-
-/** Runs the chosen destination; Both installs on the server first, then adds to the pack. */
-export async function installToServerTarget(
-  target: ServerTarget,
-  selection: ServerSelection,
-): Promise<ServerInstallOutcome> {
-  try {
-    if (selection.destination === 'modpack') return await installToModpack(target, selection);
-    const server = await installToServer(target, selection);
-    if (selection.destination === 'server' || server.kind !== 'started') return server;
-    // The server half landed; the pack half explains itself until stage 2.
-    const pack = await installToModpack(target, selection);
-    return pack.kind === 'unavailable' ? server : pack;
-  } catch (reason) {
-    return { kind: 'failed', message: String(reason) };
-  }
-}
+export const prepareServerSelection = (target: ServerTarget, project: ResourceProject, versions: readonly ResourceVersion[], destination: Destination) =>
+  flow.prepareServerSelection(target, project, versions, destination, serverCommand);
+export const installToServer = (target: ServerTarget, selection: ServerSelection) =>
+  flow.installToServer(target, selection, serverCommand, changed(target.id));
+export const installToModpack = (target: ServerTarget, selection: ServerSelection) =>
+  flow.installToModpack(target, selection, serverCommand, changed(target.id));
+export const installToServerTarget = (target: ServerTarget, selection: ServerSelection) =>
+  flow.installToServerTarget(target, selection, serverCommand, changed(target.id));

@@ -53,7 +53,7 @@ describe('[shell] routing', () => {
 
   test('the main nav has no players, settings, access or connection tabs', () => {
     const ids = visibleMainTabs({ snapshot: snapshot(), backupsConfigured: true }).map((tab) => tab.id);
-    expect(ids).toEqual(['overview', 'console', 'resources', 'files', 'automation', 'backups', 'activity']);
+    expect(ids).toEqual(['overview', 'console', 'resources', 'pack', 'files', 'automation', 'backups', 'activity']);
   });
 
   test('backups show when set up, or while the user can set them up', () => {

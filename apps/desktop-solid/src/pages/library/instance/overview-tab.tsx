@@ -19,6 +19,7 @@ import { mutateNativeScreenshot } from "../../../features/instances/native-detai
 import { copyScreenshot } from "../../../features/instances/screenshot-clipboard";
 import { t } from "../../../localization";
 import "./overview-tab.css";
+import { LinkedPack } from './linked-pack';
 
 /**
  * Overview: what you came back for. The last world you played leads, with a way straight
@@ -59,6 +60,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
 
   return (
     <div data-vesta="overview">
+      <LinkedPack instanceId={id()} />
       <Show
         when={latest()}
         fallback={

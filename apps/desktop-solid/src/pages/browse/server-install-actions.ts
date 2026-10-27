@@ -14,13 +14,16 @@ export async function installFromServerPicker(target: ServerTarget, selection: S
     case 'started':
       // While Minecraft runs the agent stages JAR changes; never promise a hot reload.
       toast.show({
-        title: t(outcome.staged ? 'browse.server-install-staged-title' : 'browse.server-install-done-title', {
+        title: t(outcome.destination === 'modpack' ? 'browse.pack-draft-added-title' : outcome.destination === 'both' ? 'browse.server-pack-added-title' : outcome.staged ? 'browse.server-install-staged-title' : 'browse.server-install-done-title', {
           name: selection.project.name,
           title: target.name,
         }),
         description: outcome.staged ? t('browse.server-install-staged') : undefined,
         tone: outcome.staged ? 'neutral' : 'success',
       });
+      break;
+    case 'partial':
+      toast.show({ title: t('browse.server-pack-partial-title'), description: t('browse.server-pack-partial-help'), tone: 'warning' });
       break;
     case 'unavailable':
       toast.show({

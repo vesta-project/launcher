@@ -1,10 +1,11 @@
-import { For, Show, createSignal } from 'solid-js';
-import { Button, Dialog, toast } from '@vesta/ui';
-import type { MessageId } from '../../../localization/messages';
-import { errorMessage } from '../../../features/servers/errors';
+import { transitionTo } from '../../../app/transition';
+import { For, Show } from 'solid-js';
+import { Button } from '@vesta/ui';
+
+
 import { stableConnectionId } from '../../../features/servers/connection-id';
-import { newIntentId } from '../../../features/servers/model';
-import { serverCommand } from '../../../features/servers/store';
+
+
 import { t } from '../../../localization';
 import { anyVisible, gate } from '../../../features/servers/capabilities';
 import { formatUptime, minecraftFact } from '../../../features/servers/model';
@@ -94,35 +95,9 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
   );
 }
 
-/** Publish the prepared pack, or require players to update to the hosted revision. */
+/** All publication changes go through the client-pack review workspace. */
 function PackActions(props: { snapshot: ServerSnapshot }) {
-  const [confirming, setConfirming] = createSignal(false, { name: 'server-pack:confirming' });
-  const [busy, setBusy] = createSignal(false, { name: 'server-pack:busy' });
-  const pack = () => props.snapshot.pack;
-  const canPublish = () => gate(props.snapshot.capabilities, 'pack.publish') !== 'denied';
-  const canRequire = () => gate(props.snapshot.capabilities, 'pack.force_update') !== 'denied'
-    && !!pack()?.hostedRevision && pack()?.minimumRevision !== pack()?.hostedRevision;
-  const run = async (work: () => Promise<unknown>, done: MessageId) => {
-    setBusy(true);
-    try { await work(); toast.show({ title: t(done), tone: 'neutral' }); }
-    catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
-    finally { setBusy(false); setConfirming(false); }
-  };
-  const id = () => props.snapshot.connection.id;
-  return (
-    <div data-vesta="server-stat-actions">
-      <Show when={canPublish()}>
-        <Button size="sm" variant="outline" disabled={busy()} onClick={() => void run(() => serverCommand((client) => client.packPublish(id(), pack()?.hostedRevision ?? '0', newIntentId())), 'servers.pack.published')}>
-          {t('servers.pack.publish')}
-        </Button>
-      </Show>
-      <Show when={canRequire()}>
-        <Button size="sm" variant="ghost" disabled={busy()} onClick={() => setConfirming(true)}>{t('servers.pack.require')}</Button>
-      </Show>
-      <Dialog open={confirming()} onOpenChange={setConfirming} size="sm" title={t('servers.pack.require-title', { version: pack()?.hostedRevision ?? '' })} description={t('servers.pack.require-description')}
-        footer={<><Button variant="ghost" onClick={() => setConfirming(false)}>{t('common.cancel')}</Button>
-          <Button tone="accent" disabled={busy()} onClick={() => void run(() => serverCommand((client) => client.packMinimum(id(), pack()!.hostedRevision!, pack()!.hostedRevision!, newIntentId())), 'servers.pack.required')}>{t('servers.pack.require')}</Button></>}
-      />
-    </div>
-  );
+  return <Show when={gate(props.snapshot.capabilities, 'pack.edit') === 'allowed' || gate(props.snapshot.capabilities, 'pack.download') === 'allowed' || gate(props.snapshot.capabilities, 'pack.access') === 'allowed'}>
+    <div data-vesta="server-stat-actions"><Button size="sm" variant="outline" onClick={() => transitionTo(`/servers/${encodeURIComponent(props.snapshot.connection.id)}/pack`)}>{t('server-pack.title')}</Button></div>
+  </Show>;
 }
