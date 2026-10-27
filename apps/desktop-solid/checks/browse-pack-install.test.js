@@ -6,7 +6,7 @@ const version = (id, loader = 'fabric') => ({ id, project_id: 'root', version_nu
 const target = (software = 'paper') => ({ id: 'connection', name: 'Server', minecraftVersion: '1.21.4', software, canInstall: true, canEditPack: true, connection: 'online' });
 function fixture() {
   const calls = [];
-  const workspace = { draft: { revision: 'reviewed', manifest: { minecraftVersion: '1.21.4', loader: 'fabric' } }, minecraftDrift: false };
+  const workspace = { draft: { revision: '7', manifest: { minecraftVersion: '1.21.4', loader: 'fabric' } }, minecraftDrift: false };
   const dependency = (id) => ({ project: { id, name: id, source: 'modrinth' }, version: version(`${id}-v`), required: true, installed: false });
   const api = {
     async packDraft() { return workspace; },
@@ -17,6 +17,26 @@ function fixture() {
   };
   return { calls, workspace, api, run: fn => fn(api) };
 }
+
+test('plugins and datapacks never read or mutate a client pack, even with conflicting side metadata', async () => {
+  for (const kind of ['plugin', 'datapack']) {
+    const f = fixture(); let reads = 0;
+    f.api.packDraft = async () => { reads++; throw new Error('unexpected pack read'); };
+    const item = { ...project, resource_type: kind, categories: [kind], environment: { client: true, server: false } };
+    expect(await prepareServerSelection(target(), item, [version('v', kind === 'plugin' ? 'bukkit' : 'datapack')], 'modpack', f.run)).toBeUndefined();
+    const prepared = await prepareServerSelection(target(), item, [version('v', kind === 'plugin' ? 'bukkit' : 'datapack')], 'server', f.run);
+    expect(prepared.version.id).toBe('v');
+    expect(reads).toBe(0);
+    expect(prepared.rows.every(row => row.destination === 'server')).toBe(true);
+  }
+});
+
+test('an untouched draft refuses client-pack review without creating it or reading dependencies', async () => {
+  const f = fixture(); f.workspace.draft.revision = '0'; let dependencies = 0;
+  f.api.packDependencies = async () => { dependencies++; throw new Error('unexpected dependency read'); };
+  await expect(prepareServerSelection(target(), project, [version('fabric')], 'modpack', f.run)).rejects.toMatchObject({ code: 'stale_target' });
+  expect(dependencies).toBe(0); expect(f.calls).toHaveLength(0);
+});
 test('Paper and vanilla choose the client draft loader and only mutate the draft', async () => {
   for (const software of ['paper', 'vanilla']) {
     const f = fixture();
@@ -26,7 +46,7 @@ test('Paper and vanilla choose the client draft loader and only mutate the draft
     const result = await installToServerTarget(target(software), { ...prepared, project, kind: 'mod', destination: 'modpack', dependencies: prepared.rows }, f.run);
     expect(result).toMatchObject({ kind: 'started', destination: 'modpack', staged: false });
     expect(f.calls).toHaveLength(1);
-    expect(f.calls[0].request).toMatchObject({ expectedRevision: 'reviewed', versionId: 'fabric', dependencies: [{ projectId: 'client-dep', versionId: 'client-dep-v', required: true }] });
+    expect(f.calls[0].request).toMatchObject({ expectedRevision: '7', versionId: 'fabric', dependencies: [{ projectId: 'client-dep', versionId: 'client-dep-v', required: true }] });
   }
 });
 test('Both keeps dependency scopes separate and uses one reviewed atomic pack edit', async () => {

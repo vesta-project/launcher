@@ -1,7 +1,7 @@
 // Reviewed Browse server/pack operations, independent of UI stores and native initialization.
 import type { ResourceProject, ResourceType, ResourceVersion } from './browse-model';
 import { selectInstallVersion } from './browse-model';
-import { dependencyRows, isContentProvider, previewCandidates, serverInstallPlan, serverVersion, type DependencyRow, type Destination, type ServerTarget } from './install-targets';
+import { clientPackState, dependencyRows, isContentProvider, previewCandidates, serverInstallPlan, serverVersion, type DependencyRow, type Destination, type ServerTarget } from './install-targets';
 import type { ServersApi } from '../servers/service';
 import type { ServerCommandError } from '../servers/native';
 import type { ContentChange } from '../servers/native-content';
@@ -22,7 +22,9 @@ type Command = <T>(run: (api: ServersApi) => Promise<T>) => Promise<T>;
 /** Review client dependencies against the draft's runtime, independently of server software. */
 export async function prepareServerSelection(target: ServerTarget, project: ResourceProject, versions: readonly ResourceVersion[], destination: Destination, run: Command) {
   if (!isContentProvider(project.source)) return undefined;
+  if ((project.resource_type === 'plugin' || project.resource_type === 'datapack') && destination !== 'server') return undefined;
   const workspace = destination !== 'server' ? await run(api => api.packDraft(target.id)) : undefined;
+  if (workspace && clientPackState(workspace) !== 'ready') throw { code: 'stale_target' };
   if (workspace?.minecraftDrift) throw { code: 'stale_target' };
   const manifest = workspace?.draft.manifest;
   const candidates = manifest ? versions.filter(version => !!selectInstallVersion([version], {
@@ -100,6 +102,8 @@ export async function installToServerTarget(
   run: Command,
   changed?: (destination: 'server' | 'modpack') => void,
 ): Promise<ServerInstallOutcome> {
+  if ((selection.kind === 'plugin' || selection.kind === 'datapack') && selection.destination !== 'server')
+    return { kind: 'failed', message: 'stale_target' };
   try {
     if (selection.destination === 'modpack') return await installToModpack(target, selection, run, changed);
     if (selection.destination === 'both' && !selection.packRevision) return { kind: 'failed', message: 'stale_target' };

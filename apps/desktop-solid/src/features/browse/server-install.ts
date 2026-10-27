@@ -5,7 +5,7 @@
 //   installToModpack          -> one reviewed, atomic pack draft edit
 import { fetchProjects } from './browse-api';
 import type { ResourceProject, ResourceVersion } from './browse-model';
-import { isContentProvider, previewCandidates, type DependencyCandidate, type Destination, type ServerTarget } from './install-targets';
+import { clientPackState, isContentProvider, previewCandidates, type ClientPackState, type DependencyCandidate, type Destination, type ServerTarget } from './install-targets';
 export { isContentProvider, isServerContentKind, previewCandidates, serverInstallPlan, type ServerInstallItem } from './install-targets';
 import { invalidateServerResources, readServerResource } from '../servers/resources';
 import { CONTENT_RESOURCES, contentResource, softwareResource } from '../servers/server-resources';
@@ -22,6 +22,11 @@ export async function serverSoftware(id: ConnectionId): Promise<string | null> {
   if (inventory) return inventory.software;
   const state = await readServerResource(id, softwareResource).catch(() => undefined);
   return state?.current?.software ?? null;
+}
+
+/** Observation only: a saved draft qualifies even before its first publication. */
+export async function serverClientPack(id: ConnectionId): Promise<ClientPackState> {
+  return clientPackState(await serverCommand(api => api.packDraft(id)));
 }
 
 export interface DependencyRequest {

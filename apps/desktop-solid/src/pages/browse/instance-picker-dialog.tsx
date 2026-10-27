@@ -16,17 +16,21 @@ import {
 import { loadVersions } from '../../features/browse/browse-projects';
 import {
   defaultDestination,
+  canTargetClientPack,
+  canTargetInstance,
   preferredDestination,
   projectSides,
   serverPermissions,
   serverTargets,
+  soleDestination,
   targetStates,
   type Destination,
   type DependencyRow,
   type ServerTarget,
   type TargetStates,
+  type ClientPackState,
 } from '../../features/browse/install-targets';
-import { prepareServerSelection, serverSoftware } from '../../features/browse/server-install';
+import { prepareServerSelection, serverSoftware, serverClientPack } from '../../features/browse/server-install';
 import { contentErrorMessage } from '../../features/servers/content-model';
 import type { ServerCommandError } from '../../features/servers/native';
 import { instances } from '../../features/instances/catalog';
@@ -93,6 +97,7 @@ export function InstancePickerDialog() {
   const [loaded, setLoaded] = createSignal<Loaded | undefined>(undefined, { name: 'browsePickerLoaded' });
   const [step, setStep] = createSignal<Step>({ kind: 'pick' }, { name: 'browsePickerStep' });
   const [software, setSoftware] = createSignal<Record<ConnectionId, string | null>>({}, { name: 'browsePickerSoftware' });
+  const [clientPacks, setClientPacks] = createSignal<Record<ConnectionId, ClientPackState>>({}, { name: 'browsePickerClientPacks' });
   let depsRequest = 0;
   /** The server Browse was opened for; chosen for the user once its row can take the project. */
   let preselect: ConnectionId | undefined;
@@ -103,11 +108,12 @@ export function InstancePickerDialog() {
       setFilter('');
       setLoaded(undefined);
       setStep({ kind: 'pick' });
+      setClientPacks({});
       depsRequest++;
       preselect = project ? untrack(serverFocus)?.id : undefined;
       if (!project) return;
       let cancelled = false;
-      const entries = untrack(instances);
+      const entries = canTargetInstance(project) ? untrack(instances) : [];
       // Software decides whether mods or plugins can go on a server; read once per opening.
       if (serverKinds.includes(project.resource_type))
         for (const snapshot of untrack(serverSnapshots)) {
@@ -116,6 +122,12 @@ export function InstancePickerDialog() {
           void serverSoftware(snapshot.connection.id).then((id) => {
             if (!cancelled) setSoftware((current) => ({ ...current, [snapshot.connection.id]: id }));
           });
+          if (allowed.modpack && canTargetClientPack(project)) {
+            const id = snapshot.connection.id;
+            void serverClientPack(id).catch(() => 'unavailable' as const).then(state => {
+              if (!cancelled) setClientPacks(current => ({ ...current, [id]: state }));
+            });
+          }
         }
       void (async () => {
         const [versions, ...lists] = await Promise.all([
@@ -141,7 +153,7 @@ export function InstancePickerDialog() {
       const pinned = pickerVersion();
       const data = loaded();
       const needle = filter().trim().toLowerCase();
-      if (!project) return [];
+      if (!project || !canTargetInstance(project)) return [];
       const rowFor = (rows: Loaded['rows'] | undefined, instanceId: string) =>
         rows?.[instanceId]?.find(
           (item) => projectKey(item.platform.toLowerCase(), item.remote_id) === projectKey(project.source, project.id),
@@ -196,7 +208,8 @@ export function InstancePickerDialog() {
       const data = loaded();
       const needle = filter().trim().toLowerCase();
       const known = software();
-      return serverTargets(serverSnapshots(), (id) => (id in known ? known[id] : undefined))
+      const packs = clientPacks();
+      return serverTargets(serverSnapshots(), (id) => (id in known ? known[id] : undefined), id => packs[id] ?? 'checking')
         .filter((target) => !needle || target.name.toLowerCase().includes(needle))
         .map((target) => ({
           target,
@@ -206,7 +219,7 @@ export function InstancePickerDialog() {
             versions: data?.versions,
             pinned: pickerVersion(),
           }),
-          checking: !data,
+          checking: !data || (target.canEditPack && canTargetClientPack(project) && target.clientPack === 'checking'),
         }));
     },
     { name: 'browsePickerServers' },
@@ -217,10 +230,10 @@ export function InstancePickerDialog() {
       return (
         !!project &&
         serverKinds.includes(project.resource_type) &&
-        serverSnapshots().some((snapshot) => {
+        (!canTargetInstance(project) || serverSnapshots().some((snapshot) => {
           const allowed = serverPermissions(snapshot);
           return allowed.server || allowed.modpack;
-        })
+        }))
       );
     },
     { name: 'browsePickerShowServers' },
@@ -245,6 +258,8 @@ export function InstancePickerDialog() {
     const project = untrack(pickerProject);
     if (!project) return;
     const destination = defaultDestination(projectSides(project), project.resource_type, row.states);
+    const only = soleDestination(row.states);
+    if (only) { void loadDependencies(row.target, only); return; }
     setStep({ kind: 'target', server: row.target.id, destination });
   };
 
@@ -268,20 +283,18 @@ export function InstancePickerDialog() {
   );
 
   /** Settles the version for the destination, then asks the resolver for its dependencies. */
-  const continueToDependencies = async () => {
-    const current = untrack(step);
-    const row = untrack(chosen);
+  async function loadDependencies(target: ServerTarget, destination: Destination) {
     const project = untrack(pickerProject);
-    if (current.kind !== 'target' || !row || !project) return;
+    if (!project) return;
     const request = ++depsRequest;
-    const base = { kind: 'deps' as const, server: current.server, destination: current.destination };
+    const base = { kind: 'deps' as const, server: target.id, destination };
     setStep(base);
     try {
       const pinned = untrack(pickerVersion);
       const versions = pinned
         ? [pinned]
         : (untrack(loaded)?.versions ?? (await loadVersions(project.source, project.id)));
-      const prepared = await prepareServerSelection(row.target, project, versions, current.destination);
+      const prepared = await prepareServerSelection(target, project, versions, destination);
       if (request !== depsRequest) return;
       if (!prepared) {
         setStep({ ...base, error: t('browse.target-reason-no-version') });
@@ -291,6 +304,10 @@ export function InstancePickerDialog() {
     } catch (reason) {
       if (request === depsRequest) setStep({ ...base, error: t(contentErrorMessage(reason as ServerCommandError)) });
     }
+  }
+  const continueToDependencies = async () => {
+    const current = untrack(step), row = untrack(chosen);
+    if (current.kind === 'target' && row) await loadDependencies(row.target, current.destination);
   };
 
   const toggleDependency = (index: number, selected: boolean) =>
@@ -318,8 +335,9 @@ export function InstancePickerDialog() {
 
   const back = () => {
     depsRequest++;
+    const only = untrack(chosen)?.states;
     setStep((current) =>
-      current.kind === 'deps'
+      current.kind === 'deps' && !(only && soleDestination(only))
         ? { kind: 'target', server: current.server, destination: current.destination }
         : { kind: 'pick' },
     );
@@ -345,7 +363,8 @@ export function InstancePickerDialog() {
 
   const footer = () => {
     const current = step();
-    if (current.kind === 'pick')
+    if (current.kind === 'pick') {
+      if (!pickerProject() || !canTargetInstance(pickerProject()!)) return undefined;
       return (
         <Button
           size="sm"
@@ -359,6 +378,7 @@ export function InstancePickerDialog() {
           {t('browse.picker-new-instance')}
         </Button>
       );
+    }
     const ready =
       current.kind === 'target' ? !!chosen()?.states[current.destination].available : !!current.version && !!current.rows;
     return (
@@ -411,7 +431,7 @@ export function InstancePickerDialog() {
             onChange={setFilter}
           />
           <div data-vesta="browse-picker-sections">
-            <section data-vesta="browse-picker-section">
+            <Show when={pickerProject() && canTargetInstance(pickerProject()!)}><section data-vesta="browse-picker-section">
               <Show when={showServers()}>
                 <h3 data-vesta="browse-picker-heading">{t('browse.picker-instances')}</h3>
               </Show>
@@ -464,7 +484,7 @@ export function InstancePickerDialog() {
               <Show when={!list().length}>
                 <EmptyLine>{t('browse.picker-empty')}</EmptyLine>
               </Show>
-            </section>
+            </section></Show>
             <Show when={showServers()}>
               <section data-vesta="browse-picker-section" data-kind="servers">
                 <h3 data-vesta="browse-picker-heading">{t('browse.picker-servers')}</h3>

@@ -293,3 +293,5 @@ browse-server-install-staged-title = { $name } installs on { $title } on the nex
 browse-server-install-staged = Minecraft is running, so the server applies it when it next starts.
 browse-server-focus = For { $title }
 browse-server-focus-back = Back to { $title } resources
+browse-target-reason-modpack-not-configured = Set up this server's client modpack first.
+browse-target-reason-modpack-unavailable = Couldn't check this server's client modpack.

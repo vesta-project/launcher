@@ -119,7 +119,7 @@ export function TargetStep(props: {
         </span>
       </div>
       <div data-vesta="browse-target-options" role="radiogroup" aria-label={t('browse.picker-title-any')}>
-        <For each={destinations}>
+        <For each={destinations.filter(destination => props.states[destination].available)}>
           {(destination) => {
             const state = () => props.states[destination];
             const labels = () => destinationLabels[destination];

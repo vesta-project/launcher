@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   connectionState,
+  clientPackState,
+  canTargetInstance,
+  soleDestination,
   defaultDestination,
   dependencyRows,
   preferredDestination,
@@ -24,7 +27,7 @@ const snapshot = (id, capabilities, patch = {}) => ({
 const role = (name) => ({ source: 'role_defaults', granted: capabilitiesForRole(name) ?? [], refused: [] });
 const target = (patch = {}) => ({
   id: 'a', serverId: 'srv_a', name: 'A', minecraftVersion: '1.21.4', software: 'fabric', connection: 'online',
-  canInstall: true, canEditPack: true, ...patch,
+  canInstall: true, canEditPack: true, clientPack: 'ready', ...patch,
 });
 const project = (patch = {}) => ({ source: 'modrinth', categories: ['fabric'], environment: { client: true, server: true }, ...patch });
 const version = (patch = {}) => ({ id: 'v1', project_id: 'p', version_number: '1.0', game_versions: ['1.21.4'], loaders: ['fabric'],
@@ -63,6 +66,40 @@ describe('permission filtering', () => {
 });
 
 describe('default target mapping', () => {
+  test('server plugins and server-only mods do not offer client instances; datapacks use their worlds', () => {
+    expect(canTargetInstance(project({ resource_type: 'plugin' }))).toBe(false);
+    expect(canTargetInstance(project({ resource_type: 'mod', environment: { client: false, server: true } }))).toBe(false);
+    expect(canTargetInstance(project({ resource_type: 'mod' }))).toBe(true);
+    expect(canTargetInstance(project({ resource_type: 'datapack', environment: { client: false, server: true } }))).toBe(true);
+  });
+  test('untouched packs stay unavailable; saved unpublished drafts qualify without numeric precision loss', () => {
+    const workspace = (revision, publishedRevision = '0') => ({ draft: { revision }, publishedRevision });
+    expect(clientPackState(workspace('0'))).toBe('unconfigured');
+    expect(clientPackState(workspace('1'))).toBe('ready');
+    expect(clientPackState(workspace('9007199254740993'))).toBe('ready');
+    expect(clientPackState(workspace('0', '2'))).toBe('ready');
+  });
+
+  test('destination choice is skipped for plugins, world datapacks, and one-sided mods', () => {
+    const input = (kind, environment = { client: true, server: true }) => ({ project: project({ environment }), kind });
+    for (const kind of ['plugin', 'datapack']) {
+      const state = targetStates(target({ software: 'paper' }), input(kind, { client: true, server: false }));
+      expect(soleDestination(state)).toBe('server');
+      expect(state.modpack.available).toBe(false);
+    }
+    expect(soleDestination(targetStates(target(), input('mod', { client: false, server: true })))).toBe('server');
+    expect(soleDestination(targetStates(target(), input('mod', { client: true, server: false })))).toBe('modpack');
+    expect(soleDestination(targetStates(target(), input('mod')))).toBeUndefined();
+    for (const clientPack of ['unconfigured', 'unavailable', 'checking']) {
+      const state = targetStates(target({ clientPack }), input('mod'));
+      expect(soleDestination(state)).toBe('server');
+      expect(state.modpack.available).toBe(false);
+    }
+    expect(targetStates(target({ software: 'paper', clientPack: 'unconfigured' }), input('resourcepack')).row)
+      .toEqual({ available: false, reason: 'modpack-not-configured' });
+    expect(targetStates(target({ software: 'paper', clientPack: 'unconfigured' }), input('mod')).row)
+      .toEqual({ available: false, reason: 'modpack-not-configured' });
+  });
   test('sides map to server, modpack or both', () => {
     const sides = (client, server) => projectSides({ environment: { client, server } });
     expect(preferredDestination(sides(true, true), 'mod')).toBe('both');

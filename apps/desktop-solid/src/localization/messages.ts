@@ -1,5 +1,7 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "browse.target-reason-modpack-not-configured",
+  "browse.target-reason-modpack-unavailable",
   "server-pack.installed",
   "server-pack.current",
   "server-pack.update-available",

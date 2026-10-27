@@ -13,6 +13,7 @@ import {
   type SourceId,
 } from './browse-model';
 import type { ContentProvider, ServerContentKind, ServerDependencyPreview } from '../servers/native-content';
+import type { PackWorkspace } from '../servers/native-pack';
 
 /* ---- Project sides ---- */
 
@@ -84,6 +85,22 @@ export function pluginLoadersFor(software: string | null | undefined): string[] 
 /* ---- Server targets ---- */
 
 export type ServerConnectionState = 'online' | 'connecting' | 'offline' | 'access';
+export type ClientPackState = 'checking' | 'unconfigured' | 'ready' | 'unavailable';
+
+/** Merely reading an untouched draft must not opt a server into client-pack installs. */
+export function clientPackState(workspace: Pick<PackWorkspace, 'draft' | 'publishedRevision'>): ClientPackState {
+  const saved = (revision: string) => /^\d+$/.test(revision) && /[1-9]/.test(revision);
+  return saved(workspace.draft.revision) || saved(workspace.publishedRevision) ? 'ready' : 'unconfigured';
+}
+
+export function canTargetClientPack(project: Pick<ResourceProject, 'resource_type' | 'environment'> & Record<string, unknown>): boolean {
+  return ['mod', 'resourcepack', 'shader'].includes(project.resource_type) && projectSides(project).client !== 'unsupported';
+}
+
+/** Datapacks proceed to the instance's world chooser; plugins never create client instances. */
+export function canTargetInstance(project: Pick<ResourceProject, 'resource_type' | 'environment'> & Record<string, unknown>): boolean {
+  return project.resource_type !== 'plugin' && (project.resource_type !== 'mod' || projectSides(project).client !== 'unsupported');
+}
 
 export interface ServerTarget {
   id: ConnectionId;
@@ -98,6 +115,8 @@ export interface ServerTarget {
   canInstall: boolean;
   /** May edit the client modpack draft (`pack.edit`). */
   canEditPack: boolean;
+  /** Per-server setup, independent from global API support and edit permission. */
+  clientPack?: ClientPackState;
 }
 
 export const SERVER_INSTALL_CAPABILITY = 'content.install';
@@ -122,6 +141,7 @@ export function connectionState(snapshot: Pick<ServerSnapshot, 'state'>): Server
 export function serverTargets(
   snapshots: readonly ServerSnapshot[],
   software: (id: ConnectionId) => string | null | undefined,
+  clientPack: (id: ConnectionId) => ClientPackState = () => 'checking',
 ): ServerTarget[] {
   return snapshots.flatMap((snapshot) => {
     const allowed = serverPermissions(snapshot);
@@ -137,6 +157,7 @@ export function serverTargets(
         connection: connectionState(snapshot),
         canInstall: allowed.server,
         canEditPack: allowed.modpack,
+        clientPack: clientPack(connection.id),
       },
     ];
   });
@@ -167,7 +188,9 @@ export type TargetReason =
   | 'unknown-software'
   | 'loader'
   | 'no-version'
-  | 'modpack-coming';
+  | 'modpack-coming'
+  | 'modpack-not-configured'
+  | 'modpack-unavailable';
 
 export type DestinationState = { available: true } | { available: false; reason: TargetReason };
 const ok: DestinationState = { available: true };
@@ -216,7 +239,8 @@ function serverState(target: ServerTarget, input: TargetInput): DestinationState
   const { kind, project } = input;
   if (!target.canInstall) return no('no-permission');
   if (kind !== 'mod' && kind !== 'plugin' && kind !== 'datapack') return no('not-server-content');
-  if (projectSides(project).server === 'unsupported') return no('client-only');
+  // Side flags describe mods. Plugins belong to the server, datapacks to its world.
+  if (kind === 'mod' && projectSides(project).server === 'unsupported') return no('client-only');
   if (kind !== 'datapack') {
     if (target.software === undefined) return no('checking');
     const family = softwareFamily(target.software);
@@ -241,6 +265,9 @@ function modpackState(target: ServerTarget, input: TargetInput): DestinationStat
   if (!target.canEditPack) return no('no-permission');
   if (kind !== 'mod' && kind !== 'resourcepack' && kind !== 'shader') return no('not-client-content');
   if (projectSides(project).client === 'unsupported') return no('server-only');
+  if (target.clientPack === 'unconfigured') return no('modpack-not-configured');
+  if (target.clientPack === 'unavailable') return no('modpack-unavailable');
+  if (target.clientPack !== 'ready') return no('checking');
   const candidates = input.pinned ? [input.pinned] : input.versions;
   if (candidates && !modpackVersion(candidates, target)) return no('no-version');
   if (!(input.modpackReady ?? MODPACK_TARGET_READY)) return no('modpack-coming');
@@ -270,10 +297,19 @@ export function targetStates(target: ServerTarget, input: TargetInput): TargetSt
   if (target.connection !== 'online') return blocked(target.connection);
   if (!target.minecraftVersion) return blocked('unknown-version');
   // Like instances: a row with no valid destination is dimmed with the reason that matters most.
-  if (!server.available && !modpack.available)
-    return { row: target.canInstall ? server : modpack, server, modpack, both };
+  if (!server.available && !modpack.available) {
+    const clientDestination = input.kind === 'resourcepack' || input.kind === 'shader'
+      || (input.kind === 'mod' && (projectSides(input.project).server === 'unsupported'
+        || (server.reason === 'needs-mod-loader' && target.canEditPack)));
+    return { row: clientDestination || !target.canInstall ? modpack : server, server, modpack, both };
+  }
   const only = server.available && !modpack.available ? 'server' : !server.available ? 'modpack' : undefined;
   return { row: ok, ...(only ? { only } : {}), server, modpack, both };
+}
+
+/** Do not ask for a destination when exactly one of the two workspaces can receive it. */
+export function soleDestination(states: TargetStates): 'server' | 'modpack' | undefined {
+  return states.row.available ? states.only : undefined;
 }
 
 /** The destination the project's sides suggest, before availability is considered. */

@@ -18,6 +18,7 @@ import { nativeInstances } from '../../features/instances/native-service';
 import { t } from '../../localization';
 import { openInstallSource } from '../create/install-navigation';
 import { openExternal } from '../../features/links/external-links';
+import { canTargetInstance } from '../../features/browse/install-targets';
 
 /** The project waiting for an instance choice; the picker dialog is open while this is set. */
 const [pickerProject, setPickerProject] = createSignal<ResourceProject | undefined>(undefined, {
@@ -98,7 +99,7 @@ export async function runInstall(
   pinned?: ResourceVersion,
 ) {
   if (kind === 'modpack') return startPack(project, pinned);
-  if (!target) {
+  if (!target || !canTargetInstance({ ...project, resource_type: kind })) {
     setPickerVersion(pinned);
     setPickerProject(project);
     return;
@@ -113,6 +114,7 @@ export async function installFromPicker(
   kind: ResourceType,
   instance: { id: string; name: string } & InstallTarget,
 ) {
+  if (!canTargetInstance({ ...project, resource_type: kind })) return;
   const pinned = untrack(pickerVersion);
   closePicker();
   if (kind === 'datapack') return chooseWorld(project, instance, pinned);
@@ -124,6 +126,7 @@ export async function installFromPicker(
  * or from the pinned version's newest Minecraft version and first loader.
  */
 export function installIntoNew(project: ResourceProject, kind: ResourceType) {
+  if (!canTargetInstance({ ...project, resource_type: kind })) return;
   const pinned = untrack(pickerVersion);
   closePicker();
   return installIntoNewInstance(project, kind, pinned
