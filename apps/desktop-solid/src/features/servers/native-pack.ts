@@ -10,10 +10,25 @@ export type PackEntryKind = 'mod' | 'resource_pack' | 'shader' | 'datapack' | 'c
 export type PackSide = 'required' | 'optional' | 'unsupported';
 export type PackEntrySource = ({ type: 'provider' } & ContentProvider) | { type: 'upload'; sha256: string } | { type: 'manual'; reason: string };
 export interface PackEntry { id: string; kind: PackEntryKind; path: string; required: boolean; environment: { client: PackSide; server: PackSide }; source: PackEntrySource }
-export interface PackManifest { name: string; summary: string; icon: string | null; displayVersion: string; minecraftVersion: string; loader: PackLoader; loaderVersion: string | null; entries: PackEntry[] }
+export type PackOverrideRoot = 'overrides' | 'client-overrides' | 'server-overrides';
+export interface PackOverrideFile { root: PackOverrideRoot; path: string; sha256: string | null; trashed: boolean }
+export type PackFileOperation = { operation: 'write'; root: PackOverrideRoot; path: string; contentBase64: string }
+  | { operation: 'attach'; root: PackOverrideRoot; path: string; sha256: string }
+  | { operation: 'mkdir' | 'trash'; root: PackOverrideRoot; path: string }
+  | { operation: 'rename'; root: PackOverrideRoot; path: string; destination: string };
+export interface PackFileMutation { expectedRevision: string; change: PackFileOperation }
+export interface PackFileRead { expectedRevision: string; root: PackOverrideRoot; path: string }
+export interface PackFileBody { revision: string; sha256: string; contentBase64: string }
+export interface PackManifest { overrideFiles?: PackOverrideFile[]; name: string; summary: string; icon: string | null; displayVersion: string; minecraftVersion: string; loader: PackLoader; loaderVersion: string | null; entries: PackEntry[] }
+export interface PackArchiveInspection {
+  format: 'mrpack' | 'curseforge' | 'zip' | 'vesta'; manifest: PackManifest; entryCount: number;
+  providerEntries: ContentProvider[]; unresolvedFiles: string[]; overrides: string[];
+  /** Null unless the whole pack's identity has been verified, not merely its individual mods. */
+  providerPack: ContentProvider | null; warnings: string[];
+}
 export interface PackDraft { revision: string; manifest: PackManifest }
 export interface PackIcon { mimeType: 'image/png' | 'image/jpeg'; contentBase64: string }
-export interface PackWorkspace { draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
+export interface PackWorkspace { providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
 export interface PackDraftWrite { expectedRevision: string; manifest: PackManifest }
 export interface PackProviderSelection extends ContentProvider { required: boolean }
 export interface PackBrowseAdd extends ContentProvider { expectedRevision: string; required: boolean; dependencies: PackProviderSelection[] }
@@ -24,6 +39,7 @@ export interface PackIssue { code: string; entryId: string | null; severity: 'wa
 export interface PackDiff { added: PackEntry[]; removed: PackEntry[]; changed: { before: PackEntry; after: PackEntry; versionChanged: boolean }[]; metadataChanged: boolean; customOverrides: string[]; symbolicLinks: string[] }
 export interface PackPreview { draftRevision: string; publishedRevision: string; manifest: PackManifest; issues: PackIssue[]; diff: PackDiff; suggestions: PackSuggestion[]; reviewSha256: string; valid: boolean; safetySnapshotRecommended: boolean; resolvedEntries: PackEntry[]; warnings: string[] }
 export interface PackPublish { expectedRevision: string; draftRevision: string; resolvedEntries: PackEntry[]; reviewSha256: string; requiredUpdate: boolean; acknowledgeLowerVersion: boolean }
+export interface PackProviderPublish extends ContentProvider { expectedRevision: string; draftRevision: string; requiredUpdate: boolean; acknowledgeLowerVersion: boolean }
 export interface PackPublishOutcome { hostedRevision: string; minimumRevision: string }
 export interface PackDependency { project: ResourceProject; version: ResourceVersion; required: boolean; installed: boolean; entry: PackEntry }
 export interface PackDependencyPreview { target: PackWorkspace; project: ResourceProject; version: ResourceVersion; entry: PackEntry; dependencies: PackDependency[]; warnings: string[] }
@@ -32,6 +48,11 @@ export interface PackUploadChunk { uploadId: string; offset: string; contentBase
 export interface PackUploadReceipt { uploadId: string; size: string; sha256: string; complete: boolean }
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);
 export const serversPackNative = {
+  packProviderPublish: (connectionId: ConnectionId, request: PackProviderPublish, intentId: string) => call<PackPublishOutcome>('server_pack_provider_publish', { connectionId, request, intentId }),
+  /** List through packDraft().draft.manifest.overrideFiles; null hash means directory. */
+  packFileRead: (connectionId: ConnectionId, request: PackFileRead) => call<PackFileBody>('server_pack_file_read', { connectionId, request }),
+  packFileMutate: (connectionId: ConnectionId, request: PackFileMutation, intentId: string) => call<PackDraft>('server_pack_file_mutate', { connectionId, request, intentId }),
+  packArchiveInspect: (connectionId: ConnectionId, uploadId: string) => call<PackArchiveInspection>('server_pack_archive_inspect', { connectionId, uploadId }),
   packDraft: (connectionId: ConnectionId) => call<PackWorkspace>('server_pack_draft', { connectionId }),
   packIcon: (connectionId: ConnectionId) => call<PackIcon | null>('server_pack_icon', { connectionId }),
   packWrite: (connectionId: ConnectionId, request: PackDraftWrite, intentId: string) => call<PackDraft>('server_pack_write', { connectionId, request, intentId }),

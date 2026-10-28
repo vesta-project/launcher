@@ -1,4 +1,4 @@
-import type { serversPackNative, PackWorkspace, PackEntry, PackManifest, PackPreview, PackSuggestion, PackImport, PackBrowseAdd, PackUploadBegin, PackUploadReceipt } from './native-pack';
+import type { serversPackNative, PackWorkspace, PackEntry, PackManifest, PackPreview, PackSuggestion, PackImport, PackBrowseAdd, PackUploadBegin, PackUploadReceipt, PackArchiveInspection } from './native-pack';
 import type { ServerCommandError } from './native';
 import type { ServerContentInventory, ContentProvider } from './native-content';
 import { fixtureProjects, fixtureVersions } from '../browse/browse-fixtures';
@@ -81,7 +81,7 @@ export function createPackFixtures(host: Host): typeof serversPackNative & { fix
     manifest.entries.push(...resolvedEntries);
     if (s.view.minecraftDrift) issues.push({ code: 'minecraft_version_drift', entryId: null, severity: 'error' });
     const before = s.published.entries;
-    const result: PackPreview = { draftRevision, publishedRevision: s.view.publishedRevision, manifest, resolvedEntries, warnings: [], issues, valid: !issues.some(i => i.severity === 'error'), diff: { added: manifest.entries.filter(e => !before.some(b => b.path === e.path)), removed: before.filter(b => !manifest.entries.some(e => e.path === b.path)), changed: manifest.entries.flatMap(e => { const b = before.find(b => b.path === e.path); return b && JSON.stringify(b) !== JSON.stringify(e) ? [{ before: b, after: e, versionChanged: b.source.type === 'provider' && e.source.type === 'provider' && b.source.versionId !== e.source.versionId }] : []; }), metadataChanged: JSON.stringify({ ...s.published, entries: [] }) !== JSON.stringify({ ...manifest, entries: [] }), customOverrides: manifest.entries.filter(e => e.source.type === 'upload').map(e => e.path), symbolicLinks: [] }, suggestions: (await suggestions(id)).items, reviewSha256: '', safetySnapshotRecommended: true };
+    const result: PackPreview = { draftRevision, publishedRevision: s.view.publishedRevision, manifest, resolvedEntries, warnings: [], issues, valid: !issues.some(i => i.severity === 'error'), diff: { added: manifest.entries.filter(e => !before.some(b => b.path === e.path)), removed: before.filter(b => !manifest.entries.some(e => e.path === b.path)), changed: manifest.entries.flatMap(e => { const b = before.find(b => b.path === e.path); return b && JSON.stringify(b) !== JSON.stringify(e) ? [{ before: b, after: e, versionChanged: b.source.type === 'provider' && e.source.type === 'provider' && b.source.versionId !== e.source.versionId }] : []; }), metadataChanged: JSON.stringify({ ...s.published, entries: [] }) !== JSON.stringify({ ...manifest, entries: [] }), customOverrides: [...manifest.entries.filter(e => e.source.type === 'upload').map(e => e.path), ...(manifest.overrideFiles ?? []).filter(f => !f.trashed && f.sha256 !== null).map(f => `${f.root}/${f.path}`)], symbolicLinks: [] }, suggestions: (await suggestions(id)).items, reviewSha256: '', safetySnapshotRecommended: true };
     result.reviewSha256 = await hash(result); return result;
   };
   const resource = (id: string, ref: ContentProvider, required: boolean) => {
@@ -99,16 +99,109 @@ export function createPackFixtures(host: Host): typeof serversPackNative & { fix
     async packWrite(id, request, intent) { return mutate(id, intent, request, () => save(id, request.expectedRevision, request.manifest)); },
     async packDelete(id, expected, intent) { return mutate(id, intent, ['delete', expected], () => save(id, expected, { ...state(id).view.draft.manifest, loader: 'none', loaderVersion: null, minecraftVersion: state(id).view.serverMinecraftVersion, entries: [] })); },
     async packAdd(id, request: PackBrowseAdd, intent) { return mutate(id, intent, request, () => { const m = clone(state(id).view.draft.manifest); for (const r of [{ ...request, required: request.required }, ...request.dependencies]) { const e = resource(id, r, r.required).entry; const old = m.entries.findIndex(old => old.id === e.id); if (old >= 0) m.entries[old] = e; else m.entries.push(e); } return save(id, request.expectedRevision, m); }); },
+    async packProviderPublish(id, request, intent) {
+      return mutate(id, intent, request, () => {
+        requireCap(id, 'pack.build'); requireCap(id, 'pack.publish'); if (request.requiredUpdate) requireCap(id, 'pack.force_update');
+        const s = state(id); if (request.expectedRevision !== s.view.publishedRevision || request.draftRevision !== s.view.draft.revision) fail('stale_target');
+        s.view.providerPack = { provider: request.provider, projectId: request.projectId, versionId: request.versionId };
+        s.view.publishedRevision = String(BigInt(s.view.publishedRevision) + 1n);
+        if (request.requiredUpdate) s.view.minimumRevision = s.view.publishedRevision;
+        const pack = host.server(id).snapshot.pack;
+        if (pack) { pack.hostedRevision = s.view.publishedRevision; pack.minimumRevision = s.view.minimumRevision; }
+        return { hostedRevision: s.view.publishedRevision, minimumRevision: s.view.minimumRevision };
+      });
+    },
+    async packFileRead(id, request) {
+      requireCap(id); const draft = state(id).view.draft;
+      if (draft.revision !== request.expectedRevision) fail('stale_target');
+      const file = draft.manifest.overrideFiles?.find(f => !f.trashed && f.root === request.root && f.path === request.path);
+      const sha256 = file?.sha256 ?? fail('not_found');
+      const bytes = blobs.get(`${id}:${sha256}`) ?? fail('not_found');
+      if (bytes.length > 1024 * 1024) fail('invalid_input');
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      return { revision: draft.revision, sha256, contentBase64: btoa(Array.from(bytes, b => String.fromCharCode(b)).join('')) };
+    },
+    async packFileMutate(id, request, intent) {
+      return mutate(id, intent, request, async () => {
+        const manifest = clone(state(id).view.draft.manifest);
+        if (state(id).view.draft.revision !== request.expectedRevision) fail('stale_target');
+        const change = request.change;
+        const valid = (p: string) => !!p && !p.startsWith('/') && !p.includes('\\') && p.split('/').every(s => !!s && s !== '.' && s !== '..' && !s.includes(':'));
+        if (!valid(change.path) || !['overrides', 'client-overrides', 'server-overrides'].includes(change.root)) fail('invalid_input');
+        const files = manifest.overrideFiles ??= [];
+        const selected = files.filter(f => !f.trashed && f.root === change.root && (f.path === change.path || f.path.startsWith(`${change.path}/`)));
+        if (change.operation === 'write' || change.operation === 'attach') {
+          if (!/^(mods|resourcepacks|shaderpacks|datapacks|config|defaultconfigs|kubejs|scripts|resources)\//.test(change.path) && !['options.txt', 'optionsof.txt', 'optionsshaders.txt', 'servers.dat'].includes(change.path)) fail('invalid_input');
+          let sha: string;
+          if (change.operation === 'write') {
+            const bytes = Uint8Array.from(atob(change.contentBase64), c => c.charCodeAt(0));
+            if (bytes.length > 1024 * 1024) fail('invalid_input');
+            new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            sha = await bytesHash(bytes); blobs.set(`${id}:${sha}`, bytes);
+          } else { sha = change.sha256; if (!blobs.has(`${id}:${sha}`)) fail('not_found'); }
+          const old = files.find(f => !f.trashed && f.root === change.root && f.path === change.path);
+          if (old) { if (old.sha256 === null) fail('conflict'); old.sha256 = sha; }
+          else files.push({ root: change.root, path: change.path, sha256: sha, trashed: false });
+        } else if (change.operation === 'mkdir') files.push({ root: change.root, path: change.path, sha256: null, trashed: false });
+        else {
+          if (!selected.length) fail('not_found');
+          if (change.operation === 'rename') {
+            if (!valid(change.destination) || change.destination.startsWith(`${change.path}/`)) fail('invalid_input');
+            for (const file of selected) file.path = change.destination + file.path.slice(change.path.length);
+          } else for (const file of selected) file.trashed = true;
+        }
+        const names = files.filter(f => !f.trashed).map(f => `${f.root}/${f.path.toLowerCase()}`);
+        if (new Set(names).size !== names.length || files.length > 256) fail('conflict');
+        return save(id, request.expectedRevision, manifest);
+      });
+    },
+    async packArchiveInspect(id, uploadId) {
+      requireCap(id);
+      const upload = uploads.get(`${id}:${uploadId}`) ?? fail('not_found');
+      if (!upload.complete || !upload.request.archive) fail('conflict');
+      return seedArchiveInspection('mrpack');
+    },
     async packImport(id, request: PackImport, intent) { return mutate(id, intent, request, async () => { const s = state(id); if (request.source === 'published') { if (s.view.publishedRevision !== request.expectedPublishedRevision) fail('stale_target'); return save(id, request.expectedRevision, s.published); } // Archive fixtures use a deterministic imported manifest; archive parsing is covered by agent Rust tests.
       if (request.source === 'uploaded_archive' && !uploads.get(`${id}:${request.uploadId}`)?.complete) fail('invalid_input');
       const m = clone(seedPackWorkspace('fabric').draft.manifest); m.name = 'Imported client pack'; return save(id, request.expectedRevision, m); }); },
     packSuggestions: suggestions,
     async packDependencies(id, source, projectId, versionId) { const target = clone(state(id).view); if (target.minecraftDrift) fail('stale_target'); const r = resource(id, { provider: source, projectId, versionId }, true); const dependencies = projectId === 'needs-api' ? [{ ...resource(id, provider('fabric-api'), true), required: true, installed: target.draft.manifest.entries.some(e => e.id === 'modrinth-fabric-api') }] : []; return { target, ...r, dependencies, warnings: [] }; },
     packPreview: preview,
-    async packBuildPublish(id, request, intent) { requireCap(id, 'pack.publish'); if (request.requiredUpdate) requireCap(id, 'pack.force_update'); return mutate(id, intent, request, async () => { const s = state(id), p = await preview(id, request.draftRevision); if (!p.valid) fail('conflict', 'pack_unresolved_file'); if (request.expectedRevision !== s.view.publishedRevision || request.reviewSha256 !== p.reviewSha256 || JSON.stringify(request.resolvedEntries) !== JSON.stringify(p.resolvedEntries)) fail('stale_target'); const next = String(BigInt(s.view.publishedRevision) + 1n); const minimum = request.requiredUpdate || s.view.publishedRevision === '0' ? next : s.view.minimumRevision; s.view.publishedRevision = next; s.view.minimumRevision = minimum; s.published = clone(p.manifest); s.publishedDraft = s.view.draft.revision; host.server(id).snapshot.pack = { hostedRevision: next, minimumRevision: minimum, status: 'published' }; host.publish?.(id); return { hostedRevision: next, minimumRevision: minimum }; }); },
+    async packBuildPublish(id, request, intent) { requireCap(id, 'pack.publish'); if (request.requiredUpdate) requireCap(id, 'pack.force_update'); return mutate(id, intent, request, async () => { const s = state(id), p = await preview(id, request.draftRevision); if (!p.valid) fail('conflict', 'pack_unresolved_file'); if (request.expectedRevision !== s.view.publishedRevision || request.reviewSha256 !== p.reviewSha256 || JSON.stringify(request.resolvedEntries) !== JSON.stringify(p.resolvedEntries)) fail('stale_target'); const next = String(BigInt(s.view.publishedRevision) + 1n); const minimum = request.requiredUpdate || s.view.publishedRevision === '0' ? next : s.view.minimumRevision; s.view.publishedRevision = next; s.view.minimumRevision = minimum; s.view.providerPack = null; s.published = clone(p.manifest); s.publishedDraft = s.view.draft.revision; host.server(id).snapshot.pack = { hostedRevision: next, minimumRevision: minimum, status: 'published' }; host.publish?.(id); return { hostedRevision: next, minimumRevision: minimum }; }); },
     async packUploadBegin(id, request, intent) { return mutate(id, intent, request, () => { if (BigInt(request.totalSize) > 68n * 1024n * 1024n) fail('invalid_input'); uploads.set(`${id}:${request.uploadId}`, { request, bytes: new Uint8Array(), complete: false }); return { uploadId: request.uploadId, size: '0', sha256: request.sha256, complete: false }; }); },
     async packUploadChunk(id, request, intent) { return mutate(id, intent, request, () => { const u = uploads.get(`${id}:${request.uploadId}`) ?? fail('not_found'); const bytes = Uint8Array.from(atob(request.contentBase64), c => c.charCodeAt(0)); if (String(u.bytes.length) !== request.offset || bytes.length > 32768 || BigInt(u.bytes.length + bytes.length) > BigInt(u.request.totalSize)) fail('stale_target'); const combined = new Uint8Array(u.bytes.length + bytes.length); combined.set(u.bytes); combined.set(bytes, u.bytes.length); u.bytes = combined; return { uploadId: request.uploadId, size: String(combined.length), sha256: u.request.sha256, complete: false }; }); },
     async packUploadFinish(id, uploadId, intent): Promise<PackUploadReceipt> { return mutate(id, intent, ['finish', uploadId], async () => { const u = uploads.get(`${id}:${uploadId}`) ?? fail('not_found'); if (String(u.bytes.length) !== u.request.totalSize || await bytesHash(u.bytes) !== u.request.sha256) fail('conflict'); u.complete = true; if (!u.request.archive) blobs.set(`${id}:${u.request.sha256}`, u.bytes); return { uploadId, size: u.request.totalSize, sha256: u.request.sha256, complete: true }; }); },
     async packUploadCancel(id, uploadId, intent) { return mutate(id, intent, ['cancel', uploadId], () => uploads.delete(`${id}:${uploadId}`)); },
   };
+}
+
+/** Deterministic archive review fixtures; production parsing lives in the agent. */
+export function seedArchiveInspection(format: PackArchiveInspection['format']): PackArchiveInspection {
+  const manifest = seedPackWorkspace('fabric').draft.manifest;
+  manifest.name = `Imported ${format} pack`;
+  if (format === 'zip') { manifest.loader = 'none'; manifest.loaderVersion = null; }
+  const override: PackEntry = { id: 'config', kind: 'config_override', path: 'config/example.toml', required: true, environment: { client: 'required', server: 'optional' }, source: { type: 'upload', sha256: 'a'.repeat(64) } };
+  if (format === 'curseforge') manifest.entries = manifest.entries.map((e, i) => ({ ...e, source: { type: 'provider', provider: 'curseforge', projectId: String(100 + i), versionId: String(200 + i) } }));
+  if (format === 'zip') manifest.entries = manifest.entries.map(e => ({ ...e, source: { type: 'upload', sha256: 'e'.repeat(64) }, environment: { client: 'required', server: 'optional' } }));
+  if (format === 'mrpack' || format === 'curseforge') manifest.overrideFiles = [{ root: 'overrides', path: override.path, sha256: 'a'.repeat(64), trashed: false }];
+  else manifest.entries.push(override);
+  if (format === 'mrpack') manifest.entries.push({ ...override, id: 'unresolved', kind: 'mod', path: 'mods/unresolved.jar', source: { type: 'manual', reason: 'import_provider_identity_missing' } });
+  return { format, manifest, entryCount: manifest.entries.length,
+    providerEntries: manifest.entries.flatMap(e => e.source.type === 'provider' ? [{ provider: e.source.provider, projectId: e.source.projectId, versionId: e.source.versionId }] : []),
+    unresolvedFiles: manifest.entries.filter(e => e.source.type === 'manual' || (format === 'zip' && e.kind !== 'config_override')).map(e => e.path),
+    overrides: [format === 'mrpack' || format === 'curseforge' ? `overrides/${override.path}` : override.path], providerPack: null,
+    warnings: ['archive_does_not_establish_pack_provider_identity', ...(format === 'zip' ? ['archive_runtime_inferred_from_server'] : [])] };
+}
+
+export function seedRedesignWorkspace(source: 'provider' | 'overrides'): PackWorkspace {
+  const workspace = seedPackWorkspace('fabric');
+  if (source === 'provider') workspace.providerPack = { provider: 'modrinth', projectId: 'pack', versionId: 'v2' };
+  else workspace.draft.manifest.overrideFiles = [
+    { root: 'overrides', path: 'config/shared.toml', sha256: 'a'.repeat(64), trashed: false },
+    { root: 'client-overrides', path: 'config/client.toml', sha256: 'b'.repeat(64), trashed: false },
+    { root: 'server-overrides', path: 'config/server.toml', sha256: 'c'.repeat(64), trashed: false },
+    { root: 'overrides', path: 'config/old.toml', sha256: 'd'.repeat(64), trashed: true },
+    { root: 'overrides', path: 'defaultconfigs', sha256: null, trashed: false },
+  ];
+  return workspace;
 }

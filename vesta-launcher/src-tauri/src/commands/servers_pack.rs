@@ -579,3 +579,76 @@ pub async fn server_pack_suggestions(
         })
         .await
 }
+
+#[tauri::command]
+pub async fn server_pack_archive_inspect(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    upload_id: String,
+) -> Result<ArchiveInspection> {
+    manager
+        .management_read(&app, &connection_id, |c| async move {
+            c.pack_archive_inspect(upload_id).await
+        })
+        .await
+}
+
+#[tauri::command]
+pub async fn server_pack_file_read(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: FileRead,
+) -> Result<FileBody> {
+    manager
+        .management_read(&app, &connection_id, |c| async move {
+            c.pack_file_read(request).await
+        })
+        .await
+}
+#[tauri::command]
+pub async fn server_pack_file_mutate(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: FileMutation,
+    intent_id: String,
+) -> Result<PackDraft> {
+    let payload = serde_json::to_value(&request).map_err(|_| invalid())?;
+    let key = intent_id.clone();
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &key,
+            "pack/files/mutate",
+            payload,
+            false,
+            |c| async move { c.pack_file_mutate(request, &intent_id).await },
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn server_pack_provider_publish(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: ProviderPackPublish,
+    intent_id: String,
+) -> Result<vesta_server_client::management::PackOutcome> {
+    let payload = serde_json::to_value(&request).map_err(|_| invalid())?;
+    let key = intent_id.clone();
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &key,
+            "pack/provider/publish",
+            payload,
+            false,
+            |c| async move { c.pack_provider_publish(request, &intent_id).await },
+        )
+        .await
+}

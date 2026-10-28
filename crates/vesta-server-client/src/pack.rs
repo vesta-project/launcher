@@ -78,12 +78,73 @@ dto!(PackEntry {
     environment: Environment,
     source: EntrySource
 });
-dto!(PackManifest{name:String,summary:String,icon:Option<String>,display_version:String,minecraft_version:String,loader:ClientLoader,loader_version:Option<String>,entries:Vec<PackEntry>});
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackManifest {
+    pub name: String,
+    pub summary: String,
+    pub icon: Option<String>,
+    pub display_version: String,
+    pub minecraft_version: String,
+    pub loader: ClientLoader,
+    pub loader_version: Option<String>,
+    pub entries: Vec<PackEntry>,
+    #[serde(default)]
+    pub override_files: Vec<OverrideFile>,
+}
+dto!(OverrideFile {root:String,path:String,sha256:Option<String>,trashed:bool});
+dto!(FileRead {
+    root: String,
+    path: String,
+    expected_revision: String
+});
+dto!(FileBody {
+    revision: String,
+    sha256: String,
+    content_base64: String
+});
+dto!(FileMutation {
+    expected_revision: String,
+    change: FileOperation
+});
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(
+    tag = "operation",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum FileOperation {
+    Write {
+        root: String,
+        path: String,
+        content_base64: String,
+    },
+    Attach {
+        root: String,
+        path: String,
+        sha256: String,
+    },
+    Mkdir {
+        root: String,
+        path: String,
+    },
+    Rename {
+        root: String,
+        path: String,
+        destination: String,
+    },
+    Trash {
+        root: String,
+        path: String,
+    },
+}
 dto!(PackDraft {
     revision: String,
     manifest: PackManifest
 });
 dto!(WorkspaceView {
+    provider_pack: Option<content::ContentProvider>,
     draft: PackDraft,
     server_minecraft_version: String,
     minecraft_drift: bool,
@@ -154,7 +215,60 @@ pub enum ImportRequest {
         expected_published_revision: String,
     },
 }
+dto!(ArchiveInspection {format:String,manifest:PackManifest,entry_count:usize,provider_entries:Vec<content::ContentProvider>,unresolved_files:Vec<String>,overrides:Vec<String>,provider_pack:Option<content::ContentProvider>,warnings:Vec<String>});
+dto!(ProviderPackPublish {
+    expected_revision: String,
+    draft_revision: String,
+    provider: String,
+    project_id: String,
+    version_id: String,
+    required_update: bool,
+    acknowledge_lower_version: bool
+});
 impl Client {
+    pub async fn pack_provider_publish(
+        &self,
+        input: ProviderPackPublish,
+        intent: &str,
+    ) -> Result<management::PackOutcome> {
+        self.pack_mutate("pack/provider/publish", &input, intent, "pack.publish")
+            .await
+    }
+
+    pub async fn pack_file_read(&self, input: FileRead) -> Result<FileBody> {
+        from_wire(
+            self.request(
+                Method::POST,
+                "/api/v3/manage/pack/files/read",
+                Some(hosting::wire(
+                    serde_json::to_value(input).map_err(|_| Error::new(ErrorCode::InvalidInput))?,
+                )),
+                None,
+                true,
+                "pack.edit",
+            )
+            .await?,
+        )
+    }
+    pub async fn pack_file_mutate(&self, input: FileMutation, intent: &str) -> Result<PackDraft> {
+        self.pack_mutate("pack/files/mutate", &input, intent, "pack.edit")
+            .await
+    }
+
+    pub async fn pack_archive_inspect(&self, upload_id: String) -> Result<ArchiveInspection> {
+        from_wire(
+            self.request(
+                Method::POST,
+                "/api/v3/manage/pack/archive/inspect",
+                Some(json!({"upload_id":upload_id})),
+                None,
+                true,
+                "pack.edit",
+            )
+            .await?,
+        )
+    }
+
     pub async fn pack_icon(&self) -> Result<Option<PackIcon>> {
         from_wire(self.get("pack/draft/icon", true, "pack.edit").await?)
     }
@@ -296,6 +410,25 @@ mod tests {
         let decoded: WorkspacePublish = from_wire(value).unwrap();
         assert!(decoded.required_update);
         assert_eq!(decoded.draft_revision, "4");
+    }
+    #[test]
+    fn override_and_provider_wire_are_closed_and_keep_decimal_revisions() {
+        let input = FileMutation {
+            expected_revision: "9007199254740991".into(),
+            change: FileOperation::Attach {
+                root: "server-overrides".into(),
+                path: "config/server.toml".into(),
+                sha256: "a".repeat(64),
+            },
+        };
+        let wire = hosting::wire(serde_json::to_value(input).unwrap());
+        assert_eq!(wire["expected_revision"], "9007199254740991");
+        assert_eq!(wire["change"]["root"], "server-overrides");
+        let decoded: FileMutation = from_wire(wire).unwrap();
+        assert_eq!(decoded.expected_revision, "9007199254740991");
+        assert!(serde_json::from_value::<FileOperation>(json!({"operation":"attach","root":"overrides","path":"config/a","sha256":"a".repeat(64),"url":"https://evil.invalid"})).is_err());
+        let manifest:PackManifest=serde_json::from_value(json!({"name":"Old","summary":"","icon":null,"displayVersion":"1","minecraftVersion":"1.21.1","loader":"none","loaderVersion":null,"entries":[]})).unwrap();
+        assert!(manifest.override_files.is_empty());
     }
     #[test]
     fn provider_source_refuses_untrusted_download_urls() {
