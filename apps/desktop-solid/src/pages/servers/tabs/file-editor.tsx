@@ -4,7 +4,7 @@ import { navigate, setLeaveGuard } from '../../../app/router';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
-import { baseName, changedLineCount, fileActions, fileIcon, fileKind, formatBytes, saveTextFile } from '../../../features/servers/files-model';
+import { baseName, changedLineCount, fileActions, fileIcon, fileKind, formatBytes, saveText, saveTextFile, type TextFileSource } from '../../../features/servers/files-model';
 import { IntentMemo } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import {
@@ -19,9 +19,14 @@ import '../../library/instance/settings-tab.css';
 /**
  * Text editor bound to the SHA-256 the file was read with. A save against a stale
  * validator never overwrites: it opens a compare of the server's copy and the draft.
+ * `source` swaps the store (a modpack's override files); without it the server's game files are edited.
  */
-export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onClose: () => void; onDownload: () => void }) {
+export function FileEditor(props: {
+  snapshot: ServerSnapshot; path: string; onClose: () => void; onDownload?: () => void;
+  source?: TextFileSource; readOnly?: boolean; label?: string;
+}) {
   const id = () => props.snapshot.connection.id;
+  const readText = (path: string) => (props.source ? props.source.read(path) : serverCommand((client) => client.fileReadText(id(), path)));
   const [file, setFile] = createSignal<TextFile | null>(null, { name: 'server-file-editor:file' });
   const [draft, setDraft] = createSignal('', { name: 'server-file-editor:draft' });
   const [validator, setValidator] = createSignal<string | null>(null, { name: 'server-file-editor:validator' });
@@ -31,14 +36,15 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   const [gone, setGone] = createSignal(false, { name: 'server-file-editor:gone' });
   const intents = new IntentMemo();
   /** Owners/admins editing server.properties, whitelist.json, ops.json or banned-*.json directly. */
-  const raw = () => protectedAccess(props.snapshot.capabilities, props.path) === 'raw';
+  const raw = () => !props.source && protectedAccess(props.snapshot.capabilities, props.path) === 'raw';
   const [edit, setEdit] = createSignal<ProtectedEdit>(IDLE, { name: 'server-file-editor:protected' });
   const [rawProblem, setRawProblem] = createSignal<MessageId | null>(null, { name: 'server-file-editor:raw-problem' });
   const rawIntents = new IntentMemo();
   const now = useServersClock();
   const editable = () => {
     const current = file();
-    return !!current && !current.binary && !current.truncated && fileActions(props.snapshot.capabilities, props.path, { kind: 'file', size: current.size }).edit;
+    if (!current || current.binary || current.truncated) return false;
+    return props.source ? !props.readOnly : fileActions(props.snapshot.capabilities, props.path, { kind: 'file', size: current.size }).edit;
   };
   const dirty = () => !!file() && draft() !== file()!.text;
   /** Where the user tried to go with unsaved edits: a route, or `close` for the Back button. */
@@ -49,7 +55,7 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
   const load = async () => {
     setError(null);
     try {
-      const read = await serverCommand((client) => client.fileReadText(id(), props.path));
+      const read = await readText(props.path);
       setFile(read); setDraft(read.text); setValidator(read.sha256); setGone(false);
     } catch (reason) { setError(reason as ServerCommandError); }
   };
@@ -60,7 +66,9 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
     setSaving(true); setError(null);
     const intentId = intents.idFor({ path: props.path, text, expected });
     try {
-      const outcome = await serverCommand((client) => saveTextFile(client, id(), props.path, text, expected, intentId));
+      const outcome = props.source
+        ? await saveText(props.source, props.path, text, expected, intentId)
+        : await serverCommand((client) => saveTextFile(client, id(), props.path, text, expected, intentId));
       intents.settle();
       if (outcome.kind === 'saved') {
         setFile({ text, sha256: outcome.sha256, size: outcome.size, binary: false, truncated: false });
@@ -121,7 +129,7 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
         return;
       }
       // Stale: read the server's copy so the user can compare before choosing.
-      try { step({ type: 'stale', server: await serverCommand((client) => client.fileReadText(id(), props.path)) }); }
+      try { step({ type: 'stale', server: await readText(props.path) }); }
       catch (readError) {
         if ((readError as ServerCommandError).code === 'not_found') step({ type: 'gone' });
         else { setError(readError as ServerCommandError); step({ type: 'failed' }); }
@@ -182,7 +190,7 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
       <div data-vesta="server-file-bar">
         <IconButton size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-back" />} label={t('server-files.back-to-files')} onClick={close} />
         <span data-vesta="server-file-icon" data-kind={fileKind(props.path)}><Icon name={fileIcon[fileKind(props.path)]} /></span>
-        <span data-vesta="server-file-name">{props.path}</span>
+        <span data-vesta="server-file-name">{props.label ?? props.path}</span>
         <Show when={file()}>{(current) => <span data-vesta="server-file-meta">{formatBytes(current().size)}</span>}</Show>
         <Show when={file() && !editable()}><Badge size="sm" variant="soft">{t('server-files.read-only')}</Badge></Show>
         <span data-vesta="server-toolbar-spacer" />
@@ -198,7 +206,9 @@ export function FileEditor(props: { snapshot: ServerSnapshot; path: string; onCl
           <Button size="sm" tone="accent" disabled={!canSave()} data-tip={t('server-files.save-shortcut', { value: saveKeys })}
             onClick={() => void saveNow()}>{t('server-files.save')}</Button>
         </Show>
-        <IconButton size="sm" variant="ghost" icon={<Icon name="icons/actions/download" />} label={t('server-files.download')} onClick={props.onDownload} />
+        <Show when={props.onDownload}>
+          {(download) => <IconButton size="sm" variant="ghost" icon={<Icon name="icons/actions/download" />} label={t('server-files.download')} onClick={() => download()()} />}
+        </Show>
       </div>
       <div data-vesta="server-pane-body" class="server-file-editor-body">
         <Show when={raw()}>

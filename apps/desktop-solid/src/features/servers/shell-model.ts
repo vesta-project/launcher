@@ -31,7 +31,7 @@ export const mainTabs: readonly ShellTab<MainTabId>[] = [
   { id: 'overview', label: 'servers.tab.overview', icon: 'icons/navigation/home', needs: [], live: false },
   { id: 'console', label: 'servers.tab.console', icon: 'icons/content/terminal', needs: ['console.read'], live: true },
   { id: 'resources', label: 'server-content.tab', icon: 'icons/content/layers', needs: ['files.list'], live: true },
-  { id: 'pack', label: 'server-pack.title', icon: 'icons/content/layers', needs: ['pack.edit', 'pack.download', 'pack.access'], live: true },
+  { id: 'pack', label: 'server-pack.title', icon: 'icons/content/modpack', needs: ['pack.edit', 'pack.download', 'pack.access'], live: true },
   { id: 'files', label: 'server-files.tab', icon: 'icons/content/folder', needs: ['files.list'], live: true },
   { id: 'automation', label: 'servers.tab.automation', icon: 'icons/content/timer', needs: ['automation.view'], live: true },
   { id: 'backups', label: 'servers.tab.backups', icon: 'icons/content/storage', needs: ['backups.view', 'backups.configure'], live: true },

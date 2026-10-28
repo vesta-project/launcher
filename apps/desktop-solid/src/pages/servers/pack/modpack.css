@@ -1,0 +1,828 @@
+/*
+ * Server → Modpack: a pack header, a sub-nav like an instance's tabs, and panes that reuse the
+ * instance Resources table and the server Files list.
+ * Hooks: [data-vesta=modpack] -header(-art -icon -copy -title -summary -facts -draft) -scroll
+ *        -first -choices -choice -card -facts -overview -panel -install -versions -diff
+ * Knobs: --modpack-art (header art image), --modpack-panel-bg
+ */
+@layer launcher {
+  :where([data-vesta="modpack"]) {
+    --modpack-panel-bg: var(--vesta-color-surface-raised);
+
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  :where([data-vesta="server-callout"][data-tone="accent"]) { --tone: var(--vesta-color-accent); }
+
+  /* ---- Header ---- */
+  :where([data-vesta="modpack-header"]) {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-4);
+    padding: var(--vesta-space-4) var(--instance-gutter);
+    overflow: hidden;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="modpack-header-art"]) {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      linear-gradient(to right, var(--vesta-color-surface) 25%, color-mix(in oklab, var(--vesta-color-surface) 80%, transparent)),
+      var(--modpack-art, none) center / cover no-repeat;
+    filter: saturate(1.2);
+    opacity: 0.9;
+  }
+
+  :where([data-vesta="modpack-header"]) > :not([data-vesta="modpack-header-art"]) {
+    position: relative;
+    z-index: 1;
+  }
+
+  :where([data-vesta="modpack-header-icon"]) {
+    flex: none;
+    inline-size: 64px;
+    block-size: 64px;
+    object-fit: cover;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-sunken, var(--vesta-color-surface));
+    box-shadow: 0 4px 14px oklch(0 0 0 / 0.25);
+  }
+
+  :where([data-vesta="modpack-header-copy"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-header-title-row"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-header-title"]) {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--vesta-text-lg);
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="modpack-header-summary"]) {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+  }
+
+  :where([data-vesta="modpack-header-facts"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-1) var(--vesta-space-3);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="modpack-header-facts"]) > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  :where([data-vesta="modpack-header-draft"]) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-1) var(--vesta-space-1) var(--vesta-space-1) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-accent) 12%, var(--vesta-color-surface));
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-draft-dot"]) {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--vesta-color-accent);
+  }
+
+  /* ---- Sub-nav + panes ---- */
+  .modpack-tabs {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  .modpack-tabs > [role="tablist"] {
+    flex: none;
+    padding-inline: var(--instance-gutter);
+    background: var(--instance-bar-bg);
+  }
+
+  /* The server workspace's sidebar rules reach nested tabs; the sub-nav stays a horizontal strip. */
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab-list"] {
+    inline-size: auto;
+    gap: var(--vesta-space-1);
+    padding: 0 var(--instance-gutter);
+    border-inline-end: 0;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab"] {
+    --tab-height: 40px;
+
+    border-radius: 0;
+  }
+
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab"][data-selected] {
+    background: transparent;
+  }
+
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab"][data-selected]::after {
+    inset-inline: var(--tab-padding-x);
+    inset-block: auto -1px;
+    inline-size: auto;
+    block-size: 2px;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .modpack-pane {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+    overflow: hidden;
+  }
+
+  :where([data-vesta="modpack-scroll"]) {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: var(--instance-gutter);
+    scrollbar-width: thin;
+  }
+
+  :where([data-vesta="modpack"]) .modpack-note {
+    margin: var(--vesta-space-2) var(--instance-gutter) 0;
+  }
+
+  :where([data-vesta="modpack"]) :where([data-vesta="server-muted"]) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  /* ---- First run ---- */
+  :where([data-vesta="modpack-first"]) {
+    display: grid;
+    gap: var(--vesta-space-4);
+    max-inline-size: 980px;
+    margin-inline: auto;
+  }
+
+  :where([data-vesta="modpack-first-head"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-first-head"] h2) {
+    margin: 0;
+    font-size: var(--vesta-text-xl);
+    font-weight: 800;
+  }
+
+  :where([data-vesta="modpack-first-head"] p) {
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="modpack-first-mark"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 48px;
+    block-size: 48px;
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta="modpack-choices"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-choice"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg);
+    transition: border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
+  }
+
+  :where([data-vesta="modpack-choice"]):hover,
+  :where([data-vesta="modpack-choice"][data-drop-target="active"]) {
+    border-color: var(--vesta-color-accent-border, var(--vesta-color-accent));
+  }
+
+  :where([data-vesta="modpack-choice"][data-choice="provider"]) {
+    background: linear-gradient(160deg, color-mix(in oklab, var(--vesta-color-accent) 12%, var(--modpack-panel-bg)), var(--modpack-panel-bg) 60%);
+  }
+
+  :where([data-vesta="modpack-choice"] h3) {
+    margin: 0;
+    font-size: var(--vesta-text-md, var(--vesta-text-sm));
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-choice"] p) {
+    flex: 1;
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: 1.45;
+  }
+
+  :where([data-vesta="modpack-choice"]) > :where([data-vesta="modpack-choice-hint"]) {
+    flex: none;
+    color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted));
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="modpack-choice"]) > button {
+    align-self: flex-start;
+  }
+
+  :where([data-vesta="modpack-choice-icon"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-accent-text);
+  }
+
+  /* ---- Cards (upload result, scratch, sync review) ---- */
+  :where([data-vesta="modpack-card"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg);
+  }
+
+  :where([data-vesta="modpack-card-head"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-card-head"]) > div {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-card-head"] h3) {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: 800;
+  }
+
+  :where([data-vesta="modpack-card-head"] img) {
+    border-radius: var(--vesta-radius-md);
+  }
+
+  :where([data-vesta="modpack-eyebrow"]) {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    color: var(--vesta-color-accent-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta="modpack-card-title"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-card-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-facts"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--vesta-space-2);
+    margin: 0;
+  }
+
+  :where([data-vesta="modpack-facts"]) > div {
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta="modpack-facts"] dt) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="modpack-facts"] dd) {
+    margin: 2px 0 0;
+    font-weight: var(--vesta-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="modpack-unresolved"]) {
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-unresolved"] summary) {
+    color: var(--vesta-color-text-muted);
+    cursor: default;
+  }
+
+  :where([data-vesta="modpack-unresolved"] ul),
+  :where([data-vesta="modpack-install-list"]),
+  :where([data-vesta="modpack-diff-group"] ul) {
+    display: grid;
+    gap: 2px;
+    max-block-size: 200px;
+    margin: var(--vesta-space-1) 0 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-install-list"]) > li {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack"], [data-vesta="modpack-install"]) code {
+    overflow-wrap: anywhere;
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="modpack-pick-list"]) {
+    display: grid;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* ---- Overview ---- */
+  :where([data-vesta="modpack-overview"]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr);
+    align-items: start;
+    gap: var(--vesta-space-4);
+  }
+
+  @container pane (max-width: 760px) {
+    :where([data-vesta="modpack-overview"]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  :where([data-vesta="modpack-overview-main"], [data-vesta="modpack-overview-side"], [data-vesta="modpack-versions"]) {
+    display: grid;
+    gap: var(--vesta-space-4);
+  }
+
+  :where([data-vesta="modpack-panel"]) {
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg);
+  }
+
+  :where([data-vesta="modpack-panel-head"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    min-block-size: 44px;
+    padding: 0 var(--vesta-space-4);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="modpack-panel-head"] h3) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta="modpack-panel-actions"]) {
+    display: flex;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-panel-body"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-4);
+  }
+
+  :where([data-vesta="modpack-panel-body"]) > button {
+    justify-self: start;
+  }
+
+  :where([data-vesta="modpack-identity"]) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-4);
+  }
+
+  :where([data-vesta="modpack-icon-pick"]) {
+    position: relative;
+    flex: none;
+    padding: 0;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: none;
+    color: inherit;
+    cursor: default;
+  }
+
+  :where([data-vesta="modpack-icon-pick"] img) {
+    display: block;
+    inline-size: 72px;
+    block-size: 72px;
+    object-fit: cover;
+  }
+
+  :where([data-vesta="modpack-icon-pick"] span) {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 2px;
+    background: oklch(0 0 0 / 0.6);
+    color: white;
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  :where([data-vesta="modpack-icon-pick"]):is(:hover, :focus-visible) span {
+    opacity: 1;
+  }
+
+  :where([data-vesta="modpack-identity-fields"]) {
+    display: grid;
+    flex: 1;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-field-row"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-source"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-source-row"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-source-row"] a) {
+    color: inherit;
+    cursor: default;
+  }
+
+  :where([data-vesta="modpack-source-provider"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-source-actions"], [data-vesta="modpack-inline-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-check-line"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-check-line"]) :where([data-vesta="icon"], svg) {
+    color: var(--vesta-color-success);
+  }
+
+  :where([data-vesta="modpack-bullets"]) {
+    display: grid;
+    gap: var(--vesta-space-1);
+    margin: 0;
+    padding-inline-start: var(--vesta-space-4);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-sync-review"]) {
+    display: grid;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-sync-review"] p) {
+    margin: 0;
+  }
+
+  /* ---- Content suggestions ---- */
+  :where([data-vesta="modpack-suggestions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    margin: var(--vesta-space-2) var(--instance-gutter) 0;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-accent) 30%, transparent);
+    border-radius: var(--vesta-radius-md);
+    background: color-mix(in oklab, var(--vesta-color-accent) 8%, transparent);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-suggestions-title"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-suggestions"] ul) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta="modpack-suggestions"] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-suggestions"] li > span) {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  /* ---- Files ---- */
+  :where([data-modpack-files]) :where([data-vesta="server-file-list"][data-columns="2"]) > :where([data-vesta="server-file-head"], [data-vesta="server-file-row"]) {
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+
+  :where([data-modpack-files]) .modpack-root-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    margin-block-end: var(--vesta-space-2);
+  }
+
+  /* ---- Install review ---- */
+  :where([data-vesta="modpack-install"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-install-runtime"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-5);
+    padding: var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta="modpack-install-runtime"]) > span:not([data-vesta]) {
+    display: grid;
+  }
+
+  :where([data-vesta="modpack-install-runtime"] small, [data-vesta="modpack-release"] small) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="modpack-install-section"] h4, [data-vesta="modpack-diff-group"] h4) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-conflict"]) {
+    justify-content: space-between;
+    padding: var(--vesta-space-1) 0;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="modpack-conflict"]) > span {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-conflict"] small) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="modpack-warnings"]) {
+    display: grid;
+    gap: var(--vesta-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--vesta-color-warning-text, var(--vesta-color-text-muted));
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-warnings"] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+  }
+
+  :where([data-vesta="modpack-install-done"]) {
+    display: grid;
+    justify-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-4);
+    text-align: center;
+  }
+
+  :where([data-vesta="modpack-install-done"] h4) {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+  }
+
+  :where([data-vesta="modpack-install-done"] p) {
+    margin: 0;
+  }
+
+  :where([data-vesta="modpack-done-mark"]) {
+    display: grid;
+    place-items: center;
+    inline-size: 44px;
+    block-size: 44px;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--vesta-color-success) 20%, transparent);
+    color: var(--vesta-color-success);
+  }
+
+  :where([data-vesta="modpack-install-loading"], [data-vesta="modpack-pick"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+  }
+
+  /* ---- Versions ---- */
+  :where([data-vesta="modpack-release"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-3) var(--vesta-space-6, 32px);
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg);
+  }
+
+  :where([data-vesta="modpack-release"]) > div {
+    display: grid;
+  }
+
+  :where([data-vesta="modpack-release"] strong) {
+    font-size: var(--vesta-text-xl);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="modpack-release"]) > p {
+    flex-basis: 100%;
+  }
+
+  :where([data-vesta="modpack-diff"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-diff-group"]) {
+    --tone: var(--vesta-color-text-muted);
+
+    padding-inline-start: var(--vesta-space-3);
+    border-inline-start: 3px solid var(--tone);
+  }
+
+  :where([data-vesta="modpack-diff-group"][data-tone="success"]) { --tone: var(--vesta-color-success); }
+  :where([data-vesta="modpack-diff-group"][data-tone="accent"]) { --tone: var(--vesta-color-accent); }
+  :where([data-vesta="modpack-diff-group"][data-tone="danger"]) { --tone: var(--vesta-color-danger); }
+
+  :where([data-vesta="modpack-publish-mode"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="modpack-version-list"]) {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta="modpack-version"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2) 0;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="modpack-version"][data-active]) {
+    margin-inline: calc(var(--vesta-space-2) * -1);
+    padding-inline: var(--vesta-space-2);
+    border-radius: var(--vesta-radius-md);
+    background: color-mix(in oklab, var(--vesta-color-success) 8%, transparent);
+  }
+
+  :where([data-vesta="modpack-version-copy"]) {
+    display: grid;
+    flex: 1;
+    min-inline-size: 160px;
+  }
+
+  :where([data-vesta="modpack-switch"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+}

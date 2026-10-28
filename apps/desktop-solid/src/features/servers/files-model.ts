@@ -196,7 +196,7 @@ export function uploadProblem(candidates: readonly Pick<UploadCandidate, 'name' 
 export const chunkCount = (size: string | number) => Math.max(1, Math.ceil(Number(size) / UPLOAD_CHUNK));
 
 /** Problem with a new or renamed name inside a directory listing, or null. */
-export function nameProblem(name: string, siblings: readonly FileEntry[], current?: string): MessageId | null {
+export function nameProblem(name: string, siblings: readonly Pick<FileEntry, 'name'>[], current?: string): MessageId | null {
   const trimmed = name.trim();
   if (!trimmed) return 'server-files.name.empty';
   if (!isSafeSegment(trimmed)) return 'server-files.name.invalid';
@@ -264,13 +264,36 @@ export type SaveOutcome =
 export async function saveTextFile(
   client: TextFileClient, connectionId: string, path: string, text: string, validator: string | null, intentId: string,
 ): Promise<SaveOutcome> {
+  return saveText(serverTextSource(client, connectionId), path, text, validator, intentId);
+}
+
+/**
+ * Where an editor reads and writes text: the server's game files, or a modpack's override
+ * files. The editor and save/compare flow are the same; only the store differs.
+ */
+export interface TextFileSource {
+  /** `server` files may be protected documents and link to Settings; other stores never are. */
+  kind: 'server' | 'pack';
+  read(path: string): Promise<TextFile>;
+  /** Rejects with `stale_target` when `validator` no longer matches. */
+  write(path: string, text: string, validator: string | null, intentId: string): Promise<{ sha256: string; size: string }>;
+}
+
+export const serverTextSource = (client: TextFileClient, connectionId: string): TextFileSource => ({
+  kind: 'server',
+  read: (path) => client.fileReadText(connectionId, path),
+  write: (path, text, validator, intentId) => client.fileWriteText(connectionId, path, text, validator, intentId),
+});
+
+/** The validator-bound save over any text source. */
+export async function saveText(source: TextFileSource, path: string, text: string, validator: string | null, intentId: string): Promise<SaveOutcome> {
   try {
-    const change = await client.fileWriteText(connectionId, path, text, validator, intentId);
+    const change = await source.write(path, text, validator, intentId);
     return { kind: 'saved', sha256: change.sha256, size: change.size };
   } catch (reason) {
     if ((reason as ServerCommandError | undefined)?.code !== 'stale_target') throw reason;
     try {
-      return { kind: 'conflict', server: await client.fileReadText(connectionId, path) };
+      return { kind: 'conflict', server: await source.read(path) };
     } catch (readError) {
       if ((readError as ServerCommandError | undefined)?.code === 'not_found') return { kind: 'gone' };
       throw readError;
