@@ -652,3 +652,39 @@ pub async fn server_pack_provider_publish(
         )
         .await
 }
+
+#[tauri::command]
+pub async fn server_pack_install_plan(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: PackInstallRequest,
+) -> Result<PackInstallPlan> {
+    manager
+        .management_read(&app, &connection_id, |c| async move {
+            c.pack_install_plan(request).await
+        })
+        .await
+}
+#[tauri::command]
+pub async fn server_pack_install_apply(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: PackInstallApply,
+    intent_id: String,
+) -> Result<PackInstallOutcome> {
+    let payload = serde_json::to_value(&request).map_err(|_| invalid())?;
+    let key = intent_id.clone();
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &key,
+            "pack/install/apply",
+            payload,
+            false,
+            |c| async move { c.pack_install_apply(request, &intent_id).await },
+        )
+        .await
+}

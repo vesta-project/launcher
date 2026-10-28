@@ -46,8 +46,16 @@ export interface PackDependencyPreview { target: PackWorkspace; project: Resourc
 export interface PackUploadBegin { uploadId: string; totalSize: string; sha256: string; archive: boolean }
 export interface PackUploadChunk { uploadId: string; offset: string; contentBase64: string }
 export interface PackUploadReceipt { uploadId: string; size: string; sha256: string; complete: boolean }
+export type PackInstallSource = ({source:'provider'} & ContentProvider) | {source:'uploaded_archive';uploadId:string} | {source:'draft'|'published';revision:string};
+export interface PackInstallRequest {source:PackInstallSource}
+export interface PackInstallFile {path:string;sha256:string;expectedSha256:string|null;conflict:'project_version'|'same_filename'|'unidentified_jar'|null}
+export interface PackInstallPlan {planId:string;confirmationToken:string;expiresAtMs:number;minecraftVersion:string;software:string;loaderVersion:string|null;softwareSwitchRequired:boolean;valid:boolean;files:PackInstallFile[];skipped:string[];warnings:string[];backupRecommended:boolean}
+export interface PackInstallApply {planId:string;confirmationToken:string;choices:{path:string;choice:'replace'|'keep'}[];setAsModpack:boolean}
+export interface PackInstallOutcome {state:'staged_until_restart';pendingIds:string[];modpackRevision:string|null}
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);
 export const serversPackNative = {
+  packInstallPlan: (connectionId:ConnectionId,request:PackInstallRequest) => call<PackInstallPlan>('server_pack_install_plan',{connectionId,request}),
+  packInstallApply: (connectionId:ConnectionId,request:PackInstallApply,intentId:string) => call<PackInstallOutcome>('server_pack_install_apply',{connectionId,request,intentId}),
   packProviderPublish: (connectionId: ConnectionId, request: PackProviderPublish, intentId: string) => call<PackPublishOutcome>('server_pack_provider_publish', { connectionId, request, intentId }),
   /** List through packDraft().draft.manifest.overrideFiles; null hash means directory. */
   packFileRead: (connectionId: ConnectionId, request: PackFileRead) => call<PackFileBody>('server_pack_file_read', { connectionId, request }),

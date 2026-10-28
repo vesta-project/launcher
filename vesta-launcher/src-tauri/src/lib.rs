@@ -241,6 +241,8 @@ pub fn run(context: tauri::Context) {
             commands::servers_pack::server_pack_delete,
             commands::servers_pack::server_pack_import,
             commands::servers_pack::server_pack_archive_inspect,
+            commands::servers_pack::server_pack_install_plan,
+            commands::servers_pack::server_pack_install_apply,
             commands::servers_pack::server_pack_provider_publish,
             commands::servers_pack::server_pack_file_read,
             commands::servers_pack::server_pack_file_mutate,

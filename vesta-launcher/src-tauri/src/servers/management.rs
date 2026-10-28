@@ -100,7 +100,7 @@ impl ServerManager {
                 let job_id = state.and_then(|_| job.get("id").and_then(Value::as_str));
                 // A content receipt completes the request even when its live file
                 // effect is queued. Inventory owns that queue; it is not a backup job.
-                let content = action.starts_with("content/");
+                let content = action.starts_with("content/") || action == "pack/install/apply";
                 let terminal = content || state.is_none_or(backup_terminal);
                 // Acceptance is already known: a local bookkeeping failure cannot undo it.
                 let _ = self

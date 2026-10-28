@@ -1,4 +1,4 @@
-import type { serversPackNative, PackWorkspace, PackEntry, PackManifest, PackPreview, PackSuggestion, PackImport, PackBrowseAdd, PackUploadBegin, PackUploadReceipt, PackArchiveInspection } from './native-pack';
+import type { serversPackNative, PackWorkspace, PackEntry, PackManifest, PackPreview, PackSuggestion, PackImport, PackBrowseAdd, PackUploadBegin, PackUploadReceipt, PackArchiveInspection, PackInstallPlan, PackInstallSource } from './native-pack';
 import type { ServerCommandError } from './native';
 import type { ServerContentInventory, ContentProvider } from './native-content';
 import { fixtureProjects, fixtureVersions } from '../browse/browse-fixtures';
@@ -31,6 +31,7 @@ interface Host {
 export function createPackFixtures(host: Host): typeof serversPackNative & { fixturePublishedManifest(id: string): PackManifest } {
   const states = new Map<string, { view: PackWorkspace; published: PackManifest; publishedDraft: string }>();
   const receipts = new Map<string, { input: string; result: unknown }>();
+  const installPlans = new Map<string,{id:string;plan:PackInstallPlan;source:PackInstallSource}>();
   const blobs = new Map<string, Uint8Array>();
   const uploads = new Map<string, { request: PackUploadBegin; bytes: Uint8Array; complete: boolean }>();
   const tails = new Map<string, Promise<unknown>>();
@@ -155,6 +156,36 @@ export function createPackFixtures(host: Host): typeof serversPackNative & { fix
         return save(id, request.expectedRevision, manifest);
       });
     },
+    async packInstallPlan(id, request) {
+      requireCap(id,'content.install');
+      if (!['owner','administrator','admin'].includes(host.server(id).snapshot.connection.role ?? '')) fail('forbidden');
+      const scenario=request.source.source==='provider'?'provider':request.source.source==='uploaded_archive'?'archive':'conflicts';
+      const plan=seedPackInstallPlan(scenario); plan.planId=crypto.randomUUID(); plan.confirmationToken=crypto.randomUUID();plan.expiresAtMs=Date.now()+900000;
+      plan.softwareSwitchRequired=host.software(id)!==plan.software||(host.minecraftVersion?.(id)??'1.21.4')!==plan.minecraftVersion;
+      installPlans.set(plan.planId,{id,plan:clone(plan),source:clone(request.source)});return plan;
+    },
+    async packInstallApply(id, request, intent) {
+      requireCap(id,'content.install');
+      if (!['owner','administrator','admin'].includes(host.server(id).snapshot.connection.role ?? '')) fail('forbidden');
+      return mutate(id,intent,request,()=>{
+        const saved=installPlans.get(request.planId)??fail('not_found'),p=saved.plan;
+        if(saved.id!==id||p.confirmationToken!==request.confirmationToken||p.expiresAtMs<Date.now())fail('conflict');
+        if(host.software(id)!==p.software||(host.minecraftVersion?.(id)??'1.21.4')!==p.minecraftVersion)fail('stale_target');
+        const conflicts=p.files.filter(f=>f.conflict).map(f=>f.path).sort();
+        if(JSON.stringify(conflicts)!==JSON.stringify(request.choices.map(c=>c.path).sort())||request.choices.some(c=>!['keep','replace'].includes(c.choice)))fail('invalid_input');
+        let modpackRevision:string|null=null;
+        if(request.setAsModpack){
+          const view=state(id).view;
+          modpackRevision=saved.source.source==='published'?saved.source.revision:String(BigInt(view.publishedRevision)+1n);
+          view.publishedRevision=modpackRevision;
+          if(saved.source.source==='provider')view.providerPack={provider:saved.source.provider,projectId:saved.source.projectId,versionId:saved.source.versionId};
+          else if(saved.source.source!=='published')view.providerPack=null;
+          host.server(id).snapshot.pack={hostedRevision:modpackRevision,minimumRevision:view.minimumRevision,status:'published'};
+          host.publish?.(id);
+        }
+        return {state:'staged_until_restart' as const,pendingIds:p.files.filter(f=>!request.choices.some(c=>c.path===f.path&&c.choice==='keep')).map((_,i)=>`${p.planId}-${i}`),modpackRevision};
+      });
+    },
     async packArchiveInspect(id, uploadId) {
       requireCap(id);
       const upload = uploads.get(`${id}:${uploadId}`) ?? fail('not_found');
@@ -204,4 +235,13 @@ export function seedRedesignWorkspace(source: 'provider' | 'overrides'): PackWor
     { root: 'overrides', path: 'defaultconfigs', sha256: null, trashed: false },
   ];
   return workspace;
+}
+
+/** Review examples for the Modpack and Browse server destinations. */
+export function seedPackInstallPlan(scenario:'provider'|'archive'|'conflicts'|'software_switch'):PackInstallPlan {
+  return {planId:'fixture-plan',confirmationToken:'fixture-confirmation',expiresAtMs:Date.now()+900000,
+    minecraftVersion:scenario==='software_switch'?'1.21.5':'1.21.4',software:'fabric',loaderVersion:'0.16.10',softwareSwitchRequired:scenario==='software_switch',valid:true,backupRecommended:true,
+    files:[{path:'mods/example.jar',sha256:'a'.repeat(64),expectedSha256:scenario==='conflicts'?'b'.repeat(64):null,conflict:scenario==='conflicts'?'project_version':null},
+      ...(scenario==='archive'?[{path:'config/example.json',sha256:'c'.repeat(64),expectedSha256:null,conflict:null}]:[])],
+    skipped:['mods/client-only.jar','client-overrides/options.txt'],warnings:['unknown_server_side:mods/example.jar']};
 }

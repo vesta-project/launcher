@@ -109,22 +109,63 @@ tests and clippy, launcher check, frontend typecheck and server/localization tes
 run separately. The full frontend suite has an existing console HOT_SCOPE_TIME budget
 failure under compilation load; diagnostic thresholds were not changed.
 
-## Outstanding approved scope
+## Install on this server (item 4)
 
-**Install on this server (item 4) is not implemented in this handoff.** There is no
-server whole-pack plan/apply command or conflict-plan fixture. Do not enable that action
-from these methods. Existing per-resource server installs remain available.
+`packInstallPlan(id,{source})` calls POST `pack/install/plan`; `packInstallApply(id,
+request,intent)` calls POST `pack/install/apply`. Native commands are
+`server_pack_install_plan` and `server_pack_install_apply`. Both are in serversApi().
+Only owner/administrator with content.install and pack.edit may use them; file scope
+permissions are checked again when staging and at restart. No UI pages were changed.
 
-The current content staging queue admits JARs and datapacks only, and can apply
-immediately while stopped. Completing the approved flow requires durable config-file
-staging through restart, a bounded reviewed multi-file plan bound to source/upload,
-software-plan and file validators, server-side provider metadata filtering (unknown
-side included with warning), shared/server override precedence, conflict/backup review,
-and optional pack assignment with exact retry outcomes. Simply calling per-entry
-contentInstall would not provide those guarantees.
+Source is one of `{source:'provider',provider,projectId,versionId}`,
+`{source:'uploaded_archive',uploadId}` (complete archive upload; inspect first),
+`{source:'draft',revision}`, or `{source:'published',revision}`. Note the nested DTO:
+`packInstallPlan(id,{source:{source:'draft',revision:workspace.draft.revision}})`.
+Planning does not edit the workspace or consume the archive upload. Provider archives
+and entry downloads use authenticated provider resolution and digest checks.
 
-Full end-to-end live acceptance, provider downloads with real credentials, and the
-server-install flow remain outstanding.
+Only enable Apply when `valid` is true. Review `minecraftVersion`, `software`, `loaderVersion`, `softwareSwitchRequired`,
+`files`, `skipped`, `warnings`, and `backupRecommended`. Software/version switching
+uses the existing softwarePlan/softwareApply review flow FIRST: pass the required
+software, Minecraft version and loader version, review Java/warnings, confirm it and
+wait for its job to finish. Then apply this pack before plan expiry (15 minutes), or
+replan. Apply rechecks installed Minecraft/software/loader, including inside its
+transaction. A plain archive with mods infers the current installed loader and warns. If no mod
+loader/version is established, valid is false: choose software first, then replan.
+
+Each file exposes its pinned SHA-256, expected existing SHA-256 and conflict category
+(project_version, same_filename, unidentified_jar). A project version replacement
+keeps the existing destination path. Supply exactly one `{path,choice:'replace'|'keep'}`
+for each conflicting file in `choices`; no extra or duplicate choices are accepted.
+Keep skips that incoming file. Other existing content is retained. Unidentified content
+outside a colliding destination is reported as a retained-content warning. Unknown
+server-side metadata includes the file with a warning; explicit client-only entries
+and resource/shader packs are excluded. Shared overrides are applied first, then server
+overrides. Client overrides are excluded. Unsafe/protected paths are refused.
+
+Apply payload: `{planId,confirmationToken,choices,setAsModpack}`. Default the checkbox
+`setAsModpack` ON. Preserve this exact request and durable intent for retries. Result:
+`{state:'staged_until_restart',pendingIds,modpackRevision}`. Files are inserted as one
+bounded transaction into the existing content queue even when the server is stopped;
+restart applies them through the file journal with preconditions, trash and audit.
+Show the returned pending IDs with existing content cancel/restart controls. Restart
+can refuse changed files or revoked authority; report the content error and replan.
+Limits: 128 pending files, 64 MiB per reviewed pack, existing queue 128 MiB total,
+16 MiB per file, eight retained plans. Cancel unused uploads separately.
+
+Optional assignment is a resumable SECOND step after atomic file staging. Provider
+sources publish a provider pointer; archive/draft sources publish a hosted custom pack;
+an already published source keeps its existing release. This also requires the normal
+pack build/publish permissions and complete client publication metadata. Publication
+can refuse lower display versions or incomplete client dependencies. If assignment
+fails, files remain staged: retain intent and retry, or manage/cancel pending content.
+Do not present assignment and file installation as a single atomic publication.
+Concurrent draft/release edits cause a conflict rather than being overwritten.
+
+`seedPackInstallPlan('provider'|'archive'|'conflicts'|'software_switch')` supplies review
+fixtures. `checks/servers-pack-install.test.js` covers fixture review and exact replay;
+the agent file test covers real override precedence, token/version rejection, durable
+staging while stopped, restart application, and request mismatch rejection.
 
 ## Validation results
 
@@ -145,3 +186,24 @@ server-install flow remain outstanding.
   failure (8 ms memo budget); it also reproduced in an isolated run while Rust
   validation was active. The installed Solid repair guide was read. No console
   implementation, diagnostics, or page changes were made for this task.
+
+### Item 4 verification (2026-10-29)
+
+- Control broad run: 1,067 passed, two failed, two ignored. One failure was the
+  new protected-path regression test before the explicit allowlist fix; both it
+  and the content-download admission failure passed focused rechecks. Pack-focused
+  selection: 59 passed. Final install regression pair: two passed. Control
+  integration targets: 28 passed.
+- Control/transport and native client all-target clippy with `-D warnings`: passed.
+- Native client full suite and install wire/path preservation tests: passed.
+- Launcher cargo check: passed with existing unrelated warnings.
+- Frontend typecheck: passed. Focused pack checks: six passed. Full expanded
+  servers/localization selection: 368 passed, one existing console HOT_SCOPE_TIME
+  failure; isolated recheck reproduced the 8 ms console-check:rows budget failure.
+  No diagnostics, thresholds, console files, pages, or browse files were changed.
+- Real-provider/live-server acceptance remains a separate end-to-end check.
+- Transport recheck, serial: 47 unit tests and 122 HTTPS tests passed; one manual
+  laboratory test ignored. The initial parallel HTTPS run had 25 timeout/pressure
+  failures; the complete serial recheck passed without changing thresholds.
+
+Backend commit: `a2c8153567631b6dc07eab73f9078c05aded3dc5`.

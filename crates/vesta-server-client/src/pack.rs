@@ -225,7 +225,65 @@ dto!(ProviderPackPublish {
     required_update: bool,
     acknowledge_lower_version: bool
 });
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(
+    tag = "source",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum PackInstallSource {
+    Provider {
+        provider: String,
+        project_id: String,
+        version_id: String,
+    },
+    UploadedArchive {
+        upload_id: String,
+    },
+    Draft {
+        revision: String,
+    },
+    Published {
+        revision: String,
+    },
+}
+dto!(PackInstallRequest {
+    source: PackInstallSource
+});
+dto!(PackInstallFile {path:String,sha256:String,expected_sha256:Option<String>,conflict:Option<String>});
+dto!(PackInstallPlan {plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<String>,backup_recommended:bool});
+dto!(PackInstallChoice {
+    path: String,
+    choice: String
+});
+dto!(PackInstallApply {plan_id:String,confirmation_token:String,choices:Vec<PackInstallChoice>,set_as_modpack:bool});
+dto!(PackInstallOutcome {state:String,pending_ids:Vec<String>,modpack_revision:Option<String>});
 impl Client {
+    pub async fn pack_install_plan(&self, input: PackInstallRequest) -> Result<PackInstallPlan> {
+        from_wire(
+            self.request(
+                Method::POST,
+                "/api/v3/manage/pack/install/plan",
+                Some(hosting::wire(
+                    serde_json::to_value(input).map_err(|_| Error::new(ErrorCode::InvalidInput))?,
+                )),
+                None,
+                true,
+                "content.install",
+            )
+            .await?,
+        )
+    }
+    pub async fn pack_install_apply(
+        &self,
+        input: PackInstallApply,
+        intent: &str,
+    ) -> Result<PackInstallOutcome> {
+        self.pack_mutate("pack/install/apply", &input, intent, "content.install")
+            .await
+    }
+
     pub async fn pack_provider_publish(
         &self,
         input: ProviderPackPublish,
@@ -435,5 +493,22 @@ mod tests {
         assert!(serde_json::from_value::<EntrySource>(json!({"type":"provider","provider":"modrinth","projectId":"p","versionId":"v","url":"https://evil.invalid"})).is_err());
         let loader: ClientLoader = serde_json::from_value(json!("fabric")).unwrap();
         assert_eq!(loader.id(), "fabric");
+    }
+}
+#[cfg(test)]
+mod install_wire_tests {
+    use super::*;
+    #[test]
+    fn install_wire_preserves_paths_and_nested_source() {
+        let input=PackInstallApply{plan_id:"plan".into(),confirmation_token:"secret".into(),choices:vec![PackInstallChoice{path:"config/My_Mod.json".into(),choice:"keep".into()}],set_as_modpack:true};
+        let value=hosting::wire(serde_json::to_value(input).unwrap());
+        assert_eq!(value["choices"][0]["path"],"config/My_Mod.json");
+        assert_eq!(value["set_as_modpack"],true);
+        let decoded:PackInstallApply=from_wire(value).unwrap();
+        assert_eq!(decoded.choices[0].path,"config/My_Mod.json");
+        let source=PackInstallRequest{source:PackInstallSource::Provider{provider:"modrinth".into(),project_id:"project".into(),version_id:"version".into()}};
+        let value=hosting::wire(serde_json::to_value(source).unwrap());
+        assert_eq!(value["source"]["project_id"],"project");
+        assert_eq!(value["source"]["source"],"provider");
     }
 }
