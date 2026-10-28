@@ -117,6 +117,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(crate::resources::ResourceManager::new());
     app.manage(crate::worlds::WorldManager::default());
     app.manage(crate::launcher_import::ImportManager::new());
+    // Pack-sync polling below requires this state during setup, before the
+    // outer setup callback returns and before commands can be dispatched.
+    app.manage(crate::servers::ServerManager::new()?);
 
     crate::startup::updates::notify_current_version(app.handle().clone());
 

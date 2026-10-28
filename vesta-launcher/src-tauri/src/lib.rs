@@ -12,6 +12,7 @@ mod metadata_cache;
 pub mod models;
 mod modpack;
 mod notifications;
+mod panic_report;
 pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod sentry_init;
@@ -69,7 +70,11 @@ pub fn run(context: tauri::Context) {
     };
 
     std::panic::set_hook(Box::new(move |e| {
-        let message = format!("Vesta Launcher closed unexpectedly: {e:?}");
+        let message = format!(
+            "Vesta Launcher closed unexpectedly: {} at {}",
+            panic_report::payload_message(e.payload()),
+            e.location().map(|location| location.to_string()).unwrap_or_else(|| "unknown location".into())
+        );
         eprintln!("{message}");
         if telemetry_enabled {
             sentry::capture_message(&message, sentry::Level::Fatal);
@@ -116,7 +121,6 @@ pub fn run(context: tauri::Context) {
             }
             logging::register_log_plugin(app, log_level)?;
             setup::init(app)?;
-            app.manage(servers::ServerManager::new()?);
             let transfers = std::sync::Arc::downgrade(app.state::<std::sync::Arc<vesta_server_client::files::FileTransfers>>().inner());
             tauri::async_runtime::spawn(async move {
                 loop {
