@@ -5,6 +5,7 @@ import {
   pluginLoaderIds,
   projectCompatibility,
   projectKey,
+  typeUsesLoader,
   type ResourceProject,
   type ResourceType,
 } from './browse-model';
@@ -206,6 +207,27 @@ export function serverFilters(target: Pick<ServerTarget, 'minecraftVersion' | 's
     gameVersion: target.minecraftVersion || null,
     loader: family === 'modded' ? normalize(target.software) : null,
   };
+}
+
+/**
+ * The operator example in the search hint, built from what the target can use: a Paper server
+ * suggests its plugin loader, a vanilla one only a version, and no target the classic Fabric one.
+ */
+export function searchExample(input: {
+  type: ResourceType;
+  minecraftVersion: string | null;
+  loader: string | null;
+  server?: Pick<ServerTarget, 'software'>;
+}): string {
+  const version = `mc:${input.minecraftVersion || '1.21.1'}`;
+  if (!typeUsesLoader(input.type)) return version;
+  let picked = input.loader;
+  if (!picked && input.server) {
+    const family = softwareFamily(input.server.software);
+    picked = family === 'modded' ? normalize(input.server.software) : family === 'plugin' ? pluginLoadersFor(input.server.software)[0] ?? null : null;
+  }
+  if (!picked && !input.server) picked = 'fabric';
+  return picked ? `${version} loader:${picked}` : version;
 }
 
 /**

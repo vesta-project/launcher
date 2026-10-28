@@ -36,12 +36,22 @@ import {
   toggleCategory,
   type,
   source,
+  serverTarget,
 } from '../../features/browse/browse-store';
+import { searchExample } from '../../features/browse/browse-targets';
 import { t } from '../../localization';
 import { FilterPanel, loaderLabels, type Section } from './filter-panel';
 import { TargetSelect } from './target-select';
 import { typeLabels } from './toolbar';
 import './search-field.css';
+
+/** The operator example follows the target: a Paper server never suggests `loader:fabric`. */
+const example = () => searchExample({
+  type: type(),
+  minecraftVersion: gameVersion(),
+  loader: typeUsesLoader(type()) ? loader() : null,
+  server: serverTarget(),
+});
 
 /** The input, so the `/` shortcut and the app's search command can focus it. */
 export const searchInput: { element?: HTMLInputElement } = {};
@@ -240,7 +250,7 @@ export function SearchField() {
           data-vesta="browse-search-input"
           ref={(element: HTMLInputElement) => (searchInput.element = element)}
           value={text()}
-          placeholder={t('browse.search-placeholder', { type: t(typeLabels[type()]).toLowerCase() })}
+          placeholder={t('browse.search-placeholder', { type: t(typeLabels[type()]).toLowerCase(), example: example() })}
           aria-label={t('browse.search-label')}
           autocomplete="off"
           spellcheck="false"

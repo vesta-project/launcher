@@ -30,7 +30,7 @@ browse-layout-label = Card layout
 browse-layout-banner = Banners
 browse-layout-compact = Compact
 
-browse-search-placeholder = Search { $type }, or type mc:1.21.1 loader:fabric
+browse-search-placeholder = Search { $type }, or type { $example }
 browse-search-label = Search resources
 browse-clear-search = Clear search and filters
 browse-filters = Filters
@@ -299,4 +299,3 @@ browse-target-new-instance = New instance
 browse-target-new-instance-help = Modpacks make their own instance.
 browse-target-any-help = Install asks where each time.
 browse-target-empty = Nothing matches.
-browse-server-modpack-coming = Installing { $name } on { $title } is coming next.

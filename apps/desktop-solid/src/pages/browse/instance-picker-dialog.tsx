@@ -36,7 +36,7 @@ import type { ServerCommandError } from '../../features/servers/native';
 import { instances } from '../../features/instances/catalog';
 import type { ConnectionId } from '../../features/servers/native';
 import { serverSnapshots } from '../../features/servers/store';
-import { serverTargetId } from '../../features/browse/browse-store';
+import { serverDestinationHint, serverTargetId } from '../../features/browse/browse-store';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import {
@@ -257,7 +257,9 @@ export function InstancePickerDialog() {
   const chooseServer = (row: { target: ServerTarget; states: TargetStates }) => {
     const project = untrack(pickerProject);
     if (!project) return;
-    const destination = defaultDestination(projectSides(project), project.resource_type, row.states);
+    const hint = untrack(serverDestinationHint);
+    const destination = hint && row.target.id === untrack(serverTargetId) && row.states[hint].available
+      ? hint : defaultDestination(projectSides(project), project.resource_type, row.states);
     const only = soleDestination(row.states);
     if (only) { void loadDependencies(row.target, only); return; }
     setStep({ kind: 'target', server: row.target.id, destination });

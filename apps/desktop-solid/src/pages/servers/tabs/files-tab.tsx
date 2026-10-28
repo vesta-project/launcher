@@ -36,7 +36,7 @@ const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', tim
 const formatDate = (ms: number | null) => (ms === null ? '' : dateFormat.format(ms));
 
 type Opened = { path: string; mode: 'editor' | 'log' };
-type NameRequest = { kind: 'file' | 'folder' | 'rename'; entry?: FileEntry };
+export type NameRequest = { kind: 'file' | 'folder' | 'rename'; entry?: Pick<FileEntry, 'name'> };
 /** Files waiting in the upload dialog, the folder they go to, and its listing for conflicts. */
 type UploadBatch = { files: UploadCandidate[]; directory: string; siblings: FileEntry[]; auto: boolean };
 
@@ -353,7 +353,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
   );
 }
 
-function FileSkeleton() {
+export function FileSkeleton() {
   return (
     <div data-vesta="server-file-list" aria-hidden="true">
       <For each={[0, 1, 2, 3, 4, 5]}>
@@ -376,10 +376,14 @@ const nameTitles: Record<NameRequest['kind'], MessageId> = {
   rename: 'server-files.rename',
 };
 
-/** New file, new folder and rename: one validated name inside the current directory. */
-function NameDialog(props: {
-  snapshot: ServerSnapshot; directory: string; siblings: FileEntry[]; request: NameRequest;
+/**
+ * New file, new folder and rename: one validated name inside the current directory.
+ * `perform` writes to another store (a modpack's override files); by default the server's files.
+ */
+export function NameDialog(props: {
+  snapshot: ServerSnapshot; directory: string; siblings: readonly Pick<FileEntry, 'name'>[]; request: NameRequest;
   onClose: () => void; onDone: (path: string) => void;
+  perform?: (kind: NameRequest['kind'], path: string, from: string | null, intentId: string) => Promise<unknown>;
 }) {
   const [name, setName] = createSignal(untrack(() => props.request.entry?.name ?? ''), { name: 'server-files:name' });
   const [busy, setBusy] = createSignal(false, { name: 'server-files:name-busy' });
@@ -397,7 +401,8 @@ function NameDialog(props: {
     const kind = props.request.kind;
     const intentId = intents.idFor({ kind, path });
     try {
-      if (kind === 'folder') await serverCommand((client) => client.fileMkdir(id, path, intentId));
+      if (props.perform) await props.perform(kind, path, props.request.entry ? childPath(props.directory, props.request.entry.name) : null, intentId);
+      else if (kind === 'folder') await serverCommand((client) => client.fileMkdir(id, path, intentId));
       else if (kind === 'file') await serverCommand((client) => client.fileWriteText(id, path, '', null, intentId));
       else await serverCommand((client) => client.fileRename(id, childPath(props.directory, props.request.entry!.name)!, path, null, intentId));
       intents.settle();
@@ -429,7 +434,10 @@ function NameDialog(props: {
   );
 }
 
-function DeleteDialog(props: { snapshot: ServerSnapshot; path: string; onClose: () => void; onDone: () => void }) {
+export function DeleteDialog(props: {
+  snapshot: ServerSnapshot; path: string; onClose: () => void; onDone: () => void;
+  perform?: (intentId: string) => Promise<unknown>; description?: string;
+}) {
   const [busy, setBusy] = createSignal(false, { name: 'server-files:delete-busy' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-files:delete-error' });
   const intents = new IntentMemo();
@@ -437,7 +445,8 @@ function DeleteDialog(props: { snapshot: ServerSnapshot; path: string; onClose: 
     setBusy(true); setError(null);
     const intentId = intents.idFor({ path: props.path });
     try {
-      await serverCommand((client) => client.fileDelete(props.snapshot.connection.id, props.path, null, intentId));
+      if (props.perform) await props.perform(intentId);
+      else await serverCommand((client) => client.fileDelete(props.snapshot.connection.id, props.path, null, intentId));
       intents.settle();
       toast.show({ title: t('server-files.moved-to-trash', { name: baseName(props.path) }), tone: 'neutral' });
       props.onDone();
@@ -449,7 +458,7 @@ function DeleteDialog(props: { snapshot: ServerSnapshot; path: string; onClose: 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }} closeLabel={t('nav.close')} size="sm"
       title={t('server-files.delete-title', { name: baseName(props.path) })}
-      description={t('server-files.delete-description')}
+      description={props.description ?? t('server-files.delete-description')}
       footer={<>
         <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
         <Button tone="danger" disabled={busy()} onClick={() => void submit()}>{t('server-files.move-to-trash')}</Button>

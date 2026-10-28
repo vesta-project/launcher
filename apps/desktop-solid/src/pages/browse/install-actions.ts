@@ -27,6 +27,8 @@ import { t } from '../../localization';
 import { openInstallSource } from '../create/install-navigation';
 import { openExternal } from '../../features/links/external-links';
 import { canTargetInstance } from '../../features/browse/install-targets';
+import { offerModpack } from '../../features/servers/modpack-handoff';
+import { navigate } from '../../app/router';
 
 /** The project waiting for an instance choice; the picker dialog is open while this is set. */
 const [pickerProject, setPickerProject] = createSignal<ResourceProject | undefined>(undefined, {
@@ -80,16 +82,21 @@ function startPack(project: ResourceProject, pinned?: ResourceVersion) {
 }
 
 /**
- * A modpack chosen for a server target: install it on the server, or use it as the server's
- * client modpack. TODO(server-modpack): hand the project and release to the server pack
- * install plan/apply flow once its backend lands; until then this only says it is coming.
+ * A modpack chosen for a server target. The server's Modpack area takes it from here: use it as
+ * the server's modpack (a provider pointer, nothing hosted) and/or install it on the server
+ * through the reviewed `packInstallPlan`/`packInstallApply` flow.
  */
 export function installModpackOnServer(
   project: ResourceProject,
   server: { id: string; name: string },
-  _pinned?: ResourceVersion,
+  pinned?: ResourceVersion,
 ): void {
-  setNotice({ tone: 'neutral', text: t('browse.server-modpack-coming', { name: project.name, title: server.name }) });
+  if (project.source !== 'modrinth' && project.source !== 'curseforge') return;
+  offerModpack({
+    serverId: server.id, provider: project.source, projectId: project.id, versionId: pinned?.id ?? null,
+    name: project.name, iconUrl: project.icon_url,
+  });
+  navigate(`/servers/${encodeURIComponent(server.id)}/pack`);
 }
 
 export function reportOutcome(project: ResourceProject, instanceName: string, outcome: InstallOutcome) {

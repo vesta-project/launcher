@@ -397,8 +397,16 @@ export const targetRef = (): BrowseTargetRef | undefined => {
 
 let appliedServer: string | undefined;
 
+/**
+ * Where installs for the server target should land by default, when Browse was opened for one
+ * (the Modpack area's Add content prefers the modpack). The picker still offers the others.
+ */
+const [serverDestinationHint, setServerDestinationHint] = createSignal<'server' | 'modpack' | undefined>(undefined, { name: 'browseServerDestination' });
+export { serverDestinationHint };
+
 function dropServerTarget() {
   appliedServer = undefined;
+  setServerDestinationHint(undefined);
   setServerTargetId(undefined);
   setServerInfo(undefined);
   setServerInstalled(new Set<string>());
@@ -437,12 +445,15 @@ export function updateServerTarget(info: ServerTarget | undefined, installedKeys
  * takes, its Minecraft version, and the mod loader when it runs one. The server becomes the
  * dropdown's target; these explicit filters win over the automatic scope.
  */
-export function browseForServer(focus: { id: string; name: string; type: ResourceType; minecraftVersion: string | null; loader: string | null }) {
+export function browseForServer(focus: {
+  id: string; name: string; type: ResourceType; minecraftVersion: string | null; loader: string | null; destination?: 'server' | 'modpack';
+}) {
   setType(focus.type);
   setGameVersionSignal(focus.minecraftVersion || null);
   setLoaderSignal(focus.type === 'mod' && focus.loader ? focus.loader.toLowerCase() : null);
   firstPage();
   syncServerTarget(focus.id);
+  setServerDestinationHint(focus.destination);
   appliedServer = focus.id;
   navigate(targetPath({ kind: 'server', id: focus.id }));
 }

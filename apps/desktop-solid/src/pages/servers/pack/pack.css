@@ -1,6 +1,0 @@
-.client-pack-workspace { display: flex; flex-direction: column; gap: 14px; max-width: 900px; padding: 20px; }
-.client-pack-workspace label { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.client-pack-workspace input:not([type=checkbox]), .client-pack-workspace textarea, .client-pack-workspace select { color: inherit; background: var(--surface-base); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px; }
-.client-pack-workspace footer, .client-pack-entry { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.client-pack-workspace code { overflow-wrap: anywhere; }
-.client-pack-workspace button, .client-pack-workspace select, .client-pack-workspace input[type=checkbox] { cursor: default; }
