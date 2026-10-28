@@ -63,7 +63,11 @@ function PlayerView() {
 
 function EditorView() {
   const area = useModpackArea();
-  const tabs = createMemo(() => modpackSubTabs(area.kind(), area.gates().edit), { name: 'modpack:tabs' });
+  // Same tabs keep the same array, so a reloaded workspace does not remount the open pane.
+  const tabs = createMemo(() => modpackSubTabs(area.kind(), area.gates().edit), {
+    name: 'modpack:tabs',
+    equals: (a, b) => a.length === b.length && a.every((tab, index) => tab.id === b[index]!.id && tab.state === b[index]!.state),
+  });
   const active = () => resolveSubTab(route().detail === 'pack' ? route().item : undefined, tabs());
   const count = (tab: ModpackSubTab) => {
     const manifest = area.workspace()?.draft.manifest;

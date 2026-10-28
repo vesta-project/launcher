@@ -139,6 +139,33 @@
     background: var(--instance-bar-bg);
   }
 
+  /* The server workspace's sidebar rules reach nested tabs; the sub-nav stays a horizontal strip. */
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab-list"] {
+    inline-size: auto;
+    gap: var(--vesta-space-1);
+    padding: 0 var(--instance-gutter);
+    border-inline-end: 0;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab"] {
+    --tab-height: 40px;
+
+    border-radius: 0;
+  }
+
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab"][data-selected] {
+    background: transparent;
+  }
+
+  .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab"][data-selected]::after {
+    inset-inline: var(--tab-padding-x);
+    inset-block: auto -1px;
+    inline-size: auto;
+    block-size: 2px;
+    border-radius: 2px 2px 0 0;
+  }
+
   .modpack-pane {
     display: flex;
     flex: 1;

@@ -1,5 +1,5 @@
 import { Badge, Button, Checkbox, Dialog, Progress, SegmentedControl } from '@vesta/ui';
-import { For, Show, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { For, Show, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { IntentMemo, lifecycleControls } from '../../../features/servers/model';
@@ -52,7 +52,8 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
     } catch (reason) { if (!disposed) setError(reason as ServerCommandError); }
     finally { if (!disposed) setBusy(false); }
   };
-  void planNow();
+  // Plan once mounted: the first request writes state, which setup must not do.
+  onSettled(() => { void planNow(); });
 
   const blocker = () => { const value = plan(); return value ? installBlocker(value, now()) : null; };
   const request = createMemo(() => { const value = plan(); return value ? installApplyRequest(value, picks(), setAsModpack()) : null; }, { name: 'modpack-install:request' });

@@ -25,7 +25,8 @@ export function withModpackScenario(api: ServersApi, setting: string | null | un
           ['client-overrides', 'options.txt', 'renderDistance:12\nguiScale:2\n'],
           ['server-overrides', 'config/ftbchunks-world.snbt', '{\n  max_claimed_chunks: 500\n}\n'],
         ];
-        let revision = view.draft.revision;
+        // The fixture draft targets 1.21.4; match the server first so file edits are accepted.
+        let revision = (await api.packWrite(id, { expectedRevision: view.draft.revision, manifest: { ...view.draft.manifest, minecraftVersion: view.serverMinecraftVersion } }, 'preview-mc')).revision;
         for (const [root, path, text] of files) {
           const draft = await api.packFileMutate(id, { expectedRevision: revision, change: { operation: 'write', root: root as 'overrides', path, contentBase64: btoa(text) } }, `preview-${path}`);
           revision = draft.revision;
@@ -33,7 +34,7 @@ export function withModpackScenario(api: ServersApi, setting: string | null | un
       } else if (parts.has('empty')) {
         await api.packDelete(id, view.draft.revision, 'preview-empty');
       }
-    })());
+    })().catch((reason) => { prepared = undefined; throw reason; }));
   };
   // `empty` presents the owner server as never published while its draft stays empty.
   const unpublished = async (id: string) => {
