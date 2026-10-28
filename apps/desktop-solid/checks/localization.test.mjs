@@ -48,6 +48,8 @@ const args = {
   example: "mc:1.21.1 loader:fabric",
   published: "14",
   minimum: "12",
+  entries: 2,
+  overrides: 1,
   added: 1,
   updated: 2,
   removed: 0,

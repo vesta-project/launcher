@@ -22,7 +22,8 @@ describe('modpack source and sub-nav gating', () => {
     expect(packSourceKind(empty(), true)).toBe('custom');
     expect(packSourceKind(seedPackWorkspace('fabric'))).toBe('custom');
     expect(packSourceKind(seedRedesignWorkspace('provider'))).toBe('provider');
-    const customized = { ...seedRedesignWorkspace('provider'), pendingPublication: true };
+    expect(packSourceKind({ ...seedRedesignWorkspace('provider'), pendingPublication: true })).toBe('provider');
+    const customized = { ...seedRedesignWorkspace('provider'), pendingPublication: true, customizingProvider: true };
     expect(packSourceKind(customized)).toBe('custom');
     const withFiles = empty();
     withFiles.draft.manifest.overrideFiles = [{ root: 'overrides', path: 'config/a.toml', sha256: 'a', trashed: false }];

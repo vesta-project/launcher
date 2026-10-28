@@ -31,14 +31,14 @@ export const draftHasContent = (manifest: PackManifest) =>
  */
 export function packSourceKind(workspace: PackWorkspace | undefined, started = false): PackSourceKind {
   if (!workspace) return 'none';
-  if (workspace.providerPack) return workspace.pendingPublication ? 'custom' : 'provider';
+  if (workspace.providerPack) return workspace.customizingProvider ? 'custom' : 'provider';
   if (workspace.publishedRevision !== '0' || started || draftHasContent(workspace.draft.manifest)) return 'custom';
   return 'none';
 }
 
 /** A customized provider pack: the draft is custom, the active release is still the provider's. */
 export const customizingProvider = (workspace: PackWorkspace | undefined) =>
-  !!workspace?.providerPack && workspace.pendingPublication;
+  !!workspace?.providerPack && !!workspace.customizingProvider;
 
 /* ---- Sub-tabs ---- */
 

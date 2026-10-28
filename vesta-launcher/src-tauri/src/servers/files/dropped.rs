@@ -6,8 +6,8 @@ use std::{
     sync::Mutex,
 };
 use vesta_server_client::{
-    files::{FileTransfers, UploadCandidate, MAX_WRITE_BYTES},
     Error, ErrorCode, Result,
+    files::{FileTransfers, MAX_WRITE_BYTES, UploadCandidate},
 };
 
 const MAX_FILES: usize = 64;
@@ -73,6 +73,48 @@ impl DroppedFiles {
         Ok(paths)
     }
 
+    pub(crate) async fn pack_bytes(
+        &self,
+        owner: &str,
+        paths: Vec<String>,
+        archive: bool,
+    ) -> Result<Vec<(String, String, Vec<u8>)>> {
+        use std::io::Read;
+        let paths = self.accept(owner, paths)?;
+        if archive && paths.len() != 1 {
+            return Err(invalid());
+        }
+        tokio::task::spawn_blocking(move || {
+            let limit = if archive {
+                68 * 1024 * 1024
+            } else {
+                16 * 1024 * 1024
+            };
+            let sources = collect_with_limit(paths, limit)?;
+            if archive && (sources.len() != 1 || sources[0].folder.is_some()) {
+                return Err(invalid());
+            }
+            sources
+                .into_iter()
+                .map(|s| {
+                    let path = s
+                        .folder
+                        .map_or_else(|| s.name.clone(), |f| format!("{f}/{}", s.name));
+                    let mut bytes = Vec::new();
+                    s.file
+                        .take(limit + 1)
+                        .read_to_end(&mut bytes)
+                        .map_err(|_| invalid())?;
+                    if bytes.len() as u64 > limit {
+                        return Err(invalid());
+                    }
+                    Ok((s.name, path, bytes))
+                })
+                .collect()
+        })
+        .await
+        .map_err(|_| Error::new(ErrorCode::Internal))?
+    }
     pub(crate) async fn upload(
         &self,
         owner: &str,
@@ -155,6 +197,10 @@ fn checked_metadata(file: &File) -> Result<fs::Metadata> {
 }
 
 fn collect(paths: Vec<PathBuf>) -> Result<Vec<Source>> {
+    collect_with_limit(paths, MAX_WRITE_BYTES)
+}
+
+fn collect_with_limit(paths: Vec<PathBuf>, limit: u64) -> Result<Vec<Source>> {
     let mut sources = Vec::new();
     let mut seen = HashSet::new();
     for path in paths {
@@ -172,7 +218,15 @@ fn collect(paths: Vec<PathBuf>) -> Result<Vec<Source>> {
             }
             guards.push(guard);
         }
-        walk(&path, guards.last(), None, 0, &mut seen, &mut sources)?;
+        walk(
+            &path,
+            guards.last(),
+            None,
+            0,
+            &mut seen,
+            &mut sources,
+            limit,
+        )?;
     }
     Ok(sources)
 }
@@ -184,6 +238,7 @@ fn walk(
     depth: usize,
     seen: &mut HashSet<PathBuf>,
     sources: &mut Vec<Source>,
+    limit: u64,
 ) -> Result<()> {
     if depth > MAX_DEPTH {
         return Err(invalid());
@@ -203,10 +258,18 @@ fn walk(
         // Stream entries, stopping at the cap rather than collecting an unbounded listing.
         for entry in fs::read_dir(path).map_err(|_| invalid())? {
             let path = path.join(entry.map_err(|_| invalid())?.file_name());
-            walk(&path, Some(&file), Some(&folder), depth + 1, seen, sources)?;
+            walk(
+                &path,
+                Some(&file),
+                Some(&folder),
+                depth + 1,
+                seen,
+                sources,
+                limit,
+            )?;
         }
     } else if seen.insert(path.to_owned()) {
-        if sources.len() >= MAX_FILES || meta.len() > MAX_WRITE_BYTES {
+        if sources.len() >= MAX_FILES || meta.len() > limit {
             return Err(invalid());
         }
         sources.push(Source {
@@ -221,6 +284,38 @@ fn walk(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn pack_drops_require_observed_paths_and_preserve_folder_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("config");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("settings.toml"), b"enabled=true").unwrap();
+        let drops = DroppedFiles::default();
+        rejects(
+            drops
+                .pack_bytes("main", strings(std::slice::from_ref(&root)), false)
+                .await,
+        );
+        drop_paths(&drops, "main", std::slice::from_ref(&root));
+        let files = drops
+            .pack_bytes("main", strings(std::slice::from_ref(&root)), false)
+            .await
+            .unwrap();
+        assert_eq!(files[0].1, "config/settings.toml");
+        assert_eq!(files[0].2, b"enabled=true");
+        rejects(
+            drops
+                .pack_bytes("main", strings(std::slice::from_ref(&root)), false)
+                .await,
+        );
+        drop_paths(&drops, "main", std::slice::from_ref(&root));
+        rejects(
+            drops
+                .pack_bytes("main", strings(std::slice::from_ref(&root)), true)
+                .await,
+        );
+    }
 
     fn strings(paths: &[PathBuf]) -> Vec<String> {
         paths
@@ -334,9 +429,11 @@ mod tests {
                 name => panic!("unexpected candidate {name}"),
             }
         }
-        assert!(!serde_json::to_string(&candidates)
-            .unwrap()
-            .contains(&root.path().to_string_lossy().to_string()));
+        assert!(
+            !serde_json::to_string(&candidates)
+                .unwrap()
+                .contains(&root.path().to_string_lossy().to_string())
+        );
     }
 
     #[test]

@@ -9,7 +9,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tauri::{AppHandle, State};
-use vesta_server_client::{pack::*, Error, ErrorCode, Result};
+use vesta_server_client::{Error, ErrorCode, Result, pack::*};
 type Manager<'a> = State<'a, Arc<ServerManager>>;
 fn invalid() -> Error {
     Error::new(ErrorCode::InvalidInput)
@@ -687,4 +687,89 @@ pub async fn server_pack_install_apply(
             |c| async move { c.pack_install_apply(request, &intent_id).await },
         )
         .await
+}
+
+#[tauri::command]
+pub async fn server_pack_history(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+) -> Result<Vec<PublishedRevision>> {
+    manager
+        .management_read(
+            &app,
+            &connection_id,
+            |c| async move { c.pack_history().await },
+        )
+        .await
+}
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DroppedPackUpload {
+    name: String,
+    path: String,
+    receipt: UploadReceipt,
+}
+#[tauri::command]
+pub async fn server_pack_upload_dropped(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    manager: Manager<'_>,
+    drops: State<'_, crate::servers::files::DroppedFiles>,
+    connection_id: String,
+    paths: Vec<String>,
+    archive: bool,
+) -> Result<Vec<DroppedPackUpload>> {
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let sources = drops.pack_bytes(window.label(), paths, archive).await?;
+    let mut result = Vec::new();
+    for (name, path, bytes) in sources {
+        let upload_id = uuid::Uuid::new_v4().to_string();
+        let sha256 = hex::encode(Sha256::digest(&bytes));
+        let input = UploadBegin {
+            upload_id: upload_id.clone(),
+            total_size: bytes.len().to_string(),
+            sha256,
+            archive,
+        };
+        server_pack_upload_begin(
+            app.clone(),
+            manager.clone(),
+            connection_id.clone(),
+            input,
+            format!("{upload_id}-begin"),
+        )
+        .await?;
+        for (i, chunk) in bytes.chunks(32768).enumerate() {
+            server_pack_upload_chunk(
+                app.clone(),
+                manager.clone(),
+                connection_id.clone(),
+                UploadChunk {
+                    upload_id: upload_id.clone(),
+                    offset: (i * 32768).to_string(),
+                    content_base64: base64::engine::general_purpose::STANDARD.encode(chunk),
+                },
+                format!("{upload_id}-{i}"),
+            )
+            .await?;
+        }
+        let receipt = server_pack_upload_finish(
+            app.clone(),
+            manager.clone(),
+            connection_id.clone(),
+            UploadId {
+                upload_id: upload_id.clone(),
+            },
+            format!("{upload_id}-finish"),
+        )
+        .await?;
+        result.push(DroppedPackUpload {
+            name,
+            path,
+            receipt,
+        });
+    }
+    Ok(result)
 }

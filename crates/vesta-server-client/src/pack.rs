@@ -62,6 +62,8 @@ pub enum EntrySource {
         reason: String,
     },
 }
+dto!(PublishedRevision { revision:String,published_at:i64,published_by:Option<String>,required_update:bool,entry_count:Option<u64>,override_count:Option<u64>,provider_version:Option<String> });
+
 dto!(Environment {
     client: Side,
     server: Side
@@ -144,6 +146,7 @@ dto!(PackDraft {
     manifest: PackManifest
 });
 dto!(WorkspaceView {
+    customizing_provider:bool,
     provider_pack: Option<content::ContentProvider>,
     draft: PackDraft,
     server_minecraft_version: String,
@@ -345,6 +348,9 @@ impl Client {
                 .await?,
         )
     }
+    pub async fn pack_history(&self) -> Result<Vec<PublishedRevision>> {
+        from_wire(self.get("pack/history", true, "pack.edit").await?)
+    }
     pub async fn pack_draft(&self) -> Result<WorkspaceView> {
         from_wire(self.get("pack/draft", true, "pack.edit").await?)
     }
@@ -489,6 +495,13 @@ mod tests {
         assert!(manifest.override_files.is_empty());
     }
     #[test]
+    fn history_wire_keeps_revision_strings_and_legacy_unknown_counts() {
+        let rows: Vec<PublishedRevision> = from_wire(json!([{"revision":"9007199254740991","published_at":1791115200000i64,"published_by":"owner","required_update":false,"entry_count":null,"override_count":null,"provider_version":"v1"}])).unwrap();
+        assert_eq!(rows[0].revision, "9007199254740991");
+        assert_eq!(rows[0].entry_count, None);
+        assert_eq!(rows[0].provider_version.as_deref(), Some("v1"));
+    }
+    #[test]
     fn provider_source_refuses_untrusted_download_urls() {
         assert!(serde_json::from_value::<EntrySource>(json!({"type":"provider","provider":"modrinth","projectId":"p","versionId":"v","url":"https://evil.invalid"})).is_err());
         let loader: ClientLoader = serde_json::from_value(json!("fabric")).unwrap();
@@ -500,15 +513,29 @@ mod install_wire_tests {
     use super::*;
     #[test]
     fn install_wire_preserves_paths_and_nested_source() {
-        let input=PackInstallApply{plan_id:"plan".into(),confirmation_token:"secret".into(),choices:vec![PackInstallChoice{path:"config/My_Mod.json".into(),choice:"keep".into()}],set_as_modpack:true};
-        let value=hosting::wire(serde_json::to_value(input).unwrap());
-        assert_eq!(value["choices"][0]["path"],"config/My_Mod.json");
-        assert_eq!(value["set_as_modpack"],true);
-        let decoded:PackInstallApply=from_wire(value).unwrap();
-        assert_eq!(decoded.choices[0].path,"config/My_Mod.json");
-        let source=PackInstallRequest{source:PackInstallSource::Provider{provider:"modrinth".into(),project_id:"project".into(),version_id:"version".into()}};
-        let value=hosting::wire(serde_json::to_value(source).unwrap());
-        assert_eq!(value["source"]["project_id"],"project");
-        assert_eq!(value["source"]["source"],"provider");
+        let input = PackInstallApply {
+            plan_id: "plan".into(),
+            confirmation_token: "secret".into(),
+            choices: vec![PackInstallChoice {
+                path: "config/My_Mod.json".into(),
+                choice: "keep".into(),
+            }],
+            set_as_modpack: true,
+        };
+        let value = hosting::wire(serde_json::to_value(input).unwrap());
+        assert_eq!(value["choices"][0]["path"], "config/My_Mod.json");
+        assert_eq!(value["set_as_modpack"], true);
+        let decoded: PackInstallApply = from_wire(value).unwrap();
+        assert_eq!(decoded.choices[0].path, "config/My_Mod.json");
+        let source = PackInstallRequest {
+            source: PackInstallSource::Provider {
+                provider: "modrinth".into(),
+                project_id: "project".into(),
+                version_id: "version".into(),
+            },
+        };
+        let value = hosting::wire(serde_json::to_value(source).unwrap());
+        assert_eq!(value["source"]["project_id"], "project");
+        assert_eq!(value["source"]["source"], "provider");
     }
 }

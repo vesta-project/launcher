@@ -247,6 +247,8 @@ pub fn run(context: tauri::Context) {
             commands::servers_pack::server_pack_file_read,
             commands::servers_pack::server_pack_file_mutate,
             commands::servers_pack::server_pack_build_publish,
+            commands::servers_pack::server_pack_history,
+            commands::servers_pack::server_pack_upload_dropped,
             commands::servers_pack::server_pack_upload_begin,
             commands::servers_pack::server_pack_upload_chunk,
             commands::servers_pack::server_pack_upload_finish,

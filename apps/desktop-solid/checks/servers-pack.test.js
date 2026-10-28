@@ -74,3 +74,20 @@ describe('client pack workspace', () => {
     expect((await api.packPreview('paper', '4')).diff.customOverrides).toContain('config/client.toml');
   });
 });
+
+test('provider link resets an unrelated draft baseline; only Customize forks it', async () => {
+  const { api } = fixture();
+  const before = await api.packDraft('paper');
+  const draft = await api.packWrite('paper', { expectedRevision: before.draft.revision, manifest: { ...before.draft.manifest, summary: 'Unrelated edits' } }, 'prelink');
+  const request = { expectedRevision: before.publishedRevision, draftRevision: draft.revision, provider: 'modrinth', projectId: 'pack', versionId: 'v1', requiredUpdate: false, acknowledgeLowerVersion: false };
+  await api.packProviderPublish('paper', request, 'link');
+  const linked = await api.packDraft('paper');
+  expect(linked.pendingPublication).toBe(false);
+  expect(linked.customizingProvider).toBe(false);
+  await api.packImport('paper', { source: 'published', expectedRevision: draft.revision, expectedPublishedRevision: linked.publishedRevision }, 'customize');
+  expect((await api.packDraft('paper')).customizingProvider).toBe(true);
+  await api.packProviderPublish('paper', { ...request, expectedRevision: linked.publishedRevision, draftRevision: (await api.packDraft('paper')).draft.revision, versionId: 'v2', requiredUpdate: true }, 'relink');
+  const rows = await api.packHistory('paper');
+  expect(rows.slice(0, 2).map(row => [row.providerVersion, row.requiredUpdate])).toEqual([['v2', true], ['v1', false]]);
+  expect((await api.packDraft('paper')).customizingProvider).toBe(false);
+});

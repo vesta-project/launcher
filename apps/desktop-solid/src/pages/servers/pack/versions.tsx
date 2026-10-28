@@ -9,7 +9,7 @@ import {
   canPublish, customizingProvider, diffChangeCount, entryFileName, needsLowerAck, publishReducer, type PublishEvent, type PublishState,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
-import type { PackEntry } from '../../../features/servers/native-pack';
+import type { PackEntry, PublishedRevision } from '../../../features/servers/native-pack';
 import { serverCommand } from '../../../features/servers/store';
 import { formatDate, t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
@@ -22,6 +22,7 @@ export function ModpackVersions() {
     <div data-vesta="modpack-scroll">
       <div data-vesta="modpack-versions">
         <ReleaseSummary />
+        <PublishedHistory />
         <Show when={area.kind() === 'provider'} fallback={<DraftReview />}>
           <ProviderVersions />
         </Show>
@@ -269,4 +270,25 @@ function ProviderVersions() {
       </div>
     </section>
   );
+}
+
+function PublishedHistory() {
+  const area = useModpackArea();
+  const [rows, setRows] = createSignal<PublishedRevision[]>([], { name: 'modpack-history:rows' });
+  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-history:error' });
+  createEffect(() => [area.id(), area.workspace()?.publishedRevision] as const, ([id]) => {
+    let disposed = false;
+    void serverCommand(api => api.packHistory(id)).then(value => { if (!disposed) { setRows(value); setError(null); } }, reason => { if (!disposed) setError(reason as ServerCommandError); });
+    onCleanup(() => { disposed = true; });
+  }, { name: 'modpack-history:load' });
+  return <section data-vesta="modpack-panel"><header data-vesta="modpack-panel-head"><h3>{t('server-pack.history-title')}</h3></header>
+    <div data-vesta="modpack-panel-body"><ServerErrorNote error={error()} />
+      <Show when={rows().length} fallback={<p data-vesta="server-muted">{t('server-pack.history-empty')}</p>}>
+        <ul><For each={rows()}>{row => <li>
+          <strong>{row.revision}</strong> · {formatDate(new Date(row.publishedAt).toISOString())} · {row.publishedBy ?? '—'} · {t(row.requiredUpdate ? 'server-pack.publish-required' : 'server-pack.publish-optional')}
+          <span> · {t('server-pack.history-counts', { entries: row.entryCount ?? '—', overrides: row.overrideCount ?? '—' })}</span>
+          <Show when={row.providerVersion}><span> · {row.providerVersion}</span></Show>
+        </li>}</For></ul>
+      </Show>
+    </div></section>;
 }

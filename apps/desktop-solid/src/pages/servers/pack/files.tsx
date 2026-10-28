@@ -20,6 +20,7 @@ import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import { FileEditor } from '../tabs/file-editor';
 import { DeleteDialog, NameDialog, type NameRequest } from '../tabs/files-tab';
+import { useNativeDropZone } from '../../../features/file-drop/zone';
 import { draggingFiles } from '../tabs/files-drop';
 import { useModpackArea } from './area';
 import '../tabs/files-tab.css';
@@ -125,6 +126,20 @@ export function ModpackFiles() {
     }
   };
 
+  let dropElement: HTMLDivElement | undefined;
+  useNativeDropZone({ element: () => dropElement, disabled: () => !area.gates().edit || !!opened() || uploading() > 0,
+    drop: (paths) => { void (async () => {
+      const into = { root: root(), directory: directory() }; setUploading(1); setError(null);
+      try {
+        const files = await serverCommand(api => api.packUploadDropped(area.id(), paths, false));
+        for (const file of files) {
+          const target = packUploadTarget(into.directory, file.path, Number(file.receipt.size));
+          if ('problem' in target) { toast.show({ title: t(target.problem), tone: 'danger' }); continue; }
+          await mutate({ operation: 'attach', root: into.root, path: target.path, sha256: file.receipt.sha256 }, newIntentId());
+        }
+      } catch (reason) { setError(reason as ServerCommandError); } finally { setUploading(0); }
+    })(); },
+  });
   const actions = (row: PackFileRow, context = false) => {
     const Item = context ? ContextMenuItem : MenuItem;
     const Separator = context ? ContextMenuSeparator : MenuSeparator;
@@ -170,7 +185,7 @@ export function ModpackFiles() {
       </header>
 
       <Show when={opened()} keyed fallback={
-        <div data-vesta="server-pane-body" class="server-files-body" data-drop-zone=""
+        <div ref={element => { dropElement = element; }} data-vesta="server-pane-body" class="server-files-body" data-drop-zone=""
           data-drop-target={dragging() ? 'active' : undefined} data-drop-hint={dragging() ? t('server-pack.drop-hint', { name: t(rootLabel(root()).label) }) : undefined}
           onDragOver={(event) => { if (!draggingFiles(event)) return; event.preventDefault(); event.dataTransfer!.dropEffect = 'copy'; setDragging(true); }}
           onDragLeave={(event) => { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) setDragging(false); }}

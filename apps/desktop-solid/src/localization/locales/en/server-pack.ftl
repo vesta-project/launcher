@@ -337,3 +337,7 @@ server-pack-active-version = Active
 server-pack-switch-version = Switch to this version
 server-pack-switch-confirm = Switch
 server-pack-switched = Switched to { $version } (revision { $revision })
+
+server-pack-history-title = Published history
+server-pack-history-empty = No published revisions yet.
+server-pack-history-counts = { $entries } entries, { $overrides } overrides

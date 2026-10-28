@@ -28,7 +28,7 @@ export interface PackArchiveInspection {
 }
 export interface PackDraft { revision: string; manifest: PackManifest }
 export interface PackIcon { mimeType: 'image/png' | 'image/jpeg'; contentBase64: string }
-export interface PackWorkspace { providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
+export interface PackWorkspace { customizingProvider?: boolean; providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
 export interface PackDraftWrite { expectedRevision: string; manifest: PackManifest }
 export interface PackProviderSelection extends ContentProvider { required: boolean }
 export interface PackBrowseAdd extends ContentProvider { expectedRevision: string; required: boolean; dependencies: PackProviderSelection[] }
@@ -53,7 +53,10 @@ export interface PackInstallPlan {planId:string;confirmationToken:string;expires
 export interface PackInstallApply {planId:string;confirmationToken:string;choices:{path:string;choice:'replace'|'keep'}[];setAsModpack:boolean}
 export interface PackInstallOutcome {state:'staged_until_restart';pendingIds:string[];modpackRevision:string|null}
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);
+export interface PublishedRevision { revision: string; publishedAt: number; publishedBy: string | null; requiredUpdate: boolean; entryCount: number | null; overrideCount: number | null; providerVersion: string | null }
 export const serversPackNative = {
+  packHistory: (connectionId: ConnectionId) => call<PublishedRevision[]>('server_pack_history', { connectionId }),
+  packUploadDropped: (connectionId: ConnectionId, paths: string[], archive: boolean) => call<{name: string; path: string; receipt: PackUploadReceipt}[]>('server_pack_upload_dropped', { connectionId, paths, archive }),
   packInstallPlan: (connectionId:ConnectionId,request:PackInstallRequest) => call<PackInstallPlan>('server_pack_install_plan',{connectionId,request}),
   packInstallApply: (connectionId:ConnectionId,request:PackInstallApply,intentId:string) => call<PackInstallOutcome>('server_pack_install_apply',{connectionId,request,intentId}),
   packProviderPublish: (connectionId: ConnectionId, request: PackProviderPublish, intentId: string) => call<PackPublishOutcome>('server_pack_provider_publish', { connectionId, request, intentId }),

@@ -10,6 +10,7 @@ import {
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
 import type { ContentProvider } from '../../../features/servers/native-content';
+import { useNativeDropZone } from '../../../features/file-drop/zone';
 import { uploadPackBytes, type PackArchiveInspection } from '../../../features/servers/native-pack';
 import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
@@ -71,6 +72,21 @@ export function FirstRun() {
     }
   };
 
+  let archiveElement: HTMLElement | undefined;
+  useNativeDropZone({ element: () => archiveElement, disabled: () => !!upload() || scratch(), drop: paths => {
+    if (paths.length !== 1 || !isPackArchiveName(paths[0]!)) { setBadFile(true); return; }
+    const name = paths[0]!.split(/[\\/]/).at(-1)!;
+    setUpload({ step: 'uploading', name }); setError(null);
+    void (async () => {
+      try {
+        const files = await serverCommand(api => api.packUploadDropped(area.id(), paths, true));
+        const receipt = files[0]!.receipt;
+        const inspection = await serverCommand(api => api.packArchiveInspect(area.id(), receipt.uploadId));
+        if (disposed) { void cancelUpload(receipt.uploadId); return; }
+        setUpload({ step: 'inspected', name, uploadId: receipt.uploadId, inspection });
+      } catch (reason) { if (!disposed) { setUpload(null); setError(reason as ServerCommandError); } }
+    })();
+  } });
   const choose = (choice: FirstRunChoice) => {
     if (choice === 'provider') browse();
     else if (choice === 'upload') picker?.click();
@@ -118,7 +134,7 @@ export function FirstRun() {
                 onDrop: (event: DragEvent) => { event.preventDefault(); setDragging(false); void receive(event.dataTransfer?.files[0]); },
               } : {};
               return (
-                <article data-vesta="modpack-choice" data-choice={choice.id} data-drop-target={choice.id === 'upload' && dragging() ? 'active' : undefined} {...dropProps}>
+                <article ref={element => { if (choice.id === 'upload') archiveElement = element; }} data-vesta="modpack-choice" data-choice={choice.id} data-drop-target={choice.id === 'upload' && dragging() ? 'active' : undefined} {...dropProps}>
                   <span data-vesta="modpack-choice-icon" aria-hidden="true"><Icon name={copy.icon} size={18} /></span>
                   <h3>{t(copy.title)}</h3>
                   <p>{t(copy.description)}</p>
