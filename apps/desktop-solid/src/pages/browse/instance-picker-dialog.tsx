@@ -36,7 +36,7 @@ import type { ServerCommandError } from '../../features/servers/native';
 import { instances } from '../../features/instances/catalog';
 import type { ConnectionId } from '../../features/servers/native';
 import { serverSnapshots } from '../../features/servers/store';
-import { serverFocus } from '../../features/browse/browse-store';
+import { serverTargetId } from '../../features/browse/browse-store';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import {
@@ -110,7 +110,7 @@ export function InstancePickerDialog() {
       setStep({ kind: 'pick' });
       setClientPacks({});
       depsRequest++;
-      preselect = project ? untrack(serverFocus)?.id : undefined;
+      preselect = project ? untrack(serverTargetId) : undefined;
       if (!project) return;
       let cancelled = false;
       const entries = canTargetInstance(project) ? untrack(instances) : [];

@@ -3016,8 +3016,6 @@ export const messageIds = [
   "browse.server-pack-partial-help",
   "browse.server-install-staged-title",
   "browse.server-install-staged",
-  "browse.server-focus",
-  "browse.server-focus-back",
   "server-content.tab",
   "server-content.kind-mod",
   "server-content.kind-plugin",
@@ -3095,6 +3093,11 @@ export const messageIds = [
   "server-hosting.custom-jar-java-current",
   "server-hosting.custom-jar-java-unknown",
   "server-hosting.custom-jar-apply",
+  "browse.target-new-instance",
+  "browse.target-new-instance-help",
+  "browse.target-any-help",
+  "browse.target-empty",
+  "browse.server-modpack-coming",
 ] as const;
 
 export type MessageId = (typeof messageIds)[number];

@@ -2,12 +2,14 @@ import { IconButton, SegmentedControl, Select } from '@vesta/ui';
 import { createMemo, Show } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { sourceById, sources, type ResourceType, type SourceId } from '../../features/browse/browse-model';
+import { serverTypes } from '../../features/browse/browse-targets';
 import {
   banners,
   setBanners,
   setSort,
   setSortOrder,
   setSource,
+  serverTarget,
   setType,
   sort,
   sortOrder,
@@ -39,8 +41,21 @@ const sourceOptions = sources.map((item) => ({
  * ordered and drawn. The install target and filters live in the search field below.
  */
 export function Toolbar() {
+  // A server target narrows the tabs to what it takes (Plugins for Paper, Mods for Fabric…).
+  const allowedTypes = createMemo(
+    () => {
+      const server = serverTarget();
+      return server ? serverTypes(server) : undefined;
+    },
+    { name: 'browseServerTypes' },
+  );
   const typeOptions = createMemo(
-    () => sourceById(source()).types.map((value) => ({ value, label: t(typeLabels[value]) })),
+    () => {
+      const allowed = allowedTypes();
+      return sourceById(source())
+        .types.filter((value) => !allowed || allowed.includes(value) || value === type())
+        .map((value) => ({ value, label: t(typeLabels[value]) }));
+    },
     { name: 'browseTypeOptions' },
   );
   const sortOptions = createMemo(

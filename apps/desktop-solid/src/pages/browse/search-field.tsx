@@ -30,8 +30,6 @@ import {
   setLoader,
   setServer,
   clearFilters,
-  clearServerFocus,
-  serverFocus,
   setText,
   results,
   text,
@@ -130,7 +128,7 @@ function openProject(url: ProjectUrl) {
 /**
  * The signature search box: filter chips, the text input and the Filters button live in one
  * field-looking container. Keys in the input: Enter commits (or opens a pasted project URL),
- * Deletion keys edit text only; chips and the target have explicit removal controls. Escape clears the text
+ * Deletion keys edit text only; chips have explicit removal controls and the target its dropdown. Escape clears the text
  * and then blurs, ArrowDown opens the filter panel (Escape closes it again). Many filters
  * collapse to the first few chips and a "+N" chip that opens the panel.
  */
@@ -197,38 +195,13 @@ export function SearchField() {
           if (event.target === event.currentTarget) searchInput.element?.focus();
         }}
       >
-        <Show when={type() !== 'modpack'}>
-          <span data-vesta="browse-scope">
-            <TargetSelect class="browse-scope-select" aria-label={t('browse.install-to')} />
-          </span>
-        </Show>
+        <span data-vesta="browse-scope">
+          <TargetSelect class="browse-scope-select" aria-label={t('browse.install-to')} />
+        </span>
         <span data-vesta="browse-search-icon" aria-hidden="true">
           <Icon name="icons/content/search" size={14} />
         </span>
         <div data-vesta="browse-chips">
-          <Show when={serverFocus()}>
-            {(focus) => (
-              <span data-vesta="browse-chip" data-kind="server">
-                <button
-                  type="button"
-                  data-vesta="browse-chip-body"
-                  title={t('browse.server-focus-back', { title: focus().name })}
-                  onClick={() => transitionTo(`/servers/${focus().id}/resources`)}
-                >
-                  <Icon name="icons/rail/servers" size={11} />
-                  {t('browse.server-focus', { title: focus().name })}
-                </button>
-                <button
-                  type="button"
-                  data-vesta="browse-chip-remove"
-                  aria-label={t('browse.remove-filter', { name: focus().name })}
-                  onClick={clearServerFocus}
-                >
-                  <Icon name="icons/actions/close" size={10} />
-                </button>
-              </span>
-            )}
-          </Show>
           <For each={shown()} keyed={(chip) => chip.key}>
             {(chip) => (
               <span data-vesta="browse-chip" data-kind={chip().kind}>
