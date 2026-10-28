@@ -1,0 +1,157 @@
+/*
+ * Browse target dropdown: a field-looking trigger and a popover with "no target", then
+ * Instances and Servers sections, each row with art, name, version line and (servers) state.
+ * Hooks:  [data-vesta=browse-target-menu] [data-vesta=browse-target-list]
+ *         [data-vesta=browse-target-group] [data-vesta=browse-target-heading]
+ *         [data-vesta=browse-target-row] [data-vesta=browse-target-art]
+ *         [data-vesta=browse-target-text] [data-vesta=browse-target-state]
+ *         [data-vesta=browse-target-check]
+ * States: option: data-selected, data-offline; state: data-state (online|connecting|offline|access)
+ */
+
+@layer launcher {
+  :where(.browse-target-popover) {
+    --overlay-padding: var(--vesta-space-1-5);
+    --popover-width: 320px;
+  }
+
+  :where([data-vesta='browse-target-menu']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1-5);
+    min-block-size: 0;
+  }
+
+  :where([data-vesta='browse-target-list']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    max-block-size: min(60vh, 420px);
+    overflow-y: auto;
+    outline: none;
+  }
+
+  :where([data-vesta='browse-target-group']) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :where([data-vesta='browse-target-heading']) {
+    margin: 0;
+    padding: var(--vesta-space-1) var(--vesta-space-2) var(--vesta-space-0-5);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta='browse-target-row']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    inline-size: 100%;
+    margin: 0;
+    padding: var(--vesta-space-1-5) var(--vesta-space-2);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='browse-target-row']):hover,
+  :where([data-vesta='browse-target-row']):focus-visible {
+    background: var(--vesta-color-fill-hover);
+    outline: none;
+  }
+
+  :where([data-vesta='browse-target-row']):focus-visible {
+    box-shadow: inset 0 0 0 2px var(--vesta-color-focus);
+  }
+
+  :where([data-vesta='browse-target-row'][data-selected]) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='browse-target-row'][data-selected] strong) {
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-target-art']) {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+  }
+
+  :where([data-vesta='browse-target-row'][data-offline] [data-vesta='browse-target-art']) {
+    filter: grayscale(0.85);
+    opacity: 0.7;
+  }
+
+  :where([data-vesta='browse-target-text']) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='browse-target-text'] > *) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='browse-target-text'] > strong) {
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='browse-target-text'] > span) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='browse-target-state']) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='browse-target-state'])::before {
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    content: '';
+  }
+
+  :where([data-vesta='browse-target-state'][data-state='online']) {
+    color: var(--vesta-color-success-text);
+  }
+
+  :where([data-vesta='browse-target-state'][data-state='connecting']),
+  :where([data-vesta='browse-target-state'][data-state='access']) {
+    color: var(--vesta-color-warning-text);
+  }
+
+  :where([data-vesta='browse-target-check']) {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 14px;
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='browse-target-art'] [data-vesta='browse-target-icon']) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}

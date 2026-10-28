@@ -54,7 +54,7 @@ browse-section-environment = Environment
 browse-section-creator = Creator
 browse-section-categories = Categories
 browse-no-instance = Any instance
-browse-instance-modpack-note = Modpacks create a new instance.
+browse-instance-modpack-note = Modpacks create a new instance, or pick a server to put one there.
 browse-any-version = Any version
 browse-any-loader = Any loader
 browse-show-snapshots = Show snapshots
@@ -291,7 +291,12 @@ browse-server-pack-partial-title = Server changes accepted; the modpack needs at
 browse-server-pack-partial-help = Check the modpack draft before retrying. Its changes could not be confirmed.
 browse-server-install-staged-title = { $name } installs on { $title } on the next restart.
 browse-server-install-staged = Minecraft is running, so the server applies it when it next starts.
-browse-server-focus = For { $title }
-browse-server-focus-back = Back to { $title } resources
 browse-target-reason-modpack-not-configured = Set up this server's client modpack first.
 browse-target-reason-modpack-unavailable = Couldn't check this server's client modpack.
+
+# Browse target dropdown
+browse-target-new-instance = New instance
+browse-target-new-instance-help = Modpacks make their own instance.
+browse-target-any-help = Install asks where each time.
+browse-target-empty = Nothing matches.
+browse-server-modpack-coming = Installing { $name } on { $title } is coming next.

@@ -23,8 +23,10 @@ import {
   loader,
   sameState,
   source,
+  serverTarget,
   setLoader,
   target,
+  targetName,
   toggleCategory,
   type,
 } from '../../features/browse/browse-store';
@@ -193,7 +195,7 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
         <span data-vesta="browse-card-action">
           <InstallButton
             state={state}
-            targetName={() => target()?.name}
+            targetName={() => (project().resource_type === 'modpack' ? serverTarget()?.name : targetName())}
             onRun={() => void runInstall(project(), project().resource_type, target())}
           />
         </span>

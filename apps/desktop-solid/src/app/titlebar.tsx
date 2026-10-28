@@ -111,7 +111,8 @@ function location(): {
           back: { to: '/browse', label: t('common.back') },
         };
       }
-      const instance = current.section === 'for' ? findInstance(current.detail)?.instance : undefined;
+      const server = current.section === 'server' && current.detail ? serverSnapshot(decodeURIComponent(current.detail)) : undefined;
+      const instance = current.section === 'for' ? findInstance(current.detail)?.instance : server?.connection;
       if (instance)
         return {
           label: t('browse.trail-for', { name: instance.name }),

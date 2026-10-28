@@ -19,6 +19,7 @@ import {
   loader,
   results,
   server,
+  serverTargetId,
   setClient,
   setCreator,
   setGameVersion,
@@ -170,7 +171,7 @@ export function FilterPanel(props: { section: () => Section | undefined }) {
       <div data-vesta="browse-panel-body">
         <PanelSection id="instance" title={t('browse.section-instance')}>
           <TargetSelect />
-          <Show when={type() === 'modpack'}>
+          <Show when={type() === 'modpack' && !serverTargetId()}>
             <p data-vesta="browse-section-note">{t('browse.instance-modpack-note')}</p>
           </Show>
         </PanelSection>

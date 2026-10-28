@@ -9,6 +9,7 @@ import {
   query,
   refreshInstalled,
   source,
+  syncServerTarget,
   syncTarget,
   targetId,
 } from '../../features/browse/browse-store';
@@ -16,10 +17,19 @@ import { findInstance } from '../../features/instances/catalog';
 import { InstancePickerDialog } from './instance-picker-dialog';
 import { WorldPickerDialog } from './world-picker-dialog';
 import { ProjectPage } from './project/project-page';
+import { ServerTargetSync } from './server-target-sync';
 import { Results } from './results';
 import { SearchField, searchInput } from './search-field';
 import { Toolbar } from './toolbar';
 import './browse.css';
+
+const decodeSegment = (value: string | undefined) => {
+  try {
+    return value && decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
 
 /** `/` focuses the search field unless the user is already typing somewhere. */
 function useSearchShortcut() {
@@ -40,11 +50,21 @@ function Browser() {
   const key = createMemo(() => queryKey(query()), { name: 'browseQueryKey' });
   useSearchShortcut();
 
-  // The route owns the target instance; the store follows it. The instance catalogue can load
-  // after the route does, so the lookup is part of what this tracks.
+  // The route owns the target (an instance under /for, a server under /server); the store
+  // follows it. The instance catalogue can load after the route does, so the lookup is part of
+  // what this tracks.
   createEffect(
-    () => ({ id: route().section === 'for' ? route().detail : undefined, ready: !!findInstance(route().detail) }),
-    ({ id }) => untrack(() => syncTarget(id)),
+    () => ({
+      instance: route().section === 'for' ? route().detail : undefined,
+      server: route().section === 'server' ? decodeSegment(route().detail) : undefined,
+      ready: !!findInstance(route().detail),
+    }),
+    ({ instance, server }) =>
+      untrack(() => {
+        if (server) return syncServerTarget(server);
+        syncServerTarget(undefined);
+        syncTarget(instance);
+      }),
   );
   createEffect(
     () => targetId(),
@@ -79,6 +99,7 @@ export function BrowsePage() {
       {/* Both views install through the same choosers. */}
       <InstancePickerDialog />
       <WorldPickerDialog />
+      <ServerTargetSync />
     </>
   );
 }

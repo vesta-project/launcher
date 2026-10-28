@@ -45,6 +45,14 @@ import {
   type SourceId,
 } from './browse-model';
 import { loadVersions, seedProjects } from './browse-projects';
+import {
+  sameServerTarget,
+  serverInstallState,
+  serverScope,
+  targetPath,
+  type BrowseTargetRef,
+} from './browse-targets';
+import type { ServerTarget } from './install-targets';
 
 /**
  * The one Browse store. It is module-level on purpose: leaving the page and coming back
@@ -260,7 +268,7 @@ export function toggleGroup(id: string) {
   });
 }
 
-/** Filters are cleared together; the target instance lives in the route so it is navigated away. */
+/** Filters are cleared together; the target lives in the route so it is navigated away. */
 export function clearFilters(options: { keepText?: boolean } = {}) {
   clearTimeout(debounce);
   if (!options.keepText) {
@@ -274,11 +282,14 @@ export function clearFilters(options: { keepText?: boolean } = {}) {
   setCreatorSignal(null);
   setCategoriesSignal([]);
   firstPage();
-  if (untrack(targetId)) navigate('/browse', { replace: true });
+  if (untrack(targetId) || untrack(serverTargetId)) navigate('/browse', { replace: true });
 }
 
+/** Whether a target scopes the results: an instance (not for modpacks) or a server. */
+const scoped = () => (!!targetId() && type() !== 'modpack') || !!serverTargetId();
+
 export const hasActiveFilters = () =>
-  countFilters(query(), !!targetId() && type() !== 'modpack') > 0 || committedText() !== '' || text() !== '';
+  countFilters(query(), scoped()) > 0 || committedText() !== '' || text() !== '';
 
 /* ---- Target instance ---- */
 
@@ -329,7 +340,7 @@ export function syncTarget(id: string | undefined) {
     return;
   }
   // An instance target replaces a server one.
-  setServerFocus(null);
+  dropServerTarget();
   const instance = targetEntry();
   if (!instance || appliedTarget === id) return;
   appliedTarget = id;
@@ -348,32 +359,115 @@ export function removeTarget() {
   navigate('/browse', { replace: true });
 }
 
-/** A server Browse was opened for: its picker row is preselected when the user installs. */
-export interface ServerFocus {
-  id: string;
-  name: string;
-}
-const [serverFocus, setServerFocus] = createSignal<ServerFocus | null>(null, { name: 'browseServerFocus' });
-export { serverFocus };
-export const clearServerFocus = () => setServerFocus(null);
+/* ---- Target server ---- */
 
 /**
- * Opens Browse for a server (its Resources tab's Add content): the kind it takes, its
- * Minecraft version, and the mod loader when it runs one. Plugin servers accept several
- * plugin loaders, so the loader filter stays open and the picker checks compatibility.
+ * A server chosen in the target dropdown, or the one Browse was opened for (its Resources
+ * tab's Add content). Results follow its Minecraft version and software, cards show what its
+ * inventory already has, and Install opens the picker straight at that server.
  */
-export function browseForServer(focus: ServerFocus & { type: ResourceType; minecraftVersion: string | null; loader: string | null }) {
-  setServerFocus({ id: focus.id, name: focus.name });
+const [serverTargetId, setServerTargetId] = createSignal<string | undefined>(undefined, { name: 'browseServerTarget' });
+/** Fed by the mounted Browse view (`ServerTargetSync`) from the snapshot and inventory. */
+const [serverInfo, setServerInfo] = createSignal<ServerTarget | undefined>(undefined, {
+  name: 'browseServerInfo',
+  equals: sameServerTarget,
+});
+/** `platform:project` keys in the server's content inventory. */
+const [serverInstalled, setServerInstalled] = createSignal<ReadonlySet<string>>(new Set(), {
+  name: 'browseServerInstalled',
+});
+export { serverTargetId, serverInstalled };
+
+/** The chosen server with what is known about it; undefined without one. */
+export const serverTarget = () => {
+  const info = serverInfo();
+  return info && info.id === serverTargetId() ? info : undefined;
+};
+
+/** Where Install goes by name: the instance, else the server. */
+export const targetName = () => target()?.name ?? serverTarget()?.name;
+
+/** The chosen target as one reference, for the dropdown. */
+export const targetRef = (): BrowseTargetRef | undefined => {
+  const server = serverTargetId();
+  if (server) return { kind: 'server', id: server };
+  const id = targetId();
+  return id ? { kind: 'instance', id } : undefined;
+};
+
+let appliedServer: string | undefined;
+
+function dropServerTarget() {
+  appliedServer = undefined;
+  setServerTargetId(undefined);
+  setServerInfo(undefined);
+  setServerInstalled(new Set<string>());
+}
+
+/** Called with the route's server id (or a project page's choice). */
+export function syncServerTarget(id: string | undefined) {
+  if (id === untrack(serverTargetId)) return;
+  dropServerTarget();
+  if (!id) return;
+  // A server target replaces an instance one.
+  if (untrack(targetId)) syncTarget(undefined);
+  setServerTargetId(id);
+}
+
+/**
+ * The server's latest description. The first one that knows the software applies its scope
+ * once: version, loader and a type the server takes. Later updates leave user edits alone.
+ */
+export function updateServerTarget(info: ServerTarget | undefined, installedKeys?: ReadonlySet<string>) {
+  const id = untrack(serverTargetId);
+  if (!id || (info && info.id !== id)) return;
+  setServerInfo(info);
+  if (installedKeys) setServerInstalled(installedKeys);
+  if (!info || appliedServer === id || info.software === undefined) return;
+  appliedServer = id;
+  const scope = serverScope(info, untrack(type));
+  if (scope.type !== untrack(type)) setType(scope.type);
+  setGameVersionSignal(scope.gameVersion);
+  setLoaderSignal(scope.loader);
+  firstPage();
+}
+
+/**
+ * Opens Browse for a server (its Resources tab's Add content, its pack's Browse): the kind it
+ * takes, its Minecraft version, and the mod loader when it runs one. The server becomes the
+ * dropdown's target; these explicit filters win over the automatic scope.
+ */
+export function browseForServer(focus: { id: string; name: string; type: ResourceType; minecraftVersion: string | null; loader: string | null }) {
   setType(focus.type);
   setGameVersionSignal(focus.minecraftVersion || null);
   setLoaderSignal(focus.type === 'mod' && focus.loader ? focus.loader.toLowerCase() : null);
   firstPage();
-  navigate('/browse');
+  syncServerTarget(focus.id);
+  appliedServer = focus.id;
+  navigate(targetPath({ kind: 'server', id: focus.id }));
 }
 
-export function chooseTarget(id: string | undefined) {
-  if (!id) return untrack(targetId) ? removeTarget() : undefined;
-  navigate(`/browse/for/${id}`, { replace: true });
+/** The dropdown's choice. Browse keeps its target in the route. */
+export function chooseTarget(ref: BrowseTargetRef | undefined) {
+  if (!ref) {
+    if (untrack(serverTargetId)) {
+      dropServerTarget();
+      setGameVersionSignal(null);
+      setLoaderSignal(null);
+      firstPage();
+      navigate('/browse', { replace: true });
+      return;
+    }
+    return untrack(targetId) ? removeTarget() : undefined;
+  }
+  navigate(targetPath(ref), { replace: true });
+}
+
+/** A project page's choice: the page stays put, only the store follows. */
+export function chooseTargetInPlace(ref: BrowseTargetRef | undefined) {
+  if (ref?.kind === 'server') return syncServerTarget(ref.id);
+  syncServerTarget(undefined);
+  syncTarget(ref?.id);
 }
 
 /* ---- Results ---- */
@@ -676,7 +770,10 @@ export function installState(project: ResourceProject): InstallState {
   const kind = project.resource_type;
   if (kind === 'modpack') return { kind: 'install' };
   const info = target();
-  if (!info) return { kind: 'install' };
+  if (!info) {
+    const server = serverTarget();
+    return server ? serverInstallState(project, server, serverInstalled()) : { kind: 'install' };
+  }
   const key = projectKey(project.source, project.id);
   if (installing().has(installingKey(info.id, project.source, project.id))) return { kind: 'installing' };
   if (installed().has(key)) return updatable().has(key) ? { kind: 'update' } : { kind: 'installed' };
@@ -818,10 +915,7 @@ export function browseCreator(project: ResourceProject, creator: Creator | undef
   setCreatorSignal(creator);
 }
 
-/** Where Browse returns to: the target instance lives in the route. */
-export const browsePath = () => {
-  const id = untrack(targetId);
-  return id ? `/browse/for/${id}` : '/browse';
-};
+/** Where Browse returns to: the target lives in the route. */
+export const browsePath = () => targetPath(untrack(targetRef));
 
-export const activeFilterCount = () => countFilters(query(), !!targetId() && type() !== 'modpack');
+export const activeFilterCount = () => countFilters(query(), scoped());

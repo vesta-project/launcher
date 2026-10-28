@@ -1,6 +1,6 @@
 import { transitionTo } from '../../../app/transition';
 import type { Creator, ResourceProject, ResourceType } from '../../../features/browse/browse-model';
-import { browseCategory, browseCreator, browsePath, syncTarget } from '../../../features/browse/browse-store';
+import { browseCategory, browseCreator, browsePath, chooseTargetInPlace } from '../../../features/browse/browse-store';
 import { t } from '../../../localization';
 import { TargetSelect } from '../target-select';
 
@@ -12,7 +12,7 @@ export function StripTarget(props: { kind: ResourceType }) {
   return (
     <label data-vesta="project-strip-target">
       <span data-vesta="project-strip-label">{t('browse.install-to')}</span>
-      <TargetSelect class="project-target-select" kind={props.kind} onChange={(id) => syncTarget(id)} />
+      <TargetSelect class="project-target-select" kind={props.kind} onChange={chooseTargetInPlace} />
     </label>
   );
 }

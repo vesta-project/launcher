@@ -12,7 +12,15 @@ import {
   type ResourceType,
   type ResourceVersion,
 } from '../../features/browse/browse-model';
-import { gameVersion, installInto, loader, setNotice, type InstallOutcome } from '../../features/browse/browse-store';
+import {
+  gameVersion,
+  installInto,
+  loader,
+  serverTarget,
+  serverTargetId,
+  setNotice,
+  type InstallOutcome,
+} from '../../features/browse/browse-store';
 import { installIntoNewInstance } from '../../features/browse/new-instance-install';
 import { nativeInstances } from '../../features/instances/native-service';
 import { t } from '../../localization';
@@ -71,6 +79,19 @@ function startPack(project: ResourceProject, pinned?: ResourceVersion) {
   });
 }
 
+/**
+ * A modpack chosen for a server target: install it on the server, or use it as the server's
+ * client modpack. TODO(server-modpack): hand the project and release to the server pack
+ * install plan/apply flow once its backend lands; until then this only says it is coming.
+ */
+export function installModpackOnServer(
+  project: ResourceProject,
+  server: { id: string; name: string },
+  _pinned?: ResourceVersion,
+): void {
+  setNotice({ tone: 'neutral', text: t('browse.server-modpack-coming', { name: project.name, title: server.name }) });
+}
+
 export function reportOutcome(project: ResourceProject, instanceName: string, outcome: InstallOutcome) {
   switch (outcome.kind) {
     case 'started':
@@ -98,7 +119,11 @@ export async function runInstall(
   target: ({ id: string; name: string } & InstallTarget) | undefined,
   pinned?: ResourceVersion,
 ) {
-  if (kind === 'modpack') return startPack(project, pinned);
+  if (kind === 'modpack') {
+    const server = untrack(serverTargetId);
+    if (!server) return startPack(project, pinned);
+    return installModpackOnServer(project, { id: server, name: untrack(serverTarget)?.name ?? server }, pinned);
+  }
   if (!target || !canTargetInstance({ ...project, resource_type: kind })) {
     setPickerVersion(pinned);
     setPickerProject(project);
