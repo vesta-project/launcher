@@ -102,7 +102,7 @@ function IdentityPanel() {
           <img src={area.icon()} alt="" width={72} height={72} draggable="false" />
           <span><Icon name="icons/actions/edit" size={12} />{t('server-pack.icon-change')}</span>
         </button>
-        <input ref={picker} type="file" accept="image/png,image/jpeg" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void pickIcon(file); }} />
+        <input ref={(element) => { picker = element; }} type="file" accept="image/png,image/jpeg" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void pickIcon(file); }} />
         <div data-vesta="modpack-identity-fields">
           <TextField size="sm" label={t('server-pack.name')} value={value().name} disabled={busy()} onChange={(name) => edit({ name })} />
           <TextArea size="sm" label={t('server-pack.summary')} value={value().summary} rows={2} disabled={busy()} onChange={(summary) => edit({ summary })} />

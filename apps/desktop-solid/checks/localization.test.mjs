@@ -45,6 +45,15 @@ const args = {
   title: "Test screenshot",
   type: "mods",
   value: "16 GB",
+  example: "mc:1.21.1 loader:fabric",
+  published: "14",
+  minimum: "12",
+  added: 1,
+  updated: 2,
+  removed: 0,
+  provider: "Modrinth",
+  software: "Fabric",
+  revision: "15",
   version: "1.2.3",
 };
 

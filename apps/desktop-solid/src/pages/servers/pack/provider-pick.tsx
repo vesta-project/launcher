@@ -1,5 +1,5 @@
 import { Button, Checkbox, Dialog, Select, toast } from '@vesta/ui';
-import { Show, createMemo, createSignal } from 'solid-js';
+import { Show, createMemo, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { sourceById } from '../../../features/browse/browse-model';
 import { loadVersions, peekVersions } from '../../../features/browse/browse-projects';
@@ -18,13 +18,13 @@ import { useModpackArea } from './area';
  */
 export function ProviderPickDialog(props: { pick: ModpackPick }) {
   const area = useModpackArea();
-  const [versionId, setVersionId] = createSignal<string | null>(props.pick.versionId, { name: 'modpack-pick:version' });
+  const [versionId, setVersionId] = createSignal<string | null>(untrack(() => props.pick.versionId), { name: 'modpack-pick:version' });
   const [useAsModpack, setUseAsModpack] = createSignal(true, { name: 'modpack-pick:assign' });
   const [install, setInstall] = createSignal(area.gates().installOnServer, { name: 'modpack-pick:install' });
   const [busy, setBusy] = createSignal(false, { name: 'modpack-pick:busy' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-pick:error' });
   const intents = new IntentMemo();
-  void loadVersions(props.pick.provider, props.pick.projectId).catch(() => {});
+  untrack(() => void loadVersions(props.pick.provider, props.pick.projectId).catch(() => {}));
   const versions = () => peekVersions(props.pick.provider, props.pick.projectId) ?? [];
   const chosen = createMemo(() => versionId() ?? pickProviderVersion(versions(), area.workspace()?.serverMinecraftVersion ?? '')?.id ?? null, { name: 'modpack-pick:chosen' });
   const close = () => clearModpackPick(props.pick.serverId);

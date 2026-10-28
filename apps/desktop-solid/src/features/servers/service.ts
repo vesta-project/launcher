@@ -44,7 +44,9 @@ function nativeApi(): ServersApi {
 const fixtureOptions = () => (globalThis.localStorage?.getItem('vesta.fixtures.backups') === 'off' ? { backupsConfigured: false } : {});
 
 let fixtureApi: Promise<ServersApi> | undefined;
-const fixtures = () => (fixtureApi ??= import('./fixtures').then((module) => module.createFixtureServers(fixtureOptions())));
+const fixtures = () => (fixtureApi ??= Promise.all([import('./fixtures'), import('./modpack-preview')]).then(([module, preview]) =>
+  // Preview only: `localStorage['vesta.fixtures.modpack']` picks a Modpack area scenario (see modpack-preview.ts).
+  preview.withModpackScenario(module.createFixtureServers(fixtureOptions()), globalThis.localStorage?.getItem('vesta.fixtures.modpack'))));
 
 const native = nativeServers ? nativeApi() : undefined;
 

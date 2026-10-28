@@ -87,7 +87,7 @@ export function FirstRun() {
         </div>
       </header>
       <ServerErrorNote error={error()} />
-      <input ref={picker} type="file" accept=".mrpack,.zip,application/zip" hidden
+      <input ref={(element) => { picker = element; }} type="file" accept=".mrpack,.zip,application/zip" hidden
         onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void receive(file); }} />
       <Show when={!upload() && !scratch()} fallback={
         <Show when={upload()} keyed fallback={<ScratchStep onBack={() => setScratch(false)} />}>
@@ -155,7 +155,7 @@ function ArchiveResult(props: {
   const intents = new IntentMemo();
   const link = () => decision().link;
   const linkProject = () => { const value = link(); return value ? peekProject(value.provider, value.projectId) : undefined; };
-  const linked = link();
+  const linked = untrack(link);
   if (linked) void loadProject(linked.provider, linked.projectId).catch(() => {});
 
   const act = async (mode: 'link' | 'host') => {

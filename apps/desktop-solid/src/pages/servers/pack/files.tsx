@@ -166,7 +166,7 @@ export function ModpackFiles() {
           </Menu>
           <Button size="sm" variant="outline" icon={<Icon name="icons/actions/upload" />} disabled={uploading() > 0} onClick={() => picker?.click()}>{t('server-files.upload')}</Button>
         </Show>
-        <input ref={picker} type="file" multiple hidden onChange={(event) => { const list = [...(event.currentTarget.files ?? [])]; event.currentTarget.value = ''; void upload(list); }} />
+        <input ref={(element) => { picker = element; }} type="file" multiple hidden onChange={(event) => { const list = [...(event.currentTarget.files ?? [])]; event.currentTarget.value = ''; void upload(list); }} />
       </header>
 
       <Show when={opened()} keyed fallback={
