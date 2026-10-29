@@ -308,3 +308,103 @@ Checkpoint launcher validation:
   passed all nine checks in isolation without threshold or console changes.
 - Focused pack/model/install/sync/workspace checks: 22 passed.
 - No page or unrelated user changes were staged.
+
+## Resume checkpoint: installed identity and update discovery (2026-10-29)
+
+This remains an incomplete implementation checkpoint. Player server-modpack delivery
+still fails closed. No files under src/pages/** were edited.
+
+### Added contracts
+
+serverModpack.installed and serverModpack.pending are nullable
+{source, displayVersion} identities. Existing top-level source/displayVersion remain
+the selected target for compatibility; do not label them as installed. During an
+update installed stays at the preceding confirmed version; pending identifies the
+reviewed incoming version and state remains staged_until_restart. Once EVERY
+associated content intent is applied, installed becomes the target and pending is
+null, including after reopening the workspace. Initial installation has installed
+null until completion. Cancelled/missing/failed/partly applied entries never promote.
+Legacy installed receipts populate installed on read. Legacy staged receipts with
+no preceding-version snapshot return installed null rather than inventing history.
+
+Second install plans and unlink refuse while pending is non-null, preventing orphaned
+journal writes or replacement of a receipt before restart. Recovery after cancelling
+part of an installation remains unfinished: the receipt stays pending and needs an
+explicit transactional cancellation/recovery operation before replan/unlink is safe.
+Do not present cancellation as a completed unlink or installed update.
+
+serversApi().serverModpackUpdate(connectionId) invokes native server_modpack_update,
+client server_modpack_update(), and authenticated GET
+/api/v3/manage/pack/server-link/update (pack.edit). Result is
+{installed, pending, available}; available is a nullable provider InstallSource.
+Discovery binds metadata to both linked project and current version, considers only
+newer publication dates, requires current server Minecraft and exact loader, and
+skips unavailable downloads. Fixed provider endpoints have a 20-second deadline;
+installation identity/authority is rechecked after fetching. Provider failures stay
+errors. Pending suppresses network discovery; non-provider links have available null.
+Candidates must still pass packInstallPlan software/file review and apply.
+
+Discovery uses the existing bounded metadata adapter: at most 256 Modrinth rows and
+the first 50 CurseForge files. Pagination and live-provider acceptance remain.
+available null means no candidate in that bounded response, not proof that the
+complete provider history was searched.
+
+### Exact UI handoff changes from the preceding checkpoint
+
+- Server Overview: use installed.source/displayVersion for the installed section;
+  installed null means no confirmed version. Show pending separately with restart
+  and pendingIds. Applying a plan must not replace the installed version label.
+- Check for updates calls serverModpackUpdate. Review update is available only when
+  available is non-null. Pass that source to packInstallPlan, retaining software
+  switching first, file conflicts, removals and choices. Show metadata errors with
+  retry. Suppress second install/unlink while pending. Do not claim cancelled pending
+  work has been recovered.
+- Browser fixtures retain both identities. fixtureRestartServerModpack(id) is a
+  fixture-only helper simulating successful restart; discovery returns a deterministic
+  next provider version after restart.
+- Client settings: keep server-modpack disabled/pending. Custom/none are unchanged.
+  Required-update launch blocking and signed binding/high-water verification remain.
+- Instance linked-pack UI is unchanged: start_modpack_update still emits
+  modpack_review_required and the compatibility packSyncApply path remains.
+  This does not complete the common review/apply lifecycle.
+
+### Exact remaining implementation
+
+1. Independent player-offering artifact/revision storage and monotonic signed
+   selection across custom/follow/none switches. Retain client manifests/blobs from
+   archive installs beyond upload/plan lifetime. Publish archive-backed hosted
+   releases and provider ID-only catalogues from the confirmed installed identity
+   after restart. Wire required-update policy, downloads, unlink and old-client
+   behavior; add end-to-end transport tests.
+2. Provider pagination/live acceptance and recovery of cancelled/failed server
+   installs. Installed/pending identity and bounded discovery are implemented.
+3. Replace server-specific apply/receipt lifecycle with the existing instance
+   modpack-link review/apply pipeline: executable-change consent, journal, rollback,
+   unlink and recovery. Preserve protected binding/signatures and required-update
+   launch checks. Retire parallel pack sync only once exercised end to end.
+
+Validation results for this resume checkpoint follow below.
+
+### Resume validation (2026-10-29)
+
+- Native client full suite passed, including the installed/pending wire regression;
+  all-target client clippy with -D warnings passed.
+- cargo check -p vesta-launcher passed with the same four launcher warnings and
+  one piston-lib warning recorded at the preceding checkpoint.
+- Desktop typecheck passed. Full expanded servers/instance/localization recheck:
+  409 passed, zero failed across 36 files. Initial run had 408 pass and the existing
+  console HOT_SCOPE_TIME failure (8.2 ms / 8 ms); an isolated run under build load
+  also reproduced it. The installed Solid repair guide was read; no diagnostic,
+  threshold, console or page code was changed. Focused model/install: six passed.
+- V: filled while linking broad Rust validation. Final agent/client builds used
+  temporary C: targets with dev/test debug info disabled and incremental disabled.
+  No Cargo profile, dependency, or test assertions were changed. Only generated
+  artifacts from this turn were removed to reclaim working space.
+- Agent control unit suite: 1,074 passed, one failed, two ignored. The sole failure
+  is the previously recorded original-v8 host fixture at host_tests.rs:729 with
+  state_migration_failed. Both new identity/journal and provider-discovery
+  regressions passed. All six control integration targets passed (28 tests).
+- Full vesta-agent tests passed (77 tests across unit/integration targets).
+- Control/transport all-target clippy with -D warnings passed.
+- Transport: 47 unit and 122 HTTPS tests passed; one manual laboratory test ignored.
+  vesta-dev: eight passed, one manual ignored. HTTPS was run serially.

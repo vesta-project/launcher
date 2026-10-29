@@ -28,7 +28,7 @@ interface Host {
   publish?(id: string): void;
   wait(ms?: number): Promise<unknown>;
 }
-export function createPackFixtures(host: Host): typeof serversPackNative & { fixturePublishedManifest(id: string): PackManifest } {
+export function createPackFixtures(host: Host): typeof serversPackNative & { fixturePublishedManifest(id: string): PackManifest; fixtureRestartServerModpack(id: string): void } {
   const history = new Map<string, import('./native-pack').PublishedRevision[]>();
   const states = new Map<string, { view: PackWorkspace; published: PackManifest; publishedDraft: string }>();
   const receipts = new Map<string, { input: string; result: unknown }>();
@@ -96,8 +96,10 @@ export function createPackFixtures(host: Host): typeof serversPackNative & { fix
     return { project, version, entry: e };
   };
   return {
+    fixtureRestartServerModpack(id) { const link=state(id).view.serverModpack;if(link?.pending){link.installed=clone(link.pending);link.pending=null;link.pendingIds=[];link.state='installed';} },
+    async serverModpackUpdate(id) { const link=state(id).view.serverModpack??fail('conflict');return {installed:clone(link.installed??null),pending:clone(link.pending??null),available:!link.pending&&link.installed?.source.source==='provider'?{...clone(link.installed.source),versionId:`${link.installed.source.versionId}-next`}:null}; },
     async clientPackMode(id, request, intent) { return mutate(id,intent,request,()=>{requireCap(id,'pack.publish');if(request.mode==='server-modpack'&&!state(id).view.serverModpack)fail('conflict');state(id).view.clientPack=clone(request);return clone(request);}); },
-    async serverModpackUnlink(id, removeOwnedFiles, intent) { return mutate(id,intent,{removeOwnedFiles},()=>{requireCap(id,'content.install');const view=state(id).view;const link=view.serverModpack??fail('conflict');view.serverModpack=null;if(view.clientPack?.mode==='server-modpack')view.clientPack={mode:'none',requireUpdate:false};return {state:'staged_until_restart' as const,pendingIds:removeOwnedFiles?Object.keys(link.files).map((_,i)=>`unlink-${i}`):[],modpackRevision:null,serverModpack:null};}); },
+    async serverModpackUnlink(id, removeOwnedFiles, intent) { return mutate(id,intent,{removeOwnedFiles},()=>{requireCap(id,'content.install');const view=state(id).view;const link=view.serverModpack??fail('conflict');if(link.pending)fail('conflict');view.serverModpack=null;if(view.clientPack?.mode==='server-modpack')view.clientPack={mode:'none',requireUpdate:false};return {state:'staged_until_restart' as const,pendingIds:removeOwnedFiles?Object.keys(link.files).map((_,i)=>`unlink-${i}`):[],modpackRevision:null,serverModpack:null};}); },
     fixturePublishedManifest(id) { return clone(state(id, false).published); },
     async packHistory(id) { await host.wait(); const s = state(id); return clone(history.get(id) ?? (s.view.publishedRevision === '0' ? [] : [{ revision: s.view.publishedRevision, publishedAt: 1793000000000, publishedBy: 'owner', requiredUpdate: s.view.minimumRevision === s.view.publishedRevision, entryCount: s.published.entries.length, overrideCount: (s.published.overrideFiles ?? []).filter(f => !f.trashed && f.sha256 !== null).length, providerVersion: s.view.providerPack?.versionId ?? null }])); },
     async packUploadDropped() { return fail('unsupported'); },
@@ -165,6 +167,7 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
     },
     async packInstallPlan(id, request) {
       requireCap(id,'content.install');
+      if(state(id).view.serverModpack?.pending)fail('conflict');
       if (!['owner','administrator','admin'].includes(host.server(id).snapshot.connection.role ?? '')) fail('forbidden');
       const scenario=request.source.source==='provider'?'provider':request.source.source==='uploaded_archive'?'archive':'conflicts';
       const plan=seedPackInstallPlan(scenario); plan.planId=crypto.randomUUID(); plan.confirmationToken=crypto.randomUUID();plan.expiresAtMs=Date.now()+900000;
@@ -182,7 +185,9 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
         if(JSON.stringify(conflicts)!==JSON.stringify(request.choices.map(c=>c.path).sort())||request.choices.some(c=>!['keep','replace'].includes(c.choice)))fail('invalid_input');
         const view=state(id).view;
         const selected=p.files.filter(f=>!request.choices.some(c=>c.path===f.path&&c.choice==='keep'));
-        view.serverModpack={source:clone(saved.source),displayVersion:'1',files:Object.fromEntries(selected.map(f=>[f.path,f.sha256])),state:'staged_until_restart'};
+        if(view.serverModpack?.pending)fail('conflict');
+        view.serverModpack={source:clone(saved.source),displayVersion:'1',files:Object.fromEntries(selected.map(f=>[f.path,f.sha256])),state:'staged_until_restart',installed:view.serverModpack?.installed??null,pending:{source:clone(saved.source),displayVersion:'1'},pendingIds:selected.map((_,i)=>`${p.planId}-${i}`)};
+        if(!selected.length){view.serverModpack.installed=view.serverModpack.pending;view.serverModpack.pending=null;view.serverModpack.state='installed';}
         return {state:'staged_until_restart' as const,pendingIds:selected.map((_,i)=>`${p.planId}-${i}`),modpackRevision:null,serverModpack:clone(view.serverModpack)};
       });
     },
@@ -250,6 +255,7 @@ export function seedPackInstallPlan(scenario:'provider'|'archive'|'conflicts'|'s
 export function seedServerModpackModel(scenario: 'none'|'linked-follow'|'linked-custom'|'unlinked-custom'): PackWorkspace {
   const view=seedPackWorkspace('fabric');
   view.serverModpack=scenario.startsWith('linked-')?{source:{source:'provider',provider:'modrinth',projectId:'friends-pack',versionId:'v2'},displayVersion:'2',files:{'mods/fabric-api.jar':'a'.repeat(64)},state:'installed'}:null;
+  if(view.serverModpack){view.serverModpack.installed={source:clone(view.serverModpack.source),displayVersion:view.serverModpack.displayVersion};view.serverModpack.pending=null;view.serverModpack.pendingIds=[];}
   view.clientPack={mode:scenario==='none'?'none':scenario==='linked-follow'?'server-modpack':'custom',requireUpdate:scenario==='linked-follow'};
   return view;
 }

@@ -145,7 +145,12 @@ dto!(PackDraft {
     revision: String,
     manifest: PackManifest
 });
-dto!(ServerModpackLink {source:PackInstallSource,display_version:String,files:std::collections::BTreeMap<String,String>,state:String,pending_ids:Vec<String>});
+dto!(ServerModpackVersion {
+    source: PackInstallSource,
+    display_version: String
+});
+dto!(ServerModpackUpdate {installed:Option<ServerModpackVersion>,pending:Option<ServerModpackVersion>,available:Option<PackInstallSource>});
+dto!(ServerModpackLink {installed:Option<ServerModpackVersion>,pending:Option<ServerModpackVersion>,source:PackInstallSource,display_version:String,files:std::collections::BTreeMap<String,String>,state:String,pending_ids:Vec<String>});
 dto!(ClientPackConfig {
     mode: String,
     require_update: bool
@@ -275,6 +280,12 @@ dto!(PackInstallOutcome {state:String,pending_ids:Vec<String>,modpack_revision:O
 impl Client {
     pub async fn server_modpack_link(&self) -> Result<Option<ServerModpackLink>> {
         from_wire(self.get("pack/server-link", true, "pack.edit").await?)
+    }
+    pub async fn server_modpack_update(&self) -> Result<ServerModpackUpdate> {
+        from_wire(
+            self.get("pack/server-link/update", true, "pack.edit")
+                .await?,
+        )
     }
     pub async fn client_pack_mode(
         &self,
@@ -572,6 +583,21 @@ mod install_wire_tests {
 #[cfg(test)]
 mod server_link_wire_tests {
     use super::*;
+    #[test]
+    fn update_contract_keeps_confirmed_and_incoming_provider_versions_separate() {
+        let version = |id: &str| serde_json::json!({"source":{"source":"provider","provider":"modrinth","project_id":"pack","version_id":id},"display_version":id});
+        let update: ServerModpackUpdate = from_wire(serde_json::json!({
+            "installed":version("v1"),"pending":version("v2"),"available":null
+        }))
+        .unwrap();
+        assert!(
+            matches!(update.installed.unwrap().source,PackInstallSource::Provider{version_id,..} if version_id=="v1")
+        );
+        assert!(
+            matches!(update.pending.unwrap().source,PackInstallSource::Provider{version_id,..} if version_id=="v2")
+        );
+        assert!(update.available.is_none());
+    }
     #[test]
     fn independent_link_contract_preserves_owned_paths_and_source_identity() {
         let link:ServerModpackLink=from_wire(serde_json::json!({"source":{"source":"provider","provider":"modrinth","project_id":"pack","version_id":"v2"},"display_version":"2","files":{"config/my_custom_file.toml":"abc"},"state":"installed","pending_ids":[]})).unwrap();

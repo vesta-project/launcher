@@ -818,3 +818,16 @@ pub async fn server_modpack_unlink(
         )
         .await
 }
+
+#[tauri::command]
+pub async fn server_modpack_update(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+) -> Result<ServerModpackUpdate> {
+    manager
+        .management_read(&app, &connection_id, |c| async move {
+            c.server_modpack_update().await
+        })
+        .await
+}

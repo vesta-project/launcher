@@ -28,7 +28,9 @@ export interface PackArchiveInspection {
 }
 export interface PackDraft { revision: string; manifest: PackManifest }
 export interface PackIcon { mimeType: 'image/png' | 'image/jpeg'; contentBase64: string }
-export interface ServerModpackLink { pendingIds?: string[]; source: PackInstallSource; displayVersion: string; files: Record<string,string>; state: string }
+export interface ServerModpackVersion { source: PackInstallSource; displayVersion: string }
+export interface ServerModpackUpdate { installed: ServerModpackVersion | null; pending: ServerModpackVersion | null; available: PackInstallSource | null }
+export interface ServerModpackLink { installed?: ServerModpackVersion | null; pending?: ServerModpackVersion | null; pendingIds?: string[]; source: PackInstallSource; displayVersion: string; files: Record<string,string>; state: string }
 export interface ClientPackConfig { mode: 'none' | 'server-modpack' | 'custom'; requireUpdate: boolean }
 export interface PackWorkspace { serverModpack?: ServerModpackLink | null; clientPack?: ClientPackConfig; customizingProvider?: boolean; providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
 export interface PackDraftWrite { expectedRevision: string; manifest: PackManifest }
@@ -57,6 +59,7 @@ export interface PackInstallOutcome {serverModpack?: ServerModpackLink | null;st
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);
 export interface PublishedRevision { revision: string; publishedAt: number; publishedBy: string | null; requiredUpdate: boolean; entryCount: number | null; overrideCount: number | null; providerVersion: string | null }
 export const serversPackNative = {
+  serverModpackUpdate: (connectionId:ConnectionId) => call<ServerModpackUpdate>('server_modpack_update',{connectionId}),
   clientPackMode: (connectionId:ConnectionId,request:ClientPackConfig,intentId:string) => call<ClientPackConfig>('server_client_pack_mode',{connectionId,request,intentId}),
   serverModpackUnlink: (connectionId:ConnectionId,removeOwnedFiles:boolean,intentId:string) => call<PackInstallOutcome>('server_modpack_unlink',{connectionId,request:{removeOwnedFiles},intentId}),
   packHistory: (connectionId: ConnectionId) => call<PublishedRevision[]>('server_pack_history', { connectionId }),

@@ -18,6 +18,23 @@ test('install links server without changing the client publication, unlink prese
  await api.packInstallApply('s',{planId:plan.planId,confirmationToken:plan.confirmationToken,choices:plan.files.filter(f=>f.conflict).map(f=>({path:f.path,choice:'replace'})),setAsModpack:true},'link');
  const after=await api.packDraft('s');expect(after.serverModpack.source.versionId).toBe('v1');expect(after.publishedRevision).toBe(before.publishedRevision);expect(snapshot.pack).toBeNull();
  await api.clientPackMode('s',{mode:'custom',requireUpdate:false},'custom');
+ await expect(api.serverModpackUnlink('s',false,'pending-unlink')).rejects.toMatchObject({code:'conflict'});
+ api.fixtureRestartServerModpack('s');
  await api.serverModpackUnlink('s',false,'unlink');
  const unlinked=await api.packDraft('s');expect(unlinked.serverModpack).toBeNull();expect(unlinked.clientPack.mode).toBe('custom');
+});
+
+test('provider discovery follows confirmed identity across staged updates and restart',async()=>{
+ const snapshot={connection:{role:'owner'},capabilities:{granted:['pack.edit','content.install']},pack:null};
+ const api=createPackFixtures({server:()=>({snapshot}),software:()=> 'fabric',wait:async()=>{}});
+ const install=async(versionId,intent)=>{const p=await api.packInstallPlan('s',{source:{source:'provider',provider:'modrinth',projectId:'pack',versionId}});return api.packInstallApply('s',{planId:p.planId,confirmationToken:p.confirmationToken,choices:p.files.filter(f=>f.conflict).map(f=>({path:f.path,choice:'replace'})),setAsModpack:false},intent);};
+ await install('v1','install');
+ expect(await api.serverModpackUpdate('s')).toMatchObject({installed:null,pending:{source:{versionId:'v1'}},available:null});
+ api.fixtureRestartServerModpack('s');
+ expect(await api.serverModpackUpdate('s')).toMatchObject({installed:{source:{versionId:'v1'}},pending:null,available:{versionId:'v1-next'}});
+ await install('v2','update');
+ expect(await api.serverModpackUpdate('s')).toMatchObject({installed:{source:{versionId:'v1'}},pending:{source:{versionId:'v2'}},available:null});
+ await expect(install('v3','race')).rejects.toMatchObject({code:'conflict'});
+ api.fixtureRestartServerModpack('s');
+ expect(await api.serverModpackUpdate('s')).toMatchObject({installed:{source:{versionId:'v2'}},pending:null});
 });

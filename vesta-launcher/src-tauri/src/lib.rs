@@ -245,6 +245,7 @@ pub fn run(context: tauri::Context) {
             commands::servers_pack::server_pack_install_apply,
             commands::servers_pack::server_client_pack_mode,
             commands::servers_pack::server_modpack_unlink,
+            commands::servers_pack::server_modpack_update,
             commands::servers_pack::server_pack_provider_publish,
             commands::servers_pack::server_pack_file_read,
             commands::servers_pack::server_pack_file_mutate,
