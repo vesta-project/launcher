@@ -1,8 +1,14 @@
 /*
- * Server → Modpack: a pack header, a sub-nav like an instance's tabs, and panes that reuse the
- * instance Resources table and the server Files list.
+ * Server → Modpack: two sections (Server modpack | Client pack). The server modpack reads like
+ * an instance linked to a modpack (link card, pending, owned content). The custom client pack
+ * has a pack header, a sub-nav like an instance's tabs, and panes that reuse the instance
+ * Resources table and the server Files list.
  * Hooks: [data-vesta=modpack] -header(-art -icon -copy -title -summary -facts -draft) -scroll
  *        -first -choices -choice -card -facts -overview -panel -install -versions -diff
+ *        -server -link-card(-identity -icon -title -name -meta -status -error) -client
+ *        -modes -mode(-icon -copy -title -description -note) -mode-save -offer
+ * States: modpack-first: data-section; modpack-mode: data-selected, data-disabled;
+ *         modpack-install-section: data-change; modpack-link-card: data-phase
  * Knobs: --modpack-art (header art image), --modpack-panel-bg
  */
 @layer launcher {
@@ -825,4 +831,280 @@
     align-items: center;
     gap: var(--vesta-space-2);
   }
+
+  /* ---- Sections (Server modpack | Client pack) ---- */
+  .instance-tabs[data-orientation] .modpack-sections > [data-vesta="tab-list"] {
+    background: var(--instance-bar-bg);
+  }
+
+  /* ---- Server modpack ---- */
+  :where([data-vesta="modpack-server"], [data-vesta="modpack-client"]) {
+    display: grid;
+    gap: var(--vesta-space-4);
+    max-inline-size: 1100px;
+  }
+
+  /* An optional link: the empty state is calm, not a call to action. */
+  :where([data-vesta="modpack-first"][data-section="server"]) {
+    margin-inline: 0;
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-first-mark"]) {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-choices"]) {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 360px));
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-choice"][data-choice="provider"]) {
+    background: var(--modpack-panel-bg);
+  }
+
+  :where([data-vesta="modpack-link-card"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg);
+  }
+
+  :where([data-vesta="modpack-link-identity"]) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-inline-size: 240px;
+    border-radius: var(--vesta-radius-sm);
+    color: inherit;
+    text-decoration: none;
+    cursor: default;
+  }
+
+  :where([data-vesta="modpack-link-identity"][href]):hover strong {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  :where([data-vesta="modpack-link-identity"]):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-space-1);
+  }
+
+  :where([data-vesta="modpack-link-icon"]) {
+    flex: none;
+    inline-size: 56px;
+    block-size: 56px;
+    border-radius: var(--vesta-radius-lg);
+    object-fit: cover;
+    box-shadow: inset 0 0 0 var(--vesta-border-width) var(--vesta-color-border);
+  }
+
+  :where([data-vesta="modpack-link-title"]) {
+    display: grid;
+    gap: 3px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-link-name"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-link-name"] strong) {
+    overflow: hidden;
+    font-size: var(--vesta-text-lg);
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="modpack-link-meta"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--vesta-space-1-5, 6px);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="modpack-link-status"]) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-1);
+  }
+
+  :where([data-vesta="modpack-link-checking"]) {
+    inline-size: 160px;
+  }
+
+  :where([data-vesta="modpack-link-error"]) {
+    flex-basis: 100%;
+  }
+
+  /* Source tags carry the platform's colour (same scheme as instance pack links). */
+  :where([data-vesta="modpack"]) :where([data-vesta="source-tag"]) {
+    --source-hue: 250;
+
+    flex: none;
+    padding: 0 6px;
+    border-radius: var(--vesta-radius-sm);
+    background: oklch(0.65 0.14 var(--source-hue) / 0.18);
+    color: oklch(0.8 0.12 var(--source-hue));
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 18px;
+  }
+
+  :where([data-vesta="modpack"]) :where([data-vesta="source-tag"][data-source="modrinth"]) { --source-hue: 155; }
+  :where([data-vesta="modpack"]) :where([data-vesta="source-tag"][data-source="curseforge"]) { --source-hue: 45; }
+  :where([data-vesta="modpack"]) :where([data-vesta="source-tag"][data-source="upload"], [data-vesta="source-tag"][data-source="vesta"]) { --source-hue: 250; }
+
+  :where([data-vesta-scheme="light"]) :where([data-vesta="modpack"]) :where([data-vesta="source-tag"]) {
+    color: oklch(0.45 0.12 var(--source-hue));
+  }
+
+  :where([data-vesta="modpack"]) :where([data-vesta="pack-current"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    padding-inline: var(--vesta-space-2);
+    color: var(--vesta-color-success-text);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-pending-copy"]) {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+  }
+
+  /* ---- Client pack mode ---- */
+  :where([data-vesta="modpack-modes"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-mode"]) {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface);
+    cursor: default;
+    transition: border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
+  }
+
+  :where([data-vesta="modpack-mode"]):hover:not([data-disabled]) {
+    border-color: var(--vesta-color-border-strong);
+  }
+
+  :where([data-vesta="modpack-mode"][data-selected]) {
+    border-color: var(--vesta-color-accent);
+    background: color-mix(in oklab, var(--vesta-color-accent) 8%, var(--vesta-color-surface));
+  }
+
+  :where([data-vesta="modpack-mode"][data-disabled]) {
+    opacity: 0.62;
+  }
+
+  :where([data-vesta="modpack-mode"]):has(input:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+
+  :where([data-vesta="modpack-mode"] input) {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :where([data-vesta="modpack-mode-icon"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="modpack-mode"][data-selected]) :where([data-vesta="modpack-mode-icon"]) {
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta="modpack-mode-copy"]) {
+    display: grid;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-mode-title"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-mode-description"], [data-vesta="modpack-mode-note"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    line-height: 1.45;
+  }
+
+  :where([data-vesta="modpack-mode-note"]) {
+    color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted));
+    font-style: italic;
+  }
+
+  :where([data-vesta="modpack-mode-save"]), :where([data-vesta="modpack-offer"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="modpack-mode-save"]) > span:first-child {
+    flex: 1;
+  }
+
+  :where([data-vesta="modpack-offer"]) {
+    inline-size: 100%;
+    margin-block-start: var(--vesta-space-2);
+    text-align: start;
+  }
+
+  :where([data-vesta="modpack-offer-copy"]) {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+  }
+
+  :where([data-vesta="modpack-offer-copy"]) > span {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  /* ---- Link review groups ---- */
+  :where([data-vesta="modpack-install-section"][data-change="success"] h4) { color: var(--vesta-color-success-text); }
+  :where([data-vesta="modpack-install-section"][data-change="accent"] h4) { color: var(--vesta-color-accent-text); }
+  :where([data-vesta="modpack-install-section"][data-change="danger"] h4) { color: var(--vesta-color-danger-text, var(--vesta-color-danger)); }
 }

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 async function harness(run) {
   const directory = await mkdtemp(join(tmpdir(), 'vesta-linked-pack-'));
@@ -28,7 +28,7 @@ async function harness(run) {
     './catalog': `export const findInstance = () => ({instance: c.record}), editInstance = () => {}, retryInstance = () => {};`,
   };
   try {
-    const built = await Bun.build({ entrypoints: [new URL('../src/features/instances/versions.ts', import.meta.url).pathname], target: 'bun',
+    const built = await Bun.build({ entrypoints: [fileURLToPath(new URL('../src/features/instances/versions.ts', import.meta.url))], target: 'bun',
       plugins: [{name: 'native-pack-boundaries', setup(build) {
         build.onResolve({ filter: /.*/ }, ({path}) => path in fixtures ? {path, namespace: 'fixture'} : undefined);
         build.onLoad({filter: /.*/, namespace: 'fixture'}, ({path}) => ({loader: 'js', contents: `const c = globalThis[${JSON.stringify(key)}];` + fixtures[path]}));
@@ -58,4 +58,16 @@ test('malformed old links do not invoke remote commands without a project id', (
   expect(api.versionStore('7').state().pack).toBeUndefined();
   await api.releaseChangelog('Modrinth', undefined, 'uQxD0ENB');
   expect(c.calls).toEqual([]);
+}));
+test('server-sourced links are the same linked pack with the server as source, never a provider lookup', () => harness(async (api, c) => {
+  Object.assign(c.record, { modpackPlatform: 'server', modpackId: 'conn-1', modpackVersionId: '12' });
+  api.useNativePack('7'); await settle();
+  expect(api.versionStore('7').state().pack).toMatchObject({ source: 'Server', serverId: 'conn-1', installed: '12' });
+  expect(api.versionStore('7').state().pack.projectId).toBeUndefined();
+  expect(await api.releaseChangelog('Server', undefined, '12')).toBeUndefined();
+  // Server links share the unified native update check; nothing reaches a provider.
+  expect(c.calls.map((call) => call.command)).toEqual(['check_modpack_update']);
+  const pack = { ...api.versionStore('7').state().pack, releases: [{ id: '14', label: '14', channel: 'release' }, { id: '12', label: '12', channel: 'release' }] };
+  expect(api.packUpdateTarget(pack)).toMatchObject({ id: '14' });
+  expect(api.packUpdateTarget({ ...pack, installed: '14' })).toBeUndefined();
 }));

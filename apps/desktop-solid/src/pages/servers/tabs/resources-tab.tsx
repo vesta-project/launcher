@@ -6,18 +6,20 @@ import { Icon } from '../../../components/icon';
 import { VirtualList } from '../../../components/virtual-list';
 import { browseForServer } from '../../../features/browse/browse-store';
 import { projectPath, sourceById, type ResourceVersion } from '../../../features/browse/browse-model';
-import { loadProjects, loadVersions, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
+import { loadProject, loadProjects, loadVersions, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
+import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
-  contentErrorMessage, contentGates, contentKinds, contentList, contentUpdate, datapackId, groupLabel, kindLabel, mutationRequest,
+  contentErrorMessage, contentGates, contentKinds, contentList, contentUpdate, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
   pendingLabel, pendingSummary, primaryKind, providerLookups, rowActions, updateRequest,
   type ContentFilter, type ContentListRow, type ContentRowModel,
 } from '../../../features/servers/content-model';
 import { lifecycleControls, newIntentId } from '../../../features/servers/model';
+import { linkProvider, serverModpackPath } from '../../../features/servers/modpack-area-model';
 import type { ContentChange, ServerContentEntry, ServerContentInventory } from '../../../features/servers/native-content';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { invalidateServerResources, readServerResource, useServerResource } from '../../../features/servers/resources';
-import { CONTENT_RESOURCES, contentResource, worldResource } from '../../../features/servers/server-resources';
+import { CONTENT_RESOURCES, contentResource, packWorkspaceResource, worldResource } from '../../../features/servers/server-resources';
 import { putOperations, serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { useLifecycle } from '../lifecycle';
@@ -38,6 +40,18 @@ const kindIcon: Record<ServerContentEntry['kind'], string> = {
 export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const content = useServerResource(id, contentResource);
+  // The server modpack link names the files it owns; reading it needs pack.edit.
+  const pack = useServerResource(id, packWorkspaceResource, { enabled: () => gate(props.snapshot.capabilities, 'pack.edit') === 'allowed' });
+  const owned = createMemo(() => new Set(Object.keys(pack.value()?.serverModpack?.files ?? {})), { name: 'server-content:owned' });
+  const modpackSource = () => pack.value()?.serverModpack?.source ?? null;
+  createEffect(() => { const value = linkProvider(modpackSource()); return value ? `${value.provider}:${value.projectId}` : null; }, (key) => {
+    const value = key ? linkProvider(untrack(modpackSource)) : null;
+    if (value) void loadProject(value.provider, value.projectId).catch(() => {});
+  }, { name: 'server-content:modpack-project' });
+  const modpackName = () => {
+    const value = linkProvider(modpackSource());
+    return (value ? peekProject(value.provider, value.projectId)?.name : undefined) ?? t('server-content.server-modpack');
+  };
   const lifecycle = useLifecycle(() => props.snapshot);
   const [filter, setFilter] = createSignal<ContentFilter>('all', { name: 'server-content:filter' });
   const [query, setQuery] = createSignal('', { name: 'server-content:query' });
@@ -209,7 +223,8 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     const entry = () => row().entry;
     const project = () => projectOf(entry());
     const available = () => updateOf(entry());
-    const actions = () => rowActions(entry(), gates()!, !!available());
+    const managed = () => isModpackOwned(entry(), owned());
+    const actions = () => rowActions(entry(), gates()!, !!available(), managed());
     const working = () => busy().has(row().key);
     const link = () => {
       const provider = entry().provider;
@@ -237,6 +252,11 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
               <span data-vesta="resource-sub">
                 {providerBadge(row())}
                 <span data-vesta="resource-file" title={entry().path}>{entry().filename}</span>
+                <Show when={managed()}>
+                  <span data-vesta="server-content-owned" title={t('server-content.managed-by-modpack')}>
+                    <Icon name="icons/content/link" size={11} />{t('server-content.from-modpack', { name: modpackName() })}
+                  </span>
+                </Show>
               </span>
             </span>
           </a>
@@ -316,10 +336,15 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
                 {t('server-content.show-in-files')}
               </MenuItem>
               <MenuSeparator />
-              <MenuItem tone="danger" icon={<Icon name="icons/actions/delete" />} disabled={working() || !actions().remove}
-                onSelect={() => { if (actions().remove) setRemoving(row()); }}>
-                {t('server-content.remove')}
-              </MenuItem>
+              <Show when={actions().managed} fallback={
+                <MenuItem tone="danger" icon={<Icon name="icons/actions/delete" />} disabled={working() || !actions().remove}
+                  onSelect={() => { if (actions().remove) setRemoving(row()); }}>
+                  {t('server-content.remove')}
+                </MenuItem>
+              }>
+                <MenuItem icon={<Icon name="icons/security/lock" />} disabled>{t('server-content.managed-by-modpack')}</MenuItem>
+                <MenuItem icon={<Icon name="icons/content/modpack" />} onSelect={() => navigate(serverModpackPath(id()))}>{t('server-content.open-modpack')}</MenuItem>
+              </Show>
             </Menu>
           </Show>
         </div>

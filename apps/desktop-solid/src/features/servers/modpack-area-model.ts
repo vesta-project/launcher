@@ -1,15 +1,156 @@
-// Pure decisions for a server's Modpack area: which source the pack has, which sub-tabs it
-// offers, the first-run choices, override file roots, the publish review machine, bulk entry
-// edits and the install-on-server review. No IO or reactivity; the pages own those.
+// Pure decisions for a server's Modpack area. Two independent, optional links:
+//  - the server modpack: the server installation linked to a modpack, like an instance linked
+//    to a modpack (link review, installed vs pending version, update, ownership, unlink);
+//  - the client pack: what players get: none, the server's modpack, or a custom Vesta pack
+//    (draft, override files, publish review).
+// No IO or reactivity; the pages own those.
 import type { MessageId } from '../../localization/messages';
-import type { CapabilityView } from './native';
+import type { CapabilityView, ServerCommandError } from './native';
 import type { PackSyncApply, PackSyncChange, PackSyncPreview } from './native-pack-sync';
 import { gate, roleKey } from './capabilities';
 import type { ContentProvider } from './native-content';
 import type {
-  PackArchiveInspection, PackDiff, PackEntry, PackEntryKind, PackInstallApply, PackInstallPlan, PackInstallSource, PackManifest,
-  PackLoader, PackOverrideFile, PackOverrideRoot, PackPreview, PackPublish, PackPublishOutcome, PackWorkspace,
+  ClientPackConfig, PackArchiveInspection, PackDiff, PackEntry, PackEntryKind, PackInstallApply, PackInstallPlan, PackInstallSource,
+  PackManifest, PackLoader, PackOverrideFile, PackOverrideRoot, PackPreview, PackPublish, PackPublishOutcome, PackWorkspace,
+  ServerModpackUpdate, ServerModpackVersion,
 } from './native-pack';
+
+/* ---- Rollout ---- */
+
+/**
+ * The single switch for the "Same as the server's modpack" player offering. The agent fails
+ * closed (`pack_unavailable`) until its independent delivery stream ships, so the choice is
+ * shown disabled ("Coming soon"). Flip to true once MODPACK-REDESIGN.md says delivery is live.
+ */
+export const SERVER_MODPACK_DELIVERY_LIVE = true;
+
+/* ---- Sections ---- */
+
+/** Server modpack (the installation link) and Client pack (what players get) are separate. */
+export type ModpackSection = 'server' | 'client';
+
+/**
+ * `/servers/:id/pack` is the server modpack; `/pack/client` the client pack, whose custom
+ * workspace sections keep their own segments (`/pack/content`, `/pack/files`, `/pack/versions`).
+ */
+export function modpackSection(item: string | undefined): ModpackSection {
+  return item === 'client' || item === 'content' || item === 'files' || item === 'versions' ? 'client' : 'server';
+}
+
+export const serverModpackPath = (id: string) => `/servers/${id}/pack`;
+
+/* ---- Server modpack link ---- */
+
+/**
+ * `installing`: the first link is staged and nothing is confirmed yet. `updating`: a confirmed
+ * version is installed and the reviewed next one waits for a restart. Both block replan/unlink.
+ */
+export type ServerLinkPhase = 'unlinked' | 'installing' | 'updating' | 'installed';
+
+export interface ServerLinkView {
+  phase: ServerLinkPhase;
+  /** What to name the link: the installed identity, else the pending one. */
+  source: PackInstallSource | null;
+  installed: ServerModpackVersion | null;
+  pending: ServerModpackVersion | null;
+  pendingIds: string[];
+  /** Paths the link installed and therefore owns (user additions are never listed). */
+  owned: string[];
+  /** A link/update review or an unlink can start (nothing waits for a restart). */
+  canChange: boolean;
+}
+
+/**
+ * The server's own modpack link. Older agents send only the selected `source` + `state`; a
+ * staged one is then pending with no confirmed version, never a made-up installed one.
+ */
+export function serverLinkView(workspace: PackWorkspace | undefined): ServerLinkView {
+  const link = workspace?.serverModpack ?? null;
+  if (!link) return { phase: 'unlinked', source: null, installed: null, pending: null, pendingIds: [], owned: [], canChange: true };
+  const selected = { source: link.source, displayVersion: link.displayVersion };
+  const installed = link.installed !== undefined ? link.installed : link.state === 'installed' ? selected : null;
+  const pending = link.pending !== undefined ? link.pending : link.state === 'staged_until_restart' ? selected : null;
+  const phase: ServerLinkPhase = pending ? (installed ? 'updating' : 'installing') : 'installed';
+  return {
+    phase, source: (installed ?? pending ?? selected).source, installed, pending, pendingIds: link.pendingIds ?? [],
+    owned: Object.keys(link.files ?? {}).sort(), canChange: !pending,
+  };
+}
+
+export type LinkSourceKind = 'modrinth' | 'curseforge' | 'upload' | 'vesta';
+export function linkSourceKind(source: PackInstallSource): LinkSourceKind {
+  if (source.source === 'provider') return source.provider;
+  return source.source === 'uploaded_archive' ? 'upload' : 'vesta';
+}
+/** Names for links without a provider project. */
+export const linkSourceLabel: Record<'upload' | 'vesta', MessageId> = {
+  upload: 'server-pack.link-source-upload',
+  vesta: 'server-pack.link-source-vesta',
+};
+/** The provider reference of a link, for project names, icons and version lists. */
+export const linkProvider = (source: PackInstallSource | null): ContentProvider | null =>
+  source?.source === 'provider' ? { provider: source.provider, projectId: source.projectId, versionId: source.versionId } : null;
+
+/** Check for updates → review. `pending` while a reviewed version waits for a restart. */
+export type UpdateCheck =
+  | { step: 'idle' }
+  | { step: 'checking' }
+  | { step: 'current' }
+  | { step: 'pending' }
+  | { step: 'available'; source: PackInstallSource }
+  | { step: 'failed'; error: ServerCommandError };
+
+/**
+ * `available: null` means no candidate in the agent's bounded provider response, not proof
+ * that nothing newer exists anywhere, so the copy says "no newer version found".
+ */
+export function updateCheckOutcome(update: ServerModpackUpdate): UpdateCheck {
+  if (update.pending) return { step: 'pending' };
+  return update.available ? { step: 'available', source: update.available } : { step: 'current' };
+}
+
+/** Unlink: keep the pack's files as ordinary content, or stage deletion of the files it owns. */
+export type UnlinkChoice = 'keep' | 'remove';
+
+/* ---- Client pack mode ---- */
+
+export type ClientPackMode = ClientPackConfig['mode'];
+export const clientPackModes: readonly ClientPackMode[] = ['none', 'server-modpack', 'custom'];
+/** New servers default to none: a server works without offering players anything. */
+export const clientPackMode = (workspace: PackWorkspace | undefined): ClientPackMode => workspace?.clientPack?.mode ?? 'none';
+
+export type ClientModeNote = 'coming-soon' | 'needs-link' | 'no-permission';
+export interface ClientModeOption { id: ClientPackMode; enabled: boolean; note: ClientModeNote | null }
+
+/**
+ * Each mode and whether this user can pick it. Changing the offering needs publish authority;
+ * following the server modpack also needs a link and the delivery rollout flag.
+ */
+export function clientModeOptions(
+  workspace: PackWorkspace | undefined, gates: Pick<ModpackGates, 'publish'>, live = SERVER_MODPACK_DELIVERY_LIVE,
+): ClientModeOption[] {
+  const linked = !!workspace?.serverModpack;
+  const permission: ClientModeNote | null = gates.publish ? null : 'no-permission';
+  return clientPackModes.map((id) => {
+    if (id !== 'server-modpack') return { id, enabled: gates.publish, note: permission };
+    const note: ClientModeNote | null = !live ? 'coming-soon' : !linked ? 'needs-link' : permission;
+    return { id, enabled: note === null, note };
+  });
+}
+
+/**
+ * The stored offering. Require-players-to-update belongs to following the server modpack; a
+ * custom pack keeps its own required publication and minimum revision on Versions.
+ */
+export function clientModeRequest(mode: ClientPackMode, requireUpdate = false): ClientPackConfig {
+  return { mode, requireUpdate: mode === 'server-modpack' && requireUpdate };
+}
+
+/** "Also offer it to players" after a link review; null when players already get it or it is not ours to change. */
+export function offerToPlayers(workspace: PackWorkspace | undefined, gates: Pick<ModpackGates, 'publish'>, live = SERVER_MODPACK_DELIVERY_LIVE): ClientModeOption | null {
+  if (!gates.publish || clientPackMode(workspace) === 'server-modpack') return null;
+  return clientModeOptions(workspace, gates, live).find((option) => option.id === 'server-modpack') ?? null;
+}
 
 /* ---- Source ---- */
 
@@ -55,8 +196,16 @@ const subTabDefs: Record<ModpackSubTab, Omit<ModpackSubTabDef, 'state'>> = {
 };
 
 /**
- * Editors get the full area. Players with download access only get the overview (Get the
- * modpack); the draft itself needs `pack.edit`. Provider packs keep Files locked until Customize.
+ * The custom client pack's sections. Only Custom has a workspace; None and the server's modpack
+ * have nothing to edit here, so they get no sections.
+ */
+export function clientSubTabs(mode: ClientPackMode, kind: PackSourceKind, canEdit: boolean): ModpackSubTabDef[] {
+  return mode === 'custom' ? modpackSubTabs(kind, canEdit) : [];
+}
+
+/**
+ * Editors get the full workspace; the draft itself needs `pack.edit`. Legacy provider pointers
+ * keep Files locked until Customize. Before anything exists only the overview (first run) shows.
  */
 export function modpackSubTabs(kind: PackSourceKind, canEdit: boolean): ModpackSubTabDef[] {
   if (!canEdit || kind === 'none') return [{ ...subTabDefs.overview, state: 'ready' }];
@@ -75,8 +224,9 @@ export function resolveSubTab(item: string | undefined, tabs: readonly ModpackSu
   return tabs.find((tab) => tab.id === item)?.id ?? 'overview';
 }
 
+/** Client pack paths; its overview is `/pack/client`. */
 export const modpackPath = (id: string, tab: ModpackSubTab) =>
-  tab === 'overview' ? `/servers/${id}/pack` : `/servers/${id}/pack/${tab}`;
+  tab === 'overview' ? `/servers/${id}/pack/client` : `/servers/${id}/pack/${tab}`;
 
 /* ---- Permissions ---- */
 
@@ -107,9 +257,14 @@ export function modpackGates(view: CapabilityView | undefined, role: string | nu
 
 export type FirstRunChoice = 'provider' | 'upload' | 'scratch';
 
-/** Each choice and whether this user may take it. */
-export function firstRunChoices(gates: Pick<ModpackGates, 'edit'>): { id: FirstRunChoice; enabled: boolean }[] {
-  return (['provider', 'upload', 'scratch'] as const).map((id) => ({ id, enabled: gates.edit }));
+/**
+ * Starting points. Linking the server takes a modpack from a provider or a file and needs the
+ * install gate. A custom client pack is built from a file or from scratch; players get a
+ * provider modpack by following the server's modpack instead.
+ */
+export function firstRunChoices(section: ModpackSection, gates: Pick<ModpackGates, 'edit' | 'installOnServer'>): { id: FirstRunChoice; enabled: boolean }[] {
+  if (section === 'server') return (['provider', 'upload'] as const).map((id) => ({ id, enabled: gates.installOnServer }));
+  return (['upload', 'scratch'] as const).map((id) => ({ id, enabled: gates.edit }));
 }
 
 export const ARCHIVE_EXTENSIONS = ['.mrpack', '.zip'];
@@ -145,6 +300,14 @@ export function archiveDecision(inspection: PackArchiveInspection): ArchiveDecis
     runtimeInferred: inspection.warnings.includes('archive_runtime_inferred_from_server') || (inspection.format === 'zip' && inspection.manifest.loader === 'none'),
     formatLabel: archiveFormatLabel[inspection.format],
   };
+}
+
+/**
+ * Linking the server to an uploaded file. A file the agent identified as a whole provider pack
+ * links to that provider version, so updates can be discovered; anything else links the file.
+ */
+export function archiveLinkSource(inspection: PackArchiveInspection, uploadId: string): PackInstallSource {
+  return inspection.providerPack ? { source: 'provider', ...inspection.providerPack } : { source: 'uploaded_archive', uploadId };
 }
 
 /** "Start from scratch": the server's client-needed mods the suggestions found, as pack additions. */
@@ -342,12 +505,10 @@ export function publishReducer(state: PublishState, event: PublishEvent): Publis
   }
 }
 
-/* ---- Install on this server ---- */
+/* ---- Link / update review ---- */
 
-export function installSource(workspace: PackWorkspace, kind: PackSourceKind): PackInstallSource {
-  if (kind === 'provider' && workspace.providerPack) return { source: 'provider', ...workspace.providerPack };
-  return { source: 'draft', revision: workspace.draft.revision };
-}
+/** The server's link review; an update is reviewed exactly like the first link. */
+export type LinkReviewMode = 'link' | 'update';
 
 export type ConflictChoice = 'replace' | 'keep';
 export const installConflicts = (plan: PackInstallPlan) => plan.files.filter((file) => file.conflict !== null);
@@ -357,15 +518,18 @@ export function defaultInstallChoices(plan: PackInstallPlan): Record<string, Con
   return Object.fromEntries(installConflicts(plan).map((file) => [file.path, file.conflict === 'project_version' ? 'replace' : 'keep']));
 }
 
-/** Exactly one choice per conflicting file, nothing else; null while any is missing. */
-export function installApplyRequest(plan: PackInstallPlan, picks: Record<string, ConflictChoice>, setAsModpack: boolean): PackInstallApply | null {
+/**
+ * Exactly one choice per conflicting file, nothing else; null while any is missing.
+ * `setAsModpack` is a deprecated agent input: linking the server never publishes a client pack.
+ */
+export function installApplyRequest(plan: PackInstallPlan, picks: Record<string, ConflictChoice>): PackInstallApply | null {
   const choices: PackInstallApply['choices'] = [];
   for (const file of installConflicts(plan)) {
     const choice = picks[file.path];
     if (choice !== 'replace' && choice !== 'keep') return null;
     choices.push({ path: file.path, choice });
   }
-  return { planId: plan.planId, confirmationToken: plan.confirmationToken, choices, setAsModpack };
+  return { planId: plan.planId, confirmationToken: plan.confirmationToken, choices, setAsModpack: false };
 }
 
 /** Plan can be applied: valid, not expired, software already matches. */
@@ -376,18 +540,31 @@ export function installBlocker(plan: PackInstallPlan, nowMs: number): MessageId 
   return null;
 }
 
-/** Files the apply would stage (kept conflicts are skipped). */
-export const installStagedCount = (plan: PackInstallPlan, picks: Record<string, ConflictChoice>) =>
-  plan.files.filter((file) => !(file.conflict && picks[file.path] === 'keep')).length;
+const isServerContent = (path: string) => /^(mods|plugins|datapacks|world\/datapacks)\//.test(path);
+const fileOperation = (file: PackInstallPlan['files'][number]): 'added' | 'updated' | 'unchanged' =>
+  file.operation === 'updated' || file.operation === 'unchanged' ? file.operation : 'added';
 
-/** Splits files into server-side (shared + server overrides) and mod entries, for the review. */
-export function installGroups(plan: PackInstallPlan): { content: string[]; overrides: string[] } {
-  const isContent = (path: string) => /^(mods|plugins|datapacks|world\/datapacks)\//.test(path);
-  return {
-    content: plan.files.filter((file) => isContent(file.path)).map((file) => file.path),
-    overrides: plan.files.filter((file) => !isContent(file.path)).map((file) => file.path),
-  };
+/**
+ * What the review changes on the server: server-side entries added, updated and removed,
+ * override files, and how many already match. Removals are only earlier pack-owned files the
+ * new version no longer has; user additions are never touched.
+ */
+export interface LinkReview { added: string[]; updated: string[]; removed: string[]; overrides: string[]; unchanged: number }
+export function linkReview(plan: PackInstallPlan): LinkReview {
+  const review: LinkReview = { added: [], updated: [], removed: (plan.removed ?? []).map(([path]) => path), overrides: [], unchanged: 0 };
+  for (const file of plan.files) {
+    const operation = fileOperation(file);
+    if (operation === 'unchanged') review.unchanged++;
+    else if (!isServerContent(file.path)) review.overrides.push(file.path);
+    else review[operation].push(file.path);
+  }
+  return review;
 }
+
+/** Changes the apply stages: kept conflicts and unchanged files are skipped; removals count. */
+export const installStagedCount = (plan: PackInstallPlan, picks: Record<string, ConflictChoice>) =>
+  plan.files.filter((file) => fileOperation(file) !== 'unchanged' && !(file.conflict && picks[file.path] === 'keep')).length
+  + (plan.removed?.length ?? 0);
 
 /* ---- Labels ---- */
 

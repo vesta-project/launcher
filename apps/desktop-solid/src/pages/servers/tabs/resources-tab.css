@@ -62,6 +62,25 @@
     margin-inline-end: var(--vesta-space-1-5);
   }
 
+  /* Owned by the server modpack link: changed through the modpack, not row by row. */
+  :where([data-vesta="server-content-owned"]) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 3px;
+    max-inline-size: 34ch;
+    padding: 0 6px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--vesta-color-accent) 14%, transparent);
+    color: var(--vesta-color-accent-text);
+    font-size: 10px;
+    font-weight: var(--vesta-weight-semibold);
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* Header summary: staged changes and the restart that applies them. */
   :where([data-vesta="server-content-summary"]) {
     --summary-tint: var(--vesta-color-accent);

@@ -15,14 +15,9 @@ server-pack-retry = Retry with the same request
 server-pack-review-again = Review again
 
 # Linked instance status (instance page)
-server-pack-installed = Installed revision:
-server-pack-current = Up to date
 server-pack-update-available = An optional update is available.
 server-pack-update-required = Update this linked pack before playing.
 server-pack-unavailable = The server's release could not be verified. Check again when it is available.
-server-pack-release = Release / minimum revisions:
-server-pack-reload = Check again
-server-pack-review-install = Review update
 
 # Header
 server-pack-source-custom = Custom
@@ -40,11 +35,8 @@ server-pack-unpublished-count = { $count ->
 server-pack-review-publish = Review & publish
 
 # First run
-server-pack-first-title = Give { $name } a modpack
-server-pack-first-description = Players get the modpack from Vesta when they join. Pick where it comes from; you can change it later.
-server-pack-first-provider-title = Use a Modrinth or CurseForge modpack
-server-pack-first-provider-description = Pick a published modpack. The server only points to it, so players download it from the provider and nothing is hosted.
-server-pack-first-provider-action = Browse modpacks
+server-pack-first-title = Build a custom client pack
+server-pack-first-description = A pack Vesta hosts for players, separate from the server software. Start from a file or from scratch; nothing reaches players until you publish.
 server-pack-first-upload-title = Upload a modpack file
 server-pack-first-upload-description = Use a .mrpack, a CurseForge export or a zip with mods and configs. Vesta checks it before anything changes.
 server-pack-first-upload-hint = Or drop the file here.
@@ -74,11 +66,6 @@ server-pack-archive-unresolved = { $count ->
 server-pack-archive-unresolved-help = These stay visible in Content and block publishing until each is replaced with a provider pin or an uploaded file.
 server-pack-archive-provider-found = This is { $name } on { $provider }. Linking it means players download it from { $provider } and Vesta hosts nothing.
 server-pack-archive-host-help = Vesta keeps a copy of this pack and serves it to players once you publish.
-server-pack-link-provider = Link the { $provider } pack (not hosted)
-server-pack-host-copy = Host my copy
-server-pack-use-as-modpack = Use as { $name }'s modpack
-server-pack-also-install = Also install on the server
-server-pack-also-install-help = Review the server-side files next. Nothing changes until you apply, and files wait for a restart.
 server-pack-scratch-title = Client mods the server needs
 server-pack-scratch-description = These mods run on the server and players need them too. Choose which to start the pack with.
 server-pack-scratch-loading = Checking the server's content
@@ -137,16 +124,8 @@ server-pack-get-install = Install
 server-pack-get-update = Install changes
 server-pack-get-link-only = Link matching files only
 server-pack-get-uncertain = The result is unclear. Check your library before trying again.
-server-pack-install-title = Install on this server
-server-pack-install-description = Put this pack's server-side mods and configs on the server, the way a server pack would.
-server-pack-install-point-side = Client-only mods and resource packs are skipped
-server-pack-install-point-review = You review conflicts with what's already installed
-server-pack-install-point-restart = Changes apply on the next restart
-server-pack-install-action = Plan the install
 
 # Install on server
-server-pack-install-dialog-title = Install { $name } on the server
-server-pack-install-dialog-description = Review what changes on { $title }. Nothing happens until you apply.
 server-pack-install-planning = Planning the install
 server-pack-install-software = Software
 server-pack-install-minecraft = Minecraft
@@ -176,10 +155,6 @@ server-pack-conflict-same-filename = A file with the same name
 server-pack-conflict-unidentified = An unidentified jar
 server-pack-install-replace = Replace
 server-pack-install-keep = Keep mine
-server-pack-install-content = { $count ->
-    [one] 1 mod or datapack
-   *[other] { $count } mods and datapacks
-}
 server-pack-install-overrides = { $count ->
     [one] 1 config or override file
    *[other] { $count } config and override files
@@ -191,13 +166,7 @@ server-pack-install-skipped = { $count ->
 server-pack-warning-unknown-side = { $path } doesn't say which side it runs on, so it's included.
 server-pack-warning-retained = { $path } isn't identified and stays as it is.
 server-pack-warning-loader-inferred = The loader comes from the server's current software.
-server-pack-install-assign = Also use as { $title }'s modpack
-server-pack-install-assign-help = Players get it from Vesta. This runs after the files are staged and can be retried on its own.
 server-pack-install-staged-help = Files are staged and applied on the next restart.
-server-pack-install-apply = { $count ->
-    [one] Stage 1 file
-   *[other] Stage { $count } files
-}
 server-pack-install-uncertain = The server may have received this already. Retrying sends the exact same request.
 server-pack-install-staged = { $count ->
     [one] 1 file staged
@@ -205,20 +174,12 @@ server-pack-install-staged = { $count ->
 }
 server-pack-install-staged-running = They apply when the server restarts.
 server-pack-install-staged-stopped = They apply the next time the server starts.
-server-pack-install-assigned = It's now the server's modpack (revision { $version }).
-server-pack-install-assign-pending = The files are staged, but the modpack wasn't assigned. Try again from Overview.
-server-pack-install-open-content = Open server content
 server-pack-install-restart = Restart now
 
 # Browse pick
-server-pack-pick-title = Use { $name } on { $title }
-server-pack-pick-description = A { $provider } modpack. Linking it hosts nothing; players download it from { $provider }.
+server-pack-pick-title = Link { $title } to { $name }
+server-pack-pick-description = A { $provider } modpack. Pick the version; the review shows what changes on the server.
 server-pack-pick-version = Version
-server-pack-pick-assign = Use as { $title }'s modpack
-server-pack-pick-assign-help = Players are offered this exact version when they join.
-server-pack-pick-link = Use as modpack
-server-pack-pick-review-install = Review install
-server-pack-linked = { $name } is now the server's modpack
 
 # Content
 server-pack-search = Search the modpack
@@ -341,3 +302,146 @@ server-pack-switched = Switched to { $version } (revision { $revision })
 server-pack-history-title = Published history
 server-pack-history-empty = No published revisions yet.
 server-pack-history-counts = { $entries } entries, { $overrides } overrides
+
+# Sections: the server's own modpack link and the client pack are independent
+server-pack-section-server = Server modpack
+server-pack-section-client = Client pack
+server-pack-client-sections = Client pack sections
+server-pack-linked-badge = Linked
+server-pack-restart-badge = Restart
+server-pack-optional = Optional
+server-pack-coming-soon = Coming soon
+
+# Server modpack: not linked
+server-pack-link-none-title = This server doesn't use a modpack
+server-pack-link-none-description = That's fine: a server runs without one. Link a modpack to install its server-side content and keep it up to date, like an instance linked to a modpack. Your own content stays separate.
+server-pack-link-no-permission = Only an owner or administrator who can install content can link a modpack.
+server-pack-link-browse-title = Browse modpacks
+server-pack-link-browse-description = Pick a Modrinth or CurseForge modpack. The server tracks its versions, so updates show up here.
+server-pack-link-browse-action = Browse modpacks
+server-pack-link-upload-title = Upload a modpack file
+server-pack-link-upload-description = Use a .mrpack, a CurseForge export or a zip. Vesta checks it and shows exactly what changes before anything is installed.
+server-pack-archive-link-file-help = This file isn't a published modpack Vesta can identify, so the server is linked to the file itself and won't find updates on its own.
+server-pack-link-review = Review link
+server-pack-link-wait-restart = A reviewed change is waiting for a restart. Restart the server first, then try again.
+server-pack-link-source-upload = Uploaded modpack
+server-pack-link-source-vesta = Vesta pack
+
+# Server modpack: linked
+server-pack-link-installed = Installed { $version }
+server-pack-link-not-confirmed = Not installed yet
+server-pack-link-pending-badge = { $version } after restart
+server-pack-link-current = Up to date
+server-pack-link-checking = Checking for updates
+server-pack-link-update-to = Update to { $version }
+server-pack-link-actions = Modpack actions
+server-pack-link-check = Check for updates
+server-pack-link-open-resources = Open Resources
+server-pack-link-pending-install = { $version } is staged and installs when the server restarts.
+server-pack-link-pending-update = The update to { $version } is staged and applies when the server restarts.
+server-pack-link-pending-help = { $count ->
+    [one] 1 change waits in Resources. Until then you can't start another update or unlink.
+   *[other] { $count } changes wait in Resources. Until then you can't start another update or unlink.
+}
+server-pack-owned-title = Content from this modpack
+server-pack-owned-description = { $count ->
+    [0] The modpack doesn't own any server files yet.
+    [one] 1 server file comes from this modpack. Resources marks it, and it changes through updates rather than one by one.
+   *[other] { $count } server files come from this modpack. Resources marks them, and they change through updates rather than one by one.
+}
+server-pack-owned-more = { $count ->
+    [one] and 1 more
+   *[other] and { $count } more
+}
+server-pack-owned-user-kept = Content you add yourself is never touched by updates or unlinking.
+server-pack-offering-none = Players aren't offered a pack. Linking the server doesn't change that.
+server-pack-offering-server = Players are offered this modpack.
+server-pack-offering-custom = Players get your custom client pack, separate from this modpack.
+server-pack-offering-open = Open client pack
+server-pack-unlink = Unlink
+server-pack-unlink-title = Unlink { $name }
+server-pack-unlink-description = The server stops tracking this modpack. Choose what happens to the files it installed.
+server-pack-unlink-keep = Keep its files
+server-pack-unlink-keep-help = { $count ->
+    [one] The 1 file stays as ordinary server content.
+   *[other] The { $count } files stay as ordinary server content.
+}
+server-pack-unlink-remove = Remove its files
+server-pack-unlink-remove-help = { $count ->
+    [one] The 1 file it installed is removed on the next restart. Files you changed are kept.
+   *[other] The { $count } files it installed are removed on the next restart. Files you changed are kept.
+}
+server-pack-unlink-offering = Players are offered this modpack. After unlinking they get no pack until you choose another.
+server-pack-unlinked = { $name } is no longer linked
+server-pack-unlinked-removing = { $count ->
+    [one] 1 file is removed on the next restart.
+   *[other] { $count } files are removed on the next restart.
+}
+
+# Link / update review
+server-pack-link-dialog-title = Link { $name }
+server-pack-update-dialog-title = Update { $name }
+server-pack-link-dialog-description = Review what changes on { $title }. Client-only content is skipped and nothing happens until you apply.
+server-pack-link-apply = { $count ->
+    [one] Link and stage 1 change
+   *[other] Link and stage { $count } changes
+}
+server-pack-update-apply = { $count ->
+    [one] Stage 1 change
+   *[other] Stage { $count } changes
+}
+server-pack-review-added = { $count ->
+    [one] 1 entry added
+   *[other] { $count } entries added
+}
+server-pack-review-updated = { $count ->
+    [one] 1 entry updated
+   *[other] { $count } entries updated
+}
+server-pack-review-removed = { $count ->
+    [one] 1 entry removed
+   *[other] { $count } entries removed
+}
+server-pack-review-removed-help = Only files this modpack installed earlier are removed. A file you changed stops the restart from removing it.
+server-pack-review-unchanged = { $count ->
+    [one] 1 file already matches.
+   *[other] { $count } files already match.
+}
+server-pack-link-players-unchanged = What players get doesn't change. That's a separate choice under Client pack.
+server-pack-offer-title = Also offer it to players
+server-pack-offer-description = Players get this same modpack when they join, downloaded from its provider.
+server-pack-offer-action = Offer to players
+server-pack-pick-review-link = Review link
+server-pack-pick-review-update = Review update
+server-pack-pick-point-server = Its server-side content is installed on the server; client-only mods are skipped.
+server-pack-pick-point-players = What players get stays a separate choice.
+server-pack-pick-replaces = The server is linked to another modpack. Linking this one replaces that link; files only the old one installed are listed for removal.
+
+# Client pack: what players get
+server-pack-client-title = What players get
+server-pack-client-description = Optional, and separate from the server's own modpack. Players can always join with any compatible client.
+server-pack-mode-none = Nothing
+server-pack-mode-none-description = Players aren't offered a pack.
+server-pack-mode-none-short = None
+server-pack-mode-server = Same as the server's modpack
+server-pack-mode-server-description = Players get the modpack the server is linked to.
+server-pack-mode-server-linked = Players get { $name }, the modpack the server is linked to.
+server-pack-mode-server-short = Server modpack
+server-pack-mode-custom = Custom pack
+server-pack-mode-custom-description = A pack you build here, separate from the server software. Vesta hosts it.
+server-pack-mode-custom-short = Custom
+server-pack-mode-current = Current
+server-pack-mode-coming-soon = Offering the server's modpack to players isn't available yet.
+server-pack-mode-needs-link = Link the server to a modpack first.
+server-pack-mode-no-permission = You can't change what players get.
+server-pack-mode-server-not-live = This server is set to offer its modpack, but delivery isn't available yet, so players can't download a pack right now.
+server-pack-mode-require-update = Require players to update
+server-pack-mode-require-update-help = Players must take a new version of the modpack before they can join.
+server-pack-mode-change-none = Players won't be offered a pack.
+server-pack-mode-change-none-kept = Players won't be offered a pack. Your custom pack and its history are kept; switch back any time.
+server-pack-mode-change-custom = Players get your published custom pack again.
+server-pack-mode-change-custom-new = Players get the custom pack once you publish it.
+server-pack-mode-change-server = Players get { $name } when they join.
+server-pack-mode-save = Save
+server-pack-mode-saved = Saved what players get
+server-pack-use-as-client-pack = Use as the client pack

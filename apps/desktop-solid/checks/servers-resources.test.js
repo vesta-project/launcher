@@ -76,7 +76,7 @@ describe('server resources inventory view model', () => {
     expect(contentGates(inventory, stopped).datapackToggle).toBe(true);
 
     const [lithium, unidentified, pendingRemove, pendingInstall] = inventory.items;
-    expect(rowActions(lithium, gates, true)).toEqual({ toggle: true, remove: true, update: true, cancel: false, identify: false });
+    expect(rowActions(lithium, gates, true)).toEqual({ toggle: true, remove: true, update: true, cancel: false, identify: false, managed: false });
     expect(rowActions(unidentified, gates, false)).toMatchObject({ identify: true, update: false });
     expect(rowActions(pendingRemove, gates, false)).toMatchObject({ toggle: false, remove: false, cancel: true });
     expect(rowActions(pendingInstall, gates, false)).toMatchObject({ toggle: false, remove: false, identify: false, cancel: true });
