@@ -211,11 +211,7 @@ Backend commit: `a2c8153567631b6dc07eab73f9078c05aded3dc5`.
 
 ## Correction implementation checkpoint (2026-10-29)
 
-This checkpoint is **not the complete redesign**. Do not enable the `server-modpack`
-player-offering choice yet: the independent delivery release stream remains to be
-implemented. The agent fails closed with `pack_unavailable` for that mode rather
-than serving an unrelated custom publication. Automatic provider update discovery,
-archive-backed player delivery, and full removal of the old sync UI contract remain.
+Historical checkpoint, superseded by the player-delivery completion below.
 
 ### Contracts now available
 
@@ -259,8 +255,7 @@ may conflict and must be reviewed again.
   from installed. Review updates using added/updated/removed entries and overrides.
   Offer unlink with explicit keep/remove-owned choices. Inventory rows can display
   a linked-pack ownership badge from `modpackOwned`.
-- Client settings: show `none` and `custom`; retain a disabled/pending
-  `server-modpack` choice until delivery completion. Preserve the custom workspace
+- Client settings: show `none`, `custom`, and `server-modpack`. Preserve the custom workspace
   when changing modes. Required publication/minimum-revision controls belong to
   custom; following mode will expose only the require-players-to-update policy.
 - Remove the install dialog's "also set as modpack" option. Installation now creates
@@ -311,8 +306,7 @@ Checkpoint launcher validation:
 
 ## Resume checkpoint: installed identity and update discovery (2026-10-29)
 
-This remains an incomplete implementation checkpoint. Player server-modpack delivery
-still fails closed. No files under src/pages/** were edited.
+Historical identity/discovery checkpoint, superseded by the delivery completion below. No files under src/pages/** were edited.
 
 ### Added contracts
 
@@ -362,7 +356,7 @@ complete provider history was searched.
 - Browser fixtures retain both identities. fixtureRestartServerModpack(id) is a
   fixture-only helper simulating successful restart; discovery returns a deterministic
   next provider version after restart.
-- Client settings: keep server-modpack disabled/pending. Custom/none are unchanged.
+- Client settings: server-modpack is now available. Custom/none are unchanged.
   Required-update launch blocking and signed binding/high-water verification remain.
 - Instance linked-pack UI is unchanged: start_modpack_update still emits
   modpack_review_required and the compatibility packSyncApply path remains.
@@ -408,3 +402,32 @@ Validation results for this resume checkpoint follow below.
 - Control/transport all-target clippy with -D warnings passed.
 - Transport: 47 unit and 122 HTTPS tests passed; one manual laboratory test ignored.
   vesta-dev: eight passed, one manual ignored. HTTPS was run serially.
+
+
+## Player delivery completion (2026-10-29)
+
+The `server-modpack` client choice can now be enabled. Provider links deliver only
+project/version IDs through the signed catalogue. Archive and draft installations
+retain a built client Vesta artifact independently of uploads, editable drafts and
+expiring install plans. Shared/client override precedence and server-file exclusion
+use the same publication builder. Retention is bounded to confirmed/incoming sources.
+Players follow `serverModpack.installed`, including during a staged update. A first
+installation offers no pack until every journal intent applies. Failed/cancelled
+pending entries retain the preceding confirmed offering. Unlink disables following;
+a custom offering and its publication history remain independent.
+
+An independent durable player-offering clock rebases catalogue/Vesta revisions
+across custom/follow mode switches. Its minimum and paired-client high-water marks
+never decrease. `requireUpdate` raises the following offering's minimum; turning it
+off permits future optional updates without undoing a previously signed minimum.
+Disabling the offering suppresses v2/v3 status/downloads. Signed nonce, TLS binding,
+revision/digest-pinned downloads and normal pack access checks remain enforced.
+Pruning and restart recovery preserve the active player artifact alongside custom.
+Pre-existing non-provider installation receipts without retained client artifacts
+fail closed and require a reviewed reinstall to capture delivery bytes.
+
+Verification includes real HTTPS provider-pointer selection while an update is
+pending, optional/required policy, mode disable/reenable and obsolete download
+rejection; journal tests cover retained archive delivery after upload/plan removal,
+pruning/reopen, and installed-version promotion. Full validation is recorded below
+when the common instance pipeline is complete.
