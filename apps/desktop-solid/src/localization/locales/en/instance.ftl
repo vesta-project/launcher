@@ -113,3 +113,10 @@ drop-choose-resources = Choose the resources to add. Review the type and destina
 drop-dependencies-help = These resources are already added. Install the dependencies below so they can work correctly.
 drop-kind-for = Resource type for { $name }
 drop-world-for = Target world for { $name }
+
+# Linked pack on Overview (provider or server source)
+instance-pack-title = Linked pack
+instance-pack-source-server = Server
+instance-pack-revision = Revision { $revision }
+instance-pack-from-server = From the server
+instance-pack-from-provider = Linked modpack

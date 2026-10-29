@@ -22,10 +22,17 @@ export interface PackRelease extends EngineVersion {
 }
 export type ReleaseChannel = "release" | "beta" | "alpha";
 export type PackSource = "Modrinth" | "CurseForge";
+/**
+ * Where a linked instance's pack comes from. A server-linked instance is the same link with the
+ * server as its source: releases are the server's published revisions, not provider versions.
+ */
+export type LinkedPackSource = PackSource | "Server";
 export interface LinkedPack {
   icon: string;
   name: string;
-  source: PackSource;
+  source: LinkedPackSource;
+  /** Server-sourced links: the server connection the pack comes from. */
+  serverId?: string;
   /** Project id on the source platform, used to fetch changelogs. */
   projectId?: string;
   installed: string;
@@ -69,8 +76,21 @@ export function compatibleLoaderVersions(
           : [];
   return [];
 }
+/** Browser fixture: "Friends Server" is linked to the Riverside SMP fixture server's client pack. */
+function serverFixturePack(id: string): LinkedPack {
+  const entry = findInstance(id)!.instance;
+  const engine = { minecraft: entry.minecraftVersion, loader: entry.modloader, loaderVersion: compatibleLoaderVersions(entry.minecraftVersion, entry.modloader)[0] ?? "" };
+  return {
+    name: "Riverside client pack", icon: entry.image, source: "Server", serverId: "fixture-survival", installed: "12",
+    releases: [
+      { ...engine, id: "14", label: "14", channel: "release", publishedAt: "2026-10-27", changes: "" },
+      { ...engine, id: "12", label: "12", channel: "release", publishedAt: "2026-10-12", changes: "" },
+    ],
+  };
+}
 function initialPack(id: string): LinkedPack | undefined {
   if (nativeInstances) return undefined;
+  if (id === "server") return serverFixturePack(id);
   if (!["create", "atm"].includes(id)) return undefined;
   const entry = findInstance(id)!.instance;
   const engine = {
@@ -198,6 +218,13 @@ function nativePack(id: string, versions: NativeVersion[] = [], name?: string): 
   const record = nativeRecord(id);
   if (!record?.modpackId?.trim()) return undefined;
   const engine = { minecraft: record.minecraftVersion, loader: record.modloader || 'vanilla', loaderVersion: record.modloaderVersion || '' };
+  // Server-sourced link: modpackId is the server, modpackVersionId the installed offering revision.
+  // Newer revisions come from the signed server check, not a provider version list.
+  if (record.modpackPlatform === 'server') {
+    const installed = record.modpackVersionId ?? '';
+    return { name: name || record.name, icon: displayImage(record), source: 'Server', serverId: record.modpackId, installed,
+      releases: [{ ...engine, id: installed, label: installed, experimental: false, channel: 'release', changes: '' }] };
+  }
   const releases: PackRelease[] = releaseOrder(versions).map((version) => ({ ...engine, minecraft: version.game_versions[0] ?? engine.minecraft,
     loader: version.loaders.find((loader) => ['fabric', 'forge', 'neoforge', 'quilt'].includes(loader)) ?? engine.loader,
     id: version.id, label: version.version_number, experimental: version.release_type !== 'release',
@@ -240,6 +267,14 @@ export function useNativePack(id: string) {
   });
 }
 
+/** Newest stable release (or newest of any channel) when it is ahead of the installed one. */
+export function packUpdateTarget(pack: LinkedPack): PackRelease | undefined {
+  const latest = pack.releases.find((item) => item.channel === "release") ?? pack.releases[0];
+  if (!latest || latest.id === pack.installed) return undefined;
+  const installed = pack.releases.findIndex((item) => item.id === pack.installed);
+  return installed < 0 || pack.releases.indexOf(latest) < installed ? latest : undefined;
+}
+
 const channelOf = (value: string): ReleaseChannel => value === 'beta' || value === 'alpha' ? value : 'release';
 const releaseOrder = (versions: NativeVersion[]) => [...versions].sort((a, b) => String(b.published_at ?? '').localeCompare(String(a.published_at ?? '')));
 
@@ -266,7 +301,9 @@ function plainText(raw: string, format: string): string {
   if (format !== 'html') return raw.trim();
   return raw.replace(/<br\s*\/?>|<\/(p|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 }
-export function releaseChangelog(source: PackSource, projectId: string | undefined, releaseId: string): Promise<string | undefined> {
+export function releaseChangelog(source: LinkedPackSource, projectId: string | undefined, releaseId: string): Promise<string | undefined> {
+  // Server revisions carry no provider changelog; the update review lists the file changes.
+  if (source === 'Server') return Promise.resolve(undefined);
   if (nativeInstances && !projectId?.trim()) return Promise.resolve(undefined);
   const key = `${source}:${projectId}:${releaseId}`;
   let cached = changelogCache.get(key);

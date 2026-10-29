@@ -6,7 +6,7 @@ import { sourceById } from '../../../features/browse/browse-model';
 import { peekProject, loadProject } from '../../../features/browse/browse-projects';
 import { IntentMemo, newIntentId } from '../../../features/servers/model';
 import {
-  archiveDecision, firstRunChoices, isPackArchiveName, packLoaderName, scratchSelections, type FirstRunChoice,
+  archiveDecision, archiveLinkSource, firstRunChoices, isPackArchiveName, packLoaderName, scratchSelections, type FirstRunChoice, type ModpackSection,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
 import type { ContentProvider } from '../../../features/servers/native-content';
@@ -18,10 +18,16 @@ import type { MessageId } from '../../../localization/messages';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
 
-const choiceCopy: Record<FirstRunChoice, { icon: string; title: MessageId; description: MessageId; action: MessageId }> = {
-  provider: { icon: 'icons/rail/browse', title: 'server-pack.first-provider-title', description: 'server-pack.first-provider-description', action: 'server-pack.first-provider-action' },
-  upload: { icon: 'icons/actions/upload', title: 'server-pack.first-upload-title', description: 'server-pack.first-upload-description', action: 'server-pack.first-upload-action' },
-  scratch: { icon: 'icons/actions/add', title: 'server-pack.first-scratch-title', description: 'server-pack.first-scratch-description', action: 'server-pack.first-scratch-action' },
+type ChoiceCopy = { icon: string; title: MessageId; description: MessageId; action: MessageId };
+const choiceCopy: Record<ModpackSection, Partial<Record<FirstRunChoice, ChoiceCopy>>> = {
+  server: {
+    provider: { icon: 'icons/rail/browse', title: 'server-pack.link-browse-title', description: 'server-pack.link-browse-description', action: 'server-pack.link-browse-action' },
+    upload: { icon: 'icons/actions/upload', title: 'server-pack.link-upload-title', description: 'server-pack.link-upload-description', action: 'server-pack.first-upload-action' },
+  },
+  client: {
+    upload: { icon: 'icons/actions/upload', title: 'server-pack.first-upload-title', description: 'server-pack.first-upload-description', action: 'server-pack.first-upload-action' },
+    scratch: { icon: 'icons/actions/add', title: 'server-pack.first-scratch-title', description: 'server-pack.first-scratch-description', action: 'server-pack.first-scratch-action' },
+  },
 };
 
 type Upload =
@@ -29,9 +35,14 @@ type Upload =
   | { step: 'inspected'; name: string; uploadId: string; inspection: PackArchiveInspection }
   | { step: 'applying'; name: string; uploadId: string; inspection: PackArchiveInspection };
 
-/** A server without a modpack: link one from a provider, upload one, or build one. */
-export function FirstRun() {
+/**
+ * Nothing set up yet. `server`: the server doesn't use a modpack (fine; it is optional): link
+ * one from a provider or a file through the link review. `client`: start the custom client
+ * pack from a file or from scratch.
+ */
+export function FirstRun(props: { section: ModpackSection }) {
   const area = useModpackArea();
+  const section = untrack(() => props.section);
   const [upload, setUpload] = createSignal<Upload | null>(null, { name: 'modpack-first:upload' });
   const [scratch, setScratch] = createSignal(false, { name: 'modpack-first:scratch' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-first:error' });
@@ -94,14 +105,17 @@ export function FirstRun() {
   };
 
   return (
-    <section data-vesta="modpack-first" aria-labelledby="modpack-first-title">
+    <section data-vesta="modpack-first" data-section={section} aria-labelledby="modpack-first-title">
       <header data-vesta="modpack-first-head">
-        <span data-vesta="modpack-first-mark" aria-hidden="true"><Icon name="icons/content/modpack" size={22} /></span>
+        <span data-vesta="modpack-first-mark" aria-hidden="true"><Icon name={section === 'server' ? 'icons/content/server' : 'icons/content/modpack'} size={22} /></span>
         <div>
-          <h2 id="modpack-first-title">{t('server-pack.first-title', { name: area.snapshot().connection.name })}</h2>
-          <p>{t('server-pack.first-description')}</p>
+          <h2 id="modpack-first-title">{section === 'server' ? t('server-pack.link-none-title') : t('server-pack.first-title')}</h2>
+          <p>{section === 'server' ? t('server-pack.link-none-description') : t('server-pack.first-description')}</p>
         </div>
       </header>
+      <Show when={section === 'server' && !area.gates().installOnServer}>
+        <p data-vesta="server-muted">{t('server-pack.link-no-permission')}</p>
+      </Show>
       <ServerErrorNote error={error()} />
       <input ref={(element) => { picker = element; }} type="file" accept=".mrpack,.zip,application/zip" hidden
         onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void receive(file); }} />
@@ -115,7 +129,7 @@ export function FirstRun() {
               </div>
             }>
               {(inspected) => (
-                <ArchiveResult name={inspected.name} uploadId={inspected.uploadId} inspection={inspected.inspection}
+                <ArchiveResult section={section} name={inspected.name} uploadId={inspected.uploadId} inspection={inspected.inspection}
                   onCancel={() => { void cancelUpload(inspected.uploadId); setUpload(null); }}
                   onApplying={(busy) => setUpload(busy ? { ...inspected, step: 'applying' } : { ...inspected, step: 'inspected' })}
                   onDone={() => setUpload(null)} />
@@ -125,9 +139,9 @@ export function FirstRun() {
         </Show>
       }>
         <div data-vesta="modpack-choices">
-          <For each={firstRunChoices(area.gates())}>
+          <For each={firstRunChoices(section, area.gates())}>
             {(choice) => {
-              const copy = choiceCopy[choice.id];
+              const copy = choiceCopy[section][choice.id]!;
               const dropProps = choice.id === 'upload' ? {
                 onDragOver: (event: DragEvent) => { if (!event.dataTransfer?.types.includes('Files')) return; event.preventDefault(); setDragging(true); },
                 onDragLeave: () => setDragging(false),
@@ -141,7 +155,7 @@ export function FirstRun() {
                   <Show when={choice.id === 'upload'}>
                     <p data-vesta="modpack-choice-hint">{t('server-pack.first-upload-hint')}</p>
                   </Show>
-                  <Button size="sm" tone={choice.id === 'provider' ? 'accent' : 'neutral'} variant={choice.id === 'provider' ? 'solid' : 'outline'}
+                  <Button size="sm" tone="neutral" variant="outline"
                     disabled={!choice.enabled} onClick={() => choose(choice.id)}>{t(copy.action)}</Button>
                 </article>
               );
@@ -155,17 +169,17 @@ export function FirstRun() {
 }
 
 /**
- * The inspected archive. A pack the agent identified on a provider is linked (nothing hosted);
- * anything else becomes this server's hosted custom pack. Either can also be installed on the server.
+ * The inspected archive. For the server it goes to the link review (an identified provider pack
+ * links to that provider version so updates can be found). For the client pack it becomes the
+ * hosted custom pack.
  */
 function ArchiveResult(props: {
-  name: string; uploadId: string; inspection: PackArchiveInspection;
+  section: ModpackSection; name: string; uploadId: string; inspection: PackArchiveInspection;
   onCancel: () => void; onApplying: (busy: boolean) => void; onDone: () => void;
 }) {
   const area = useModpackArea();
   const decision = () => archiveDecision(props.inspection);
   const manifest = () => props.inspection.manifest;
-  const [alsoInstall, setAlsoInstall] = createSignal(false, { name: 'modpack-archive:install' });
   const [busy, setBusy] = createSignal(false, { name: 'modpack-archive:busy' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-archive:error' });
   const intents = new IntentMemo();
@@ -174,29 +188,26 @@ function ArchiveResult(props: {
   const linked = untrack(link);
   if (linked) void loadProject(linked.provider, linked.projectId).catch(() => {});
 
-  const act = async (mode: 'link' | 'host') => {
+  /** Server: hand the file to the link review, which owns the upload from here. */
+  const review = () => {
+    const source = archiveLinkSource(props.inspection, props.uploadId);
+    // A provider link reads the provider, not the file: the upload is no longer needed.
+    if (source.source === 'provider') void serverCommand((api) => api.packUploadCancel(area.id(), props.uploadId, newIntentId())).catch(() => {});
+    area.startInstall({ source, name: linkProject()?.name ?? manifest().name, mode: 'link', uploadId: source.source === 'uploaded_archive' ? props.uploadId : undefined });
+    props.onDone();
+  };
+
+  const host = async () => {
     const workspace = area.workspace();
     if (!workspace || busy()) return;
     setBusy(true); setError(null); props.onApplying(true);
     try {
-      if (mode === 'link') {
-        const provider = link()!;
-        const request = { ...provider, expectedRevision: workspace.publishedRevision, draftRevision: workspace.draft.revision, requiredUpdate: false, acknowledgeLowerVersion: false };
-        await serverCommand((api) => api.packProviderPublish(area.id(), request, intents.idFor(['link', request])));
-        intents.settle();
-        await serverCommand((api) => api.packUploadCancel(area.id(), props.uploadId, newIntentId())).catch(() => {});
-        await area.reload();
-        if (alsoInstall()) area.startInstall({ source: { source: 'provider', ...provider }, name: linkProject()?.name ?? manifest().name, setAsModpack: false });
-      } else {
-        // The plan reads the upload, so it is reviewed before the import uses it.
-        if (alsoInstall()) area.startInstall({ source: { source: 'uploaded_archive', uploadId: props.uploadId }, name: manifest().name, setAsModpack: false });
-        const request = { source: 'uploaded_archive' as const, expectedRevision: workspace.draft.revision, uploadId: props.uploadId };
-        const draft = await serverCommand((api) => api.packImport(area.id(), request, intents.idFor(['host', request])));
-        intents.settle();
-        area.applyDraft(draft);
-        area.markStarted();
-        await area.reload();
-      }
+      const request = { source: 'uploaded_archive' as const, expectedRevision: workspace.draft.revision, uploadId: props.uploadId };
+      const draft = await serverCommand((api) => api.packImport(area.id(), request, intents.idFor(['host', request])));
+      intents.settle();
+      area.applyDraft(draft);
+      area.markStarted();
+      await area.reload();
       props.onDone();
     } catch (reason) {
       intents.settle(reason as ServerCommandError);
@@ -239,26 +250,19 @@ function ArchiveResult(props: {
           <p data-vesta="server-muted">{t('server-pack.archive-unresolved-help')}</p>
         </details>
       </Show>
-      <Show when={link()} fallback={<p data-vesta="server-muted">{t('server-pack.archive-host-help')}</p>}>
-        {(provider) => <ProviderLinkNote provider={provider()} name={linkProject()?.name} />}
+      <Show when={props.section === 'server'} fallback={<p data-vesta="server-muted">{t('server-pack.archive-host-help')}</p>}>
+        <Show when={link()} fallback={<p data-vesta="server-muted">{t('server-pack.archive-link-file-help')}</p>}>
+          {(provider) => <ProviderLinkNote provider={provider()} name={linkProject()?.name} />}
+        </Show>
       </Show>
       <ServerErrorNote error={error()} />
-      <Show when={area.gates().installOnServer}>
-        <Checkbox size="sm" checked={alsoInstall()} onChange={setAlsoInstall} disabled={busy()}
-          label={t('server-pack.also-install')} description={t('server-pack.also-install-help')} />
-      </Show>
       <footer data-vesta="modpack-card-actions">
         <Button variant="ghost" disabled={busy()} onClick={props.onCancel}>{t('common.cancel')}</Button>
         <span data-vesta="server-toolbar-spacer" />
-        <Show when={link()} fallback={
-          <Button tone="accent" disabled={busy()} onClick={() => void act('host')}>{t('server-pack.use-as-modpack', { name: area.snapshot().connection.name })}</Button>
+        <Show when={props.section === 'server'} fallback={
+          <Button tone="accent" disabled={busy()} onClick={() => void host()}>{t('server-pack.use-as-client-pack')}</Button>
         }>
-          {(provider) => (
-            <>
-              <Button variant="outline" disabled={busy()} onClick={() => void act('host')}>{t('server-pack.host-copy')}</Button>
-              <Button tone="accent" disabled={busy()} onClick={() => void act('link')}>{t('server-pack.link-provider', { provider: sourceById(provider().provider).label })}</Button>
-            </>
-          )}
+          <Button tone="accent" disabled={busy() || !area.gates().installOnServer} onClick={review}>{t('server-pack.link-review')}</Button>
         </Show>
       </footer>
     </div>

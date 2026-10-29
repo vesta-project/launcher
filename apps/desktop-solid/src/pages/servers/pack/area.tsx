@@ -5,18 +5,21 @@ import type { ResourceProject } from '../../../features/browse/browse-model';
 import { initials, serverArt } from '../../../features/servers/art';
 import { IntentMemo } from '../../../features/servers/model';
 import {
-  modpackGates, modpackPath, packSourceKind, type ModpackGates, type ModpackSubTab, type PackSourceKind,
+  clientModeRequest, clientPackMode, linkProvider, modpackGates, modpackPath, packSourceKind, serverLinkView, serverModpackPath,
+  type ClientPackMode, type LinkReviewMode, type ModpackGates, type ModpackSubTab, type PackSourceKind, type ServerLinkView,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { PackDraft, PackInstallSource, PackManifest, PackPreview, PackWorkspace } from '../../../features/servers/native-pack';
+import { seedServerResource } from '../../../features/servers/resources';
+import { packWorkspaceResource } from '../../../features/servers/server-resources';
 import { serverCommand } from '../../../features/servers/store';
 
+/** A link or update review of the server's own modpack. */
 export interface InstallRequestSource {
   source: PackInstallSource;
   /** What the review calls the pack. */
   name: string;
-  /** Default for "Also use as this server's modpack". */
-  setAsModpack: boolean;
+  mode: LinkReviewMode;
   /** An archive upload to cancel if the review is abandoned. */
   uploadId?: string;
 }
@@ -26,21 +29,33 @@ export interface ModpackAreaValue {
   id: Accessor<string>;
   gates: Accessor<ModpackGates>;
   workspace: Accessor<PackWorkspace | undefined>;
+  /** The custom client pack's draft state (legacy provider pointer, custom, or nothing yet). */
   kind: Accessor<PackSourceKind>;
+  /** The server's own modpack link, independent of what players get. */
+  link: Accessor<ServerLinkView>;
+  /** The provider project the server is linked to, when the link has one. */
+  linkProject: Accessor<ResourceProject | undefined>;
+  /** What players get: none, the server's modpack, or the custom pack. */
+  clientMode: Accessor<ClientPackMode>;
+  setClientMode: (mode: ClientPackMode, requireUpdate?: boolean) => Promise<void>;
   loading: Accessor<boolean>;
   error: Accessor<ServerCommandError | null>;
   reload: () => Promise<void>;
   applyDraft: (draft: PackDraft) => void;
   /** Saves a whole manifest against the current draft revision. */
   writeManifest: (manifest: PackManifest) => Promise<void>;
-  /** Pack art for the header: provider icon, uploaded icon, or generated art. */
+  /** Client pack art for its header: provider icon, uploaded icon, or generated art. */
   icon: Accessor<string>;
+  /** Server modpack art: the linked project's icon or generated art. */
+  linkIcon: Accessor<string>;
   providerProject: Accessor<ResourceProject | undefined>;
   /** The publication preview for the current draft, for change counts; undefined until read. */
   preview: Accessor<PackPreview | undefined>;
   refreshPreview: () => void;
   markStarted: () => void;
+  /** A client pack section. */
   open: (tab: ModpackSubTab) => void;
+  openServer: () => void;
   install: Accessor<InstallRequestSource | null>;
   startInstall: (request: InstallRequestSource | null) => void;
 }
@@ -60,9 +75,18 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
   const [preview, setPreview] = createSignal<PackPreview | undefined>(undefined, { name: 'modpack:preview' });
   const [install, setInstall] = createSignal<InstallRequestSource | null>(null, { name: 'modpack:install' });
   const kind = createMemo(() => packSourceKind(workspace(), started()), { name: 'modpack:kind' });
+  const link = createMemo(() => serverLinkView(workspace()), { name: 'modpack:link' });
+  const clientMode = createMemo(() => clientPackMode(workspace()), { name: 'modpack:client-mode' });
   const writes = new IntentMemo();
+  const modes = new IntentMemo();
   let disposed = false;
   onCleanup(() => { disposed = true; });
+
+  /** Every read also refreshes the shared copy Resources uses for ownership badges. */
+  const accept = (value: PackWorkspace) => {
+    setWorkspace(value);
+    seedServerResource(untrack(id), packWorkspaceResource, value);
+  };
 
   let sequence = 0;
   const reload = async () => {
@@ -71,7 +95,7 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     setLoading(true); setError(null);
     try {
       const value = await serverCommand((api) => api.packDraft(untrack(id)));
-      if (!disposed && request === sequence) setWorkspace(value);
+      if (!disposed && request === sequence) accept(value);
     } catch (reason) {
       if (!disposed && request === sequence) setError(reason as ServerCommandError);
     } finally {
@@ -100,6 +124,22 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     }
   };
 
+  /** Stores the player offering. The custom workspace is kept whatever the mode. */
+  const setClientMode = async (mode: ClientPackMode, requireUpdate = false) => {
+    const request = clientModeRequest(mode, requireUpdate);
+    try {
+      const value = await serverCommand((api) => api.clientPackMode(untrack(id), request, modes.idFor(request)));
+      modes.settle();
+      if (disposed) return;
+      setWorkspace((current) => (current ? { ...current, clientPack: value } : current));
+      const current = untrack(workspace);
+      if (current) seedServerResource(untrack(id), packWorkspaceResource, current);
+    } catch (reason) {
+      modes.settle(reason as ServerCommandError);
+      throw reason;
+    }
+  };
+
   // The uploaded icon, read again only when its hash changes.
   createEffect(() => workspace()?.draft.manifest.icon ?? null, (sha) => {
     if (!sha) { setIconData(undefined); return; }
@@ -116,6 +156,16 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     return provider ? peekProject(provider.provider, provider.projectId) : undefined;
   };
 
+  const linkKey = () => { const provider = linkProvider(link().source); return provider ? `${provider.provider}:${provider.projectId}` : null; };
+  createEffect(linkKey, (key) => {
+    const provider = key ? linkProvider(untrack(link).source) : null;
+    if (provider) void loadProject(provider.provider, provider.projectId).catch(() => {});
+  }, { name: 'modpack:link-project' });
+  const linkProject = () => {
+    const provider = linkProvider(link().source);
+    return provider ? peekProject(provider.provider, provider.projectId) : undefined;
+  };
+
   // A preview names how many changes publication would make. Read once per draft revision.
   let previewed: string | null = null;
   const refreshPreview = () => {
@@ -128,18 +178,21 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
   };
   createEffect(() => {
     const current = workspace();
-    return current && kind() === 'custom' && current.pendingPublication ? current.draft.revision : null;
+    return current && clientMode() === 'custom' && kind() === 'custom' && current.pendingPublication ? current.draft.revision : null;
   }, (revision) => {
     if (!revision) { setPreview(undefined); return; }
     if (revision !== previewed) refreshPreview();
   }, { name: 'modpack:preview-load' });
 
   const icon = () => providerProject()?.icon_url ?? iconData() ?? serverArt(`${snapshot().connection.serverId}:pack`, initials(workspace()?.draft.manifest.name ?? snapshot().connection.name));
+  const linkIcon = () => linkProject()?.icon_url ?? serverArt(`${snapshot().connection.serverId}:server-modpack`, initials(linkProject()?.name ?? snapshot().connection.name));
 
   return {
-    snapshot, id, gates, workspace, kind, loading, error, reload, applyDraft, writeManifest, icon, providerProject, preview, refreshPreview,
+    snapshot, id, gates, workspace, kind, link, linkProject, clientMode, setClientMode, loading, error, reload, applyDraft, writeManifest,
+    icon, linkIcon, providerProject, preview, refreshPreview,
     markStarted: () => setStarted(true),
     open: (tab) => transitionTo(modpackPath(untrack(id), tab)),
+    openServer: () => transitionTo(serverModpackPath(untrack(id))),
     install, startInstall: setInstall,
   };
 }

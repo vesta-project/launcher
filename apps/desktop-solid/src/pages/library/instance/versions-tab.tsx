@@ -25,6 +25,7 @@ import {
   releaseChangelog,
   searchPacks,
   packReleases,
+  packUpdateTarget,
   type EngineVersion,
   type LinkedPack,
   type PackCandidate,
@@ -38,10 +39,8 @@ import { instancePending } from "../../../features/instances/native-service";
 import { EmptyLine } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
 import { t } from "../../../localization";
-import { navigate } from "../../../app/router";
-import { projectPath } from "../../../features/browse/browse-model";
-import { prefetchProject } from "../../../features/browse/browse-projects";
 import "./versions-tab.css";
+import { PackIdentity, packVersionLabel } from "./pack-identity";
 
 export function VersionsTab(props: { entry: InstanceEntry }) {
   onSettled(() => { void loadMetadata(); });
@@ -247,12 +246,6 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
         }
       >
         {(linked) => {
-          const source = () => linked().source === "CurseForge" ? "curseforge" : "modrinth";
-          const path = () => linked().projectId ? projectPath(source(), linked().projectId!) : undefined;
-          const warmProject = () => {
-            const projectId = linked().projectId;
-            if (projectId) prefetchProject(source(), projectId);
-          };
           const releases = createMemo(
             () => {
               const query = releaseQuery().trim().toLowerCase();
@@ -268,35 +261,15 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
             <section data-vesta="pack-view">
               {/* The pack as one line: what is installed, whether it is current, and its actions. */}
               <header data-vesta="pack-head">
-                <a
-                  data-vesta="pack-identity"
-                  href={path() ? `#${path()}` : undefined}
-                  onPointerEnter={warmProject}
-                  onFocus={warmProject}
-                  onClick={(event) => {
-                    const next = path();
-                    if (!next || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                    event.preventDefault();
-                    navigate(next);
-                  }}
-                >
-                  <img data-vesta="pack-icon" src={linked().icon} alt="" />
-                  <div data-vesta="pack-title">
-                    <span data-vesta="pack-name">
-                      <strong>{linked().name}</strong>
-                      <span data-vesta="source-tag" data-source={linked().source.toLowerCase()}>
-                        {linked().source}
-                      </span>
-                    </span>
-                    <span data-vesta="pack-meta">
-                      {linked().installedLabel ?? linked().installed}
-                      <span aria-hidden="true">·</span>
-                      Minecraft {store.state().engine.minecraft}
-                      <span aria-hidden="true">·</span>
-                      {loaderName(store.state().engine.loader)}
-                    </span>
-                  </div>
-                </a>
+                <PackIdentity pack={linked()} meta={
+                  <>
+                    {packVersionLabel(linked())}
+                    <span aria-hidden="true">·</span>
+                    Minecraft {store.state().engine.minecraft}
+                    <span aria-hidden="true">·</span>
+                    {loaderName(store.state().engine.loader)}
+                  </>
+                } />
                 <div data-vesta="pack-status">
                   <Show
                     when={updateTarget(linked())}
@@ -580,13 +553,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
   );
 }
 
-/** Newest stable release (or newest of any channel) when it is ahead of the installed one. */
-function updateTarget(pack: LinkedPack): PackRelease | undefined {
-  const latest = pack.releases.find((item) => item.channel === "release") ?? pack.releases[0];
-  if (!latest || latest.id === pack.installed) return undefined;
-  const installed = pack.releases.findIndex((item) => item.id === pack.installed);
-  return installed < 0 || pack.releases.indexOf(latest) < installed ? latest : undefined;
-}
+const updateTarget = packUpdateTarget;
 /** Releases are ordered newest first, so a larger index than the installed one is older. */
 function changeKind(pack: LinkedPack | undefined, release: PackRelease): "update" | "downgrade" | "switch" {
   if (!pack) return "switch";

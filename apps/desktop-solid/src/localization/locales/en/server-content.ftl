@@ -54,3 +54,9 @@ server-content-software-unknown = Vesta can’t tell which software runs this se
 server-content-error-mods-unsupported = This server’s software doesn’t load mods.
 server-content-error-plugins-unsupported = This server’s software doesn’t load plugins.
 server-content-error-stale = The file changed on the server. Refresh and try again.
+
+# Server modpack ownership
+server-content-from-modpack = From modpack { $name }
+server-content-managed-by-modpack = Managed by the server modpack
+server-content-open-modpack = Open server modpack
+server-content-server-modpack = the server modpack

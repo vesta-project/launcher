@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  archiveDecision, bulkRemove, bulkRequiredTarget, bulkSetRequired, canPublish, defaultInstallChoices, draftHasContent, filterEntries,
-  firstRunChoices, installApplyRequest, installBlocker, installSource, installStagedCount, installWarning, liveSelection, modpackGates,
-  modpackSubTabs, packDirectory, packRootCounts, packSourceKind, packUploadTarget, pickProviderVersion, publishReducer, resolveSubTab,
-  scratchSelections, syncApplyRequest, updateEntry,
+  SERVER_MODPACK_DELIVERY_LIVE, archiveDecision, archiveLinkSource, bulkRemove, bulkRequiredTarget, bulkSetRequired, canPublish, clientModeOptions,
+  clientModeRequest, clientPackMode, clientSubTabs, defaultInstallChoices, draftHasContent, filterEntries, firstRunChoices, installApplyRequest,
+  installBlocker, installStagedCount, installWarning, linkProvider, linkReview, linkSourceKind, liveSelection, modpackGates, modpackPath,
+  modpackSection, modpackSubTabs, offerToPlayers, packDirectory, packRootCounts, packSourceKind, packUploadTarget, pickProviderVersion,
+  publishReducer, resolveSubTab, scratchSelections, serverLinkView, serverModpackPath, syncApplyRequest, updateCheckOutcome, updateEntry,
 } from '../src/features/servers/modpack-area-model.ts';
-import { seedArchiveInspection, seedPackInstallPlan, seedPackWorkspace, seedRedesignWorkspace } from '../src/features/servers/fixtures-pack.ts';
+import { isModpackOwned, rowActions } from '../src/features/servers/content-model.ts';
+import { seedArchiveInspection, seedPackInstallPlan, seedPackWorkspace, seedRedesignWorkspace, seedServerModpackModel } from '../src/features/servers/fixtures-pack.ts';
 import { searchExample } from '../src/features/browse/browse-targets.ts';
 
 const empty = () => {
@@ -55,9 +57,18 @@ describe('modpack source and sub-nav gating', () => {
 });
 
 describe('first run', () => {
-  test('choices follow pack.edit', () => {
-    expect(firstRunChoices({ edit: true }).map((choice) => [choice.id, choice.enabled])).toEqual([['provider', true], ['upload', true], ['scratch', true]]);
-    expect(firstRunChoices({ edit: false }).every((choice) => !choice.enabled)).toBe(true);
+  test('linking the server takes a provider or a file (install gate); a custom client pack starts from a file or scratch', () => {
+    expect(firstRunChoices('server', { edit: true, installOnServer: true }).map((choice) => [choice.id, choice.enabled])).toEqual([['provider', true], ['upload', true]]);
+    expect(firstRunChoices('server', { edit: true, installOnServer: false }).every((choice) => !choice.enabled)).toBe(true);
+    expect(firstRunChoices('client', { edit: true, installOnServer: false }).map((choice) => [choice.id, choice.enabled])).toEqual([['upload', true], ['scratch', true]]);
+    expect(firstRunChoices('client', { edit: false, installOnServer: true }).every((choice) => !choice.enabled)).toBe(true);
+  });
+
+  test('an uploaded file links to its identified provider version, otherwise to the file itself', () => {
+    const mrpack = seedArchiveInspection('mrpack');
+    expect(archiveLinkSource(mrpack, 'up-1')).toEqual({ source: 'uploaded_archive', uploadId: 'up-1' });
+    const identified = { ...mrpack, providerPack: { provider: 'modrinth', projectId: 'fo', versionId: 'v3' } };
+    expect(archiveLinkSource(identified, 'up-1')).toEqual({ source: 'provider', provider: 'modrinth', projectId: 'fo', versionId: 'v3' });
   });
 
   test('an identified provider archive links (not hosted); anything else is hosted', () => {
@@ -169,21 +180,32 @@ describe('bulk content actions', () => {
   });
 });
 
-describe('install on this server', () => {
-  test('the source is the provider pointer or the current draft', () => {
-    const provider = seedRedesignWorkspace('provider');
-    expect(installSource(provider, 'provider')).toEqual({ source: 'provider', provider: 'modrinth', projectId: 'pack', versionId: 'v2' });
-    expect(installSource(seedPackWorkspace('fabric'), 'custom')).toEqual({ source: 'draft', revision: '3' });
-  });
-
-  test('one choice per conflict; project versions replace by default', () => {
+describe('link / update review', () => {
+  test('one choice per conflict; project versions replace by default; linking never publishes a client pack', () => {
     const plan = seedPackInstallPlan('conflicts');
     const picks = defaultInstallChoices(plan);
     expect(picks).toEqual({ 'mods/example.jar': 'replace' });
-    expect(installApplyRequest(plan, picks, true)).toEqual({ planId: plan.planId, confirmationToken: plan.confirmationToken, choices: [{ path: 'mods/example.jar', choice: 'replace' }], setAsModpack: true });
-    expect(installApplyRequest(plan, {}, true)).toBeNull();
+    expect(installApplyRequest(plan, picks)).toEqual({ planId: plan.planId, confirmationToken: plan.confirmationToken, choices: [{ path: 'mods/example.jar', choice: 'replace' }], setAsModpack: false });
+    expect(installApplyRequest(plan, {})).toBeNull();
     expect(installStagedCount(plan, { 'mods/example.jar': 'keep' })).toBe(0);
-    expect(installApplyRequest(seedPackInstallPlan('archive'), {}, false).choices).toEqual([]);
+    expect(installApplyRequest(seedPackInstallPlan('archive'), {}).choices).toEqual([]);
+  });
+
+  test('the review groups added, updated and removed server entries, overrides and unchanged files', () => {
+    const plan = {
+      ...seedPackInstallPlan('provider'),
+      files: [
+        { path: 'mods/new.jar', sha256: 'a', expectedSha256: null, conflict: null, operation: 'added' },
+        { path: 'mods/lithium.jar', sha256: 'b', expectedSha256: 'c', conflict: null, operation: 'updated' },
+        { path: 'mods/same.jar', sha256: 'd', expectedSha256: 'd', conflict: null, operation: 'unchanged' },
+        { path: 'config/pack.toml', sha256: 'e', expectedSha256: null, conflict: null, operation: 'added' },
+        { path: 'mods/legacy.jar', sha256: 'f', expectedSha256: null, conflict: null },
+      ],
+      removed: [['mods/gone.jar', 'g'.repeat(64)]],
+    };
+    expect(linkReview(plan)).toEqual({ added: ['mods/new.jar', 'mods/legacy.jar'], updated: ['mods/lithium.jar'], removed: ['mods/gone.jar'], overrides: ['config/pack.toml'], unchanged: 1 });
+    // Four staged files plus one removal; the unchanged file is not a change.
+    expect(installStagedCount(plan, {})).toBe(5);
   });
 
   test('software switches, invalid and expired plans block apply', () => {
@@ -221,5 +243,120 @@ describe('get the modpack and Browse glue', () => {
     expect(searchExample({ type: 'datapack', minecraftVersion: '1.21.4', loader: null, server: { software: 'vanilla' } })).toBe('mc:1.21.4');
     expect(searchExample({ type: 'mod', minecraftVersion: '1.20.1', loader: null, server: { software: 'neoforge' } })).toBe('mc:1.20.1 loader:neoforge');
     expect(searchExample({ type: 'mod', minecraftVersion: '1.21.4', loader: null, server: { software: 'vanilla' } })).toBe('mc:1.21.4');
+  });
+});
+
+describe('server modpack link (optional, like an instance linked to a modpack)', () => {
+  const linked = () => seedServerModpackModel('linked-custom');
+
+  test('unlinked is a normal state: nothing pending, nothing owned', () => {
+    const view = serverLinkView(seedServerModpackModel('none'));
+    expect(view).toEqual({ phase: 'unlinked', source: null, installed: null, pending: null, pendingIds: [], owned: [], canChange: true });
+    expect(serverLinkView(undefined).phase).toBe('unlinked');
+  });
+
+  test('linked: installed identity, owned files, provider reference', () => {
+    const view = serverLinkView(linked());
+    expect(view.phase).toBe('installed');
+    expect(view.installed).toEqual({ source: { source: 'provider', provider: 'modrinth', projectId: 'friends-pack', versionId: 'v2' }, displayVersion: '2' });
+    expect(view.owned).toEqual(['mods/fabric-api.jar']);
+    expect(view.canChange).toBe(true);
+    expect(linkProvider(view.source)).toEqual({ provider: 'modrinth', projectId: 'friends-pack', versionId: 'v2' });
+    expect(linkSourceKind(view.source)).toBe('modrinth');
+    expect(linkSourceKind({ source: 'uploaded_archive', uploadId: 'u' })).toBe('upload');
+    expect(linkProvider({ source: 'uploaded_archive', uploadId: 'u' })).toBeNull();
+  });
+
+  test('pending until restart: first install has no confirmed version; an update keeps the installed one', () => {
+    const installing = linked();
+    installing.serverModpack.installed = null;
+    installing.serverModpack.pending = { source: installing.serverModpack.source, displayVersion: '2' };
+    installing.serverModpack.pendingIds = ['p-1', 'p-2'];
+    installing.serverModpack.state = 'staged_until_restart';
+    expect(serverLinkView(installing)).toMatchObject({ phase: 'installing', installed: null, pendingIds: ['p-1', 'p-2'], canChange: false });
+
+    const updating = linked();
+    updating.serverModpack.pending = { source: { ...updating.serverModpack.source, versionId: 'v3' }, displayVersion: '3' };
+    const view = serverLinkView(updating);
+    expect(view).toMatchObject({ phase: 'updating', installed: { displayVersion: '2' }, pending: { displayVersion: '3' }, canChange: false });
+    // The installed label never jumps to the pending version.
+    expect(view.source.versionId).toBe('v2');
+
+    // Older agents: only source + state. Staged means pending with no invented history.
+    const legacy = { serverModpack: { source: { source: 'uploaded_archive', uploadId: 'u' }, displayVersion: '1', files: {}, state: 'staged_until_restart' } };
+    expect(serverLinkView(legacy)).toMatchObject({ phase: 'installing', installed: null, pending: { displayVersion: '1' } });
+  });
+
+  test('update available only when discovery returns a candidate; pending suppresses it', () => {
+    const next = { source: 'provider', provider: 'modrinth', projectId: 'friends-pack', versionId: 'v3' };
+    expect(updateCheckOutcome({ installed: null, pending: null, available: next })).toEqual({ step: 'available', source: next });
+    expect(updateCheckOutcome({ installed: null, pending: null, available: null })).toEqual({ step: 'current' });
+    expect(updateCheckOutcome({ installed: null, pending: { source: next, displayVersion: '3' }, available: next })).toEqual({ step: 'pending' });
+  });
+});
+
+describe('client pack mode (optional, independent of the server link)', () => {
+  const publisher = { publish: true };
+
+  test('defaults to none; sections only exist for a custom pack', () => {
+    expect(clientPackMode(undefined)).toBe('none');
+    expect(clientPackMode({ ...seedServerModpackModel('none'), clientPack: undefined })).toBe('none');
+    expect(clientPackMode(seedServerModpackModel('linked-custom'))).toBe('custom');
+    expect(clientSubTabs('none', 'custom', true)).toEqual([]);
+    expect(clientSubTabs('server-modpack', 'custom', true)).toEqual([]);
+    expect(clientSubTabs('custom', 'custom', true).map((tab) => tab.id)).toEqual(['overview', 'content', 'files', 'versions']);
+    expect(clientSubTabs('custom', 'none', true).map((tab) => tab.id)).toEqual(['overview']);
+  });
+
+  test('"Same as the server\'s modpack" stays disabled (coming soon) until delivery is live', () => {
+    expect(SERVER_MODPACK_DELIVERY_LIVE).toBe(false);
+    const options = clientModeOptions(seedServerModpackModel('linked-custom'), publisher);
+    expect(options.map((option) => [option.id, option.enabled, option.note])).toEqual([
+      ['none', true, null], ['server-modpack', false, 'coming-soon'], ['custom', true, null],
+    ]);
+    // With the flag flipped it still needs a link and publish authority.
+    expect(clientModeOptions(seedServerModpackModel('linked-custom'), publisher, true)[1]).toEqual({ id: 'server-modpack', enabled: true, note: null });
+    expect(clientModeOptions(seedServerModpackModel('unlinked-custom'), publisher, true)[1]).toEqual({ id: 'server-modpack', enabled: false, note: 'needs-link' });
+    expect(clientModeOptions(seedServerModpackModel('linked-custom'), { publish: false }, true).every((option) => !option.enabled && option.note === 'no-permission')).toBe(true);
+  });
+
+  test('require-update belongs to following the server modpack; custom keeps its publication policy', () => {
+    expect(clientModeRequest('server-modpack', true)).toEqual({ mode: 'server-modpack', requireUpdate: true });
+    expect(clientModeRequest('custom', true)).toEqual({ mode: 'custom', requireUpdate: false });
+    expect(clientModeRequest('none')).toEqual({ mode: 'none', requireUpdate: false });
+  });
+
+  test('"Also offer it to players" after linking: disabled while delivery is not live, hidden once offered', () => {
+    expect(offerToPlayers(seedServerModpackModel('linked-custom'), publisher)).toEqual({ id: 'server-modpack', enabled: false, note: 'coming-soon' });
+    expect(offerToPlayers(seedServerModpackModel('linked-custom'), publisher, true)).toEqual({ id: 'server-modpack', enabled: true, note: null });
+    expect(offerToPlayers(seedServerModpackModel('linked-follow'), publisher, true)).toBeNull();
+    expect(offerToPlayers(seedServerModpackModel('linked-custom'), { publish: false }, true)).toBeNull();
+  });
+
+  test('routes: /pack is the server modpack; client sections live under the client pack', () => {
+    expect(modpackSection(undefined)).toBe('server');
+    expect(modpackSection('client')).toBe('client');
+    expect(modpackSection('files')).toBe('client');
+    expect(serverModpackPath('s')).toBe('/servers/s/pack');
+    expect(modpackPath('s', 'overview')).toBe('/servers/s/pack/client');
+    expect(modpackPath('s', 'versions')).toBe('/servers/s/pack/versions');
+  });
+});
+
+describe('Resources ownership', () => {
+  const gates = { running: false, install: true, update: true, remove: true, toggle: true, cancel: true, identify: true, datapackToggle: true };
+  const entry = { kind: 'mod', path: 'mods/fabric-api.jar', filename: 'fabric-api.jar', size: '1', enabled: true, sha256: 'a', provider: { provider: 'modrinth', projectId: 'fabric-api', versionId: '1' }, declared: null, pending: null, pendingId: null, pendingError: null };
+
+  test('rows the server modpack owns are marked (agent flag or link paths); user additions are not', () => {
+    const owned = new Set(Object.keys(seedServerModpackModel('linked-custom').serverModpack.files));
+    expect(isModpackOwned(entry, owned)).toBe(true);
+    expect(isModpackOwned({ ...entry, path: 'mods/mine.jar' }, owned)).toBe(false);
+    expect(isModpackOwned({ ...entry, path: 'mods/mine.jar', modpackOwned: true })).toBe(true);
+    expect(isModpackOwned(entry)).toBe(false);
+  });
+
+  test('owned rows cannot be removed or updated one by one', () => {
+    expect(rowActions(entry, gates, true, true)).toMatchObject({ managed: true, remove: false, update: false, toggle: true });
+    expect(rowActions(entry, gates, true)).toMatchObject({ managed: false, remove: true, update: true });
   });
 });

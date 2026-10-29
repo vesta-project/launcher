@@ -209,6 +209,11 @@
     --source-hue: 45;
   }
 
+  /* A server-sourced link: the tag names the server. */
+  :where([data-vesta='source-tag'][data-source='server']) {
+    --source-hue: 285;
+  }
+
   :where([data-vesta-scheme='light']) :where([data-vesta='source-tag']) {
     color: oklch(0.45 0.12 var(--source-hue));
   }

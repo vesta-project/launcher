@@ -176,20 +176,30 @@ export interface RowActions {
   update: boolean;
   cancel: boolean;
   identify: boolean;
+  /** The server modpack owns this file: remove and update go through the modpack instead. */
+  managed: boolean;
 }
+
+/**
+ * Whether the server modpack link owns an inventory row: the agent's `modpackOwned` flag, or
+ * the link's recorded path (agents that do not mark rows yet). User additions never match.
+ */
+export const isModpackOwned = (entry: Pick<ServerContentEntry, 'path' | 'modpackOwned'>, owned?: ReadonlySet<string>) =>
+  entry.modpackOwned === true || !!owned?.has(entry.path);
 
 /**
  * What one row may do. A queued change blocks others until it applies or is cancelled; an
  * entry the bounded scan did not fingerprint gets no destructive request (no guessed validator).
  */
-export function rowActions(entry: ServerContentEntry, gates: ContentGates, hasUpdate: boolean): RowActions {
+export function rowActions(entry: ServerContentEntry, gates: ContentGates, hasUpdate: boolean, managed = false): RowActions {
   const queued = !!entry.pending;
   const validated = entry.sha256 !== null;
   const jar = entry.kind !== 'datapack';
   return {
+    managed,
     toggle: !queued && entry.enabled !== null && (jar ? gates.toggle && validated : gates.datapackToggle),
-    remove: !queued && validated && gates.remove,
-    update: !queued && validated && hasUpdate && gates.update && !!entry.provider,
+    remove: !queued && validated && gates.remove && !managed,
+    update: !queued && validated && hasUpdate && gates.update && !!entry.provider && !managed,
     cancel: queued && !!entry.pendingId && gates.cancel,
     identify: !entry.provider && jar && gates.identify && entry.pending !== 'install',
   };

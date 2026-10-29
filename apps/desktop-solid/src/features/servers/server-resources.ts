@@ -84,6 +84,11 @@ export async function warmSoftwareMetadata(id: string, software: SoftwareId, wan
 export const contentResource = serverResource('content', (id) => serverCommand((client) => client.content(id)));
 /** What a content mutation can change: the inventory, and the world's datapack state. */
 export const CONTENT_RESOURCES = ['content', 'world'] as const;
+/**
+ * The pack workspace (server modpack link + client pack), shared so Resources can mark the
+ * rows the server modpack owns. Needs `pack.edit`; the Modpack area seeds it on every read.
+ */
+export const packWorkspaceResource = serverResource('pack-workspace', (id) => serverCommand((client) => client.packDraft(id)));
 export const sftpResource = serverResource('sftp', (id) => serverCommand((client) => client.sftp(id)));
 export const sftpKeysResource = serverResource('sftp-keys', (id) => serverCommand((client) => client.sftpKeys(id)));
 

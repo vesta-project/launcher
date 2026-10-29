@@ -4,12 +4,16 @@ import { Dynamic } from '@solidjs/web';
 import { route } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
-import { modpackSubTabs, resolveSubTab, type ModpackSubTab } from '../../../features/servers/modpack-area-model';
+import {
+  clientSubTabs, modpackSection, resolveSubTab, type ClientPackMode, type ModpackSection, type ModpackSubTab,
+} from '../../../features/servers/modpack-area-model';
 import { modpackPick } from '../../../features/servers/modpack-handoff';
 import type { ServerSnapshot } from '../../../features/servers/native';
 import { formatNumber, t } from '../../../localization';
+import type { MessageId } from '../../../localization/messages';
 import { ServerErrorNote } from '../parts';
 import { ModpackAreaContext, createModpackArea, useModpackArea } from './area';
+import { ClientModePanel } from './client-mode';
 import { ModpackContent } from './content';
 import { ModpackFiles } from './files';
 import { FirstRun } from './first-run';
@@ -18,6 +22,7 @@ import { ModpackHeader } from './header';
 import { InstallOnServerDialog } from './install-on-server';
 import { ModpackOverview } from './overview';
 import { ProviderPickDialog } from './provider-pick';
+import { ServerModpack } from './server-modpack';
 import { ModpackVersions } from './versions';
 import './modpack.css';
 
@@ -28,9 +33,17 @@ const views: Record<ModpackSubTab, Component> = {
   versions: ModpackVersions,
 };
 
+const modeLabel: Record<ClientPackMode, MessageId> = {
+  none: 'server-pack.mode-none-short',
+  'server-modpack': 'server-pack.mode-server-short',
+  custom: 'server-pack.mode-custom-short',
+};
+
 /**
- * Server → Modpack: the pack players get, laid out like an instance (header, then Overview,
- * Content, Files and Versions). A server without a pack starts with the three ways to get one.
+ * Server → Modpack: two independent, optional parts. **Server modpack** is the server
+ * installation's own link (like an instance linked to a modpack). **Client pack** is what
+ * players get: nothing, the server's modpack, or a custom pack laid out like an instance
+ * (header, then Overview, Content, Files and Versions).
  */
 export function ModpackTab(props: { snapshot: ServerSnapshot }) {
   const area = createModpackArea(() => props.snapshot);
@@ -49,7 +62,7 @@ export function ModpackTab(props: { snapshot: ServerSnapshot }) {
   );
 }
 
-/** Without pack.edit the draft is not readable: players only get the pack. */
+/** Without pack.edit the workspace is not readable: players only get the pack. */
 function PlayerView() {
   const area = useModpackArea();
   return (
@@ -63,9 +76,46 @@ function PlayerView() {
 
 function EditorView() {
   const area = useModpackArea();
+  const section = (): ModpackSection => modpackSection(route().detail === 'pack' ? route().item : undefined);
+  const linkBadge = () => {
+    const phase = area.link().phase;
+    if (phase === 'unlinked') return undefined;
+    return phase === 'installed'
+      ? <Icon name="icons/content/link" size={12} label={t('server-pack.linked-badge')} />
+      : <Badge size="sm" variant="soft" tone="warning">{t('server-pack.restart-badge')}</Badge>;
+  };
+  return (
+    <Show when={area.workspace()} fallback={
+      <div data-vesta="modpack-scroll">
+        <ServerErrorNote error={area.error()} onRetry={() => void area.reload()} />
+        <Show when={!area.error()}><EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.loading')} /></Show>
+      </div>
+    }>
+      <Tabs size="sm" value={section()} onChange={(value) => (value === 'server' ? area.openServer() : area.open('overview'))} class="modpack-tabs modpack-sections">
+        <TabList aria-label={t('server-pack.sections')}>
+          <Tab value="server" icon={<Icon name="icons/content/server" />} badge={linkBadge()}>{t('server-pack.section-server')}</Tab>
+          <Tab value="client" icon={<Icon name="icons/content/modpack" />}
+            badge={<Badge size="sm" variant="soft" tone={area.clientMode() === 'none' ? 'neutral' : 'accent'}>{t(modeLabel[area.clientMode()])}</Badge>}>
+            {t('server-pack.section-client')}
+          </Tab>
+        </TabList>
+        <Show when={section() === 'server'}>
+          <TabPanel forceMount value="server" class="modpack-pane"><ServerModpack /></TabPanel>
+        </Show>
+        <Show when={section() === 'client'}>
+          <TabPanel forceMount value="client" class="modpack-pane"><ClientPack /></TabPanel>
+        </Show>
+      </Tabs>
+    </Show>
+  );
+}
+
+/** What players get. Only Custom has a workspace (header + sections); other modes are one panel. */
+function ClientPack() {
+  const area = useModpackArea();
   // Same tabs keep the same array, so a reloaded workspace does not remount the open pane.
-  const tabs = createMemo(() => modpackSubTabs(area.kind(), area.gates().edit), {
-    name: 'modpack:tabs',
+  const tabs = createMemo(() => clientSubTabs(area.clientMode(), area.kind(), area.gates().edit), {
+    name: 'modpack:client-tabs',
     equals: (a, b) => a.length === b.length && a.every((tab, index) => tab.id === b[index]!.id && tab.state === b[index]!.state),
   });
   const active = () => resolveSubTab(route().detail === 'pack' ? route().item : undefined, tabs());
@@ -77,16 +127,13 @@ function EditorView() {
     return undefined;
   };
   return (
-    <Show when={area.workspace()} fallback={
-      <div data-vesta="modpack-scroll">
-        <ServerErrorNote error={area.error()} onRetry={() => void area.reload()} />
-        <Show when={!area.error()}><EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.loading')} /></Show>
-      </div>
-    }>
-      <Show when={area.kind() !== 'none'} fallback={<div data-vesta="modpack-scroll"><FirstRun /></div>}>
+    <Show when={tabs().length} fallback={<div data-vesta="modpack-scroll"><div data-vesta="modpack-client"><ClientModePanel /></div></div>}>
+      <Show when={area.kind() !== 'none'} fallback={
+        <div data-vesta="modpack-scroll"><div data-vesta="modpack-client"><ClientModePanel /><FirstRun section="client" /></div></div>
+      }>
         <ModpackHeader />
         <Tabs size="sm" value={active()} onChange={(tab) => area.open(tab as ModpackSubTab)} class="modpack-tabs">
-          <TabList aria-label={t('server-pack.sections')}>
+          <TabList aria-label={t('server-pack.client-sections')}>
             <For each={tabs()}>
               {(tab) => (
                 <Tab value={tab.id} icon={<Icon name={tab.icon} />} badge={

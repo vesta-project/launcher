@@ -1,28 +1,31 @@
 import { Badge, Button, Dialog, Select, TextArea, TextField, toast } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { Icon } from '../../../components/icon';
 import { projectPath, sourceById } from '../../../features/browse/browse-model';
 import { loadVersions, peekVersions } from '../../../features/browse/browse-projects';
 import { loadMetadata, loaderVersions } from '../../../features/instances/metadata';
 import { IntentMemo, newIntentId } from '../../../features/servers/model';
-import { customizingProvider, installSource, packLoaderName, packLoaders } from '../../../features/servers/modpack-area-model';
+import { customizingProvider, packLoaderName, packLoaders } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
 import { uploadPackBytes, type PackLoader, type PackManifest } from '../../../features/servers/native-pack';
 import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
+import { ClientModePanel } from './client-mode';
 import { GetModpack } from './get-modpack';
 
 const ICON_LIMIT = 256 * 1024;
 
-/** Overview: who the pack is, where it comes from, and the two ways to use it. */
+/** Custom client pack overview: what players get, who the pack is, and getting it locally. */
 export function ModpackOverview() {
   const area = useModpackArea();
   return (
     <div data-vesta="modpack-scroll">
+      <div data-vesta="modpack-client">
+      <ClientModePanel />
       <div data-vesta="modpack-overview">
         <div data-vesta="modpack-overview-main">
           <Show when={area.kind() === 'provider'} fallback={<IdentityPanel />}>
@@ -34,8 +37,8 @@ export function ModpackOverview() {
         </div>
         <aside data-vesta="modpack-overview-side">
           <GetModpack />
-          <InstallPanel />
         </aside>
+      </div>
       </div>
     </div>
   );
@@ -203,24 +206,5 @@ function ProviderPanel() {
         <ServerErrorNote error={error()} />
       </Dialog>
     </Panel>
-  );
-}
-
-/** Install the pack's server-side files on this server, through the reviewed plan. */
-function InstallPanel() {
-  const area = useModpackArea();
-  return (
-    <Show when={area.gates().installOnServer}>
-      <Panel title={t('server-pack.install-title')}>
-        <p data-vesta="server-muted">{t('server-pack.install-description')}</p>
-        <For each={['server-pack.install-point-side', 'server-pack.install-point-review', 'server-pack.install-point-restart'] as const}>
-          {(key) => <p data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t(key)}</p>}
-        </For>
-        <Button size="sm" tone="accent" icon={<Icon name="icons/content/server" />} onClick={() => {
-          const workspace = area.workspace()!;
-          area.startInstall({ source: installSource(workspace, area.kind()), name: workspace.draft.manifest.name, setAsModpack: area.kind() !== 'provider' });
-        }}>{t('server-pack.install-action')}</Button>
-      </Panel>
-    </Show>
   );
 }
