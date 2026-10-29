@@ -235,6 +235,19 @@ impl ServerManager {
                 error
             );
         }
+        {
+            use crate::schema::instance::dsl as fields;
+            use diesel::prelude::*;
+            let mut conn = crate::utils::db::get_vesta_conn().map_err(io)?;
+            diesel::update(fields::instance.find(instance.id))
+                .set((
+                    fields::modpack_platform.eq(Some("server")),
+                    fields::modpack_id.eq(Some(&plan.release.server_id)),
+                    fields::modpack_version_id.eq(Some(&plan.release.revision)),
+                ))
+                .execute(&mut conn)
+                .map_err(io)?;
+        }
         let updated = crate::commands::instances::get_instance(instance.id).map_err(io)?;
         let _ = app.emit("core://instance-updated", updated);
         let _ = app.emit("core://pack-sync-changed", instance.id);

@@ -207,3 +207,104 @@ staging while stopped, restart application, and request mismatch rejection.
   failures; the complete serial recheck passed without changing thresholds.
 
 Backend commit: `a2c8153567631b6dc07eab73f9078c05aded3dc5`.
+
+
+## Correction implementation checkpoint (2026-10-29)
+
+This checkpoint is **not the complete redesign**. Do not enable the `server-modpack`
+player-offering choice yet: the independent delivery release stream remains to be
+implemented. The agent fails closed with `pack_unavailable` for that mode rather
+than serving an unrelated custom publication. Automatic provider update discovery,
+archive-backed player delivery, and full removal of the old sync UI contract remain.
+
+### Contracts now available
+
+`packDraft` returns additional `serverModpack` (nullable) and `clientPack` fields.
+`serverModpack` contains `source` (same discriminated source as install planning),
+`displayVersion`, `files` (literal path -> SHA-256 ownership map), `state`
+(`staged_until_restart` or `installed`) and `pendingIds`. Source version and file
+ownership are persisted independently of the custom draft/publication. State only
+becomes installed after every associated content intent is applied.
+
+`packInstallPlan` / `packInstallApply` now link or update the **server installation**.
+Each reviewed file has `operation` (`added`, `updated`, `unchanged`); `removed` is an
+array of `[path, expectedSha256]` pairs. Only prior pack-owned paths absent from the
+new pack are removed, through the restart journal with hash preconditions and trash.
+User additions are retained. Modified owned files require review for replacement;
+a removal encountering a local edit refuses at restart and retains the file.
+`setAsModpack` is a deprecated compatibility input: it no longer publishes or
+replaces a client draft. Apply returns `serverModpack`; `modpackRevision` is null.
+
+`serversNative.serverModpackUnlink(connectionId, removeOwnedFiles, intentId)`
+unlinks and either keeps files or stages deletion of recorded pack-owned files.
+It leaves a custom client offering intact; a following offering becomes `none`.
+`serversNative.clientPackMode(connectionId, {mode, requireUpdate}, intentId)` stores
+`none` / `server-modpack` / `custom` separately. Publish authority is required;
+`requireUpdate` also requires `pack.force_update`. New state defaults durably to
+`none`. `none` suppresses v2/v3 player pack status/downloads while retaining custom
+publication history. Custom publication/minimum-revision behavior stays intact.
+
+Migration creates no server link without a verified installation receipt. Existing
+publications, including provider pointers, remain custom offerings. No legacy
+provider pointer is claimed as an installed server pack. Existing file provenance
+is not silently adopted as pack ownership. Existing plans without a link snapshot
+may conflict and must be reviewed again.
+
+### Exact page handoff (no pages edited in this checkpoint)
+
+- Separate server installation/link controls from client offering controls. A server
+  with neither link nor offering remains fully usable. Use `serverModpack`, not
+  `providerPack`, as the server installation identity.
+- Server Overview: show source and selected version; show restart-pending separately
+  from installed. Review updates using added/updated/removed entries and overrides.
+  Offer unlink with explicit keep/remove-owned choices. Inventory rows can display
+  a linked-pack ownership badge from `modpackOwned`.
+- Client settings: show `none` and `custom`; retain a disabled/pending
+  `server-modpack` choice until delivery completion. Preserve the custom workspace
+  when changing modes. Required publication/minimum-revision controls belong to
+  custom; following mode will expose only the require-players-to-update policy.
+- Remove the install dialog's "also set as modpack" option. Installation now creates
+  the server link and never publishes a client offering.
+- Instance linked-pack UI: recognize `modpackPlatform === 'server'`, with modpackId
+  = server ID and modpackVersionId = installed server-offering revision. TLS
+  fingerprint, connection and rollback high-water marks remain in the protected
+  adapter receipt. Do not offer provider browsing for this source.
+- `check_modpack_update` now dispatches server links through signed server checks
+  and returns the existing version/update contract (`release_type` is `required`
+  or `optional` for a server). Verification/offline failures remain errors.
+  `start_modpack_update` returns `modpack_review_required:<JSON preview>` for a
+  server source; present its file review and use `packSyncApply` with explicit
+  consentRevision. Retain native launch blocking and never synthesize consent.
+  The compatibility adapter still owns apply/polling; this is not yet complete
+  retirement of `native-pack-sync`.
+
+Fixtures: `seedServerModpackModel('none' | 'linked-follow' | 'linked-custom' |
+'unlinked-custom')`; existing `seedPackSync('optional_update' | 'required_update')`
+provides server-sourced instance policy states. `servers-modpack-model.test.js`
+checks independence, install-without-publication, unlink, and required-update policy.
+
+### Remaining backend implementation before acceptance
+
+1. Independent player offering release selection, including provider ID-only
+   catalogues following the linked version and uploaded-archive client artifacts.
+   Preserve custom publication history and monotonic signed rollback policy across
+   mode switches; do not reuse the custom release as a server-link publication.
+2. Latest provider-version discovery/status and installed-vs-staged source identity
+   during an update (this checkpoint exposes the selected source plus pending state).
+3. Finish the common linked-pack review/apply contract and migrate the legacy
+   receipt/metadata lifecycle, including unlink and recovery, then retire separate
+   server sync controls in pages.
+4. Real-provider and live-server acceptance after these remaining changes.
+
+
+Checkpoint launcher validation:
+- `cargo check -p vesta-launcher` passed with four existing launcher warnings and
+  one existing piston-lib warning.
+- Full `vesta-server-client` suite passed, including the new owned-path wire test;
+  all-target client clippy with `-D warnings` passed.
+- Desktop typecheck passed. Expanded servers/instance/localization run: 404 passed,
+  one `HOT_SCOPE_TIME` console-check:rows failure (8.1482 ms against 8 ms).
+  The Solid repair guide was consulted; the real servers-reactivity test file
+  passed all nine checks in isolation without threshold or console changes.
+- Focused pack/model/install/sync/workspace checks: 22 passed.
+- No page or unrelated user changes were staged.

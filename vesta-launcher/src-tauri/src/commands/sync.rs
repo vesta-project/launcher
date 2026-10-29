@@ -21,6 +21,36 @@ pub async fn check_modpack_update(
         .first(&mut conn)
         .map_err(|e| format!("Instance not found: {}", e))?;
 
+    // The server adapter keeps its signed binding/rollback receipt while exposing
+    // the same instance modpack check contract as provider sources.
+    let manager = app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>();
+    if let Some(check) = manager
+        .pack_sync_check(&app_handle, instance_id)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        if let Some(error) = check.error {
+            return Err(error.to_string());
+        }
+        return Ok(ModpackUpdateInfo {
+            current_version: check.installed_revision.clone(),
+            latest_version: Some(ModpackVersionInfo {
+                id: check.published_revision.clone(),
+                version_number: check.published_revision.clone(),
+                release_type: if check.can_launch {
+                    "optional"
+                } else {
+                    "required"
+                }
+                .into(),
+            }),
+            update_available: check.installed_revision.as_deref()
+                != Some(check.published_revision.as_str()),
+        });
+    }
+    if inst.modpack_platform.as_deref() == Some("server") {
+        return Err("Server modpack binding is missing".into());
+    }
     let current_version_id = match inst.modpack_version_id.as_deref() {
         Some(v) => v.to_string(),
         None => {
@@ -131,6 +161,29 @@ pub async fn start_modpack_update(
         .first(&mut conn)
         .map_err(|e| format!("Instance not found: {}", e))?;
 
+    let manager = app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>();
+    if let Some(link) = manager
+        .pack_link(instance_id)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        let preview = manager
+            .pack_sync_preview(&app_handle, &link.connection_id, Some(instance_id))
+            .await
+            .map_err(|e| e.to_string())?;
+        if preview.revision != new_version_id {
+            return Err("Modpack version changed; check for updates again".into());
+        }
+        // Return the reviewed changes through the existing native adapter. Applying
+        // requires explicit revision consent, just like a provider update review.
+        return Err(format!(
+            "modpack_review_required:{}",
+            serde_json::to_string(&preview).map_err(|e| e.to_string())?
+        ));
+    }
+    if inst.modpack_platform.as_deref() == Some("server") {
+        return Err("Server modpack binding is missing".into());
+    }
     let config_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
     let data_dir = config_dir.join("data");
     let game_dir = inst

@@ -145,7 +145,17 @@ dto!(PackDraft {
     revision: String,
     manifest: PackManifest
 });
+dto!(ServerModpackLink {source:PackInstallSource,display_version:String,files:std::collections::BTreeMap<String,String>,state:String,pending_ids:Vec<String>});
+dto!(ClientPackConfig {
+    mode: String,
+    require_update: bool
+});
+dto!(ServerModpackUnlink {
+    remove_owned_files: bool
+});
 dto!(WorkspaceView {
+    server_modpack:Option<ServerModpackLink>,
+    client_pack:ClientPackConfig,
     customizing_provider:bool,
     provider_pack: Option<content::ContentProvider>,
     draft: PackDraft,
@@ -254,15 +264,34 @@ pub enum PackInstallSource {
 dto!(PackInstallRequest {
     source: PackInstallSource
 });
-dto!(PackInstallFile {path:String,sha256:String,expected_sha256:Option<String>,conflict:Option<String>});
-dto!(PackInstallPlan {plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<String>,backup_recommended:bool});
+dto!(PackInstallFile {path:String,sha256:String,expected_sha256:Option<String>,conflict:Option<String>,operation:String});
+dto!(PackInstallPlan {plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<String>,backup_recommended:bool,removed:Vec<(String,String)>});
 dto!(PackInstallChoice {
     path: String,
     choice: String
 });
 dto!(PackInstallApply {plan_id:String,confirmation_token:String,choices:Vec<PackInstallChoice>,set_as_modpack:bool});
-dto!(PackInstallOutcome {state:String,pending_ids:Vec<String>,modpack_revision:Option<String>});
+dto!(PackInstallOutcome {state:String,pending_ids:Vec<String>,modpack_revision:Option<String>,server_modpack:Option<ServerModpackLink>});
 impl Client {
+    pub async fn server_modpack_link(&self) -> Result<Option<ServerModpackLink>> {
+        from_wire(self.get("pack/server-link", true, "pack.edit").await?)
+    }
+    pub async fn client_pack_mode(
+        &self,
+        input: ClientPackConfig,
+        intent: &str,
+    ) -> Result<ClientPackConfig> {
+        self.pack_mutate("pack/client-mode", &input, intent, "pack.publish")
+            .await
+    }
+    pub async fn server_modpack_unlink(
+        &self,
+        input: ServerModpackUnlink,
+        intent: &str,
+    ) -> Result<PackInstallOutcome> {
+        self.pack_mutate("pack/server-link/unlink", &input, intent, "content.install")
+            .await
+    }
     pub async fn pack_install_plan(&self, input: PackInstallRequest) -> Result<PackInstallPlan> {
         from_wire(
             self.request(
@@ -537,5 +566,21 @@ mod install_wire_tests {
         let value = hosting::wire(serde_json::to_value(source).unwrap());
         assert_eq!(value["source"]["project_id"], "project");
         assert_eq!(value["source"]["source"], "provider");
+    }
+}
+
+#[cfg(test)]
+mod server_link_wire_tests {
+    use super::*;
+    #[test]
+    fn independent_link_contract_preserves_owned_paths_and_source_identity() {
+        let link:ServerModpackLink=from_wire(serde_json::json!({"source":{"source":"provider","provider":"modrinth","project_id":"pack","version_id":"v2"},"display_version":"2","files":{"config/my_custom_file.toml":"abc"},"state":"installed","pending_ids":[]})).unwrap();
+        assert!(link.files.contains_key("config/my_custom_file.toml"));
+        assert!(
+            matches!(link.source,PackInstallSource::Provider{version_id,..} if version_id=="v2")
+        );
+        let config: ClientPackConfig =
+            from_wire(serde_json::json!({"mode":"server-modpack","require_update":true})).unwrap();
+        assert!(config.require_update);
     }
 }

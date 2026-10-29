@@ -492,7 +492,11 @@ pub fn from_wire<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> Re
                                 }
                             })
                             .collect();
-                        (key, convert(v))
+                        // Ownership dictionaries contain literal relative paths.
+                        let opaque_files = k == "files"
+                            && v.as_object()
+                                .is_some_and(|m| m.values().all(serde_json::Value::is_string));
+                        (key, if opaque_files { v } else { convert(v) })
                     })
                     .collect(),
             ),

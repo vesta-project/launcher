@@ -34,6 +34,8 @@ pub struct DeclaredMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentEntry {
+    #[serde(default)]
+    pub modpack_owned: bool,
     pub kind: ContentKind,
     pub path: String,
     pub filename: String,

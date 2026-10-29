@@ -17,7 +17,7 @@ export function seedPackWorkspace(scenario: PackFixtureScenario): PackWorkspace 
   if (scenario === 'diff') entries.push(entry('faithful', 'resource_pack'));
   if (scenario === 'suggestions') entries.push(entry('removed-both-mod', 'mod', true));
   if (scenario === 'validation_failures') entries.push({ ...entry('forge-only'), source: { type: 'provider', ...provider('forge-only', 'incompatible') } }, { ...entry('manual'), source: { type: 'manual', reason: 'manual_download_required' } });
-  return { draft: { revision: '3', manifest: { name: vanilla ? 'Vanilla textures' : scenario === 'paper' ? 'Riverside client pack' : 'Friends client pack', summary: 'Client resources shared with players.', icon: null, displayVersion: '1.2.0', minecraftVersion: '1.21.4', loader: vanilla ? 'none' : 'fabric', loaderVersion: vanilla ? null : '0.16.10', entries } }, serverMinecraftVersion: '1.21.4', minecraftDrift: false, publishedRevision: '14', minimumRevision: '12', pendingPublication: scenario === 'diff' || scenario === 'suggestions' || scenario === 'validation_failures', safetySnapshotRecommended: true };
+  return { serverModpack: null, clientPack: { mode: 'custom', requireUpdate: false }, draft: { revision: '3', manifest: { name: vanilla ? 'Vanilla textures' : scenario === 'paper' ? 'Riverside client pack' : 'Friends client pack', summary: 'Client resources shared with players.', icon: null, displayVersion: '1.2.0', minecraftVersion: '1.21.4', loader: vanilla ? 'none' : 'fabric', loaderVersion: vanilla ? null : '0.16.10', entries } }, serverMinecraftVersion: '1.21.4', minecraftDrift: false, publishedRevision: '14', minimumRevision: '12', pendingPublication: scenario === 'diff' || scenario === 'suggestions' || scenario === 'validation_failures', safetySnapshotRecommended: true };
 }
 interface Host {
   scenario?: PackFixtureScenario;
@@ -96,6 +96,8 @@ export function createPackFixtures(host: Host): typeof serversPackNative & { fix
     return { project, version, entry: e };
   };
   return {
+    async clientPackMode(id, request, intent) { return mutate(id,intent,request,()=>{requireCap(id,'pack.publish');if(request.mode==='server-modpack'&&!state(id).view.serverModpack)fail('conflict');state(id).view.clientPack=clone(request);return clone(request);}); },
+    async serverModpackUnlink(id, removeOwnedFiles, intent) { return mutate(id,intent,{removeOwnedFiles},()=>{requireCap(id,'content.install');const view=state(id).view;const link=view.serverModpack??fail('conflict');view.serverModpack=null;if(view.clientPack?.mode==='server-modpack')view.clientPack={mode:'none',requireUpdate:false};return {state:'staged_until_restart' as const,pendingIds:removeOwnedFiles?Object.keys(link.files).map((_,i)=>`unlink-${i}`):[],modpackRevision:null,serverModpack:null};}); },
     fixturePublishedManifest(id) { return clone(state(id, false).published); },
     async packHistory(id) { await host.wait(); const s = state(id); return clone(history.get(id) ?? (s.view.publishedRevision === '0' ? [] : [{ revision: s.view.publishedRevision, publishedAt: 1793000000000, publishedBy: 'owner', requiredUpdate: s.view.minimumRevision === s.view.publishedRevision, entryCount: s.published.entries.length, overrideCount: (s.published.overrideFiles ?? []).filter(f => !f.trashed && f.sha256 !== null).length, providerVersion: s.view.providerPack?.versionId ?? null }])); },
     async packUploadDropped() { return fail('unsupported'); },
@@ -178,17 +180,10 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
         if(host.software(id)!==p.software||(host.minecraftVersion?.(id)??'1.21.4')!==p.minecraftVersion)fail('stale_target');
         const conflicts=p.files.filter(f=>f.conflict).map(f=>f.path).sort();
         if(JSON.stringify(conflicts)!==JSON.stringify(request.choices.map(c=>c.path).sort())||request.choices.some(c=>!['keep','replace'].includes(c.choice)))fail('invalid_input');
-        let modpackRevision:string|null=null;
-        if(request.setAsModpack){
-          const view=state(id).view;
-          modpackRevision=saved.source.source==='published'?saved.source.revision:String(BigInt(view.publishedRevision)+1n);
-          view.publishedRevision=modpackRevision;
-          if(saved.source.source==='provider')view.providerPack={provider:saved.source.provider,projectId:saved.source.projectId,versionId:saved.source.versionId};
-          else if(saved.source.source!=='published')view.providerPack=null;
-          host.server(id).snapshot.pack={hostedRevision:modpackRevision,minimumRevision:view.minimumRevision,status:'published'};
-          host.publish?.(id);
-        }
-        return {state:'staged_until_restart' as const,pendingIds:p.files.filter(f=>!request.choices.some(c=>c.path===f.path&&c.choice==='keep')).map((_,i)=>`${p.planId}-${i}`),modpackRevision};
+        const view=state(id).view;
+        const selected=p.files.filter(f=>!request.choices.some(c=>c.path===f.path&&c.choice==='keep'));
+        view.serverModpack={source:clone(saved.source),displayVersion:'1',files:Object.fromEntries(selected.map(f=>[f.path,f.sha256])),state:'staged_until_restart'};
+        return {state:'staged_until_restart' as const,pendingIds:selected.map((_,i)=>`${p.planId}-${i}`),modpackRevision:null,serverModpack:clone(view.serverModpack)};
       });
     },
     async packArchiveInspect(id, uploadId) {
@@ -249,4 +244,12 @@ export function seedPackInstallPlan(scenario:'provider'|'archive'|'conflicts'|'s
     files:[{path:'mods/example.jar',sha256:'a'.repeat(64),expectedSha256:scenario==='conflicts'?'b'.repeat(64):null,conflict:scenario==='conflicts'?'project_version':null},
       ...(scenario==='archive'?[{path:'config/example.json',sha256:'c'.repeat(64),expectedSha256:null,conflict:null}]:[])],
     skipped:['mods/client-only.jar','client-overrides/options.txt'],warnings:['unknown_server_side:mods/example.jar']};
+}
+
+/** Corrected independent links, including a server that offers no player pack. */
+export function seedServerModpackModel(scenario: 'none'|'linked-follow'|'linked-custom'|'unlinked-custom'): PackWorkspace {
+  const view=seedPackWorkspace('fabric');
+  view.serverModpack=scenario.startsWith('linked-')?{source:{source:'provider',provider:'modrinth',projectId:'friends-pack',versionId:'v2'},displayVersion:'2',files:{'mods/fabric-api.jar':'a'.repeat(64)},state:'installed'}:null;
+  view.clientPack={mode:scenario==='none'?'none':scenario==='linked-follow'?'server-modpack':'custom',requireUpdate:scenario==='linked-follow'};
+  return view;
 }

@@ -28,7 +28,9 @@ export interface PackArchiveInspection {
 }
 export interface PackDraft { revision: string; manifest: PackManifest }
 export interface PackIcon { mimeType: 'image/png' | 'image/jpeg'; contentBase64: string }
-export interface PackWorkspace { customizingProvider?: boolean; providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
+export interface ServerModpackLink { pendingIds?: string[]; source: PackInstallSource; displayVersion: string; files: Record<string,string>; state: string }
+export interface ClientPackConfig { mode: 'none' | 'server-modpack' | 'custom'; requireUpdate: boolean }
+export interface PackWorkspace { serverModpack?: ServerModpackLink | null; clientPack?: ClientPackConfig; customizingProvider?: boolean; providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
 export interface PackDraftWrite { expectedRevision: string; manifest: PackManifest }
 export interface PackProviderSelection extends ContentProvider { required: boolean }
 export interface PackBrowseAdd extends ContentProvider { expectedRevision: string; required: boolean; dependencies: PackProviderSelection[] }
@@ -48,13 +50,15 @@ export interface PackUploadChunk { uploadId: string; offset: string; contentBase
 export interface PackUploadReceipt { uploadId: string; size: string; sha256: string; complete: boolean }
 export type PackInstallSource = ({source:'provider'} & ContentProvider) | {source:'uploaded_archive';uploadId:string} | {source:'draft'|'published';revision:string};
 export interface PackInstallRequest {source:PackInstallSource}
-export interface PackInstallFile {path:string;sha256:string;expectedSha256:string|null;conflict:'project_version'|'same_filename'|'unidentified_jar'|null}
-export interface PackInstallPlan {planId:string;confirmationToken:string;expiresAtMs:number;minecraftVersion:string;software:string;loaderVersion:string|null;softwareSwitchRequired:boolean;valid:boolean;files:PackInstallFile[];skipped:string[];warnings:string[];backupRecommended:boolean}
+export interface PackInstallFile {operation?: string;path:string;sha256:string;expectedSha256:string|null;conflict:'project_version'|'same_filename'|'unidentified_jar'|null}
+export interface PackInstallPlan {removed?: [string,string][];planId:string;confirmationToken:string;expiresAtMs:number;minecraftVersion:string;software:string;loaderVersion:string|null;softwareSwitchRequired:boolean;valid:boolean;files:PackInstallFile[];skipped:string[];warnings:string[];backupRecommended:boolean}
 export interface PackInstallApply {planId:string;confirmationToken:string;choices:{path:string;choice:'replace'|'keep'}[];setAsModpack:boolean}
-export interface PackInstallOutcome {state:'staged_until_restart';pendingIds:string[];modpackRevision:string|null}
+export interface PackInstallOutcome {serverModpack?: ServerModpackLink | null;state:'staged_until_restart';pendingIds:string[];modpackRevision:string|null}
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);
 export interface PublishedRevision { revision: string; publishedAt: number; publishedBy: string | null; requiredUpdate: boolean; entryCount: number | null; overrideCount: number | null; providerVersion: string | null }
 export const serversPackNative = {
+  clientPackMode: (connectionId:ConnectionId,request:ClientPackConfig,intentId:string) => call<ClientPackConfig>('server_client_pack_mode',{connectionId,request,intentId}),
+  serverModpackUnlink: (connectionId:ConnectionId,removeOwnedFiles:boolean,intentId:string) => call<PackInstallOutcome>('server_modpack_unlink',{connectionId,request:{removeOwnedFiles},intentId}),
   packHistory: (connectionId: ConnectionId) => call<PublishedRevision[]>('server_pack_history', { connectionId }),
   packUploadDropped: (connectionId: ConnectionId, paths: string[], archive: boolean) => call<{name: string; path: string; receipt: PackUploadReceipt}[]>('server_pack_upload_dropped', { connectionId, paths, archive }),
   packInstallPlan: (connectionId:ConnectionId,request:PackInstallRequest) => call<PackInstallPlan>('server_pack_install_plan',{connectionId,request}),

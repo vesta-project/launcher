@@ -8,6 +8,7 @@ export type ContentPending = 'install' | 'remove' | 'update' | 'enable' | 'disab
 export interface ContentProvider { provider: 'modrinth' | 'curseforge'; projectId: string; versionId: string }
 export interface ContentDeclared { loader: string | null; side: string | null; name: string | null; version: string | null; dependencies: string[] }
 export interface ServerContentEntry {
+  modpackOwned?: boolean;
   kind: ServerContentKind; path: string; filename: string; size: string; enabled: boolean | null;
   sha256: string | null; provider: ContentProvider | null; declared: ContentDeclared | null;
   pending: ContentPending | null; pendingId: string | null; pendingError: string | null;

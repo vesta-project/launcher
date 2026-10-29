@@ -9,7 +9,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tauri::{AppHandle, State};
-use vesta_server_client::{Error, ErrorCode, Result, pack::*};
+use vesta_server_client::{pack::*, Error, ErrorCode, Result};
 type Manager<'a> = State<'a, Arc<ServerManager>>;
 fn invalid() -> Error {
     Error::new(ErrorCode::InvalidInput)
@@ -772,4 +772,49 @@ pub async fn server_pack_upload_dropped(
         });
     }
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn server_client_pack_mode(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: ClientPackConfig,
+    intent_id: String,
+) -> Result<ClientPackConfig> {
+    let payload = serde_json::to_value(&request).map_err(|_| invalid())?;
+    let key = intent_id.clone();
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &key,
+            "pack/client-mode",
+            payload,
+            false,
+            |c| async move { c.client_pack_mode(request, &intent_id).await },
+        )
+        .await
+}
+#[tauri::command]
+pub async fn server_modpack_unlink(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    request: ServerModpackUnlink,
+    intent_id: String,
+) -> Result<PackInstallOutcome> {
+    let payload = serde_json::to_value(&request).map_err(|_| invalid())?;
+    let key = intent_id.clone();
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &key,
+            "pack/server-link/unlink",
+            payload,
+            false,
+            |c| async move { c.server_modpack_unlink(request, &intent_id).await },
+        )
+        .await
 }
