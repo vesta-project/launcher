@@ -47,3 +47,15 @@ to that server (destination step still allows modpack/both).
   "use as modpack" import, server pack install plan/apply, contracts + fixtures + handoff.
 - Claude UI: Browse target select (now), then the Modpack area refactor on the new contracts.
 - Terra (computer use): end-to-end acceptance in the real app against the dev server.
+
+## Correction (2026-10-29): two independent, optional links
+1. **Server modpack link (optional).** A server does not need a modpack. When it has one, the
+   server is *linked* to a modpack (Modrinth / CurseForge / uploaded archive) exactly like an
+   instance linked to a modpack: install, track version, update, unlink. Server-side content
+   comes from it (client-only entries skipped); user-added server content stays separate.
+2. **Client pack (optional), independent of (1).** Modes: `none` | `server-modpack` (players get
+   the same modpack the server is linked to — provider packs referenced by ID, not hosted) |
+   `custom` (a Vesta-built/hosted pack, separate from the server software and server modpack).
+3. **Linked instances**: an instance linked to a server behaves exactly like an instance linked
+   to a provider modpack (same link model, update checks, update flow, UI) — only the source is
+   the server. Reuse the existing instance modpack-link pipeline; no parallel system.
