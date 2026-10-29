@@ -20,7 +20,7 @@ import './versions-tab.css';
 export function LinkedPack(props: { instanceId: string }) {
   const id = untrack(() => props.instanceId);
   useNativePack(id);
-  const store = versionStore(id);
+  const store = untrack(() => versionStore(id));
   const pack = () => store.state().pack;
   const sync = useServerStatus(() => (pack()?.source === 'Server' ? id : undefined));
   const target = () => { const value = pack(); return value ? packUpdateTarget(value) : undefined; };
