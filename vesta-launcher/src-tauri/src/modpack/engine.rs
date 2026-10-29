@@ -24,6 +24,8 @@ pub struct UpdatePlan {
     pub zip_path: PathBuf,
     pub format: ModpackFormat,
     pub actions: ActionTree,
+    pub(crate) server_receipt: Option<Vec<u8>>,
+    pub(crate) source: crate::tasks::update_modpack::UpdateSource,
 }
 
 pub struct AppliedUpdate {
@@ -56,6 +58,37 @@ impl Drop for AppliedUpdate {
         // Dropping the transaction restores tracked paths and rotations with
         // same-filesystem renames.
         self.rollback.take();
+    }
+}
+
+pub(crate) async fn plan_source(
+    app: &tauri::AppHandle,
+    instance: &Instance,
+    game_dir: &Path,
+    target: &str,
+    ctx: &TaskContext,
+    source: &crate::tasks::update_modpack::UpdateSource,
+) -> Result<UpdatePlan, String> {
+    match source {
+        crate::tasks::update_modpack::UpdateSource::Provider => {
+            if instance.modpack_platform.as_deref() == Some("server") {
+                return Err("Server modpack review is required".into());
+            }
+            plan(app, instance, game_dir, target, ctx).await
+        }
+        crate::tasks::update_modpack::UpdateSource::Server { review, link_only } => {
+            let manager = app.state::<std::sync::Arc<crate::servers::ServerManager>>();
+            manager
+                .validate_update_review(instance, review)
+                .await
+                .map_err(|e| e.to_string())?;
+            let mut plan = super::server_source::plan(game_dir, review)?;
+            plan.source = source.clone();
+            if *link_only && !plan.actions.is_empty() {
+                return Err("pack_existing_files_mismatch".into());
+            }
+            Ok(plan)
+        }
     }
 }
 
@@ -121,6 +154,8 @@ pub async fn plan(
         zip_path,
         format,
         actions,
+        server_receipt: None,
+        source: crate::tasks::update_modpack::UpdateSource::Provider,
     })
 }
 
@@ -229,12 +264,13 @@ pub async fn apply(
         })
         .count() as u32;
 
-    let rollback = RollbackSnapshot::capture(
-        game_dir,
-        rollback_paths(game_dir, &plan.actions, &removable_paths),
-        rotations,
-    )
-    .map_err(|error| format!("Failed to prepare update rollback: {}", error))?;
+    let mut paths = rollback_paths(game_dir, &plan.actions, &removable_paths);
+    if let Some(receipt) = &plan.server_receipt {
+        staging
+            .write_staged(crate::servers::pack_sync::RECEIPT, receipt)
+            .map_err(|e| e.to_string())?;
+        paths.push(crate::servers::pack_sync::RECEIPT.into());
+    }
 
     ctx.set_stage("copying_files");
     ctx.update_overall_progress(65);
@@ -262,25 +298,46 @@ pub async fn apply(
         Some(5),
         Some(6),
     );
-    if let Err(error) = staging.commit() {
-        let commit_error = format!("Failed to commit update: {}", error);
-        return match rollback.restore() {
-            Ok(()) => Err(format!(
-                "{}. The previous instance files were restored.",
-                commit_error
-            )),
-            Err(restore_error) => Err(format!(
-                "{}. Automatic rollback was incomplete: {}.",
-                commit_error, restore_error
-            )),
-        };
+    if let crate::tasks::update_modpack::UpdateSource::Server { review, .. } = &plan.source {
+        app_handle
+            .state::<std::sync::Arc<crate::servers::ServerManager>>()
+            .validate_update_review(
+                &crate::commands::instances::get_instance(instance_id)?,
+                review,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        super::server_source::verify_baseline(game_dir, review)?;
+        super::server_source::verify_staged(&staging, review)?;
     }
+    let rollback = commit_staged(game_dir, staging, paths, rotations)?;
 
     Ok(AppliedUpdate {
         skipped_deletions,
         preserved_worlds,
         rollback: Some(rollback),
     })
+}
+
+pub(crate) fn commit_staged(
+    game_dir: &Path,
+    staging: StagingDir,
+    paths: Vec<String>,
+    rotations: Vec<RollbackRotation>,
+) -> Result<RollbackSnapshot, String> {
+    let rollback =
+        RollbackSnapshot::capture(game_dir, paths, rotations).map_err(|e| e.to_string())?;
+    if let Err(error) = staging.commit() {
+        return match rollback.restore() {
+            Ok(()) => Err(format!(
+                "Failed to commit update: {error}; previous files restored"
+            )),
+            Err(recovery) => Err(format!(
+                "Failed to commit update: {error}; rollback incomplete: {recovery}"
+            )),
+        };
+    }
+    Ok(rollback)
 }
 
 fn rollback_paths(

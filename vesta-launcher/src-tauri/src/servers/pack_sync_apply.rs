@@ -11,6 +11,34 @@ pub struct ApplyRequest {
 }
 
 impl ServerManager {
+    pub(crate) async fn apply_instance_modpack_review(
+        &self,
+        app: &AppHandle,
+        instance_id: i32,
+        review_id: String,
+        consent_revision: Option<String>,
+    ) -> Result<i32> {
+        {
+            let previews = self.pack_previews.lock().await;
+            let review = previews
+                .get(&review_id)
+                .ok_or_else(|| conflict("pack_review_expired"))?;
+            if review.preview.instance_id != Some(instance_id) {
+                return Err(conflict("pack_server_binding_mismatch"));
+            }
+        }
+        self.pack_sync_apply(
+            app,
+            ApplyRequest {
+                review_id,
+                consent_revision,
+                name: None,
+                link_only: false,
+            },
+        )
+        .await
+    }
+
     pub async fn pack_sync_apply(&self, app: &AppHandle, request: ApplyRequest) -> Result<i32> {
         use crate::tasks::manager::*;
         let _gate = self.pack_gate.lock().await;
@@ -72,224 +100,28 @@ impl ServerManager {
             .map_err(io)?;
             crate::commands::instances::get_instance(id).map_err(io)?
         };
-        // Launch takes the play guard before checking pack policy. Release the
-        // pack gate before waiting for play to preserve that lock order.
-        drop(_gate);
-        let tasks = app.state::<TaskManager>();
-        let _play = tasks
-            .acquire_conflicts([
-                instance_play_conflict_key(instance.id),
-                mods_conflict_key(instance.id),
-                resourcepacks_conflict_key(instance.id),
-                shaderpacks_conflict_key(instance.id),
-                saves_conflict_key(instance.id),
-            ])
-            .await;
-        let _gate = self.pack_gate.lock().await;
-        let instance = crate::commands::instances::get_instance(instance.id).map_err(io)?;
-        let (active, old) = self
-            .verified_release(&plan.preview.connection_id, Some(&instance))
-            .await?;
-        if active.revision != plan.release.revision
-            || active.sha256 != plan.release.sha256
-            || active.server_id != plan.release.server_id
-            || active.fingerprint != plan.release.fingerprint
-            || old.as_ref().map(|r| (&r.revision, &r.sha256))
-                != plan.old.as_ref().map(|r| (&r.revision, &r.sha256))
-        {
-            return Err(conflict("pack_review_stale"));
-        }
-        if piston_lib::game::launcher::is_instance_running(&instance.slug())
-            .await
-            .map_err(io)?
-        {
-            return Err(conflict("pack_instance_running"));
-        }
-        if runtime(&instance) != plan.preview.runtime {
-            return Err(conflict("pack_incompatible_runtime"));
-        }
         let root = game_dir(&instance)?;
-        std::fs::create_dir_all(&root).map_err(io)?;
         if crate::modpack::update::has_pending_recovery(&root) {
             return Err(conflict("pack_recovery_required"));
         }
-        let changes = diff(&root, old.as_ref(), &plan.files)?;
-        if request.link_only && !changes.is_empty() {
-            return Err(conflict("pack_existing_files_mismatch"));
-        }
-        // A changed file set after review needs another review, including when a
-        // previously matching local executable has been removed in the meantime.
-        if plan.preview.instance_id.is_some()
-            && serde_json::to_value(&changes).map_err(io)?
-                != serde_json::to_value(&plan.preview.changes).map_err(io)?
-        {
-            return Err(conflict("pack_review_stale"));
-        }
-        let receipt = Receipt {
-            revision: plan.release.revision.clone(),
-            sha256: plan.release.sha256.clone(),
-            runtime: plan.preview.runtime.clone(),
-            files: plan.files.clone(),
-        };
-        let previously_linked = self.pack_link(instance.id).await?.is_some();
+        // Compatibility entry point: all execution, metadata finalization and recovery
+        // now belong to the instance update task/engine, with Server as a source kind.
+        self.remember_release(instance.id, &plan.preview.connection_id, &plan.release)?;
         crate::modpack::update::begin(app, &instance, &root, &plan.release.revision).map_err(io)?;
-        let mut status_guard =
-            crate::modpack::update::StatusGuard::new(app.clone(), instance.id, root.clone());
+        let task = crate::tasks::update_modpack::UpdateModpackTask::from_server(
+            instance.id,
+            instance.name.clone(),
+            root.clone(),
+            plan,
+            request.link_only,
+        );
         drop(_gate);
-        let result: Result<()> = async {
-            // The existing installer owns Minecraft, loader, Java and shared
-            // artifact verification. Pack code never implements a second runtime.
-            if !request.link_only {
-                let reporter = Arc::new(piston_lib::game::installer::types::SilentProgressReporter);
-                let java = crate::utils::java::ensure_java_for_instance(
-                    app,
-                    &instance,
-                    Some(reporter.as_ref()),
-                    None,
-                )
-                .await
-                .map_err(io)?;
-                let mut spec = piston_lib::game::installer::types::InstallSpec::new(
-                    instance.minecraft_version.clone(),
-                    self.root.join("data"),
-                    root.clone(),
-                );
-                use piston_lib::game::installer::types::ModloaderType;
-                spec.modloader = match plan.preview.runtime.loader.as_str() {
-                    "fabric" => Some(ModloaderType::Fabric),
-                    "quilt" => Some(ModloaderType::Quilt),
-                    "forge" => Some(ModloaderType::Forge),
-                    "neoforge" => Some(ModloaderType::NeoForge),
-                    _ => None,
-                };
-                spec.modloader_version = instance.modloader_version.clone();
-                spec.java_path = Some(java.into());
-                piston_lib::game::installer::install_instance(spec, reporter)
-                    .await
-                    .map_err(io)?;
-            }
-            // Runtime downloads do not monopolize the signed-status gate.
-            // Recheck the selected publication after that potentially slow work.
-            let _gate = self.pack_gate.lock().await;
-            let (latest, latest_old) = self
-                .verified_release(&plan.preview.connection_id, Some(&instance))
-                .await?;
-            if latest.revision != plan.release.revision
-                || latest.sha256 != plan.release.sha256
-                || latest.server_id != plan.release.server_id
-                || latest.fingerprint != plan.release.fingerprint
-                || latest_old.as_ref().map(|r| (&r.revision, &r.sha256))
-                    != plan.old.as_ref().map(|r| (&r.revision, &r.sha256))
-            {
-                return Err(conflict("pack_review_stale"));
-            }
-            let final_changes = diff(&root, old.as_ref(), &plan.files)?;
-            if serde_json::to_value(&final_changes).map_err(io)?
-                != serde_json::to_value(&changes).map_err(io)?
-            {
-                return Err(conflict("pack_review_stale"));
-            }
-            let snapshot = apply_files(&root, &plan, &final_changes, &receipt)?;
-            self.remember_release(instance.id, &plan.preview.connection_id, &latest)?;
-            // Commit marker is the point after which recovery preserves the new
-            // receipt. DB/status refresh may be retried after an app crash.
-            snapshot.finalize().map_err(io)?;
-            Ok(())
+        if let Err(error) = app.state::<TaskManager>().submit(Box::new(task)).await {
+            crate::modpack::update::rollback_start(app, instance.id, &root);
+            return Err(io(error));
         }
-        .await;
-        if let Err(error) = result {
-            let recovery = status_guard.recover_failure();
-            if !previously_linked && read_json::<Receipt>(&root.join(RECEIPT))?.is_none() {
-                let _ = std::fs::remove_file(link_path(&self.root, instance.id));
-            }
-            recovery.map_err(io)?;
-            return Err(error);
-        }
-        // Existing recovery also clears pending metadata and marks installed.
-        status_guard.recover_failure().map_err(io)?;
-        // Reconciliation acquires the same resource guards. The transaction is
-        // durable now; release exclusion before registering/scanning watchers.
-        drop(_play);
-        // A new pack instance deferred its initial scan until the durable commit.
-        // Existing watchers already queue their reconciliation behind our guards.
-        let watcher = app.state::<crate::resources::watcher::ResourceWatcher>();
-        if let Err(error) = watcher.unwatch_instance(instance.id).await {
-            log::warn!(
-                "Pack instance {} watcher reset failed: {}",
-                instance.id,
-                error
-            );
-        }
-        if let Err(error) = app
-            .state::<crate::resources::watcher::ResourceWatcher>()
-            .watch_instance(
-                instance.slug(),
-                instance.id,
-                root.to_string_lossy().into_owned(),
-            )
-            .await
-        {
-            log::warn!(
-                "Pack instance {} watcher registration failed: {}",
-                instance.id,
-                error
-            );
-        }
-        {
-            use crate::schema::instance::dsl as fields;
-            use diesel::prelude::*;
-            let mut conn = crate::utils::db::get_vesta_conn().map_err(io)?;
-            diesel::update(fields::instance.find(instance.id))
-                .set((
-                    fields::modpack_platform.eq(Some("server")),
-                    fields::modpack_id.eq(Some(&plan.release.server_id)),
-                    fields::modpack_version_id.eq(Some(&plan.release.revision)),
-                ))
-                .execute(&mut conn)
-                .map_err(io)?;
-        }
-        let updated = crate::commands::instances::get_instance(instance.id).map_err(io)?;
-        let _ = app.emit("core://instance-updated", updated);
-        let _ = app.emit("core://pack-sync-changed", instance.id);
         Ok(instance.id)
     }
-}
-
-fn apply_files(
-    root: &Path,
-    plan: &Prepared,
-    changes: &[Change],
-    receipt: &Receipt,
-) -> Result<crate::sync::staging::RollbackSnapshot> {
-    use crate::sync::staging::{RollbackSnapshot, StagingDir};
-    let stage = StagingDir::new(root).map_err(io)?;
-    for change in changes {
-        confined(root, &change.path)?;
-        if change.operation != "remove" {
-            let source = plan.stage.path().join(&change.path);
-            let bytes = std::fs::read(source).map_err(io)?;
-            if plan.files.get(&change.path) != Some(&digest(&bytes)) {
-                return Err(conflict("pack_integrity_failure"));
-            }
-            stage.write_staged(&change.path, &bytes).map_err(io)?;
-        }
-    }
-    stage
-        .write_staged(RECEIPT, &serde_json::to_vec(receipt).map_err(io)?)
-        .map_err(io)?;
-    let snapshot = RollbackSnapshot::capture(
-        root,
-        changes
-            .iter()
-            .map(|c| c.path.clone())
-            .chain(std::iter::once(RECEIPT.into())),
-        std::iter::empty(),
-    )
-    .map_err(io)?;
-    // capture moves originals into the journal. Staging only contains the diff,
-    // leaving every unrelated user mod and world in place.
-    stage.commit().map_err(io)?;
-    Ok(snapshot)
 }
 
 fn verify_consent(preview: &Preview, request: &ApplyRequest) -> Result<()> {
@@ -375,6 +207,41 @@ mod tests {
             old: Some(old),
         }
     }
+    fn apply_files(
+        root: &Path,
+        review: &Prepared,
+        _changes: &[Change],
+        _receipt: &Receipt,
+    ) -> Result<crate::sync::staging::RollbackSnapshot> {
+        let plan = crate::modpack::server_source::plan(root, review).map_err(io)?;
+        let staging = crate::sync::staging::StagingDir::new(root).map_err(io)?;
+        let mut paths = vec![
+            RECEIPT.into(),
+            piston_lib::game::modpack::manifest::ModpackManifest::FILE_NAME.into(),
+        ];
+        for change in &review.preview.changes {
+            paths.push(change.path.clone());
+            if change.operation != "remove" {
+                let bytes = piston_lib::game::modpack::parser::read_zip_override_entry(
+                    &plan.zip_path,
+                    plan.format,
+                    &change.path,
+                )
+                .map_err(io)?;
+                staging.write_staged(&change.path, &bytes).map_err(io)?;
+            }
+        }
+        staging
+            .write_staged(
+                piston_lib::game::modpack::manifest::ModpackManifest::FILE_NAME,
+                &serde_json::to_vec(&plan.new_manifest).unwrap(),
+            )
+            .map_err(io)?;
+        staging
+            .write_staged(RECEIPT, plan.server_receipt.as_ref().unwrap())
+            .map_err(io)?;
+        crate::modpack::engine::commit_staged(root, staging, paths, vec![]).map_err(io)
+    }
     fn receipt(plan: &Prepared) -> Receipt {
         Receipt {
             revision: plan.release.revision.clone(),
@@ -432,6 +299,10 @@ mod tests {
             b"old"
         );
         assert!(!root.path().join("mods/new.jar").exists());
+        assert!(!root
+            .path()
+            .join(piston_lib::game::modpack::manifest::ModpackManifest::FILE_NAME)
+            .exists());
         assert_eq!(
             std::fs::read(root.path().join("config/test.toml")).unwrap(),
             b"old config"
@@ -521,6 +392,39 @@ mod tests {
             b"old config"
         );
     }
+    #[test]
+    fn server_source_migrates_manifest_and_staged_digest_refuses_post_review_tamper() {
+        let root = tempfile::tempdir().unwrap();
+        let review = plan(root.path());
+        let converted = crate::modpack::server_source::plan(root.path(), &review).unwrap();
+        assert_eq!(converted.new_manifest.modpack_id.as_deref(), Some("server"));
+        assert!(converted
+            .new_manifest
+            .overrides
+            .extracted
+            .contains(&"mods/new.jar".to_string()));
+        let staging = crate::sync::staging::StagingDir::new(root.path()).unwrap();
+        for change in &review.preview.changes {
+            if change.operation != "remove" {
+                staging
+                    .write_staged(
+                        &change.path,
+                        &std::fs::read(review.stage.path().join(&change.path)).unwrap(),
+                    )
+                    .unwrap();
+            }
+        }
+        crate::modpack::server_source::verify_staged(&staging, &review).unwrap();
+        staging
+            .write_staged("mods/new.jar", b"modified after ZIP creation")
+            .unwrap();
+        assert!(crate::modpack::server_source::verify_staged(&staging, &review).is_err());
+        assert_eq!(
+            std::fs::read(root.path().join("mods/old.jar")).unwrap(),
+            b"old"
+        );
+    }
+
     #[test]
     fn portable_paths_and_runtime_identity_are_strict() {
         for path in [

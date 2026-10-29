@@ -208,6 +208,90 @@ pub async fn start_modpack_update(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn preview_modpack_update(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+    new_version_id: String,
+) -> Result<crate::servers::pack_sync::Preview, String> {
+    let manager = app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>();
+    let link = manager
+        .pack_link(instance_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("Server modpack binding is missing")?;
+    let preview = manager
+        .pack_sync_preview(&app_handle, &link.connection_id, Some(instance_id))
+        .await
+        .map_err(|e| e.to_string())?;
+    if preview.revision != new_version_id {
+        manager.pack_sync_discard(&preview.review_id).await;
+        return Err("Modpack version changed; check for updates again".into());
+    }
+    Ok(preview)
+}
+
+/// Apply a reviewed linked-instance update. The server adapter is a source of the
+/// ordinary UpdateModpackTask; it does not execute a second installation pipeline.
+#[tauri::command]
+pub async fn apply_modpack_update(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+    review_id: String,
+    consent_revision: Option<String>,
+) -> Result<(), String> {
+    app_handle
+        .state::<std::sync::Arc<crate::servers::ServerManager>>()
+        .apply_instance_modpack_review(&app_handle, instance_id, review_id, consent_revision)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Unlink keeps all installed content. The protected source binding is detached
+/// after the metadata transaction; a crash leaves an explicit retryable state.
+#[tauri::command]
+pub async fn unlink_modpack(app_handle: tauri::AppHandle, instance_id: i32) -> Result<(), String> {
+    let tasks = app_handle.state::<TaskManager>();
+    let _play = tasks
+        .acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(
+            instance_id,
+        )])
+        .await;
+    let inst = crate::commands::instances::get_instance(instance_id)?;
+    let root = inst
+        .game_directory
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .ok_or("Instance directory missing")?;
+    if crate::modpack::update::has_pending_recovery(&root) {
+        return Err("Recover the pending modpack update before unlinking".into());
+    }
+    crate::sync::safeguards::check_instance_not_running(&root).map_err(|e| e.to_string())?;
+    app_handle
+        .state::<std::sync::Arc<crate::servers::ServerManager>>()
+        .detach_modpack_source(instance_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    use crate::schema::instance::dsl as fields;
+    use diesel::prelude::*;
+    let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
+    diesel::update(fields::instance.find(instance_id))
+        .set((
+            fields::modpack_platform.eq(None::<String>),
+            fields::modpack_id.eq(None::<String>),
+            fields::modpack_version_id.eq(None::<String>),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
+    use tauri::Emitter;
+    let _ = app_handle.emit(
+        "core://instance-updated",
+        crate::commands::instances::get_instance(instance_id)?,
+    );
+    Ok(())
+}
+
 /// Information about an available modpack update.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ModpackUpdateInfo {

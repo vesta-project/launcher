@@ -1,3 +1,4 @@
+import type { PackSyncPreview } from '../servers/native-pack-sync';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createSignal, onSettled } from "solid-js";
@@ -21,8 +22,9 @@ export interface PackRelease extends EngineVersion {
   changes: string;
 }
 export type ReleaseChannel = "release" | "beta" | "alpha";
-export type PackSource = "Modrinth" | "CurseForge";
+export type PackSource = "Modrinth" | "CurseForge" | "Server";
 export interface LinkedPack {
+  instanceId?: number;
   icon: string;
   name: string;
   source: PackSource;
@@ -184,7 +186,8 @@ export function unlinkPack(id: string, removeBundled: boolean) {
     }
     // Explicit unlink releases ownership before its optional cleanup. Ordinary
     // Resources deletion must never remove files while the pack owns them.
-    await invoke('update_instance', { instanceData: { ...record, modpackId: null, modpackVersionId: null, modpackPlatform: null, modpackIconUrl: null } });
+    if (record.modpackPlatform === 'server') await invoke('unlink_modpack', { instanceId: record.id });
+    else await invoke('update_instance', { instanceData: { ...record, modpackId: null, modpackVersionId: null, modpackPlatform: null, modpackIconUrl: null } });
     await invoke('clear_modpack_resource_provenance', { instanceId: record.id });
     for (const row of bundled) {
       await invoke('delete_resource', { instanceId: record.id, resourceId: row.id });
@@ -204,7 +207,7 @@ function nativePack(id: string, versions: NativeVersion[] = [], name?: string): 
     channel: channelOf(version.release_type), publishedAt: typeof version.published_at === 'string' ? version.published_at.slice(0, 10) : undefined, changes: '' }));
   const installed = record.modpackVersionId ?? '';
   if (!releases.some((release) => release.id === installed)) releases.push({ ...engine, id: installed, label: installed, experimental: false, channel: 'release', changes: '' });
-  return { name: name || record.name, icon: displayImage(record), projectId: record.modpackId ?? undefined, source: record.modpackPlatform === 'curseforge' ? 'CurseForge' : 'Modrinth',
+  return { instanceId: record.id, name: name || record.name, icon: displayImage(record), projectId: record.modpackId ?? undefined, source: record.modpackPlatform === 'server' ? 'Server' : record.modpackPlatform === 'curseforge' ? 'CurseForge' : 'Modrinth',
     installed, installedLabel: releases.find((release) => release.id === installed)?.label, releases };
 }
 export function useNativePack(id: string) {
@@ -215,7 +218,21 @@ export function useNativePack(id: string) {
       const record = nativeRecord(id);
       const projectId = record?.modpackId?.trim();
       const platform = record?.modpackPlatform;
-      if (!projectId || !platform || !['modrinth', 'curseforge'].includes(platform)) return;
+      if (!projectId || !platform) return;
+      if (platform === 'server') {
+        const current = ++revision;
+        try {
+          const check = await invoke<{ latest_version: {id:string;release_type:string} | null }>('check_modpack_update', { instanceId: record.id });
+          if (disposed || current !== revision || nativeRecord(id)?.modpackVersionId !== record.modpackVersionId || nativeRecord(id)?.modpackPlatform !== 'server' || nativeRecord(id)?.modpackId !== projectId) return;
+          const pack = nativePack(id);
+          if (pack && check.latest_version && !pack.releases.some(r => r.id === check.latest_version!.id)) {
+            pack.releases.unshift({ ...pack.releases[0], id: check.latest_version.id, label: check.latest_version.id, changes: check.latest_version.release_type });
+          }
+          versionStore(id).setState(state => ({ ...state, pack }));
+        } catch (error) { if (!disposed && current === revision) reportInstanceError(error); }
+        return;
+      }
+      if (!['modrinth', 'curseforge'].includes(platform)) return;
       const current = ++revision;
       try {
         const [versions, project] = await Promise.allSettled([
@@ -247,6 +264,7 @@ const releaseOrder = (versions: NativeVersion[]) => [...versions].sort((a, b) =>
 export interface UpdatePreview {
   /** Provider changelog text, when the platform supplies one. */
   changelog?: string;
+  review?: PackSyncPreview;
   /**
    * Resource-level diff. The native update engine does not expose a dry run, so
    * these stay undefined outside the browser fixtures and the dialog says so.
@@ -267,6 +285,7 @@ function plainText(raw: string, format: string): string {
   return raw.replace(/<br\s*\/?>|<\/(p|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 }
 export function releaseChangelog(source: PackSource, projectId: string | undefined, releaseId: string): Promise<string | undefined> {
+  if (source === "Server") return Promise.resolve(undefined);
   if (nativeInstances && !projectId?.trim()) return Promise.resolve(undefined);
   const key = `${source}:${projectId}:${releaseId}`;
   let cached = changelogCache.get(key);
@@ -281,6 +300,10 @@ export function releaseChangelog(source: PackSource, projectId: string | undefin
   return cached;
 }
 export async function previewPackUpdate(pack: LinkedPack, release: PackRelease): Promise<UpdatePreview> {
+  if (nativeInstances && pack.source === 'Server' && pack.instanceId !== undefined) {
+    const review = await invoke<PackSyncPreview>('preview_modpack_update', { instanceId: pack.instanceId, newVersionId: release.id });
+    return { review, added: review.changes.filter(c => c.operation === 'add').map(c => c.path), removed: review.changes.filter(c => c.operation === 'remove').map(c => c.path), updated: review.changes.filter(c => c.operation === 'update').map(c => c.path) };
+  }
   const changelog = await releaseChangelog(pack.source, pack.projectId, release.id).catch(() => undefined);
   if (nativeInstances) return { changelog };
   const downgrade = pack.releases.findIndex((item) => item.id === release.id) > pack.releases.findIndex((item) => item.id === pack.installed);
@@ -308,6 +331,7 @@ interface NativeProject { id: string; name: string; summary: string; icon_url: s
 const candidate = (source: PackSource, project: NativeProject): PackCandidate =>
   ({ id: project.id, source, name: project.name, summary: project.summary, icon: project.icon_url ?? "", author: project.author });
 export async function searchPacks(source: PackSource, query: string): Promise<PackCandidate[]> {
+  if (source === "Server") return [];
   if (!nativeInstances) {
     const text = query.trim().toLowerCase();
     return fixturePacks.filter((pack) => pack.source === source && pack.name.toLowerCase().includes(text));
@@ -353,4 +377,9 @@ export function linkPack(id: string, pack: PackCandidate, release: PackRelease) 
   versionStore(id).setState((state) => ({ ...state, pack: { name: pack.name, icon: findInstance(id)!.instance.image, source: pack.source,
     projectId: pack.id, installed: release.id, installedLabel: release.label, releases: [release] } }));
   return Promise.resolve(true);
+}
+
+/** Apply a native file review with explicit executable consent, through the instance update task. */
+export async function applyPackReview(id: string, review: PackSyncPreview, consentRevision?: string) {
+  await performNative(id, record => invoke('apply_modpack_update', { instanceId: record.id, reviewId: review.reviewId, consentRevision: consentRevision ?? null }));
 }

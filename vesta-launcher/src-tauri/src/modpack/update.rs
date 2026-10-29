@@ -25,6 +25,12 @@ struct PreviousInstanceMetadata {
     modloader: Option<String>,
     modloader_version: Option<String>,
     modpack_version_id: Option<String>,
+    #[serde(default)]
+    modpack_platform: Option<String>,
+    #[serde(default)]
+    modpack_id: Option<String>,
+    #[serde(default)]
+    source_recorded: bool,
 }
 
 impl From<&crate::models::instance::Instance> for PreviousInstanceMetadata {
@@ -34,6 +40,9 @@ impl From<&crate::models::instance::Instance> for PreviousInstanceMetadata {
             modloader: instance.modloader.clone(),
             modloader_version: instance.modloader_version.clone(),
             modpack_version_id: instance.modpack_version_id.clone(),
+            modpack_platform: instance.modpack_platform.clone(),
+            modpack_id: instance.modpack_id.clone(),
+            source_recorded: true,
         }
     }
 }
@@ -152,17 +161,28 @@ fn restore_previous_metadata(
     use crate::schema::instance::dsl as instances;
     use diesel::prelude::*;
 
-    diesel::update(instances::instance.filter(instances::id.eq(instance_id)))
-        .set((
-            instances::minecraft_version.eq(&previous.minecraft_version),
-            instances::modloader.eq(&previous.modloader),
-            instances::modloader_version.eq(&previous.modloader_version),
-            instances::modpack_version_id.eq(&previous.modpack_version_id),
-            instances::installation_status.eq(Some("installed".to_string())),
-        ))
-        .execute(&mut conn)
-        .map_err(|error| format!("Failed to restore previous instance metadata: {}", error))?;
+    conn.transaction::<(), diesel::result::Error, _>(|conn| {
+        diesel::update(instances::instance.filter(instances::id.eq(instance_id)))
+            .set((
+                instances::minecraft_version.eq(&previous.minecraft_version),
+                instances::modloader.eq(&previous.modloader),
+                instances::modloader_version.eq(&previous.modloader_version),
+                instances::modpack_version_id.eq(&previous.modpack_version_id),
+                instances::installation_status.eq(Some("installed".to_string())),
+            ))
+            .execute(conn)?;
 
+        if previous.source_recorded {
+            diesel::update(instances::instance.filter(instances::id.eq(instance_id)))
+                .set((
+                    instances::modpack_platform.eq(&previous.modpack_platform),
+                    instances::modpack_id.eq(&previous.modpack_id),
+                ))
+                .execute(conn)?;
+        }
+        Ok(())
+    })
+    .map_err(|e| format!("Failed to restore previous instance metadata: {e}"))?;
     let restored = crate::commands::instances::get_instance(instance_id)?;
     let _ = app_handle.emit("core://instance-updated", restored);
     Ok(())
@@ -367,7 +387,7 @@ pub fn clear_pending(game_dir: &Path) -> Result<(), String> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn finish(
+pub(crate) async fn finish(
     app_handle: &tauri::AppHandle,
     ctx: &TaskContext,
     instance: &crate::models::instance::Instance,
@@ -376,6 +396,7 @@ pub async fn finish(
     new_version_id: &str,
     game_dir: &Path,
     source_zip_path: &Path,
+    source: &crate::tasks::update_modpack::UpdateSource,
 ) -> Result<FinishedUpdate, String> {
     let runtime_changed = crate::utils::instance_runtime::manifest_runtime_identity_changed(
         old_manifest,
@@ -384,7 +405,14 @@ pub async fn finish(
 
     let mut manifest = new_manifest.clone();
     manifest.installed_at = chrono::Utc::now().to_rfc3339();
-    manifest.source_zip_path = Some(source_zip_path.to_path_buf());
+    manifest.source_zip_path = if matches!(
+        source,
+        crate::tasks::update_modpack::UpdateSource::Server { .. }
+    ) {
+        None
+    } else {
+        Some(source_zip_path.to_path_buf())
+    };
     crate::sync::manifest::backfill_manifest_hashes(&mut manifest, game_dir, instance.id)
         .map_err(|error| format!("Failed to backfill manifest hashes: {}", error))?;
     manifest
@@ -398,8 +426,14 @@ pub async fn finish(
     updated.modloader = runtime_fields.modloader.clone();
     updated.modloader_version = runtime_fields.modloader_version.clone();
     updated.modpack_version_id = Some(new_version_id.to_string());
+    if let crate::tasks::update_modpack::UpdateSource::Server { review, .. } = source {
+        updated.modpack_platform = Some("server".into());
+        updated.modpack_id = Some(review.release.server_id.clone());
+    }
 
-    if runtime_changed {
+    if runtime_changed
+        || matches!(source,crate::tasks::update_modpack::UpdateSource::Server {review,link_only:false} if review.old.is_none())
+    {
         ctx.update_description(
             "Reinstalling game runtime for new Minecraft version...".to_string(),
         );
@@ -424,6 +458,8 @@ pub async fn finish(
                 instances::modloader.eq(&runtime_fields.modloader),
                 instances::modloader_version.eq(&runtime_fields.modloader_version),
                 instances::modpack_version_id.eq(Some(new_version_id.to_string())),
+                instances::modpack_platform.eq(&updated.modpack_platform),
+                instances::modpack_id.eq(&updated.modpack_id),
                 instances::installation_status.eq(Some("installed".to_string())),
             ))
             .execute(conn)?;
@@ -609,6 +645,9 @@ mod tests {
                 modloader: Some("fabric".to_string()),
                 modloader_version: Some("0.15.11".to_string()),
                 modpack_version_id: Some("old-version".to_string()),
+                modpack_platform: None,
+                modpack_id: None,
+                source_recorded: true,
             })
         );
     }

@@ -15,7 +15,7 @@ use vesta_server_client::{
     Error, ErrorCode, Result,
 };
 
-const RECEIPT: &str = ".vesta-server-pack.json";
+pub(crate) const RECEIPT: &str = ".vesta-server-pack.json";
 const FILE_LIMIT: u64 = 16 * 1024 * 1024;
 const TOTAL_LIMIT: u64 = 64 * 1024 * 1024;
 fn io(_: impl std::fmt::Display) -> Error {
@@ -73,7 +73,7 @@ pub struct Preview {
     pub executable_changes: Vec<String>,
     pub consent_required: bool,
 }
-pub(super) struct Prepared {
+pub(crate) struct Prepared {
     pub preview: Preview,
     pub release: Release,
     pub files: BTreeMap<String, String>,
@@ -244,7 +244,7 @@ fn safe_path(path: &str) -> Result<()> {
     }
     Ok(())
 }
-fn confined(root: &Path, path: &str) -> Result<PathBuf> {
+pub(crate) fn confined(root: &Path, path: &str) -> Result<PathBuf> {
     safe_path(path)?;
     let mut current = root.to_path_buf();
     // Reject links/reparse points at the game root and every existing parent.
@@ -277,7 +277,7 @@ fn linked(m: &std::fs::Metadata) -> bool {
         m.file_type().is_symlink()
     }
 }
-fn digest(bytes: &[u8]) -> String {
+pub(crate) fn digest(bytes: &[u8]) -> String {
     vesta_server_client::trust::leaf_fingerprint(bytes)
 }
 fn file_digest(path: &Path) -> Result<Option<String>> {
@@ -290,7 +290,7 @@ fn file_digest(path: &Path) -> Result<Option<String>> {
         Err(e) => Err(io(e)),
     }
 }
-fn diff(
+pub(crate) fn diff(
     root: &Path,
     old: Option<&Receipt>,
     files: &BTreeMap<String, String>,
@@ -365,13 +365,30 @@ fn read_member(
 }
 
 impl ServerManager {
+    pub(crate) async fn detach_modpack_source(&self, id: i32) -> Result<()> {
+        let _gate = self.pack_gate.lock().await;
+        let active = link_path(&self.root, id);
+        let detached = active.with_extension("detached.json");
+        if active.exists() {
+            // Retain the authority receipt for diagnostics; no game files are removed.
+            let link: Link = read_json(&active)?.ok_or_else(|| conflict("pack_invalid_receipt"))?;
+            write_json(&detached, &link)?;
+            std::fs::remove_file(&active).map_err(io)?;
+        }
+        self.pack_previews
+            .lock()
+            .await
+            .retain(|_, p| p.preview.instance_id != Some(id));
+        Ok(())
+    }
+
     pub async fn pack_sync_discard(&self, review_id: &str) {
         self.pack_previews.lock().await.remove(review_id);
     }
     pub async fn pack_link(&self, id: i32) -> Result<Option<Link>> {
         read_json(&link_path(&self.root, id))
     }
-    async fn verified_release(
+    pub(crate) async fn verified_release(
         &self,
         connection: &str,
         instance: Option<&Instance>,
@@ -382,6 +399,9 @@ impl ServerManager {
             Some(i) => self.pack_link(i.id).await?,
             None => None,
         };
+        if let (Some(instance),Some(link))=(instance,&link) {
+            if instance.modpack_platform.as_deref()==Some("server") && instance.modpack_id.as_deref()!=Some(link.server_id.as_str()) {return Err(conflict("pack_server_binding_mismatch"));}
+        }
         if let Some(link) = &link {
             if link.connection_id != connection
                 || link.server_id != binding.server_id

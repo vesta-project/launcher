@@ -431,3 +431,85 @@ pending, optional/required policy, mode disable/reenable and obsolete download
 rejection; journal tests cover retained archive delivery after upload/plan removal,
 pruning/reopen, and installed-version promotion. Full validation is recorded below
 when the common instance pipeline is complete.
+
+
+## Common instance update pipeline completion (2026-10-29)
+
+Server links now execute through `UpdateModpackTask` with an explicit Server source.
+The adapter verifies the paired TLS signature, nonce, identity, monotonic revision /
+minimum and immutable digest, resolves the reviewed client files, and converts its
+receipt into the normal instance manifest/action plan. The existing instance engine
+owns staging, settings preparation, ownership reconciliation, rollback journal,
+runtime/Java setup, metadata finalization, watcher handling and crash recovery.
+The separate server `apply_files` implementation has been removed. Compatibility
+`packSyncApply` submits this same task and retains its existing request/result shape;
+its returned instance ID means the task was accepted, not that installation finished.
+Observe normal instance/task updates for completion. Read-only server status polling
+and protected binding/high-water receipts remain source-adapter responsibilities.
+
+Additive instance commands / feature contracts (no page files edited):
+
+- `preview_modpack_update({instanceId,newVersionId})` returns the existing
+  `PackSyncPreview` for a server source. `start_modpack_update` retains its existing
+  `modpack_review_required:<preview>` compatibility response.
+- `apply_modpack_update({instanceId,reviewId,consentRevision})` checks the review's
+  target instance and submits the common task. Executable changes require explicit
+  consent to that exact revision. Stale local files, receipts, releases or bindings
+  require another review; the task rechecks before its journal commit. Staged bytes
+  are rehashed against reviewed SHA-256 pins immediately before mutation.
+- `unlink_modpack({instanceId})` keeps installed files, detaches the protected source
+  binding and clears source metadata under the instance play guard. Interrupted
+  unlink is fail-closed and retryable. `versions.unlinkPack` uses this for servers
+  before its existing optional bundled-resource cleanup.
+- `LinkedPack.source` additionally accepts `Server`, and `instanceId` is optional.
+  `UpdatePreview.review` optionally contains the existing `PackSyncPreview`.
+  `previewPackUpdate` exposes real server file changes; `applyPackReview` submits
+  explicit consent through the common command. Provider browsing/changelog fetching
+  is skipped for server sources. Existing shapes and provider behavior are retained.
+
+Legacy server receipts migrate to the ordinary instance manifest on the next reviewed
+apply; the protected connection/TLS/high-water receipt remains outside the game tree.
+Both the manifest and adapter receipt are journaled together. Failed updates restore
+files and the preceding runtime/version/source metadata; committed recovery preserves
+the new version. Legacy pending markers that predate source snapshots retain their
+existing source fields on rollback. Missing server bindings block native launch,
+as do a required update or failed signature/status verification.
+
+Server installation remains independent of optional player delivery. If a client
+projection cannot be built, planning reports `client_delivery_unavailable:<code>`
+while preserving the server review; following that confirmed version fails closed
+until complete client bytes are available. New valid archive installs retain the
+client projection automatically. Older non-provider receipts with no recoverable
+client data require a reviewed reinstall; server-only files cannot reconstruct a
+missing client archive.
+
+### Final validation
+
+- Control broad run: 1,044 passed, 32 failed, two ignored. All 31 timing/runtime
+  failures passed the serial recheck. The sole remaining failure is the pre-existing
+  original-v8 host fixture (`state_migration_failed` at host_tests.rs:729), already
+  recorded at the preceding checkpoint. Final files/workspace regression selection:
+  35 passed. All six control integration targets passed (28 tests).
+- Full vesta-agent suite: 77 tests passed. Control/transport all-target clippy with
+  `-D warnings`: passed.
+- Transport: 47 unit tests passed. Serial HTTPS run: 122 passed, one policy regression
+  failed, one manual ignored. The regression was fixed; all four HTTPS pack tests
+  then passed, including hosted archive downloads, provider IDs, installed/pending
+  selection, custom/follow switching and monotonic optional/required policy.
+- Native client full suite and all-target clippy with `-D warnings`: passed.
+- Native common-engine / recovery / server-source selection: 14 tests passed. On
+  Windows, the generated lib-test executable needed a Common Controls v6 manifest
+  to load; it was embedded only into that generated executable using the SDK mt tool.
+  No application manifest or dependency was changed.
+- Launcher cargo check: passed with the existing four launcher warnings and one
+  piston-lib warning. Desktop typecheck: passed. Final expanded Bun selection:
+  409 passed, zero failed across 36 files. An earlier run reproduced the existing
+  `HOT_SCOPE_TIME` console-check:rows budget at 8.1 ms / 8 ms; its installed repair
+  guide was read, and no console code, budget or diagnostic was changed.
+
+### Follow-ups
+
+Provider pagination (bounded discovery is still 256 Modrinth rows / 50 CurseForge
+files), explicit transactional recovery after cancelled/failed server installs, and
+real-provider/live-server acceptance remain. The two backend items above are complete.
+No files under src/pages/** or unrelated user changes were staged.

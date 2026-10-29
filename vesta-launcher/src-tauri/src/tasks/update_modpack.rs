@@ -5,11 +5,21 @@ use crate::sync::safeguards;
 use crate::tasks::manager::{instance_play_conflict_key, Task, TaskContext};
 use tauri::Manager;
 
+#[derive(Clone)]
+pub(crate) enum UpdateSource {
+    Provider,
+    Server {
+        review: std::sync::Arc<crate::servers::pack_sync::Prepared>,
+        link_only: bool,
+    },
+}
+
 pub struct UpdateModpackTask {
     pub instance_id: i32,
     pub instance_name: String,
     pub new_version_id: String,
     pub game_dir: PathBuf,
+    source: UpdateSource,
 }
 
 impl UpdateModpackTask {
@@ -24,6 +34,26 @@ impl UpdateModpackTask {
             instance_name,
             new_version_id,
             game_dir,
+            source: UpdateSource::Provider,
+        }
+    }
+
+    pub(crate) fn from_server(
+        instance_id: i32,
+        instance_name: String,
+        game_dir: PathBuf,
+        review: crate::servers::pack_sync::Prepared,
+        link_only: bool,
+    ) -> Self {
+        Self {
+            instance_id,
+            instance_name,
+            new_version_id: review.release.revision.clone(),
+            game_dir,
+            source: UpdateSource::Server {
+                review: std::sync::Arc::new(review),
+                link_only,
+            },
         }
     }
 
@@ -119,6 +149,7 @@ impl Task for UpdateModpackTask {
     }
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
+        let source = self.source.clone();
         let instance_id = self.instance_id;
         let new_version_id = self.new_version_id.clone();
         let game_dir = self.game_dir.clone();
@@ -175,12 +206,13 @@ impl Task for UpdateModpackTask {
                     .map_err(|e| format!("Instance not found: {}", e))?;
 
                 // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
-                let mut plan = crate::modpack::engine::plan(
+                let mut plan = crate::modpack::engine::plan_source(
                     &app_handle,
                     &inst,
                     &game_dir,
                     &new_version_id,
                     &ctx,
+                    &source,
                 )
                 .await?;
 
@@ -188,12 +220,13 @@ impl Task for UpdateModpackTask {
                     // A process appeared after the audit. Discard the plan, wait,
                     // and recompute so live mutation never races a late launch.
                     Self::wait_for_instance_exit(&game_dir, &ctx).await?;
-                    plan = crate::modpack::engine::plan(
+                    plan = crate::modpack::engine::plan_source(
                         &app_handle,
                         &inst,
                         &game_dir,
                         &new_version_id,
                         &ctx,
+                        &source,
                     )
                     .await?;
                     safeguards::check_instance_not_running(&game_dir).map_err(|e| e.to_string())?;
@@ -232,6 +265,7 @@ impl Task for UpdateModpackTask {
                     &new_version_id,
                     &game_dir,
                     &plan.zip_path,
+                    &source,
                 )
                 .await
                 {
@@ -254,6 +288,9 @@ impl Task for UpdateModpackTask {
                     };
                 }
                 };
+                if let UpdateSource::Server {review,..}=&source {
+                    app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().validate_update_review(&inst,review).await.map_err(|e|e.to_string())?;
+                }
                 if let Err(finalize_error) = outcome.finalize() {
                     return match status_guard.recover_failure() {
                     Ok(_) => Err(format!(

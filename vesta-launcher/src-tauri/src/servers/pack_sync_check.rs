@@ -83,6 +83,14 @@ impl ServerManager {
                 "pack_sync:{}",
                 serde_json::to_string(&check).map_err(|e| e.to_string())?
             )),
+            Ok(None)
+                if crate::commands::instances::get_instance(instance_id)?
+                    .modpack_platform
+                    .as_deref()
+                    == Some("server") =>
+            {
+                Err("pack_server_binding_missing".into())
+            }
             Ok(_) => Ok(()),
             Err(error) => Err(format!(
                 "pack_sync:{}",
