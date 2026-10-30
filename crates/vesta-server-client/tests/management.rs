@@ -24,7 +24,7 @@ async fn backup_configuration_bridge_maps_closed_drafts_and_preserves_retry_inte
     assert!(!view.backups_configured); assert!(!view.repository.initialized);
     assert_eq!(view.revision, None);
     let draft = BackupConfigDraft {
-        profiles: vec![BackupProfileConfig {name:"daily".into(),mode:"stopped".into(),keep_last:7,keep_daily:7,keep_weekly:4,keep_monthly:3,on_mutation:"fail-world".into(),warn_seconds:60,max_snapshots:None,include:vec![],exclude:vec!["logs/".into()]}],
+        profiles: vec![BackupProfileConfig {name:"daily".into(),mode:"stopped".into(),keep_total:10,keep_hourly:0,keep_last:7,keep_daily:7,keep_weekly:4,keep_monthly:3,on_mutation:"fail-world".into(),warn_seconds:60,max_snapshots:None,include:vec![],exclude:vec!["logs/".into()]}],
         limits: BackupConfigLimits {max_snapshots:None,max_repository_bytes:None,min_free_bytes:1073741824}, initialize_repository:true,
     };
     a.set("PUT", "/api/v3/manage/backups/config", json!({"revision":1}));

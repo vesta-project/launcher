@@ -12,6 +12,8 @@ const call = <T>(command: string, args?: Record<string, unknown>) => invoke<T>(c
 export interface BackupProfile {
   name: string;
   mode: 'online' | 'stopped';
+  keepTotal?: number | null;
+  keepHourly?: number | null;
   keepLast: number;
   keepDaily: number;
   keepWeekly: number;

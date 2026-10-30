@@ -7,6 +7,10 @@ use serde::{Deserialize, Serialize};
 pub struct BackupProfileConfig {
     pub name: String,
     pub mode: String,
+    #[serde(default)]
+    pub keep_total: u32,
+    #[serde(default)]
+    pub keep_hourly: u32,
     pub keep_last: u32,
     pub keep_daily: u32,
     pub keep_weekly: u32,
@@ -19,7 +23,7 @@ pub struct BackupProfileConfig {
 }
 impl BackupProfileConfig {
     fn wire(&self) -> Value {
-        json!({"name":self.name,"mode":self.mode,"keep_last":self.keep_last,"keep_daily":self.keep_daily,
+        json!({"name":self.name,"mode":self.mode,"keep_total":self.keep_total,"keep_hourly":self.keep_hourly,"keep_last":self.keep_last,"keep_daily":self.keep_daily,
             "keep_weekly":self.keep_weekly,"keep_monthly":self.keep_monthly,"on_mutation":self.on_mutation,
             "warn_seconds":self.warn_seconds,"max_snapshots":self.max_snapshots,"include":self.include,"exclude":self.exclude})
     }

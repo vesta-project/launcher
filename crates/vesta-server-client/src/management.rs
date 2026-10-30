@@ -10,7 +10,7 @@ macro_rules! dto {
         pub struct $name { $(pub $field: $ty),* }
     };
 }
-dto!(BackupProfile { name: String, mode: String, keep_last: u64, keep_daily: u64,
+dto!(BackupProfile { name: String, mode: String, keep_total: Option<u64>, keep_hourly: Option<u64>, keep_last: u64, keep_daily: u64,
     keep_weekly: u64, keep_monthly: u64, on_mutation: String, warn_seconds: u64, max_snapshots: Option<u64> });
 dto!(BackupJob { id: String, profile: String, kind: String, state: String,
     requested_by: Option<String>, snapshot_id: Option<String>, error_code: Option<String>,

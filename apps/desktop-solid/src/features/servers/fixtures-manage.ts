@@ -67,8 +67,8 @@ function seed(): ManageState {
     backupLimits: { maxSnapshots: 60, maxRepositoryBytes: 20_000_000_000, minFreeBytes: 5_000_000_000 },
     configReceipts: new Map(),
     profiles: [
-      { name: 'daily', mode: 'online', keepLast: 7, keepDaily: 7, keepWeekly: 4, keepMonthly: 3, onMutation: 'fail-world', warnSeconds: 60, maxSnapshots: 30, include: [], exclude: [] },
-      { name: 'before-updates', mode: 'stopped', keepLast: 5, keepDaily: 0, keepWeekly: 0, keepMonthly: 0, onMutation: 'fail-any', warnSeconds: 0, maxSnapshots: 5, include: [], exclude: ['logs/'] },
+      { name: 'daily', mode: 'online', keepTotal: 30, keepHourly: 0, keepLast: 7, keepDaily: 7, keepWeekly: 4, keepMonthly: 3, onMutation: 'fail-world', warnSeconds: 60, maxSnapshots: 30, include: [], exclude: [] },
+      { name: 'before-updates', mode: 'stopped', keepTotal: 5, keepHourly: 0, keepLast: 5, keepDaily: 0, keepWeekly: 0, keepMonthly: 0, onMutation: 'fail-any', warnSeconds: 0, maxSnapshots: 5, include: [], exclude: ['logs/'] },
     ],
     jobs: [
       { id: `job-${hex(6)}`, profile: 'daily', kind: 'backup', state: 'succeeded', requestedBy: 'Nightly backup', snapshotId: hex(32), errorCode: null,
@@ -158,7 +158,7 @@ export function createManageFixtures(host: ManageHost) {
       for (const p of draft.profiles) {
         if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(p.name) || !['online', 'stopped'].includes(p.mode)
           || !['warn', 'fail-world', 'fail-any'].includes(p.onMutation)
-          || ![p.keepLast, p.keepDaily, p.keepWeekly, p.keepMonthly].every((v) => bounded(v, 1000))
+          || ![p.keepTotal ?? 0, p.keepHourly ?? 0, p.keepLast, p.keepDaily, p.keepWeekly, p.keepMonthly].every((v) => bounded(v, 1000))
           || !bounded(p.warnSeconds, 600) || (p.maxSnapshots !== null && (!bounded(p.maxSnapshots, 4294967295) || p.maxSnapshots === 0))
           || p.include.length > 64 || !p.include.every(relative) || p.exclude.length > 64
           || p.exclude.some((s) => !s || s.length > 512 || /[\x00-\x1f]/.test(s) || /^[!#\\]/.test(s) || s.split('/').includes('..'))) fail('invalid_input');
