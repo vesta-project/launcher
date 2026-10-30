@@ -19,6 +19,9 @@ export interface ContentCapabilities {
   datapackToggleOffline?: boolean; datapackToggleRunning?: boolean;
 }
 export interface ServerContentInventory {
+  /** Actual writes deferred until stopped-process ownership. */
+  deferredWrites?: number;
+  needsRestart?: boolean;
   items: ServerContentEntry[]; capabilities: ContentCapabilities; minecraftVersion: string;
   /** Authoritative managed server family, independent of the client pack loader. Null for unidentified/custom software. */
   software: string | null; truncated: boolean;

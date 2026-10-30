@@ -67,6 +67,10 @@ pub struct ContentCapabilities {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentInventory {
+    #[serde(default)]
+    pub deferred_writes: usize,
+    #[serde(default)]
+    pub needs_restart: bool,
     pub items: Vec<ContentEntry>,
     pub capabilities: ContentCapabilities,
     pub minecraft_version: String,
