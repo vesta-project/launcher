@@ -126,6 +126,8 @@
     font-size: var(--vesta-text-sm);
     line-height: 1.45;
   }
+  :where([data-vesta="dialog-body"] > [data-vesta="server-callout"]:not(:first-child)) { margin-block-start: var(--vesta-space-3); }
+  :where([data-vesta="settings-panel-body"] > [data-vesta="server-callout"]) { margin: var(--vesta-space-3) var(--vesta-space-4); }
   :where([data-vesta="server-callout"]) p { margin: 0; flex-basis: 100%; }
   :where([data-vesta="server-callout"][data-tone="success"]) { --tone: oklch(0.72 0.17 150); }
   :where([data-vesta="server-callout"][data-tone="warning"]) { --tone: oklch(0.78 0.15 75); }
@@ -317,7 +319,7 @@
   :where([data-vesta="server-setting-block"]) [data-vesta="setting-row-copy"] { display: flex; flex-direction: column; gap: 2px; }
 
   /* Flush tab bodies under a pane toolbar */
-  :where([data-vesta="server-activity"]) { display: flex; flex-direction: column; block-size: 100%; min-block-size: 0; }
+  :where([data-vesta="server-activity"]) { display: flex; flex-direction: column; block-size: 100%; min-block-size: 0; gap: 0; }
   :where([data-vesta="server-pane-body"]) {
     display: flex;
     flex: 1;
@@ -379,6 +381,11 @@
   :where([data-vesta="server-activity-detail"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-style: italic; }
   :where([data-vesta="server-activity-meta"]) { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-activity-meta"]) span + span::before { content: "·"; margin-inline-end: 12px; }
+
+  :where(.servers-workspace [data-vesta="instance-settings-scroll"] > *, .servers-workspace [data-vesta="server-activity"] > [data-vesta="server-pane-body"] > *) {
+    inline-size: 100%;
+    max-inline-size: var(--content-max-width);
+  }
 
   /* Management tabs: toolbar over a settings-style scroll */
   :where([data-vesta="server-activity"]) > [data-vesta="instance-settings-scroll"] { flex: 1; }

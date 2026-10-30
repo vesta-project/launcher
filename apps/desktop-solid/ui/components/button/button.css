@@ -130,6 +130,7 @@
 
   :where([data-vesta='button-label']) {
     min-inline-size: 0;
+    padding-block: 0.15em;
     overflow: hidden;
     text-overflow: ellipsis;
   }

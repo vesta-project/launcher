@@ -5,11 +5,12 @@
  * Knobs: --settings-max-width, --setting-row-gap
  */
 @layer launcher {
+  :root { --content-max-width: 680px; }
   :where([data-vesta='settings-section']) {
     display: flex;
     flex-direction: column;
     gap: var(--vesta-space-2);
-    max-inline-size: var(--settings-max-width, 680px);
+    max-inline-size: var(--settings-max-width, var(--content-max-width));
   }
 
   :where([data-vesta='settings-section'] + [data-vesta='settings-section']) {

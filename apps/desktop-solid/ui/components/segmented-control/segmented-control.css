@@ -83,6 +83,7 @@
     box-sizing: border-box;
     block-size: var(--segmented-height);
     max-inline-size: 100%;
+    overflow-x: auto;
     padding: var(--segmented-padding);
     border-radius: var(--segmented-radius);
     background: var(--segmented-track-bg);
@@ -136,7 +137,8 @@
   }
 
   :where([data-vesta='segmented-control'][data-fill] [data-vesta='segmented-item']) {
-    flex: 1 1 0;
+    flex: 1 1 auto;
+    min-inline-size: max-content;
   }
 
   :where([data-vesta='segmented-item']:not([data-disabled], [data-checked])):hover {
@@ -169,7 +171,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
+    line-height: var(--vesta-leading-tight);
     padding-block: 0.15em;
     min-inline-size: 0;
     overflow: hidden;
@@ -179,7 +181,9 @@
 
   :where([data-vesta='segmented-text']) {
     display: block;
-    text-box: trim-both cap alphabetic;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* The label is what Kobalte selects on click, so it reaches over the whole item:
