@@ -16,7 +16,6 @@ import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
 import { ClientModePanel } from './client-mode';
-import { GetModpack } from './get-modpack';
 
 const ICON_LIMIT = 256 * 1024;
 
@@ -36,9 +35,6 @@ export function ModpackOverview() {
             <p data-vesta="server-callout" data-tone="warning">{t('server-pack.customizing-help')}</p>
           </Show>
         </div>
-        <aside data-vesta="modpack-overview-side">
-          <GetModpack />
-        </aside>
       </div>
       </div>
     </div>

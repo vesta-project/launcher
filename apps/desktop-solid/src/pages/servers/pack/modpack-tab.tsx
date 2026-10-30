@@ -17,7 +17,7 @@ import { ClientModePanel } from './client-mode';
 import { ModpackContent } from './content';
 import { ModpackFiles } from './files';
 import { FirstRun } from './first-run';
-import { GetModpack } from './get-modpack';
+import { PlayOnServerCard, offersClientPack } from './get-modpack';
 import { ModpackHeader } from './header';
 import { InstallOnServerDialog } from './install-on-server';
 import { ModpackOverview } from './overview';
@@ -68,7 +68,9 @@ function PlayerView() {
   return (
     <div data-vesta="modpack-scroll">
       <Show when={area.gates().download} fallback={<EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.no-access')} />}>
-        <GetModpack />
+        <Show when={offersClientPack(area.snapshot())} fallback={<EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.play-none')} />}>
+          <section data-vesta="server-cards"><PlayOnServerCard snapshot={area.snapshot()} /></section>
+        </Show>
       </Show>
     </div>
   );

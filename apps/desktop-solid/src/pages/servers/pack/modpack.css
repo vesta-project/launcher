@@ -427,6 +427,10 @@
     gap: var(--vesta-space-4);
   }
 
+  :where([data-vesta="modpack-overview"]:not(:has(> [data-vesta="modpack-overview-side"]))) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   @container pane (max-width: 760px) {
     :where([data-vesta="modpack-overview"]) {
       grid-template-columns: minmax(0, 1fr);

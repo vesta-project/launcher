@@ -18,6 +18,7 @@ import { serverOperations, useServerTopic, useServersClock } from '../../../feat
 import type { ServerSnapshot } from '../../../features/servers/native';
 import { OverviewGraphs } from './overview-graphs';
 import { FactBadge, Freshness, Sensitive, ServerErrorNote } from '../parts';
+import { PlayOnServerCard, canGetModpack, offersClientPack } from '../pack/get-modpack';
 
 export function OverviewTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
@@ -52,7 +53,11 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
           <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} phase={props.snapshot.state.phase} />
         </article>
 
-        <Show when={props.snapshot.pack}>
+        <Show when={canGetModpack(props.snapshot) && offersClientPack(props.snapshot)}>
+          <PlayOnServerCard snapshot={props.snapshot} />
+        </Show>
+
+        <Show when={props.snapshot.pack && !offersClientPack(props.snapshot) ? props.snapshot.pack : null}>
           {(pack) => (
             <article data-vesta="server-stat">
               <h2>{t('servers.overview.pack')}</h2>
