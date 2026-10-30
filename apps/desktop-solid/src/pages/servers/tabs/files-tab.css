@@ -88,7 +88,7 @@
     place-items: center;
     inline-size: 28px;
     block-size: 28px;
-    border-radius: 6px;
+    border-radius: var(--vesta-radius-md);;
     background: var(--vesta-color-fill);
     color: var(--vesta-color-text-muted);
   }
@@ -265,7 +265,7 @@
     place-items: center;
     inline-size: 40px;
     block-size: 40px;
-    border-radius: 4px;
+    border-radius: var(--vesta-radius-sm);;
     background: oklch(0.32 0.02 260);
   }
 

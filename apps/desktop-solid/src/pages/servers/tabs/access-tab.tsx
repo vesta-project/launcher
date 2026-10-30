@@ -272,9 +272,9 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
                 <div data-vesta="setting-row">
                   <div data-vesta="setting-row-copy">
                     <span data-vesta="setting-row-label">{t('servers.access.invitation-for', { name: invitation.role.name })}</span>
-                    <span data-vesta="setting-row-description">
-                      {t('servers.access.expires-in', { count: left() })}
-                      <Show when={invitation.createdBy}>{(who) => <> · {t('servers.access.created-by', { name: who() })}</>}</Show>
+                    <span data-vesta="setting-row-description" style={{ display: 'flex', gap: 'var(--vesta-space-2)', 'flex-wrap': 'wrap' }}>
+                      <span>{t('servers.access.expires-in', { count: left() })}</span>
+                      <Show when={invitation.createdBy}>{(who) => <span>{t('servers.access.created-by', { name: who() })}</span>}</Show>
                     </span>
                   </div>
                   <div data-vesta="setting-row-control">

@@ -103,8 +103,7 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
                     <section data-vesta="changelog-release" data-tag={release().tag}>
                       <header data-vesta="changelog-release-head">
                         <h3 data-vesta="changelog-release-title">{release().name}</h3>
-                        <span data-vesta="changelog-release-meta">
-                          {release().tag} · {date(release().publishedAt)}
+                        <span data-vesta="changelog-release-meta" style={{ display: 'flex', gap: 'var(--vesta-space-2)' }}><span>{release().tag}</span><span>{date(release().publishedAt)}</span>
                         </span>
                         <Button
                           size="sm"

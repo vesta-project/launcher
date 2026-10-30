@@ -32,7 +32,7 @@
     place-items: center;
     inline-size: var(--resource-icon-size);
     block-size: var(--resource-icon-size);
-    border-radius: 6px;
+    border-radius: var(--vesta-radius-md);;
     background: var(--vesta-color-fill);
     box-shadow: 0 0 0 1px var(--vesta-color-border);
     color: var(--vesta-color-text-muted);

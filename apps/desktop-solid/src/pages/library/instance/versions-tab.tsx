@@ -263,11 +263,9 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
               <header data-vesta="pack-head">
                 <PackIdentity pack={linked()} meta={
                   <>
-                    {packVersionLabel(linked())}
-                    <span aria-hidden="true">·</span>
-                    Minecraft {store.state().engine.minecraft}
-                    <span aria-hidden="true">·</span>
-                    {loaderName(store.state().engine.loader)}
+                    <span>{packVersionLabel(linked())}</span>
+                    <span>Minecraft {store.state().engine.minecraft}</span>
+                    <span>{loaderName(store.state().engine.loader)}</span>
                   </>
                 } />
                 <div data-vesta="pack-status">
@@ -462,10 +460,9 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
           >
             <dl data-vesta="version-comparison">
               <dt>{t("linking.preview-engine")}</dt>
-              <dd>
-                Minecraft {store.state().engine.minecraft} → {release().minecraft || store.state().engine.minecraft}
-                {" · "}
-                {store.state().engine.loader} → {release().loader}
+              <dd style={{ display: 'flex', gap: 'var(--vesta-space-2)', 'flex-wrap': 'wrap' }}>
+                <span>Minecraft {store.state().engine.minecraft} → {release().minecraft || store.state().engine.minecraft}</span>
+                <span>{store.state().engine.loader} → {release().loader}</span>
               </dd>
               <dt>{t("versions.pack-version")}</dt>
               <dd>
@@ -661,9 +658,8 @@ function ReleaseRow(props: {
             data-vesta="release-game"
             data-differs={props.release.minecraft && props.release.minecraft !== props.minecraft ? "" : undefined}
           >
-            {props.release.minecraft}
-            <span aria-hidden="true">·</span>
-            {loaderName(props.release.loader)}
+            <span>{props.release.minecraft}</span>
+            <span>{loaderName(props.release.loader)}</span>
           </span>
           <time data-vesta="release-date" datetime={props.release.publishedAt}>
             {formatDate(props.release.publishedAt)}

@@ -112,11 +112,11 @@ function RunRow(props: { snapshot: ServerSnapshot; run: RunSummary; name: string
         <Icon name={props.run.state === 'suspended' ? 'icons/controls/warning' : props.run.trigger.kind === 'manual' ? 'icons/actions/play' : 'icons/content/timer'} size={14} />
       </span>
       <div data-vesta="server-activity-body">
-        <p data-vesta="server-activity-line">
+        <p data-vesta="server-activity-line" style={{ display: 'flex', gap: 'var(--vesta-space-2)', 'flex-wrap': 'wrap' }}>
           <Show when={props.showName}>
-            <strong>{props.name ?? t('server-automation.deleted-workflow')}</strong>{' · '}
+            <strong>{props.name ?? t('server-automation.deleted-workflow')}</strong>
           </Show>
-          {t(trigger().message, { ...trigger().args })}
+          <span>{t(trigger().message, { ...trigger().args })}</span>
         </p>
         <p data-vesta="server-activity-meta">
           <span title={formatDateTime(props.run.startedAtMs)}>{t('servers.ago', { time: t(started().message, { count: started().count }) })}</span>

@@ -33,9 +33,8 @@ export function LinkedPack(props: { instanceId: string }) {
           <header data-vesta="pack-head">
             <PackIdentity pack={linked()} meta={
               <>
-                {packVersionLabel(linked())}
-                <span aria-hidden="true">·</span>
-                {t(linked().source === 'Server' ? 'instance-pack.from-server' : 'instance-pack.from-provider')}
+                <span>{packVersionLabel(linked())}</span>
+                <span>{t(linked().source === 'Server' ? 'instance-pack.from-server' : 'instance-pack.from-provider')}</span>
               </>
             } />
             <div data-vesta="pack-status">

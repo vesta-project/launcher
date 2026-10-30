@@ -99,7 +99,7 @@
     flex: none;
     inline-size: 64px;
     block-size: 40px;
-    border-radius: 6px;
+    border-radius: var(--vesta-radius-md);;
     object-fit: cover;
     box-shadow: 0 0 0 1px var(--vesta-color-border-strong);
   }

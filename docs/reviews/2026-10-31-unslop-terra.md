@@ -13,3 +13,4 @@ This is a partial source audit; a fixture-based visual audit and the other reque
 - Stretched segmented items within the track.
 - Replaced world art and swatch fixed radii and shadows with theme tokens.
 - Remaining literal audit and visual verification are incomplete.
+- Replaced exact 4px, 6px, 8px and pill radii in account, library and server views with their matching theme tokens. Minecraft-specific colours and dynamic folder tints remain intentional artwork.

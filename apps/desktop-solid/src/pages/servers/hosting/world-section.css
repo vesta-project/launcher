@@ -42,7 +42,7 @@
     inline-size: 64px;
     block-size: 64px;
     aspect-ratio: 1;
-    border-radius: var(--vesta-radius-md);
+    border-radius: var(--vesta-radius-lg);
     object-fit: cover;
     box-shadow: 0 0 0 var(--vesta-border-width) var(--vesta-color-border-strong), var(--vesta-shadow-sm);
     image-rendering: pixelated;
@@ -165,7 +165,7 @@
     flex: none;
     inline-size: 28px;
     block-size: 28px;
-    border-radius: var(--vesta-radius-sm);
+    border-radius: var(--vesta-radius-md);
     background: linear-gradient(to bottom, var(--dimension-a) 0 38%, var(--dimension-b) 38% 100%);
     box-shadow: inset 0 0 0 var(--vesta-border-width) var(--vesta-color-border);
   }
