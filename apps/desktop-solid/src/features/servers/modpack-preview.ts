@@ -1,11 +1,25 @@
 // Preview only: shapes the browser fixtures' owner server into the Modpack area's scenarios so
 // each state can be seen without a live agent. Set before loading, comma-separated:
-//   localStorage['vesta.fixtures.modpack'] = 'provider' | 'overrides' | 'empty'
+//   localStorage['vesta.fixtures.modpack'] = 'provider' | 'overrides' | 'empty' | 'linked'
 //   plus optionally 'archive=mrpack|curseforge|zip|vesta|linked' for upload inspection results.
 import { seedArchiveInspection } from './fixtures-pack';
+import type { ServerContentEntry } from './native-content';
 import type { ServersApi } from './service';
 
 const OWNER = 'fixture-survival';
+
+/** `linked`: the owner server follows a Modrinth modpack that installed these mods. */
+const LINKED_MODS: [projectId: string | null, name: string][] = [
+  ['sodium', 'Sodium'], ['lithium', 'Lithium'], [null, 'Create'], [null, "Farmer's Delight"], [null, 'Supplementaries'],
+  [null, 'Waystones'], [null, 'Balm'], [null, 'Cloth Config API'], [null, 'Architectury API'], [null, 'Jade'], [null, 'Chunky'],
+  [null, 'Spark'], [null, 'FerriteCore'], [null, 'Collective'],
+];
+const linkedPath = (name: string) => `mods/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jar`;
+const linkedEntries = (): ServerContentEntry[] => LINKED_MODS.map(([projectId, name]) => ({
+  kind: 'mod', path: linkedPath(name), filename: linkedPath(name).slice(5), size: '812345', enabled: true, sha256: 'd'.repeat(64), modpackOwned: true,
+  provider: projectId ? { provider: 'modrinth', projectId, versionId: `${projectId}-1` } : null,
+  declared: { loader: 'fabric', side: '*', name, version: '1.0', dependencies: [] }, pending: null, pendingId: null, pendingError: null,
+}));
 
 export function withModpackScenario(api: ServersApi, setting: string | null | undefined): ServersApi {
   if (!setting) return api;
@@ -47,7 +61,21 @@ export function withModpackScenario(api: ServersApi, setting: string | null | un
     async packDraft(id) {
       await prepare(id);
       const { view, blank } = await unpublished(id);
+      if (parts.has('linked') && id === OWNER && !view.serverModpack) {
+        const source = { source: 'provider' as const, provider: 'modrinth' as const, projectId: 'fo', versionId: 'fo-2' };
+        const files = Object.fromEntries(linkedEntries().map((entry) => [entry.path, entry.sha256!]));
+        return { ...view, serverModpack: { source, displayVersion: '2', files, state: 'installed', installed: { source, displayVersion: '2' }, pending: null, pendingIds: [] } };
+      }
       return blank ? { ...view, publishedRevision: '0', minimumRevision: '0', pendingPublication: false } : view;
+    },
+    async serverModpackUpdate(id) {
+      if (!parts.has('linked') || id !== OWNER) return api.serverModpackUpdate(id);
+      const link = (await this.packDraft(id)).serverModpack!;
+      return { installed: link.installed ?? null, pending: null, available: null };
+    },
+    async content(id) {
+      const inventory = await api.content(id);
+      return parts.has('linked') && id === OWNER ? { ...inventory, items: [...linkedEntries(), ...inventory.items] } : inventory;
     },
     async packProviderPublish(id, request, intent) {
       const real = (await api.packDraft(id)).publishedRevision;

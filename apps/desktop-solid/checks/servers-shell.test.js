@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { capabilitiesForRole } from '../src/features/servers/capabilities';
 import {
-  agentReachable, backupsConfigured, extraWarnings, headerExplains, headerNotice, isQuietError, joinAddress, knownPlayerCount,
-  legacyTabs, paneState, resolveServerLocation, restartPending, serverPath, visibleMainTabs, visibleSections,
+  CLIENT_PACK_ENTRY, activeNavEntry, agentReachable, backupsConfigured, extraWarnings, headerExplains, headerNotice, isQuietError, joinAddress,
+  knownPlayerCount, legacyTabs, navEntryPath, paneState, resolveServerLocation, restartPending, serverNavEntries, serverPath, visibleMainTabs,
+  visibleSections,
 } from '../src/features/servers/shell-model';
 import {
   invalidateServerResources, peekServerResource, readServerResource, resourceKey, seedServerResource, serverResource,
@@ -54,6 +55,28 @@ describe('[shell] routing', () => {
   test('the main nav has no players, settings, access or connection tabs', () => {
     const ids = visibleMainTabs({ snapshot: snapshot(), backupsConfigured: true }).map((tab) => tab.id);
     expect(ids).toEqual(['overview', 'console', 'resources', 'pack', 'files', 'automation', 'backups', 'activity']);
+  });
+
+  test('pack editors get Server modpack and Client pack as a Modpack group at the end of the sidebar', () => {
+    const tabs = visibleMainTabs({ snapshot: snapshot(), backupsConfigured: true });
+    const editor = serverNavEntries(tabs, true);
+    expect(editor.map((entry) => entry.value)).toEqual(['overview', 'console', 'resources', 'files', 'automation', 'backups', 'activity', 'pack', CLIENT_PACK_ENTRY]);
+    expect(editor.filter((entry) => entry.group === 'modpack').map((entry) => entry.label)).toEqual(['server-pack.section-server', 'server-pack.section-client']);
+    expect(editor.filter((entry) => entry.group).every((entry) => entry.tab.id === 'pack')).toBe(true);
+    // Players keep the single Modpack entry in place.
+    const player = serverNavEntries(tabs, false);
+    expect(player.map((entry) => entry.value)).toEqual(['overview', 'console', 'resources', 'pack', 'files', 'automation', 'backups', 'activity']);
+    expect(player.some((entry) => entry.group)).toBe(false);
+  });
+
+  test('client pack paths select the Client pack entry; the server modpack is /pack', () => {
+    expect(activeNavEntry('pack', undefined, true)).toBe('pack');
+    for (const item of ['client', 'content', 'files', 'versions']) expect(activeNavEntry('pack', item, true)).toBe(CLIENT_PACK_ENTRY);
+    expect(activeNavEntry('pack', 'client', false)).toBe('pack');
+    expect(activeNavEntry('files', 'world', true)).toBe('files');
+    expect(navEntryPath('c1', CLIENT_PACK_ENTRY)).toBe('/servers/c1/pack/client');
+    expect(navEntryPath('c1', 'pack')).toBe('/servers/c1/pack');
+    expect(navEntryPath('c1', 'overview')).toBe('/servers/c1');
   });
 
   test('backups show when set up, or while the user can set them up', () => {

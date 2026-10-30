@@ -1,15 +1,15 @@
 /*
- * Server â†’ Modpack: two sections (Server modpack | Client pack). The server modpack reads like
+ * Server → Modpack: two sidebar entries (Server modpack, Client pack). The server modpack reads like
  * an instance linked to a modpack (link card, pending, owned content). The custom client pack
- * has a pack header, a sub-nav like an instance's tabs, and panes that reuse the instance
+ * has one row of sections like an instance's tabs, and panes that reuse the instance
  * Resources table and the server Files list.
- * Hooks: [data-vesta=modpack] -header(-art -icon -copy -title -summary -facts -draft) -scroll
+ * Hooks: [data-vesta=modpack] -section -tabbar -draft(-dot) -scroll
  *        -first -choices -choice -card -facts -overview -panel -install -versions -diff
  *        -server -link-card(-identity -icon -title -name -meta -status -error) -client
  *        -modes -mode(-icon -copy -title -description -note) -mode-save -offer
- * States: modpack-first: data-section; modpack-mode: data-selected, data-disabled;
+ * States: modpack-section, modpack-first: data-section; modpack-mode: data-selected, data-disabled;
  *         modpack-install-section: data-change; modpack-link-card: data-phase
- * Knobs: --modpack-art (header art image), --modpack-panel-bg
+ * Knobs: --modpack-panel-bg
  */
 @layer launcher {
   :where([data-vesta="modpack"]) {
@@ -23,115 +23,7 @@
 
   :where([data-vesta="server-callout"][data-tone="accent"]) { --tone: var(--vesta-color-accent); }
 
-  /* ---- Header ---- */
-  :where([data-vesta="modpack-header"]) {
-    position: relative;
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: var(--vesta-space-4);
-    padding: var(--vesta-space-4) var(--instance-gutter);
-    overflow: hidden;
-    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
-  }
-
-  :where([data-vesta="modpack-header-art"]) {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    background:
-      linear-gradient(to right, var(--vesta-color-surface) 25%, color-mix(in oklab, var(--vesta-color-surface) 80%, transparent)),
-      var(--modpack-art, none) center / cover no-repeat;
-    filter: saturate(1.2);
-    opacity: 0.9;
-  }
-
-  :where([data-vesta="modpack-header"]) > :not([data-vesta="modpack-header-art"]) {
-    position: relative;
-    z-index: 1;
-  }
-
-  :where([data-vesta="modpack-header-icon"]) {
-    flex: none;
-    inline-size: 64px;
-    block-size: 64px;
-    object-fit: cover;
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    background: var(--vesta-color-surface-sunken, var(--vesta-color-surface));
-    box-shadow: 0 4px 14px oklch(0 0 0 / 0.25);
-  }
-
-  :where([data-vesta="modpack-header-copy"]) {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: var(--vesta-space-1);
-    min-inline-size: 0;
-  }
-
-  :where([data-vesta="modpack-header-title-row"]) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--vesta-space-2);
-  }
-
-  :where([data-vesta="modpack-header-title"]) {
-    margin: 0;
-    overflow: hidden;
-    font-size: var(--vesta-text-lg);
-    font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  :where([data-vesta="modpack-header-summary"]) {
-    display: -webkit-box;
-    margin: 0;
-    overflow: hidden;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-  }
-
-  :where([data-vesta="modpack-header-facts"]) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--vesta-space-1) var(--vesta-space-3);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-    font-variant-numeric: tabular-nums;
-  }
-
-  :where([data-vesta="modpack-header-facts"]) > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  :where([data-vesta="modpack-header-draft"]) {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    padding: var(--vesta-space-1) var(--vesta-space-1) var(--vesta-space-1) var(--vesta-space-3);
-    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
-    border-radius: var(--vesta-radius-container);
-    background: color-mix(in oklab, var(--vesta-color-accent) 12%, var(--vesta-color-surface));
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-semibold);
-  }
-
-  :where([data-vesta="modpack-draft-dot"]) {
-    inline-size: 8px;
-    block-size: 8px;
-    border-radius: 50%;
-    background: var(--vesta-color-accent);
-  }
-
-  /* ---- Sub-nav + panes ---- */
+  /* ---- Section row: one row of client pack sections, unpublished changes at its end ---- */
   .modpack-tabs {
     display: flex;
     flex: 1;
@@ -139,19 +31,25 @@
     min-block-size: 0;
   }
 
-  .modpack-tabs > [role="tablist"] {
+  :where([data-vesta="modpack-tabbar"]) {
+    display: flex;
     flex: none;
-    padding-inline: var(--instance-gutter);
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding-inline: calc(var(--instance-gutter) - var(--tab-padding-x, var(--vesta-space-3))) var(--instance-gutter);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
     background: var(--instance-bar-bg);
   }
 
-  /* The server workspace's sidebar rules reach nested tabs; the sub-nav stays a horizontal strip. */
+  /* The server workspace's sidebar rules reach nested tabs; the sections stay a horizontal row. */
   .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab-list"] {
+    flex: 1;
     inline-size: auto;
+    min-inline-size: 0;
     gap: var(--vesta-space-1);
-    padding: 0 var(--instance-gutter);
-    border-inline-end: 0;
-    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
 
   .instance-tabs[data-orientation] .modpack-tabs [data-vesta="tab"] {
@@ -170,6 +68,23 @@
     inline-size: auto;
     block-size: 2px;
     border-radius: 2px 2px 0 0;
+  }
+
+  :where([data-vesta="modpack-draft"]) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="modpack-draft-dot"]) {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--vesta-color-accent);
   }
 
   .modpack-pane {
@@ -465,6 +380,80 @@
     font-weight: var(--vesta-weight-semibold);
     letter-spacing: 0.04em;
     text-transform: uppercase;
+  }
+
+  :where([data-vesta="modpack-panel-count"]) {
+    margin-inline-start: var(--vesta-space-2);
+    color: var(--vesta-color-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Resources a server modpack installed: two columns of icon + name, the rest as "+N more". */
+  :where([data-vesta="modpack-owned"]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--vesta-space-1) var(--vesta-space-3);
+    margin: 0;
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    list-style: none;
+  }
+
+  :where([data-vesta="modpack-owned"]) > li {
+    display: flex;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-owned-item"]) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    min-block-size: 32px;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where(button[data-vesta="modpack-owned-item"]) {
+    margin-inline: calc(var(--vesta-space-1) * -1);
+    padding: 0 var(--vesta-space-1);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    text-align: start;
+    cursor: default;
+  }
+
+  :where(button[data-vesta="modpack-owned-item"]):hover { background: var(--vesta-color-fill); color: var(--vesta-color-text); }
+  :where(button[data-vesta="modpack-owned-item"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
+
+  :where([data-vesta="modpack-owned-item"] img),
+  :where([data-vesta="modpack-owned-placeholder"]) {
+    flex: none;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: var(--vesta-radius-sm);
+  }
+
+  :where([data-vesta="modpack-owned-item"] img) {
+    object-fit: cover;
+  }
+
+  :where([data-vesta="modpack-owned-placeholder"]) {
+    display: grid;
+    place-items: center;
+    background: var(--vesta-color-fill);
+    box-shadow: 0 0 0 var(--vesta-border-width) var(--vesta-color-border);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="modpack-owned-name"]) {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   :where([data-vesta="modpack-panel-actions"]) {
@@ -836,9 +825,12 @@
     gap: var(--vesta-space-2);
   }
 
-  /* ---- Sections (Server modpack | Client pack) ---- */
-  .instance-tabs[data-orientation] .modpack-sections > [data-vesta="tab-list"] {
-    background: var(--instance-bar-bg);
+  /* ---- Sections: the sidebar entry picks one; it fills the pane ---- */
+  :where([data-vesta="modpack-section"]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
   }
 
   /* ---- Server modpack ---- */
@@ -1122,44 +1114,73 @@
 }
 
 /* ---- Install / link / update review ----
- * Hooks: [data-vesta=pack-review] -title -summary -version(-static -meta) -switch -changes
+ * Hooks: [data-vesta=pack-review] -title -name -summary -version(-static -meta) -switch -changes
  *        -counts -count -unchanged -conflicts -notes -note -loading
- * States: pack-review-switch: data-acknowledged; pack-review-count: data-kind, aria-expanded
+ * States: pack-review-title: data-summary; pack-review-switch: data-acknowledged; pack-review-count: data-kind, aria-expanded
  */
 @layer launcher {
   :where(.pack-review-dialog) {
-    --pack-review-art: 36px;
+    --pack-review-art: 40px;
   }
 
+  /* Art on the left; name + source tag over the summary beside it. The close button keeps the
+     header's right edge, so nothing sits under it. */
   :where([data-vesta="pack-review-title"]) {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--pack-review-art) minmax(0, 1fr);
     align-items: center;
-    gap: var(--vesta-space-3);
+    column-gap: var(--vesta-space-3);
     min-inline-size: 0;
   }
 
-  :where([data-vesta="pack-review-title"] img) {
-    flex: none;
-    inline-size: var(--pack-review-art, 36px);
-    block-size: var(--pack-review-art, 36px);
+  :where([data-vesta="pack-review-title"]) > img {
+    grid-row: span 2;
+    inline-size: var(--pack-review-art);
+    block-size: var(--pack-review-art);
     border-radius: var(--vesta-radius-md);
     object-fit: cover;
   }
 
-  :where([data-vesta="pack-review-title"]) > span:not([data-vesta]) {
+  :where([data-vesta="pack-review-title"]:not([data-summary])) > img {
+    grid-row: auto;
+  }
+
+  :where([data-vesta="pack-review-name"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="pack-review-name"]) > span:not([data-vesta]) {
+    min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  :where(.pack-review-dialog [data-vesta="dialog-description"]) {
-    padding-inline-start: calc(var(--dialog-padding) + var(--pack-review-art) + var(--vesta-space-3));
+  :where([data-vesta="pack-review-name"]) > [data-vesta="source-tag"] {
+    flex: none;
   }
 
+  /* Muted relative to the title, so it reads on any title bar a theme draws. */
   :where([data-vesta="pack-review-summary"]) {
-    display: block;
     overflow: hidden;
+    color: color-mix(in oklab, currentColor 72%, transparent);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-regular, 400);
+    line-height: var(--vesta-leading-tight);
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Read as the description; shown in the title. */
+  :where(.pack-review-dialog [data-vesta="dialog-description"]) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
     white-space: nowrap;
   }
 
@@ -1198,7 +1219,7 @@
     display: flex;
     flex: 1;
     flex-wrap: wrap;
-    gap: var(--vesta-space-1);
+    gap: var(--vesta-space-1) var(--vesta-space-3);
     min-inline-size: 0;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);

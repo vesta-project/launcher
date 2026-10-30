@@ -559,6 +559,20 @@
   :where([data-vesta="server-header-address"]) { display: inline-flex; align-items: center; gap: 2px; }
   :where([data-vesta="server-header-address"]) :where([data-vesta="button"]) { color: inherit; }
 
+  /* A labelled group at the end of the sidebar (Modpack: Server modpack, Client pack). */
+  :where([data-vesta="server-nav-heading"]) {
+    display: none;
+  }
+
+  .instance-tabs[data-orientation="vertical"] :where([data-vesta="server-nav-heading"]) {
+    display: block;
+    margin-block-start: var(--vesta-space-3);
+    padding: 0 var(--tab-padding-x) var(--vesta-space-1);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-medium);
+  }
+
   /* Tabs that need the agent stay in place while it is unreachable, dimmed. */
   .instance-tabs [data-vesta="tab"].server-tab-offline:not([data-selected]) { opacity: 0.55; }
 

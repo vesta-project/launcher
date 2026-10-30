@@ -26,11 +26,11 @@ describe('backups tab visibility', () => {
 
 describe('setup draft', () => {
   const unconfigured = { limits: { maxSnapshots: null, maxRepositoryBytes: null, minFreeBytes: 1 }, repository: { kind: 'local', location: 'x', initialized: false } };
-  test('suggests one online daily profile keeping up to 14, at most one per day, of the whole game', () => {
+  test('suggests one online daily profile keeping the newest 14, of the whole game', () => {
     const draft = setupDraft(unconfigured);
     expect(draft.initializeRepository).toBe(true);
     expect(draft.profiles).toHaveLength(1);
-    expect(draft.profiles[0]).toMatchObject({ name: 'daily', mode: 'online', keepTotal: 14, keepDaily: 14, keepLast: 0, keepHourly: 0, keepWeekly: 0, keepMonthly: 0, include: [], exclude: [] });
+    expect(draft.profiles[0]).toMatchObject({ name: 'daily', mode: 'online', keepTotal: 0, keepHourly: 0, keepLast: 14, keepDaily: 0, keepWeekly: 0, keepMonthly: 0, include: [], exclude: [] });
     expect(draftValid(draft)).toBe(true);
     expect(setupDraft({ ...unconfigured, repository: { ...unconfigured.repository, initialized: true } }).initializeRepository).toBe(false);
   });
@@ -79,26 +79,26 @@ describe('draft diff', () => {
   });
 });
 
-import { simpleRetention, withSimpleRetention } from '../src/features/servers/backup-setup-model';
-describe('simple retention', () => {
+import { retentionAdvanced, retentionForm, withRetention } from '../src/features/servers/backup-setup-model';
+describe('retention', () => {
   const base = { ...suggestedProfile(), keepTotal: 0, keepHourly: 0, keepLast: 0, keepDaily: 0, keepWeekly: 0, keepMonthly: 0 };
-  test('"keep up to N" maps to the total cap and mirrors the chosen tier', () => {
-    expect(withSimpleRetention(base, { total: 20, thinning: 'none' })).toMatchObject({ keepTotal: 20, keepLast: 20, keepHourly: 0, keepDaily: 0, keepWeekly: 0, keepMonthly: 0 });
-    expect(withSimpleRetention(base, { total: 24, thinning: 'hourly' })).toMatchObject({ keepTotal: 24, keepLast: 0, keepHourly: 24, keepDaily: 0 });
-    expect(withSimpleRetention({ ...base, keepWeekly: 4, keepMonthly: 3 }, { total: 7, thinning: 'daily' })).toMatchObject({ keepTotal: 7, keepDaily: 7, keepWeekly: 0, keepMonthly: 0 });
-  });
-  test('reads back what it wrote, and older single-tier profiles without a total', () => {
-    for (const retention of [{ total: 20, thinning: 'none' }, { total: 24, thinning: 'hourly' }, { total: 7, thinning: 'daily' }]) {
-      expect(simpleRetention(withSimpleRetention(base, retention))).toEqual(retention);
+  test('newest, daily and weekly map onto keep_last, keep_daily and keep_weekly', () => {
+    expect(withRetention(base, { newest: 7, daily: 14, weekly: 4 })).toMatchObject({ keepLast: 7, keepDaily: 14, keepWeekly: 4, keepTotal: 0, keepHourly: 0, keepMonthly: 0 });
+    for (const form of [{ newest: 20, daily: 0, weekly: 0 }, { newest: 0, daily: 7, weekly: 4 }]) {
+      expect(retentionForm(withRetention(base, form))).toEqual(form);
     }
-    expect(simpleRetention({ ...base, keepTotal: undefined, keepLast: 5 })).toEqual({ total: 5, thinning: 'none' });
-    expect(simpleRetention(base)).toEqual({ total: 0, thinning: 'none' });
-    expect(simpleRetention({ ...base, keepTotal: 30 })).toEqual({ total: 30, thinning: 'none' });
   });
-  test('weekly/monthly tiers, several tiers or a mismatched cap need the advanced counts', () => {
-    expect(simpleRetention({ ...base, keepDaily: 7, keepWeekly: 4 })).toBeNull();
-    expect(simpleRetention({ ...base, keepLast: 3, keepDaily: 7 })).toBeNull();
-    expect(simpleRetention({ ...base, keepTotal: 30, keepDaily: 7 })).toBeNull();
+  test('editing clears a total cap (it would prune daily and weekly backups) but keeps hourly and monthly', () => {
+    expect(withRetention({ ...base, keepTotal: 30, keepHourly: 24, keepMonthly: 3 }, { newest: 5, daily: 7, weekly: 0 }))
+      .toMatchObject({ keepTotal: 0, keepHourly: 24, keepMonthly: 3, keepLast: 5, keepDaily: 7 });
+  });
+  test('Advanced starts open only when something beyond the newest backups is kept', () => {
+    expect(retentionAdvanced({ ...base, keepLast: 10 })).toBe(false);
+    expect(retentionAdvanced({ ...base, keepTotal: 10 })).toBe(false);
+    expect(retentionAdvanced({ ...base, keepDaily: 7 })).toBe(true);
+    expect(retentionAdvanced({ ...base, keepWeekly: 4 })).toBe(true);
+    expect(retentionAdvanced({ ...base, keepMonthly: 3 })).toBe(true);
+    expect(retentionAdvanced({ ...base, keepHourly: 24 })).toBe(true);
   });
   test('validity, keeps-everything and diffs include the total and hourly counts', () => {
     expect(retentionValid({ ...base, keepTotal: 1001 })).toBe(false);

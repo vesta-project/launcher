@@ -56,7 +56,6 @@ const backupErrors: Record<string, MessageId> = {
   backup_confirmation_expired: 'servers.error.confirmation-expired',
 };
 
-// TODO: expose total-cap and thinning retention fields in Claude's profile editor redesign.
 export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = () => props.snapshot.connection.id;

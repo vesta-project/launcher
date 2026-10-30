@@ -163,4 +163,9 @@ export function formatDate(
   return new Intl.DateTimeFormat(locale(), options).format(date);
 }
 
+/** "a, b and c" in the current locale. */
+export function formatList(items: readonly string[]): string {
+  return new Intl.ListFormat(locale(), { type: "conjunction" }).format(items);
+}
+
 export { locale, languagePreference };
