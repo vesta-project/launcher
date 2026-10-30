@@ -5,12 +5,11 @@ import { route } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import {
-  clientSubTabs, modpackSection, resolveSubTab, type ClientPackMode, type ModpackSection, type ModpackSubTab,
+  clientSubTabs, modpackSection, resolveSubTab, type ModpackSection, type ModpackSubTab,
 } from '../../../features/servers/modpack-area-model';
 import { modpackPick } from '../../../features/servers/modpack-handoff';
 import type { ServerSnapshot } from '../../../features/servers/native';
 import { formatNumber, t } from '../../../localization';
-import type { MessageId } from '../../../localization/messages';
 import { ServerErrorNote } from '../parts';
 import { ModpackAreaContext, createModpackArea, useModpackArea } from './area';
 import { ClientModePanel } from './client-mode';
@@ -18,7 +17,7 @@ import { ModpackContent } from './content';
 import { ModpackFiles } from './files';
 import { FirstRun } from './first-run';
 import { PlayOnServerCard, offersClientPack } from './get-modpack';
-import { ModpackHeader } from './header';
+import { ModpackDraftStatus } from './header';
 import { InstallOnServerDialog } from './install-on-server';
 import { ModpackOverview } from './overview';
 import { ProviderPickDialog } from './provider-pick';
@@ -33,17 +32,11 @@ const views: Record<ModpackSubTab, Component> = {
   versions: ModpackVersions,
 };
 
-const modeLabel: Record<ClientPackMode, MessageId> = {
-  none: 'server-pack.mode-none-short',
-  'server-modpack': 'server-pack.mode-server-short',
-  custom: 'server-pack.mode-custom-short',
-};
-
 /**
- * Server → Modpack: two independent, optional parts. **Server modpack** is the server
- * installation's own link (like an instance linked to a modpack). **Client pack** is what
- * players get: nothing, the server's modpack, or a custom pack laid out like an instance
- * (header, then Overview, Content, Files and Versions).
+ * Server → Modpack: two independent, optional parts, each its own sidebar entry. **Server
+ * modpack** is the server installation's own link (like an instance linked to a modpack).
+ * **Client pack** is what players get: nothing, the server's modpack, or a custom pack laid out
+ * like an instance (header, then Overview, Content, Files and Versions).
  */
 export function ModpackTab(props: { snapshot: ServerSnapshot }) {
   const area = createModpackArea(() => props.snapshot);
@@ -76,16 +69,10 @@ function PlayerView() {
   );
 }
 
+/** Server modpack and Client pack are sidebar entries; the URL says which one this pane shows. */
 function EditorView() {
   const area = useModpackArea();
   const section = (): ModpackSection => modpackSection(route().detail === 'pack' ? route().item : undefined);
-  const linkBadge = () => {
-    const phase = area.link().phase;
-    if (phase === 'unlinked') return undefined;
-    return phase === 'installed'
-      ? <Icon name="icons/content/link" size={12} label={t('server-pack.linked-badge')} />
-      : <Badge size="sm" variant="soft" tone="warning">{t('server-pack.restart-badge')}</Badge>;
-  };
   return (
     <Show when={area.workspace()} fallback={
       <div data-vesta="modpack-scroll">
@@ -93,26 +80,19 @@ function EditorView() {
         <Show when={!area.error()}><EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.loading')} /></Show>
       </div>
     }>
-      <Tabs size="sm" value={section()} onChange={(value) => (value === 'server' ? area.openServer() : area.open('overview'))} class="modpack-tabs modpack-sections">
-        <TabList aria-label={t('server-pack.sections')}>
-          <Tab value="server" icon={<Icon name="icons/content/server" />} badge={linkBadge()}>{t('server-pack.section-server')}</Tab>
-          <Tab value="client" icon={<Icon name="icons/content/modpack" />}
-            badge={<Badge size="sm" variant="soft" tone={area.clientMode() === 'none' ? 'neutral' : 'accent'}>{t(modeLabel[area.clientMode()])}</Badge>}>
-            {t('server-pack.section-client')}
-          </Tab>
-        </TabList>
-        <Show when={section() === 'server'}>
-          <TabPanel forceMount value="server" class="modpack-pane"><ServerModpack /></TabPanel>
+      <div data-vesta="modpack-section" data-section={section()}>
+        <Show when={section() === 'client'} fallback={<ServerModpack />}>
+          <ClientPack />
         </Show>
-        <Show when={section() === 'client'}>
-          <TabPanel forceMount value="client" class="modpack-pane"><ClientPack /></TabPanel>
-        </Show>
-      </Tabs>
+      </div>
     </Show>
   );
 }
 
-/** What players get. Only Custom has a workspace (header + sections); other modes are one panel. */
+/**
+ * What players get. Only Custom has a workspace: one row of sections (the server header is the
+ * page header; the pack's identity lives in its Overview). Other modes are one panel.
+ */
 function ClientPack() {
   const area = useModpackArea();
   // Same tabs keep the same array, so a reloaded workspace does not remount the open pane.
@@ -133,21 +113,23 @@ function ClientPack() {
       <Show when={area.kind() !== 'none'} fallback={
         <div data-vesta="modpack-scroll"><div data-vesta="modpack-client"><ClientModePanel /><FirstRun section="client" /></div></div>
       }>
-        <ModpackHeader />
         <Tabs size="sm" value={active()} onChange={(tab) => area.open(tab as ModpackSubTab)} class="modpack-tabs">
-          <TabList aria-label={t('server-pack.client-sections')}>
-            <For each={tabs()}>
-              {(tab) => (
-                <Tab value={tab.id} icon={<Icon name={tab.icon} />} badge={
-                  tab.state === 'locked' ? <Icon name="icons/security/lock" size={12} label={t('server-pack.customize-first')} />
-                    : tab.state === 'read-only' ? <Badge size="sm" variant="soft">{t('server-pack.read-only')}</Badge>
-                      : count(tab.id) !== undefined ? <span data-vesta="instance-tab-count">{formatNumber(count(tab.id)!)}</span> : undefined
-                }>
-                  {t(tab.label)}
-                </Tab>
-              )}
-            </For>
-          </TabList>
+          <div data-vesta="modpack-tabbar">
+            <TabList aria-label={t('server-pack.client-sections')}>
+              <For each={tabs()}>
+                {(tab) => (
+                  <Tab value={tab.id} icon={<Icon name={tab.icon} />} badge={
+                    tab.state === 'locked' ? <Icon name="icons/security/lock" size={12} label={t('server-pack.customize-first')} />
+                      : tab.state === 'read-only' ? <Badge size="sm" variant="soft">{t('server-pack.read-only')}</Badge>
+                        : count(tab.id) !== undefined ? <span data-vesta="instance-tab-count">{formatNumber(count(tab.id)!)}</span> : undefined
+                  }>
+                    {t(tab.label)}
+                  </Tab>
+                )}
+              </For>
+            </TabList>
+            <ModpackDraftStatus />
+          </div>
           <For each={tabs()}>
             {(tab) => (
               <Show when={active() === tab.id}>

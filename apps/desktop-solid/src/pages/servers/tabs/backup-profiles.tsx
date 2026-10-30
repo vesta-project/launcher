@@ -3,11 +3,11 @@ import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from '../../../components/icon';
 import { transitionTo } from '../../../app/transition';
-import { t } from '../../../localization';
+import { formatList, t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import {
-  MAX_KEEP, MAX_PROFILES, diffCount, draftDiff, editDraft, keepsEverything, nextProfileName, parseList, profileProblems, setupDraft,
-  simpleRetention, suggestedProfile, withSimpleRetention, type ProfileProblem, type SimpleRetention, type Thinning,
+  MAX_KEEP, MAX_PROFILES, diffCount, draftDiff, editDraft, keepsEverything, nextProfileName, parseList, profileProblems, retentionAdvanced,
+  retentionForm, setupDraft, suggestedProfile, withRetention, type ProfileProblem, type Retention, type RetentionForm,
 } from '../../../features/servers/backup-setup-model';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
@@ -42,16 +42,19 @@ const problemText: Record<ProfileProblem, MessageId> = {
   exclude: 'servers.backup-setup.exclude-problem',
 };
 
-const ADVANCED_FIELDS = [
-  ['keepTotal', 'servers.backup-setup.keep-total'],
-  ['keepLast', 'servers.backup-setup.keep-last'],
-  ['keepHourly', 'servers.backup-setup.keep-hourly'],
-  ['keepDaily', 'servers.backup-setup.keep-daily'],
-  ['keepWeekly', 'servers.backup-setup.keep-weekly'],
-  ['keepMonthly', 'servers.backup-setup.keep-monthly'],
-] as const satisfies readonly (readonly [keyof BackupProfileConfig, MessageId])[];
+/** One "keep" rule: the words before the count, the field it writes and the unit after it. */
+interface KeepRule { field: 'keepLast' | 'keepDaily' | 'keepWeekly' | 'keepMonthly' | 'keepHourly'; lead: MessageId; unit: MessageId }
 
-const DEFAULT_TOTAL = 14;
+const NEWEST: KeepRule = { field: 'keepLast', lead: 'servers.backup-setup.keep-newest', unit: 'servers.backup-setup.keep-backups' };
+const ADVANCED: readonly KeepRule[] = [
+  { field: 'keepDaily', lead: 'servers.backup-setup.keep-daily', unit: 'servers.backup-setup.unit-days' },
+  { field: 'keepWeekly', lead: 'servers.backup-setup.keep-weekly', unit: 'servers.backup-setup.unit-weeks' },
+];
+/** Tiers older launchers or other tools may have set; listed only while they are. */
+const LEGACY: readonly KeepRule[] = [
+  { field: 'keepMonthly', lead: 'servers.backup-setup.keep-monthly', unit: 'servers.backup-setup.unit-months' },
+  { field: 'keepHourly', lead: 'servers.backup-setup.keep-hourly', unit: 'servers.backup-setup.unit-hours' },
+];
 
 /** Name, mode, retention and scope of one profile, in two columns. */
 function ProfileFields(props: { row: Row; others: readonly BackupProfileConfig[]; readOnly?: boolean; onChange: (patch: Partial<Row>) => void }) {
@@ -59,13 +62,30 @@ function ProfileFields(props: { row: Row; others: readonly BackupProfileConfig[]
   const problems = () => profileProblems(profile(), props.others);
   const has = (problem: ProfileProblem) => problems().includes(problem);
   const patch = (next: Partial<BackupProfileConfig>) => props.onChange({ profile: { ...props.row.profile, ...next } });
-  const simple = () => simpleRetention(props.row.profile);
-  // Advanced opens by itself only for retention the simple form can't show.
-  const [advanced, setAdvanced] = createSignal(untrack(simple) === null, { name: 'server-backup-fields:advanced' });
-  const setSimple = (next: Partial<SimpleRetention>) => {
-    const base = simple() ?? { total: props.row.profile.keepTotal || DEFAULT_TOTAL, thinning: 'none' as Thinning };
-    patch(withSimpleRetention(props.row.profile, { ...base, ...next }));
+  // Advanced starts open when the profile already keeps daily or weekly backups.
+  const [advanced, setAdvanced] = createSignal(untrack(() => retentionAdvanced(props.row.profile)), { name: 'server-backup-fields:advanced' });
+  // Legacy tiers stay listed for the whole edit once shown, so clearing one doesn't move the rows.
+  const legacy = LEGACY.filter((rule) => (untrack(() => props.row.profile[rule.field]) ?? 0) > 0);
+  const setKeep = (field: KeepRule['field'], count: number) => {
+    const form: RetentionForm = { ...retentionForm(props.row.profile) };
+    if (field === 'keepLast') form.newest = count;
+    else if (field === 'keepDaily') form.daily = count;
+    else if (field === 'keepWeekly') form.weekly = count;
+    patch({ ...withRetention(props.row.profile, form), ...(field === 'keepMonthly' || field === 'keepHourly' ? { [field]: count } : {}) });
   };
+  // The first row's lead also holds every other lead, hidden, so the column is as wide as the
+  // longest one before Advanced opens and nothing moves when it does.
+  const keepRow = (rule: KeepRule, sizes: readonly KeepRule[] = []) => (
+    <div data-vesta="backup-keep-row">
+      <span data-vesta="backup-keep-lead">
+        <span>{t(rule.lead)}</span>
+        <For each={sizes}>{(other) => <span data-vesta="backup-keep-sizer" aria-hidden="true">{t(other.lead)}</span>}</For>
+      </span>
+      <NumberField size="sm" aria-label={t(rule.lead)} value={props.row.profile[rule.field] ?? 0} min={0} max={MAX_KEEP} disabled={props.readOnly}
+        onChange={(next: number) => setKeep(rule.field, next)} />
+      <span>{t(rule.unit, { count: props.row.profile[rule.field] ?? 0 })}</span>
+    </div>
+  );
   return (
     <div data-vesta="backup-form">
       <div data-vesta="backup-form-column">
@@ -86,42 +106,17 @@ function ProfileFields(props: { row: Row; others: readonly BackupProfileConfig[]
 
         <div data-vesta="backup-form-field">
           <span data-vesta="backup-form-label">{t('servers.backup-setup.retention')}</span>
-          <Show when={simple()} fallback={<span data-vesta="backup-form-help">{retentionText(props.row.profile)}</span>}>
-            {(value) => (
-              <>
-                <div data-vesta="backup-keep-row">
-                  <span>{t('servers.backup-setup.keep-up-to')}</span>
-                  <NumberField size="sm" aria-label={t('servers.backup-setup.keep-total')} value={value().total} min={0} max={MAX_KEEP} disabled={props.readOnly}
-                    onChange={(next: number) => setSimple({ total: next })} />
-                  <span>{t('servers.backup-setup.keep-backups', { count: value().total })}</span>
-                </div>
-                <div data-vesta="backup-keep-row">
-                  <span>{t('servers.backup-setup.thinning')}</span>
-                  <SegmentedControl size="sm" aria-label={t('servers.backup-setup.thinning')} value={value().thinning} disabled={props.readOnly}
-                    onChange={(next) => setSimple({ thinning: next as Thinning })}
-                    options={[
-                      { value: 'none', label: t('servers.backup-setup.thinning-none') },
-                      { value: 'hourly', label: t('servers.backup-setup.thinning-hour') },
-                      { value: 'daily', label: t('servers.backup-setup.thinning-day') },
-                    ]} />
-                </div>
-              </>
-            )}
-          </Show>
-          <details data-vesta="backup-advanced" open={advanced()} onToggle={(event) => setAdvanced(event.currentTarget.open)}>
-            <summary>{t('servers.backup-setup.advanced')}</summary>
-            <div data-vesta="backup-keep-grid">
-              <For each={ADVANCED_FIELDS}>
-                {([field, label]) => (
-                  <NumberField size="sm" label={t(label)} value={(props.row.profile[field] as number | null | undefined) ?? 0} min={0} max={MAX_KEEP} disabled={props.readOnly}
-                    onChange={(next: number) => patch({ [field]: next })} />
-                )}
-              </For>
-            </div>
-            <Show when={!simple() && !props.readOnly}>
-              <Button size="sm" variant="ghost" onClick={() => setSimple({})}>{t('servers.backup-setup.use-simple')}</Button>
+          {/* One grid, so every count lines up; opening Advanced only adds rows under the toggle. */}
+          <div data-vesta="backup-keep">
+            {keepRow(NEWEST, [...ADVANCED, ...legacy])}
+            <button type="button" data-vesta="backup-advanced" aria-expanded={advanced() ? 'true' : 'false'} onClick={() => setAdvanced(!advanced())}>
+              <Icon name="icons/controls/chevron-right" size={12} />
+              {t('servers.backup-setup.advanced')}
+            </button>
+            <Show when={advanced()}>
+              <For each={[...ADVANCED, ...legacy]}>{(rule) => keepRow(rule)}</For>
             </Show>
-          </details>
+          </div>
           <Show when={has('keep-range')}><p data-vesta="server-callout" data-tone="danger">{t(problemText['keep-range'])}</p></Show>
           <Show when={!has('keep-range') && keepsEverything(props.row.profile)}>
             <p data-vesta="server-callout" data-tone="warning">{t('servers.backup-setup.keeps-everything')}</p>
@@ -291,7 +286,7 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
   const valid = () => current().every((row) => profileProblems(fromRow(row), others(row.key)).length === 0);
   const edit = (key: number, patch: Partial<Row>) => setRows(current().map((row) => (row.key === key ? { ...row, ...patch } : row)));
   const add = () => {
-    const row = toRow(withSimpleRetention({ ...suggestedProfile(), name: nextProfileName(profiles().map((profile) => profile.name)) }, { total: 10, thinning: 'none' }));
+    const row = toRow(withRetention({ ...suggestedProfile(), name: nextProfileName(profiles().map((profile) => profile.name)) }, { newest: 10, daily: 0, weekly: 0 }));
     setRows([...current(), row]);
     setOpen(row.key);
   };
@@ -390,21 +385,16 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
   );
 }
 
-/** Retention in plain words, e.g. "Up to 14 · one per day", or the advanced counts. */
-export function retentionText(profile: Pick<BackupProfileConfig, 'keepTotal' | 'keepHourly' | 'keepLast' | 'keepDaily' | 'keepWeekly' | 'keepMonthly'>) {
-  const simple = simpleRetention(profile);
-  if (simple) {
-    if (!simple.total) return t('servers.backups.keep-all');
-    const total = t('servers.backups.keep-up-to', { count: simple.total });
-    return simple.thinning === 'none' ? total : `${total} · ${t(simple.thinning === 'hourly' ? 'servers.backups.one-per-hour' : 'servers.backups.one-per-day')}`;
-  }
-  const parts = [
-    profile.keepTotal && t('servers.backups.keep-up-to', { count: profile.keepTotal }),
-    profile.keepLast && t('servers.backups.keep-last', { count: profile.keepLast }),
-    profile.keepHourly && t('servers.backups.keep-hourly', { count: profile.keepHourly }),
-    profile.keepDaily && t('servers.backups.keep-daily', { count: profile.keepDaily }),
-    profile.keepWeekly && t('servers.backups.keep-weekly', { count: profile.keepWeekly }),
-    profile.keepMonthly && t('servers.backups.keep-monthly', { count: profile.keepMonthly }),
-  ].filter(Boolean);
-  return parts.join(' · ');
+/** Retention as one sentence, e.g. "Keeps the newest 7 and one per day for 14 days". */
+export function retentionText(profile: Retention) {
+  if (keepsEverything(profile)) return t('servers.backups.keep-all');
+  const parts = ([
+    [profile.keepLast, 'servers.backups.keep-newest'],
+    [profile.keepHourly ?? 0, 'servers.backups.keep-hourly'],
+    [profile.keepDaily, 'servers.backups.keep-daily'],
+    [profile.keepWeekly, 'servers.backups.keep-weekly'],
+    [profile.keepMonthly, 'servers.backups.keep-monthly'],
+    [profile.keepTotal ?? 0, 'servers.backups.keep-total'],
+  ] as const).filter(([count]) => count > 0).map(([count, message]) => t(message, { count }));
+  return t('servers.backups.keeps', { list: formatList(parts) });
 }

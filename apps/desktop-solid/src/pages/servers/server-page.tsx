@@ -8,13 +8,14 @@ import { Icon } from '../../components/icon';
 import { canGoBack, route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
+import type { MessageId } from '../../localization/messages';
 import { anyVisible, gate } from '../../features/servers/capabilities';
 import { stableConnectionId } from '../../features/servers/connection-id';
 import { invalidateServerResources, useServerResource } from '../../features/servers/resources';
 import { backupsResource, operationsResource } from '../../features/servers/server-resources';
 import {
-  agentReachable, backupsConfigured, paneState, resolveServerLocation, serverPath, visibleMainTabs, visibleSections,
-  type MainTabId, type SettingsSectionId,
+  activeNavEntry, agentReachable, backupsConfigured, navEntryPath, paneState, resolveServerLocation, serverNavEntries, serverPath, visibleMainTabs,
+  visibleSections, type MainTabId, type ServerNavEntry, type SettingsSectionId,
 } from '../../features/servers/shell-model';
 import { putSnapshot, removeServer, serverCommand, serverSnapshot, serversLoaded, useServerTopic } from '../../features/servers/store';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
@@ -43,6 +44,9 @@ const views: Record<MainTabId, { view: Component<{ snapshot: ServerSnapshot }>; 
   backups: { view: BackupsTab, flush: true },
   activity: { view: ActivityTab, flush: true },
 };
+
+/** A sidebar row: an entry, or the heading that starts a group. */
+type NavItem = { key: string; entry: ServerNavEntry; heading?: undefined } | { key: string; heading: MessageId; entry?: undefined };
 
 const sideNavQuery = '(min-width: 960px)';
 function useSideNav() {
@@ -102,6 +106,13 @@ function ServerContent(props: { id: string }) {
     const current = location();
     return current.mode === 'main' && tabs().some((tab) => tab.id === current.tab) ? current.tab : 'overview';
   };
+  // Pack editors get Server modpack and Client pack as two entries under a "Modpack" group.
+  const editsPack = () => gate(snapshot().capabilities, 'pack.edit') === 'allowed';
+  const entries = () => serverNavEntries(tabs(), editsPack());
+  const navItems = (): NavItem[] => entries().flatMap((entry, index, all): NavItem[] => (entry.group && all[index - 1]?.group !== entry.group
+    ? [{ key: `group:${entry.group}`, heading: 'server-pack.title' }, { key: entry.value, entry }]
+    : [{ key: entry.value, entry }]));
+  const activeEntry = () => activeNavEntry(activeTab(), route().item, editsPack());
   const settings = () => location().mode === 'settings';
   const section = (): SettingsSectionId => {
     const current = location();
@@ -123,6 +134,12 @@ function ServerContent(props: { id: string }) {
   const open = (tab: MainTabId) => {
     setPreviousTab(tab);
     transitionTo(serverPath(props.id, { mode: 'main', tab }));
+  };
+  const openEntry = (value: string) => {
+    const entry = entries().find((candidate) => candidate.value === value);
+    if (!entry) return;
+    setPreviousTab(entry.tab.id);
+    transitionTo(navEntryPath(props.id, value));
   };
   const openSettings = () => {
     if (settings()) return;
@@ -155,22 +172,26 @@ function ServerContent(props: { id: string }) {
             <Show
               when={settings()}
               fallback={
-                <Tabs size="sm" orientation={sideNav() ? 'vertical' : 'horizontal'} value={activeTab()} onChange={(tab) => open(tab as MainTabId)} class="instance-tabs">
+                <Tabs size="sm" orientation={sideNav() ? 'vertical' : 'horizontal'} value={activeEntry()} onChange={openEntry} class="instance-tabs">
                   <TabList aria-label={t('servers.sections')}>
-                    <For each={tabs()}>
-                      {(tab) => (
-                        <Tab value={tab.id} icon={<Icon name={tab.icon} />} class={paneState(snapshot(), tab) === 'offline' ? 'server-tab-offline' : undefined}>
-                          <span data-server-prefetch={tab.id}>{t(tab.label)}</span>
-                        </Tab>
+                    <For each={navItems()} keyed={(item) => item.key}>
+                      {(item) => (
+                        <Show when={item().entry} fallback={<span data-vesta="server-nav-heading" aria-hidden="true">{t(item().heading!)}</span>}>
+                          {(entry) => (
+                            <Tab value={entry().value} icon={<Icon name={entry().icon} />} class={paneState(snapshot(), entry().tab) === 'offline' ? 'server-tab-offline' : undefined}>
+                              <span data-server-prefetch={entry().tab.id}>{t(entry().label)}</span>
+                            </Tab>
+                          )}
+                        </Show>
                       )}
                     </For>
                   </TabList>
-                  <For each={tabs()}>
-                    {(tab) => (
-                      <Show when={activeTab() === tab.id}>
-                        <TabPanel forceMount value={tab.id} class={views[tab.id].flush ? 'instance-pane instance-pane-flush' : 'instance-pane'}>
-                          <Show when={paneState(snapshot(), tab) === 'ready'} fallback={<ServerOfflinePane snapshot={snapshot()} />}>
-                            <Dynamic component={views[tab.id].view} snapshot={snapshot()} />
+                  <For each={entries()} keyed={(entry) => entry.value}>
+                    {(entry) => (
+                      <Show when={activeEntry() === entry().value}>
+                        <TabPanel forceMount value={entry().value} class={views[entry().tab.id].flush ? 'instance-pane instance-pane-flush' : 'instance-pane'}>
+                          <Show when={paneState(snapshot(), entry().tab) === 'ready'} fallback={<ServerOfflinePane snapshot={snapshot()} />}>
+                            <Dynamic component={views[entry().tab.id].view} snapshot={snapshot()} />
                           </Show>
                         </TabPanel>
                       </Show>

@@ -1,21 +1,24 @@
 import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, Progress, toast } from '@vesta/ui';
-import { For, Show, createEffect, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { projectPath, sourceById } from '../../../features/browse/browse-model';
-import { loadVersions, peekVersions } from '../../../features/browse/browse-projects';
+import { loadProjects, loadVersions, peekProject, peekVersions } from '../../../features/browse/browse-projects';
+import { gate } from '../../../features/servers/capabilities';
+import { baseName, contentName, isModpackOwned, providerLookups } from '../../../features/servers/content-model';
 import { IntentMemo, lifecycleControls } from '../../../features/servers/model';
 import { offerModpack } from '../../../features/servers/modpack-handoff';
 import {
   linkProvider, linkSourceKind, linkSourceLabel, updateCheckOutcome, type UnlinkChoice, type UpdateCheck,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
+import type { ServerContentEntry } from '../../../features/servers/native-content';
 import type { PackInstallSource, ServerModpackVersion } from '../../../features/servers/native-pack';
-import { invalidateServerResources } from '../../../features/servers/resources';
-import { CONTENT_RESOURCES } from '../../../features/servers/server-resources';
+import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
+import { CONTENT_RESOURCES, contentResource } from '../../../features/servers/server-resources';
 import { serverCommand } from '../../../features/servers/store';
-import { t } from '../../../localization';
+import { formatNumber, t } from '../../../localization';
 import { useLifecycle } from '../lifecycle';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
@@ -202,30 +205,84 @@ function PendingPanel() {
   );
 }
 
-/** Files the link installed. Resources marks them; they change through the modpack, not one by one. */
+/** Tiles shown before "+N more"; two columns of four rows. */
+const OWNED_TILES = 8;
+
+/**
+ * The resources the link installed, as a two-column grid of icon and name; the rest is one
+ * "+N more" tile. Resources lists them all under the modpack's group.
+ */
 function OwnedPanel() {
   const area = useModpackArea();
-  const owned = () => area.link().owned;
+  const content = useServerResource(() => area.id(), contentResource, { enabled: () => gate(area.snapshot().capabilities, 'files.list') !== 'denied' });
+  const items = createMemo(() => ownedResources(area.link().owned, content.value()?.items), { name: 'modpack-server:owned' });
+  createEffect(items, (value) => {
+    for (const [provider, ids] of providerLookups(value.flatMap((item) => (item.entry ? [item.entry] : [])))) void loadProjects(provider, ids).catch(() => {});
+  }, { name: 'modpack-server:owned-projects' });
+  const overflow = () => items().length > OWNED_TILES;
+  const shown = () => (overflow() ? items().slice(0, OWNED_TILES - 1) : items());
+  const openResources = () => transitionTo(`/servers/${area.id()}/resources`);
   return (
-    <section data-vesta="modpack-panel">
-      <header data-vesta="modpack-panel-head">
-        <h3>{t('server-pack.owned-title')}</h3>
-        <Button size="sm" variant="ghost" iconEnd={<Icon name="icons/navigation/arrow-forward" />} onClick={() => transitionTo(`/servers/${area.id()}/resources`)}>
-          {t('server-pack.link-open-resources')}
-        </Button>
-      </header>
-      <div data-vesta="modpack-panel-body">
-        <p data-vesta="server-muted">{t('server-pack.owned-description', { count: owned().length })}</p>
-        <Show when={owned().length}>
-          <ul data-vesta="modpack-install-list" data-vesta-owned="">
-            <For each={owned().slice(0, 6)}>{(path) => <li><Icon name="icons/content/cube" size={12} /><code>{path}</code></li>}</For>
-          </ul>
-          <Show when={owned().length > 6}><p data-vesta="server-muted">{t('server-pack.owned-more', { count: owned().length - 6 })}</p></Show>
-        </Show>
-        <p data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t('server-pack.owned-user-kept')}</p>
-      </div>
-    </section>
+    <Show when={items().length}>
+      <section data-vesta="modpack-panel">
+        <header data-vesta="modpack-panel-head">
+          <h3>{t('server-pack.owned-title')}<span data-vesta="modpack-panel-count">{formatNumber(items().length)}</span></h3>
+          <Button size="sm" variant="ghost" iconEnd={<Icon name="icons/navigation/arrow-forward" />} onClick={openResources}>
+            {t('server-pack.link-open-resources')}
+          </Button>
+        </header>
+        <ul data-vesta="modpack-owned">
+          <For each={shown()}>
+            {(item) => {
+              const project = () => (item.entry?.provider ? peekProject(item.entry!.provider!.provider, item.entry!.provider!.projectId) : undefined);
+              const name = () => (item.entry ? contentName(item.entry!, project()) : baseName(item.path.split('/').at(-1)!));
+              return (
+                <li data-vesta="modpack-owned-item" title={item.path}>
+                  <Show when={project()?.icon_url} fallback={
+                    <span data-vesta="modpack-owned-placeholder" aria-hidden="true"><Icon name={ownedKindIcon[item.kind]} size={14} /></span>
+                  }>
+                    {(src) => <img src={src()} alt="" loading="lazy" decoding="async" width={24} height={24} draggable="false" />}
+                  </Show>
+                  <span data-vesta="modpack-owned-name">{name()}</span>
+                </li>
+              );
+            }}
+          </For>
+          <Show when={overflow()}>
+            <li>
+              <button type="button" data-vesta="modpack-owned-item" data-more="" onClick={openResources}>
+                <span data-vesta="modpack-owned-placeholder" aria-hidden="true"><Icon name="icons/content/layers" size={14} /></span>
+                <span data-vesta="modpack-owned-name">{t('server-pack.owned-more', { count: items().length - shown().length })}</span>
+              </button>
+            </li>
+          </Show>
+        </ul>
+      </section>
+    </Show>
   );
+}
+
+const ownedKindIcon: Record<ServerContentEntry['kind'], string> = {
+  mod: 'icons/content/cube',
+  plugin: 'icons/content/dependencies',
+  datapack: 'icons/content/layers',
+};
+
+interface OwnedResource { path: string; kind: ServerContentEntry['kind']; entry?: ServerContentEntry }
+
+/**
+ * The link's files that are resources: the inventory's own rows when it is readable, else the
+ * archives by path (config and other override files are not resources).
+ */
+function ownedResources(owned: readonly string[], inventory: readonly ServerContentEntry[] | undefined): OwnedResource[] {
+  if (inventory) {
+    const paths = new Set(owned);
+    return inventory.filter((entry) => isModpackOwned(entry, paths)).map((entry) => ({ path: entry.path, kind: entry.kind, entry }));
+  }
+  return owned.flatMap((path): OwnedResource[] => {
+    if (!/\.(jar|zip)$/i.test(path)) return [];
+    return [{ path, kind: path.startsWith('plugins/') ? 'plugin' : path.includes('datapacks/') ? 'datapack' : 'mod' }];
+  });
 }
 
 /** The client pack is separate: say what players get and where to change it. */

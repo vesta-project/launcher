@@ -57,6 +57,7 @@ const args = {
   software: "Fabric",
   revision: "15",
   version: "1.2.3",
+  list: "the newest 7 and one per day for 14 days",
 };
 
 describe("localization catalogs", () => {

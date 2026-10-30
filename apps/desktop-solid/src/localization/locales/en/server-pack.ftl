@@ -1,5 +1,4 @@
 server-pack-title = Modpack
-server-pack-sections = Modpack sections
 server-pack-tab-overview = Overview
 server-pack-tab-content = Content
 server-pack-tab-files = Files
@@ -20,13 +19,7 @@ server-pack-update-required = Update this linked pack before playing.
 server-pack-unavailable = The server's release could not be verified. Check again when it is available.
 
 # Header
-server-pack-source-custom = Custom
-server-pack-customizing = Customizing
 server-pack-minecraft = Minecraft { $version }
-server-pack-minecraft-locked = Follows the server's Minecraft version
-server-pack-display-version = Version { $version }
-server-pack-revision-facts = Revision { $published } · minimum { $minimum }
-server-pack-never-published = Not published yet
 server-pack-unpublished = Unpublished changes
 server-pack-unpublished-count = { $count ->
     [one] 1 unpublished change
@@ -327,8 +320,6 @@ server-pack-provider-unavailable = Couldn't download or verify the pack from its
 server-pack-section-server = Server modpack
 server-pack-section-client = Client pack
 server-pack-client-sections = Client pack sections
-server-pack-linked-badge = Linked
-server-pack-restart-badge = Restart
 server-pack-optional = Optional
 server-pack-coming-soon = Coming soon
 
@@ -364,16 +355,7 @@ server-pack-link-pending-help = { $count ->
    *[other] { $count } changes wait in Resources. Until then you can't start another update or unlink.
 }
 server-pack-owned-title = Content from this modpack
-server-pack-owned-description = { $count ->
-    [0] The modpack doesn't own any server files yet.
-    [one] 1 server file comes from this modpack. Resources marks it, and it changes through updates rather than one by one.
-   *[other] { $count } server files come from this modpack. Resources marks them, and they change through updates rather than one by one.
-}
-server-pack-owned-more = { $count ->
-    [one] and 1 more
-   *[other] and { $count } more
-}
-server-pack-owned-user-kept = Content you add yourself is never touched by updates or unlinking.
+server-pack-owned-more = +{ $count } more
 server-pack-offering-none = Players aren't offered a pack. Linking the server doesn't change that.
 server-pack-offering-server = Players are offered this modpack.
 server-pack-offering-custom = Players get your custom client pack, separate from this modpack.
@@ -442,14 +424,11 @@ server-pack-client-title = What players get
 server-pack-client-description = Optional, and separate from the server's own modpack. Players can always join with any compatible client.
 server-pack-mode-none = Nothing
 server-pack-mode-none-description = Players aren't offered a pack.
-server-pack-mode-none-short = None
 server-pack-mode-server = Same as the server's modpack
 server-pack-mode-server-description = Players get the modpack the server is linked to.
 server-pack-mode-server-linked = Players get { $name }, the modpack the server is linked to.
-server-pack-mode-server-short = Server modpack
 server-pack-mode-custom = Custom pack
 server-pack-mode-custom-description = A pack you build here, separate from the server software. Vesta hosts it.
-server-pack-mode-custom-short = Custom
 server-pack-mode-current = Current
 server-pack-mode-coming-soon = Offering the server's modpack to players isn't available yet.
 server-pack-mode-needs-link = Link the server to a modpack first.
@@ -507,9 +486,6 @@ server-pack-review-backing-up = Backing up…
 server-pack-review-installing = Installing…
 server-pack-review-install = Install
 server-pack-review-update = Update
-server-pack-review-note-restart = Applies on the next restart.
-server-pack-review-note-start = Applies when the server starts.
-server-pack-review-note-players = Players get it too.
 server-pack-review-stage-archive = Reading the pack
 server-pack-review-stage-metadata = Resolving files
 server-pack-review-stage-review = Checking the server
@@ -525,9 +501,9 @@ server-pack-play-instance-none = No instances to link
 server-pack-play-checking = Checking the server's pack
 server-pack-play-consent = I trust the mods and scripts in this pack
 server-pack-play-none = This server doesn't offer a modpack.
-server-pack-review-note-replaces = Replaces the current modpack link.
 server-pack-provider-filename = This file?s name is not supported on the server.
 server-pack-provider-host = The provider returned an unsupported download host.
 server-pack-provider-redirect = The download redirected too many times. Try again.
 server-pack-provider-manual = This file requires a manual download from the provider.
 server-pack-review-note-stop = Stop Minecraft to switch the software.
+server-pack-review-note = Applies on server restart.

@@ -1,7 +1,8 @@
 /*
  * Server → Backups: profiles, then storage and recent jobs; a profile's settings in two columns.
  * Hooks: [data-vesta=backups-layout] -main -side; backup-form(-column -field -label -help -actions)
- *        backup-keep-row, backup-keep-grid, backup-advanced, backup-location
+ *        backup-keep(-row -lead -sizer), backup-advanced, backup-location
+ * States: backup-advanced: aria-expanded
  */
 @layer launcher {
   /* Inside the shared content width: profiles first, then storage and recent jobs. */
@@ -57,38 +58,54 @@
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta="backup-keep-row"]) {
-    display: flex;
-    flex-wrap: wrap;
+  /* Retention: "lead [count] unit" rows in one grid, so the counts share a column. */
+  :where([data-vesta="backup-keep"]) {
+    display: grid;
+    grid-template-columns: max-content 88px max-content;
     align-items: center;
     gap: var(--vesta-space-2);
     font-size: var(--vesta-text-sm);
   }
 
-  :where([data-vesta="backup-keep-row"]) > [data-vesta="field"] {
-    inline-size: 96px;
+  :where([data-vesta="backup-keep-row"]) {
+    display: contents;
+  }
+
+  /* The visible lead and the hidden ones share one cell; the widest sets the column. */
+  :where([data-vesta="backup-keep-lead"]) {
+    display: grid;
+  }
+
+  :where([data-vesta="backup-keep-lead"]) > * {
+    grid-area: 1 / 1;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="backup-keep-sizer"]) {
+    visibility: hidden;
   }
 
   :where([data-vesta="backup-advanced"]) {
-    align-self: stretch;
-    font-size: var(--vesta-text-sm);
-  }
-
-  :where([data-vesta="backup-advanced"] summary) {
+    display: inline-flex;
+    grid-column: 1 / -1;
+    justify-self: start;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    min-block-size: 24px;
+    margin-inline: calc(var(--vesta-space-1) * -1);
+    padding: 0 var(--vesta-space-1);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    background: transparent;
     color: var(--vesta-color-text-muted);
+    font: inherit;
     cursor: default;
   }
 
-  :where([data-vesta="backup-advanced"][open] summary) {
-    margin-block-end: var(--vesta-space-2);
-  }
-
-  :where([data-vesta="backup-keep-grid"]) {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--vesta-space-2) var(--vesta-space-3);
-    margin-block-end: var(--vesta-space-2);
-  }
+  :where([data-vesta="backup-advanced"]):hover { color: var(--vesta-color-text); }
+  :where([data-vesta="backup-advanced"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
+  :where([data-vesta="backup-advanced"]) > :first-child { transition: rotate 120ms ease; }
+  :where([data-vesta="backup-advanced"][aria-expanded="true"]) > :first-child { rotate: 90deg; }
 
   :where([data-vesta="backup-form-actions"]) {
     display: flex;

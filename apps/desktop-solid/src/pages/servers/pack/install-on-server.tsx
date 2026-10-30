@@ -14,7 +14,7 @@ import {
   type ConflictChoice,
 } from '../../../features/servers/modpack-area-model';
 import {
-  backupProfileFor, planSoftwareSwitch, reviewApplyRequest, reviewBlocker, reviewCounts, reviewEmpty, runtimeLabel,
+  backupProfileFor, planSoftwareSwitch, reviewApplyRequest, reviewBlocker, reviewCounts, reviewEmpty, runtimeLabel, softwareName,
   type PackRuntime, type ReviewCountKey, type ReviewPlan,
 } from '../../../features/servers/pack-install-review';
 import type { ServerCommandError } from '../../../features/servers/native';
@@ -195,18 +195,9 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
     area.startInstall(null);
   };
 
-  const notes = () => {
-    const lines = [t(running() ? 'server-pack.review-note-restart' : 'server-pack.review-note-start')];
-    if (switchTo() && running()) lines.push(t('server-pack.review-note-stop'));
-    if (area.clientMode() === 'server-modpack') lines.push(t('server-pack.review-note-players'));
-    const linked = linkProvider(area.link().source), next = linkProvider(source());
-    if (area.link().phase !== 'unlinked' && props.request.mode === 'link' && !(linked && next && linked.provider === next.provider && linked.projectId === next.projectId)) lines.push(t('server-pack.review-note-replaces'));
-    return lines.join(' · ');
-  };
+  // The button keeps its label while working; progress shows in the body, not the footer.
   const actionLabel = (): string => {
-    if (stage() === 'backup') return t('server-pack.review-backing-up');
-    if (stage() === 'install') return t('server-pack.review-installing');
-    if (uncertain()) return t('server-pack.retry');
+    if (uncertain() && !stage()) return t('server-pack.retry');
     return t(update() ? 'server-pack.review-update' : 'server-pack.review-install');
   };
 
@@ -226,7 +217,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
             <Button tone="accent" onClick={() => area.startInstall(null)}>{t('server-pack.done')}</Button>
           </>
         }>
-          <span data-vesta="pack-review-note">{notes()}</span>
+          <span data-vesta="pack-review-note">{t('server-pack.review-note')}</span>
           <Button variant="ghost" disabled={!!stage()} onClick={close}>{t('common.cancel')}</Button>
           <Button tone="accent" disabled={busy() || !request() || !!blocker() || (!!plan() && reviewEmpty(plan()!))}
             title={blocker() ? t(blocker()!) : undefined} onClick={() => void apply()}>
@@ -274,7 +265,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                   <Checkbox size="sm" checked={backupFirst()} disabled={busy()} onChange={setBackupFirst} label={t('server-pack.review-backup-first')} />
                 </Show>
                 <Show when={backupFailed()}><p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.review-backup-failed')}</p></Show>
-                <Show when={stage() === 'backup'}><Progress size="sm" label={t('server-pack.review-backing-up')} /></Show>
+                <Show when={stage()}>{(current) => <Progress size="sm" label={t(current() === 'backup' ? 'server-pack.review-backing-up' : 'server-pack.review-installing')} />}</Show>
                 <Show when={uncertain()}><p data-vesta="server-callout" data-tone="warning">{t('server-pack.install-uncertain')}</p></Show>
                 <ServerErrorNote error={error()} />
               </>
@@ -296,7 +287,10 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   );
 }
 
-/** Pack art, name and source tag in one line: the dialog's title. */
+/**
+ * The dialog's title: pack art beside the name and source tag, with the provider's one-line
+ * summary under the name. The summary is read once, as the dialog's description.
+ */
 function ReviewTitle(props: { source: PackInstallSource; name: string }) {
   const area = useModpackArea();
   const provider = () => linkProvider(props.source);
@@ -310,18 +304,23 @@ function ReviewTitle(props: { source: PackInstallSource; name: string }) {
   const icon = () => project()?.icon_url ?? serverArt(`${area.snapshot().connection.serverId}:review:${name()}`, initials(name()));
   const sourceName = () => (kind() === 'modrinth' || kind() === 'curseforge' ? sourceById(kind() as 'modrinth' | 'curseforge').label : t(linkSourceLabel[kind() as 'upload' | 'vesta']));
   return (
-    <span data-vesta="pack-review-title">
-      <img src={icon()} alt="" width={36} height={36} draggable="false" />
-      <span>{name()}</span>
-      <span data-vesta="source-tag" data-source={kind()}>{sourceName()}</span>
+    <span data-vesta="pack-review-title" data-summary={project()?.summary ? '' : undefined}>
+      <img src={icon()} alt="" width={40} height={40} draggable="false" />
+      <span data-vesta="pack-review-name">
+        <span>{name()}</span>
+        <span data-vesta="source-tag" data-source={kind()}>{sourceName()}</span>
+      </span>
+      <Show when={project()?.summary}>
+        {(text) => <span data-vesta="pack-review-summary" aria-hidden="true" title={text()}>{text()}</span>}
+      </Show>
     </span>
   );
 }
 
-/** One line from the provider's summary; nothing for uploads and Vesta packs. */
+/** The provider's summary for assistive technology; the title shows it under the name. */
 function ReviewSummary(props: { source: PackInstallSource }) {
   const summary = () => { const value = linkProvider(props.source); return value ? peekProject(value.provider, value.projectId)?.summary : undefined; };
-  return <Show when={summary()}>{(text) => <span data-vesta="pack-review-summary" title={text()}>{text()}</span>}</Show>;
+  return <Show when={summary()}>{(text) => <span>{text()}</span>}</Show>;
 }
 
 /**
@@ -351,7 +350,8 @@ function VersionCard(props: { source: PackInstallSource; onSource: (source: Pack
     const a = list.indexOf(to), b = list.indexOf(from);
     return a < 0 || b < 0 ? null : a < b ? 'update' : 'older';
   };
-  const runtime = () => props.plan ? `${runtimeLabel({ software: props.plan.software, minecraftVersion: props.plan.minecraftVersion, loaderVersion: null })}${props.plan.loaderVersion ? ` · ${props.plan.loaderVersion}` : ''}` : '';
+  /** The pack's runtime as separate facts: Minecraft, then the loader and its version. */
+  const loader = () => (props.plan && props.plan.software !== 'vanilla' ? `${softwareName(props.plan.software)}${props.plan.loaderVersion ? ` ${props.plan.loaderVersion}` : ''}` : null);
   return (
     <div data-vesta="pack-review-version">
       <Show when={provider()} fallback={<span data-vesta="pack-review-version-static"><small>{t('server-pack.review-version')}</small><strong>{t(linkSourceLabel[linkSourceKind(props.source) as 'upload' | 'vesta'])}</strong></span>}>
@@ -363,8 +363,9 @@ function VersionCard(props: { source: PackInstallSource; onSource: (source: Pack
         )}
       </Show>
       <span data-vesta="pack-review-version-meta">
-        <Show when={installed()}>{(id) => <><span>{t('server-pack.review-installed', { version: versionName(id()) })}</span><span aria-hidden="true">·</span></>}</Show>
-        <span>{runtime()}</span>
+        <Show when={installed()}>{(id) => <span>{t('server-pack.review-installed', { version: versionName(id()) })}</span>}</Show>
+        <Show when={props.plan}>{(value) => <span>{t('server-pack.minecraft', { version: value().minecraftVersion })}</span>}</Show>
+        <Show when={loader()}>{(value) => <span>{value()}</span>}</Show>
       </span>
       <Show when={state()}>
         {(value) => (

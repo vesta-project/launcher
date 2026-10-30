@@ -384,22 +384,28 @@ servers-backups-no-points = No backups yet.
 servers-backups-mode-online = While running
 servers-backups-mode-stopped = Server stopped
 servers-backups-keep-all = Keeps every backup
-servers-backups-keep-last = { $count ->
-    [one] Keeps the latest
-   *[other] Keeps { $count } latest
-  }
+servers-backups-keeps = Keeps { $list }
+servers-backups-keep-newest = { $count ->
+    [one] the newest backup
+   *[other] the newest { $count }
+}
+servers-backups-keep-hourly = { $count ->
+    [one] one per hour for 1 hour
+   *[other] one per hour for { $count } hours
+}
 servers-backups-keep-daily = { $count ->
-    [one] { $count } daily
-   *[other] { $count } daily
-  }
+    [one] one per day for 1 day
+   *[other] one per day for { $count } days
+}
 servers-backups-keep-weekly = { $count ->
-    [one] { $count } weekly
-   *[other] { $count } weekly
-  }
+    [one] one per week for 1 week
+   *[other] one per week for { $count } weeks
+}
 servers-backups-keep-monthly = { $count ->
-    [one] { $count } monthly
-   *[other] { $count } monthly
-  }
+    [one] one per month for 1 month
+   *[other] one per month for { $count } months
+}
+servers-backups-keep-total = at most { $count } in total
 servers-backups-show-points = Backups
 servers-backups-hide-points = Hide backups
 servers-backups-run = Back up now
@@ -449,10 +455,6 @@ servers-backup-setup-mode-online-help = World saving pauses briefly while files 
 servers-backup-setup-mode-stopped-help = Only while Minecraft is stopped.
 servers-backup-setup-retention = Retention
 servers-backup-setup-retention-help = For example, 7 days keeps one backup from each of 7 days.
-servers-backup-setup-keep-last = Latest
-servers-backup-setup-keep-daily = Daily
-servers-backup-setup-keep-weekly = Weekly
-servers-backup-setup-keep-monthly = Monthly
 servers-backup-setup-keep-range = Use a whole number from 0 to 1000.
 servers-backup-setup-keeps-everything = With every count at 0 nothing is cleaned up, so backup storage keeps growing.
 servers-backup-setup-scope = What to back up
@@ -492,23 +494,32 @@ servers-backup-setup-badge-new = New
 servers-backup-setup-badge-edited = Edited
 servers-backup-setup-disable-warning = With no profiles, backups are turned off. Existing backups are kept.
 servers-backup-setup-saved = Backup profiles saved
-servers-backup-setup-keep-total = Total
-servers-backup-setup-keep-hourly = Hourly
-servers-backup-setup-keep-up-to = Keep up to
 servers-backup-setup-keep-backups = { $count ->
     [one] backup
    *[other] backups
 }
-servers-backup-setup-thinning = At most one per
-servers-backup-setup-thinning-none = Off
-servers-backup-setup-thinning-hour = Hour
-servers-backup-setup-thinning-day = Day
+servers-backup-setup-keep-newest = Keep the newest
+servers-backup-setup-keep-daily = Also keep one per day for
+servers-backup-setup-keep-weekly = one per week for
+servers-backup-setup-keep-monthly = one per month for
+servers-backup-setup-keep-hourly = one per hour for
+servers-backup-setup-unit-days = { $count ->
+    [one] day
+   *[other] days
+}
+servers-backup-setup-unit-weeks = { $count ->
+    [one] week
+   *[other] weeks
+}
+servers-backup-setup-unit-months = { $count ->
+    [one] month
+   *[other] months
+}
+servers-backup-setup-unit-hours = { $count ->
+    [one] hour
+   *[other] hours
+}
 servers-backup-setup-advanced = Advanced
-servers-backup-setup-use-simple = Use simple retention
-servers-backups-keep-up-to = Keeps up to { $count }
-servers-backups-one-per-hour = one per hour
-servers-backups-one-per-day = one per day
-servers-backups-keep-hourly = { $count } hourly
 servers-backup-setup-unsaved = { $count ->
     [one] 1 unsaved change
    *[other] { $count } unsaved changes

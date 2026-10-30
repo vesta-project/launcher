@@ -65,4 +65,5 @@ export function backupProfileFor(profiles: readonly { name: string; mode: 'onlin
 const softwareNames: Record<string, string> = {
   vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge', paper: 'Paper', purpur: 'Purpur', spigot: 'Spigot',
 };
-export const runtimeLabel = (runtime: PackRuntime) => `${softwareNames[runtime.software] ?? runtime.software} ${runtime.minecraftVersion}`;
+export const softwareName = (software: string) => softwareNames[software] ?? software;
+export const runtimeLabel = (runtime: PackRuntime) => `${softwareName(runtime.software)} ${runtime.minecraftVersion}`;

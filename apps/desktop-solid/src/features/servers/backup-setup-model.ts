@@ -10,43 +10,37 @@ export function backupsTabVisible(configured: boolean | undefined, canConfigure:
   return configured === true || canConfigure || (configured === undefined && requested);
 }
 
-/** The profile suggested on first setup: "daily", online, up to 14 backups at most one per day, the whole game. */
-export const suggestedProfile = (): BackupProfileConfig => withSimpleRetention(
-  { ...defaultBackupProfile('daily'), mode: 'online', include: [], exclude: [] }, { total: 14, thinning: 'daily' },
+/** The profile suggested on first setup: "daily", online, the newest 14 backups, the whole game. */
+export const suggestedProfile = (): BackupProfileConfig => withRetention(
+  { ...defaultBackupProfile('daily'), mode: 'online', keepHourly: 0, keepMonthly: 0, include: [], exclude: [] }, { newest: 14, daily: 0, weekly: 0 },
 );
 
 /* ---- Retention ---- */
 
-type Retention = Pick<BackupProfileConfig, 'keepTotal' | 'keepHourly' | 'keepLast' | 'keepDaily' | 'keepWeekly' | 'keepMonthly'>;
-export type Thinning = 'none' | 'hourly' | 'daily';
-/** "Keep up to `total` backups", optionally at most one per hour or day. */
-export interface SimpleRetention { total: number; thinning: Thinning }
+export type Retention = Pick<BackupProfileConfig, 'keepTotal' | 'keepHourly' | 'keepLast' | 'keepDaily' | 'keepWeekly' | 'keepMonthly'>;
 
 /**
- * The simple form of a profile's retention, or null when it needs the advanced counts (weekly or
- * monthly tiers, or several tiers at once). A total of 0 keeps everything.
+ * "Keep the newest `newest` backups", and under Advanced "also keep one per day for `daily`
+ * days" and "one per week for `weekly` weeks". These are the agent's keep_last, keep_daily and
+ * keep_weekly; a backup any rule keeps survives pruning.
  */
-export function simpleRetention(profile: Retention): SimpleRetention | null {
-  if (profile.keepWeekly || profile.keepMonthly) return null;
-  const tiers = ([['none', profile.keepLast], ['hourly', profile.keepHourly ?? 0], ['daily', profile.keepDaily]] as const).filter(([, count]) => count > 0);
-  const total = profile.keepTotal ?? 0;
-  if (!tiers.length) return { total, thinning: 'none' };
-  if (tiers.length > 1) return null;
-  const [[thinning, count]] = tiers;
-  return total && total !== count ? null : { total: count, thinning };
-}
+export interface RetentionForm { newest: number; daily: number; weekly: number }
+
+export const retentionForm = (profile: Retention): RetentionForm =>
+  ({ newest: profile.keepLast, daily: profile.keepDaily, weekly: profile.keepWeekly });
 
 /**
- * Applies the simple form. The tier count mirrors the total so agents without a total cap still
- * prune to the same number.
+ * Applies the form. The total cap has no control: it would prune backups the daily and weekly
+ * rules promise to keep, so editing clears it. Hourly and monthly counts stay as they are; the
+ * editor shows them while they are set.
  */
-export function withSimpleRetention<P extends Retention>(profile: P, retention: SimpleRetention): P {
-  const { total, thinning } = retention;
-  return {
-    ...profile, keepTotal: total, keepLast: thinning === 'none' ? total : 0, keepHourly: thinning === 'hourly' ? total : 0,
-    keepDaily: thinning === 'daily' ? total : 0, keepWeekly: 0, keepMonthly: 0,
-  };
+export function withRetention<P extends Retention>(profile: P, form: RetentionForm): P {
+  return { ...profile, keepTotal: 0, keepLast: form.newest, keepDaily: form.daily, keepWeekly: form.weekly };
 }
+
+/** Advanced starts open when the profile keeps anything beyond the newest backups. */
+export const retentionAdvanced = (profile: Retention) =>
+  !!(profile.keepDaily || profile.keepWeekly || profile.keepMonthly || profile.keepHourly);
 
 /** The first-time draft: one suggested profile, the server's limits, and a new repository. */
 export const setupDraft = (configuration: Pick<BackupConfiguration, 'limits' | 'repository'>): BackupConfigDraft => ({
