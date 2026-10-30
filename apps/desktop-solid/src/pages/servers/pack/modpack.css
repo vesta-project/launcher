@@ -1116,3 +1116,229 @@
     padding-block: var(--vesta-space-1);
   }
 }
+
+/* ---- Install / link / update review ----
+ * Hooks: [data-vesta=pack-review] -title -summary -version(-static -meta) -switch -changes
+ *        -counts -count -unchanged -conflicts -notes -note -loading
+ * States: pack-review-switch: data-acknowledged; pack-review-count: data-kind, aria-expanded
+ */
+@layer launcher {
+  :where(.pack-review-dialog) {
+    --pack-review-art: 36px;
+  }
+
+  :where([data-vesta="pack-review-title"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="pack-review-title"] img) {
+    flex: none;
+    inline-size: var(--pack-review-art, 36px);
+    block-size: var(--pack-review-art, 36px);
+    border-radius: var(--vesta-radius-md);
+    object-fit: cover;
+  }
+
+  :where([data-vesta="pack-review-title"]) > span:not([data-vesta]) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where(.pack-review-dialog [data-vesta="dialog-description"]) {
+    padding-inline-start: calc(var(--dialog-padding) + var(--pack-review-art) + var(--vesta-space-3));
+  }
+
+  :where([data-vesta="pack-review-summary"]) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="pack-review"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="pack-review-version"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg, var(--vesta-color-surface-raised));
+  }
+
+  :where([data-vesta="pack-review-version"]) > [data-vesta="field"] {
+    flex: none;
+    min-inline-size: 180px;
+  }
+
+  :where([data-vesta="pack-review-version-static"]) {
+    display: grid;
+  }
+
+  :where([data-vesta="pack-review-version-static"] small) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="pack-review-version-meta"]) {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="pack-review-switch"]) {
+    display: grid;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-warning) 45%, transparent);
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-warning) 10%, transparent);
+  }
+
+  :where([data-vesta="pack-review-switch"][data-acknowledged]) {
+    border-color: var(--vesta-color-border);
+    background: transparent;
+  }
+
+  :where([data-vesta="pack-review-switch"] p) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="pack-review-switch"] p) > svg {
+    color: var(--vesta-color-warning);
+  }
+
+  :where([data-vesta="pack-review-switch"] small) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="pack-review-changes"]) {
+    display: grid;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="pack-review-counts"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="pack-review-count"]) {
+    --tone: var(--vesta-color-text-muted);
+
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-block-size: 26px;
+    padding: 0 var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    cursor: default;
+  }
+
+  :where([data-vesta="pack-review-count"]) > svg:first-child { color: var(--tone); }
+  :where([data-vesta="pack-review-count"]) > svg:last-child { color: var(--vesta-color-text-muted); transition: rotate 120ms ease; }
+  :where([data-vesta="pack-review-count"][aria-expanded="true"]) { border-color: var(--tone); background: color-mix(in oklab, var(--tone) 10%, transparent); }
+  :where([data-vesta="pack-review-count"][aria-expanded="true"]) > svg:last-child { rotate: 180deg; }
+  :where([data-vesta="pack-review-count"]):hover { background: var(--vesta-color-fill); }
+  :where([data-vesta="pack-review-count"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
+  :where([data-vesta="pack-review-count"][data-kind="added"]) { --tone: var(--vesta-color-success); }
+  :where([data-vesta="pack-review-count"][data-kind="updated"]) { --tone: var(--vesta-color-accent); }
+  :where([data-vesta="pack-review-count"][data-kind="removed"]) { --tone: var(--vesta-color-danger); }
+
+  :where([data-vesta="pack-review-unchanged"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="pack-review-changes"] [data-vesta="modpack-install-list"]) {
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta="pack-review-conflicts"]) {
+    display: grid;
+    gap: var(--vesta-space-1);
+  }
+
+  :where([data-vesta="pack-review-conflicts"] h4) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    margin: 0;
+    color: var(--vesta-color-warning-text, var(--vesta-color-text));
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="pack-review-conflicts"] ul) {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta="pack-review-conflicts"] li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="pack-review"] code) {
+    overflow-wrap: anywhere;
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="pack-review-notes"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="pack-review-notes"] ul) {
+    margin: var(--vesta-space-1) 0 0;
+    padding-inline-start: var(--vesta-space-4);
+  }
+
+  :where([data-vesta="pack-review-loading"]) {
+    display: grid;
+    gap: var(--vesta-space-2);
+    padding-block: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="pack-review-note"]) {
+    flex: 1;
+    align-self: center;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
