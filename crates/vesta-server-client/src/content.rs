@@ -108,7 +108,7 @@ impl Client {
     pub async fn content_inventory(&self) -> Result<ContentInventory> {
         let inventory: ContentInventory =
             from_wire(self.get("content", true, "files.list").await?)?;
-        if inventory.items.len() > 2000 {
+        if inventory.items.len() > 131_072 {
             return Err(unsupported());
         }
         Ok(inventory)

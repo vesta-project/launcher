@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { indexMetadata } from '../src/features/instances/metadata-index';
 import { boundOptions } from '../ui/components/combobox/options';
 
@@ -36,7 +36,7 @@ test('bounded pickers search beyond the first page and retain the selected label
 
 // Real metadata service and RequestCache; inert host only, no browser or rendering.
 async function metadataHarness() {
-  const file = new URL('../src/features/instances/metadata.ts', import.meta.url).pathname;
+  const file = fileURLToPath(new URL('../src/features/instances/metadata.ts', import.meta.url));
   const built = await Bun.build({entrypoints: [file], target: 'bun', conditions: ['browser', 'development'], plugins: [{
     name: 'metadata-host', setup(build) {
       build.onResolve({filter: /^\.\.\/\.\.\/localization$/}, () => ({path: 'localization', namespace: 'fixture'}));
@@ -45,7 +45,7 @@ async function metadataHarness() {
       build.onLoad({filter: /.*/, namespace: 'fixture'}, ({path}) => ({loader: 'js', contents: path === 'localization' ? 'export const t = id => id;' : path === 'native'
         ? 'export const nativeInstances = true;'
         : 'let handler; export const setInvoke = next => handler = next; export const invoke = (...args) => handler(...args);'}));
-      build.onLoad({filter: /instances\/metadata\.ts$/}, async ({path}) => ({loader: 'ts', contents: await Bun.file(path).text() +
+      build.onLoad({filter: /instances[\\/]metadata\.ts$/}, async ({path}) => ({loader: 'ts', contents: await Bun.file(path).text() +
         '\nexport {cache}; export {flush} from "solid-js"; export {setInvoke} from "@tauri-apps/api/core";'}));
     }
   }]});

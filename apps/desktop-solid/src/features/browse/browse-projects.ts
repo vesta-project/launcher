@@ -63,6 +63,22 @@ export const peekVersions = (platform: string, id: string): ResourceVersion[] | 
   revision();
   return versionsCache.peek(projectKey(platform, id))?.data;
 };
+
+/** An explicit installed-content update scan. Keep slow connections usable: only two
+ * catalogues at a time, deduplicated, and stop admitting work when the view leaves. */
+export async function loadVersionLists(projects: readonly { provider: SourceId; projectId: string }[], current: () => boolean = () => true) {
+  const pending = [...new Map(projects.map(project => [projectKey(project.provider, project.projectId), project])).values()];
+  let cursor = 0, failed = 0;
+  const worker = async () => {
+    while (current() && cursor < pending.length) {
+      const project = pending[cursor++];
+      try { await loadVersions(project.provider, project.projectId); }
+      catch { failed++; }
+    }
+  };
+  await Promise.all([worker(), worker()]);
+  return { failed };
+}
 /** Subscribes to a project entry; returns the unsubscribe. */
 export const watchProject = (platform: string, id: string, listener: (project: ResourceProject | undefined) => void) =>
   projectCache.subscribe(projectKey(platform, id), (snapshot) => listener(snapshot.data));

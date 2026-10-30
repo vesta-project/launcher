@@ -9,8 +9,8 @@ import {
   type ClientPackMode, type LinkReviewMode, type ModpackGates, type ModpackSubTab, type PackSourceKind, type ServerLinkView,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import type { PackDraft, PackInstallSource, PackManifest, PackPreview, PackWorkspace } from '../../../features/servers/native-pack';
-import { seedServerResource } from '../../../features/servers/resources';
+import type { PackDraft, PackInstallSource, PackManifest, PackPreview, PackPublishOutcome, PackWorkspace } from '../../../features/servers/native-pack';
+import { peekServerResource, readServerResource, seedServerResource } from '../../../features/servers/resources';
 import { packWorkspaceResource } from '../../../features/servers/server-resources';
 import { serverCommand } from '../../../features/servers/store';
 
@@ -42,6 +42,7 @@ export interface ModpackAreaValue {
   error: Accessor<ServerCommandError | null>;
   reload: () => Promise<void>;
   applyDraft: (draft: PackDraft) => void;
+  applyPublication: (outcome: PackPublishOutcome, reviewedDraftRevision: string) => void;
   /** Saves a whole manifest against the current draft revision. */
   writeManifest: (manifest: PackManifest) => Promise<void>;
   /** Client pack art for its header: provider icon, uploaded icon, or generated art. */
@@ -51,7 +52,7 @@ export interface ModpackAreaValue {
   providerProject: Accessor<ResourceProject | undefined>;
   /** The publication preview for the current draft, for change counts; undefined until read. */
   preview: Accessor<PackPreview | undefined>;
-  refreshPreview: () => void;
+  refreshPreview: () => Promise<PackPreview>;
   markStarted: () => void;
   /** A client pack section. */
   open: (tab: ModpackSubTab) => void;
@@ -65,9 +66,21 @@ export const useModpackArea = () => useContext(ModpackAreaContext)!;
 
 /** Loads the pack workspace once per server and keeps derived pieces next to it. */
 export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAreaValue {
-  const id = () => snapshot().connection.id;
-  const gates = createMemo(() => modpackGates(snapshot().capabilities, snapshot().connection.role), { name: 'modpack:gates' });
-  const [workspace, setWorkspace] = createSignal<PackWorkspace | undefined>(undefined, { name: 'modpack:workspace' });
+  const id = createMemo(() => snapshot().connection.id, { name: 'modpack:server-id' });
+  const access = createMemo(() => ({ capabilities: snapshot().capabilities, role: snapshot().connection.role }), {
+    name: 'modpack:access', equals: (a, b) => a.role === b.role && (a.capabilities === b.capabilities || JSON.stringify(a.capabilities) === JSON.stringify(b.capabilities)),
+  });
+  const gates = createMemo(() => modpackGates(access().capabilities, access().role), {
+    name: 'modpack:gates', equals: (a, b) => (Object.keys(a) as (keyof ModpackGates)[]).every(key => a[key] === b[key]),
+  });
+  const [workspaceData, setWorkspaceData] = createSignal(untrack(() => ({ serverId: id(), value: peekServerResource(id(), packWorkspaceResource) })), { name: 'modpack:workspace-data' });
+  // Derive identity isolation in the same reactive flush, before any loading effect.
+  const workspace = createMemo(() => {
+    if (!gates().edit) return undefined;
+    const current = workspaceData();
+    return current.serverId === id() ? current.value : peekServerResource(id(), packWorkspaceResource);
+  }, { name: 'modpack:workspace' });
+  const setWorkspace = (value: PackWorkspace | undefined) => setWorkspaceData({ serverId: untrack(id), value });
   const [loading, setLoading] = createSignal(false, { name: 'modpack:loading' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack:error' });
   const [started, setStarted] = createSignal(false, { name: 'modpack:started' });
@@ -89,12 +102,15 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
   };
 
   let sequence = 0;
-  const reload = async () => {
+  const reload = async (useWarmCache = false) => {
     if (!untrack(gates).edit) return;
+    const serverId = untrack(id);
     const request = ++sequence;
     setLoading(true); setError(null);
     try {
-      const value = await serverCommand((api) => api.packDraft(untrack(id)));
+      const value = useWarmCache
+        ? await readServerResource(serverId, packWorkspaceResource)
+        : await serverCommand((api) => api.packDraft(serverId));
       if (!disposed && request === sequence) accept(value);
     } catch (reason) {
       if (!disposed && request === sequence) setError(reason as ServerCommandError);
@@ -102,38 +118,62 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
       if (!disposed && request === sequence) setLoading(false);
     }
   };
-  createEffect(() => [id(), gates().edit] as const, ([, edit]) => { if (edit) void reload(); }, { name: 'modpack:load' });
+  let loadedId = untrack(id);
+  createEffect(() => `${id()}:${gates().edit}`, () => {
+    const serverId = untrack(id), edit = untrack(gates).edit;
+    if (serverId !== loadedId || !edit) {
+      loadedId = serverId;
+      sequence++;
+      setPreview(undefined); setInstall(null); setStarted(false); setIconData(undefined);
+      setLoading(false); setError(null);
+    }
+    if (edit) void reload(true);
+  }, { name: 'modpack:load' });
 
   const applyDraft = (draft: PackDraft) => {
-    setWorkspace((current) => (current ? { ...current, draft, pendingPublication: true } : current));
+    // A read begun before this acknowledged edit must not replace it on landing.
+    sequence++;
+    setLoading(false);
+    const current = untrack(workspace);
+    if (current) accept({ ...current, draft, pendingPublication: true });
+    setPreview(undefined);
+  };
+  const applyPublication = (outcome: PackPublishOutcome, reviewedDraftRevision: string) => {
+    const current = untrack(workspace);
+    if (!current) return;
+    sequence++; setLoading(false); setPreview(undefined);
+    accept({ ...current, publishedRevision: outcome.hostedRevision, minimumRevision: outcome.minimumRevision,
+      pendingPublication: current.draft.revision !== reviewedDraftRevision });
   };
 
   const writeManifest = async (manifest: PackManifest) => {
     const current = untrack(workspace);
     if (!current) return;
+    const serverId = untrack(id);
     const request = { expectedRevision: current.draft.revision, manifest };
     try {
-      const draft = await serverCommand((api) => api.packWrite(untrack(id), request, writes.idFor(request)));
+      const draft = await serverCommand((api) => api.packWrite(serverId, request, writes.idFor({ serverId, ...request })));
       writes.settle();
-      applyDraft(draft);
+      if (!disposed && serverId === untrack(id)) applyDraft(draft);
     } catch (reason) {
       writes.settle(reason as ServerCommandError);
       // Someone else edited the draft: show theirs; the caller reports the error.
-      if ((reason as ServerCommandError).code === 'stale_target') void reload();
+      if (!disposed && serverId === untrack(id) && (reason as ServerCommandError).code === 'stale_target') void reload();
       throw reason;
     }
   };
 
   /** Stores the player offering. The custom workspace is kept whatever the mode. */
   const setClientMode = async (mode: ClientPackMode, requireUpdate = false) => {
+    const serverId = untrack(id);
     const request = clientModeRequest(mode, requireUpdate);
     try {
-      const value = await serverCommand((api) => api.clientPackMode(untrack(id), request, modes.idFor(request)));
+      const value = await serverCommand((api) => api.clientPackMode(serverId, request, modes.idFor({ serverId, ...request })));
       modes.settle();
-      if (disposed) return;
-      setWorkspace((current) => (current ? { ...current, clientPack: value } : current));
+      if (disposed || serverId !== untrack(id)) return;
+      sequence++; setLoading(false);
       const current = untrack(workspace);
-      if (current) seedServerResource(untrack(id), packWorkspaceResource, current);
+      if (current) accept({ ...current, clientPack: value });
     } catch (reason) {
       modes.settle(reason as ServerCommandError);
       throw reason;
@@ -141,10 +181,13 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
   };
 
   // The uploaded icon, read again only when its hash changes.
-  createEffect(() => workspace()?.draft.manifest.icon ?? null, (sha) => {
-    if (!sha) { setIconData(undefined); return; }
-    void serverCommand((api) => api.packIcon(untrack(id))).then((icon) => {
-      if (!disposed) setIconData(icon ? `data:${icon.mimeType};base64,${icon.contentBase64}` : undefined);
+  let iconSequence = 0;
+  createEffect(() => [id(), workspace()?.draft.manifest.icon ?? null] as const, ([serverId, sha]) => {
+    const request = ++iconSequence;
+    setIconData(undefined);
+    if (!sha) return;
+    void serverCommand((api) => api.packIcon(serverId)).then((icon) => {
+      if (!disposed && request === iconSequence) setIconData(icon ? `data:${icon.mimeType};base64,${icon.contentBase64}` : undefined);
     }).catch(() => {});
   }, { name: 'modpack:icon-load' });
 
@@ -166,30 +209,29 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     return provider ? peekProject(provider.provider, provider.projectId) : undefined;
   };
 
-  // A preview names how many changes publication would make. Read once per draft revision.
-  let previewed: string | null = null;
+  // Resolving dependencies is expensive. Only an explicit publication review needs it;
+  // concurrent clicks share the read, but retrying a completed review always revalidates.
+  let previewRead: { key: string; promise: Promise<PackPreview> } | undefined;
   const refreshPreview = () => {
     const current = untrack(workspace);
-    if (!current || !untrack(gates).build) return;
-    previewed = current.draft.revision;
-    void serverCommand((api) => api.packPreview(untrack(id), current.draft.revision)).then((value) => {
-      if (!disposed && untrack(workspace)?.draft.revision === value.draftRevision) setPreview(value);
-    }).catch(() => {});
+    if (!current || !untrack(gates).build) return Promise.reject({ code: 'forbidden', retryAfterMs: null } satisfies ServerCommandError);
+    const serverId = untrack(id);
+    const key = `${serverId}:${current.draft.revision}`;
+    if (previewRead?.key === key) return previewRead.promise;
+    const promise = serverCommand((api) => api.packPreview(serverId, current.draft.revision)).then((value) => {
+      if (!disposed && serverId === untrack(id) && untrack(workspace)?.draft.revision === value.draftRevision) setPreview(value);
+      return value;
+    }).finally(() => { if (previewRead?.promise === promise) previewRead = undefined; });
+    previewRead = { key, promise };
+    return promise;
   };
-  createEffect(() => {
-    const current = workspace();
-    return current && clientMode() === 'custom' && kind() === 'custom' && current.pendingPublication ? current.draft.revision : null;
-  }, (revision) => {
-    if (!revision) { setPreview(undefined); return; }
-    if (revision !== previewed) refreshPreview();
-  }, { name: 'modpack:preview-load' });
 
   const icon = () => providerProject()?.icon_url ?? iconData() ?? serverArt(`${snapshot().connection.serverId}:pack`, initials(workspace()?.draft.manifest.name ?? snapshot().connection.name));
   const linkIcon = () => linkProject()?.icon_url ?? serverArt(`${snapshot().connection.serverId}:server-modpack`, initials(linkProject()?.name ?? snapshot().connection.name));
 
   return {
-    snapshot, id, gates, workspace, kind, link, linkProject, clientMode, setClientMode, loading, error, reload, applyDraft, writeManifest,
-    icon, linkIcon, providerProject, preview, refreshPreview,
+    snapshot, id, gates, workspace, kind, link, linkProject, clientMode, setClientMode, loading, error, reload, applyDraft, applyPublication, writeManifest,
+    icon, linkIcon, providerProject, preview: () => preview()?.draftRevision === workspace()?.draft.revision ? preview() : undefined, refreshPreview,
     markStarted: () => setStarted(true),
     open: (tab) => transitionTo(modpackPath(untrack(id), tab)),
     openServer: () => transitionTo(serverModpackPath(untrack(id))),

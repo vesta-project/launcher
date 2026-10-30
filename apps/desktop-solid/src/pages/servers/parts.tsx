@@ -1,10 +1,11 @@
 import './servers.css';
-import { Badge, Button } from '@vesta/ui';
+import { Badge, Button, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { setting } from '../../features/settings/config';
 import { t } from '../../localization';
-import { serverErrorPresentation } from '../../features/servers/errors';
+import { serverErrorDetails, serverErrorFile, serverErrorPresentation } from '../../features/servers/errors';
+import { copyText } from '../../platform/clipboard';
 import { groupFingerprint } from '../../features/servers/fingerprint';
 import { age, freshnessVisible, type Dot, type Fact } from '../../features/servers/model';
 import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
@@ -79,10 +80,21 @@ export function ServerErrorNote(props: {
         const seconds = () => Math.ceil(Math.max(0, Math.min(error().retryAfterMs ?? 0, retryAt() - now())) / 1000);
         return (
           <div data-vesta="server-error" role="alert">
-            <span>
+            <div data-vesta="server-error-body">
               {t(presentation().message)}
               <Show when={seconds() > 0}> {t('servers.retry-after', { count: seconds() })}</Show>
-            </span>
+              <Show when={serverErrorFile(error())}>{(filename) => <code data-vesta="server-error-file">{filename()}</code>}</Show>
+              <details data-vesta="server-error-details">
+                <summary>{t('server-pack.error-details')}</summary>
+                <pre>{serverErrorDetails(error())}</pre>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  void copyText(serverErrorDetails(error())).then(
+                    () => toast.show({ title: t('servers.copied'), tone: 'neutral' }),
+                    () => toast.show({ title: t('server-pack.error-copy-failed'), tone: 'danger' }),
+                  );
+                }}>{t('servers.copy')}</Button>
+              </details>
+            </div>
             <Show when={props.onRetry && (presentation().action === 'retry' || presentation().action === 'refresh' || presentation().action === 'wait')}>
               <Button size="sm" variant="ghost" disabled={presentation().action === 'wait' && seconds() > 0} onClick={() => props.onRetry?.()}>{t('common.retry')}</Button>
             </Show>

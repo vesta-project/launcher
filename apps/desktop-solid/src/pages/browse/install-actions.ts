@@ -92,6 +92,11 @@ export function installModpackOnServer(
   pinned?: ResourceVersion,
 ): void {
   if (project.source !== 'modrinth' && project.source !== 'curseforge') return;
+  const target = untrack(serverTarget);
+  if (!target || target.id !== server.id || !target.canInstallModpack) {
+    setNotice({ tone: 'danger', text: t('server-pack.link-no-permission') });
+    return;
+  }
   offerModpack({
     serverId: server.id, provider: project.source, projectId: project.id, versionId: pinned?.id ?? null,
     name: project.name, iconUrl: project.icon_url,

@@ -721,16 +721,16 @@ pub async fn server_pack_upload_dropped(
     archive: bool,
 ) -> Result<Vec<DroppedPackUpload>> {
     use base64::Engine;
-    use sha2::{Digest, Sha256};
-    let sources = drops.pack_bytes(window.label(), paths, archive).await?;
+    use tokio::io::AsyncReadExt;
+    let sources = drops.pack_sources(window.label(), paths, archive).await?;
     let mut result = Vec::new();
-    for (name, path, bytes) in sources {
+    for source in sources {
         let upload_id = uuid::Uuid::new_v4().to_string();
-        let sha256 = hex::encode(Sha256::digest(&bytes));
+        let mut file = tokio::fs::File::from_std(source.file);
         let input = UploadBegin {
             upload_id: upload_id.clone(),
-            total_size: bytes.len().to_string(),
-            sha256,
+            total_size: source.size.to_string(),
+            sha256: source.sha256,
             archive,
         };
         server_pack_upload_begin(
@@ -741,19 +741,33 @@ pub async fn server_pack_upload_dropped(
             format!("{upload_id}-begin"),
         )
         .await?;
-        for (i, chunk) in bytes.chunks(32768).enumerate() {
+        let mut offset = 0u64;
+        let mut buffer = vec![0u8; 512 * 1024];
+        loop {
+            let count = file.read(&mut buffer).await.map_err(|_| invalid())?;
+            if count == 0 {
+                break;
+            }
+            if offset + count as u64 > source.size {
+                return Err(invalid());
+            }
+            let chunk = &buffer[..count];
             server_pack_upload_chunk(
                 app.clone(),
                 manager.clone(),
                 connection_id.clone(),
                 UploadChunk {
                     upload_id: upload_id.clone(),
-                    offset: (i * 32768).to_string(),
+                    offset: offset.to_string(),
                     content_base64: base64::engine::general_purpose::STANDARD.encode(chunk),
                 },
-                format!("{upload_id}-{i}"),
+                format!("{upload_id}-{offset}"),
             )
             .await?;
+            offset += count as u64;
+        }
+        if offset != source.size {
+            return Err(invalid());
         }
         let receipt = server_pack_upload_finish(
             app.clone(),
@@ -766,8 +780,8 @@ pub async fn server_pack_upload_dropped(
         )
         .await?;
         result.push(DroppedPackUpload {
-            name,
-            path,
+            name: source.name,
+            path: source.path,
             receipt,
         });
     }

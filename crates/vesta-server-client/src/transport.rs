@@ -307,6 +307,18 @@ impl Transport {
             None
         };
         let mut request = self.http.request(method, self.endpoint.route(path)?);
+        if mutation
+            && matches!(
+                path,
+                "/api/v3/manage/pack/install/plan"
+                    | "/api/v3/manage/pack/install/apply"
+                    | "/api/v3/manage/pack/archive/inspect"
+                    | "/api/v3/manage/pack/draft/uploads/finish"
+            )
+        {
+            // Match the agent's hour-long pack budget, including slow large downloads.
+            request = request.timeout(Duration::from_secs(3630));
+        }
         if let Some(token) = token {
             request = request.bearer_auth(token);
         }
@@ -329,9 +341,7 @@ impl Transport {
         if conflict {
             self.invalidate_reads();
         }
-        if mutation && matches!(status.as_u16(), 502 | 504) {
-            return Err(Error::new(ErrorCode::OutcomeUnknown));
-        }
+        let uncertain_gateway = mutation && matches!(status.as_u16(), 502 | 504);
         let retry = response
             .headers()
             .get("retry-after")
@@ -352,23 +362,64 @@ impl Transport {
             .and_then(|v| v.to_str().ok())
             .filter(|v| v.len() <= 128)
             .map(str::to_owned);
-        if response.content_length().is_some_and(|n| n > 1024 * 1024) {
-            return Err(Error::new(ErrorCode::Unsupported));
+        let body_limit =
+            if path.starts_with("/api/v3/manage/pack/") || path == "/api/v3/manage/content" {
+                32 * 1024 * 1024
+            } else {
+                1024 * 1024
+            };
+        if response
+            .content_length()
+            .is_some_and(|n| n > body_limit as u64)
+        {
+            return Err(Error::new(if uncertain_gateway {
+                ErrorCode::OutcomeUnknown
+            } else {
+                ErrorCode::Unsupported
+            }));
         }
         let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(|e| self.network_error(e))? {
-            if bytes.len() + chunk.len() > 1024 * 1024 {
-                return Err(Error::new(ErrorCode::Unsupported));
+        while let Some(chunk) = response.chunk().await.map_err(|e| {
+            if uncertain_gateway {
+                Error::new(ErrorCode::OutcomeUnknown)
+            } else {
+                self.network_error(e)
+            }
+        })? {
+            if bytes.len() + chunk.len() > body_limit {
+                return Err(Error::new(if uncertain_gateway {
+                    ErrorCode::OutcomeUnknown
+                } else {
+                    ErrorCode::Unsupported
+                }));
             }
             bytes.extend_from_slice(&chunk);
         }
         let value: Value = serde_json::from_slice(&bytes).map_err(|_| {
-            if status.is_success() {
+            if uncertain_gateway {
+                Error::new(ErrorCode::OutcomeUnknown)
+            } else if status.is_success() {
                 Error::new(ErrorCode::Unsupported)
             } else {
                 Error::wire(status.as_u16(), "", retry)
             }
         })?;
+        // A typed agent refusal proves this provider step failed before applying
+        // anything. A proxy/gateway failure still has an uncertain outcome.
+        if uncertain_gateway
+            && !(value["api_version"] == "3"
+                && matches!(
+                    value.pointer("/error/code").and_then(Value::as_str),
+                    Some(
+                        "content_pack_metadata_invalid"
+                            | "content_pack_download_failed"
+                            | "content_pack_hash_mismatch"
+                            | "content_pack_source_unsafe"
+                    )
+                ))
+        {
+            return Err(Error::new(ErrorCode::OutcomeUnknown));
+        }
         if !status.is_success() {
             let error = Error::wire_for_route(
                 status.as_u16(),
@@ -379,7 +430,8 @@ impl Transport {
                     .unwrap_or(""),
                 retry,
                 path,
-            );
+            )
+            .with_provider_details(value.pointer("/error/details").unwrap_or(&Value::Null));
             // Some policy adapters signal revision conflicts by wire code with
             // another status. Apply the same rule after closed-code decoding.
             if mutation

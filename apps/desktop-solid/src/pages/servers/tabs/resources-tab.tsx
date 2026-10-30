@@ -1,16 +1,16 @@
 import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Switch, TextField, toast } from '@vesta/ui';
-import { Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { VirtualList } from '../../../components/virtual-list';
 import { browseForServer } from '../../../features/browse/browse-store';
 import { projectPath, sourceById, type ResourceVersion } from '../../../features/browse/browse-model';
-import { loadProject, loadProjects, loadVersions, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
+import { loadProject, loadProjects, loadVersionLists, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
-  contentErrorMessage, contentGates, contentKinds, contentList, contentUpdate, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
+  contentSide, contentErrorMessage, contentGates, contentKinds, contentList, contentUpdate, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
   pendingLabel, pendingSummary, primaryKind, providerLookups, rowActions, updateRequest,
   type ContentFilter, type ContentListRow, type ContentRowModel,
 } from '../../../features/servers/content-model';
@@ -59,6 +59,12 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   const [removing, setRemoving] = createSignal<ContentRowModel | null>(null, { name: 'server-content:removing' });
   const [busy, setBusy] = createSignal<ReadonlySet<string>>(new Set(), { name: 'server-content:busy' });
   const [viewport, setViewport] = createSignal<HTMLDivElement | undefined>(undefined, { name: 'server-content:viewport' });
+  const [checking, setChecking] = createSignal(false, { name: 'server-content:checking' });
+  const [checkFailed, setCheckFailed] = createSignal(false, { name: 'server-content:check-failed' });
+  let disposed = false;
+  let checkSequence = 0;
+  onCleanup(() => { disposed = true; });
+  createEffect(id, () => { checkSequence++; setChecking(false); setCheckFailed(false); }, { name: 'server-content:check-scope' });
 
   const inventory = () => content.value();
   const gates = createMemo(() => {
@@ -72,9 +78,16 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   createEffect(inventory, (value) => {
     if (!value) return;
     for (const [provider, ids] of providerLookups(value.items)) void loadProjects(provider, ids).catch(() => {});
-    if (!value.capabilities.update) return;
-    for (const item of value.items) if (item.provider) void loadVersions(item.provider.provider, item.provider.projectId).catch(() => {});
   }, { name: 'server-content:providers' });
+  const checkUpdates = async () => {
+    if (untrack(checking)) return;
+    const serverId = id();
+    const request = ++checkSequence;
+    setChecking(true); setCheckFailed(false);
+    const result = await loadVersionLists((inventory()?.items ?? []).flatMap(item => item.provider ? [item.provider] : []),
+      () => !disposed && request === checkSequence && serverId === untrack(id));
+    if (!disposed && request === checkSequence && serverId === untrack(id)) { setChecking(false); setCheckFailed(result.failed > 0); }
+  };
 
   const projectOf = (entry: ServerContentEntry) => (entry.provider ? peekProject(entry.provider.provider, entry.provider.projectId) : undefined);
   const versionsOf = (entry: ServerContentEntry) => (entry.provider ? peekVersions(entry.provider.provider, entry.provider.projectId) : undefined);
@@ -236,6 +249,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
         <div data-vesta="table-cell" role="cell" class="col-name">
           <a data-vesta="resource-identity" href={link() ? `#${link()}` : undefined}
             onPointerEnter={() => { const provider = entry().provider; if (provider) prefetchProject(provider.provider, provider.projectId); }}
+            onFocusIn={() => { const provider = entry().provider; if (provider) prefetchProject(provider.provider, provider.projectId); }}
             onClick={(event) => {
               const path = link();
               if (!path || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -251,6 +265,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
               <span data-vesta="resource-title">{row().name}</span>
               <span data-vesta="resource-sub">
                 {providerBadge(row())}
+                <Badge size="sm" variant="soft" tone="neutral">{t(contentSide(entry(), project()))}</Badge>
                 <span data-vesta="resource-file" title={entry().path}>{entry().filename}</span>
                 <Show when={managed()}>
                   <span data-vesta="server-content-owned" title={t('server-content.managed-by-modpack')}>
@@ -374,6 +389,11 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
           </Show>
           <TextField size="sm" class="resources-search" aria-label={t('server-content.search')} placeholder={t('server-content.search')}
             icon={<Icon name="icons/content/search" size={14} />} value={query()} onChange={setQuery} />
+          <Show when={inventory()?.capabilities.update && inventory()?.items.some(item => !!item.provider)}>
+            <Button size="sm" variant="outline" disabled={checking()} onClick={() => void checkUpdates()}>
+              {t(checking() ? 'server-pack.checking-content' : 'server-pack.check-content')}
+            </Button>
+          </Show>
           <Show when={gates()?.install}>
             <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={addContent}>{t('server-content.add')}</Button>
           </Show>
@@ -397,6 +417,8 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
       </Show>
 
       <ServerErrorNote error={content.error()} onRetry={() => void content.refresh()} />
+      <Show when={checkFailed()}><p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.check-content-failed')}</p></Show>
+      <span data-vesta="sr-only" role="status">{checking() ? t('server-pack.checking-content') : ''}</span>
       <Show when={inventory()?.truncated}>
         <p data-vesta="server-callout" data-tone="warning" class="server-content-note">{t('server-content.truncated')}</p>
       </Show>

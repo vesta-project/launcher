@@ -309,3 +309,18 @@ export function customJarReview(plan: Pick<CustomJarPlan, 'customJar' | 'mainCla
     risks: plan.risks.map((risk) => jarRisks[risk] ?? 'server-hosting.warning-other'),
   };
 }
+
+/** Placement and compatibility are separate: installing on a server does not imply server-only. */
+export function contentSide(entry: Pick<ServerContentEntry, 'kind' | 'declared'>, project?: Pick<ResourceProject, 'environment'>): MessageId {
+  if (entry.kind === 'plugin') return 'server-content.side-server';
+  if (entry.kind === 'datapack') return 'server-content.side-world';
+  const side = entry.declared?.side;
+  if (side === '*' || side === 'both') return 'server-content.side-both';
+  if (side === 'server' || side === 'dedicated_server') return 'server-content.side-server';
+  if (side === 'client') return 'server-content.side-client';
+  const env = project?.environment;
+  if (env?.server_requirement === 'unsupported') return 'server-content.side-client';
+  if (env?.client_requirement === 'unsupported') return 'server-content.side-server';
+  if (env?.client_requirement && env.server_requirement) return 'server-content.side-both';
+  return 'server-content.side-unknown';
+}

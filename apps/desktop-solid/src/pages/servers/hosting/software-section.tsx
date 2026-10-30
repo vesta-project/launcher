@@ -197,16 +197,17 @@ function Field(props: { label: string; aside?: JSX.Element; children: JSX.Elemen
  * Inline change: software → Minecraft version → software version, then the agent's plan is
  * reviewed in place and applied. Same plan/apply contract and confirmations as before.
  */
-function ChangeFlow(props: {
+export function ChangeFlow(props: {
+  target?: { software: SoftwareId; version: string; loaderVersion: string | null };
   snapshot: ServerSnapshot; state: SoftwareState; jobRunning: boolean; onAccepted: (job: SoftwareJob) => void;
   java: ServerJavaInventory | undefined; javaActions: JavaActions;
 }) {
   const id = stableConnectionId(() => props.snapshot);
   const now = useServersClock();
   const start = untrack(() => initialChoice(props.state.catalog, props.state.current, props.snapshot.info?.minecraftVersion || null));
-  const [software, setSoftware] = createSignal<SoftwareId | null>(start.software, { name: 'server-software:pick' });
+  const [software, setSoftware] = createSignal<SoftwareId | null>(props.target?.software ?? start.software, { name: 'server-software:pick' });
   /** The Minecraft version asked for; the shown value falls back when the list lacks it. */
-  const [wanted, setWanted] = createSignal<string | null>(start.minecraft, { name: 'server-software:minecraft' });
+  const [wanted, setWanted] = createSignal<string | null>(props.target?.version ?? start.minecraft, { name: 'server-software:minecraft' });
   const [plan, setPlan] = createSignal<SoftwarePlan | null>(null, { name: 'server-software:plan' });
   const [acknowledged, setAcknowledged] = createSignal(false, { name: 'server-software:ack' });
   const [legacyAcknowledged, setLegacyAcknowledged] = createSignal(false, { name: 'server-software:ack-legacy' });
@@ -214,18 +215,18 @@ function ChangeFlow(props: {
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-software:error' });
   const intents = new IntentMemo();
   const offered = () => props.state.catalog.some((entry) => entry.software === software() && selectable(entry));
-  const versions = useServerResource(id, softwareVersionsResource, { args: () => software()!, enabled: offered });
+  const versions = useServerResource(id, softwareVersionsResource, { args: () => software()!, enabled: () => !props.target && offered() });
 
   const versionList = () => versions.value()?.software === software() ? versions.value()?.versions : undefined;
-  const minecraft = () => software() === start.software && wanted() === start.minecraft && start.minecraft
-    ? start.minecraft : keepMinecraft(versionList(), wanted());
+  const minecraft = () => props.target?.version ?? (software() === start.software && wanted() === start.minecraft && start.minecraft
+    ? start.minecraft : keepMinecraft(versionList(), wanted()));
   const releaseKey = () => software() + ':' + minecraft();
-  const [pickedRelease, setPickedRelease] = createSignal<{ key: string; id: string } | null>(null, { name: 'server-software:release' });
+  const [pickedRelease, setPickedRelease] = createSignal<{ key: string; id: string } | null>(props.target?.loaderVersion ? { key: props.target.software + ':' + props.target.version, id: props.target.loaderVersion } : null, { name: 'server-software:release' });
   const installedRelease = () => props.state.current?.loaderVersion ?? (props.state.current?.build != null ? String(props.state.current.build) : 'latest');
   const selectedRelease = () => pickedRelease()?.key === releaseKey() ? pickedRelease()!.id
     : software() === start.software && minecraft() === start.minecraft ? installedRelease() : 'latest';
   const releaseArgs = createMemo(() => ({ software: software()!, version: minecraft()! }), { name: 'server-software:release-query' });
-  const releases = useServerResource(id, softwareReleasesResource, { args: releaseArgs, enabled: () => offered() && versionList() !== undefined && !versions.refreshing() && !!minecraft() && !!softwareVersionKind(software()) });
+  const releases = useServerResource(id, softwareReleasesResource, { args: releaseArgs, enabled: () => !props.target && offered() && versionList() !== undefined && !versions.refreshing() && !!minecraft() && !!softwareVersionKind(software()) });
   const releaseList = () => releases.value()?.software === software() && releases.value()?.version === minecraft() ? releases.value()?.releases ?? [] : [];
   const releaseOptions = createMemo(() => {
     const values = [...releaseList()].sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true })).map(value => ({ value: value.id, label: value.build !== null ? 'Build ' + value.build : value.id }));
@@ -319,6 +320,8 @@ function ChangeFlow(props: {
   return (
     <div data-vesta="server-software-flow" data-server-software-step={reviewing() ? 'review' : 'pick'}>
       <Show when={!reviewing()}>
+        <Show when={props.target}><p>{softwareName(software())} {minecraft()} {selectedRelease() === 'latest' ? '' : selectedRelease()}</p></Show>
+        <Show when={!props.target}>
         <Field label={t('server-hosting.software-label')}>
           <div onPointerOver={(event) => { if (event.pointerType !== 'touch') warmOption(event.target); }} onPointerLeave={() => clearTimeout(hoverTimer)} onFocusIn={(event) => warmOption(event.target)}>
           <SegmentedControl aria-label={t('server-hosting.software-label')} fill value={software() ?? undefined}
@@ -349,10 +352,11 @@ function ChangeFlow(props: {
         <HostingError error={versions.error()} onRetry={() => void versions.refresh()} />
         <Show when={versions.value() && !minecraftOptions().length}><p data-vesta="server-hosting-hint">{t('server-hosting.no-versions')}</p></Show>
 
+        </Show>
         <Show when={where() === 'changed'}>
           <div data-vesta="server-software-actions">
               <Button tone="accent" disabled={busy() || !!blocker()} onClick={() => void review()}>{t('server-hosting.review')}</Button>
-              <Button variant="ghost" disabled={busy()} onClick={discard}>{t('server-hosting.discard')}</Button>
+              <Show when={!props.target}><Button variant="ghost" disabled={busy()} onClick={discard}>{t('server-hosting.discard')}</Button></Show>
             <Show when={busy()}><Progress size="sm" label={t('server-hosting.preparing')} /></Show>
           </div>
         </Show>

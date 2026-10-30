@@ -40,8 +40,49 @@ pub struct Error {
     pub local_pressure: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<ProviderErrorDetails>,
+}
+/// A bounded public file identity, never a provider response, URL or credential.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderErrorDetails {
+    pub stage: String,
+    pub provider: String,
+    pub project_id: String,
+    pub version_id: String,
+    pub filename: Option<String>,
 }
 impl Error {
+    pub(crate) fn with_provider_details(mut self, value: &serde_json::Value) -> Self {
+        if !self
+            .reason
+            .as_deref()
+            .is_some_and(|reason| reason.starts_with("content_pack_"))
+        {
+            return self;
+        }
+        let valid_id = |s: &str| {
+            s.len() <= 128
+                && s.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+        };
+        let details = serde_json::from_value::<ProviderErrorDetails>(value.clone()).ok();
+        self.details = details.filter(|d| {
+            matches!(d.stage.as_str(), "metadata" | "download")
+                && matches!(d.provider.as_str(), "curseforge" | "modrinth")
+                && !d.project_id.is_empty()
+                && valid_id(&d.project_id)
+                && valid_id(&d.version_id)
+                && d.filename.as_ref().is_none_or(|s| {
+                    !s.is_empty()
+                        && s.len() <= 256
+                        && s.bytes()
+                            .all(|b| (32..=126).contains(&b) && !matches!(b, b'/' | b'\\' | b':'))
+                })
+        });
+        self
+    }
     pub fn wire_for_route(status: u16, code: &str, retry: Option<u64>, path: &str) -> Self {
         let mut error = Self::wire(status, code, retry);
         // Pre-inventory permission adapters recognized these paths but rejected
@@ -68,6 +109,7 @@ impl Error {
             retry_after_ms: None,
             local_pressure: false,
             reason: None,
+            details: None,
         }
     }
     pub fn local_pressure(mut self) -> Self {
@@ -84,6 +126,7 @@ impl Error {
                 "world_",
                 "sftp_",
                 "content_",
+                "pack_",
                 "server_install.",
             ]
             .iter()
@@ -92,7 +135,7 @@ impl Error {
         use ErrorCode::*;
         let code = match code {
             "software_runtime_unavailable" | "software_disabled" => Unsupported,
-            "software_busy" => ServerBusy,
+            "software_busy" | "pack_storage_low" => ServerBusy,
             "software_plan_expired" | "software_confirmation_invalid" => ConfirmationExpired,
             "software_revision_conflict" | "world_state_conflict" => StaleTarget,
             "recovery_required" if status == 409 => OutcomeUnknown,
@@ -129,6 +172,7 @@ impl Error {
             retry_after_ms,
             local_pressure: false,
             reason,
+            details: None,
         }
     }
 }
@@ -166,6 +210,35 @@ impl Default for ConnectionState {
         }
     }
 }
+impl ConnectionState {
+    /// An operation deadline is not evidence that the agent is offline. Status
+    /// refreshes and authenticated status events own the connectivity observation.
+    pub fn observe_request_failure(&mut self, error: &Error, now_ms: i64) {
+        if error.local_pressure {
+            return;
+        }
+        self.last_error = Some(error.code);
+        match error.code {
+            ErrorCode::FingerprintMismatch => {
+                self.access = "fingerprint_changed".into();
+                self.phase = "unreachable".into();
+            }
+            ErrorCode::CredentialsRejected => self.access = "credentials_rejected".into(),
+            ErrorCode::CredentialsUnavailable => self.access = "credentials_unavailable".into(),
+            ErrorCode::NoManagementAccess => self.access = "no_management_access".into(),
+            ErrorCode::RateLimited => {
+                self.phase = "backoff".into();
+                self.retry_at_ms = Some(self.rate_limited_until_ms.unwrap_or_else(|| {
+                    now_ms.saturating_add(
+                        error.retry_after_ms.unwrap_or(10_000).min(i64::MAX as u64) as i64,
+                    )
+                }));
+            }
+            ErrorCode::Unreachable | ErrorCode::TlsFailed => self.phase = "unreachable".into(),
+            _ => {}
+        }
+    }
+}
 dto!(SupervisorStatus {
     orphan_running: bool, launch_unresolved: bool, observation_failed: bool,
     crash_restart_enabled: bool, crash_loop: bool, restart_state_unsaved: bool,
@@ -189,7 +262,7 @@ dto!(ServerInfo {
     game_port: Option<u16>, backups_configured: Option<bool>, join_address: Option<String>
 });
 dto!(PackStatus { hosted_revision: Option<String>, minimum_revision: Option<String>, status: String });
-dto!(CapabilityView { source: String, granted: Vec<String>, refused: Vec<String> });
+dto!(CapabilityView { source: String, granted: Vec<String>, refused: Vec<String>, roles: Option<Vec<String>> });
 dto!(ServerSnapshot {
     connection: ServerConnection, state: ConnectionState, info: Option<ServerInfo>,
     status: Option<ServerStatus>, status_observed_at_ms: Option<i64>, pack: Option<PackStatus>,
@@ -507,4 +580,90 @@ pub fn from_wire<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> Re
         }
     }
     serde_json::from_value(convert(value)).map_err(|_| Error::new(ErrorCode::Unsupported))
+}
+
+#[cfg(test)]
+mod provider_error_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn slow_operation_does_not_erase_live_connection_but_connection_failure_does() {
+        let mut state = ConnectionState {
+            phase: "online".into(),
+            ..Default::default()
+        };
+        for code in [
+            ErrorCode::Timeout,
+            ErrorCode::OutcomeUnknown,
+            ErrorCode::ServerBusy,
+        ] {
+            state.observe_request_failure(&Error::new(code), 1000);
+            assert_eq!(state.phase, "online");
+            assert_eq!(state.access, "paired");
+            assert_eq!(state.last_error, Some(code));
+        }
+        state.observe_request_failure(&Error::new(ErrorCode::Unreachable), 1000);
+        assert_eq!(state.phase, "unreachable");
+        state.phase = "online".into();
+        state.observe_request_failure(&Error::new(ErrorCode::FingerprintMismatch), 1000);
+        assert_eq!(state.phase, "unreachable");
+        assert_eq!(state.access, "fingerprint_changed");
+    }
+    #[test]
+    fn local_pressure_preserves_connection_and_remote_rate_limit_preserves_retry() {
+        let mut state = ConnectionState {
+            phase: "online".into(),
+            ..Default::default()
+        };
+        state.observe_request_failure(&Error::new(ErrorCode::RateLimited).local_pressure(), 1000);
+        assert_eq!(state.phase, "online");
+        assert!(state.last_error.is_none());
+        state.rate_limited_until_ms = Some(7000);
+        state.observe_request_failure(&Error::new(ErrorCode::RateLimited), 1000);
+        assert_eq!(state.phase, "backoff");
+        assert_eq!(state.retry_at_ms, Some(7000));
+        state.observe_request_failure(&Error::new(ErrorCode::CredentialsRejected), 1000);
+        assert_eq!(state.access, "credentials_rejected");
+    }
+    #[test]
+    fn pack_reasons_and_public_file_details_survive_ipc() {
+        let details = json!({"stage":"metadata","provider":"curseforge","projectId":"1691925","versionId":"9022781","filename":"mielon's-the-sift+26.3.jar", "downloadUrl":"https://ignored.invalid/private"});
+        let error = Error::wire(422, "content_pack_download_unavailable", None)
+            .with_provider_details(&details);
+        assert_eq!(error.code, ErrorCode::InvalidInput);
+        let ipc = serde_json::to_value(&error).unwrap();
+        assert_eq!(ipc["details"]["filename"], "mielon's-the-sift+26.3.jar");
+        assert_eq!(ipc["details"]["projectId"], "1691925");
+        assert!(ipc["details"].get("downloadUrl").is_none());
+        assert_eq!(
+            Error::wire(400, "pack_path_invalid", None)
+                .reason
+                .as_deref(),
+            Some("pack_path_invalid")
+        );
+    }
+    #[test]
+    fn untrusted_error_details_are_bounded_and_never_general_response_text() {
+        let good = json!({"stage":"download","provider":"curseforge","projectId":"1","versionId":"2","filename":"mod.jar"});
+        for (field, bad) in [
+            ("stage", "arbitrary response".into()),
+            ("provider", "https://private.invalid".into()),
+            ("projectId", "id\nsecret".into()),
+            ("filename", "../private.jar".into()),
+            ("filename", "a".repeat(257)),
+            ("filename", "bad\u{202e}.jar".into()),
+        ] {
+            let mut value = good.clone();
+            value[field] = json!(bad);
+            let error = Error::wire(502, "content_pack_download_failed", None)
+                .with_provider_details(&value);
+            assert!(error.details.is_none(), "accepted {field}");
+        }
+        assert!(Error::wire(400, "invalid_request", None)
+            .with_provider_details(&good)
+            .details
+            .is_none());
+        let old = Error::wire(400, "invalid_request", None);
+        assert!(serde_json::to_value(old).unwrap().get("details").is_none());
+    }
 }

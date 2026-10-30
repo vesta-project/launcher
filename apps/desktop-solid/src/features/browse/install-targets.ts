@@ -1,7 +1,7 @@
 // Pure model for Browse install targets beyond instances: which servers can receive a
 // project, where on the server it goes (server files, client modpack or both), and why a
 // choice is unavailable. No IO here; `server-install.ts` holds the effectful glue.
-import { gate } from '../servers/capabilities';
+import { canInstallServerModpack, gate } from '../servers/capabilities';
 import type { ConnectionId, ServerSnapshot } from '../servers/native';
 import {
   gameVersionMatches,
@@ -113,6 +113,7 @@ export interface ServerTarget {
   connection: ServerConnectionState;
   /** May install into the server's files (`content.install`). */
   canInstall: boolean;
+  canInstallModpack?: boolean;
   /** May edit the client modpack draft (`pack.edit`). */
   canEditPack: boolean;
   /** Per-server setup, independent from global API support and edit permission. */
@@ -156,6 +157,7 @@ export function serverTargets(
         software: software(connection.id),
         connection: connectionState(snapshot),
         canInstall: allowed.server,
+        canInstallModpack: canInstallServerModpack(snapshot.capabilities, connection.role),
         canEditPack: allowed.modpack,
         clientPack: clientPack(connection.id),
       },

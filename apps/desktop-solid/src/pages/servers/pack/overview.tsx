@@ -5,7 +5,8 @@ import { navigate } from '../../../app/router';
 import { Icon } from '../../../components/icon';
 import { projectPath, sourceById } from '../../../features/browse/browse-model';
 import { loadVersions, peekVersions } from '../../../features/browse/browse-projects';
-import { loadMetadata, loaderVersions } from '../../../features/instances/metadata';
+import { loadMetadata, loaderVersions, metadata, metadataError } from '../../../features/instances/metadata';
+import { softwareIcon } from '../../../features/servers/software-flow';
 import { IntentMemo, newIntentId } from '../../../features/servers/model';
 import { customizingProvider, packLoaderName, packLoaders } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
@@ -64,10 +65,29 @@ function IdentityPanel() {
   void loadMetadata();
   // A newer draft (another tab, a reload) replaces unsaved identity edits only when there are none.
   createEffect(() => workspace().draft.revision, () => { setError(null); }, { name: 'modpack-identity:revision' });
-  const value = createMemo(() => ({ ...workspace().draft.manifest, ...edits() }), { name: 'modpack-identity:value' });
+  const value = createMemo(() => {
+    const patch = edits();
+    const current = { ...workspace().draft.manifest, ...patch };
+    // An explicitly chosen loader can precede its metadata response. Resolve its
+    // default reactively without writing edits or reusing the old loader's version.
+    if (patch.loader === current.loader && current.loader !== 'none' && !current.loaderVersion) {
+      return { ...current, loaderVersion: loaderVersions(workspace().serverMinecraftVersion, current.loader)[0] ?? null };
+    }
+    return current;
+  }, { name: 'modpack-identity:value' });
   const dirty = () => Object.keys(edits()).length > 0;
   const edit = (patch: Partial<PackManifest>) => setEdits((current) => ({ ...current, ...patch }));
-  const versions = () => (value().loader === 'none' ? [] : loaderVersions(workspace().serverMinecraftVersion, value().loader).slice(0, 40));
+  const versions = () => (value().loader === 'none' ? [] : loaderVersions(workspace().serverMinecraftVersion, value().loader));
+  const versionOptions = () => {
+    const selected = value().loaderVersion;
+    const list = versions();
+    return (selected && !list.includes(selected) ? [selected, ...list] : list).map(version => ({ value: version, label: version }));
+  };
+  const chooseLoader = (loader: PackLoader) => {
+    if (loader === value().loader) return;
+    const list = loader === 'none' ? [] : loaderVersions(workspace().serverMinecraftVersion, loader);
+    edit({ loader, loaderVersion: list[0] ?? null });
+  };
 
   const save = async (patch: Partial<PackManifest> = {}) => {
     setBusy(true); setError(null);
@@ -96,7 +116,7 @@ function IdentityPanel() {
       <Show when={dirty()}>
         <span data-vesta="modpack-panel-actions">
           <Button size="sm" variant="ghost" disabled={busy()} onClick={() => setEdits({})}>{t('server-pack.discard')}</Button>
-          <Button size="sm" tone="accent" disabled={busy()} onClick={() => void save()}>{t('server-pack.save')}</Button>
+          <Button size="sm" tone="accent" disabled={busy() || (value().loader !== 'none' && !value().loaderVersion)} onClick={() => void save()}>{t('server-pack.save')}</Button>
         </span>
       </Show>
     }>
@@ -109,20 +129,19 @@ function IdentityPanel() {
         <div data-vesta="modpack-identity-fields">
           <TextField size="sm" label={t('server-pack.name')} value={value().name} disabled={busy()} onChange={(name) => edit({ name })} />
           <TextArea size="sm" label={t('server-pack.summary')} value={value().summary} rows={2} disabled={busy()} onChange={(summary) => edit({ summary })} />
+          <TextField size="sm" label={t('server-pack.version')} description={t('server-pack.version-help')} value={value().displayVersion} disabled={busy()} onChange={(displayVersion) => edit({ displayVersion })} />
           <div data-vesta="modpack-field-row">
-            <TextField size="sm" label={t('server-pack.version')} description={t('server-pack.version-help')} value={value().displayVersion} disabled={busy()} onChange={(displayVersion) => edit({ displayVersion })} />
             <Select size="sm" label={t('server-pack.loader')} value={value().loader} disabled={busy()}
-              options={packLoaders.map((loader) => ({ value: loader, label: loader === 'none' ? t('server-pack.loader-none') : packLoaderName(loader) }))}
-              onChange={(loader) => edit({ loader: loader as PackLoader, loaderVersion: loader === 'none' ? null : versions()[0] ?? value().loaderVersion ?? null })} />
+              options={packLoaders.map((loader) => ({ value: loader, label: loader === 'none' ? t('server-pack.loader-none') : packLoaderName(loader), icon: () => <Icon name={softwareIcon[loader === 'none' ? 'vanilla' : loader]} size={14} /> }))}
+              onChange={(loader) => chooseLoader(loader as PackLoader)} />
             <Show when={value().loader !== 'none'}>
-              <Show when={versions().length} fallback={
-                <TextField size="sm" label={t('server-pack.loader-version')} value={value().loaderVersion ?? ''} disabled={busy()} onChange={(loaderVersion) => edit({ loaderVersion: loaderVersion || null })} />
-              }>
-                <Select size="sm" label={t('server-pack.loader-version')} value={value().loaderVersion ?? undefined} disabled={busy()}
-                  options={versions().map((version) => ({ value: version, label: version }))} onChange={(loaderVersion) => edit({ loaderVersion })} />
-              </Show>
+              <Select size="sm" label={t('server-pack.loader-version')} value={value().loaderVersion ?? ''}
+                placeholder={t(metadata() || metadataError() ? 'server-pack.no-loader-versions' : 'server-pack.loading-versions')}
+                disabled={busy() || !versionOptions().length} options={versionOptions()}
+                onChange={(loaderVersion) => edit({ loaderVersion })} />
             </Show>
           </div>
+          <Show when={metadataError()}><Button size="sm" variant="ghost" onClick={() => void loadMetadata()}>{t('common.retry')}</Button></Show>
           <p data-vesta="server-muted"><Icon name="icons/security/lock" size={11} /> {t('server-pack.minecraft-help', { version: workspace().serverMinecraftVersion })}</p>
           <Show when={workspace().minecraftDrift}>
             <div data-vesta="server-callout" data-tone="warning" role="alert">

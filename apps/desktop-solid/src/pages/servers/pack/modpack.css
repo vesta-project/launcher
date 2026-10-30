@@ -676,7 +676,7 @@
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta="modpack-install-section"] h4, [data-vesta="modpack-diff-group"] h4) {
+  :where([data-vesta="modpack-install-section"] h4, [data-vesta="modpack-install-section"] > summary, [data-vesta="modpack-diff-group"] h4) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-1);
@@ -1104,7 +1104,15 @@
   }
 
   /* ---- Link review groups ---- */
-  :where([data-vesta="modpack-install-section"][data-change="success"] h4) { color: var(--vesta-color-success-text); }
-  :where([data-vesta="modpack-install-section"][data-change="accent"] h4) { color: var(--vesta-color-accent-text); }
-  :where([data-vesta="modpack-install-section"][data-change="danger"] h4) { color: var(--vesta-color-danger-text, var(--vesta-color-danger)); }
+  :where([data-vesta="modpack-install-section"][data-change="success"] h4, [data-vesta="modpack-install-section"][data-change="success"] > summary) { color: var(--vesta-color-success-text); }
+  :where([data-vesta="modpack-install-section"][data-change="accent"] h4, [data-vesta="modpack-install-section"][data-change="accent"] > summary) { color: var(--vesta-color-accent-text); }
+  :where([data-vesta="modpack-install-section"][data-change="danger"] h4, [data-vesta="modpack-install-section"][data-change="danger"] > summary) { color: var(--vesta-color-danger-text, var(--vesta-color-danger)); }
+}
+
+@layer vesta.components {
+  :where([data-vesta="modpack-install-section"] > summary) {
+    display: list-item;
+    cursor: default;
+    padding-block: var(--vesta-space-1);
+  }
 }

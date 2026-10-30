@@ -7,7 +7,7 @@
 import type { MessageId } from '../../localization/messages';
 import type { CapabilityView, ServerCommandError } from './native';
 import type { PackSyncApply, PackSyncChange, PackSyncPreview } from './native-pack-sync';
-import { gate, roleKey } from './capabilities';
+import { canInstallServerModpack, gate } from './capabilities';
 import type { ContentProvider } from './native-content';
 import type {
   ClientPackConfig, PackArchiveInspection, PackDiff, PackEntry, PackEntryKind, PackInstallApply, PackInstallPlan, PackInstallSource,
@@ -242,14 +242,13 @@ export interface ModpackGates {
 
 export function modpackGates(view: CapabilityView | undefined, role: string | null | undefined): ModpackGates {
   const can = (capability: string) => gate(view, capability) === 'allowed';
-  const manager = ['owner', 'administrator'].includes(roleKey(role));
   return {
     edit: can('pack.edit'),
     build: can('pack.build'),
     publish: can('pack.build') && can('pack.publish'),
     forceUpdate: can('pack.force_update'),
     download: can('pack.download') || can('pack.access'),
-    installOnServer: manager && can('content.install') && can('pack.edit'),
+    installOnServer: canInstallServerModpack(view, role),
   };
 }
 
@@ -593,7 +592,10 @@ export function syncChangeSummary(changes: readonly PackSyncChange[]) {
 }
 
 const installWarnings: Record<string, MessageId> = {
+  missing_required_dependency: 'server-pack.warning-missing-dependency',
   unknown_server_side: 'server-pack.warning-unknown-side',
+  unknown_or_optional_server_side: 'server-pack.warning-unknown-side',
+  archive_loader_inferred_from_server_review_required: 'server-pack.warning-loader-inferred',
   retained_unidentified_content: 'server-pack.warning-retained',
   loader_inferred_from_server: 'server-pack.warning-loader-inferred',
 };
@@ -636,4 +638,10 @@ export function packUploadTarget(directory: string, name: string, size: number):
 export function pickProviderVersion<V extends { id: string; game_versions: string[]; release_type: string }>(versions: readonly V[], minecraft: string): V | undefined {
   const fits = versions.filter((version) => version.game_versions.includes(minecraft));
   return fits.find((version) => version.release_type === 'release') ?? fits[0];
+}
+
+/** Early Install consent covers additive, compatible plans; conflicts still need review. */
+export function installCanProceedWithoutReview(plan: PackInstallPlan, now: number): boolean {
+  return !installBlocker(plan, now) && !installConflicts(plan).length && !(plan.removed?.length)
+    && !plan.warnings.length && plan.files.every(file => file.operation === 'added' || file.operation === 'unchanged');
 }

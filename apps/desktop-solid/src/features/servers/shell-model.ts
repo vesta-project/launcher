@@ -148,7 +148,8 @@ export interface Pressure {
  * explains them (the connection is down, or the server asked us to slow down); real,
  * actionable errors always show where they happened.
  */
-export function headerExplains(error: { code: ServerErrorCode } | null | undefined, snapshot: Pick<ServerSnapshot, 'state'>, pressure: Pressure | null, nowMs: number): boolean {
+export function headerExplains(error: { code: ServerErrorCode; reason?: string | null } | null | undefined, snapshot: Pick<ServerSnapshot, 'state'>, pressure: Pressure | null, nowMs: number): boolean {
+  if (error?.reason?.startsWith('content_') || error?.reason?.startsWith('pack_')) return false;
   if (!error || !isQuietError(error.code)) return false;
   if (snapshot.state.phase !== 'online') return true;
   if (snapshot.state.rateLimitedUntilMs && snapshot.state.rateLimitedUntilMs > nowMs) return true;

@@ -391,12 +391,21 @@ impl Client {
                     .map(str::to_owned);
                 Ok(CapabilityView {
                     source: "session".into(),
+                    roles: value.get("roles").and_then(Value::as_array).map(|roles| {
+                        roles
+                            .iter()
+                            .filter_map(|role| {
+                                role.get("id").and_then(Value::as_str).map(str::to_owned)
+                            })
+                            .collect()
+                    }),
                     granted,
                     refused: self.refused().await,
                 })
             }
             Err(e) if matches!(e.code, ErrorCode::NotFound | ErrorCode::Unsupported) => {
                 Ok(CapabilityView {
+                    roles: None,
                     source: if role.is_some() {
                         "role_defaults"
                     } else {

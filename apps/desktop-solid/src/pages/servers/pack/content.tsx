@@ -1,11 +1,11 @@
 import { Badge, Button, Checkbox, Dialog, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Switch, TextField, toast } from '@vesta/ui';
-import { For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { VirtualList } from '../../../components/virtual-list';
 import { projectPath, sourceById } from '../../../features/browse/browse-model';
-import { loadProjects, loadVersions, peekProject, peekVersions } from '../../../features/browse/browse-projects';
+import { loadProjects, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
 import { browseForServer } from '../../../features/browse/browse-store';
 import { IntentMemo } from '../../../features/servers/model';
 import {
@@ -39,8 +39,9 @@ const suggestionCopy: Record<PackSuggestion['kind'], { message: MessageId; actio
 /** Content: the pack's entries, like an instance's Resources. Provider packs are read-only until Customize. */
 export function ModpackContent() {
   const area = useModpackArea();
-  const manifest = () => area.workspace()!.draft.manifest;
-  const readOnly = () => area.kind() === 'provider';
+  const [pendingManifest, setPendingManifest] = createSignal<PackManifest | null>(null, { name: 'modpack-content:pending-manifest' });
+  const manifest = () => pendingManifest() ?? area.workspace()!.draft.manifest;
+  const readOnly = () => area.kind() === 'provider' || !!area.workspace()?.minecraftDrift;
   const [query, setQuery] = createSignal('', { name: 'modpack-content:query' });
   const [kind, setKind] = createSignal<EntryFilter>('all', { name: 'modpack-content:kind' });
   const [selected, setSelected] = createSignal<string[]>([], { name: 'modpack-content:selected' });
@@ -48,9 +49,14 @@ export function ModpackContent() {
   const [busy, setBusy] = createSignal(false, { name: 'modpack-content:busy' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-content:error' });
   const [suggestions, setSuggestions] = createSignal<PackSuggestions | null>(null, { name: 'modpack-content:suggestions' });
+  const [checking, setChecking] = createSignal(false, { name: 'modpack-content:checking' });
+  const [suggestionError, setSuggestionError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-content:suggestion-error' });
   const [dismissed, setDismissed] = createSignal<ReadonlySet<string>>(new Set(), { name: 'modpack-content:dismissed' });
   const [viewport, setViewport] = createSignal<HTMLDivElement | undefined>(undefined, { name: 'modpack-content:viewport' });
   const adds = new IntentMemo();
+  let disposed = false;
+  let suggestionSequence = 0;
+  onCleanup(() => { disposed = true; });
 
   // Provider names and icons, shared with Browse's cache.
   createEffect(() => manifest().entries, (entries) => {
@@ -64,14 +70,33 @@ export function ModpackContent() {
     for (const [provider, ids] of byProvider) void loadProjects(provider, ids).catch(() => {});
   }, { name: 'modpack-content:projects' });
 
-  // Suggestions are read explicitly once per draft revision; nothing is applied without a click.
-  createEffect(() => (readOnly() ? null : area.workspace()!.draft.revision), (revision) => {
-    if (!revision) return;
-    void serverCommand((api) => api.packSuggestions(area.id())).then((value) => {
+  // Checking provider updates is optional work, not a prerequisite for displaying or
+  // editing the draft. A required/optional switch must not start another catalogue scan.
+  const checkSuggestions = async () => {
+    if (untrack(checking) || untrack(busy)) return;
+    const serverId = area.id();
+    const revision = area.workspace()!.draft.revision;
+    const request = ++suggestionSequence;
+    setChecking(true); setSuggestionError(null);
+    try {
+      const value = await serverCommand((api) => api.packSuggestions(serverId));
+      if (disposed || request !== suggestionSequence || serverId !== untrack(area.id) || revision !== untrack(area.workspace)?.draft.revision) return;
+      if (value.draftRevision !== revision) { await area.reload(); return; }
       setSuggestions(value);
-      for (const item of value.items) if (item.provider) void loadProjects(item.provider.provider, [item.provider.projectId]).catch(() => {});
-    }).catch(() => {});
-  }, { name: 'modpack-content:suggestions-load' });
+      const groups = new Map<'modrinth' | 'curseforge', string[]>();
+      for (const item of value.items) if (item.provider) {
+        const ids = groups.get(item.provider.provider) ?? [];
+        ids.push(item.provider.projectId); groups.set(item.provider.provider, ids);
+      }
+      for (const [provider, ids] of groups) void loadProjects(provider, ids).catch(() => {});
+    } catch (reason) {
+      if (!disposed && request === suggestionSequence) setSuggestionError(reason as ServerCommandError);
+    } finally { if (!disposed && request === suggestionSequence) setChecking(false); }
+  };
+  createEffect(() => area.workspace()!.draft.revision, () => {
+    suggestionSequence++;
+    setSuggestions(null); setChecking(false); setSuggestionError(null);
+  }, { name: 'modpack-content:suggestions-stale' });
 
   const project = (entry: PackEntry) => (entry.source.type === 'provider' ? peekProject(entry.source.provider, entry.source.projectId) : undefined);
   const nameOf = (entry: PackEntry) => project(entry)?.name ?? entryFileName(entry);
@@ -85,13 +110,17 @@ export function ModpackContent() {
 
   const toggle = (id: string, on: boolean) => setSelected((list) => (on ? [...new Set([...list, id])] : list.filter((entry) => entry !== id)));
   const save = async (next: PackManifest, message?: MessageId) => {
+    if (untrack(busy)) return false;
     setBusy(true); setError(null);
+    // Only the editor is optimistic. The shared workspace remains server-confirmed,
+    // so publication can never race ahead of an unacknowledged draft write.
+    setPendingManifest(next);
     try {
       await area.writeManifest(next);
-      if (message) toast.show({ title: t(message), tone: 'success' });
+      if (!disposed && message) toast.show({ title: t(message), tone: 'success' });
       return true;
-    } catch (reason) { setError(reason as ServerCommandError); return false; }
-    finally { setBusy(false); }
+    } catch (reason) { if (!disposed) setError(reason as ServerCommandError); return false; }
+    finally { if (!disposed) { setPendingManifest(null); setBusy(false); } }
   };
   const remove = async (ids: string[]) => {
     setRemoving(null);
@@ -135,9 +164,10 @@ export function ModpackContent() {
   const row = (entry: () => PackEntry) => {
     const available = () => updates().get(entry().id);
     const link = () => (entry().source.type === 'provider' ? projectPath((entry().source as { provider: string }).provider, (entry().source as { projectId: string }).projectId) : undefined);
+    const warm = () => { const source = entry().source; if (source.type === 'provider') prefetchProject(source.provider, source.projectId); };
     return (
       <div data-vesta="table-row" role="presentation" class={{ 'resource-row': true, 'row-selected': chosen().includes(entry().id) }}
-        onPointerEnter={() => { const source = entry().source; if (source.type === 'provider') void loadVersions(source.provider, source.projectId).catch(() => {}); }}>
+        onPointerEnter={warm} onFocusIn={warm}>
         <div data-vesta="table-cell" role="cell" class="col-check">
           <Show when={!readOnly()}>
             <Checkbox size="sm" aria-label={t('server-pack.select-entry', { name: nameOf(entry()) })} disabled={busy()}
@@ -185,7 +215,7 @@ export function ModpackContent() {
         </div>
         <div data-vesta="table-cell" role="cell" class="col-enabled">
           <Switch size="sm" aria-label={t('server-pack.required-entry', { name: nameOf(entry()) })} checked={entry().required}
-            disabled={busy() || readOnly()} onChange={(on) => setRequired([entry().id], on)} />
+            disabled={readOnly()} readOnly={busy()} onChange={(on) => { if (!busy()) setRequired([entry().id], on); }} />
         </div>
         <div data-vesta="table-cell" role="cell" class="col-menu">
           <Show when={!readOnly()}>
@@ -193,13 +223,13 @@ export function ModpackContent() {
               <IconButton {...menuProps} variant="ghost" size="sm" tooltip={false} label={t('server-pack.entry-actions', { name: nameOf(entry()) })} icon={<Icon name="icons/content/ellipsis-v" />} />
             )}>
               <Show when={available()}>
-                <MenuItem icon={<Icon name="icons/actions/download" />} onSelect={() => update(entry())}>{t('server-pack.update-entry', { name: nameOf(entry()) })}</MenuItem>
+                <MenuItem disabled={busy()} icon={<Icon name="icons/actions/download" />} onSelect={() => update(entry())}>{t('server-pack.update-entry', { name: nameOf(entry()) })}</MenuItem>
               </Show>
-              <MenuItem icon={<Icon name="icons/controls/check" />} onSelect={() => setRequired([entry().id], !entry().required)}>
+              <MenuItem disabled={busy()} icon={<Icon name="icons/controls/check" />} onSelect={() => setRequired([entry().id], !entry().required)}>
                 {t(entry().required ? 'server-pack.make-optional' : 'server-pack.make-required')}
               </MenuItem>
               <MenuSeparator />
-              <MenuItem tone="danger" icon={<Icon name="icons/actions/delete" />} onSelect={() => setRemoving([entry().id])}>{t('server-pack.remove')}</MenuItem>
+              <MenuItem disabled={busy()} tone="danger" icon={<Icon name="icons/actions/delete" />} onSelect={() => setRemoving([entry().id])}>{t('server-pack.remove')}</MenuItem>
             </Menu>
           </Show>
         </div>
@@ -218,9 +248,12 @@ export function ModpackContent() {
             <TextField size="sm" class="resources-search" aria-label={t('server-pack.search')} placeholder={t('server-pack.search')}
               icon={<Icon name="icons/content/search" size={14} />} value={query()} onChange={setQuery} />
             <Show when={!readOnly()} fallback={
-              <Button size="sm" variant="outline" icon={<Icon name="icons/actions/edit" />} onClick={() => area.open('overview')}>{t('server-pack.customize-to-edit')}</Button>
+              <Button size="sm" variant="outline" icon={<Icon name="icons/actions/edit" />} onClick={() => area.open('overview')}>{t(area.workspace()?.minecraftDrift ? 'server-pack.repair' : 'server-pack.customize-to-edit')}</Button>
             }>
-              <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={addContent}>{t('server-pack.add-content')}</Button>
+              <Button size="sm" variant="outline" disabled={checking() || busy()} onClick={() => void checkSuggestions()}>
+                {t(checking() ? 'server-pack.checking-content' : 'server-pack.check-content')}
+              </Button>
+              <Button size="sm" tone="accent" disabled={busy()} icon={<Icon name="icons/actions/add" />} onClick={addContent}>{t('server-pack.add-content')}</Button>
             </Show>
           </div>
         }>
@@ -237,8 +270,11 @@ export function ModpackContent() {
         </Show>
       </div>
 
-      <Show when={readOnly()}>
+      <Show when={area.kind() === 'provider'}>
         <p data-vesta="server-callout" data-tone="neutral" class="modpack-note"><Icon name="icons/security/lock" size={14} /> {t('server-pack.content-read-only')}</p>
+      </Show>
+      <Show when={area.workspace()?.minecraftDrift}>
+        <p data-vesta="server-callout" data-tone="warning" class="modpack-note" role="alert">{t('server-pack.drift', { version: area.workspace()!.serverMinecraftVersion })}</p>
       </Show>
       <Show when={strip().length}>
         <div data-vesta="modpack-suggestions" role="region" aria-label={t('server-pack.suggestions')}>
@@ -260,8 +296,10 @@ export function ModpackContent() {
         </div>
       </Show>
       <ServerErrorNote error={error()} />
+      <ServerErrorNote error={suggestionError()} />
+      <span data-vesta="sr-only" role="status">{busy() ? t('server-pack.saving') : checking() ? t('server-pack.checking-content') : ''}</span>
 
-      <div data-vesta="resources-list" tabindex={0} ref={setViewport}>
+      <div data-vesta="resources-list" aria-busy={busy() ? 'true' : 'false'} tabindex={0} ref={setViewport}>
         <Show when={visible().length} fallback={
           <EmptyState variant="inline" icon="icons/content/layers"
             title={t(query() ? 'server-pack.no-matches' : 'server-pack.content-empty')}

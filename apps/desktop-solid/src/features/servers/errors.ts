@@ -35,8 +35,27 @@ export function toServerError(reason: unknown): ServerCommandError {
   return { code: 'internal' };
 }
 
+const packReasons: Record<string, { message: MessageId; action: RecoveryAction }> = {
+  pack_storage_low: { message: 'server-hosting.reason-storage-low', action: 'none' },
+  content_pack_download_unavailable: { message: 'server-pack.download-unavailable', action: 'none' },
+  content_pack_metadata_invalid: { message: 'server-pack.metadata-invalid', action: 'retry' },
+  content_pack_download_failed: { message: 'server-pack.download-failed', action: 'retry' },
+  content_pack_hash_mismatch: { message: 'server-pack.hash-mismatch', action: 'retry' },
+  content_pack_source_unsafe: { message: 'server-pack.source-unsafe', action: 'none' },
+  pack_path_invalid: { message: 'server-pack.path-invalid', action: 'none' },
+  pack_catalogue_invalid: { message: 'server-pack.archive-invalid', action: 'none' },
+  pack_archive_invalid: { message: 'server-pack.archive-invalid', action: 'none' },
+  pack_too_large: { message: 'server-pack.too-large', action: 'none' },
+  pack_unresolved_file: { message: 'server-pack.unresolved-file', action: 'none' },
+};
+
 export function serverErrorPresentation(reason: unknown) {
   const error = toServerError(reason);
+  if (error.reason && packReasons[error.reason]) return packReasons[error.reason]!;
+  if (error.reason === 'content_provider_not_configured')
+    return { message: 'server-pack.provider-not-configured' as MessageId, action: 'none' as const };
+  if (error.reason === 'content_provider_unavailable')
+    return { message: 'server-pack.provider-unavailable' as MessageId, action: 'retry' as const };
   if (error.localPressure && error.code === 'rate_limited')
     return { message: 'servers.error.client-rate-limited' as MessageId, action: 'wait' as const };
   if (error.localPressure && error.code === 'server_busy')
@@ -45,3 +64,30 @@ export function serverErrorPresentation(reason: unknown) {
 }
 
 export const errorMessage = (reason: unknown): MessageId => serverErrorPresentation(reason).message;
+
+function providerDetails(error: ServerCommandError) {
+  const d = error.details;
+  const id = (s: unknown): s is string => typeof s === 'string' && /^[a-zA-Z0-9_-]{0,128}$/.test(s);
+  return d && ['metadata', 'download'].includes(d.stage) && ['curseforge', 'modrinth'].includes(d.provider)
+    && id(d.projectId) && d.projectId && id(d.versionId) ? d : null;
+}
+
+export function serverErrorFile(reason: unknown): string | null {
+  const filename = providerDetails(toServerError(reason))?.filename;
+  return typeof filename === 'string' && filename.length <= 256 && /^[\x20-\x7e]+$/.test(filename)
+    && !/[\\/:]/.test(filename) ? filename : null;
+}
+
+/** Safe diagnostics for support. Do not stringify arbitrary command rejections. */
+export function serverErrorDetails(reason: unknown): string {
+  const error = toServerError(reason);
+  const lines: string[] = [error.code];
+  if (error.reason && /^[a-zA-Z0-9_.]{1,96}$/.test(error.reason)) lines.push(error.reason);
+  const d = providerDetails(error);
+  if (d) {
+    lines.push(`${d.stage}: ${d.provider} ${d.projectId}${d.versionId ? ` / ${d.versionId}` : ''}`);
+    const filename = serverErrorFile(reason);
+    if (filename) lines.push(filename);
+  }
+  return lines.join('\n');
+}

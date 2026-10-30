@@ -60,3 +60,9 @@ server-content-from-modpack = From modpack { $name }
 server-content-managed-by-modpack = Managed by the server modpack
 server-content-open-modpack = Open server modpack
 server-content-server-modpack = the server modpack
+
+server-content-side-client = Client
+server-content-side-server = Server
+server-content-side-both = Client & server
+server-content-side-world = World
+server-content-side-unknown = Side unknown

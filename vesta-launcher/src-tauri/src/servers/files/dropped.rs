@@ -6,8 +6,8 @@ use std::{
     sync::Mutex,
 };
 use vesta_server_client::{
+    files::{FileTransfers, UploadCandidate, MAX_WRITE_BYTES},
     Error, ErrorCode, Result,
-    files::{FileTransfers, MAX_WRITE_BYTES, UploadCandidate},
 };
 
 const MAX_FILES: usize = 64;
@@ -73,20 +73,21 @@ impl DroppedFiles {
         Ok(paths)
     }
 
-    pub(crate) async fn pack_bytes(
+    pub(crate) async fn pack_sources(
         &self,
         owner: &str,
         paths: Vec<String>,
         archive: bool,
-    ) -> Result<Vec<(String, String, Vec<u8>)>> {
-        use std::io::Read;
+    ) -> Result<Vec<PackSource>> {
         let paths = self.accept(owner, paths)?;
         if archive && paths.len() != 1 {
             return Err(invalid());
         }
         tokio::task::spawn_blocking(move || {
+            use sha2::{Digest, Sha256};
+            use std::io::{Read, Seek, SeekFrom};
             let limit = if archive {
-                68 * 1024 * 1024
+                128 * 1024 * 1024 * 1024
             } else {
                 16 * 1024 * 1024
             };
@@ -96,19 +97,35 @@ impl DroppedFiles {
             }
             sources
                 .into_iter()
-                .map(|s| {
-                    let path = s
+                .map(|mut source| {
+                    let path = source
                         .folder
-                        .map_or_else(|| s.name.clone(), |f| format!("{f}/{}", s.name));
-                    let mut bytes = Vec::new();
-                    s.file
-                        .take(limit + 1)
-                        .read_to_end(&mut bytes)
-                        .map_err(|_| invalid())?;
-                    if bytes.len() as u64 > limit {
-                        return Err(invalid());
+                        .map_or_else(|| source.name.clone(), |f| format!("{f}/{}", source.name));
+                    let mut hash = Sha256::new();
+                    let mut size = 0u64;
+                    let mut buffer = [0u8; 65536];
+                    loop {
+                        let count = source.file.read(&mut buffer).map_err(|_| invalid())?;
+                        if count == 0 {
+                            break;
+                        }
+                        size += count as u64;
+                        if size > limit {
+                            return Err(invalid());
+                        }
+                        hash.update(&buffer[..count]);
                     }
-                    Ok((s.name, path, bytes))
+                    source
+                        .file
+                        .seek(SeekFrom::Start(0))
+                        .map_err(|_| invalid())?;
+                    Ok(PackSource {
+                        name: source.name,
+                        path,
+                        file: source.file,
+                        size,
+                        sha256: hex::encode(hash.finalize()),
+                    })
                 })
                 .collect()
         })
@@ -429,11 +446,9 @@ mod tests {
                 name => panic!("unexpected candidate {name}"),
             }
         }
-        assert!(
-            !serde_json::to_string(&candidates)
-                .unwrap()
-                .contains(&root.path().to_string_lossy().to_string())
-        );
+        assert!(!serde_json::to_string(&candidates)
+            .unwrap()
+            .contains(&root.path().to_string_lossy().to_string()));
     }
 
     #[test]
@@ -510,4 +525,12 @@ mod tests {
             b"secret"
         );
     }
+}
+
+pub(crate) struct PackSource {
+    pub name: String,
+    pub path: String,
+    pub file: File,
+    pub size: u64,
+    pub sha256: String,
 }

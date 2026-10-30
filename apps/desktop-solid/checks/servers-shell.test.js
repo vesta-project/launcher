@@ -116,6 +116,8 @@ describe('[shell] one place for connectivity problems', () => {
   test('panels hide quiet errors only while the header explains them', () => {
     const busy = { code: 'server_busy' };
     expect(headerExplains(busy, offline(), null, 0)).toBe(true);
+    expect(headerExplains({ ...busy, reason: 'content_provider_not_configured' }, offline(), null, 0)).toBe(false);
+    expect(headerExplains({ ...busy, reason: 'content_pack_download_failed' }, offline(), null, 0)).toBe(false);
     expect(headerExplains(busy, snapshot(), { code: 'server_busy', untilMs: 10 }, 5)).toBe(true);
     expect(headerExplains(busy, snapshot(), { code: 'server_busy', untilMs: 10 }, 20)).toBe(false);
     expect(headerExplains(busy, snapshot(), null, 0)).toBe(false);

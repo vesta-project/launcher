@@ -10,6 +10,7 @@ import {
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
 import type { PackEntry, PublishedRevision } from '../../../features/servers/native-pack';
+import { serverResource, useServerResource } from '../../../features/servers/resources';
 import { serverCommand } from '../../../features/servers/store';
 import { formatDate, t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
@@ -63,8 +64,10 @@ function DraftReview() {
   const review = async () => {
     setError(null);
     try {
-      const preview = await serverCommand((api) => api.packPreview(area.id(), untrack(area.workspace)!.draft.revision));
-      if (!disposed) send({ type: 'previewed', preview });
+      const revision = untrack(area.workspace)!.draft.revision;
+      const preview = await area.refreshPreview();
+      if (!disposed && revision === untrack(area.workspace)?.draft.revision) send({ type: 'previewed', preview });
+      else if (!disposed) send({ type: 'reset' });
     } catch (reason) { if (!disposed) { setError(reason as ServerCommandError); send({ type: 'failed', code: (reason as ServerCommandError).code }); } }
   };
   const publish = async (request: Extract<PublishState, { step: 'publishing' }>['request']) => {
@@ -73,6 +76,7 @@ function DraftReview() {
       const outcome = await serverCommand((api) => api.packBuildPublish(area.id(), request, intents.idFor(request)));
       intents.settle();
       if (disposed) return;
+      area.applyPublication(outcome, request.draftRevision);
       send({ type: 'published', outcome });
       toast.show({ title: t('server-pack.published', { version: outcome.hostedRevision }), tone: 'success' });
       await area.reload();
@@ -104,9 +108,9 @@ function DraftReview() {
         </Show>
         <Show when={state().step === 'idle' || (state().step === 'failed' && !reviewing())}>
           <p data-vesta="server-muted">{t(pending() ? 'server-pack.draft-pending-help' : 'server-pack.draft-clean-help')}</p>
-          <Button size="sm" tone="accent" icon={<Icon name="icons/content/history" />} disabled={!area.gates().build} onClick={() => send({ type: 'review' })}>
+          <Show when={pending()}><Button size="sm" tone="accent" icon={<Icon name="icons/content/history" />} disabled={!area.gates().build} onClick={() => send({ type: 'review' })}>
             {t('server-pack.review-publish')}
-          </Button>
+          </Button></Show>
         </Show>
         <Show when={state().step === 'reviewing'}><p role="status" data-vesta="server-muted">{t('server-pack.reviewing')}</p></Show>
         <Show when={reviewing()}>
@@ -272,22 +276,29 @@ function ProviderVersions() {
   );
 }
 
+const historyResource = serverResource<PublishedRevision[], string>('pack-history', id => serverCommand(api => api.packHistory(id)));
+
 function PublishedHistory() {
   const area = useModpackArea();
-  const [rows, setRows] = createSignal<PublishedRevision[]>([], { name: 'modpack-history:rows' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-history:error' });
-  createEffect(() => [area.id(), area.workspace()?.publishedRevision] as const, ([id]) => {
-    let disposed = false;
-    void serverCommand(api => api.packHistory(id)).then(value => { if (!disposed) { setRows(value); setError(null); } }, reason => { if (!disposed) setError(reason as ServerCommandError); });
-    onCleanup(() => { disposed = true; });
-  }, { name: 'modpack-history:load' });
+  const history = useServerResource(area.id, historyResource, { args: () => area.workspace()?.publishedRevision ?? '0' });
+  const rows = () => history.value() ?? [];
   return <section data-vesta="modpack-panel"><header data-vesta="modpack-panel-head"><h3>{t('server-pack.history-title')}</h3></header>
-    <div data-vesta="modpack-panel-body"><ServerErrorNote error={error()} />
-      <Show when={rows().length} fallback={<p data-vesta="server-muted">{t('server-pack.history-empty')}</p>}>
-        <ul><For each={rows()}>{row => <li>
-          <strong>{row.revision}</strong> · {formatDate(new Date(row.publishedAt).toISOString())} · {row.publishedBy ?? '—'} · {t(row.requiredUpdate ? 'server-pack.publish-required' : 'server-pack.publish-optional')}
-          <span> · {t('server-pack.history-counts', { entries: row.entryCount ?? '—', overrides: row.overrideCount ?? '—' })}</span>
-          <Show when={row.providerVersion}><span> · {row.providerVersion}</span></Show>
+    <div data-vesta="modpack-panel-body"><ServerErrorNote error={history.error()} onRetry={() => void history.refresh()} />
+      <Show when={rows().length} fallback={<Show when={!history.error()}><p data-vesta="server-muted" role="status">{t(history.loading() ? 'server-pack.history-loading' : 'server-pack.history-empty')}</p></Show>}>
+        <ul data-vesta="modpack-version-list"><For each={rows()}>{row => <li data-vesta="modpack-version">
+          <Icon name="icons/content/history" size={16} />
+          <div data-vesta="modpack-version-copy">
+            <strong>{t('server-pack.published-revision')} {row.revision}</strong>
+            <span data-vesta="server-muted">
+              {[
+                formatDate(new Date(row.publishedAt).toISOString()), row.publishedBy,
+                row.entryCount != null ? t('server-pack.history-entries', { count: row.entryCount }) : null,
+                row.overrideCount != null ? t('server-pack.history-overrides', { count: row.overrideCount }) : null,
+              ].filter(Boolean).join(' · ')}
+            </span>
+          </div>
+          <Show when={row.providerVersion}><Badge size="sm" variant="outline">{row.providerVersion}</Badge></Show>
+          <Badge size="sm" tone={row.requiredUpdate ? 'warning' : 'neutral'}>{t(row.requiredUpdate ? 'server-pack.publish-required' : 'server-pack.publish-optional')}</Badge>
         </li>}</For></ul>
       </Show>
     </div></section>;

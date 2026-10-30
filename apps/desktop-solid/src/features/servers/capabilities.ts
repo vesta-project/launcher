@@ -51,6 +51,13 @@ export function gate(view: CapabilityView | undefined, capability: string): Gate
   return view.source === 'unknown' ? 'unknown' : 'denied';
 }
 
+/** Whole-pack installation is reserved for effective owners/administrators. */
+export function canInstallServerModpack(view: CapabilityView | undefined, pairedRole?: string | null): boolean {
+  const roles = view?.roles ?? [roleKey(pairedRole)];
+  return roles.some(role => ['owner', 'administrator'].includes(roleKey(role)))
+    && gate(view, 'content.install') === 'allowed' && gate(view, 'pack.edit') === 'allowed';
+}
+
 /** True when any listed capability could be usable. Used to decide whether a tab is shown. */
 export const anyVisible = (view: CapabilityView | undefined, capabilities: readonly string[]) =>
   capabilities.some((capability) => gate(view, capability) !== 'denied');

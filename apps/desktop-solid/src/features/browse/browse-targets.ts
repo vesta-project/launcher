@@ -95,10 +95,12 @@ export function buildTargetOptions(input: {
 }): TargetOptions {
   const needle = normalize(input.query).trim();
   const instances = input.kind === 'modpack' ? [] : input.instances;
-  const servers = serverTargets(input.snapshots, input.software).map((target) => ({
-    ...target,
-    minecraftVersion: input.minecraftVersion?.(target.id) || target.minecraftVersion,
-  }));
+  const servers = serverTargets(input.snapshots, input.software)
+    .filter(target => input.kind !== 'modpack' || target.canInstallModpack)
+    .map((target) => ({
+      ...target,
+      minecraftVersion: input.minecraftVersion?.(target.id) || target.minecraftVersion,
+    }));
   const total = instances.length + servers.length;
   return {
     instances: instances

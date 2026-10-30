@@ -56,6 +56,7 @@ struct State {
     operation_reads: AtomicUsize,
     operation_read_denied: AtomicBool,
     mutation_has_details: AtomicBool,
+    pack_plan_error_mode: AtomicUsize,
 }
 struct Agent {
     endpoint: Endpoint,
@@ -379,9 +380,83 @@ async fn route(
             assert!(body.get("durationSeconds").is_none());
             envelope(operation("queued"))
         }
+        "/api/v3/manage/pack/install/plan" => {
+            let mode = state.pack_plan_error_mode.load(Ordering::SeqCst);
+            if mode == 3 {
+                tokio::time::sleep(std::time::Duration::from_secs(16)).await;
+            }
+            if mode == 2 {
+                return Ok(error(StatusCode::BAD_GATEWAY, "proxy_error"));
+            }
+            let mut response = plain(
+                json!({"api_version":"3","error":{"code": if mode == 1 { "content_pack_hash_mismatch" } else { "content_pack_download_unavailable" },"details":{
+                    "stage":"download","provider":"curseforge","projectId":"1691925","versionId":"9022781","filename":"mielon's-the-sift+26.3.jar","responseBody":"must not cross IPC"
+                }}}),
+            );
+            *response.status_mut() = if mode == 1 {
+                StatusCode::BAD_GATEWAY
+            } else {
+                StatusCode::UNPROCESSABLE_ENTITY
+            };
+            response
+        }
         _ => error(StatusCode::NOT_FOUND, "resource_not_found"),
     };
     Ok(response)
+}
+
+#[tokio::test]
+async fn pack_review_failure_preserves_file_identity_over_pinned_https() {
+    use vesta_server_client::pack::{PackInstallRequest, PackInstallSource};
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    let input = PackInstallRequest {
+        source: PackInstallSource::Provider {
+            provider: "curseforge".into(),
+            project_id: "1714524".into(),
+            version_id: "9024763".into(),
+        },
+    };
+    let error = client.pack_install_plan(input.clone()).await.unwrap_err();
+    assert_eq!(
+        error.reason.as_deref(),
+        Some("content_pack_download_unavailable")
+    );
+    assert_eq!(
+        error.details.as_ref().unwrap().filename.as_deref(),
+        Some("mielon's-the-sift+26.3.jar")
+    );
+    assert!(!serde_json::to_string(&error)
+        .unwrap()
+        .contains("must not cross IPC"));
+    agent.state.pack_plan_error_mode.store(1, Ordering::SeqCst);
+    let failure = client.pack_install_plan(input.clone()).await.unwrap_err();
+    assert_eq!(
+        failure.reason.as_deref(),
+        Some("content_pack_hash_mismatch")
+    );
+    assert!(failure.details.is_some());
+    agent.state.pack_plan_error_mode.store(2, Ordering::SeqCst);
+    assert_eq!(
+        client
+            .pack_install_plan(input.clone())
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::OutcomeUnknown
+    );
+    // A real slow HTTPS response must survive the ordinary 15 s request limit.
+    agent.state.pack_plan_error_mode.store(3, Ordering::SeqCst);
+    assert_eq!(
+        client
+            .pack_install_plan(input)
+            .await
+            .unwrap_err()
+            .reason
+            .as_deref(),
+        Some("content_pack_download_unavailable")
+    );
 }
 
 #[tokio::test]
@@ -587,10 +662,9 @@ async fn additive_self_projection_and_status_stream_are_supported() {
     let agent = Agent::start().await;
     agent.state.modern.store(true, Ordering::SeqCst);
     let client = agent.paired().await;
-    assert_eq!(
-        client.capabilities(None).await.unwrap().granted,
-        vec!["status.view", "lifecycle.start"]
-    );
+    let capabilities = client.capabilities(None).await.unwrap();
+    assert_eq!(capabilities.granted, vec!["status.view", "lifecycle.start"]);
+    assert_eq!(capabilities.roles, Some(vec!["owner".into()]));
     let mut socket = client.socket(ServerTopic::Metrics).await.unwrap();
     assert!(socket
         .next()

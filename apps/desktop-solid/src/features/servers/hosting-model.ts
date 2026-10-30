@@ -64,6 +64,8 @@ export const warningCopy = (code: string): MessageId => warningMessage[code] ?? 
 
 /** Copy for the agent's fixed reason codes (software_*, server_install.*, sftp/world). */
 const reasons: Record<string, MessageId> = {
+  content_provider_not_configured: 'server-pack.provider-not-configured',
+  content_provider_unavailable: 'server-pack.provider-unavailable',
   'server_install.build_tools_missing': 'server-hosting.reason-build-tools',
   'server_install.build_memory_low': 'server-hosting.reason-build-memory',
   'server_install.build_output_mismatch': 'server-hosting.reason-build-output',

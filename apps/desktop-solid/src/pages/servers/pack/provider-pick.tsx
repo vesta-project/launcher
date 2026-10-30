@@ -1,5 +1,5 @@
 import { Button, Dialog, Select } from '@vesta/ui';
-import { Show, createMemo, createSignal, untrack } from 'solid-js';
+import { Show, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { sourceById } from '../../../features/browse/browse-model';
 import { loadVersions, peekVersions } from '../../../features/browse/browse-projects';
@@ -16,7 +16,17 @@ import { useModpackArea } from './area';
 export function ProviderPickDialog(props: { pick: ModpackPick }) {
   const area = useModpackArea();
   const [versionId, setVersionId] = createSignal<string | null>(untrack(() => props.pick.versionId), { name: 'modpack-pick:version' });
-  untrack(() => void loadVersions(props.pick.provider, props.pick.projectId).catch(() => {}));
+  const [loading, setLoading] = createSignal(false, { name: 'modpack-pick:loading' });
+  const [failed, setFailed] = createSignal(false, { name: 'modpack-pick:failed' });
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
+  const load = async () => {
+    setLoading(true); setFailed(false);
+    try { await loadVersions(props.pick.provider, props.pick.projectId); }
+    catch { if (!disposed) setFailed(true); }
+    finally { if (!disposed) setLoading(false); }
+  };
+  untrack(() => void load());
   const versions = () => peekVersions(props.pick.provider, props.pick.projectId) ?? [];
   const chosen = createMemo(() => versionId() ?? pickProviderVersion(versions(), area.workspace()?.serverMinecraftVersion ?? '')?.id ?? null, { name: 'modpack-pick:chosen' });
   const current = () => linkProvider(area.link().source);
@@ -56,11 +66,18 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
             <h3>{props.pick.name}</h3>
           </div>
         </div>
-        <Select size="sm" label={t('server-pack.pick-version')} value={chosen() ?? undefined} onChange={setVersionId} placeholder={t('server-pack.loading-versions')}
+        <Select size="sm" label={t('server-pack.pick-version')} value={chosen() ?? undefined} onChange={setVersionId}
+          placeholder={t(loading() ? 'server-pack.loading-versions' : failed() ? 'server-pack.versions-failed' : 'server-pack.versions-empty')}
           options={versions().map((version) => ({
             value: version.id, label: version.version_number,
             description: `${version.game_versions.slice(0, 3).join(', ')} · ${version.loaders.join(', ')}`,
           }))} />
+        <Show when={failed()}>
+          <p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.versions-failed')}
+            <Button size="sm" variant="ghost" disabled={loading()} onClick={() => void load()}>{t('common.retry')}</Button>
+          </p>
+        </Show>
+        <span data-vesta="sr-only" role="status">{loading() ? t('server-pack.loading-versions') : ''}</span>
         <p data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t('server-pack.pick-point-server')}</p>
         <p data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t('server-pack.pick-point-players')}</p>
         <Show when={replacing()}>

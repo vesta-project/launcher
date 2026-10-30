@@ -34,3 +34,17 @@ describe('server content inventory and staging', () => {
     expect((await api.content('v')).capabilities.install).toBe(false);
   });
 });
+
+import { contentSide } from '../src/features/servers/content-model.ts';
+test('resource sides use declarations and explicit provider requirements, never installation location', () => {
+ const mod={kind:'mod',declared:null};
+ expect(contentSide(mod)).toBe('server-content.side-unknown');
+ expect(contentSide({...mod,declared:{side:'*'}})).toBe('server-content.side-both');
+ expect(contentSide({...mod,declared:{side:'client'}})).toBe('server-content.side-client');
+ expect(contentSide({...mod,declared:{side:'server'}})).toBe('server-content.side-server');
+ expect(contentSide({kind:'plugin',declared:null})).toBe('server-content.side-server');
+ expect(contentSide({kind:'datapack',declared:null})).toBe('server-content.side-world');
+ expect(contentSide(mod,{environment:{client:true,server:true}})).toBe('server-content.side-unknown');
+ expect(contentSide(mod,{environment:{client:true,server:true,client_requirement:'required',server_requirement:'optional'}})).toBe('server-content.side-both');
+ expect(contentSide(mod,{environment:{client:false,server:true,client_requirement:'unsupported',server_requirement:'required'}})).toBe('server-content.side-server');
+});

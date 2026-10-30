@@ -1,19 +1,21 @@
 import { Badge, Button, Dialog, Progress, SegmentedControl, toast } from '@vesta/ui';
-import { For, Show, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { IntentMemo, lifecycleControls, newIntentId } from '../../../features/servers/model';
 import {
-  defaultInstallChoices, installApplyRequest, installBlocker, installConflicts, installStagedCount, installWarning, linkReview, offerToPlayers,
+  defaultInstallChoices, installCanProceedWithoutReview, installApplyRequest, installBlocker, installConflicts, installStagedCount, installWarning, linkReview, offerToPlayers,
   type ConflictChoice,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
 import type { PackInstallOutcome, PackInstallPlan } from '../../../features/servers/native-pack';
-import { invalidateServerResources } from '../../../features/servers/resources';
-import { CONTENT_RESOURCES } from '../../../features/servers/server-resources';
+import { useServerResource, invalidateServerResources } from '../../../features/servers/resources';
+import { softwareResource, CONTENT_RESOURCES } from '../../../features/servers/server-resources';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
+import { PackSoftwareChange } from './pack-software-change';
+import type { SoftwareId } from '../../../features/servers/hosting-native';
 import { useLifecycle } from '../lifecycle';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea, type InstallRequestSource } from './area';
@@ -32,6 +34,9 @@ const conflictLabel: Record<NonNullable<PackInstallPlan['files'][number]['confli
 export function InstallOnServerDialog(props: { request: InstallRequestSource }) {
   const area = useModpackArea();
   const now = useServersClock();
+  const [softwareOpen, setSoftwareOpen] = createSignal(false, { name: 'modpack-install:software-open' });
+  const software = useServerResource(() => area.id(), softwareResource);
+  const [installRequested, setInstallRequested] = createSignal(false, { name: 'modpack-install:requested' });
   const lifecycle = useLifecycle(area.snapshot);
   const [plan, setPlan] = createSignal<PackInstallPlan | null>(null, { name: 'modpack-install:plan' });
   const [picks, setPicks] = createSignal<Record<string, ConflictChoice>>({}, { name: 'modpack-install:picks' });
@@ -43,18 +48,27 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   let disposed = false;
   onCleanup(() => { disposed = true; });
 
-  const planNow = async () => {
+  const planNow = async (): Promise<void> => {
+    const startedRevision = untrack(() => software.value()?.revision);
     setBusy(true); setError(null); setPlan(null);
     try {
       const value = await serverCommand((api) => api.packInstallPlan(area.id(), { source: untrack(() => props.request.source) }));
       if (disposed) return;
+      if (startedRevision !== undefined && startedRevision !== untrack(() => software.value()?.revision)) return planNow();
       setPlan(value);
       setPicks(defaultInstallChoices(value));
+      if (untrack(installRequested) && installCanProceedWithoutReview(value, untrack(now))) await apply();
+      else setInstallRequested(false);
     } catch (reason) { if (!disposed) setError(reason as ServerCommandError); }
     finally { if (!disposed) setBusy(false); }
   };
   // Plan once mounted: the first request writes state, which setup must not do.
-  onSettled(() => { void planNow(); });
+  onSettled(() => { void software.refresh(); void planNow(); });
+  let softwareRevision: string | undefined;
+  createEffect(() => software.value()?.revision, revision => {
+    const previous = softwareRevision; softwareRevision = revision;
+    if (previous !== undefined && revision !== previous && !untrack(busy) && !untrack(outcome)) void planNow();
+  }, { name: 'modpack-install:software-revision' });
 
   const blocker = () => { const value = plan(); return value ? installBlocker(value, now()) : null; };
   const request = createMemo(() => { const value = plan(); return value ? installApplyRequest(value, picks()) : null; }, { name: 'modpack-install:request' });
@@ -81,7 +95,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   };
 
   const close = () => {
-    if (busy() && !outcome()) return;
+    if (busy() && plan() && !outcome()) return;
     // An uploaded file the review read but nobody linked is cancelled rather than abandoned.
     const uploadId = untrack(() => props.request.uploadId);
     if (uploadId && !untrack(outcome)) void serverCommand((api) => api.packUploadCancel(area.id(), uploadId, newIntentId())).catch(() => {});
@@ -110,9 +124,14 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
           <Show when={plan()}>
             <span data-vesta="server-muted">{t('server-pack.install-expires', { count: minutesLeft() })}</span>
           </Show>
-          <Button tone="accent" disabled={busy() || !request() || !!blocker()} onClick={() => void apply()}>
-            {uncertain() ? t('server-pack.retry') : t(update() ? 'server-pack.update-apply' : 'server-pack.link-apply', { count: plan() ? installStagedCount(plan()!, picks()) : 0 })}
-          </Button>
+          <Show when={!plan() && !error()}>
+            <Button tone="accent" disabled={installRequested()} onClick={() => setInstallRequested(true)}>{t(installRequested() ? 'server-pack.install-preparing' : 'server-pack.install-action')}</Button>
+          </Show>
+          <Show when={plan()}>
+            <Button tone="accent" disabled={busy() || !request() || !!blocker()} onClick={() => void apply()}>
+              {uncertain() ? t('server-pack.retry') : t(update() ? 'server-pack.update-apply' : 'server-pack.link-apply', { count: installStagedCount(plan()!, picks()) })}
+            </Button>
+          </Show>
         </Show>
       }>
       <Show when={outcome()} fallback={
@@ -135,13 +154,17 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
               <Show when={value().softwareSwitchRequired}>
                 <div data-vesta="server-callout" data-tone="warning" role="alert">
                   <span>{t('server-pack.install-switch-help', { software: value().software, version: value().minecraftVersion })}</span>
+                  <Show when={software.value()?.current}>{current => <span>{t('server-pack.install-current-runtime', { software: current().software ?? '', version: current().version ?? '', loader: current().loaderVersion ?? '' })}</span>}</Show>
                   <span data-vesta="modpack-inline-actions">
                     <Button size="sm" variant="outline" icon={<Icon name="icons/actions/external-link" />}
-                      onClick={() => { area.startInstall(null); transitionTo(`/servers/${area.id()}/settings/software`); }}>{t('server-pack.install-review-software')}</Button>
+                      onClick={() => setSoftwareOpen(true)}>{t('server-pack.install-review-software')}</Button>
                     <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/refresh" />} disabled={busy()} onClick={() => void planNow()}>{t('server-pack.install-replan')}</Button>
                   </span>
                 </div>
               </Show>
+              <Show when={softwareOpen() && software.value()}>{state => <PackSoftwareChange id={area.id()} snapshot={area.snapshot()} state={state()}
+                target={{ software: value().software as SoftwareId, version: value().minecraftVersion, loaderVersion: value().loaderVersion }}
+                onWorking={setBusy} onComplete={() => { setSoftwareOpen(false); void planNow(); }} />}</Show>
               <Show when={!value().valid}><p data-vesta="server-callout" data-tone="danger" role="alert">{t('server-pack.install-invalid')}</p></Show>
               <Show when={blocker() === 'server-pack.install-expired'}>
                 <div data-vesta="server-callout" data-tone="warning"><span>{t('server-pack.install-expired')}</span>
@@ -189,9 +212,10 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                 </details>
               </Show>
               <Show when={value().warnings.length}>
-                <ul data-vesta="modpack-warnings">
-                  <For each={value().warnings}>{(warning) => <li><Icon name="icons/controls/warning" size={12} />{installWarning(warning, t)}</li>}</For>
-                </ul>
+                <details data-vesta="modpack-unresolved">
+                  <summary>{t('server-pack.install-notes', { count: value().warnings.length })}</summary>
+                  <ul data-vesta="modpack-warnings"><For each={value().warnings}>{(warning) => <li>{installWarning(warning, t)}</li>}</For></ul>
+                </details>
               </Show>
               <p data-vesta="server-muted"><Icon name="icons/actions/reload" size={12} /> {t('server-pack.install-staged-help')}</p>
               <p data-vesta="server-muted"><Icon name="icons/content/modpack" size={12} /> {t('server-pack.link-players-unchanged')}</p>
@@ -217,12 +241,12 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
 function ReviewGroup(props: { title: MessageId; tone: 'success' | 'accent' | 'danger' | 'neutral'; icon: string; paths: string[] }) {
   return (
     <Show when={props.paths.length}>
-      <section data-vesta="modpack-install-section" data-change={props.tone}>
-        <h4>{t(props.title, { count: props.paths.length })}</h4>
+      <details data-vesta="modpack-install-section" data-change={props.tone}>
+        <summary>{t(props.title, { count: props.paths.length })}</summary>
         <ul data-vesta="modpack-install-list">
           <For each={props.paths}>{(path) => <li><Icon name={props.icon} size={12} /><code>{path}</code></li>}</For>
         </ul>
-      </section>
+      </details>
     </Show>
   );
 }

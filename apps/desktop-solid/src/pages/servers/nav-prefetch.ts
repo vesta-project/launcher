@@ -9,7 +9,7 @@ import { gameStopped } from '../../features/servers/hosting-model';
 import {
   accessSourcesResource, backupStorageResource, contentResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
   motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, softwareJobsResource, softwareResource, sftpResource,
-  usersResource, whitelistResource, worldResource, warmSoftwareMetadata,
+  usersResource, whitelistResource, worldResource, warmSoftwareMetadata, packWorkspaceResource,
 } from '../../features/servers/server-resources';
 import { workflowsResource } from './automation/resources';
 import { agentReachable } from '../../features/servers/shell-model';
@@ -35,6 +35,12 @@ registerServerPrefetch('overview', (snapshot) => {
 });
 registerServerPrefetch('resources', (snapshot) => {
   if (can(snapshot, 'files.list')) prefetchServerResource(snapshot.connection.id, contentResource);
+  if (can(snapshot, 'pack.edit')) prefetchServerResource(snapshot.connection.id, packWorkspaceResource);
+});
+registerServerPrefetch('pack', (snapshot) => {
+  if (can(snapshot, 'pack.edit')) {
+    prefetchServerResource(snapshot.connection.id, packWorkspaceResource);
+  }
 });
 registerServerPrefetch('activity', (snapshot) => prefetchServerResource(snapshot.connection.id, operationsResource));
 registerServerPrefetch('backups', (snapshot) => {

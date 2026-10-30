@@ -11,6 +11,7 @@ async function harness(run) {
     project: { id: 'p', source: 'modrinth', description: 'Full description' },
     batch: [{ id: 'p', source: 'modrinth', description: null }],
     versions: [{ id: 'v', version_number: '1.0' }],
+    versionReads: [],
     projectReads: 0,
     detailReads: [],
     peerReads: 0,
@@ -32,7 +33,7 @@ async function harness(run) {
           const c = globalThis[${JSON.stringify(key)}];
           export const fetchProject = async () => { c.projectReads++; return c.project; };
           export const fetchProjects = async () => c.batch;
-          export const fetchVersions = async () => c.versions;
+          export const fetchVersions = async (...args) => { c.versionReads.push(args); return typeof c.versions === 'function' ? c.versions(...args) : c.versions; };
           export const fetchPeerProject = async (project) => { c.peerReads++; return typeof c.peer === 'function' ? c.peer(project) : c.peer; };
           export const fetchVersionDetails = async (...args) => { c.detailReads.push(args); return {version: c.versions[0], changelog_status: args[3] ? 'available' : 'unavailable'}; };
         ` }));
@@ -117,4 +118,28 @@ test('opposite-direction peer lookups do not invalidate each other in flight', (
   c.peer = (project) => project.source === 'modrinth' ? second : first;
   expect(await Promise.all([api.loadPeerProjectId(first), api.loadPeerProjectId(second)])).toEqual([second, first]);
   expect(c.peerReads).toBe(2);
+}));
+
+test('installed-content update scans deduplicate and admit only two catalogues at a time', () => harness(async (api, c) => {
+  const pending = [];
+  c.versions = (provider, id) => new Promise((resolve, reject) => pending.push({ provider, id, resolve, reject }));
+  let current = true;
+  const scan = api.loadVersionLists([
+    { provider: 'modrinth', projectId: 'a' }, { provider: 'modrinth', projectId: 'a' },
+    { provider: 'curseforge', projectId: 'a' }, { provider: 'modrinth', projectId: 'b' },
+    { provider: 'modrinth', projectId: 'c' },
+  ], () => current);
+  await Promise.resolve(); await Promise.resolve();
+  expect(pending.map(p => [p.provider, p.id])).toEqual([['modrinth', 'a'], ['curseforge', 'a']]);
+  pending[0].reject(new Error('offline'));
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  expect(pending.map(p => p.id)).toEqual(['a', 'a', 'b']);
+  current = false;
+  pending[1].resolve([]); pending[2].resolve([]);
+  expect(await scan).toEqual({ failed: 1 });
+  expect(c.versionReads).toHaveLength(3);
+  // A later scan retries failures and uses successful cached lists.
+  c.versions = [];
+  expect(await api.loadVersionLists([{ provider: 'modrinth', projectId: 'a' }, { provider: 'modrinth', projectId: 'b' }])).toEqual({ failed: 0 });
+  expect(c.versionReads).toHaveLength(4);
 }));

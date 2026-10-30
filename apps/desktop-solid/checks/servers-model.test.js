@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { DEFAULT_PORT, isPairingCode, parseAddressInput, parseHostPort } from '../src/features/servers/address';
 import { anyVisible, capabilitiesForRole, gate, roleKey } from '../src/features/servers/capabilities';
 import { ConsoleBuffer } from '../src/features/servers/console-model';
-import { errorPresentation, serverErrorPresentation, toServerError } from '../src/features/servers/errors';
+import { errorPresentation, serverErrorDetails, serverErrorFile, serverErrorPresentation, toServerError } from '../src/features/servers/errors';
 import { differingGroups, groupFingerprint, normalizeFingerprint, sameFingerprint } from '../src/features/servers/fingerprint';
 import {
   accessFact, age, connectionFact, consoleLineProblem, formatUptime, isPlayerName, lifecycleControls, minecraftFact, playersFact, statusDot,
@@ -94,6 +94,33 @@ describe('[errors] closed client error model', () => {
     expect(serverErrorPresentation({ code: 'server_busy', localPressure: true }).message).toBe('servers.error.client-busy');
     expect(serverErrorPresentation({ code: 'rate_limited' }).message).toBe('servers.error.rate-limited');
     expect(serverErrorPresentation({ code: 'server_busy' }).message).toBe('servers.error.server-busy');
+    expect(serverErrorPresentation({ code: 'server_busy', reason: 'content_provider_not_configured' })).toEqual({ message: 'server-pack.provider-not-configured', action: 'none' });
+    expect(serverErrorPresentation({ code: 'server_busy', reason: 'content_provider_unavailable' })).toEqual({ message: 'server-pack.provider-unavailable', action: 'retry' });
+  });
+});
+
+describe('[connectivity] actionable pack errors', () => {
+  test('provider failures identify the step instead of blaming form values', () => {
+    for (const [reason, suffix, action] of [
+      ['content_pack_download_unavailable', 'download-unavailable', 'none'],
+      ['content_pack_metadata_invalid', 'metadata-invalid', 'retry'],
+      ['content_pack_download_failed', 'download-failed', 'retry'],
+      ['content_pack_hash_mismatch', 'hash-mismatch', 'retry'],
+      ['content_pack_source_unsafe', 'source-unsafe', 'none'],
+      ['pack_catalogue_invalid', 'archive-invalid', 'none'],
+      ['pack_path_invalid', 'path-invalid', 'none'],
+    ]) expect(serverErrorPresentation({ code: 'invalid_input', reason })).toEqual({ message: `server-pack.${suffix}`, action });
+  });
+  test('copyable details contain only bounded public file identity', () => {
+    const error = { code: 'invalid_input', reason: 'content_pack_download_unavailable',
+      details: { stage: 'metadata', provider: 'curseforge', projectId: '1691925', versionId: '9022781', filename: "mielon's-the-sift+26.3.jar", downloadUrl: 'https://secret.invalid', response: 'secret' } };
+    expect(serverErrorDetails(error)).toBe("invalid_input\ncontent_pack_download_unavailable\nmetadata: curseforge 1691925 / 9022781\nmielon's-the-sift+26.3.jar");
+    expect(serverErrorFile(error)).toBe("mielon's-the-sift+26.3.jar");
+    for (const filename of ['../secret.jar', 'bad\nfile.jar', 'a'.repeat(257), 'bad\u202efile.jar']) {
+      expect(serverErrorDetails({ ...error, details: { ...error.details, filename } })).not.toContain(filename);
+      expect(serverErrorFile({ ...error, details: { ...error.details, filename } })).toBeNull();
+    }
+    expect(serverErrorDetails(new Error('private response'))).toBe('internal');
   });
 });
 

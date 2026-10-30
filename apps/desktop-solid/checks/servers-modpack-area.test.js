@@ -53,6 +53,12 @@ describe('modpack source and sub-nav gating', () => {
     expect(modpackGates(view(['pack.edit']), 'owner').installOnServer).toBe(false);
     expect(modpackGates(view(['pack.build']), 'owner').publish).toBe(false);
     expect(modpackGates(view(['pack.access']), 'pack-user').download).toBe(true);
+    const granted = ['content.install', 'pack.edit'];
+    expect(modpackGates({ ...view(granted), roles: ['owner'] }, null).installOnServer).toBe(true);
+    expect(modpackGates({ ...view(granted), roles: ['administrator'] }, 'viewer').installOnServer).toBe(true);
+    expect(modpackGates({ ...view(granted), roles: [] }, 'owner').installOnServer).toBe(false);
+    expect(modpackGates({ ...view(granted), roles: ['custom'] }, null).installOnServer).toBe(false);
+    expect(modpackGates({ ...view(granted), roles: ['owner'], refused: ['content.install'] }, null).installOnServer).toBe(false);
   });
 });
 

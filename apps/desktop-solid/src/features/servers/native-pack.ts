@@ -90,13 +90,16 @@ export const serversPackNative = {
 };
 
 type UploadApi = Pick<typeof serversPackNative, 'packUploadBegin' | 'packUploadChunk' | 'packUploadFinish'>;
-/** Stable resumable intents; 32 KiB chunks fit the agent's default 64 KiB request budget. */
+/** Stable resumable intents; authenticated pack uploads use bounded 512 KiB chunks. */
 export async function uploadPackBytes(api: UploadApi, connectionId: string, bytes: Uint8Array, archive: boolean, intentId: string): Promise<PackUploadReceipt> {
   const sha256 = async (value: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(value).buffer))].map(n => n.toString(16).padStart(2, '0')).join('');
   const uploadId = await sha256(new TextEncoder().encode(intentId));
   await api.packUploadBegin(connectionId, { uploadId, totalSize: String(bytes.length), sha256: await sha256(bytes), archive }, `${uploadId}-begin`);
-  for (let offset = 0; offset < bytes.length; offset += 32768) {
-    const contentBase64 = btoa(String.fromCharCode(...bytes.subarray(offset, offset + 32768)));
+  for (let offset = 0; offset < bytes.length; offset += 512 * 1024) {
+    const chunk = bytes.subarray(offset, offset + 512 * 1024);
+    let binary = '';
+    for (let start = 0; start < chunk.length; start += 32768) binary += String.fromCharCode(...chunk.subarray(start, start + 32768));
+    const contentBase64 = btoa(binary);
     await api.packUploadChunk(connectionId, { uploadId, offset: String(offset), contentBase64 }, `${uploadId}-${offset}`);
   }
   return api.packUploadFinish(connectionId, uploadId, `${uploadId}-finish`);

@@ -126,14 +126,14 @@ server-pack-get-link-only = Link matching files only
 server-pack-get-uncertain = The result is unclear. Check your library before trying again.
 
 # Install on server
-server-pack-install-planning = Planning the install
+server-pack-install-planning = Downloading and verifying files
 server-pack-install-software = Software
 server-pack-install-minecraft = Minecraft
 server-pack-install-loader = Loader version
 server-pack-install-none = None
 server-pack-install-runtime-matches = Server already matches
 server-pack-install-switch-badge = Software change needed
-server-pack-install-switch-help = This pack needs { $software } on Minecraft { $version }. Change the server software first, then plan again.
+server-pack-install-switch-help = This pack uses { $software } on Minecraft { $version } with the loader version shown above. Match that setup to continue.
 server-pack-install-switch-first = Change the server software first
 server-pack-install-review-software = Review software change
 server-pack-install-replan = Plan again
@@ -293,6 +293,9 @@ server-pack-published-required = Revision { $version } is out and required.
 server-pack-provider-versions = { $provider } versions
 server-pack-show-all-versions = Show all versions
 server-pack-loading-versions = Loading versions…
+server-pack-versions-failed = Couldn't load versions.
+server-pack-versions-empty = No versions are available.
+server-pack-saving = Saving changes…
 server-pack-no-versions = No versions for Minecraft { $version }.
 server-pack-active-version = Active
 server-pack-switch-version = Switch to this version
@@ -301,7 +304,24 @@ server-pack-switched = Switched to { $version } (revision { $revision })
 
 server-pack-history-title = Published history
 server-pack-history-empty = No published revisions yet.
+server-pack-history-loading = Loading published versions…
 server-pack-history-counts = { $entries } entries, { $overrides } overrides
+server-pack-history-entries = { $count } entries
+server-pack-history-overrides = { $count } overrides
+server-pack-no-loader-versions = No compatible versions found
+server-pack-provider-not-configured = CurseForge isn't configured on this server. Its API key must be set on the agent before linking this pack.
+server-pack-download-unavailable = CurseForge refused this file's download or no longer hosts it. Try another pack version or install its server files manually.
+server-pack-metadata-invalid = The provider returned invalid file details while preparing this pack. Retry or choose another version.
+server-pack-download-failed = A pack file couldn't be downloaded. Check the server's connection and retry.
+server-pack-hash-mismatch = A downloaded pack file didn't match the provider's checksum. Nothing was installed. Retry to download it again.
+server-pack-source-unsafe = The provider returned a file name or download address Vesta can't use safely. Try another pack version.
+server-pack-path-invalid = This pack contains a file path Vesta can't install safely. Try another version.
+server-pack-archive-invalid = This pack's archive or manifest isn't supported. Choose another version or a Minecraft modpack export.
+server-pack-too-large = This pack exceeds the server's import limits. Use a smaller pack or install its server files manually.
+server-pack-unresolved-file = This pack contains a file without a verified download. Add a provider version for that file before installing.
+server-pack-error-details = Error details
+server-pack-error-copy-failed = Could not copy. Select and copy the details below.
+server-pack-provider-unavailable = Couldn't download or verify the pack from its provider. Try again later.
 
 # Sections: the server's own modpack link and the client pack are independent
 server-pack-section-server = Server modpack
@@ -381,7 +401,7 @@ server-pack-unlinked-removing = { $count ->
 # Link / update review
 server-pack-link-dialog-title = Link { $name }
 server-pack-update-dialog-title = Update { $name }
-server-pack-link-dialog-description = Review what changes on { $title }. Client-only content is skipped and nothing happens until you apply.
+server-pack-link-dialog-description = Install on { $title }. Client-only files are skipped. Changes that need a decision are shown before installation.
 server-pack-link-apply = { $count ->
     [one] Link and stage 1 change
    *[other] Link and stage { $count } changes
@@ -445,3 +465,13 @@ server-pack-mode-change-server = Players get { $name } when they join.
 server-pack-mode-save = Save
 server-pack-mode-saved = Saved what players get
 server-pack-use-as-client-pack = Use as the client pack
+server-pack-check-content = Check for updates
+server-pack-checking-content = Checking for updates…
+server-pack-check-content-failed = Some updates couldn't be checked. Try again.
+
+server-pack-install-action = Install
+server-pack-install-preparing = Preparing installation?
+server-pack-install-notes = { $count } notes
+server-pack-install-current-runtime = Installed: { $software } { $version }, loader { $loader }
+
+server-pack-warning-missing-dependency = A required dependency is missing from this pack: { $path }

@@ -65,6 +65,8 @@ export interface ServerCommandError {
   localPressure?: boolean;
   /** The agent's fixed wire code when it adds detail, e.g. `software_runtime_unavailable`. Never free text. */
   reason?: string | null;
+  /** Sanitized public provider identity. No response body, URL or credential. */
+  details?: { stage: 'metadata' | 'download'; provider: 'curseforge' | 'modrinth'; projectId: string; versionId: string; filename: string | null } | null;
 }
 
 export const isServerCommandError = (value: unknown): value is ServerCommandError =>
@@ -169,6 +171,8 @@ export interface PackStatus {
 }
 
 export interface CapabilityView {
+  /** Current role ids reported by the agent, independent of the pairing method. */
+  roles?: string[] | null;
   /** `session`: the server reported effective capabilities. `role_defaults`: derived from a built-in role name. */
   source: 'session' | 'role_defaults' | 'unknown';
   granted: string[];

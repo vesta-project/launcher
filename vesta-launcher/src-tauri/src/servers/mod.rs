@@ -241,28 +241,9 @@ impl ServerManager {
                 }
             }
         }
-        snapshot.state.last_error = Some(error.code);
-        match error.code {
-            ErrorCode::FingerprintMismatch => {
-                snapshot.state.access = "fingerprint_changed".into();
-                snapshot.state.phase = "unreachable".into();
-            }
-            ErrorCode::CredentialsRejected => snapshot.state.access = "credentials_rejected".into(),
-            ErrorCode::CredentialsUnavailable => {
-                snapshot.state.access = "credentials_unavailable".into()
-            }
-            ErrorCode::NoManagementAccess => snapshot.state.access = "no_management_access".into(),
-            ErrorCode::RateLimited => {
-                snapshot.state.phase = "backoff".into();
-                snapshot.state.retry_at_ms = Some(snapshot.state.rate_limited_until_ms.unwrap_or(
-                    vesta_server_client::now_ms() + error.retry_after_ms.unwrap_or(10_000) as i64,
-                ));
-            }
-            ErrorCode::Unreachable | ErrorCode::Timeout | ErrorCode::TlsFailed => {
-                snapshot.state.phase = "unreachable".into()
-            }
-            _ => {}
-        }
+        snapshot
+            .state
+            .observe_request_failure(error, vesta_server_client::now_ms());
         let _ = self.publish_observation(app, snapshot).await;
     }
     async fn client(&self, id: &str) -> Result<Arc<Client>> {
@@ -495,6 +476,7 @@ impl ServerManager {
             pack: None,
             capabilities: CapabilityView {
                 source: "unknown".into(),
+                roles: None,
                 granted: vec![],
                 refused: vec![],
             },
