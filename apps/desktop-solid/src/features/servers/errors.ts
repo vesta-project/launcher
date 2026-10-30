@@ -37,6 +37,18 @@ export function toServerError(reason: unknown): ServerCommandError {
 }
 
 const packReasons: Record<string, { message: MessageId; action: RecoveryAction }> = {
+  pack_limit_invalid: { message: 'server-pack.error-pack-limit-invalid', action: 'none' },
+  pack_path_protected: { message: 'server-pack.error-pack-path-protected', action: 'none' },
+  pack_path_linked: { message: 'server-pack.error-pack-path-linked', action: 'none' },
+  pack_unavailable: { message: 'server-pack.error-pack-unavailable', action: 'none' },
+  pack_artifact_conflict: { message: 'server-pack.error-pack-artifact-conflict', action: 'none' },
+  pack_artifact_not_published: { message: 'server-pack.error-pack-artifact-not-published', action: 'none' },
+  pack_release_revision_exhausted: { message: 'server-pack.error-pack-release-revision-exhausted', action: 'none' },
+  pack_release_revision_mismatch: { message: 'server-pack.error-pack-release-revision-mismatch', action: 'none' },
+  pack_release_version_not_increasing: { message: 'server-pack.error-pack-release-version-not-increasing', action: 'none' },
+  pack_release_version_invalid: { message: 'server-pack.error-pack-release-version-invalid', action: 'none' },
+  pack_prune_recovery_required: { message: 'server-pack.error-pack-prune-recovery-required', action: 'none' },
+  pack_custom_content_disabled: { message: 'server-pack.error-pack-custom-content-disabled', action: 'none' },
   pack_storage_low: { message: 'server-hosting.reason-storage-low', action: 'none' },
   content_pack_download_unavailable: { message: 'server-pack.download-unavailable', action: 'none' },
   content_pack_metadata_invalid: { message: 'server-pack.metadata-invalid', action: 'retry' },
@@ -94,6 +106,7 @@ export function serverErrorFile(reason: unknown): string | null {
 export function serverErrorDetails(reason: unknown): string {
   const error = toServerError(reason);
   const lines: string[] = [error.code];
+  if (error.issue && error.issue.code === error.reason) lines.push(`${error.issue.code}: ${error.issue.rule}: ${error.issue.item}`);
   if (error.reason && /^[a-zA-Z0-9_.]{1,96}$/.test(error.reason)) lines.push(error.reason);
   const d = providerDetails(error);
   if (d) {

@@ -65,6 +65,7 @@ impl TokenBucket {
                 local_pressure: true,
                 reason: None,
                 details: None,
+                issue: None,
                 retry_after_ms: Some(wait.as_millis().max(1) as u64),
             });
         }
@@ -128,6 +129,7 @@ impl Scheduler {
                 local_pressure: true,
                 reason: None,
                 details: None,
+                issue: None,
                 retry_after_ms: Some(self.paused_for().as_millis() as u64),
             });
         }

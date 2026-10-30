@@ -278,7 +278,11 @@ dto!(PackInstallRequest {
 dto!(PackInstallFile {path:String,sha256:String,expected_sha256:Option<String>,conflict:Option<String>,operation:String});
 dto!(SoftwareSwitchTarget {software:String,minecraft_version:String,loader_version:Option<String>});
 dto!(SoftwareSwitch {from:SoftwareSwitchTarget,to:SoftwareSwitchTarget});
-dto!(PackInstallPlan {software_switch:Option<SoftwareSwitch>,plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<String>,backup_recommended:bool,removed:Vec<(String,String)>});
+dto!(InstallWarning {code:String,rule:String,item:String,detail:String});
+#[derive(Clone,Debug,Deserialize,Serialize)]
+#[serde(untagged)]
+pub enum PackInstallWarning { Structured(InstallWarning), Legacy(String) }
+dto!(PackInstallPlan {software_switch:Option<SoftwareSwitch>,plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<PackInstallWarning>,backup_recommended:bool,removed:Vec<(String,String)>});
 dto!(PackInstallChoice {
     path: String,
     choice: String

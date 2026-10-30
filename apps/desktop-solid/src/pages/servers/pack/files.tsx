@@ -19,7 +19,7 @@ import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import { FileEditor } from '../tabs/file-editor';
-import { DeleteDialog, NameDialog, type NameRequest } from '../tabs/files-tab';
+import { NameDialog, type NameRequest } from '../tabs/files-tab';
 import { useNativeDropZone } from '../../../features/file-drop/zone';
 import { draggingFiles } from '../tabs/files-drop';
 import { useModpackArea } from './area';
@@ -41,11 +41,11 @@ export function ModpackFiles() {
   const root = () => location().root;
   const directory = () => location().directory;
   const files = () => area.workspace()!.draft.manifest.overrideFiles ?? [];
-  const rows = createMemo(() => packDirectory(files(), root(), directory()), { name: 'modpack-files:rows' });
+  const [pendingTrash, setPendingTrash] = createSignal<string[]>([]);
+  const rows = createMemo(() => packDirectory(files(), root(), directory()).filter(row => !pendingTrash().some(key => key === `${root()}/${row.path}` || `${root()}/${row.path}`.startsWith(`${key}/`))), { name: 'modpack-files:rows' });
   const counts = createMemo(() => packRootCounts(files()), { name: 'modpack-files:counts' });
   const [opened, setOpened] = createSignal<{ root: PackOverrideRoot; path: string } | null>(null, { name: 'modpack-files:opened' });
   const [naming, setNaming] = createSignal<NameRequest | null>(null, { name: 'modpack-files:naming' });
-  const [deleting, setDeleting] = createSignal<PackFileRow | null>(null, { name: 'modpack-files:deleting' });
   const [uploading, setUploading] = createSignal(0, { name: 'modpack-files:uploading' });
   const [dragging, setDragging] = createSignal(false, { name: 'modpack-files:dragging' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-files:error' });
@@ -150,7 +150,17 @@ export function ModpackFiles() {
         </Item>
         <Separator />
         <Item icon={<Icon name="icons/actions/edit" />} onSelect={() => setNaming({ kind: 'rename', entry: { name: row.name } })}>{t('server-files.rename')}</Item>
-        <Item icon={<Icon name="icons/actions/delete" />} tone="danger" onSelect={() => setDeleting(row)}>{t('server-files.move-to-trash')}</Item>
+        <Item icon={<Icon name="icons/actions/delete" />} tone="danger" onSelect={() => {
+          const fileRoot = root(), connection = area.id(), expectedRevision = untrack(area.workspace)!.draft.revision, key = fileRoot + '/' + row.path, intent = newIntentId();
+          toast.undo({ title: t('server-files.moved-to-trash', { name: baseName(row.path) }), undoLabel: 'Undo',
+            apply: () => setPendingTrash(items => [...items, key]),
+            rollback: () => setPendingTrash(items => items.filter(item => item !== key)),
+            commit: async () => {
+              const draft = await serverCommand(api => api.packFileMutate(connection, { expectedRevision, change: { operation: 'trash', root: fileRoot, path: row.path } }, intent));
+              if (area.id() === connection) area.applyDraft(draft); setPendingTrash(items => items.filter(item => item !== key));
+            },
+            onError: reason => toast.show({ title: 'Could not move file to trash. Refresh and try again.', description: String((reason as ServerCommandError).reason ?? (reason as ServerCommandError).code), tone: 'danger' }) });
+        }}>{t('server-files.move-to-trash')}</Item>
       </>
     );
   };
@@ -236,13 +246,6 @@ export function ModpackFiles() {
           <NameDialog snapshot={area.snapshot()} directory={directory()} siblings={rows()} request={request} perform={name}
             onClose={() => setNaming(null)}
             onDone={(path) => { setNaming(null); if (request.kind === 'file') setOpened({ root: root(), path }); }} />
-        )}
-      </Show>
-      <Show when={deleting()} keyed>
-        {(row) => (
-          <DeleteDialog snapshot={area.snapshot()} path={row.path} description={t('server-pack.file-trash-description')}
-            perform={(intentId) => mutate({ operation: 'trash', root: root(), path: row.path }, intentId)}
-            onClose={() => setDeleting(null)} onDone={() => setDeleting(null)} />
         )}
       </Show>
     </div>

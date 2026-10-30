@@ -55,7 +55,8 @@ export type PackInstallSource = ({source:'provider'} & ContentProvider) | {sourc
 export interface PackInstallRequest {source:PackInstallSource}
 export interface PackInstallFile {operation?: string;path:string;sha256:string;expectedSha256:string|null;conflict:'project_version'|'same_filename'|'unidentified_jar'|null}
 export interface SoftwareSwitchTarget {software:string;minecraftVersion:string;loaderVersion:string|null}
-export interface PackInstallPlan {softwareSwitch?:{from:SoftwareSwitchTarget;to:SoftwareSwitchTarget}|null;removed?: [string,string][];planId:string;confirmationToken:string;expiresAtMs:number;minecraftVersion:string;software:string;loaderVersion:string|null;softwareSwitchRequired:boolean;valid:boolean;files:PackInstallFile[];skipped:string[];warnings:string[];backupRecommended:boolean}
+export interface PackInstallWarning { code: string; rule: string; item: string; detail: string }
+export interface PackInstallPlan {softwareSwitch?:{from:SoftwareSwitchTarget;to:SoftwareSwitchTarget}|null;removed?: [string,string][];planId:string;confirmationToken:string;expiresAtMs:number;minecraftVersion:string;software:string;loaderVersion:string|null;softwareSwitchRequired:boolean;valid:boolean;files:PackInstallFile[];skipped:string[];warnings:(string | PackInstallWarning)[];backupRecommended:boolean}
 export interface PackInstallApply {acknowledgeWarnings?:boolean;acknowledgeSoftwareSwitch?:boolean;planId:string;confirmationToken:string;choices:{path:string;choice:'replace'|'keep'}[];setAsModpack:boolean}
 export interface PackInstallOutcome {serverModpack?: ServerModpackLink | null;softwareJobId?:string|null;state:'queued'|'staged_until_restart';pendingIds:string[];modpackRevision:string|null}
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);

@@ -55,7 +55,6 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
   const [view, setView] = createSignal<'browse' | 'trash'>('browse', { name: 'server-files:view' });
   const [opened, setOpened] = createSignal<Opened | null>(null, { name: 'server-files:opened' });
   const [naming, setNaming] = createSignal<NameRequest | null>(null, { name: 'server-files:naming' });
-  const [deleting, setDeleting] = createSignal<FileEntry | null>(null, { name: 'server-files:deleting' });
   const [uploads, setUploads] = createSignal<UploadBatch | null>(null, { name: 'server-files:uploads' });
   /** The folder row files are being dragged over, if any; a drop there uploads into it. */
   const [dropFolder, setDropFolder] = createSignal<string | null>(null, { name: 'server-files:drop-folder' });
@@ -346,9 +345,6 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
             onDone={(path) => { setNaming(null); refresh(); if (request.kind === 'file') setOpened({ path, mode: 'editor' }); }} />
         )}
       </Show>
-      <Show when={deleting()} keyed>
-        {(entry) => <DeleteDialog snapshot={props.snapshot} path={pathOf(entry)} onClose={() => setDeleting(null)} onDone={() => { setDeleting(null); refresh(); }} />}
-      </Show>
       <Show when={uploads()} keyed>
         {(batch) => (
           <UploadDialog snapshot={props.snapshot} directory={batch.directory} siblings={batch.siblings} files={batch.files} auto={batch.auto}
@@ -437,41 +433,6 @@ export function NameDialog(props: {
       <Show when={target() && isExecutableContent(target()!)}>
         <p data-vesta="server-callout" data-tone="warning">{t('server-files.executable-warning')}</p>
       </Show>
-      <ServerErrorNote error={error()} />
-    </Dialog>
-  );
-}
-
-export function DeleteDialog(props: {
-  snapshot: ServerSnapshot; path: string; onClose: () => void; onDone: () => void;
-  perform?: (intentId: string) => Promise<unknown>; description?: string;
-}) {
-  const [busy, setBusy] = createSignal(false, { name: 'server-files:delete-busy' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-files:delete-error' });
-  const intents = new IntentMemo();
-  const submit = async () => {
-    setBusy(true); setError(null);
-    const intentId = intents.idFor({ path: props.path });
-    try {
-      if (props.perform) await props.perform(intentId);
-      else await serverCommand((client) => client.fileDelete(props.snapshot.connection.id, props.path, null, intentId));
-      intents.settle();
-      toast.show({ title: t('server-files.moved-to-trash', { name: baseName(props.path) }), tone: 'neutral' });
-      props.onDone();
-    } catch (reason) {
-      intents.settle(reason as ServerCommandError);
-      setError(reason as ServerCommandError);
-    } finally { setBusy(false); }
-  };
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }} closeLabel={t('nav.close')} size="sm"
-      title={t('server-files.delete-title', { name: baseName(props.path) })}
-      description={props.description ?? t('server-files.delete-description')}
-      footer={<>
-        <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
-        <Button tone="danger" disabled={busy()} onClick={() => void submit()}>{t('server-files.move-to-trash')}</Button>
-      </>}
-    >
       <ServerErrorNote error={error()} />
     </Dialog>
   );

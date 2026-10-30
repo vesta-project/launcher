@@ -84,6 +84,7 @@ export function ServerErrorNote(props: {
               {t(presentation().message)}
               <Show when={seconds() > 0}> {t('servers.retry-after', { count: seconds() })}</Show>
               <Show when={serverErrorFile(error())}>{(filename) => <code data-vesta="server-error-file">{filename()}</code>}</Show>
+              <Show when={error().issue}>{issue => <code data-vesta="server-error-file">{issue().code}: {issue().rule}: {issue().item}</code>}</Show>
               <details data-vesta="server-error-details">
                 <summary>{t('server-pack.error-details')}</summary>
                 <pre>{serverErrorDetails(error())}</pre>

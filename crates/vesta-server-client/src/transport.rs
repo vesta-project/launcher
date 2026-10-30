@@ -431,7 +431,8 @@ impl Transport {
                 retry,
                 path,
             )
-            .with_provider_details(value.pointer("/error/details").unwrap_or(&Value::Null));
+            .with_provider_details(value.pointer("/error/details").unwrap_or(&Value::Null))
+            .with_pack_issue(value.pointer("/error/issue").unwrap_or(&Value::Null));
             // Some policy adapters signal revision conflicts by wire code with
             // another status. Apply the same rule after closed-code decoding.
             if mutation
