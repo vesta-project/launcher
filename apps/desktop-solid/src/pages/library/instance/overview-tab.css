@@ -140,7 +140,7 @@
   :where([data-vesta="overview-world"] > img) {
     inline-size: 40px;
     block-size: 28px;
-    border-radius: 4px;
+    border-radius: var(--vesta-radius-sm);;
     object-fit: cover;
   }
 

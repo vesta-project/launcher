@@ -541,7 +541,7 @@
     flex: none;
     inline-size: 40px;
     block-size: 40px;
-    border-radius: 8px;
+    border-radius: var(--vesta-radius-lg);;
     object-fit: cover;
     background: var(--vesta-color-fill);
   }

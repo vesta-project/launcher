@@ -1261,7 +1261,7 @@
     min-block-size: 26px;
     padding: 0 var(--vesta-space-2);
     border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: 999px;
+    border-radius: var(--vesta-radius-full);;
     background: transparent;
     color: var(--vesta-color-text);
     font: inherit;

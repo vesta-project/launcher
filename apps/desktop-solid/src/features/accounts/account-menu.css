@@ -97,7 +97,7 @@
   :where([data-vesta="account-face"][data-size="small"]) {
     inline-size: 22px;
     block-size: 22px;
-    border-radius: 4px;
+    border-radius: var(--vesta-radius-sm);;
   }
 
   :where([data-vesta="account-copy"]) {
