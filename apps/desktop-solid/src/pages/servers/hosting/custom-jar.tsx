@@ -12,6 +12,7 @@ import type { ServerJavaInventory } from '../../../features/servers/native-java'
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { SettingsPanel } from '../settings-parts';
 import { Hint, HostingError } from './parts';
+import { sameReviewedPlan } from '../../../features/servers/review-plan';
 
 /**
  * Owner-only: launch a JAR that is already in the server files, or return to the managed
@@ -41,12 +42,20 @@ export function CustomJarPanel(props: {
     finally { setBusy(false); }
   };
   const apply = async () => {
-    const current = plan();
-    if (!current || expired() || !stopped()) return;
+    let current = plan();
+    if (!current || !stopped()) return;
+    if (expired()) {
+      const previous = current;
+      setPlan(null);
+      await prepare(previous.customJar?.path ?? null);
+      current = plan();
+      if (!current || !sameReviewedPlan(previous, current)) return;
+    }
+    const planId = current.planId;
     const intentId = intents.idFor({ planId: current.planId });
     setBusy(true); setError(null);
     try {
-      const job = await serverCommand((client) => client.customJarApply(id(), current.planId, intentId));
+      const job = await serverCommand((client) => client.customJarApply(id(), planId, intentId));
       intents.settle();
       setPlan(null);
       toast.show({ title: t('server-hosting.switch-accepted'), tone: 'neutral' });
@@ -110,17 +119,10 @@ export function CustomJarPanel(props: {
                 </Show>
                 <Hint when={!stopped()}>{t('server-hosting.stop-first')}</Hint>
                 <div data-vesta="server-software-actions">
-                  <Show when={!expired()} fallback={
-                    <Button tone="accent" disabled={busy()} onClick={() => void prepare(review().path)}>{t('server-hosting.review-again')}</Button>
-                  }>
                     <Button tone="accent" disabled={busy() || !stopped() || props.jobRunning} onClick={() => void apply()}>
                       {t(review().path ? 'server-hosting.custom-jar-apply' : 'server-hosting.custom-jar-restore')}
                     </Button>
-                  </Show>
                   <Button variant="ghost" disabled={busy()} onClick={() => { setPlan(null); setError(null); }}>{t('server-hosting.back')}</Button>
-                  <span data-vesta="server-hosting-hint">
-                    {expired() ? t('server-hosting.review-expired') : t('server-hosting.review-expires', { count: remaining() })}
-                  </span>
                 </div>
               </section>
             );

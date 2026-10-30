@@ -308,7 +308,6 @@ function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-restore:error' });
   const id = () => props.snapshot.connection.id;
   const stopped = () => props.snapshot.status?.state === 'stopped';
-  const remaining = () => Math.max(0, Math.ceil(((prepared()?.expiresAtMs ?? 0) - now()) / 1000));
   const prepare = async () => {
     setBusy(true); setError(null);
     try {
@@ -318,11 +317,17 @@ function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point
     finally { setBusy(false); }
   };
   const confirm = async () => {
-    const current = prepared();
+    let current = prepared();
     if (!current) return;
     setBusy(true); setError(null);
     try {
-      const job = await serverCommand((client) => client.backupRestoreConfirm(id(), current.jobId));
+      if (current.expiresAtMs <= now()) {
+        const fresh = await serverCommand(client => client.backupRestorePrepare(id(), props.profile, props.point.id, [], !safety(), newIntentId()));
+        current = { jobId: fresh.job.id, expiresAtMs: fresh.expiresAtMs };
+        setPrepared(current);
+      }
+      const jobId = current.jobId;
+      const job = await serverCommand((client) => client.backupRestoreConfirm(id(), jobId));
       toast.show({ title: t('servers.backups.restore-started'), tone: 'neutral' });
       props.onDone(job);
       props.onClose();
@@ -340,10 +345,10 @@ function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point
         <>
           <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
           <Show
-            when={prepared() && remaining() > 0}
+            when={prepared()}
             fallback={<Button tone="danger" variant="outline" disabled={busy() || !stopped()} onClick={() => void prepare()}>{t('servers.backups.prepare')}</Button>}
           >
-            <Button tone="danger" disabled={busy()} onClick={() => void confirm()}>{t('servers.backups.confirm-restore', { count: remaining() })}</Button>
+            <Button tone="danger" disabled={busy() || !stopped()} onClick={() => void confirm()}>{t('servers.backups.confirm-restore')}</Button>
           </Show>
         </>
       }
