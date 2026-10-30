@@ -637,7 +637,7 @@
     grid-template-columns: minmax(0, 1fr) 18.5rem;
     gap: var(--vesta-space-8);
     align-items: start;
-    max-inline-size: 76rem;
+    max-inline-size: var(--content-max-width);
   }
 
   :where([data-vesta='project-article']) {

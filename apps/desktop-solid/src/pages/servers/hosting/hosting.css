@@ -181,7 +181,7 @@
   :where([data-vesta="server-software-field"]) [data-vesta="segmented-field"] { --segmented-height: 68px; }
   :where([data-vesta="server-software-field"]) [data-vesta="segmented-item"] { flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-block-size: 60px; }
   :where([data-vesta="server-software-field"]) [data-vesta="segmented-icon"] { inline-size: auto; block-size: auto; }
-  :where([data-vesta="server-software-field"]) [data-vesta="segmented-label"] { display: block; flex: none; inline-size: 100%; text-align: center; }
+  :where([data-vesta="server-software-field"]) [data-vesta="segmented-label"] { flex: none; max-inline-size: 100%; text-align: center; }
   :where([data-vesta="server-software-versions"]) {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
