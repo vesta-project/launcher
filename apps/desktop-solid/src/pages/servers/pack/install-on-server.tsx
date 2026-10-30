@@ -125,7 +125,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
             <span data-vesta="server-muted">{t('server-pack.install-expires', { count: minutesLeft() })}</span>
           </Show>
           <Show when={!plan() && !error()}>
-            <Button tone="accent" disabled={installRequested()} onClick={() => setInstallRequested(true)}>{t(installRequested() ? 'server-pack.install-preparing' : 'server-pack.install-action')}</Button>
+            <Button tone="accent" disabled={busy() || installRequested()} onClick={() => setInstallRequested(true)}>{t(busy() || installRequested() ? 'server-pack.install-preparing' : 'server-pack.install-action')}</Button>
           </Show>
           <Show when={plan()}>
             <Button tone="accent" disabled={busy() || !request() || !!blocker()} onClick={() => void apply()}>
