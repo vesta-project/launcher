@@ -107,7 +107,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
                 <div data-vesta="server-software-installed">
                   <SoftwareMark software={state().current?.software} size="lg" />
                   <div><strong>{launchText(state().current)}</strong>
-                    <Show when={java.value()?.selected}>{(runtime) => <p data-vesta="server-hosting-hint">{runtime().vendor} · Java {runtime().major}</p>}</Show>
+                    <Show when={java.value()?.selected}>{(runtime) => <p data-vesta="server-hosting-hint" style={{ display: 'flex', gap: 'var(--vesta-space-2)' }}><span>{runtime().vendor}</span><span>Java {runtime().major}</span></p>}</Show>
                   </div>
                 </div>
               </SettingsPanel>
@@ -145,7 +145,6 @@ function SoftwareOutcome(props: { state: SoftwareState; job: SoftwareJob | undef
           <footer data-vesta="server-software-previous">
             <Icon name="icons/content/history" size={13} />
             <Show when={props.state.available}>
-              <span aria-hidden="true">·</span>
               <button type="button" data-vesta="server-software-restore" disabled={!props.stopped || props.busy}
                 title={!props.stopped ? t('server-hosting.stop-first') : undefined} onClick={() => props.onRestore()}>
                 {t(softwareRestoreKind(props.state) === 'software' ? 'server-hosting.restore-previous' : 'server-hosting.recover-launch')}

@@ -364,10 +364,7 @@ export function AccountSettings() {
                   <Head uuid={account.uuid} size={32} />
                   <div>
                     <strong>{account.username}</strong>
-                    <span>
-                      {account.account_type}
-                      <Show when={account.is_expired}> · {t('prefs.account.expired')}</Show>
-                    </span>
+                    <span style={{ display: 'flex', gap: 'var(--vesta-space-2)' }}><span>{account.account_type}</span><Show when={account.is_expired}><span>{t('prefs.account.expired')}</span></Show></span>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => void switchAccount(account.uuid)}>
                     {t('prefs.account.make-active')}

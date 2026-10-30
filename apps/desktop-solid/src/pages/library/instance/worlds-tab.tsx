@@ -246,7 +246,7 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                   >
                     {world().mode}
                   </span>
-                  <Show when={world().days !== undefined}>{t("worlds.day-count", { count: world().days ?? 0 })} · </Show>{world().lastPlayed} · {t("worlds.megabytes", { size: world().sizeMb })}
+                  <Show when={world().days !== undefined}><span>{t("worlds.day-count", { count: world().days ?? 0 })}</span></Show><span>{world().lastPlayed}</span><span>{t("worlds.megabytes", { size: world().sizeMb })}</span>
                 </span>
               </div>
               <span data-vesta="world-detail-section">

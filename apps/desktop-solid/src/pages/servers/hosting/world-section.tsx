@@ -61,7 +61,7 @@ function WorldHero(props: { snapshot: ServerSnapshot; world: ServerWorld }) {
           <p data-vesta="server-software-meta">
             <Show when={props.world.exists} fallback={<span>{t('server-world.not-generated')}</span>}>
               <Show when={version()}>{(value) => <span>{t('server-hosting.minecraft-version', { version: value() })}</span>}</Show>
-              <Show when={size()}>{(value) => <><Show when={version()}><span aria-hidden="true">·</span></Show><span>{t(value().message, { size: value().size })}</span></>}</Show>
+              <Show when={size()}>{(value) => <><span>{t(value().message, { size: value().size })}</span></>}</Show>
             </Show>
           </p>
         </div>

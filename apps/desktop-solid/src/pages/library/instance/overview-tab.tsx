@@ -91,7 +91,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                 >
                   {world().mode}
                 </span>
-                <Show when={world().days !== undefined}>{t("worlds.day-count", { count: world().days ?? 0 })} · </Show>{world().lastPlayed}
+                <Show when={world().days !== undefined}><span>{t("worlds.day-count", { count: world().days ?? 0 })}</span></Show><span>{world().lastPlayed}</span>
               </span>
             </div>
             <div data-vesta="overview-continue-actions">

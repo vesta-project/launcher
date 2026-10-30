@@ -462,9 +462,7 @@ export function InstancePickerDialog() {
                           />
                           <span data-vesta="browse-picker-text">
                             <strong>{row().instance.name}</strong>
-                            <span>
-                              {row().instance.minecraftVersion} · {row().instance.modloader}
-                            </span>
+                            <span style={{ display: 'flex', gap: 'var(--vesta-space-2)' }}><span>{row().instance.minecraftVersion}</span><span>{row().instance.modloader}</span></span>
                           </span>
                           <span data-vesta="browse-picker-status" data-status={status().kind}>
                             <Show when={status().kind === 'installed'}>
