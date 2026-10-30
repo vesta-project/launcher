@@ -37,7 +37,7 @@ export interface ModpackAreaValue {
   linkProject: Accessor<ResourceProject | undefined>;
   /** What players get: none, the server's modpack, or the custom pack. */
   clientMode: Accessor<ClientPackMode>;
-  setClientMode: (mode: ClientPackMode, requireUpdate?: boolean) => Promise<void>;
+  setClientMode: (mode: ClientPackMode, requireUpdate?: boolean, allowCustomContent?: boolean) => Promise<void>;
   loading: Accessor<boolean>;
   error: Accessor<ServerCommandError | null>;
   reload: () => Promise<void>;
@@ -164,9 +164,9 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
   };
 
   /** Stores the player offering. The custom workspace is kept whatever the mode. */
-  const setClientMode = async (mode: ClientPackMode, requireUpdate = false) => {
+  const setClientMode = async (mode: ClientPackMode, requireUpdate = false, allowCustomContent = untrack(() => workspace()?.clientPack?.allowCustomContent ?? false)) => {
     const serverId = untrack(id);
-    const request = clientModeRequest(mode, requireUpdate);
+    const request = { ...clientModeRequest(mode, requireUpdate), allowCustomContent };
     try {
       const value = await serverCommand((api) => api.clientPackMode(serverId, request, modes.idFor({ serverId, ...request })));
       modes.settle();

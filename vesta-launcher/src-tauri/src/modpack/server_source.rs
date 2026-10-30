@@ -29,7 +29,7 @@ pub(crate) fn plan(root: &Path, review: &Prepared) -> Result<super::engine::Upda
     }
     let template = |version: String| ModpackManifest {
         source: ModpackFormat::Modrinth,
-        modpack_id: Some(review.release.server_id.clone()),
+        modpack_id: Some(review.provider_pack.as_ref().map_or_else(|| review.release.server_id.clone(), |p| p.project.clone())),
         name: review.preview.name.clone(),
         version,
         installed_at: String::new(),

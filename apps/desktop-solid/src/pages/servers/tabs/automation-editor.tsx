@@ -471,30 +471,14 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
   );
 }
 
-/** Confirms a delete; run history is kept by the agent. */
+/** Shared deferred delete, used from both the list and the editor. */
 export function DeleteWorkflowDialog(props: { snapshot: ServerSnapshot; workflow: { id: string; name: string; revision: number }; onClose: () => void; onDeleted: () => void }) {
-  const [busy, setBusy] = createSignal(false, { name: 'server-automation-delete:busy' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-automation-delete:error' });
-  const confirm = async () => {
-    setBusy(true); setError(null);
-    try {
-      await serverCommand((client) => client.automationWorkflowDelete(props.snapshot.connection.id, props.workflow.id, props.workflow.revision, newIntentId()));
-      toast.show({ title: t('server-automation.deleted', { name: props.workflow.name }), tone: 'neutral' });
-      props.onDeleted();
-      props.onClose();
-    } catch (reason) { setError(reason as ServerCommandError); }
-    finally { setBusy(false); }
-  };
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }} size="sm" closeLabel={t('nav.close')}
-      title={t('server-automation.delete-title', { name: props.workflow.name })}
-      description={t('server-automation.delete-description')}
-      footer={<>
-        <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
-        <Button tone="danger" disabled={busy()} onClick={() => void confirm()}>{t('server-automation.delete')}</Button>
-      </>}
-    >
-      <ServerErrorNote error={error()} />
-    </Dialog>
-  );
+  const connection = props.snapshot.connection.id, workflow = { ...props.workflow };
+  const rollback = () => invalidateServerResources(connection, [workflowsResource.name, workflowResource.name]);
+  const onDeleted = props.onDeleted, onClose = props.onClose;
+  queueMicrotask(() => toast.undo({ title: t('server-automation.deleted', { name: workflow.name }), undoLabel: 'Undo',
+    apply: () => { onDeleted(); onClose(); }, rollback,
+    commit: () => serverCommand(client => client.automationWorkflowDelete(connection, workflow.id, workflow.revision, newIntentId())),
+    onError: reason => toast.show({ title: t(errorMessage(reason)), tone: 'danger' }) }));
+  return null;
 }

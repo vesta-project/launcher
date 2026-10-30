@@ -33,6 +33,7 @@ const operations = keyed<ServerOperation[]>('serverOperations', () => []);
 const metrics = keyed<MetricsSample[]>('serverMetrics', () => []);
 const consoleVersions = keyed<number>('serverConsoleVersion', () => 0);
 const [order, setOrder] = createSignal<ConnectionId[]>([], { name: 'serverOrder' });
+const [hiddenServers, setHiddenServers] = createSignal<Set<ConnectionId>>(new Set());
 const [loaded, setLoaded] = createSignal(false, { name: 'serversLoaded' });
 const [listError, setListError] = createSignal<ServerCommandError | null>(null, { name: 'serversListError' });
 
@@ -87,7 +88,7 @@ export const serversLoaded = loaded;
 export const serversListError = listError;
 const sameSnapshots = (a: readonly ServerSnapshot[], b: readonly ServerSnapshot[]) => a.length === b.length && a.every((snapshot, index) => snapshot === b[index]);
 export const serverSnapshots = createMemo(
-  () => order().map((id) => snapshots.get(id)).filter((snapshot): snapshot is ServerSnapshot => !!snapshot),
+  () => order().filter(id => !hiddenServers().has(id)).map((id) => snapshots.get(id)).filter((snapshot): snapshot is ServerSnapshot => !!snapshot),
   { name: 'serverList', equals: sameSnapshots },
 );
 export const serverSnapshot = (id: ConnectionId | undefined) => (id ? snapshots.get(id) : undefined);
@@ -176,9 +177,16 @@ export async function refreshServers() {
   }
 }
 
+/** Hide a connection during the shared undo window without releasing its state. */
+export function hideServer(id: ConnectionId) {
+  setHiddenServers(current => new Set(current).add(id));
+  return () => setHiddenServers(current => { const next = new Set(current); next.delete(id); return next; });
+}
+
 export async function removeServer(id: ConnectionId) {
   await serverCommand((client) => client.remove(id));
   forget(id);
+  setHiddenServers(current => { const next = new Set(current); next.delete(id); return next; });
 }
 
 /** Custom server icons as PNG data URLs: undefined until loaded, null when unset or unreadable. */

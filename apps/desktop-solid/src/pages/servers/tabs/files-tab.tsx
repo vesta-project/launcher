@@ -66,6 +66,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
   const pathOf = (entry: FileEntry) => (directory() ? `${directory()}/${entry.name}` : entry.name);
 
   // Only the newest listing applies, so a slow reply can't replace a newer directory.
+  const pendingTrash = new Set<string>();
   let sequence = 0;
   const load = async (path: string, more = false) => {
     const request = ++sequence;
@@ -74,7 +75,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
     try {
       const page = await serverCommand((client) => client.filesList(id(), path, more ? cursor() : null));
       if (request !== sequence) return;
-      setEntries((current) => (more ? [...current, ...page.items] : page.items));
+      setEntries((current) => (more ? [...current, ...page.items] : page.items).filter(entry => !pendingTrash.has(path ? `${path}/${entry.name}` : entry.name)));
       setCursor(page.nextCursor);
     } catch (reason) {
       if (request === sequence) { setError(reason as ServerCommandError); if (!more) setEntries([]); }
@@ -210,7 +211,14 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
           <Item icon={<Icon name="icons/actions/edit" />} onSelect={() => setNaming({ kind: 'rename', entry })}>{t('server-files.rename')}</Item>
         </Show>
         <Show when={allowed().delete}>
-          <Item icon={<Icon name="icons/actions/delete" />} tone="danger" onSelect={() => setDeleting(entry)}>{t('server-files.move-to-trash')}</Item>
+          <Item icon={<Icon name="icons/actions/delete" />} tone="danger" onSelect={() => {
+              const connection = id(), path = pathOf(entry), parent = directory();
+              toast.undo({ title: t('server-files.moved-to-trash', { name: entry.name }), undoLabel: 'Undo',
+                apply: () => { pendingTrash.add(path); setEntries(current => current.filter(item => item.name !== entry.name)); },
+                rollback: () => { pendingTrash.delete(path); if (directory() === parent) void load(parent); },
+                commit: async () => { await serverCommand(client => client.fileDelete(connection, path, null, newIntentId())); pendingTrash.delete(path); },
+                onError: reason => toast.show({ title: t(errorMessage(reason)), tone: 'danger' }) });
+            }}>{t('server-files.move-to-trash')}</Item>
         </Show>
       </>
     );

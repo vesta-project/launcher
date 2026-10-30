@@ -167,6 +167,7 @@ mod tests {
             ("config/test.toml".into(), digest(b"new config")),
         ]);
         let release = Release {
+            allow_custom_content: false,
             server_id: "server".into(),
             fingerprint: "b".repeat(64),
             revision: "2".into(),
@@ -199,6 +200,7 @@ mod tests {
             changes,
         };
         Prepared {
+            provider_pack: None,
             preview,
             release,
             files,

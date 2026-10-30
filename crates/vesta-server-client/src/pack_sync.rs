@@ -41,6 +41,8 @@ pub fn status(installed: u64, latest: u64, minimum: u64) -> Result<SyncStatus> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Release {
+    #[serde(default)]
+    pub allow_custom_content: bool,
     pub server_id: String,
     pub fingerprint: String,
     pub revision: String,

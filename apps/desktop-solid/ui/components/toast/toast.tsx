@@ -1,3 +1,4 @@
+import { deferAction } from './deferred-action';
 import { Toast as KobalteToast, toaster } from '@kobalte/core/toast';
 import type { JSX } from '@solidjs/web';
 import { createSignal, For, Show, type Accessor } from 'solid-js';
@@ -127,6 +128,15 @@ function ToastItem(props: { toastId: number; options: Accessor<ToastOptions> }) 
 
 /** Imperative toast API. Toasts appear in the matching <ToastRegion>. */
 export const toast = {
+  /** Apply locally now; keep the irreversible request out of the undo window. */
+  undo(options: { title: string; undoLabel: string; apply: () => void; rollback: () => void; commit: () => Promise<unknown>; onError: (reason: unknown) => void; delay?: number }) {
+    options.apply();
+    let cancel = () => {};
+    const id = toast.show({ title: options.title, persistent: true, dismissible: false,
+      actions: [{ label: options.undoLabel, onClick: () => cancel() }] });
+    cancel = deferAction({ ...options, delay: options.delay ?? 6000, onCommit: () => toast.dismiss(id) });
+    return id;
+  },
   /** Show a toast and return its id. */
   show(options: ToastOptions, target?: { region?: string }): number {
     const [state, setState] = createSignal(options);

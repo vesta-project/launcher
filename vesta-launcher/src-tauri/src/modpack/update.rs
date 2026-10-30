@@ -427,8 +427,16 @@ pub(crate) async fn finish(
     updated.modloader_version = runtime_fields.modloader_version.clone();
     updated.modpack_version_id = Some(new_version_id.to_string());
     if let crate::tasks::update_modpack::UpdateSource::Server { review, .. } = source {
-        updated.modpack_platform = Some("server".into());
-        updated.modpack_id = Some(review.release.server_id.clone());
+        if let Some(provider) = &review.provider_pack {
+            updated.modpack_platform = Some(provider.platform.clone());
+            updated.modpack_id = Some(provider.project.clone());
+            updated.modpack_version_id = Some(provider.version.clone());
+            updated.modpack_icon_url = provider.icon_url.clone();
+            if review.preview.instance_id.is_none() || updated.icon_path.as_deref().is_some_and(|p| p.starts_with("builtin:placeholder")) { updated.icon_path = None; }
+        } else {
+            updated.modpack_platform = Some("server".into());
+            updated.modpack_id = Some(review.release.server_id.clone());
+        }
     }
 
     if runtime_changed
@@ -457,9 +465,11 @@ pub(crate) async fn finish(
                 instances::minecraft_version.eq(&runtime_fields.minecraft_version),
                 instances::modloader.eq(&runtime_fields.modloader),
                 instances::modloader_version.eq(&runtime_fields.modloader_version),
-                instances::modpack_version_id.eq(Some(new_version_id.to_string())),
+                instances::modpack_version_id.eq(&updated.modpack_version_id),
                 instances::modpack_platform.eq(&updated.modpack_platform),
                 instances::modpack_id.eq(&updated.modpack_id),
+                instances::modpack_icon_url.eq(&updated.modpack_icon_url),
+                instances::icon_path.eq(&updated.icon_path),
                 instances::installation_status.eq(Some("installed".to_string())),
             ))
             .execute(conn)?;
