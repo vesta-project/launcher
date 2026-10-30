@@ -191,7 +191,6 @@ server-settings-key-query-port = Query port
 server-settings-group-essentials = Essentials
 server-settings-malformed-short = Invalid value in the file
 server-settings-motd-title = Server list message (MOTD)
-server-settings-motd-help = What players see under the server name while Minecraft is running.
 server-settings-motd-preview-aria = Server list preview for { $name }: { $value }
 server-settings-search = Search settings
 server-settings-no-results = No settings match your search.

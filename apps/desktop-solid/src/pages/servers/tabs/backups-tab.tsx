@@ -56,6 +56,7 @@ const backupErrors: Record<string, MessageId> = {
   backup_confirmation_expired: 'servers.error.confirmation-expired',
 };
 
+// TODO: expose total-cap and thinning retention fields in Claude's profile editor redesign.
 export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = () => props.snapshot.connection.id;
@@ -64,6 +65,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const backups = useServerResource(connection, backupsResource);
   const space = useServerResource(connection, backupStorageResource);
   const overview = () => backups.value() ?? null;
+  const visibleJobs = () => (overview()?.jobs ?? []).filter(job => job.kind !== 'verify' || !!job.errorCode || job.state === 'failed' || job.state === 'recovery_required');
   const storage = () => space.value() ?? null;
   const error = backups.error;
   const loading = () => backups.loading() || backups.refreshing();
@@ -81,9 +83,6 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
       <Button size="sm" variant="ghost" onClick={() => setOpenProfile(openProfile() === name ? null : name)}>
         {t(openProfile() === name ? 'servers.backups.hide-points' : 'servers.backups.show-points')}
       </Button>
-      <Show when={can('backups.verify')}>
-        <Button size="sm" variant="outline" onClick={() => void start('verify', name)}>{t('servers.backups.verify')}</Button>
-      </Show>
       <Show when={can('backups.create')}>
         <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start('run', name)}>{t('servers.backups.run')}</Button>
       </Show>
@@ -120,12 +119,12 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
     follower?.observe(jobs);
   }, { name: 'server-backups:jobs' });
 
-  const start = async (kind: 'run' | 'verify', profile: string) => {
+  const start = async (_kind: 'run', profile: string) => {
     try {
-      const job = await serverCommand((client) => (kind === 'run' ? client.backupRun(id(), profile, newIntentId()) : client.backupVerify(id(), profile, newIntentId())));
+      const job = await serverCommand((client) => client.backupRun(id(), profile, newIntentId()));
       if (disposed) return;
       setStarted(job);
-      toast.show({ title: t(kind === 'run' ? 'servers.backups.started' : 'servers.backups.verify-started', { name: profile }), tone: 'neutral' });
+      toast.show({ title: t('servers.backups.started', { name: profile }), tone: 'neutral' });
       void refresh();
     } catch (reason) {
       toast.show({ title: t(errorMessage(reason)), tone: 'danger' });
@@ -219,9 +218,9 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
 
         <section data-vesta="settings-panel">
           <h3>{t('servers.backups.recent')}</h3>
-          <Show when={overview()?.jobs.length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-jobs')}</p>}>
+          <Show when={visibleJobs().length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-jobs')}</p>}>
             <ul data-vesta="server-activity-list" class="server-panel-list">
-              <For each={overview()?.jobs ?? []} keyed={(job) => job.id}>
+              <For each={visibleJobs()} keyed={(job) => job.id}>
                 {(job) => {
                   const when = () => age(job().createdAtMs, now());
                   return (
@@ -239,7 +238,6 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                           <span>{t('servers.ago', { time: t(when().message, { count: when().count }) })}</span>
                           <Show when={job().result?.dataAdded !== undefined}><span>{t('servers.backups.added', { value: bytes(job().result?.dataAdded) })}</span></Show>
                           <Show when={job().result?.filesChanged !== undefined}><span>{t('servers.backups.files-changed', { count: (job().result?.filesChanged ?? 0) + (job().result?.filesNew ?? 0) })}</span></Show>
-                          <Show when={job().result?.verified}><span>{t('servers.backups.verified')}</span></Show>
                         </p>
                       </div>
                       <Badge size="sm" variant="soft" tone={jobTone(job())}>{t(jobState[job().state])}</Badge>

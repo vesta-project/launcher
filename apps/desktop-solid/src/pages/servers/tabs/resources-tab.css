@@ -6,18 +6,15 @@
  */
 @layer launcher {
   .server-content-table [data-vesta="table-row"] {
-    grid-template-columns: minmax(0, 1fr) 140px 176px 56px calc(var(--instance-gutter) + 32px);
+    grid-template-columns: minmax(0, 1fr) 140px 56px calc(var(--instance-gutter) + 32px);
   }
 
   .server-content-table .col-name {
     padding-inline-start: var(--instance-gutter);
   }
 
-  .server-content-table .col-status {
-    gap: var(--vesta-space-1);
-  }
 
-  /* A staged change keeps the row readable; the badge says what happens next. */
+  /* Keep staged installs readable. */
   .server-content-table .resource-row[data-pending="install"] :where([data-vesta="resource-identity"]) {
     opacity: 0.75;
   }
@@ -49,36 +46,10 @@
     color: var(--vesta-color-text-muted);
   }
 
-  :where([data-vesta="server-content-provider"][data-unknown]) {
-    padding: 0 5px;
-    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
-    border-radius: 4px;
-    font-size: 10px;
-    line-height: 14px;
-  }
 
   :where([data-vesta="server-content-provider"]) + :where([data-vesta="resource-file"])::before {
     content: "·";
     margin-inline-end: var(--vesta-space-1-5);
-  }
-
-  /* Owned by the server modpack link: changed through the modpack, not row by row. */
-  :where([data-vesta="server-content-owned"]) {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    gap: 3px;
-    max-inline-size: 34ch;
-    padding: 0 6px;
-    overflow: hidden;
-    border-radius: 4px;
-    background: color-mix(in oklab, var(--vesta-color-accent) 14%, transparent);
-    color: var(--vesta-color-accent-text);
-    font-size: 10px;
-    font-weight: var(--vesta-weight-semibold);
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   /* Header summary: staged changes and the restart that applies them. */
@@ -121,7 +92,7 @@
 
   @container pane (max-width: 640px) {
     .server-content-table [data-vesta="table-row"] {
-      grid-template-columns: minmax(0, 1fr) 176px 56px calc(var(--instance-gutter) + 32px);
+      grid-template-columns: minmax(0, 1fr) 56px calc(var(--instance-gutter) + 32px);
     }
 
     .server-content-table .col-version {

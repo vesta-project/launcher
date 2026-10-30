@@ -112,7 +112,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
                 </div>
               </SettingsPanel>
             }>
-            <SettingsPanel title={t('server-hosting.change')} name="software">
+            <SettingsPanel title={t('server-hosting.software-label')} name="software">
               <For each={[state().current?.installationId ?? 'original']} keyed={(entry) => entry}>{() => <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} java={java.value()} javaActions={javaActions} />}</For>
             </SettingsPanel>
             </Show>
@@ -144,9 +144,6 @@ function SoftwareOutcome(props: { state: SoftwareState; job: SoftwareJob | undef
         {(previous) => (
           <footer data-vesta="server-software-previous">
             <Icon name="icons/content/history" size={13} />
-            <span>{softwareRestoreKind(props.state) === 'software'
-              ? t('server-hosting.previously', { name: launchSummary(previous())! })
-              : t('server-hosting.saved-launch')}</span>
             <Show when={props.state.available}>
               <span aria-hidden="true">·</span>
               <button type="button" data-vesta="server-software-restore" disabled={!props.stopped || props.busy}
@@ -329,7 +326,7 @@ export function ChangeFlow(props: {
 
   return (
     <div data-vesta="server-software-flow" data-server-software-step={reviewing() ? 'review' : 'pick'}>
-      <Show when={!reviewing()}>
+      <>
         <Show when={props.target}><p>{softwareName(software())} {minecraft()} {selectedRelease() === 'latest' ? '' : selectedRelease()}</p></Show>
         <Show when={!props.target}>
         <Field label={t('server-hosting.software-label')}>
@@ -364,7 +361,7 @@ export function ChangeFlow(props: {
         <Show when={versions.value() && !minecraftOptions().length}><p data-vesta="server-hosting-hint">{t('server-hosting.no-versions')}</p></Show>
 
         </Show>
-        <Show when={where() === 'changed'}>
+        <Show when={!reviewing() && where() === 'changed'}>
           <div data-vesta="server-software-actions">
               <Button tone="accent" disabled={busy() || !!blocker()} onClick={() => void review()}>{t('server-hosting.review')}</Button>
               <Show when={!props.target}><Button variant="ghost" disabled={busy()} onClick={discard}>{t('server-hosting.discard')}</Button></Show>
@@ -372,26 +369,12 @@ export function ChangeFlow(props: {
           </div>
         </Show>
         <Show when={blocker()}>{(message) => <p data-vesta="server-hosting-hint" data-server-software-blocked>{t(message())}</p>}</Show>
-      </Show>
+      </>
 
       <Show when={plan()}>
         {(current) => (
           <section data-vesta="server-software-review" aria-label={t('server-hosting.review-title')}>
             <h4>{t('server-hosting.review-title')}</h4>
-            <div data-vesta="server-software-compare">
-              <div data-vesta="server-software-side">
-                <span>{t('server-hosting.from')}</span>
-                <div><SoftwareMark software={props.state.current?.software} /><strong>{launchText(props.state.current)}</strong></div>
-              </div>
-              <Icon name="icons/navigation/arrow-forward" size={16} />
-              <div data-vesta="server-software-side" data-to>
-                <span>{t('server-hosting.to')}</span>
-                <div>
-                  <SoftwareMark software={current().software} />
-                  <strong>{launchSummary({ software: current().software, version: current().version, build: current().build, loaderVersion: current().loaderVersion, installationId: '' })}</strong>
-                </div>
-              </div>
-            </div>
             <Show when={compat()}>{(java) => <JavaCompat compat={java()} inventory={props.java} actions={props.javaActions} locked={busy() || props.jobRunning} stopped={gameStopped(props.snapshot)} onReplan={() => void review()} />}</Show>
             <p data-vesta="server-callout" data-tone="warning">{t('server-hosting.backup-first')}</p>
             <Show when={otherWarnings().length || current().risks.length}>
