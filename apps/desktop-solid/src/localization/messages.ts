@@ -1,5 +1,8 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "management.export-files",
+  "management.export-description",
+  "management.export-selected",
   "server-content.restart-load",
   "server-pack.provider-filename",
   "server-pack.provider-host",

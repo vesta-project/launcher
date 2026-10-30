@@ -65,10 +65,10 @@ export function ServerSettings(props: {
                 {(section) => (
                   <button
                     type="button"
-                    data-vesta="prefs-nav-item"
+                    data-vesta="instance-settings-link"
                     data-server-prefetch={section.id}
                     data-offline={paneState(props.snapshot, section) === 'offline' ? '' : undefined}
-                    aria-current={active() === section.id ? 'page' : undefined}
+                    aria-current={active() === section.id ? 'true' : undefined}
                     onClick={() => props.onSection(section.id)}
                   >
                     <Icon name={section.icon} size={16} />

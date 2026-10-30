@@ -9,6 +9,7 @@ import { t } from '../../localization';
 import type { SettingsSectionId } from '../../features/servers/shell-model';
 import { useServerShell } from './shell-context';
 import './server-settings.css';
+import { Card } from '../settings/parts';
 
 /**
  * One section's page: a scrolling column of panels, with room reserved at the bottom for
@@ -23,7 +24,7 @@ export function SettingsPage(props: { children: JSX.Element; saveBar?: JSX.Eleme
   );
 }
 
-/** A raised panel with a small uppercase title, optional one-line help and a header action. */
+/** Launcher settings card with the server panel marker retained. */
 export function SettingsPanel(props: {
   title: string;
   description?: JSX.Element;
@@ -34,16 +35,9 @@ export function SettingsPanel(props: {
   name?: string;
 }) {
   return (
-    <section data-vesta="settings-panel" data-danger={props.danger ? '' : undefined} data-server-panel={props.name}>
-      <header data-vesta="server-panel-head">
-        <div>
-          <h3>{props.title}</h3>
-          <Show when={props.description}><p>{props.description}</p></Show>
-        </div>
-        <Show when={props.action}><div data-vesta="server-panel-head-action">{props.action}</div></Show>
-      </header>
-      {props.children}
-    </section>
+    <div data-server-panel={props.name}>
+      <Card title={props.title} description={props.description} action={props.action} danger={props.danger}>{props.children}</Card>
+    </div>
   );
 }
 
@@ -56,7 +50,7 @@ export function SettingsGroup(props: {
   children: JSX.Element;
 }) {
   return (
-    <section data-vesta="settings-panel" data-server-group data-open={props.open ? '' : undefined}>
+    <section data-vesta="prefs-card" data-server-group data-open={props.open ? '' : undefined}>
       <button type="button" data-vesta="server-group-toggle" aria-expanded={props.open ? 'true' : 'false'} onClick={() => props.onToggle()}>
         <Icon name="icons/controls/chevron-right" size={14} />
         <h3>{props.title}</h3>

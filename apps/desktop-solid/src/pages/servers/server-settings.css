@@ -12,7 +12,7 @@
   /* ---- Panel header: uppercase title, optional help, action on the right ---- */
   :where([data-vesta="server-panel-head"]) {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--vesta-space-3);
     padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-1);
   }
@@ -23,8 +23,8 @@
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: normal;
+    text-transform: none;
   }
   :where([data-vesta="server-panel-head"] p) {
     margin: var(--vesta-space-1) 0 0;
@@ -309,7 +309,7 @@
     border-radius: var(--vesta-radius-md);
     background: var(--vesta-color-surface-raised);
   }
-  :where([data-vesta="server-player-fact"]) > span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); font-weight: var(--vesta-weight-semibold); letter-spacing: 0.04em; text-transform: uppercase; }
+  :where([data-vesta="server-player-fact"]) > span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); font-weight: var(--vesta-weight-semibold); letter-spacing: normal; text-transform: none; }
   :where([data-vesta="server-player-fact"]) > p { flex: 1; margin: 0; font-size: var(--vesta-text-sm); line-height: 1.45; }
   :where([data-vesta="server-player-fact"]) > p > small { display: block; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-player-fact"]) > :where([data-vesta="button"]) { align-self: flex-start; margin-block-start: var(--vesta-space-1); }

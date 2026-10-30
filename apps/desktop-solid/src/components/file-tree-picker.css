@@ -1,0 +1,6 @@
+@layer launcher {
+  [data-vesta="file-picker"], [data-vesta="export-metadata"] { display: flex; flex-direction: column; gap: var(--vesta-space-4); }
+  [data-vesta="file-picker-tree"] { min-block-size: 240px; max-block-size: 50vh; overflow: auto; border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); padding-block: var(--vesta-space-2); }
+  [data-vesta="file-picker-row"] { display: flex; align-items: center; min-block-size: 36px; gap: var(--vesta-space-2); }
+  [data-vesta="file-picker-indent"] { inline-size: 28px; flex: none; }
+}

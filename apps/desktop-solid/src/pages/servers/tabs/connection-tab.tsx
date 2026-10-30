@@ -1,6 +1,5 @@
 import { Button, IconButton, Switch as Toggle, TextField } from '@vesta/ui';
 import { Show, createSignal, untrack } from 'solid-js';
-import type { JSX } from '@solidjs/web';
 import { Icon } from '../../../components/icon';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
@@ -11,16 +10,7 @@ import { FingerprintView, Sensitive } from '../parts';
 import { RemoveServerDialog } from '../remove-dialog';
 import { ServerRefreshButton } from '../refresh-button';
 import '../../library/instance/settings-tab.css';
-
-/** A settings panel with the instance Settings tab's look. */
-function Panel(props: { title: string; danger?: boolean; children: JSX.Element }) {
-  return (
-    <section data-vesta="settings-panel" data-danger={props.danger ? '' : undefined}>
-      <h3>{props.title}</h3>
-      <div data-vesta="settings-panel-body">{props.children}</div>
-    </section>
-  );
-}
+import { Card as Panel } from '../../settings/parts';
 
 /** Local connection settings: name, pin, how this device reaches and trusts the server, and removal. */
 export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
@@ -41,7 +31,7 @@ export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
   };
   const signIn = () =>
     [props.snapshot.connection.signInMethod === 'minecraft' ? t('servers.sign-in.minecraft') : t('servers.sign-in.code'),
-      props.snapshot.connection.role ? roleLabel(props.snapshot.connection.role) : null].filter(Boolean).join(' · ');
+      props.snapshot.connection.role ? roleLabel(props.snapshot.connection.role) : null].filter(Boolean).join(', ');
 
   return (
     <div data-vesta="instance-settings-scroll" data-server-connection>
